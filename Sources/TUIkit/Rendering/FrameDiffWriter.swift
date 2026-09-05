@@ -388,8 +388,16 @@ extension FrameDiffWriter {
             for: region
         )
         rowsBuiltInLastBuild = builtCount
+        if Self.debugEnabled {
+            FileHandle.standardError.write(
+                Data("[FrameDiffWriter] built \(builtCount) of \(terminalHeight) rows (\(region))\n".utf8))
+        }
         return lines
     }
+
+    /// `TUIKIT_DEBUG_RENDER=1`, the same switch as `RenderCache`'s frame line.
+    private static let debugEnabled =
+        ProcessInfo.processInfo.environment["TUIKIT_DEBUG_RENDER"] == "1"
 
     /// `styled` with the row's background put back after every reset.
     ///

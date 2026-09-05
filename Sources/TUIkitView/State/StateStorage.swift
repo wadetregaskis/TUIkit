@@ -208,15 +208,6 @@ extension StateStorage {
         retainedSubtreeRoots.append(root)
     }
 
-    /// Whether the identity is protected by a retained subtree this pass.
-    ///
-    /// O(roots × depth) per call via the structural ancestor walk; roots are
-    /// the handful of windowing containers on screen, so this stays cheap even
-    /// though it runs once per prune candidate.
-    private func isRetained(_ identity: ViewIdentity) -> Bool {
-        retainedSubtreeRoots.contains { $0.isAncestor(of: identity) }
-    }
-
     // MARK: - Conditional Branch Tracking
 
     /// Records which branch a `ConditionalView` rendered this frame, and reports
@@ -321,14 +312,18 @@ extension StateStorage {
     /// (e.g., by navigation or conditional branches) while keeping windowed-out
     /// rows' state alive.
     public func endRenderPass() {
+        // Indexed once for the pass: the prune asks of every unmarked box,
+        // and a climb per root per box was most of a frame's end on a page
+        // of memoised cards (see `RetainedSubtreeIndex`).
+        let retained = RetainedSubtreeIndex(roots: retainedSubtreeRoots)
         let staleKeys = values.keys.filter {
-            !activeIdentities.contains($0.identity) && !isRetained($0.identity)
+            !activeIdentities.contains($0.identity) && !retained.retains($0.identity)
         }
         for key in staleKeys {
             values.removeValue(forKey: key)
         }
         let staleTrackedKeys = trackedValues.keys.filter {
-            !activeIdentities.contains($0.identity) && !isRetained($0.identity)
+            !activeIdentities.contains($0.identity) && !retained.retains($0.identity)
         }
         for key in staleTrackedKeys {
             trackedValues.removeValue(forKey: key)
@@ -339,7 +334,7 @@ extension StateStorage {
         // theirs: if a retained row's conditional flips on re-entry, the
         // flip must be SEEN so the stale branch's state gets invalidated.
         let staleConditionals = lastConditionalCase.keys.filter {
-            !activeIdentities.contains($0) && !isRetained($0)
+            !activeIdentities.contains($0) && !retained.retains($0)
         }
         for identity in staleConditionals {
             lastConditionalCase.removeValue(forKey: identity)

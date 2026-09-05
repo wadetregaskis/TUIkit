@@ -3402,3 +3402,23 @@ Method note: the two were measured together first, then split with a
 third binary carrying only the flag — the bench win was ALL the flag, the
 live scrollbar win only the memo. Measure each change alone before
 attributing either.
+
+## 47. Seven hundred entries, all retained, each climbing to every root (2026-09-05, night)
+
+The `TUIKIT_DEBUG_RENDER` frame line gained the prune's own counts, and on
+the live dashboard they read: 64 buffers, 724 sizes, **764 unmarked, 764
+retained, 0 dropped** — every frame. A memo hit at a card's root marks
+nothing below it; it declares the subtree retained, and the prune then
+asks of each unmarked entry whether some retained root is its ancestor,
+which was one climb per root per entry. `endRenderPass` 9.7% of the
+frame, `isRetained` 7.5%; `clearAffected` at the pass's start, two climbs
+per entry, 7.4%.
+
+`RetainedSubtreeIndex` (TUIkitCore) indexes the pass's roots by structural
+hash once; an entry climbs its own chain once and confirms structurally
+only on a hash hit. `clearAffected` puts the changed identity's chain in a
+set for the "above" half. Raw-rooted identities keep the prefix walk.
+Bench kitchensink −55.6% (the hug's two thousand sizes under one retained
+list), dashboard −3.8%; live kitchensink −30.4%. The diff writer now also
+reports rows rebuilt per frame under the same switch, for the next look
+at the output half.

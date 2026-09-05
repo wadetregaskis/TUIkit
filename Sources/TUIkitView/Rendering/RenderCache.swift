@@ -312,6 +312,11 @@ public final class RenderCache: @unchecked Sendable {
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
+    /// What the last ``removeInactive()`` walked and dropped — the
+    /// `TUIKIT_DEBUG_RENDER` frame line prints it, since the retained-subtree
+    /// walk is per entry NOT marked active and its cost is the count of those.
+    private var lastPrune = (renderEntries: 0, sizeEntries: 0, retainedChecks: 0, prunedRender: 0, prunedSizes: 0)
+
     /// Subtree roots whose descendants must survive this pass's collection even
     /// though nothing below them was visited. See ``retainSubtree(_:)``.
     private var retainedSubtreeRoots: [ViewIdentity] = []
@@ -691,13 +696,10 @@ extension RenderCache {
         return .changed
     }
 
-    /// Whether a retained subtree protects this identity from collection.
-    ///
-    /// O(roots × depth) via the structural ancestor walk, paid only for entries
-    /// that were *not* visited this pass — the roots are the handful of
-    /// `.equatable()` views that hit, so this stays cheap.
-    private func isRetained(_ identity: ViewIdentity) -> Bool {
-        retainedSubtreeRoots.contains { $0.isAncestor(of: identity) }
+    /// The pass's retained roots, indexed for the prune — built once per
+    /// ``removeInactive()``, which asks of every unmarked entry.
+    private func retainedIndex() -> RetainedSubtreeIndex {
+        RetainedSubtreeIndex(roots: retainedSubtreeRoots)
     }
 
     /// Begins a new render pass by draining any deferred `@State` invalidations,
@@ -757,16 +759,25 @@ extension RenderCache {
     /// Any entry whose identity was not marked active during this render pass
     /// is removed. Prevents memory leaks from permanently removed views.
     public func removeInactive() {
+        var retainedChecks = 0
+        let retained = retainedIndex()
         func isLive(_ identity: ViewIdentity) -> Bool {
-            activeIdentities.contains(identity) || isRetained(identity)
+            if activeIdentities.contains(identity) { return true }
+            retainedChecks += 1
+            return retained.retains(identity)
         }
         let staleKeys = entries.keys.filter { !isLive($0) }
         for key in staleKeys {
             entries.removeValue(forKey: key)
         }
+        var staleSizes = 0
         for key in sizeEntries.keys where !isLive(key.identity) {
             sizeEntries.removeValue(forKey: key)
+            staleSizes += 1
         }
+        lastPrune = (
+            renderEntries: entries.count + staleKeys.count, sizeEntries: sizeEntries.count + staleSizes,
+            retainedChecks: retainedChecks, prunedRender: staleKeys.count, prunedSizes: staleSizes)
         // Environment slots are pruned by pass number, not by `activeIdentities`
         // — only memoizing views mark themselves active, and an environment
         // modifier is not one, so an identity check would drop every slot on
@@ -809,10 +820,31 @@ extension RenderCache {
     ///     value and every `@State` write.
     public func clearAffected(by identity: ViewIdentity, keepingSizes: Bool = false) {
         stats.subtreeClears += 1
+        // The hashes of `identity` and every ancestor of it, so "is the cached
+        // identity `identity` or above it" is a set lookup per entry (confirmed
+        // structurally on a hit) rather than a climb of `identity`'s chain per
+        // entry. "Is it below" still climbs the cached chain to `identity`'s
+        // depth, which is one hop per level of difference and a hash compare.
+        var chain = Set<Int>()
+        var cursor: ViewIdentity? = identity
+        while let node = cursor {
+            chain.insert(node.structuralHash)
+            cursor = node.parent
+        }
         func affects(_ cached: ViewIdentity) -> Bool {
-            cached == identity
-                || cached.isAncestor(of: identity)
-                || identity.isAncestor(of: cached)
+            // Raw-rooted identities (tests, the empty default root) have no
+            // chain to index: ancestry is a path prefix, and only the walk
+            // sees it.
+            if identity.isRawRooted || cached.isRawRooted {
+                return cached == identity
+                    || cached.isAncestor(of: identity)
+                    || identity.isAncestor(of: cached)
+            }
+            if cached.depth <= identity.depth {
+                return chain.contains(cached.structuralHash)
+                    && (cached == identity || cached.isAncestor(of: identity))
+            }
+            return identity.isAncestor(of: cached)
         }
         let staleKeys = entries.keys.filter(affects)
         for key in staleKeys {
@@ -860,7 +892,10 @@ extension RenderCache {
                 + "subtreeClears: \(frame.subtreeClears), "
                 + "entries: \(entries.count), hit rate: \(rate) | "
                 + "MEASURE hits: \(measureHits) misses: \(measureMisses) "
-                + "entries: \(measureEntries.count)"
+                + "entries: \(measureEntries.count) | "
+                + "PRUNE render: \(lastPrune.renderEntries) sizes: \(lastPrune.sizeEntries) "
+                + "retainedChecks: \(lastPrune.retainedChecks) "
+                + "dropped: \(lastPrune.prunedRender)+\(lastPrune.prunedSizes)"
         )
     }
 }

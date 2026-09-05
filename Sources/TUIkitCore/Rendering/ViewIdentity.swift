@@ -259,6 +259,19 @@ extension ViewIdentity {
         }
     }
 
+    /// How many steps below the root this identity is; the root is 0.
+    public var depth: Int { node.depth }
+
+    /// Whether this identity's root is a raw path string (``init(path:)``):
+    /// such identities have no chain to climb — ancestry is a string prefix,
+    /// and only ``isAncestor(of:)`` can answer it.
+    public var isRawRooted: Bool { node.rootIsRaw }
+
+    /// The structural hash — what ``hash(into:)`` combines — exposed so a
+    /// caller holding many identities can index them by it (see
+    /// ``RetainedSubtreeIndex``) and confirm with `==` only on a hit.
+    public var structuralHash: Int { node.cachedHash }
+
     /// The identity one structural step up, or `nil` at the root.
     ///
     /// Answers "was this registered directly under that container?" without
@@ -520,5 +533,57 @@ func cachedTypeName(_ type: Any.Type) -> String {
         let name = String(describing: type)
         cache[key] = name
         return name
+    }
+}
+
+// MARK: - Asking "is this under any of these roots?" of many identities
+
+/// The retained subtree roots of a pass, indexed so that asking whether an
+/// identity lies below any of them is one climb of that identity's chain
+/// rather than one climb per root.
+///
+/// A cache prunes what a pass did not mark active, and a memo hit at a
+/// subtree root marks nothing below it — it declares the subtree retained
+/// instead. So at the end of every pass the prune asks, of every entry not
+/// marked, whether some retained root is its ancestor: on a page of a dozen
+/// memoised cards that was 764 of 788 entries, each climbing to every root's
+/// depth for every root, and all of them retained. Here the roots' structural
+/// hashes go in a set, the entry's chain is climbed once from its parent, and
+/// `==` (the structural walk) runs only on a hash hit.
+public struct RetainedSubtreeIndex {
+    private let roots: [ViewIdentity]
+    private let hashes: Set<Int>
+    private let shallowest: Int
+    private let anyRootIsRaw: Bool
+
+    /// - Parameter roots: The pass's retained subtree roots, in any order.
+    public init(roots: [ViewIdentity]) {
+        self.roots = roots
+        self.hashes = Set(roots.map(\.structuralHash))
+        self.shallowest = roots.map(\.depth).min() ?? .max
+        self.anyRootIsRaw = roots.contains(where: \.isRawRooted)
+    }
+
+    /// Whether nothing is retained at all — the caller can skip the ask.
+    public var isEmpty: Bool { roots.isEmpty }
+
+    /// Whether some root is a strict ancestor of `identity`.
+    public func retains(_ identity: ViewIdentity) -> Bool {
+        guard !roots.isEmpty else { return false }
+        // A raw-rooted identity has no chain: ancestry is a path-string prefix
+        // that only `isAncestor(of:)` can see, so it takes the walk.
+        if anyRootIsRaw || identity.isRawRooted {
+            return roots.contains { $0.isAncestor(of: identity) }
+        }
+        var cursor = identity.parent
+        while let candidate = cursor, candidate.depth >= shallowest {
+            if hashes.contains(candidate.structuralHash),
+                roots.contains(where: { $0.depth == candidate.depth && $0 == candidate })
+            {
+                return true
+            }
+            cursor = candidate.parent
+        }
+        return false
     }
 }
