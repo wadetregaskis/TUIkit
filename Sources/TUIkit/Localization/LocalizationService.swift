@@ -226,11 +226,8 @@ public final class LocalizationService: @unchecked Sendable {
     /// Loads translations from bundled JSON file.
     private func loadTranslationsFromBundle(language: String) -> [String: String]? {
         guard
-            let url = Bundle.module.url(
-                forResource: language,
-                withExtension: "json",
-                subdirectory: "translations"
-            )
+            let url = moduleResourceURL(
+                named: language, extension: "json", subdirectory: "translations")
         else {
             return nil
         }
