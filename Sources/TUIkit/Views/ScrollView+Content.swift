@@ -161,23 +161,43 @@ extension _ScrollViewCore {
         // might just be a 'N more above' indicator — far
         // shorter than the proposed width). When horizontal scrolling is on, each
         // line is first sliced to the visible column window (carrying SGR state).
-        var visibleLines = Array(
-            full.lines.dropFirst(scrollOffset).prefix(viewportHeight)
-        ).map { line -> String in
-            let windowed = horizontalEnabled
-                ? line.ansiAwareSlice(visibleStart: horizontalOffset, visibleCount: viewportWidth)
-                : line
-            return windowed.padToVisibleWidth(viewportWidth)
+        // Each visible line's width from what the content buffer already
+        // knows — a stack pads its lines to one width and says so — rather
+        // than a scan per line per frame to learn it, and the window's own
+        // buffer says what it knows in turn, so the scrollbar and the writer
+        // do not scan either. A horizontal slice changes the width, so only
+        // the vertical case carries it; the rest measure as before.
+        let window = full.lines.dropFirst(scrollOffset).prefix(viewportHeight)
+        var visibleLines: [String] = []
+        visibleLines.reserveCapacity(viewportHeight)
+        var visibleWidths: [Int] = []
+        visibleWidths.reserveCapacity(viewportHeight)
+        for (offset, line) in window.enumerated() {
+            if horizontalEnabled {
+                let sliced = line.ansiAwareSlice(
+                    visibleStart: horizontalOffset, visibleCount: viewportWidth)
+                visibleLines.append(sliced.padToVisibleWidth(viewportWidth))
+                visibleWidths.append(max(viewportWidth, sliced.strippedLength))
+                continue
+            }
+            let known: Int? =
+                full.linesAreUniformWidth ? full.width : full.lineWidths?[scrollOffset + offset]
+            let width = known ?? line.strippedLength
+            if width >= viewportWidth {
+                visibleLines.append(line)
+                visibleWidths.append(width)
+            } else {
+                visibleLines.append(line.padToVisibleWidth(viewportWidth, knownVisibleWidth: width))
+                visibleWidths.append(viewportWidth)
+            }
         }
         if visibleLines.count < viewportHeight {
             let blank = String(repeating: " ", count: viewportWidth)
-            visibleLines.append(
-                contentsOf: Array(
-                    repeating: blank,
-                    count: viewportHeight - visibleLines.count
-                )
-            )
+            let missing = viewportHeight - visibleLines.count
+            visibleLines.append(contentsOf: Array(repeating: blank, count: missing))
+            visibleWidths.append(contentsOf: repeatElement(viewportWidth, count: missing))
         }
+        let uniform = visibleWidths.allSatisfy { $0 == viewportWidth }
 
         // Filter + shift overlays. An overlay is kept if its
         // vertical span intersects [scrollOffset, scrollOffset
@@ -295,7 +315,9 @@ extension _ScrollViewCore {
             return clipped.shifted(byX: dx, y: -scrollOffset)
         }
 
-        var result = FrameBuffer(lines: visibleLines, width: viewportWidth)
+        var result = FrameBuffer(
+            lines: visibleLines, width: viewportWidth,
+            uniformWidth: uniform, lineWidths: uniform ? nil : visibleWidths)
         result.overlays = visibleOverlays
         result.hitTestRegions = visibleRegions
         result.animatedCells = visibleRuns

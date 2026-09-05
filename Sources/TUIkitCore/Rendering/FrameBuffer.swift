@@ -912,18 +912,30 @@ extension FrameBuffer {
 
         var clippedLines = self.height > maxHeight ? Array(lines.prefix(maxHeight)) : lines
         var resultWidth = 0
+        // The widths this walk learns are carried out: a consumer that pads
+        // these lines next (a scroll window, a scrollbar, the writer) then
+        // does not scan them again to learn what was just measured here.
+        var clippedWidths: [Int] = []
+        clippedWidths.reserveCapacity(clippedLines.count)
         for index in clippedLines.indices {
-            let lineWidth = clippedLines[index].strippedLength
+            // `self.width`: the parameter `width` is the TARGET, and shadows it.
+            let known: Int? = linesAreUniformWidth ? self.width : lineWidths?[index]
+            let lineWidth = known ?? clippedLines[index].strippedLength
             if lineWidth > maxWidth {
                 let (clipped, clippedWidth) = clippedLines[index].ansiAwarePrefixWithWidth(
                     visibleCount: maxWidth, knownVisibleWidth: lineWidth)
                 clippedLines[index] = clipped
                 resultWidth = max(resultWidth, clippedWidth)
+                clippedWidths.append(clippedWidth)
             } else {
                 resultWidth = max(resultWidth, lineWidth)
+                clippedWidths.append(lineWidth)
             }
         }
-        var result = FrameBuffer(lines: clippedLines, width: resultWidth)
+        let uniform = clippedWidths.allSatisfy { $0 == resultWidth }
+        var result = FrameBuffer(
+            lines: clippedLines, width: resultWidth,
+            uniformWidth: uniform, lineWidths: uniform ? nil : clippedWidths)
         // Overlay layers are free-floating and composited separately at the
         // root — clamping the in-flow content must never discard them. The
         // old comment claimed the same for hit regions, but theirs describe

@@ -1374,7 +1374,14 @@ extension String {
     /// - Parameter targetWidth: The desired visible width in terminal cells.
     /// - Returns: The padded string.
     public func padToVisibleWidth(_ targetWidth: Int) -> String {
-        let currentWidth = strippedLength
+        padToVisibleWidth(targetWidth, knownVisibleWidth: strippedLength)
+    }
+
+    /// ``padToVisibleWidth(_:)`` for a caller that already knows the visible
+    /// width — a buffer carrying `lineWidths`, a clamp that just measured —
+    /// so the scan is not repeated to learn it. `knownVisibleWidth` MUST be
+    /// this string's visible width; a wrong one pads to the wrong length.
+    public func padToVisibleWidth(_ targetWidth: Int, knownVisibleWidth currentWidth: Int) -> String {
         if currentWidth >= targetWidth {
             return self
         }
