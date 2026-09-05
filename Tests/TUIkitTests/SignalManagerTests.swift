@@ -21,13 +21,23 @@ import Testing
 /// the loop).
 ///
 /// `.serialized` because these send process-global signals — two of these
-/// running concurrently would cross wires. A time limit so a hang (e.g. a
-/// source that never arms, which would also be a real bug) fails fast rather
-/// than blocking the suite. Sending a signal is safe only *after* `install()`
-/// returns: it awaits the registration barrier, so by then every source is
-/// armed and even SIGTERM is caught rather than terminating the test runner.
+/// running concurrently would cross wires. Sending a signal is safe only
+/// *after* `install()` returns: it awaits the registration barrier, so by then
+/// every source is armed and even SIGTERM is caught rather than terminating
+/// the test runner.
+///
+/// The time limit is for a source that never arms — a real bug, and one that
+/// would otherwise hang the suite. It is five minutes rather than one because
+/// of where the wake arrives. The source's handler runs on the main queue,
+/// and in a full run that queue already holds every main-actor test not yet
+/// started, so the handler cannot run until they have: the wake lands
+/// seconds before the run ends, whatever the run's length. Measured on CI at
+/// one commit, the first test here "passed after" 46.9 s of a 50.3 s macOS
+/// run and 57.9 s of a 61.6 s Linux run, and failed a one-minute limit on a
+/// Linux 6.2 lane whose run took 72.7 s. A limit inside the run's own length
+/// is a limit on the run, not on signal delivery.
 @MainActor
-@Suite("SignalManager", .serialized, .timeLimit(.minutes(1)))
+@Suite("SignalManager", .serialized, .timeLimit(.minutes(5)))
 struct SignalManagerTests {
     /// Installs `signals`, sends `signal`, and returns once the source handler
     /// has run and woken us — proving delivery reached the main-actor handler.
