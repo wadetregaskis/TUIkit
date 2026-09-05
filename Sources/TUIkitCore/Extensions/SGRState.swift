@@ -38,310 +38,408 @@
 /// A code outside that set is passed through verbatim, in order, ahead of the
 /// netted state: unknown means "not safe to reason about", and dropping a code
 /// is worse than emitting one too many.
+///
+/// ## Representation
+///
+/// A bitmask, two small colour values and a (nearly always empty) array — no
+/// `Set`, no `[String]` per colour. This state is parsed and compared once per
+/// CELL by the cell diff, the overlay split, the SGR collapse and the opacity
+/// blend, on every frame; with a `Set<Int>` of attributes and parameter lists
+/// of strings, every copy retained three heap objects and every `apply` split
+/// the sequence into strings and parsed each. Numerals are spelled
+/// canonically on the way out (`07` in reads back as `7`), which a terminal
+/// cannot tell apart; every test model compares the state, not the spelling.
 public struct SGRState: Sendable, Equatable {
 
-    /// The on/off attributes, in the order they are emitted.
-    ///
-    /// Stored as a set of the codes that turn them ON, because that is what
-    /// ``rendered`` needs and it makes the reset codes a plain removal.
-    private var attributes: Set<Int> = []
+    /// A colour as SGR spells it: a named code as given (`31`, `97`, `44`,
+    /// `107`), a 256-colour index, or 24-bit components. Which slot it is in
+    /// says whether the extended forms render as 38 or 48.
+    private enum Colour: Sendable, Equatable {
+        case named(Int)
+        case indexed(Int)
+        case rgb(Int, Int, Int)
 
-    /// The foreground parameter list (e.g. `["31"]`, `["38", "5", "208"]`), or
-    /// `nil` for the terminal's default.
-    private var foreground: [String]?
+        /// The parameters as `apply` would have been given them.
+        func codes(introducer: Int) -> [String] {
+            switch self {
+            case .named(let code): return [String(code)]
+            case .indexed(let index): return [String(introducer), "5", String(index)]
+            case .rgb(let red, let green, let blue):
+                return [String(introducer), "2", String(red), String(green), String(blue)]
+            }
+        }
 
-    /// The background parameter list, or `nil` for the terminal's default.
-    private var background: [String]?
+        /// Appends the parameters to a sequence under construction.
+        func append(to parameters: inout String, introducer: Int) {
+            switch self {
+            case .named(let code):
+                parameters += String(code)
+            case .indexed(let index):
+                parameters += String(introducer)
+                parameters += ";5;"
+                parameters += String(index)
+            case .rgb(let red, let green, let blue):
+                parameters += String(introducer)
+                parameters += ";2;"
+                parameters += String(red)
+                parameters += ";"
+                parameters += String(green)
+                parameters += ";"
+                parameters += String(blue)
+            }
+        }
+
+        /// A colour from a complete parameter list — one named code, or the
+        /// three- or five-element extended forms — or `nil` for anything else.
+        init?(parameters: [String]) {
+            switch parameters.count {
+            case 1:
+                guard let code = Int(parameters[0]) else { return nil }
+                self = .named(code)
+            case 3:
+                guard parameters[1] == "5", let index = Int(parameters[2]) else { return nil }
+                self = .indexed(index)
+            case 5:
+                guard parameters[1] == "2", let red = Int(parameters[2]), let green = Int(parameters[3]),
+                    let blue = Int(parameters[4])
+                else { return nil }
+                self = .rgb(red, green, blue)
+            default:
+                return nil
+            }
+        }
+    }
+
+    /// The on/off attributes: bit `n` is set when attribute `n` (1...9) is on.
+    /// Rendered in ascending order, which is bit order.
+    private var attributes: UInt16 = 0
+
+    /// The foreground, or `nil` for the terminal's default.
+    private var foreground: Colour?
+
+    /// The background, or `nil` for the terminal's default.
+    private var background: Colour?
 
     /// Codes this model does not understand, kept verbatim and in order.
     private var passthrough: [String] = []
 
     /// Whether the state is the terminal's default — nothing to emit.
     public var isDefault: Bool {
-        attributes.isEmpty && foreground == nil && background == nil && passthrough.isEmpty
+        attributes == 0 && foreground == nil && background == nil && passthrough.isEmpty
     }
 
     public init() {}
 
-    /// The attribute codes and the codes that switch each one off.
+    /// The bits each off-code clears.
     ///
     /// 21 is included alongside 22 for bold: ECMA-48 assigns 21 to
     /// double-underline and many terminals treat it as bold-off, so honouring
     /// both is the conservative reading — this is netting, and treating an
     /// off-code as a no-op would leave styling ON that the original cleared.
-    private static let attributeOff: [Int: Set<Int>] = [
-        22: [1, 2],  // normal intensity: clears bold and dim
-        23: [3], 24: [4], 25: [5, 6], 27: [7], 28: [8], 29: [9],
-        21: [1],
-    ]
+    private static func attributesOff(by code: Int) -> UInt16 {
+        switch code {
+        case 21: return bit(1)
+        case 22: return bit(1) | bit(2)  // normal intensity: clears bold and dim
+        case 23: return bit(3)
+        case 24: return bit(4)
+        case 25: return bit(5) | bit(6)
+        case 27: return bit(7)
+        case 28: return bit(8)
+        case 29: return bit(9)
+        default: return 0
+        }
+    }
+
+    private static func bit(_ attribute: Int) -> UInt16 { 1 << UInt16(attribute) }
+
+    /// The attributes that put ink on a cell holding nothing but a space:
+    /// underline, blink (both), reverse, strike.
+    private static let visibleOnBlankCell: UInt16 = bit(4) | bit(5) | bit(6) | bit(7) | bit(9)
+
+    /// Sets the foreground to a colour's SGR parameters — `["31"]`,
+    /// `["38", "5", "n"]`, `["38", "2", "r", "g", "b"]` — or to the terminal's
+    /// default for `nil` (what SGR 39 does).
+    ///
+    /// The same state ``apply(_:)`` reaches for `ESC[<parameters>m`. The parse
+    /// is the way to learn a colour from text; this is the way to state one
+    /// you already hold — `apply` rebuilt and re-split the sequence per cell
+    /// of a translucent overlay, 17% of that page's frame. A list that is not
+    /// a complete colour is applied as the sequence it spells.
+    ///
+    /// - Parameter parameters: A well-formed colour parameter list, or `nil`.
+    public mutating func setForeground(parameters: [String]?) {
+        guard let parameters else {
+            foreground = nil
+            return
+        }
+        if let colour = Colour(parameters: parameters) {
+            foreground = colour
+        } else {
+            apply("\u{1B}[" + parameters.joined(separator: ";") + "m")
+        }
+    }
+
+    /// The background twin of ``setForeground(parameters:)`` (SGR 49 for `nil`).
+    public mutating func setBackground(parameters: [String]?) {
+        guard let parameters else {
+            background = nil
+            return
+        }
+        if let colour = Colour(parameters: parameters) {
+            background = colour
+        } else {
+            apply("\u{1B}[" + parameters.joined(separator: ";") + "m")
+        }
+    }
 
     /// Folds one complete escape sequence into the state.
     ///
     /// Non-SGR sequences (anything not ending in `m`) are ignored: they move the
     /// cursor or clear the screen, and neither is "styling in force".
     ///
+    /// Walks the bytes and parses each parameter in place: no split, no
+    /// `String` per code. A parameter that is not a number is passed through
+    /// as the text it was.
+    ///
     /// - Parameter sequence: A full escape, `ESC [ … m`.
-    /// Sets the foreground to a colour's SGR parameters — `["31"]`,
-    /// `["38", "5", "n"]`, `["38", "2", "r", "g", "b"]` — or to the terminal's
-    /// default for `nil` (what SGR 39 does).
-    ///
-    /// Byte-for-byte what ``apply(_:)`` stores for `ESC[<parameters>m`: a
-    /// named colour is kept as its one code and an extended one as its
-    /// complete parameter list, and 39 clears. The parse is the way to learn
-    /// a colour from text; this is the way to state one you already hold —
-    /// `apply` rebuilt and re-split the sequence per cell of a translucent
-    /// overlay, 17% of that page's frame.
-    ///
-    /// - Parameter parameters: A well-formed colour parameter list, or `nil`.
-    public mutating func setForeground(parameters: [String]?) {
-        foreground = parameters
-    }
-
-    /// The background twin of ``setForeground(parameters:)`` (SGR 49 for `nil`).
-    public mutating func setBackground(parameters: [String]?) {
-        background = parameters
-    }
-
     public mutating func apply(_ sequence: String) {
-        guard sequence.hasSuffix("m") else { return }
-        var parameters = sequence.dropFirst().drop(while: { $0 != "[" }).dropFirst().dropLast()
-        if parameters.isEmpty { parameters = "0" }  // a bare ESC[m is a reset
-
-        let codes = parameters.split(separator: ";", omittingEmptySubsequences: false).map {
-            $0.isEmpty ? "0" : String($0)
+        var codes: [Parameter] = []
+        let utf8 = sequence.utf8
+        guard utf8.last == 0x6D else { return }  // 'm'
+        // The parameters run from after '[' to before 'm'; a sequence with no
+        // '[' has no parameters, which is the same as an empty list.
+        var index = utf8.startIndex
+        while index < utf8.endIndex, utf8[index] != 0x5B { index = utf8.index(after: index) }  // '['
+        if index < utf8.endIndex { index = utf8.index(after: index) }
+        let end = utf8.index(before: utf8.endIndex)
+        var start = index
+        while true {
+            var cursor = start
+            var value = 0
+            var numeric = true
+            var empty = true
+            while cursor < end, utf8[cursor] != 0x3B {  // ';'
+                let byte = utf8[cursor]
+                if numeric, byte >= 0x30, byte <= 0x39, value < 100_000_000 {
+                    value = value * 10 + Int(byte - 0x30)
+                } else {
+                    numeric = false
+                }
+                empty = false
+                cursor = utf8.index(after: cursor)
+            }
+            if empty {
+                codes.append(.number(0))  // a bare ESC[m, or an empty slot, is 0
+            } else if numeric {
+                codes.append(.number(value))
+            } else {
+                codes.append(.text(String(sequence[start..<cursor])))
+            }
+            guard cursor < end else { break }
+            start = utf8.index(after: cursor)
+            if start == end { codes.append(.number(0)); break }  // a trailing ';'
         }
+        apply(codes)
+    }
+
+    /// One parsed parameter: a number, or text this model cannot read.
+    private enum Parameter {
+        case number(Int)
+        case text(String)
+
+        var text: String {
+            switch self {
+            case .number(let value): return String(value)
+            case .text(let text): return text
+            }
+        }
+    }
+
+    private mutating func apply(_ codes: [Parameter]) {
         var index = 0
         while index < codes.count {
-            let code = codes[index]
-            guard let value = Int(code) else {
-                passthrough.append(code)
+            guard case .number(let value) = codes[index] else {
+                passthrough.append(codes[index].text)
                 index += 1
                 continue
             }
             switch value {
             case 0:
                 self = Self()
-            case 1, 2, 3, 4, 5, 6, 7, 8, 9:
-                attributes.insert(value)
+            case 1...9:
+                attributes |= Self.bit(value)
             case 21, 22, 23, 24, 25, 27, 28, 29:
-                attributes.subtract(Self.attributeOff[value] ?? [])
+                attributes &= ~Self.attributesOff(by: value)
             case 30...37, 90...97:
-                foreground = [code]
+                foreground = .named(value)
             case 39:
                 foreground = nil
             case 40...47, 100...107:
-                background = [code]
+                background = .named(value)
             case 49:
                 background = nil
             case 38, 48, 58:
                 index += applyExtendedColour(value, codes, from: index)
                 continue
             default:
-                passthrough.append(code)
+                passthrough.append(String(value))
             }
             index += 1
         }
     }
 
-    /// Folds one extended-colour sequence — `5;n` (256) or `2;r;g;b` (24-bit)
-    /// after a 38/48/58 introducer — and returns how many parameters it
-    /// consumed. 58 is the underline colour: not a colour this models, but
-    /// its arguments belong to IT and must not be re-parsed as top-level
-    /// codes — `58;5;4` read that way nets to blink + underline, two
-    /// attributes nobody set — so it rides passthrough as one atom.
-    ///
-    /// A truncated introducer — `38;5` with no index, `38;2` short of three
-    /// channels — is dropped rather than stored: parameter lists are joined
-    /// back to back on re-emission, so a stored fragment would consume
-    /// whatever code came next (a following `41` becoming the "missing"
-    /// palette index, and the background vanishing). What the terminal did
-    /// with the malformed original is undefined; eating a neighbour is not.
+    /// Folds a `38;…`, `48;…` or `58;…` parameter group, and reports how many
+    /// parameters it consumed. An incomplete group is consumed and ignored: it
+    /// cannot be read as a colour, and its digits are not attributes.
     private mutating func applyExtendedColour(
-        _ introducer: Int, _ codes: [String], from index: Int
+        _ introducer: Int, _ codes: [Parameter], from index: Int
     ) -> Int {
-        let span = extendedColourSpan(codes, from: index)
-        let parameters = Array(codes[index..<min(codes.count, index + span)])
-        guard Self.isCompleteExtendedColour(parameters) else { return span }
+        let span = Self.extendedColourSpan(codes, from: index)
+        let parameters = codes[index..<min(codes.count, index + span)]
+        let colour: Colour?
+        switch (parameters.count, parameters.dropFirst().first) {
+        case (3, .number(5)):
+            if case .number(let value) = parameters[index + 2] { colour = .indexed(value) } else { colour = nil }
+        case (5, .number(2)):
+            if case .number(let red) = parameters[index + 2], case .number(let green) = parameters[index + 3],
+                case .number(let blue) = parameters[index + 4]
+            {
+                colour = .rgb(red, green, blue)
+            } else {
+                colour = nil
+            }
+        default:
+            colour = nil
+        }
+        guard let colour else { return span }
         switch introducer {
-        case 38: foreground = parameters
-        case 48: background = parameters
-        default: passthrough.append(parameters.joined(separator: ";"))
+        case 38: foreground = colour
+        case 48: background = colour
+        default: passthrough.append(parameters.map(\.text).joined(separator: ";"))
         }
         return span
     }
 
-    /// How many parameters an extended-colour introducer consumes, including
-    /// itself. A malformed run consumes only what is there.
-    private func extendedColourSpan(_ codes: [String], from index: Int) -> Int {
+    private static func extendedColourSpan(_ codes: [Parameter], from index: Int) -> Int {
         guard index + 1 < codes.count else { return 1 }
         switch codes[index + 1] {
-        case "5": return min(3, codes.count - index)
-        case "2": return min(5, codes.count - index)
+        case .number(5): return min(3, codes.count - index)
+        case .number(2): return min(5, codes.count - index)
         default: return 1
         }
     }
 
-    /// Whether an extended-colour parameter list is whole: introducer, form,
-    /// and every channel the form promises.
-    private static func isCompleteExtendedColour(_ parameters: [String]) -> Bool {
-        guard parameters.count >= 2 else { return false }
-        switch parameters[1] {
-        case "5": return parameters.count == 3
-        case "2": return parameters.count == 5
-        default: return false
-        }
-    }
-
-    /// The shortest escape sequence that puts a freshly-reset terminal into this
-    /// state, or `""` when it is already the default.
-    ///
-    /// One `ESC[…m` carrying every parameter, rather than one escape per
-    /// attribute: same result, fewer bytes, and it is what a terminal parses
-    /// fastest.
+    /// The shortest sequence that puts a default terminal into this state, or
+    /// the empty string for the default state.
     public var rendered: String {
         guard !isDefault else { return "" }
         return "\u{1B}[" + parameters + "m"
     }
 
-    /// ``rendered``'s parameter list on its own, for a caller assembling one
-    /// escape out of several things — a reset and this state, say.
+    /// The netted parameters, `;`-separated: passthrough first, then the
+    /// attributes, then the colours.
+    ///
+    /// Ascending attribute order, so the same state always renders identically
+    /// — an unstable rendering would make buffers that ARE equal compare
+    /// unequal and defeat the render memo.
     public var parameters: String {
-        var parameters: [String] = passthrough
-        // Sorted so the same state always renders identically — a `Set` has no
-        // order, and an unstable rendering would make buffers that ARE equal
-        // compare unequal and defeat the render memo.
-        parameters += attributes.sorted().map(String.init)
-        if let foreground { parameters += foreground }
-        if let background { parameters += background }
-        return parameters.joined(separator: ";")
+        var result = passthrough.joined(separator: ";")
+        var attribute = 1
+        while attribute <= 9 {
+            if attributes & Self.bit(attribute) != 0 {
+                if !result.isEmpty { result += ";" }
+                result += String(attribute)
+            }
+            attribute += 1
+        }
+        if let foreground {
+            if !result.isEmpty { result += ";" }
+            foreground.append(to: &result, introducer: 38)
+        }
+        if let background {
+            if !result.isEmpty { result += ";" }
+            background.append(to: &result, introducer: 48)
+        }
+        return result
     }
 
-    /// The shortest escape sequence that takes a terminal **already in
-    /// `previous`** into this state, or `""` when it is already there.
+    /// The shortest sequence that takes a terminal from `previous` to this
+    /// state, or the empty string when they are the same.
     ///
-    /// ``rendered`` answers the same question from a freshly-reset terminal,
-    /// which is the only safe answer when the incoming state is unknown — but
-    /// inside one built line it is known, because we put it there. Saying only
-    /// what changed is most of a frame: the two commonest escapes in a divider
-    /// drag were `ESC[0;48;5;16m` (12 bytes, and only the foreground was going
-    /// back to default — `ESC[39m`, 5) and `ESC[0;38;5;22;48;5;16m` (19 bytes
-    /// over a background that was already 16 — `ESC[38;5;22m`, 11).
-    ///
-    /// Two changes are NOT expressed as a delta, and both fall back to a
-    /// reset-prefixed absolute:
-    ///
-    /// - **Turning an attribute off.** The off-codes are where terminals
-    ///   genuinely disagree — ECMA-48 assigns 21 to double-underline while many
-    ///   terminals read it as bold-off, which is why ``apply(_:)`` honours both
-    ///   readings. Emitting one would be betting on the terminal's; a reset is
-    ///   unambiguous everywhere, and this is the render path.
-    /// - **A change in the passthrough codes.** Unknown means "not safe to
-    ///   reason about", so it is not safe to reason about the difference either.
-    ///
-    /// Only `39` / `49` (default foreground / background) are added to the
-    /// codes TUIkit emits, and both are universal — see
-    /// `Documentation/Terminal-compatibility.md`.
+    /// A delta — only the components that changed — where one can be spelled:
+    /// an attribute that went OFF has no single off-code that is safe on every
+    /// terminal, so that case falls back to a reset-prefixed absolute.
     public func rendered(changingFrom previous: Self) -> String {
         guard self != previous else { return "" }
         let absolute = isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + parameters + "m"
-        guard previous.attributes.isSubset(of: attributes),
+        guard previous.attributes & ~attributes == 0,
             previous.passthrough == passthrough
         else { return absolute }
 
-        var codes = attributes.subtracting(previous.attributes).sorted().map(String.init)
-        if foreground != previous.foreground { codes += foreground ?? ["39"] }
-        if background != previous.background { codes += background ?? ["49"] }
+        var codes = ""
+        let turnedOn = attributes & ~previous.attributes
+        var attribute = 1
+        while attribute <= 9 {
+            if turnedOn & Self.bit(attribute) != 0 {
+                if !codes.isEmpty { codes += ";" }
+                codes += String(attribute)
+            }
+            attribute += 1
+        }
+        if foreground != previous.foreground {
+            if !codes.isEmpty { codes += ";" }
+            if let foreground { foreground.append(to: &codes, introducer: 38) } else { codes += "39" }
+        }
+        if background != previous.background {
+            if !codes.isEmpty { codes += ";" }
+            if let background { background.append(to: &codes, introducer: 48) } else { codes += "49" }
+        }
         // Unreachable — equal attributes, foreground and background with equal
         // passthrough IS equality — but a delta that says nothing would silently
         // leave the previous styling in force, so spend the bytes rather than
         // trust the reasoning.
         guard !codes.isEmpty else { return absolute }
-        let delta = "\u{1B}[" + codes.joined(separator: ";") + "m"
+        let delta = "\u{1B}[" + codes + "m"
         // A delta is usually shorter, but not always: going back to the default
         // spells out `ESC[39;49m` where `ESC[0m` says the same in four bytes.
         // Both are correct, so take whichever is smaller.
         return delta.utf8.count <= absolute.utf8.count ? delta : absolute
     }
 
-    /// Whether this state and `other` paint a **blank cell** — a cell holding
-    /// nothing but a space — the same.
-    ///
-    /// Weaker than equality on purpose. Most of what SGR expresses is a
-    /// property of a GLYPH, and a blank cell has none: bold, dim, italic and
-    /// conceal are all unobservable on a space, and so is the foreground colour
-    /// unless something is drawing in it. A screen full of background is
-    /// exactly what a terminal UI mostly is — the gutters, the padding to the
-    /// right edge, the space between a label and its value — so a diff that
-    /// calls those cells dirty because an invisible foreground changed rewrites
-    /// most of a row to change nothing anyone can see.
-    ///
-    /// What IS observable on a space, and so is still compared:
-    ///
-    /// - the **background**, which is the whole of what a blank cell shows;
-    /// - **underline, strikethrough and blink** (4, 5, 6, 9), which draw ink on
-    ///   an empty cell, and **reverse** (7), which makes the foreground the
-    ///   colour the cell is painted;
-    /// - the **foreground**, but only when one of those is in force — that is
-    ///   precisely when it has something to colour;
-    /// - any **passthrough** code, because unknown means "not safe to reason
-    ///   about", and that includes reasoning about whether it is visible.
-    ///
-    /// The caller must have established that both cells hold a space. This says
-    /// nothing about a cell with a glyph in it.
+    /// Whether a cell holding nothing but a space looks the same under this
+    /// state as under `other`: the background, the attributes that put ink on
+    /// a blank cell, and — only when one of those is on — the foreground they
+    /// draw in. A passthrough code is unknown and might draw, so it counts.
     public func paintsBlankCellsIdentically(to other: Self) -> Bool {
         guard background == other.background,
             passthrough.isEmpty, other.passthrough.isEmpty
         else { return false }
-        let mine = attributes.intersection(Self.visibleOnBlankCell)
-        guard mine == other.attributes.intersection(Self.visibleOnBlankCell) else { return false }
+        let mine = attributes & Self.visibleOnBlankCell
+        guard mine == other.attributes & Self.visibleOnBlankCell else { return false }
         // Those attributes draw in the foreground colour (or, for reverse, AS
         // the background), so with any of them in force the foreground is as
         // visible as the background is.
-        return mine.isEmpty || foreground == other.foreground
+        return mine == 0 || foreground == other.foreground
     }
 
-    /// The attributes that put ink on a cell holding nothing but a space.
-    private static let visibleOnBlankCell: Set<Int> = [4, 5, 6, 7, 9]
+    /// Whether reverse video (SGR 7) is in force.
+    package var reversesVideo: Bool { attributes & Self.bit(7) != 0 }
 
-    /// Whether reverse video (SGR 7) is in force — the foreground is the
-    /// colour the cell is painted, and the background is the colour any ink
-    /// draws in.
-    ///
-    /// Exposed for the opacity blend, which reasons about the colours a cell
-    /// DISPLAYS: a reversed cell's field is its foreground, and a reversed
-    /// space is a solid fill, not a blank.
-    package var reversesVideo: Bool { attributes.contains(7) }
-
-    /// Whether this state draws a PATTERN of ink on a cell holding nothing but
-    /// a space — underline, blink and strikethrough all draw in the foreground
-    /// colour with no glyph present.
-    ///
-    /// Reverse (7) is deliberately not included: it draws no pattern, it swaps
-    /// which colour fills the cell, and is answered by ``reversesVideo``. The
-    /// remaining codes here are `visibleOnBlankCell` minus it, and the two
-    /// definitions must move together.
+    /// Whether an attribute in force draws in the foreground colour on a blank
+    /// cell — underline, blink, strike — so the foreground is visible there.
     package var paintsInkOnBlankCell: Bool {
-        !attributes.isDisjoint(with: [4, 5, 6, 9])
+        attributes & (Self.bit(4) | Self.bit(5) | Self.bit(6) | Self.bit(9)) != 0
     }
 
-    /// Whether this state names a background at all.
-    ///
-    /// The cheap form of `!renderedBackground.isEmpty`, for the composite path,
-    /// which asks it once per escape in an overlay and must not build a string
-    /// to find out.
+    /// Whether a background colour is in force (as opposed to the default).
     public var namesBackground: Bool { background != nil }
 
-    /// Just the BACKGROUND half of ``rendered`` — the escape that re-establishes
-    /// this state's background colour and says nothing about anything else, or
-    /// `""` when the background is the terminal's own.
-    ///
-    /// Wanted wherever a run of cells is redrawn *in place* over a surface that
-    /// is not being redrawn with it. Such a redraw must land on the background
-    /// that was already there, but must NOT inherit the foreground, bold or
-    /// underline in force at that point — those belong to the text it is
-    /// replacing, not to the surface under it.
+    /// Just the background, as a sequence — what a padded run needs restored
+    /// under it — or the empty string when the default is in force.
     public var renderedBackground: String {
         guard let background else { return "" }
-        return "\u{1B}[" + background.joined(separator: ";") + "m"
+        var parameters = ""
+        background.append(to: &parameters, introducer: 48)
+        return "\u{1B}[" + parameters + "m"
     }
 }

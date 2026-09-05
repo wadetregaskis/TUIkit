@@ -3422,3 +3422,28 @@ Bench kitchensink −55.6% (the hug's two thousand sizes under one retained
 list), dashboard −3.8%; live kitchensink −30.4%. The diff writer now also
 reports rows rebuilt per frame under the same switch, for the next look
 at the output half.
+
+## 48. Widths carried, and a state that is a number (2026-09-05, late)
+
+**The scroll window and the clamp carry the widths they know** (9769bd6d).
+`strippedLength` was 10.3% of the live dashboard frame: the window padded
+every visible line by scanning it, its buffer measured every line again,
+and the scrollbar scanned each a third time — for lines a stack had just
+padded to one width and said so. The window reads the content buffer's
+`linesAreUniformWidth`/`lineWidths`, pads through a known-width overload,
+and says what it knows in turn; the clamp does the same on the way in and
+carries what it measured on the way out. Live dashboard −5.6%; the bench
+cannot see it.
+
+**`SGRState` is a bitmask and two small colours** (this commit). The
+per-cell type under the cell diff, the overlay split, the SGR collapse and
+the opacity blend held a `Set<Int>`, two `[String]`s and a `[String]`, and
+`apply` split every sequence into strings. Now a `UInt16`, an enum per
+colour, and a byte walk that parses parameters where they stand. Bench
+translucent −10.8%; live translucent −10.3%, dashboard −5.9%. Numerals
+spell canonically on the way out, which no terminal can tell apart and
+no test compares.
+
+Live dashboard after §43–48, per frame: the scene ~30%, the diff writer
+~20% (`buildLine` rebuilding the rows a pulse step moved, `collapsingAdjacentSGR`
+under it), animation ticks ~14%, pass begin/end ~10%.
