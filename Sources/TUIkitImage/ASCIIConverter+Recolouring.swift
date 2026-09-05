@@ -128,9 +128,7 @@ extension ASCIIConverter {
             // property access with its one-time-initialisation check, and a
             // retain of the palette's storage — a million times, for an answer
             // that could not change between pixels.
-            let mode = colorMode
-            let threshold = monoThreshold
-            scaled.mapPixels { quantizePixel($0, mode: mode, monoThreshold: threshold, table: table) }
+            scaled.quantise(with: PixelQuantiser(mode: colorMode, monoThreshold: monoThreshold, table: table))
         }
 
         // Mono's two values become mono's two COLOURS. Done after the

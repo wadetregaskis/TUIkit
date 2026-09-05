@@ -114,6 +114,12 @@ extension RGBAImage {
         }
     }
 
+    /// Quantises every pixel in place through `quantiser`'s loop — see
+    /// `PixelQuantiser.apply(to:)` for why the loop lives there.
+    mutating func quantise(with quantiser: PixelQuantiser) {
+        quantiser.apply(to: &pixels)
+    }
+
     /// Adds an error value to the pixel at the given coordinates (for dithering).
     ///
     /// Clamps each channel to the valid 0-255 range.
