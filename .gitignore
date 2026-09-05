@@ -76,3 +76,10 @@ palette_probe*.json
 placement_probe*.json
 recent_emoji_sweep*.json
 treatment_card*.json
+
+# The WebAssembly demo's build products (Tools/Web/build.sh makes them).
+# The module is ~50 MB and the resources are copies of what SwiftPM already
+# built, so none of it belongs in the history — see Tools/Web/README.md.
+Tools/Web/site/Example.wasm
+Tools/Web/site/manifest.json
+Tools/Web/site/resources/

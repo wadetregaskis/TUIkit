@@ -1,0 +1,204 @@
+<!doctype html>
+<!--
+  🖥️ TUIkit — Terminal UI Kit for Swift
+  The Example app, compiled to WebAssembly, running in a terminal made of DOM.
+
+  The page owns the terminal (xterm.js) and the keyboard; the worker owns the
+  Swift program. Between them sit two SharedArrayBuffers: one ring of keystroke
+  bytes, and one control block the worker parks on when it has nothing to do.
+  Serve this with `Tools/Web/serve.py` — SharedArrayBuffer needs the
+  cross-origin isolation headers it sets.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TUIkit in WebAssembly</title>
+    <link rel="stylesheet" crossorigin="anonymous" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.min.css" />
+    <style>
+      :root {
+        color-scheme: dark;
+        --page: #16181d;
+        --panel: #1e2128;
+        --ink: #d7dae0;
+        --muted: #878d99;
+        --accent: #7fd1b9;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+      header {
+        padding: 14px 20px 10px;
+        border-bottom: 1px solid #2b2f38;
+      }
+      h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      main {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        padding: 18px;
+      }
+      #frame {
+        background: var(--panel);
+        border: 1px solid #2b2f38;
+        border-radius: 8px;
+        padding: 10px;
+        box-shadow: 0 10px 40px #0006;
+      }
+      footer {
+        padding: 8px 20px 16px;
+        color: var(--muted);
+        font-size: 12px;
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      #status {
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      kbd {
+        background: #2b2f38;
+        border-radius: 4px;
+        padding: 1px 5px;
+        font: 11px ui-monospace, monospace;
+      }
+      #unsupported {
+        max-width: 60ch;
+        margin: 40px auto;
+        color: #f0b8b8;
+      }
+      code {
+        font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+        background: #2b2f38;
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>TUIkit — the Example app, in WebAssembly</h1>
+      <p>
+        The same Swift binary as the terminal build, compiled for
+        <code>wasm32-unknown-wasip1</code> and driven through a WASI host written for this page.
+      </p>
+    </header>
+    <main><div id="frame"><div id="terminal"></div></div></main>
+    <footer>
+      <span id="status">loading…</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd> move · <kbd>enter</kbd> open · <kbd>esc</kbd> back · <kbd>q</kbd> quit</span>
+    </footer>
+
+    <!-- `crossorigin` is required, not decoration: the page is cross-origin isolated
+         (COEP: require-corp), and a script without it is refused. -->
+    <script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/xterm/6.0.0/xterm.js"></script>
+    <script type="module">
+      const status = document.getElementById("status");
+      const COLUMNS = 100;
+      const ROWS = 32;
+
+      if (!crossOriginIsolated || typeof SharedArrayBuffer === "undefined") {
+        document.querySelector("main").innerHTML =
+          `<div id="unsupported"><p><strong>This page needs cross-origin isolation.</strong></p>
+           <p>The Swift program blocks while it waits for a keystroke, which only a worker may do,
+           and the page hands it those keystrokes through a <code>SharedArrayBuffer</code> — available
+           only on a cross-origin-isolated page. Serve this directory with
+           <code>Tools/Web/serve.py</code>, which sets the two headers that turn it on.</p></div>`;
+        status.textContent = "not isolated";
+      } else {
+        const terminal = new Terminal({
+          cols: COLUMNS,
+          rows: ROWS,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, "Cascadia Mono", monospace',
+          fontSize: 13,
+          theme: { background: "#1e2128", foreground: "#d7dae0" },
+          allowProposedApi: true,
+          convertEol: false,
+          scrollback: 0,
+        });
+        terminal.open(document.getElementById("terminal"));
+        terminal.focus();
+
+        // The two shared buffers. The ring is generous: a paste is the only
+        // thing that arrives faster than the guest drains it, and 64 KB is more
+        // than anyone pastes into a demo.
+        const control = new SharedArrayBuffer(4 * 4);
+        const input = new SharedArrayBuffer(65536);
+        const controlView = new Int32Array(control);
+        const inputView = new Uint8Array(input);
+
+        const encoder = new TextEncoder();
+        function send(data) {
+          const bytes = encoder.encode(data);
+          let write = Atomics.load(controlView, 1);
+          for (const byte of bytes) {
+            inputView[write % inputView.length] = byte;
+            write += 1;
+          }
+          Atomics.store(controlView, 1, write);
+          // Bump the sequence and wake the worker: it is parked on this word.
+          Atomics.add(controlView, 0, 1);
+          Atomics.notify(controlView, 0);
+        }
+
+        // A handle for poking at the bridge from the console when something
+        // does not arrive: `__tuikit.pending()` is how many keystroke bytes the
+        // worker has not taken yet, and `__tuikit.send("q")` puts bytes in
+        // without going through the keyboard at all.
+        window.__tuikit = {
+          send,
+          pending: () => Atomics.load(controlView, 1) - Atomics.load(controlView, 2),
+          indices: () => [...controlView],
+        };
+
+        terminal.onData(send);
+        terminal.onBinary((data) => send(data));
+
+        const worker = new Worker("./worker.js", { type: "module" });
+        const decoder = new TextDecoder();
+        worker.onmessage = (event) => {
+          const message = event.data;
+          if (message.kind === "stdout") {
+            terminal.write(decoder.decode(message.bytes, { stream: true }));
+          } else if (message.kind === "status") {
+            status.textContent = message.text;
+          } else if (message.kind === "exit") {
+            status.textContent = `exited (${message.code})`;
+            terminal.write("\r\n[2m— the program exited; reload to run it again —[0m\r\n");
+          } else if (message.kind === "error") {
+            status.textContent = "failed";
+            terminal.write(`\r\n[31m${message.message.replace(/\n/g, "\r\n")}[0m\r\n`);
+          }
+        };
+
+        const manifest = await (await fetch("./manifest.json")).json();
+        worker.postMessage({
+          kind: "start",
+          wasmURL: manifest.wasm,
+          manifest,
+          columns: COLUMNS,
+          rows: ROWS,
+          control,
+          input,
+        });
+      }
+    </script>
+  </body>
+</html>
