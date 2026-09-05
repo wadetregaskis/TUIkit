@@ -423,26 +423,59 @@ jobs:
       # after it: the whole point is to watch them go green over time.
 
       # `ShapeSampling` imported Glibc-or-Darwin and called `cos`/`sin`
-      # unconditionally, so Windows got no `cos` at all. Fixed; this stays
-      # advisory only until CI confirms nothing else in the module follows it.
+      # unconditionally, so Windows got no `cos` at all. Fixed, and green on
+      # all five Windows lanes since, so it is binding.
       - name: "Build TUIkitImage"
-        continue-on-error: true
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitImage"
 
+      # ── The four modules' own test targets ──
+      # Each links only its module, so these are the first tests Windows can
+      # run without a console layer. Advisory until they go green, then binding
+      # like everything above.
+      - name: "Build TUIkitCoreTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitCoreTests"
+
+      - name: "Build TUIkitStylingTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitStylingTests"
+
+      - name: "Build TUIkitViewTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitViewTests"
+
+      - name: "Build TUIkitImageTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkitImageTests"
+
+      # Every advisory step carries a timeout. `swift build --build-tests` on
+      # the 6.3 container printed its last diagnostic and then sat for six
+      # hours until the job's own limit cancelled it (2026-09-04) — and a
+      # cancelled job is not `continue-on-error`'s to forgive, so the gate
+      # went red for a hang in a step that is allowed to fail. Thirty minutes
+      # is several times what any of these takes when it finishes.
       - name: "Build TUIkit (umbrella)"
         continue-on-error: true
+        timeout-minutes: 30
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --target TUIkit"
 
       - name: "Build everything"
         continue-on-error: true
+        timeout-minutes: 30
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "build --build-tests"
 
       - name: "Test"
         continue-on-error: true
+        timeout-minutes: 30
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "test"
 
       - name: "Smoke — headless render of every scenario"
         continue-on-error: true
+        timeout-minutes: 30
         run: ./Tools/ci-windows-swift.ps1 -Image "${{ steps.image.outputs.image }}" -Arguments "run Stress --selfcheck"
 
   # Server 2025 and the Windows 11 client cannot host an ltsc2022 container, so
@@ -487,19 +520,46 @@ jobs:
       - name: "Build TUIkitView"
         run: swift build --target TUIkitView
 
-      # Advisory until CI confirms the ShapeSampling fix is the whole story.
+      # Green on both native lanes as well as every container lane, so binding
+      # here too.
       - name: "Build TUIkitImage"
-        continue-on-error: true
         run: swift build --target TUIkitImage
+
+      # The same scoreboard rows as the container lane, with the same timeouts
+      # and for the same reason — see that lane.
+      - name: "Build TUIkitCoreTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: swift build --target TUIkitCoreTests
+
+      - name: "Build TUIkitStylingTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: swift build --target TUIkitStylingTests
+
+      - name: "Build TUIkitViewTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: swift build --target TUIkitViewTests
+
+      - name: "Build TUIkitImageTests"
+        continue-on-error: true
+        timeout-minutes: 30
+        run: swift build --target TUIkitImageTests
 
       - name: "Build everything"
         continue-on-error: true
+        timeout-minutes: 30
         run: swift build --build-tests
+
       - name: "Test"
         continue-on-error: true
+        timeout-minutes: 30
         run: swift test
+
       - name: "Smoke — headless render of every scenario"
         continue-on-error: true
+        timeout-minutes: 30
         run: swift run Stress --selfcheck
 
   # ── DocC Documentation ─────────────────────────────────────────────────────
