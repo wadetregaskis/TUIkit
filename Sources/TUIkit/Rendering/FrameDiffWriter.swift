@@ -424,7 +424,7 @@ extension FrameDiffWriter {
 
     static func restoringBackground(in styled: String, bgCode: String, reset: String) -> String {
         guard !bgCode.isEmpty else { return styled }
-        return ANSIRenderer.splittingCollapsedResets(styled).replacing(reset, with: reset + bgCode)
+        return ANSIRenderer.restating(bgCode, afterResetsIn: styled)
     }
 
     /// Builds one terminal-ready output line from a raw buffer line (`nil` marks

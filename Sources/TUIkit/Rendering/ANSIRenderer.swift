@@ -135,7 +135,7 @@ extension ANSIRenderer {
     /// - Returns: The string with persistent background applied.
     static func applyPersistentBackground(_ string: String, color: Color) -> String {
         let bgCode = backgroundCode(for: color)
-        return bgCode + splittingCollapsedResets(string).replacing(reset, with: reset + bgCode)
+        return bgCode + restating(bgCode, afterResetsIn: string)
     }
 
     /// Wraps a string in faint (SGR 2) that persists across ANSI resets.
@@ -150,7 +150,7 @@ extension ANSIRenderer {
     /// - Parameter string: The text to draw faint.
     /// - Returns: The string with persistent dim applied.
     static func applyPersistentDim(_ string: String) -> String {
-        dim + splittingCollapsedResets(string).replacing(reset, with: reset + dim) + reset
+        dim + restating(dim, afterResetsIn: string) + reset
     }
 
     /// `ESC[0;<params>m` spelled as `ESC[0m ESC[<params>m`, so that a
@@ -165,6 +165,82 @@ extension ANSIRenderer {
     /// used by both wrappers and by the replay's background restoration.
     static func splittingCollapsedResets(_ string: String) -> String {
         string.replacing("\u{1B}[0;", with: reset + "\u{1B}[")
+    }
+
+    /// `string` with `restore` re-stated after every reset it contains, a
+    /// collapsed `ESC[0;…m` counting as a reset followed by the rest — what
+    /// `splittingCollapsedResets(string).replacing(reset, with: reset +
+    /// restore)` produces, byte for byte, in one pass over the bytes instead
+    /// of two generic searches, since it runs once per rebuilt row and once
+    /// per animated run patched on every tick (8% of a live frame between
+    /// them).
+    ///
+    /// The two-step form's exact behaviour is kept, including its edges: a
+    /// split that the first step creates (`ESC[0;0;31m` → `ESC[0m ESC[0;31m`)
+    /// is not split again, but an `ESC[0m` the split forms (`ESC[0;0m` →
+    /// `ESC[0m ESC[0m`) is a reset the second step sees and restores after.
+    /// `RestatingAfterResetsTests` pins the two equal on randomised input.
+    ///
+    /// - Parameters:
+    ///   - string: A styled line or fragment.
+    ///   - restore: The sequence to re-state after each reset (a background,
+    ///     a dim) — appended verbatim.
+    static func restating(_ restore: String, afterResetsIn string: String) -> String {
+        guard !restore.isEmpty else { return string }
+        // A line with no `ESC [ 0` in it has nothing to restore after, and is
+        // most styled lines: found without copying the bytes first.
+        let hasResetIntroducer =
+            string.utf8.withContiguousStorageIfAvailable { buffer -> Bool in
+                var index = 0
+                while index + 2 < buffer.count {
+                    if buffer[index] == 0x1B, buffer[index + 1] == 0x5B, buffer[index + 2] == 0x30 {
+                        return true
+                    }
+                    index += 1
+                }
+                return false
+            } ?? true
+        guard hasResetIntroducer else { return string }
+        let bytes = Array(string.utf8)
+        let restoreBytes = Array(restore.utf8)
+        var out: [UInt8] = []
+        out.reserveCapacity(bytes.count + restoreBytes.count * 4)
+        let resetBytes: [UInt8] = [0x1B, 0x5B, 0x30, 0x6D]  // ESC [ 0 m
+        var index = 0
+        while index < bytes.count {
+            if bytes[index] == 0x1B, index + 3 < bytes.count, bytes[index + 1] == 0x5B, bytes[index + 2] == 0x30 {
+                if bytes[index + 3] == 0x6D {  // ESC[0m — a reset: restore after it
+                    out.append(contentsOf: resetBytes)
+                    out.append(contentsOf: restoreBytes)
+                    index += 4
+                    continue
+                }
+                if bytes[index + 3] == 0x3B {  // ESC[0; — split into a reset and the rest
+                    out.append(contentsOf: resetBytes)
+                    out.append(contentsOf: restoreBytes)
+                    out.append(0x1B)
+                    out.append(0x5B)
+                    index += 4
+                    // The `ESC[` just written plus a following `0m` is an
+                    // `ESC[0m` the second step would have matched; a following
+                    // `0;` is a split the first step would NOT have (it does not
+                    // re-scan what it wrote).
+                    if index + 1 < bytes.count, bytes[index] == 0x30, bytes[index + 1] == 0x6D {
+                        out.append(0x30)
+                        out.append(0x6D)
+                        out.append(contentsOf: restoreBytes)
+                        index += 2
+                    }
+                    continue
+                }
+            }
+            out.append(bytes[index])
+            index += 1
+        }
+        // The bytes are the input's own UTF-8 plus ASCII escapes, so the
+        // decode cannot fail; the lint rule is about `Data`, and there is none.
+        // swiftlint:disable:next optional_data_string_conversion
+        return String(decoding: out, as: UTF8.self)
     }
 
     /// Moves the cursor to the specified position.

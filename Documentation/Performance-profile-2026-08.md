@@ -3447,3 +3447,26 @@ no test compares.
 Live dashboard after §43–48, per frame: the scene ~30%, the diff writer
 ~20% (`buildLine` rebuilding the rows a pulse step moved, `collapsingAdjacentSGR`
 under it), animation ticks ~14%, pass begin/end ~10%.
+
+## 49. A merge that forgot, and two searches for one reset (2026-09-05, later)
+
+**A stack of uniform rows keeps every line's width** (52e7585b). After
+§48's window learned to read widths, `strippedLength` was still 7.7% of
+the live dashboard frame — the stack it read from had nothing to say.
+`appendVertically` carried per-line widths only when both sides held an
+array, and a uniform side holds none, so a stack of uniform rows at two
+widths (every page) forgot all of them. The uniform side now spells its
+widths out for the merge. The bench sees it through `placeBuffer`'s pad:
+dashboard −38.7%, textwall −16.9%, kitchensink −7.3%; live textwall −5.9%.
+
+**A background is restated after resets in one pass** (this commit).
+`restoringBackground` was two generic `String.replacing` searches per
+rebuilt row and per patched run — `RangeReplaceableCollection.replacing`
+8.1% of the live frame. One byte walk with the two-step's exact edge
+semantics (a split it creates is not re-split; an `ESC[0m` a split forms
+IS restored after), pinned equal on two thousand random strings, and a
+scan that returns the line untouched when it holds no `ESC[0` at all.
+Bench translucent −6.0%; live translucent −8.0%, dashboard −6.7% (interval
+reaching 0). A first cut without the scan read kitchensink +1.5% on the
+bench — the byte copy on lines with escapes and no reset — which the scan
+removed.
