@@ -6,6 +6,7 @@
 
 import Foundation
 import Testing
+import TUIkitCore
 
 @testable import TUIkit
 
@@ -27,21 +28,32 @@ struct RenderPerformanceTests {
         RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
-    /// Measures the time to render a view multiple times.
+    /// The CPU time this thread spends rendering a view `iterations` times,
+    /// in seconds — or the wall time, where the platform has no per-thread
+    /// CPU clock.
     ///
-    /// Uses `Date` instead of `CFAbsoluteTimeGetCurrent` because CoreFoundation
-    /// timing functions are not available on Linux. The precision difference
-    /// is negligible for performance benchmarks at millisecond granularity.
+    /// CPU time rather than wall time because these run inside the full
+    /// suite, which keeps every core busy. A wall clock then charges the
+    /// render for whatever else the scheduler ran in the meantime: the menu
+    /// loop below takes 0.43 s alone and read 1.1–1.6 s on CI runners, over
+    /// its budget with nothing having changed. Thread CPU time excludes the
+    /// preemption, so a budget here is a budget on the render — see
+    /// `threadCPUNanoseconds()`. It is not a budget on the machine: a slower
+    /// CPU still reads slower, which is what the budgets are for.
     private func measureRenderTime<V: View>(
         _ view: V,
         iterations: Int = 100,
         context: RenderContext
     ) -> TimeInterval {
-        let start = Date()
+        let cpuStart = threadCPUNanoseconds()
+        let wallStart = Date()
         for _ in 0..<iterations {
             _ = renderToBuffer(view, context: context)
         }
-        return Date().timeIntervalSince(start)
+        if let cpuStart, let cpuEnd = threadCPUNanoseconds() {
+            return TimeInterval(cpuEnd - cpuStart) / 1_000_000_000
+        }
+        return Date().timeIntervalSince(wallStart)
     }
 
     // MARK: - Stack Performance Tests
@@ -283,6 +295,19 @@ struct RenderPerformanceStatistics {
         RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
+    /// Thread CPU seconds spent in `work`, or wall seconds where the platform
+    /// has no per-thread clock — the same measurement as
+    /// `RenderPerformanceTests`, for the same reason.
+    private func measure(_ work: () -> Void) -> TimeInterval {
+        let cpuStart = threadCPUNanoseconds()
+        let wallStart = Date()
+        work()
+        if let cpuStart, let cpuEnd = threadCPUNanoseconds() {
+            return TimeInterval(cpuEnd - cpuStart) / 1_000_000_000
+        }
+        return Date().timeIntervalSince(wallStart)
+    }
+
     @Test("Print render performance statistics")
     func printStatistics() {
         let context = testContext()
@@ -291,42 +316,42 @@ struct RenderPerformanceStatistics {
         var results: [(String, TimeInterval)] = []
 
         // Measure each view type
-        let start1 = Date()
-        for _ in 0..<iterations {
-            _ = renderToBuffer(
-                VStack {
-                    Text("A")
-                    Text("B")
-                },
-                context: context
-            )
-        }
-        results.append(("VStack (2 children)", Date().timeIntervalSince(start1)))
+        results.append(("VStack (2 children)", measure {
+            for _ in 0..<iterations {
+                _ = renderToBuffer(
+                    VStack {
+                        Text("A")
+                        Text("B")
+                    },
+                    context: context
+                )
+            }
+        }))
 
-        let start2 = Date()
-        for _ in 0..<iterations {
-            _ = renderToBuffer(
-                HStack {
-                    Text("A")
-                    Text("B")
-                },
-                context: context
-            )
-        }
-        results.append(("HStack (2 children)", Date().timeIntervalSince(start2)))
+        results.append(("HStack (2 children)", measure {
+            for _ in 0..<iterations {
+                _ = renderToBuffer(
+                    HStack {
+                        Text("A")
+                        Text("B")
+                    },
+                    context: context
+                )
+            }
+        }))
 
-        let start3 = Date()
-        for _ in 0..<iterations {
-            _ = renderToBuffer(Button("Test") {}, context: context)
-        }
-        results.append(("Button", Date().timeIntervalSince(start3)))
+        results.append(("Button", measure {
+            for _ in 0..<iterations {
+                _ = renderToBuffer(Button("Test") {}, context: context)
+            }
+        }))
 
         var isOn = false
-        let start4 = Date()
-        for _ in 0..<iterations {
-            _ = renderToBuffer(Toggle("Test", isOn: Binding(get: { isOn }, set: { isOn = $0 })), context: context)
-        }
-        results.append(("Toggle", Date().timeIntervalSince(start4)))
+        results.append(("Toggle", measure {
+            for _ in 0..<iterations {
+                _ = renderToBuffer(Toggle("Test", isOn: Binding(get: { isOn }, set: { isOn = $0 })), context: context)
+            }
+        }))
 
         // Print results
         print("\n=== Render Performance Statistics ===")

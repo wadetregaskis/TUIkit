@@ -17,14 +17,21 @@ import Musl
 /// CPU time consumed by the calling thread so far, in nanoseconds — or `nil`
 /// where the platform has no per-thread CPU clock.
 ///
-/// ## Why the bench needs this
+/// `package`, not public: it is measurement plumbing for the Stress bench and
+/// the render-performance tests, which is why it lives in the lowest module
+/// both can reach rather than in either of them.
+///
+/// ## Why a benchmark needs this
 ///
 /// A wall clock counts every microsecond, including the ones the scheduler
 /// spent running something else. On a machine that is not idle — the ordinary
 /// case — that turns an A/B of two binaries into an A/B of two *moments*: the
 /// binary that happened to run while a browser repainted looks slower. Two
 /// changes were reverted on 2026-08-12/13 because their effect could not be
-/// separated from exactly that drift.
+/// separated from exactly that drift. The render-performance tests met the
+/// same thing from the other side: run inside the full suite, which keeps
+/// every core busy, a loop that takes 0.43 s alone read 1.1–1.6 s on CI
+/// runners and failed a budget nothing had changed.
 ///
 /// Thread CPU time excludes preemption. The same frame costs the same whatever
 /// else the box is doing, so the measurement stops being a measurement of the
@@ -36,12 +43,13 @@ import Musl
 ///
 /// ## Cost
 ///
-/// Read twice per frame. On Darwin this is `clock_gettime_nsec_np`, which is
-/// more expensive than the `mach_absolute_time` behind `DispatchTime` — so it
-/// brackets the wall-clock reads rather than sitting inside them, keeping the
-/// existing wall number measuring exactly what it always did.
+/// The bench reads it twice per frame. On Darwin this is
+/// `clock_gettime_nsec_np`, which is more expensive than the
+/// `mach_absolute_time` behind `DispatchTime` — so it brackets the wall-clock
+/// reads rather than sitting inside them, keeping the existing wall number
+/// measuring exactly what it always did.
 @inline(__always)
-func threadCPUNanoseconds() -> UInt64? {
+package func threadCPUNanoseconds() -> UInt64? {
     #if canImport(Darwin)
     return clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
     #elseif canImport(Glibc) || canImport(Musl)
