@@ -117,11 +117,17 @@ extension _TransitionView: Renderable {
                 explicitAnimation: transition.explicitAnimation,
                 render: { departurePhase in
                     removal.apply(to: buffer, phase: departurePhase * arrival, context: context)
+                        .slotBuffer()
                 }),
             at: context.identity)
 
-        guard phase < 1 else { return buffer }
-        return transition.insertion.apply(to: buffer, phase: phase, context: context)
+        // `!= 1`, not `< 1`: a spring goes PAST its target and comes back, and
+        // above 1 is a picture (the view a cell beyond where it lands) rather
+        // than a rounding artefact — see ``AnyTransition/Effect/apply(to:phase:context:)``.
+        // Exactly 1 is the settled value the store returns for a finished or
+        // unanimated arrival, so the fast path still catches every idle frame.
+        guard phase != 1 else { return buffer }
+        return transition.insertion.apply(to: buffer, phase: phase, context: context).slotBuffer()
     }
 }
 

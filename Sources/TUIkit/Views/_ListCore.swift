@@ -1663,8 +1663,26 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// left on one describes a dialog that was never drawn.
     ///
     /// Anchored layers translate to the row's on-screen position (`shifted`
-    /// leaves screen-centred layers untouched); no clipping — floating above
-    /// the in-flow content is the point of an overlay.
+    /// leaves screen-centred layers untouched). A layer that is a SURFACE —
+    /// a drop-down, a menu, a dialog — is then left alone, because floating
+    /// above the in-flow content is the point of an overlay and a picker on
+    /// the last row must not lose its options to the list's own edge.
+    ///
+    /// A layer carrying a piece of a row's own DRAWING is clipped to the list,
+    /// which is the same rule ``ScrollView`` applies — there for a SOURCED
+    /// reason (SwiftUI's `scrollClipDisabled(_:)` documents that "by default, a
+    /// scroll view clips its content to its bounds"), here for an inferred one.
+    /// **That SwiftUI's `List` clips is reasoning, not a measurement**: no
+    /// documentation was found saying so, and it is believed because a `List`
+    /// scrolls and because `.offset(x: 7)` on a row of a 14-wide list was
+    /// painting over the page beside it, which is certainly wrong.
+    ///
+    /// The clip is to the list's OUTER box, so displaced drawing can still
+    /// overwrite the list's own border — `.offset(x: 7)` in a 14-wide bordered
+    /// list eats the right `│`. Strictly better than before (it used to run
+    /// past the border and onto the page) and not yet right. Clipping to the
+    /// content box needs a rect-shaped clip on ``OverlayLayer``, whose current
+    /// one is anchored at the origin.
     private func attachRowOverlays(
         to buffer: inout FrameBuffer,
         context: RenderContext,
@@ -1675,11 +1693,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let style = context.environment.listStyle
         let topInset = (style.showsBorder ? 1 : 0) + paddingTop
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
+        let bounds = (width: buffer.width, height: buffer.height)
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
             let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
-            buffer.overlays.append(
-                contentsOf: visible.row.buffer.shiftedOverlays(
-                    byX: rowContentX, y: topInset + position.yStart - clip))
+            for layer in visible.row.buffer.shiftedOverlays(
+                byX: rowContentX, y: topInset + position.yStart - clip)
+            {
+                // `centered` as well as `isOpaque`, though today every centred
+                // layer is a modal and so opaque: a centred layer's offset is a
+                // post-centre delta rather than a position, so clipping one
+                // against these bounds would be arithmetic on the wrong number.
+                guard !layer.isOpaque, !layer.centered else {
+                    buffer.overlays.append(layer)
+                    continue
+                }
+                if let clipped = layer.clipped(toWidth: bounds.width, height: bounds.height) {
+                    buffer.overlays.append(clipped)
+                }
+            }
         }
     }
 

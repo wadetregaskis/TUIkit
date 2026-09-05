@@ -44,26 +44,18 @@ extension OffsetView: Renderable, Layoutable {
         // the background). The displaced drawing floats as an overlay layer,
         // carrying the content's hit regions (and any layers it emitted
         // itself) so interaction follows the visible position.
-        // The slot still has to EXIST, though. A buffer with no lines is not
-        // "a blank view" to a stack — it is "no child": `appendVertically`
-        // drops it, spacing and all, so every sibling after an offset view
-        // moved up into its place and the floated drawing composited on top of
-        // whatever took it. Empty lines reserve the rows and paint no cells,
-        // which is exactly the shape this needs: the footprint the measure pass
-        // promised, and nothing drawn in it.
-        //
-        // The WIDTH is declared even though no cell carries it, because a
-        // container that aligns its children asks each buffer how wide it is:
-        // `_ZStackCore` positions by `alignment.childOffset(childWidth:)`, and
-        // a zero-width answer centres an 8-cell label 4 cells right of centre
-        // and pins a trailing-aligned one to the frame's right edge. Compositing
-        // reads the lines, not this number, so the promise above still holds —
-        // an empty line paints nothing wherever it is placed.
-        var placeholder = FrameBuffer(
-            lines: Array(repeating: "", count: rendered.height), width: rendered.width)
+        // The slot still has to EXIST, though, and has to declare its width —
+        // see ``FrameBuffer/init(footprintWidth:height:)``, which carries both
+        // halves of that and why each one was a bug.
+        var placeholder = FrameBuffer(footprintWidth: rendered.width, height: rendered.height)
         placeholder.overlays.append(
             OverlayLayer(
                 offsetX: x, offsetY: y, content: rendered, level: .popover,
+                // Below the anchored presentations that share this level: a
+                // displaced label is not a window, so an open drop-down it
+                // overlaps draws over it, whatever order the tree emitted them
+                // in. See ``OverlayLayer/displacedDrawingZIndex``.
+                zIndex: OverlayLayer.displacedDrawingZIndex,
                 // Displaced drawing, not a surface: `.offset` moves this view's
                 // own cells to another place on the page, and the page behind
                 // them is meant to keep showing. See ``OverlayLayer/isOpaque``.

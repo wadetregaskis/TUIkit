@@ -69,6 +69,31 @@ public struct OverlayLayer: Sendable, Equatable {
     /// The fine-grained stacking order within a ``level`` (higher draws later).
     public var zIndex: Double
 
+    /// The ``zIndex`` for a layer that is a view's own displaced DRAWING —
+    /// `.offset`, `.position`, a transition's overshoot — rather than a
+    /// surface presented over the page.
+    ///
+    /// Being an overlay at all already puts such a layer above the in-flow
+    /// content it escaped, and ``OverlayLevel`` already puts it below a dialog
+    /// or an alert. What was left undecided is the order against the OTHER
+    /// layers at `.popover`: an anchored drop-down or a context menu, which are
+    /// windows and must not have a bouncing label drawn over them. Emission
+    /// order decided that, which is to say the shape of the view tree did.
+    ///
+    /// So displaced drawing sits one notch below the level's floor. A negative
+    /// value rather than pushing the presentations up: `zIndex` exists for
+    /// exactly this and nothing in the framework sets it, so the room was
+    /// already there and no case of the enum had to move. Nothing draws below
+    /// this but the page.
+    ///
+    /// Note what this does NOT decide, because the compositor answers it
+    /// without a number: a layer emitted INSIDE a presentation's content rides
+    /// in that presentation's buffer and is drained in the pass after it, so a
+    /// view bouncing inside a dialog draws above the dialog while one bouncing
+    /// on the page behind it draws below. The ordering is relative because the
+    /// nesting is.
+    public static let displacedDrawingZIndex: Double = -1
+
     /// The height of the anchoring control sitting immediately above
     /// ``offsetY``.
     ///
@@ -269,30 +294,7 @@ public struct OverlayLayer: Sendable, Equatable {
             let dropY = y - offsetY
             var visible = clamped
             if dropY > 0 { visible.lines = Array(visible.lines.dropFirst(dropY)) }
-            if dropX > 0 {
-                visible.lines = visible.lines.map { line in
-                    // `ansiAwareSlice`, not `ansiAwareSuffix`: the suffix throws
-                    // away every SGR that occurred before the cut, so a preview
-                    // clipped at the left edge arrived unstyled and rendered in
-                    // the terminal's raw defaults — which reads as "just the
-                    // background". The slice replays the style it cut through.
-                    let owed = max(0, line.strippedLength - dropX)
-                    let slice = line.ansiAwareSlice(visibleStart: dropX, visibleCount: owed)
-                    // A wide glyph straddling the cut cannot be half-drawn, so
-                    // it is dropped whole and the line comes back a cell short —
-                    // which would slide the whole preview one column left, off
-                    // the cell the pointer grabbed. Pad that shortfall, after
-                    // the carried style so the gap keeps the run's background.
-                    let shortfall = owed - slice.strippedLength
-                    guard shortfall > 0 else { return slice }
-                    // The scalar-exact split, not `leadingANSISequences()` +
-                    // `dropFirst(count)`: a combining mark opening the visible
-                    // text fuses with the last sequence's terminator into one
-                    // `Character`, and the character-counted drop severed it.
-                    let (carried, remainder) = slice.leadingANSISplit()
-                    return carried + String(repeating: " ", count: shortfall) + remainder
-                }
-            }
+            if dropX > 0 { visible.lines = Self.cutting(visible.lines, leadingColumns: dropX) }
             visible = visible.clamped(toWidth: max(0, maxWidth - x), height: max(0, maxHeight - y))
             return (visible, x, y)
         }
@@ -312,6 +314,121 @@ public struct OverlayLayer: Sendable, Equatable {
         x = max(0, x)
 
         return (clamped, x, y)
+    }
+
+    /// `lines` with `columns` cells cut from the left of each.
+    ///
+    /// Shared by the two places a layer loses its leading columns — the screen
+    /// edge, and a clipping container (see ``clipped(toWidth:height:)``) —
+    /// because each of the three things it does is a bug someone shipped by
+    /// doing the obvious thing instead.
+    private static func cutting(_ lines: [String], leadingColumns columns: Int) -> [String] {
+        lines.map { line in
+            // `ansiAwareSlice`, not `ansiAwareSuffix`: the suffix throws away
+            // every SGR that occurred before the cut, so a preview clipped at
+            // the left edge arrived unstyled and rendered in the terminal's raw
+            // defaults — which reads as "just the background". The slice
+            // replays the style it cut through.
+            let owed = max(0, line.strippedLength - columns)
+            let slice = line.ansiAwareSlice(visibleStart: columns, visibleCount: owed)
+            // A wide glyph straddling the cut cannot be half-drawn, so it is
+            // dropped whole and the line comes back a cell short — which would
+            // slide the whole preview one column left, off the cell the pointer
+            // grabbed. Pad that shortfall, after the carried style so the gap
+            // keeps the run's background.
+            let shortfall = owed - slice.strippedLength
+            guard shortfall > 0 else { return slice }
+            // The scalar-exact split, not `leadingANSISequences()` +
+            // `dropFirst(count)`: a combining mark opening the visible text
+            // fuses with the last sequence's terminator into one `Character`,
+            // and the character-counted drop severed it.
+            let (carried, remainder) = slice.leadingANSISplit()
+            return carried + String(repeating: " ", count: shortfall) + remainder
+        }
+    }
+
+    /// The part of this layer that falls inside a `width` × `height`
+    /// container, or `nil` when none of it does.
+    ///
+    /// What a CLIPPING container does to a layer carrying a piece of its own
+    /// content's drawing — `.offset`, `.position`, a transition's overshoot.
+    /// SwiftUI's `ScrollView` clips its content to its bounds (which is what
+    /// `View.scrollClipDisabled(_:)` exists to turn off), and a layer that
+    /// escapes one paints over whatever sits beside the viewport.
+    ///
+    /// It is emphatically NOT for a presentation. A menu, a drop-down, a
+    /// dialog or a toast is a window over the page, and clipping one to the
+    /// scroller its trigger happens to sit in is how a picker on the last row
+    /// of a list loses every option. Callers choose by ``isOpaque``, which
+    /// already draws exactly that line.
+    ///
+    /// The layer's offset is relative to the container, so a negative one
+    /// means it starts outside: those columns and rows are cut from the
+    /// CONTENT and the offset moves to the edge, since a composited buffer
+    /// cannot be placed at a negative column. Hit-test regions are cut with
+    /// the cells they name — a region left standing over clipped cells is a
+    /// click target for a view that is not drawn there.
+    ///
+    /// - Parameters:
+    ///   - width: The container's width in cells.
+    ///   - height: The container's height in rows.
+    /// - Returns: The clipped layer, `self` when it was already inside, or
+    ///   `nil` when nothing of it survives.
+    public func clipped(toWidth width: Int, height: Int) -> Self? {
+        // Already inside: the overwhelmingly common case, and worth a test to
+        // skip re-measuring every line of every layer on every frame.
+        if offsetX >= 0, offsetY >= 0, offsetX + content.width <= width,
+            offsetY + content.height <= height {
+            return self
+        }
+        let x = max(0, offsetX)
+        let y = max(0, offsetY)
+        let boxWidth = width - x
+        let boxHeight = height - y
+        guard boxWidth > 0, boxHeight > 0 else { return nil }
+        let dropX = x - offsetX
+        let dropY = y - offsetY
+        guard dropX < content.width || content.width == 0, dropY < content.height else {
+            return nil
+        }
+
+        var cut = content
+        if dropX > 0 || dropY > 0 {
+            // Regions are clipped BEFORE the shift, against the surviving box
+            // stated in the content's own coordinates, so every offset that
+            // comes out of the shift is already inside it. Clipping after would
+            // have to reason about negative offsets, which is where
+            // `FrameBuffer.clamped(toWidth:height:)` — correct for everything
+            // it is asked, all of which starts at the origin — would go wrong.
+            cut.hitTestRegions = content.hitTestRegions.compactMap {
+                $0.clipped(
+                    toColumns: dropX..<(dropX + boxWidth), rows: dropY..<(dropY + boxHeight))
+            }
+            var lines = dropY > 0 ? Array(cut.lines.dropFirst(dropY)) : cut.lines
+            if dropX > 0 { lines = Self.cutting(lines, leadingColumns: dropX) }
+            // `replacingLines` moves the layers, regions, runs and opacity
+            // regions with the cells they describe — the whole point of using
+            // it rather than assigning `lines`.
+            cut = cut.replacingLines(lines, overlayShiftX: -dropX, overlayShiftY: -dropY)
+        }
+        let clipped = cut.clamped(toWidth: boxWidth, height: boxHeight)
+        // A layer whose own drawing is gone may still carry a presentation
+        // opened from inside it, which is not this container's to discard.
+        //
+        // It only saves a layer that is PARTLY outside: one that is wholly
+        // outside is already gone at the `dropX`/`dropY` guard above, nested
+        // presentation and all. Measured — a layer at `offsetX: -20` with
+        // 5-wide content carrying a `.modal` returns nil there. That case is
+        // narrow in practice (a `ScrollView` culls the vertical one before it
+        // gets here) and is left rather than fixed blind, but the guard below
+        // should not be read as covering it.
+        guard !clipped.isEmpty || !clipped.overlays.isEmpty else { return nil }
+
+        var copy = self
+        copy.content = clipped
+        copy.offsetX = x
+        copy.offsetY = y
+        return copy
     }
 
     /// Returns a copy of this layer with its offset shifted by `(dx, dy)`.

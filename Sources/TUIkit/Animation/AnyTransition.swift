@@ -31,6 +31,56 @@ import TUIkitView
 ///
 /// `.scale` is the effect that changes most: there is no sub-cell rendering to
 /// shrink, so it reveals the view from its anchor a whole cell at a time.
+///
+/// While a view is ARRIVING, the slot clips it: the part still outside is not
+/// drawn. A SwiftUI frame clips nothing — `View.clipped(antialiased:)`
+/// documents that a bounding frame is used only for layout and that content
+/// beyond it stays visible — so a view sliding in there is expected to cross
+/// its siblings. Here it would cross them by *erasing* them: a terminal cell
+/// holds one glyph, so an arriving view has no way to be over a neighbour
+/// without taking its cell. Wrap the transition in a container that clips (a
+/// `ScrollView`, a `List`) and SwiftUI agrees; put it in a plain stack and this
+/// is a deviation.
+///
+/// ## Overshoot
+///
+/// A spring goes past its target and comes back, so a phase above `1` is a
+/// real value and not a rounding artefact — `Animation.bouncy` peaks at
+/// **1.0460**, `Animation.snappy` at **1.0063**, and `Animation.smooth`, which
+/// has no bounce, at exactly 1.
+///
+/// ``move(edge:)`` and ``offset(x:y:)`` draw that: past 1 the view stands a
+/// cell or two clear of the slot it has just arrived in, floating over
+/// whatever is beside it as `View.offset(x:y:)` does. The
+/// displacement follows the curve with no minimum, so `.snappy`'s 0.13 of a
+/// cell across a twenty-cell view draws no bounce at all — which is right,
+/// since SwiftUI's snappy does not visibly bounce either. It is a whole number
+/// of cells, so the bounce is bigger on a wide view (four cells across an
+/// 80-column row at `.bouncy`) and, vertically, needs a panel eleven rows tall
+/// before it moves at all.
+///
+/// ``opacity`` and ``scale`` stop at 1, and for reasons belonging to the
+/// effects rather than to the spring: nothing is more opaque than opaque, and
+/// `.scale` uncovers the buffer from an anchor — the buffer IS the slot, so
+/// there is nothing beyond it to uncover.
+///
+/// Three consequences of floating the overshoot, each chosen and each a
+/// deviation from a permanent `.offset`:
+///
+/// - **Clicks stay at the slot.** A transitioning view's hit-test regions
+///   describe where it will be, not the cells it is passing through, for the
+///   whole transition. Moving them with the picture would let them win the hit
+///   test over a peer control the bounce is standing on, which is a worse
+///   failure than a click landing where the eye aimed 100 ms ago.
+/// - **Trailing blanks do not erase.** The floated cells are trimmed of
+///   trailing padding first; a row that was all padding becomes nothing at all.
+///   Leading blanks inside a row that has content do still paint over what they
+///   pass, and so do INTERIOR ones — a `Spacer` between two labels erases what
+///   is under the gap for as long as the bounce lasts. A layer has one origin,
+///   not one per line, and rectangular content rather than a set of inked cells.
+/// - **The screen edge cuts rather than pushes.** A view bouncing at the edge
+///   loses the columns that fall off it, instead of sliding back on screen the
+///   way a menu does.
 public struct AnyTransition: Sendable, Equatable {
 
     /// One effect, or several composed. A value rather than a closure so a

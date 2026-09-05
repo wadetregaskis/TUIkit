@@ -258,6 +258,35 @@ public struct FrameBuffer: Sendable, Equatable {
         self.lineWidths = nil  // uniform at `width`; no array needed
     }
 
+    /// Creates a footprint: `height` rows that paint no cell at all, declaring
+    /// itself `width` cells wide.
+    ///
+    /// NOT ``init(emptyWithWidth:height:)``, whose rows are spaces. Those
+    /// PAINT: compositing is opaque per cell, so a blank-filled buffer erases
+    /// whatever is beneath it — the opposite of what a view wants when it has
+    /// floated its drawing somewhere else (``OverlayLayer``) and is leaving
+    /// behind the space the measure pass promised.
+    ///
+    /// Both halves are load-bearing, and each was a shipped bug:
+    ///
+    /// - the rows have to EXIST. A buffer with no lines is not "a blank view"
+    ///   to a stack, it is "no child": `appendVertically` drops it, spacing and
+    ///   all, so every sibling after it moves up and the floated drawing lands
+    ///   on whatever took its place.
+    /// - the WIDTH has to be declared, even though no cell carries it, because
+    ///   a container that aligns its children asks each buffer how wide it is —
+    ///   a zero-width answer centres an 8-cell label 4 cells off centre.
+    ///
+    /// - Parameters:
+    ///   - width: The width to declare, in cells.
+    ///   - height: The number of rows to reserve.
+    public init(footprintWidth width: Int, height: Int) {
+        self.storage = Array(repeating: "", count: max(0, height))
+        self.width = max(0, width)
+        self.linesAreUniformWidth = false  // no line is `width` cells; none is drawn
+        self.lineWidths = nil
+    }
+
     // MARK: - Combining Arrays
 
     /// Creates a vertically stacked buffer from an array of buffers.

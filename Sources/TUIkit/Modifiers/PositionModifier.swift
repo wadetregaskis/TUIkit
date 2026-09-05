@@ -90,22 +90,21 @@ extension PositionView: Renderable, Layoutable {
         // Floated rather than composited into the lines, for the reason
         // `OffsetView` floats: a terminal has no transparency, so painting a
         // full-size blank field here would erase whatever is beneath it. The
-        // rows still have to EXIST or a stack drops the child entirely, and the
-        // WIDTH has to be declared or a container that aligns its children
-        // places this one as though it were nothing wide — the footprint the
-        // measure above promised, with nothing drawn in it.
-        var placeholder = FrameBuffer(
-            lines: Array(repeating: "", count: height), width: width)
+        // footprint — rows that exist and a declared width, both load-bearing —
+        // is ``FrameBuffer/init(footprintWidth:height:)``.
+        var placeholder = FrameBuffer(footprintWidth: width, height: height)
         placeholder.overlays.append(
             OverlayLayer(
                 offsetX: x - rendered.width / 2,
                 offsetY: y - rendered.height / 2,
                 content: rendered,
                 level: .popover,
+                // Below the anchored presentations at this level, as for
+                // `.offset`. See ``OverlayLayer/displacedDrawingZIndex``.
+                zIndex: OverlayLayer.displacedDrawingZIndex,
                 // Displaced drawing, not a surface — as for `.offset`. See
                 // ``OverlayLayer/isOpaque``.
                 isOpaque: false))
-        _ = width
         return placeholder
     }
 }

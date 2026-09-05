@@ -473,6 +473,72 @@ standing no-speculative-changes rule here, so it wants a session of its own with
 a PTY sweep rather than a corner of one — not because the feature is large, but
 because the places it reaches are load-bearing for everything else that scrolls.
 
+### 2.9 What clips a floating layer, and how far a spring may carry a view
+
+A view's drawing can leave its own bounds three ways here: `.offset`,
+`.position`, and — since a spring goes past its target — a `.move` / `.offset`
+transition on the way back. All three become a **non-opaque overlay layer**:
+the view's own cells, floating, with nothing painted where they came from
+(a terminal has no transparency, so an in-place blank box would erase the page).
+
+**Which containers clip one is SwiftUI's answer, not a terminal's.** Two doc
+comments in the SDK settle it:
+
+- `View.clipped(antialiased:)` — a view's bounding frame is used only for
+  layout, and content extending beyond it is still visible. So a plain
+  `VStack`/`HStack`/`ZStack` clips nothing, and neither does `.frame()` alone.
+- `View.scrollClipDisabled(_:)` — a scroll view clips its content to its bounds
+  by default, which is what the modifier exists to turn off.
+
+TUIkit clipped **none** of them until now: `.offset(x: 7)` on a row of a
+12-wide `ScrollView` painted three columns of the page beside the viewport, and
+the same row in a 14-wide `List` painted over the list's own right border. Both
+now clip a layer that is a piece of their content (`ScrollView`'s viewport,
+`List`'s bounds), and a plain stack still does not. `.scrollClipDisabled(_:)`
+itself is **not** implemented; if it is ever wanted, the clip is one call in
+`ScrollView`'s windowing.
+
+**A presentation is not content and is never clipped.** A menu, a drop-down, a
+dialog or a toast is a window over the page — the layer flag is `isOpaque` —
+and clipping one to the scroller its trigger happens to sit in is how a picker
+on the last visible row loses every option. SwiftUI does not clip its
+presentations to a scroll view either.
+
+**Overshoot.** `Animation.bouncy` peaks at phase **1.0460**, `.snappy` at
+**1.0063**, `.smooth` at exactly 1 (measured from `Animation.fraction(at:)`).
+Past 1, `.move`/`.offset` transitions draw the view a whole number of cells
+clear of the slot it has just arrived in; `.opacity` and `.scale` stop at 1,
+because nothing is more opaque than opaque and `.scale` uncovers a buffer that
+IS the slot. There is deliberately **no minimum**: `.snappy`'s 0.13 of a cell
+across a twenty-cell view draws no bounce, matching a SwiftUI snappy that does
+not visibly bounce, and a bounce needs a panel eleven rows tall before it moves
+vertically at all.
+
+Ordering is **relative**, and the compositor already expressed it: layers sort
+by level (`popover < modal < alert < notification`), so an overshoot on the page
+draws under a dialog, while an overshoot INSIDE that dialog rides in the
+dialog's own buffer and is drained in the next compositing pass — above it. The
+only thing that had to be added was a sub-level ordinal: displaced drawing takes
+a negative `zIndex` (`OverlayLayer.displacedDrawingZIndex`), so a bouncing label
+sorts under an anchored drop-down at the same level instead of under whatever
+the tree happened to emit first. No case of the level enum moved.
+
+**Three deviations from SwiftUI inside the overshoot**, each because a cell
+grid is not a compositor: hit-test regions stay at the slot for the duration
+(moving them would let a bouncing view steal a peer control's clicks, since the
+dispatcher takes the last matching region); the floated cells are trimmed of
+trailing blanks, because compositing replaces the base cell under every overlay
+cell including spaces, and a slot-width row of padding would wipe a column of
+its neighbour per cell (leading blanks inside a row that has content still
+paint — a layer has one origin, not one per line); and a view bouncing at the
+screen edge loses the columns that fall off it rather than sliding back on, as
+a menu would.
+
+**While a view is arriving** (phase 0…1) the slot still clips it, which is a
+deviation: by the `clipped(antialiased:)` rule above, SwiftUI would let it
+cross its siblings. Here crossing them means *erasing* them, one glyph per
+cell, so the slot is the boundary until the view has arrived.
+
 ## 3. Open divergence
 
 **None.** The one that stood here is closed, and how it fell is the fifth

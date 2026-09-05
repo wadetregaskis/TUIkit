@@ -142,6 +142,44 @@ public struct HitTestRegion: Sendable, Equatable {
     public func contains(x: Int, y: Int) -> Bool {
         x >= offsetX && x < offsetX + width && y >= offsetY && y < offsetY + height
     }
+
+    /// The part of this region inside `columns` × `rows`, or `nil` when none
+    /// of it is.
+    ///
+    /// The trim a CLIPPING CONTAINER performs, which is why it accumulates
+    /// ``topClip`` / ``leftClip`` rather than merely moving the rectangle:
+    /// hit-testing wants the visible rectangle, but a handler is handed points
+    /// measured from where the region really BEGINS, and a region trimmed
+    /// without recording what was cut reports every point short by exactly
+    /// that much.
+    ///
+    /// The ranges are in the carrying buffer's own coordinates and nothing is
+    /// re-based, so a caller clipping to a box that does not start at the
+    /// origin passes that box's ranges and shifts afterwards.
+    ///
+    /// - Parameters:
+    ///   - columns: The surviving column range.
+    ///   - rows: The surviving row range.
+    /// - Returns: The trimmed region, `self` when it was already inside, or
+    ///   `nil` when nothing of it survives.
+    public func clipped(toColumns columns: Range<Int>, rows: Range<Int>) -> Self? {
+        let left = Swift.max(offsetX, columns.lowerBound)
+        let right = Swift.min(offsetX + width, columns.upperBound)
+        let top = Swift.max(offsetY, rows.lowerBound)
+        let bottom = Swift.min(offsetY + height, rows.upperBound)
+        guard right > left, bottom > top else { return nil }
+        guard left != offsetX || top != offsetY || right != offsetX + width
+            || bottom != offsetY + height
+        else { return self }
+        var trimmed = Self(
+            offsetX: left, offsetY: top, width: right - left, height: bottom - top,
+            handlerID: handlerID, focusID: focusID)
+        trimmed.revealOutsetTop = revealOutsetTop
+        trimmed.revealOutsetBottom = revealOutsetBottom
+        trimmed.topClip = topClip + (top - offsetY)
+        trimmed.leftClip = leftClip + (left - offsetX)
+        return trimmed
+    }
 }
 
 extension HitTestRegion {

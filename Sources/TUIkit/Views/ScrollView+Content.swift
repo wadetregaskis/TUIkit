@@ -203,7 +203,21 @@ extension _ScrollViewCore {
             let topY = overlay.offsetY - overlay.anchorHeight
             let bottomY = overlay.offsetY + overlay.content.height
             guard bottomY > viewportTop, topY < viewportBottom else { return nil }
-            return overlay.shifted(byX: dx, y: -scrollOffset)
+            let shifted = overlay.shifted(byX: dx, y: -scrollOffset)
+            // A scroll view clips its CONTENT to its bounds, as SwiftUI's does
+            // — `View.scrollClipDisabled(_:)` is the modifier that turns that
+            // off, and it documents the default. Until now nothing here clipped
+            // a layer at all, so `.offset(x: 7)` on a row of a 12-wide scroller
+            // painted three columns of the page beside it.
+            //
+            // Only the layers that ARE content: a layer that is a surface
+            // (`isOpaque`) is a window over the page — a drop-down, a menu, a
+            // toast — and SwiftUI does not clip a presentation to the scroller
+            // its trigger sits in either. The culling above already lets those
+            // through whole, including the flip-above-the-anchor case that
+            // needs `anchorHeight`.
+            guard !shifted.isOpaque else { return shifted }
+            return shifted.clipped(toWidth: viewportWidth, height: viewportHeight)
         }
 
         // Filter + shift hit-test regions, same logic — and TRIM them to the
