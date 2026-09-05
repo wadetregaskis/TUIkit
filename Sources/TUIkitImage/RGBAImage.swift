@@ -127,10 +127,14 @@ extension RGBAImage {
     public mutating func addError(at x: Int, _ y: Int, rError: Int16, gError: Int16, bError: Int16) {
         let index = y * width + x
         let pixel = pixels[index]
+        // The alpha is kept: this rebuilds the pixel, and `RGBA(r:g:b:)`
+        // would default it to opaque — the defect that made every dithered
+        // picture with transparency come out solid.
         pixels[index] = RGBA(
             r: UInt8(clamping: Int16(pixel.r) + rError),
             g: UInt8(clamping: Int16(pixel.g) + gError),
-            b: UInt8(clamping: Int16(pixel.b) + bError)
+            b: UInt8(clamping: Int16(pixel.b) + bError),
+            a: pixel.a
         )
     }
 }
