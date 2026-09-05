@@ -220,10 +220,28 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
         // already filled every `@Environment` (and `@FocusState`) box on this
         // view, so publishing the environment as well was pure overhead on the
         // single most-executed operation in the framework.
+        //
+        // The change invalidates THIS view's identity — its subtree and the
+        // ancestors whose buffers contain it — through the sink a `@State`
+        // write uses, not the whole cache. It used to clear everything: a
+        // model that changes every frame (a clock, a progress counter, a
+        // download's byte count) then made every frame a cold render of the
+        // entire tree, and the memo machinery never served a single buffer
+        // while it did. Measured on `Stress` under autopilot, every scenario
+        // cost its `--bench --cold` price, not its warm one — `fanout` 113 ms
+        // a frame for 12.8 ms of work. The tracking is per body, so the
+        // identity whose body read the value is exactly the one to drop; an
+        // ancestor that did not read it keeps a buffer that never held it.
+        // The whole-cache clear remains only where there is no cache to scope
+        // to (a headless render with no `RenderCache` in the environment).
         let body = withObservationTracking {
             view.body
-        } onChange: {
-            AppState.shared.setNeedsRenderWithCacheClear()
+        } onChange: { [sink = context.renderCache, identity = context.identity] in
+            if let sink {
+                sink.invalidateRender(for: identity)
+            } else {
+                AppState.shared.setNeedsRenderWithCacheClear()
+            }
         }
 
         context.stateStorage!.markActive(context.identity)

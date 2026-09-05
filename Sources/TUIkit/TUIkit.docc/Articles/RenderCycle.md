@@ -427,7 +427,7 @@ Cache invalidation is **identity-scoped** where possible, with full clears as th
 | Trigger | Mechanism |
 |---------|-----------|
 | A `@State` change | `StateBox.value.didSet` calls `renderCache.clearAffected(by: identity)` — only the affected subtree's cached buffers are invalidated. `clearAll()` is the fallback when the box has no identity yet |
-| An `@Observable` change | `AppState.setNeedsRenderWithCacheClear()`; `RenderLoop` consumes the flag (`consumeNeedsCacheClear`) and calls `clearAll()` |
+| An `@Observable` change | The body that read the property was evaluated under `withObservationTracking` at its view's identity, so the change calls `renderCache.invalidateRender(for: identity)` — the same sink as a `@State` write, and the same scope. `AppState.setNeedsRenderWithCacheClear()` → `clearAll()` is the fallback only when the render has no cache to scope to |
 | A global environment change | `RenderLoop` compares an `EnvironmentSnapshot` (palette ID + appearance ID) each frame and clears on mismatch |
 | A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)`, dropping the subtree below it |
 
