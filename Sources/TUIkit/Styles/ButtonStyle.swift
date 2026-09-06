@@ -543,9 +543,7 @@ private struct _ButtonStyleBody: View, Renderable {
             // prefix (which always reserves 2 cells — `BorderRenderer` pads
             // with spaces when unfocused so things stay aligned) plus the
             // horizontal padding either side of the label.
-            let indicatorWidth =
-                appearance.indicatesFocusInLabel ? 0 : BorderRenderer.focusIndicatorWidth
-            let chromeWidth = indicatorWidth + 2 * appearance.horizontalPadding
+            let chromeWidth = Self.chromeWidth(for: appearance)
             let labelText = Self.fitLabel(
                 configuration.label, into: context.availableWidth, chrome: chromeWidth)
             let paddedLabel = padding + labelText + padding
@@ -613,7 +611,7 @@ private struct _ButtonStyleBody: View, Renderable {
         // `horizontalPadding` cells of padding either side. If the cell
         // can't fit the full label the label is ellipsis-truncated so
         // the caps still align and the truncation is visible to the user.
-        let chromeWidth = 2 + 2 * appearance.horizontalPadding  // caps + paddings
+        let chromeWidth = Self.chromeWidth(for: appearance)
         let labelText = Self.fitLabel(
             configuration.label, into: context.availableWidth, chrome: chromeWidth)
         let paddedLabel = padding + labelText + padding
@@ -852,6 +850,25 @@ private struct _ButtonStyleBody: View, Renderable {
     /// is so narrow that even the chrome doesn't fit, the label is
     /// dropped entirely — the parent's clamping safety net will then clip
     /// the chrome itself.
+    /// The cells this style's chrome occupies around the label.
+    ///
+    /// The ONE place the arithmetic lives. Both string branches of
+    /// `renderToBuffer` read it, and so does ``sizeThatFits`` — the same bargain
+    /// `FieldChrome` strikes for a text field's caps, and for the same reason:
+    /// a measure and a render that each work the number out for themselves
+    /// drift, and the drift shows as a button laid out one cell from where it
+    /// draws.
+    fileprivate static func chromeWidth(for appearance: _ButtonAppearance) -> Int {
+        appearance.isPlain
+            // No caps; the focus-indicator prefix always reserves its cells
+            // (`BorderRenderer` pads with spaces when unfocused so things stay
+            // aligned), unless the variant marks focus in the label instead.
+            ? (appearance.indicatesFocusInLabel ? 0 : BorderRenderer.focusIndicatorWidth)
+                + 2 * appearance.horizontalPadding
+            // `▐ … ▌` end caps plus the padding either side.
+            : 2 + 2 * appearance.horizontalPadding
+    }
+
     fileprivate static func fitLabel(_ label: String, into availableWidth: Int, chrome: Int) -> String {
         let labelBudget = availableWidth - chrome
         guard labelBudget > 0 else { return "" }
@@ -860,6 +877,30 @@ private struct _ButtonStyleBody: View, Renderable {
         // truncatedToWidth places the ellipsis itself; with a tiny budget it
         // returns just `…` which still keeps the chrome aligned.
         return label.truncatedToWidth(labelBudget)
+    }
+}
+
+extension _ButtonStyleBody: Layoutable {
+    /// The size ``renderToBuffer(context:)`` produces, without producing it.
+    ///
+    /// Both string branches draw exactly `chromeWidth + the fitted label`, on
+    /// one line, and both numbers come from the same two helpers the render
+    /// uses — so this is the render's own arithmetic, asked without the cells.
+    /// `ButtonMeasureParityTests` renders the matrix and compares, because
+    /// "same arithmetic" is a claim about code that has to be checked against
+    /// what it actually draws.
+    ///
+    /// A `@ViewBuilder` label is deliberately left to render: measuring it would
+    /// go through `AnyView`, where a flexible child measures to the whole
+    /// available width rather than to what it draws.
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        guard configuration.labelView == nil else {
+            return measureFixedByRendering(self, proposal: proposal, context: context)
+        }
+        let chrome = Self.chromeWidth(for: appearance)
+        let label = Self.fitLabel(
+            configuration.label, into: context.availableWidth, chrome: chrome)
+        return ViewSize.fixed(chrome + label.strippedLength, 1)
     }
 }
 
