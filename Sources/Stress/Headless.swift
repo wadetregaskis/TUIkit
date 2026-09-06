@@ -177,7 +177,14 @@ enum Headless {
         var ns: UInt64 = 0
         var cpuNs: UInt64 = 0
         var cpuMeasured = false
-        for _ in 0..<iterations {
+        // Resident size, sampled rather than integrated. Every 64th frame is
+        // often enough to characterise a run that is thousands of frames long
+        // and rare enough that the syscall does not land in the per-frame
+        // number — and it is deliberately OUTSIDE the timed region, so the
+        // CPU and wall figures still measure exactly the render.
+        var memory = ProcessMemory.Samples()
+        for iteration in 0..<iterations {
+            if iteration.isMultiple(of: 64) { memory.sample() }
             if cold { warm = makeContext(cols: cols, rows: rows) }
             clock.tick &+= 1
             let cpuStart = threadCPUNanoseconds()
@@ -216,6 +223,22 @@ enum Headless {
             let cpuPerFrameUs = Double(cpuNs) / 1_000 / Double(max(1, iterations))
             print(String(format: "  cpu-per-frame=%.1fµs  (%.1f%% of wall)",
                 cpuPerFrameUs, perFrameUs > 0 ? cpuPerFrameUs / perFrameUs * 100 : 0))
+        }
+        memory.sample()
+        // Peak is what has to FIT; mean is what the process typically holds.
+        // A cache that buys CPU by keeping buffers shows up here and nowhere
+        // else, which is why this is printed beside `cpu-per-frame` rather
+        // than in a separate tool. `rss-peak` is the process high-water mark
+        // (`ru_maxrss`), so it includes the build-up before the loop; the
+        // sampled pair describe the loop itself.
+        if let peak = ProcessMemory.peakResidentBytes() {
+            let mb = { (bytes: UInt64) in Double(bytes) / 1_048_576 }
+            if let mean = memory.meanBytes {
+                print(String(format: "  rss-peak=%.1fMB  rss-mean=%.1fMB  rss-sampled-peak=%.1fMB",
+                    mb(peak), mb(mean), mb(memory.peakSampled)))
+            } else {
+                print(String(format: "  rss-peak=%.1fMB", mb(peak)))
+            }
         }
         let memo = warm.renderCache?.measureMemoTotals ?? (hits: 0, misses: 0)
         let lookups = memo.hits + memo.misses

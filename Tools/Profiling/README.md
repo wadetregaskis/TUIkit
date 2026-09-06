@@ -124,6 +124,7 @@ Four things make it trustworthy, and each was validated by measurement:
 | | |
 |---|---|
 | **CPU time, not wall clock** | Reads the harness's `cpu-per-frame`. Preemption by everything else on the box no longer lands in the number. |
+| **RAM beside CPU** | Reads the harness's `rss-peak` and prints `ram OLD->NEW` after the verdict. Plain medians, not a bootstrap: peak RSS barely varies between runs of one binary, so an interval on it would be theatre. A change over a megabyte is worth a look; below that it is allocator noise. |
 | **Randomised run order** | A fixed order is a fixed bias — every hand-run pass showed whichever binary ran *second* as slower, including the pass where that was the original. |
 | **Paired ratios + a bootstrap CI** | A and B run adjacent in time, so drift hits both; comparing per-rep ratios cancels it, and the interval prices what is left. |
 | **Calibrated iteration count** | 300 iterations of a 160 µs scenario is 50 ms of measurement, mostly warm-up. Each run is sized to ~1.5 s. |

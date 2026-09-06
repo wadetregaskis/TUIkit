@@ -88,6 +88,14 @@ strings, and the end-of-pass prune was 88–95% of a frame that the app does
 not pay. `cpu-per-frame` numbers from before 2026-09-05 were taken without
 either and are not comparable.
 
+`--bench` also reports **`rss-peak`, `rss-mean` and `rss-sampled-peak`** —
+`ru_maxrss` for the high-water mark, plus the resident size sampled every 64th
+frame so a peak reached once is distinguishable from one held all run. Sampling
+sits outside the timed region, so the CPU and wall figures still measure exactly
+the render. This exists because a render cache buys CPU by keeping buffers, and
+until it did, nothing priced that side of the trade: `ab_bench.py` now prints
+the peak beside the timing verdict.
+
 ```sh
 swift build -c release --product Stress -Xswiftc -g
 BIN="$(swift build -c release --product Stress --show-bin-path)/Stress"

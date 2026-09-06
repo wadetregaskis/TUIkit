@@ -59,10 +59,15 @@ SCENARIOS = [
 
 WALL_RE = re.compile(r"(?<!-)\bper-frame=([0-9.]+)")  # not `cpu-per-frame=`
 CPU_RE = re.compile(r"cpu-per-frame=([0-9.]+)")
+# Peak resident size, which the harness started reporting beside the timings so
+# that "is this cheaper?" stops being a question about one resource out of two.
+# A render cache is the case that needs it: it buys an order of magnitude of CPU
+# by keeping buffers, and nothing here used to price that.
+RSS_RE = re.compile(r"rss-peak=([0-9.]+)")
 
 
 def run(binary, scenario, scale, iterations, cols, rows, cold=False):
-    """One bench run; returns (wall_us, cpu_us) per frame."""
+    """One bench run; returns (wall_us, cpu_us, peak_rss_mb)."""
     out = subprocess.run(
         [binary, "--bench", "--scenario", scenario, "--scale", str(scale),
          "--iterations", str(iterations), "--cols", str(cols), "--rows", str(rows)]
@@ -70,9 +75,12 @@ def run(binary, scenario, scale, iterations, cols, rows, cold=False):
         capture_output=True, text=True, check=True).stdout
     wall = WALL_RE.search(out)
     cpu = CPU_RE.search(out)
+    rss = RSS_RE.search(out)
     if not wall:
         raise RuntimeError(f"no timing in output of {binary} {scenario}:\n{out}")
-    return float(wall.group(1)), float(cpu.group(1)) if cpu else None
+    return (float(wall.group(1)),
+            float(cpu.group(1)) if cpu else None,
+            float(rss.group(1)) if rss else None)
 
 
 def calibrate(binary, scenario, scale, target_seconds, cols, rows, cold=False):
@@ -172,6 +180,7 @@ def main():
             run(binary, scenario, args.scale, iterations, args.cols, args.rows, args.cold)
 
         olds, news, ratios = [], [], []
+        old_rss, new_rss = [], []
         for _ in range(args.reps):
             # Indexed by POSITION, not by path: a null test (`ab_bench.py X X`)
             # passes the same path twice, and keying by path would collapse the
@@ -181,23 +190,38 @@ def main():
                 order.reverse()
             binaries = (args.old, args.new)
             results = [0.0, 0.0]
+            memory = [None, None]
             for position in order:
-                results[position] = run(
+                reading = run(
                     binaries[position], scenario, args.scale, iterations,
-                    args.cols, args.rows, args.cold)[index]
+                    args.cols, args.rows, args.cold)
+                results[position] = reading[index]
+                memory[position] = reading[2]
             old_us, new_us = results[0], results[1]
             olds.append(old_us)
             news.append(new_us)
             ratios.append(new_us / old_us)
+            if memory[0] and memory[1]:
+                old_rss.append(memory[0])
+                new_rss.append(memory[1])
 
         median_ratio = statistics.median(ratios)
         lo, hi = bootstrap_ci(ratios)
         verdict = ("faster" if hi < 1.0 else
                    "slower" if lo > 1.0 else
                    "indistinguishable")
+        # RAM is reported as plain medians rather than through the bootstrap:
+        # peak RSS barely varies between runs of the same binary, so a
+        # confidence interval on it would be theatre. A change of more than a
+        # megabyte is worth a look; below that it is allocator noise.
+        if old_rss and new_rss:
+            old_mb, new_mb = statistics.median(old_rss), statistics.median(new_rss)
+            ram = f"  ram {old_mb:.1f}->{new_mb:.1f}MB {(new_mb - old_mb):+.1f}"
+        else:
+            ram = ""
         print(f"{scenario:<16}{iterations:>8}{statistics.median(olds):>11.1f}"
               f"{statistics.median(news):>11.1f}{(median_ratio - 1) * 100:>+8.1f}%"
-              f"{(lo - 1) * 100:>+9.1f}%{(hi - 1) * 100:>+7.1f}%  {verdict}")
+              f"{(lo - 1) * 100:>+9.1f}%{(hi - 1) * 100:>+7.1f}%  {verdict}{ram}")
 
     return 0
 
