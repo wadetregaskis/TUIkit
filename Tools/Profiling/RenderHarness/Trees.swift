@@ -19,6 +19,10 @@ import TUIkit
 ///   flexible-width sharing nests two levels deep (the demo's worst case).
 /// - ``mixedForm()`` — a settings-style page mixing interactive controls;
 ///   broad coverage of the modifier chain + focus registration.
+/// - ``menu()`` — the exact tree `RenderPerformanceTests.menuPerformance`
+///   builds. It is here because that test is the project's standing budget on
+///   the menu path and the only shape CI has ever failed on, and a budget you
+///   cannot profile is a budget you can only argue about.
 enum Trees {
     /// Three flexible bordered boxes sharing a row. Mirrors the
     /// "Content Alignment" demo and `AlignmentBoxSquishTests`.
@@ -212,6 +216,23 @@ enum Trees {
                 Button("Save") { }
             }
         }
+    }
+
+    /// The tree `RenderPerformanceTests.menuPerformance` renders 500 times —
+    /// copied rather than approximated, because the whole point is to profile
+    /// the thing the budget is asserted on.
+    ///
+    /// `.menuStyle(.inline)` matters: the inline style renders the items into
+    /// the frame instead of opening a pop-up, so this measures the composed
+    /// `Menu` hierarchy and its three `Button`s, not the overlay machinery.
+    @MainActor
+    static func menu() -> some View {
+        Menu("Test Menu") {
+            Button("Item 1") {}
+            Button("Item 2") {}
+            Button("Item 3") {}
+        }
+        .menuStyle(.inline)
     }
 }
 

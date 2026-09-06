@@ -84,6 +84,7 @@ struct RenderHarness {
         case "stackRows": checksum = renderLoop(Trees.stackRows(), context, iterations)
         case "list": checksum = renderLoop(Trees.list(), context, iterations)
         case "form": checksum = renderLoop(Trees.mixedForm(), context, iterations)
+        case "menu": checksum = renderLoop(Trees.menu(), context, iterations)
         default:
             FileHandle.standardError.write(Data("unknown tree: \(tree)\n".utf8))
             print(usage)
@@ -112,6 +113,6 @@ struct RenderHarness {
 
     static let usage = """
         RenderHarness — Mode A profiling harness (xctrace --launch).
-        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|stackRows|list|form] [--iterations N] [--cols C] [--rows R]
+        Usage: RenderHarness [--tree alignment|nested|frames|paneled|memoRows|stackRows|list|form|menu] [--iterations N] [--cols C] [--rows R]
         """
 }
