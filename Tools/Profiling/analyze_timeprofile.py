@@ -34,6 +34,7 @@ import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+import re
 from collections import defaultdict
 
 SYSTEM_PREFIXES = ("/usr/", "/System/", "/Library/", "/var/", "/private/var/")
@@ -56,7 +57,7 @@ def is_app(path: str) -> bool:
 
 
 def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: str,
-            callers_of=None, process_filter=None):
+            callers_of=None, process_filter=None, blame=None):
     xml = export_table(trace, run, "time-profile")
 
     # Global id -> value maps. Instruments shares ONE id namespace across
@@ -64,6 +65,10 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
     # type it was defined as, so per-type maps keyed by the global id are
     # unambiguous.
     weight_by_id, thread_by_id, state_by_id, process_by_id = {}, {}, {}, {}
+    blame_ms = defaultdict(float)
+    blame_n = defaultdict(int)
+    blame_matched = [0.0]
+    blame_unattributed = [0.0]
     frame_by_id = {}    # id -> (name, binary_name, binary_path)
     binary_by_id = {}   # id -> (binary_name, binary_path)
 
@@ -185,6 +190,24 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         thread_ms[thread.split(" (")[0] or "?"] += ms
 
         leaf_name, _leaf_bn, leaf_bp = frames[0]
+        if blame is not None and (not blame or re.search(blame, leaf_name)):
+            # BLAME: credit this sample to the nearest frame that is OUR code.
+            #
+            # Self time answers "where was the CPU", and for this framework the
+            # answer is mostly `swift_release`, `swift_retain` and `malloc` —
+            # true, and useless, because none of those is a thing anyone can go
+            # and fix. They are caused by whatever TUIkit frame is sitting just
+            # underneath them on the stack. Walking leaf-to-root to the first
+            # app frame turns "the runtime is busy" into "this function is
+            # making it busy", which is the question worth asking.
+            blame_matched[0] += ms
+            for name, _bn, bp in frames:
+                if is_app(bp):
+                    blame_ms[name] += ms
+                    blame_n[name] += 1
+                    break
+            else:
+                blame_unattributed[0] += ms
         self_ms[leaf_name] += ms
         self_n[leaf_name] += 1
         mod_ms[frames[0][1] or "<unknown>"] += ms
@@ -219,6 +242,8 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         "self_ms": self_ms, "self_n": self_n, "incl_ms": incl_ms,
         "mod_ms": mod_ms, "app_self_ms": app_self_ms, "app_incl_ms": app_incl_ms,
         "callers_ms": callers_ms, "callers_matched_ms": callers_matched_ms,
+        "blame_ms": blame_ms, "blame_n": blame_n,
+        "blame_matched_ms": blame_matched[0], "blame_unattributed_ms": blame_unattributed[0],
         "top": top,
     }
 
@@ -252,6 +277,13 @@ def main():
                          "`xctrace record --all-processes` recording of a PTY app that "
                          "Instruments cannot launch or attach to (e.g. the live `Stress` "
                          "under autopilot, emission included)")
+    ap.add_argument("--blame", metavar="PATTERN", nargs="?", const="", default=None,
+                    help="attribute samples to the nearest TUIkit/app frame beneath "
+                         "the leaf, instead of to the leaf itself. With no PATTERN, "
+                         "every sample; with one (a regex matched against the leaf "
+                         "name), only samples that bottomed out there — e.g. "
+                         "--blame 'swift_(retain|release)|malloc|Metadata' answers "
+                         "'which of OUR functions is generating this runtime traffic'.")
     ap.add_argument("--callers", metavar="PATTERN", default=None,
                     help="also aggregate the immediate CALLERS of every frame whose "
                          "name contains PATTERN — answers 'who is invoking this hot "
@@ -261,7 +293,7 @@ def main():
     if not os.path.exists(args.trace):
         sys.exit(f"no such trace: {args.trace}")
 
-    r = analyze(args.trace, args.run, args.top, args.thread, args.state,
+    r = analyze(args.trace, args.run, args.top, args.thread, args.state, blame=args.blame,
                 callers_of=args.callers, process_filter=args.process)
 
     print("=" * 78)
@@ -284,6 +316,15 @@ def main():
                 r["app_self_ms"], t, r["top"])
     print_table("APP ONLY — inclusive time in TUIkit / Example",
                 r["app_incl_ms"], t, r["top"])
+    if args.blame is not None:
+        matched = r["blame_matched_ms"]
+        unattr = r["blame_unattributed_ms"]
+        label = args.blame or "every sample"
+        print_table(
+            f"BLAME — nearest app frame beneath the leaf, for leaves matching {label!r} "
+            f"({matched:.0f} ms = {(matched / t * 100) if t else 0:.1f}% matched, "
+            f"{unattr:.0f} ms had no app frame at all)",
+            r["blame_ms"], t, r["top"], counts=r["blame_n"])
     if args.callers is not None:
         print_table(
             f"Callers of '{args.callers}' "

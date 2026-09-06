@@ -227,6 +227,24 @@ Keyboard input is raw terminal bytes (arrows = `ESC[A/B/C/D`, page jumps
 
 ### `analyze_timeprofile.py` — trace → hot functions
 
+> **`--blame` is usually the one you want.** Self time says where the CPU was,
+> and for this framework the honest answer is `swift_release`, `swift_retain`
+> and `malloc` — true, and useless, because none of them is a thing anyone can
+> go and fix. `--blame` credits each sample to the nearest TUIkit frame
+> *beneath* the leaf, turning "the runtime is busy" into "this function is
+> making it busy". With a regex it restricts to samples that bottomed out in a
+> particular kind of work:
+>
+> ```sh
+> python3 Tools/Profiling/analyze_timeprofile.py t.trace --blame
+> python3 Tools/Profiling/analyze_timeprofile.py t.trace \
+>     --blame 'swift_retain|swift_release|_malloc|tiny_|Metadata'
+> ```
+>
+> On the `menu` tree the leaf view said 55% libswiftCore and named nothing
+> actionable; `--blame` said environment access 15.8%, `AnyIterator.next()`
+> 9.2%, identity nodes 3.8%, string building 3.3% and array regrowth 3.0%.
+
 **Profiling the live app, emission included.** Instruments cannot `--launch`
 a PTY app and `--attach` is denied here, but `xcrun xctrace record
 --all-processes --time-limit 8s` records everything on the machine while
