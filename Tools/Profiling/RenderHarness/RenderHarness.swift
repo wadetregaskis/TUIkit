@@ -84,6 +84,23 @@ struct RenderHarness {
         //   frame in the Stress bench and nothing at all in the app.
         environment.preferenceStorage = PreferenceStorage()
         environment.volatileReadTracker = VolatileReadTracker()
+        // An app's root environment is not an empty one, and the gap is not
+        // cosmetic. `RenderLoop.buildEnvironment()` STORES the palette and the
+        // appearance, and every frame stamps the terminal size and the
+        // animation clock. Left unset here, every read of those four fell
+        // through the dictionary to `defaultValue` — 208 of the 687
+        // environment reads this tree performs per frame missed, where the same
+        // reads in an app all hit. That is the difference between measuring a
+        // dictionary miss and measuring an `Any` unbox plus a dynamic cast, so
+        // an optimisation aimed at the miss path would have been aimed at the
+        // harness. Seeded with the values the defaults already produce, so the
+        // rendered output is unchanged and only the lookup pattern becomes the
+        // app's.
+        environment.palette = SystemPalette(.green)
+        environment.appearance = .default
+        environment.terminalWidth = cols
+        environment.terminalHeight = rows
+        environment.animationFrame = AnimationFrame()
         let context = RenderContext(
             availableWidth: cols, availableHeight: rows, environment: environment,
             identity: ViewIdentity(rootType: HarnessRoot.self))
