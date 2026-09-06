@@ -104,6 +104,14 @@ extension EquatableView: Renderable {
             // the cached subtree, so they stay active for GC.
             // But we skip the actual rendering work.
             markSubtreeActive(context: context)
+            if RenderCache.verifiesRenderMemo {
+                let fresh = TUIkitView.renderToBuffer(content, context: context)
+                if fresh.lines != cached.lines {
+                    cache.noteRenderMemoMismatch(
+                        viewType: String(describing: Content.self), served: cached,
+                        fresh: fresh, identity: identity.path)
+                }
+            }
             return cached
         }
 

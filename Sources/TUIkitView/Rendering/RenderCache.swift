@@ -352,6 +352,10 @@ public final class RenderCache: @unchecked Sendable {
     /// the thousand and the first few say everything.
     public private(set) var measureMemoMismatches: [String] = []
 
+    /// What ``verifiesRenderMemo`` found: one line per served buffer a fresh
+    /// render disagreed with. Capped, for the reason the measure twin is.
+    public private(set) var renderMemoMismatches: [String] = []
+
     /// A stack's resolved children for the pass — see
     /// `resolveChildViews(from:context:)`. Identity plus the content's type
     /// and raw bytes, like ``MeasureKey`` without a proposal: which children a
@@ -713,6 +717,72 @@ extension RenderCache {
         else { return nil }
         return value
     }()
+
+    /// Whether every BUFFER memo hit is checked against a fresh render.
+    ///
+    /// The twin of ``verifiesMeasureMemo``, and it exists because a served
+    /// buffer can be wrong in a way nothing else notices. The memo's claim is
+    /// that a subtree whose view value compares equal, at the same size, draws
+    /// the same cells — and that claim quietly depends on everything ELSE the
+    /// subtree read while drawing. An environment value applied through a
+    /// modifier is compared (``noteAppliedEnvironment``), but one **assigned
+    /// directly** — `context.environment.foo = x`, which several containers do
+    /// — is not, and the entry it invalidates is nobody's.
+    ///
+    /// That is not hypothetical: it is how a buffer painted over one
+    /// `surfaceBackground` came to be served over another, blend and all, until
+    /// the surface joined the key. The direct check is to render the subtree the
+    /// memo just saved and compare the cells, which costs more than the memo
+    /// saves and so is never on in an app.
+    ///
+    /// Set by `TUIKIT_VERIFY_RENDER_MEMO`, or assigned directly by a test.
+    /// ``renderMemoMismatches`` collects what it finds.
+    @MainActor public static var verifiesRenderMemo =
+        ProcessInfo.processInfo.environment["TUIKIT_VERIFY_RENDER_MEMO"] != nil
+
+    /// Where ``verifiesRenderMemo`` writes what it finds, when the environment
+    /// variable names a path rather than just switching the mode on — an app has
+    /// nowhere to print a diagnostic that would not corrupt the frame under test.
+    @MainActor static let renderMemoMismatchLog: String? = {
+        guard let value = ProcessInfo.processInfo.environment["TUIKIT_VERIFY_RENDER_MEMO"],
+            value.contains("/")
+        else { return nil }
+        return value
+    }()
+
+    /// Records a served buffer that a fresh render did not reproduce.
+    ///
+    /// - Parameters:
+    ///   - viewType: The memoized view's type, for the report.
+    ///   - served: What the memo handed back.
+    ///   - fresh: What rendering it again produced.
+    ///   - identity: Where in the tree it sat.
+    @MainActor public func noteRenderMemoMismatch(
+        viewType: String, served: FrameBuffer, fresh: FrameBuffer, identity: String = ""
+    ) {
+        guard renderMemoMismatches.count < 20 else { return }
+        let shared = min(served.lines.count, fresh.lines.count)
+        let differing = (0..<shared).first { served.lines[$0] != fresh.lines[$0] }
+        let firstDiff =
+            differing.map {
+                "line \($0): served \(served.lines[$0].debugDescription) "
+                    + "but a fresh render says \(fresh.lines[$0].debugDescription)"
+            }
+            ?? "served \(served.lines.count) lines, a fresh render gives \(fresh.lines.count)"
+        renderMemoMismatches.append(
+            "\(viewType): \(firstDiff)" + (identity.isEmpty ? "" : " at \(identity)"))
+        if let path = Self.renderMemoMismatchLog, let last = renderMemoMismatches.last,
+            let data = (last + "\n").data(using: .utf8)
+        {
+            if let handle = FileHandle(forWritingAtPath: path) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: URL(fileURLWithPath: path))
+            }
+        }
+    }
 
     /// Records a served size a fresh measurement did not agree with.
     @MainActor public func noteMeasureMemoMismatch(

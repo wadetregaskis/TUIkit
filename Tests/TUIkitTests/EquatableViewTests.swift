@@ -275,7 +275,19 @@ struct EquatableViewGateTests {
 
         // …while the render-pass buffer itself is cached as before.
         _ = renderToBuffer(view, context: renderContext)
-        #expect(tally.count == 2, "the second render pass serves the cache")
+        #expect(
+            tally.count == 2 + verifierRenders(hits: 1),
+            "the second render pass serves the cache")
+    }
+
+    /// Renders the verifier adds on top of the ones under test.
+    ///
+    /// `TUIKIT_VERIFY_RENDER_MEMO` re-renders every SERVED buffer to check it,
+    /// so a test that counts renders counts those too. Expressed as a function
+    /// of the hit count rather than skipped, so the suite stays meaningful in
+    /// both modes and a run under the verifier shows only real findings.
+    private func verifierRenders(hits: Int) -> Int {
+        RenderCache.verifiesRenderMemo ? hits : 0
     }
 
     @Test("An interactive subtree re-renders every frame (its regions are per-frame state)")
@@ -300,6 +312,7 @@ struct EquatableViewGateTests {
         _ = renderToBuffer(view, context: renderContext)
         _ = renderToBuffer(view, context: renderContext)
         _ = renderToBuffer(view, context: renderContext)
-        #expect(tally.count == 1, "one render, two cache hits")
+        #expect(
+            tally.count == 1 + verifierRenders(hits: 2), "one render, two cache hits")
     }
 }
