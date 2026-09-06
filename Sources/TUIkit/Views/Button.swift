@@ -275,10 +275,42 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         static let isHovered = 1
     }
 
-    /// A button hugs its label (it never grows to fill), so a single render is
-    /// its exact, fixed measure.
+    /// A button hugs its label (it never grows to fill), so this is its exact,
+    /// fixed measure.
+    ///
+    /// Measured through the style's own body rather than by rendering this
+    /// button and discarding the buffer. The two are the same question:
+    /// `ButtonStyle.makeBuffer` is `renderToBuffer(makeBody(configuration:))`
+    /// and lives in an extension — not a protocol requirement — so EVERY button
+    /// style's buffer is its body's buffer, and `renderToBuffer` below adds only
+    /// a hit-test region to it, never a cell. So the size of the body is the
+    /// size of the button, and `measureChild` is the way to ask for a size.
+    ///
+    /// It matters because rendering to measure is most of what a button costs.
+    /// Two-pass layout measures a stack's children before it renders them, so a
+    /// plain button was drawn twice a frame; inside a menu, which takes a hug
+    /// measure of the whole column first, three times. Priced by caching the
+    /// answer across frames in the Mode A harness (checksums unchanged):
+    /// `menu` -48.4%, `paneled` -31.1%, `form` -9.0%, all 9 of 9 paired reps,
+    /// and nothing on the six trees with no buttons in them.
+    ///
+    /// A style whose body is procedural (`_ButtonStyleBody`, which is
+    /// `Renderable` with no `Layoutable`) still reaches `measureFixedByRendering`
+    /// one level further down, so it costs what it always did. A style whose
+    /// body is structural — `_MenuItemButtonStyle`, whose `_MenuItemRowBar`
+    /// answers `sizeThatFits` with `measureChild(row)` — never paints at all.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureFixedByRendering(self, proposal: proposal, context: context)
+        let style = context.environment.buttonStyle
+        // A procedural body is going to be drawn to be measured whichever way
+        // it is asked, and going through the style would then resolve the
+        // configuration twice — once here and again inside the render. Measured:
+        // that double resolve was `paneled` +1.3%, 0 of 9 reps faster.
+        guard style.bodyCanMeasureItself else {
+            return measureFixedByRendering(self, proposal: proposal, context: context)
+        }
+        let resolved = resolve(context: context)
+        return style.makeSize(
+            configuration: resolved.configuration, proposal: proposal, context: context)
     }
 
     /// Reports this button to whatever owns its highlight, and answers whether
@@ -345,7 +377,27 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         return menuOrdinal == context.environment.menuHighlightedOrdinal
     }
 
-    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+    /// Everything a pass works out before it asks the style for anything.
+    ///
+    /// Shared because the measure and the render must agree to the cell: the
+    /// size a button reports is the size of the very view the style would
+    /// build, so both passes have to arrive at the same
+    /// ``ButtonStyleConfiguration`` — same focus, same hover, same resolved
+    /// shortcut (whose hint the row prints, and which a measure that missed it
+    /// would size too narrow for the render to fit).
+    private struct Resolved {
+        let configuration: ButtonStyleConfiguration
+        let persistedFocusID: String
+        let menuOrdinal: Int?
+        let hoverBox: StateBox<Bool>
+        let effectiveAction: () -> Void
+        let isDisabled: Bool
+    }
+
+    /// Resolves this button against `context`, running the per-frame side
+    /// effects that are already gated on `!context.isMeasuring` inside
+    /// themselves. This is what `renderToBuffer` used to do inline, verbatim.
+    private func resolve(context: RenderContext) -> Resolved {
         // Combine this button's own disabled state with the cascading
         // `.disabled(_:)` environment value (a container can disable it).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
@@ -439,7 +491,6 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             }
         }
 
-        let style = context.environment.buttonStyle
         let configuration = ButtonStyleConfiguration(
             label: label,
             labelView: labelView,
@@ -450,7 +501,25 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             isEnabled: !isDisabled,
             keyboardShortcut: resolvedShortcut
         )
-        var buffer = style.makeBuffer(configuration: configuration, context: context)
+        return Resolved(
+            configuration: configuration,
+            persistedFocusID: persistedFocusID,
+            menuOrdinal: menuOrdinal,
+            hoverBox: hoverBox,
+            effectiveAction: effectiveAction,
+            isDisabled: isDisabled)
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let resolved = resolve(context: context)
+        let isDisabled = resolved.isDisabled
+        let persistedFocusID = resolved.persistedFocusID
+        let menuOrdinal = resolved.menuOrdinal
+        let hoverBox = resolved.hoverBox
+        let effectiveAction = resolved.effectiveAction
+        let style = context.environment.buttonStyle
+        var buffer = style.makeBuffer(
+            configuration: resolved.configuration, context: context)
 
         // Hit-test region for mouse clicks AND hover transitions.
         // A left-button release inside the button's bounds counts

@@ -3916,3 +3916,103 @@ being true: the `Mirror` path is retained and correct for anything the walk
 refuses, so a future removal degrades to today's behaviour rather than breaking;
 the whole change is one file; and the nightly-toolchain CI lanes are where SPI
 breakage would surface first.
+
+## 56. A button was drawn to be measured, and drawn again to be seen (2026-09-06, later)
+
+§55 optimised the hottest thing on the menu path. This one asks the question that
+should have come first: how much work is the frame doing at all?
+
+    renderToBuffer  130.0/frame     measureChild  65.0/frame     memo hits 2.0
+    _ButtonCore      9 render /  6 measure        (5 visits per button)
+    _MenuItemRow     9 render /  0 measure
+    Text            10 render /  9 measure
+
+**195 view visits to draw three menu rows.** `_ButtonCore` is 69.4% of the frame
+inclusive, and it is entered nine times for three buttons.
+
+The reason is one line. `_ButtonCore.sizeThatFits` was
+`measureFixedByRendering(self, ...)` — so **every measure of a button renders the
+whole button** (style body, HStack, frames, text, cells) and keeps a width and a
+height. Two-pass layout measures a stack's children before rendering them, so a
+plain button is drawn twice a frame; inside a menu, which takes a hug measure of
+the whole column first, three times.
+
+### What it was worth
+
+Caching each button's size across frames in the Mode A harness — exact there,
+since it renders one unchanging tree — with every checksum unchanged:
+
+    tree        old µs/frame  new µs/frame   change   reps
+    menu             230.0         118.3    -48.4%    9/9
+    paneled          187.5         129.2    -31.1%    9/9
+    form             231.7         210.8     -9.0%    9/9
+    (the six trees with no buttons)          +-0.7%   noise
+
+### Why that cache was not the change
+
+The same cache, emptied at the start of every pass, recovers **nothing**: `menu`
+-0.4%, `paneled` -0.9%, reps split near evenly. Within one frame a button is
+never measured twice at the same width — the asks are genuinely different
+questions, and `_ButtonCore`'s within-pass repeats agree 0% of the time. So the
+whole 48% was CROSS-frame, which is the variant whose failure mode is a stale
+size and silently wrong layout. (A probe on `framedcolumns` did say 1,604 asks,
+99.8% would hit, 0 would be wrong — but keyed on identity and widths only, and
+that scenario never changes a button's label, so it is not a clearance.)
+
+### The change: ask a cheaper question, not an older one
+
+`ButtonStyle.makeBuffer` is `renderToBuffer(makeBody(configuration:), context:)`
+and it lives in an **extension, not a protocol requirement** — so no style can
+override it, and every style's buffer is its body's buffer. `_ButtonCore` then
+appends a hit-test region to that buffer and never a cell. So the body's size IS
+the button's size, and the way to ask for a size is `measureChild`.
+
+`ButtonStyle.makeSize(configuration:proposal:context:)` sits beside `makeBuffer`
+so `Body` stays concrete: erasing it to `AnyView` to measure would change the
+answer, because a flexible child measures to the full available width through
+`AnyView`. `_ButtonCore` now shares one `resolve(context:)` between both passes,
+because the two must reach an identical `ButtonStyleConfiguration` — same focus,
+same hover, same resolved shortcut, whose hint the row prints and which a measure
+that missed it would size too narrow for the render to fit.
+
+No cache, no key, no invalidation, nothing to go stale.
+
+### The gate, which the first cut did not have
+
+Ungated this was `menu` -12.1% but `paneled` **+1.3%, 0 of 9 reps faster** — a
+real regression, and mine: `sizeThatFits` resolved the configuration, then the
+procedural fallback rendered the button and resolved it again. Gated on
+`Body.self is any Layoutable.Type`, a procedural body takes exactly its old path:
+
+    tree        old µs/frame  new µs/frame   change   reps
+    menu             231.7         199.2    -14.0%    9/9
+    nested           260.8         255.0     -2.8%    8/9
+    paneled          187.5         188.3     +0.4%    4/9
+    (everything else within +-1.6%, reps split)
+
+`_MenuItemButtonStyle` wins because `_MenuItemRowBar` answers `sizeThatFits` with
+`measureChild(row)` and paints nothing. `DefaultButtonStyle` does not, because
+`_ButtonStyleBody` is `Renderable` with no `Layoutable`.
+
+### What was left on the table, deliberately
+
+The other ~34 points of the 48% are `_ButtonStyleBody`, which computes its chrome
+widths and label fitting procedurally. Giving it a hand-written `sizeThatFits`
+would put one sizing rule in two places, and two copies of a rule drift — the
+`List`/`Table` divergence this codebase already has scars from — with wrong
+layout, not a crash, as the failure. Rendering to measure is the honest answer
+there until the arithmetic itself is factored out to a single owner.
+
+### An aside worth recording
+
+The per-pass measure memo serves **6.2%** of lookups on `framedcolumns`, **1.1%**
+on `kitchensink`, **11.7%** on `churn`. Its key includes `viewValueHash`, which
+is `withUnsafeBytes(of: view)` — so any view holding a closure or a property
+wrapper hashes differently on every construction, and every `Button` and every
+`@State` view is invisible to it. Measured, two instances held alive at once:
+plain `let x: Int` STABLE; one `@Environment` UNSTABLE; one `@State` UNSTABLE;
+`Button("x") {}` UNSTABLE.
+
+Verification: 6,166 tests in 869 suites pass with 21 known issues, unchanged; all
+nine Mode A checksums identical; `Stress --selfcheck` renders all 20 scenarios;
+`swiftlint --strict` clean.

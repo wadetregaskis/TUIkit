@@ -161,6 +161,33 @@ extension ButtonStyle {
     ) -> FrameBuffer {
         renderToBuffer(makeBody(configuration: configuration), context: context)
     }
+
+    /// Whether this style's body can answer its own size without being drawn.
+    ///
+    /// A metatype conformance check, and the whole reason ``makeSize`` is worth
+    /// asking for: a `Layoutable` body has a `sizeThatFits`, so measuring it
+    /// paints nothing. A procedural one (`_ButtonStyleBody`) would be rendered
+    /// one level further down anyway, and asking it through the style would
+    /// resolve the configuration twice for the same answer.
+    var bodyCanMeasureItself: Bool { Body.self is any Layoutable.Type }
+
+    /// The size ``makeBuffer(configuration:context:)`` would come back as,
+    /// without building it.
+    ///
+    /// The same body, asked the same question through `measureChild` instead of
+    /// `renderToBuffer` — which is what lets a structural style answer without
+    /// painting a cell, and what keeps a procedural one costing exactly what it
+    /// did. Here rather than at the call site so `Body` stays concrete: erasing
+    /// it to `AnyView` to measure would change the answer, because a flexible
+    /// child measures to the full available width through `AnyView`.
+    @MainActor
+    func makeSize(
+        configuration: Configuration,
+        proposal: ProposedSize,
+        context: RenderContext
+    ) -> ViewSize {
+        measureChild(makeBody(configuration: configuration), proposal: proposal, context: context)
+    }
 }
 
 // MARK: - Built-in Button Styles
