@@ -157,7 +157,8 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
         if let cached = cache.lookup(
             identity: identity, view: element,
             contextWidth: context.availableWidth, contextHeight: context.availableHeight,
-            gradientFrame: context.gradientFrame)
+            gradientFrame: context.gradientFrame,
+            surfaceBackground: context.environment.surfaceBackground)
         {
             // Keep the cached subtree's state alive for GC — the WHOLE
             // subtree, not just this identity: nothing below is visited on a
@@ -239,7 +240,8 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
             cache.store(
                 identity: identity, view: element, buffer: buffer,
                 contextWidth: context.availableWidth, contextHeight: context.availableHeight,
-                gradientFrame: context.gradientFrame)
+                gradientFrame: context.gradientFrame,
+            surfaceBackground: context.environment.surfaceBackground)
         }
         return buffer
     }

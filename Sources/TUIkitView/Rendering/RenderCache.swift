@@ -6,6 +6,7 @@
 
 import Foundation
 import TUIkitCore
+import TUIkitStyling
 
 // MARK: - Render Cache
 
@@ -155,16 +156,35 @@ public final class RenderCache: @unchecked Sendable {
         /// wearing the three-row ramp's colours.
         public let gradientFrame: GradientFrame?
 
+        /// The surface the subtree was painted OVER.
+        ///
+        /// Translucent ink is composited against `enclosingSurface` at render
+        /// time, so a buffer holds a blend that is only right over the surface
+        /// it was made on. Here for the same reason ``gradientFrame`` is: a
+        /// cached child that MOVED within a ramp had to re-render, and a cached
+        /// child that is now over a different colour has to as well.
+        ///
+        /// The raw `surfaceBackground` rather than the resolved
+        /// `enclosingSurface`: resolving consults the palette on every lookup,
+        /// and a palette change already invalidates through its own modifier.
+        /// The value that gets past that is a container assigning
+        /// `environment.surfaceBackground` directly (`TabView` does), which
+        /// bypasses `noteAppliedEnvironment` and so leaves nothing else to
+        /// notice it.
+        public let surfaceBackground: Color?
+
         /// Creates a new cache entry.
         public init(
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
-            gradientFrame: GradientFrame? = nil
+            gradientFrame: GradientFrame? = nil,
+            surfaceBackground: Color? = nil
         ) {
             self.viewSnapshot = viewSnapshot
             self.buffer = buffer
             self.contextWidth = contextWidth
             self.contextHeight = contextHeight
             self.gradientFrame = gradientFrame
+            self.surfaceBackground = surfaceBackground
         }
     }
 
@@ -504,7 +524,8 @@ extension RenderCache {
         view: V,
         contextWidth: Int,
         contextHeight: Int,
-        gradientFrame: GradientFrame? = nil
+        gradientFrame: GradientFrame? = nil,
+        surfaceBackground: Color? = nil
     ) -> FrameBuffer? {
         guard let entry = entries[identity] else {
             stats.misses += 1
@@ -525,6 +546,11 @@ extension RenderCache {
         }
         // The ramp's colours are baked into the buffer, so a view that has
         // MOVED within one must re-render even though nothing about it changed.
+        guard entry.surfaceBackground == surfaceBackground else {
+            stats.misses += 1
+            logDebug("MISS (surface changed) \(identity.path)")
+            return nil
+        }
         guard entry.gradientFrame == gradientFrame else {
             stats.misses += 1
             logDebug("MISS (gradient moved) \(identity.path)")
@@ -558,7 +584,8 @@ extension RenderCache {
         buffer: FrameBuffer,
         contextWidth: Int,
         contextHeight: Int,
-        gradientFrame: GradientFrame? = nil
+        gradientFrame: GradientFrame? = nil,
+        surfaceBackground: Color? = nil
     ) {
         stats.stores += 1
         entries[identity] = CacheEntry(
@@ -566,7 +593,8 @@ extension RenderCache {
             buffer: buffer,
             contextWidth: contextWidth,
             contextHeight: contextHeight,
-            gradientFrame: gradientFrame
+            gradientFrame: gradientFrame,
+            surfaceBackground: surfaceBackground
         )
         logDebug("STORE \(identity.path)")
     }

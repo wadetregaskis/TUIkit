@@ -97,7 +97,8 @@ extension EquatableView: Renderable {
             view: content,
             contextWidth: context.availableWidth,
             contextHeight: context.availableHeight,
-            gradientFrame: context.gradientFrame
+            gradientFrame: context.gradientFrame,
+            surfaceBackground: context.environment.surfaceBackground
         ) {
             // Still need to run hydration for @State properties inside
             // the cached subtree, so they stay active for GC.
@@ -143,7 +144,8 @@ extension EquatableView: Renderable {
                 buffer: buffer,
                 contextWidth: context.availableWidth,
                 contextHeight: context.availableHeight,
-                gradientFrame: context.gradientFrame
+                gradientFrame: context.gradientFrame,
+                surfaceBackground: context.environment.surfaceBackground
             )
         }
 
