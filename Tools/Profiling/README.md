@@ -374,6 +374,14 @@ xcrun xctrace record --template "Time Profiler" --output harness.trace \
 python3 Tools/Profiling/analyze_timeprofile.py harness.trace
 ```
 
+The harness installs what `RenderLoop` installs — state storage, a render
+cache, a preference store, a **volatile read tracker** (a precondition of the
+measure memo, not a diagnostic), an identity tree rooted at a TYPE — and runs
+the per-pass lifecycle around every iteration. That is fidelity, not ceremony:
+without the prune this harness reported `list` at 108 MB of peak RSS and
+`memoRows` at 23 MB, against 8.3 MB and 7.9 MB once the pass closes properly.
+A harness that never prunes is measuring itself.
+
 This gives deterministic, input-timing-free profiles ideal for
 before/after comparisons while optimizing. Because the harness exits
 quickly and takes no input, a plain `/usr/bin/time -p "$BIN" --tree …` is

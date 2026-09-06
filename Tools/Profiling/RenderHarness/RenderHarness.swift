@@ -68,8 +68,25 @@ struct RenderHarness {
         // harness never clears it between iterations, so it models the
         // steady-state where unchanged subtrees stay cached across frames.
         environment.renderCache = RenderCache()
+        // Everything below this line is fidelity, learned from `Stress`'s bench
+        // making the same mistakes first. Without it Mode A measures a world the
+        // app does not live in:
+        //
+        // * `volatileReadTracker` is a PRECONDITION of the measure memo
+        //   (`ChildInfo`), not a diagnostic — with no tracker the memo is off,
+        //   and a harness reporting "no cache activity" is describing itself
+        //   rather than the framework.
+        // * `preferenceStorage`, because `.preference` force-unwraps it.
+        // * Rooting identity at a TYPE, as `RenderLoop` roots an app. Under the
+        //   default raw-path root every identity is raw-rooted, and
+        //   `ViewIdentity.isAncestor(of:)` then renders and prefix-compares two
+        //   full path strings — which made the end-of-pass prune 88-95% of a
+        //   frame in the Stress bench and nothing at all in the app.
+        environment.preferenceStorage = PreferenceStorage()
+        environment.volatileReadTracker = VolatileReadTracker()
         let context = RenderContext(
-            availableWidth: cols, availableHeight: rows, environment: environment)
+            availableWidth: cols, availableHeight: rows, environment: environment,
+            identity: ViewIdentity(rootType: HarnessRoot.self))
 
         // Dispatch on the tree name into a generic loop so each tree keeps its
         // own concrete `View` type — type-erasing here would change the very
@@ -105,11 +122,25 @@ struct RenderHarness {
     private static func renderLoop<V: View>(_ view: V, _ context: RenderContext, _ iterations: Int) -> Int {
         var checksum = 0
         for _ in 0..<iterations {
+            // The per-pass lifecycle IS part of a frame: `RenderLoop` opens
+            // every pass with these and closes it by pruning whatever the pass
+            // did not mark alive. Without them this loop rendered into a cache
+            // that was never pruned and a per-pass measure memo that was never
+            // emptied, so an off-screen size was a hit here and a miss in the
+            // app — the same correction `Stress`'s bench needed.
+            context.environment.stateStorage?.beginRenderPass()
+            context.environment.renderCache?.beginRenderPass()
             let buffer = renderToBuffer(view, context: context)
+            context.environment.stateStorage?.endRenderPass()
+            context.environment.renderCache?.removeInactive()
             checksum = checksum &+ buffer.width &+ buffer.height &+ buffer.lines.count
         }
         return checksum
     }
+
+    /// The type the harness's identity tree is rooted at — the stand-in for the
+    /// `App` type `RenderLoop` roots a real tree at.
+    private enum HarnessRoot {}
 
     static let usage = """
         RenderHarness — Mode A profiling harness (xctrace --launch).
