@@ -3775,3 +3775,144 @@ saved. Streamed, the same scenario is indistinguishable and `dashboard` is
 
 Bench checksums identical on all 20 scenarios; 6,166 tests pass with 21 known
 issues; the PTY walk of `Example` reaches all 35 items.
+
+## 55. Thirty-six reflections, and the twelve percent they cost (2026-09-06)
+
+CI fails on the menu render budget, so the menu is where this pass started. Two
+corrections had to land before any number about it meant anything.
+
+The first was the harness (df7ad91d). `RenderLoop.buildEnvironment()` stores the
+palette and the appearance and stamps the terminal size and the animation clock
+every frame; Mode A stored four services and nothing else. `EnvironmentValues`
+has two quite different read paths — a miss is a hash and a failed probe, a hit
+is that plus an `Any` unbox, a `swift_dynamicCast` and a retain when the value is
+an existential — so which one you are measuring depends entirely on whether the
+key is present. Seeded like an app, the menu tree's miss rate falls from 70.9% to
+40.5%, because the two hottest keys stop missing altogether.
+
+The second was reading the profile at all. Self time on this trace says
+`swift_release` 6.0%, `swift_retain` 4.3%, malloc 2.8% — all true, and none of it
+names anything anyone can fix. `analyze_timeprofile.py --blame` (60258a57) walks
+each sample from the leaf to the first frame in our own code and credits that
+instead:
+
+    ms       %  blamed function
+  1289.0     8.8  specialized AnyIterator.next()
+  1193.0     8.1  EnvironmentValues.subscript.getter
+   552.0     3.8  specialized static IdentityNode.structurallyEqual(_:_:)
+   530.0     3.6  resolveEnvironmentProperties<A>(of:in:)
+   512.0     3.5  Environment.wrappedValue.getter
+   382.0     2.6  _StyleEnvironmentView.childContext(_:)
+   305.0     2.1  outlined init with copy of Any
+   185.0     1.3  specialized __RawDictionaryStorage.find<A>(_:hashValue:)
+   151.0     1.0  ObjectIdentifier._rawHashValue(seed:)
+
+Thirty-one percent of the frame is the environment.
+
+### What the counters said, and why they beat the percentages
+
+Instrumenting the subscript and the resolver directly (that instrumentation is
+not committed — the `String(describing:)` histogram costs 412 µs a frame against
+the 244 µs frame it measures) gives per-frame counts for the `menu` tree:
+
+    env.read            687.0    (40.5% miss)
+    env.write            46.0    mean dictionary size at write 15.6
+    bindStateProperties  35.0    100% served by its negative cache — 0 Mirror walks
+    resolveEnvProps      35.0    74.3% negative-cache hits -> 9 Mirror walks, 36 children
+
+Thirty-six children a frame, costing 12.4% of it. That is ~3.4 µs per walk, and
+it is the count that makes the finding: a hot spot doing thirty-six things is a
+hot spot with a cheap fix, where the same percentage spread over 687 things is
+not. It also refutes the obvious reading of `AnyIterator` — with 45 reflective
+operations in a frame the iteration cannot be the cost, so the cost has to be
+what each step *does*.
+
+It is. Each `Mirror.children` step builds a `Child` — a String allocated for the
+field's name and the field's value boxed into an `Any` — on top of the reflective
+field projection.
+
+I had a tidier story than that and the measurement killed it. The self-time
+profile puts ~10% of the run in `MetadataCacheKey::operator==`, `getCache`,
+`getGenericContext` and `_swift_getGenericMetadata`, and since `_MenuItemRow`'s
+fields are generic (`Environment<any Palette>`, `Environment<Int?>`,
+`Environment<Int>`) it was natural to read that as Mirror instantiating metadata
+per field per render. Removing Mirror entirely disproves it: those symbols go
+from ~1,350 ms to ~1,250 ms, and `swift_retain`/`swift_release` do not fall at
+all (850→863 and 647→695, marginally UP). Whatever drives the metadata cache on
+this path, it is not this. The cost that did leave is inside `AnyIterator.next()`
+itself, which is specialized into the binary and does not decompose further in
+the profile — so the honest claim is the measured one, and the mechanism below
+the walk stays unexplained.
+
+### One type, and it cannot help it
+
+Every reflecting call on the menu path is `_MenuItemRow`: 3 rows x 3 renders a
+frame. It has three `@Environment` properties and no way to avoid them —
+`ButtonStyle.makeBody` composes views and is handed no render context, so the
+palette has to come from the environment. Any user-written `ButtonStyle` has the
+same shape, which makes this the general path rather than a quirk of the menu.
+The `_*Core` advice in CLAUDE.md — read the environment off `RenderContext` —
+does not reach a style's body, because a style's body has no context to read.
+
+### Key paths, because a key path outlives the instance
+
+`Mirror` yields a *value*, which is useless on the next render of a freshly
+constructed view. A key path is an accessor, so it can be found once per type and
+kept. `resolveEnvironmentProperties` now memoizes each view type into one of
+three buckets, checked in descending order of how often each answers:
+
+    typesWithoutEnvironment  Set        74% of calls on this tree; a Set test, forever
+    resolvablePaths          [AnyKeyPath]   found once, applied per render
+    typesNeedingMirror       Set        the fallback, also memoized
+
+The third bucket matters more than it looks. The first cut of this did not have
+it: when `_forEachFieldWithKeyPath` declined a type, nothing was cached, so that
+type paid a refused key-path walk *and* a Mirror walk on every render. That is
+strictly more work than before, and the Stress sweep caught it as `deep` +1.6%
+(CI +0.9…+2.4, verdict "slower") — the only scenario in that sweep that moved at
+all.
+
+### Numbers
+
+Mode A, paired, order randomised per rep, 9 reps of 12,000 renders:
+
+    tree        old µs/frame  new µs/frame   change  reps faster
+    menu             264.2         234.2    -11.6%      9/9
+    form             243.3         240.8     -1.7%      5/9
+    memoRows          51.7          50.8     -1.6%      6/9
+    paneled          191.7         189.2     -0.9%      7/9
+    nested/stackRows/frames  —          —     +0.0%    2-3/9
+    list             253.3         255.8     +0.7%      4/9
+    alignment         91.7          94.2     +0.9%      3/9
+
+Only the `menu` row is a result. `/usr/bin/time -p` reports hundredths of a
+second, which over 12,000 iterations quantises every figure to 0.83 µs/frame —
+visibly, since they are all multiples of it — so every other row is at or below
+the instrument's resolution and none of them is being claimed.
+
+Whole-run on-CPU for 60,000 renders of the same tree: **14,687 ms -> 13,245 ms**,
+-9.8%, consistent with the paired figure. In the blame table `AnyIterator.next()`
+disappears entirely and the new key-path apply, `resolve(_:of:in:)`, enters at
+4.6% / 612 ms — so 1,819 ms of reflection became ~612 ms of key-path
+application.
+
+6,166 tests in 869 suites pass with 21 known issues, unchanged. Cross-compiles
+to `aarch64-swift-linux-musl` on the 6.3.3 static SDK, so the SPI import travels.
+
+### The blind spot this exposed
+
+`ab_bench.py` across all 17 default scenarios reports "indistinguishable"
+everywhere. That is not a null result about the change; it is a null result about
+the sweep. `grep` finds no `Menu` and no `ButtonStyle` in any of the 20 Stress
+scenarios, so not one of them contains a type that reflects. The benchmark set
+has no coverage of the shape CI's failing test is made of.
+
+### The dependency this takes on
+
+`_forEachFieldWithKeyPath` is the only way to get key paths for a type's stored
+properties, and it is `@_spi(Reflection)` rather than public API. Three things
+make that acceptable here and they should be re-checked if any of them stops
+being true: the `Mirror` path is retained and correct for anything the walk
+refuses, so a future removal degrades to today's behaviour rather than breaking;
+the whole change is one file; and the nightly-toolchain CI lanes are where SPI
+breakage would surface first.
