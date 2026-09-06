@@ -85,7 +85,7 @@ def run(binary, scenario, scale, iterations, cols, rows, cold=False):
 
 def calibrate(binary, scenario, scale, target_seconds, cols, rows, cold=False):
     """Iterations that make one run last roughly `target_seconds`."""
-    wall_us, _ = run(binary, scenario, scale, 30, cols, rows, cold)
+    wall_us, _, _ = run(binary, scenario, scale, 30, cols, rows, cold)
     iterations = int(target_seconds * 1_000_000 / max(wall_us, 1.0))
     return max(50, min(iterations, 200_000))
 
