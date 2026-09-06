@@ -116,20 +116,39 @@ enum Headless {
             let context = makeContext(cols: 120, rows: 40)
             let view = AnyView(scenario.make(config).environment(clock))
             let trimmedBefore = StackGuard.truncationCount
+            // TWICE, with the pass lifecycle between, because a memo only
+            // SERVES on a second render — so a one-render check never exercised
+            // the buffer memo at all, and `TUIKIT_VERIFY_RENDER_MEMO` had
+            // nothing to verify. The second render is what the verifier reads.
+            context.environment.stateStorage?.beginRenderPass()
+            context.environment.renderCache?.beginRenderPass()
+            _ = renderToBuffer(view, context: context)
+            context.environment.stateStorage?.endRenderPass()
+            context.environment.renderCache?.removeInactive()
+            context.environment.stateStorage?.beginRenderPass()
+            context.environment.renderCache?.beginRenderPass()
             let buffer = renderToBuffer(view, context: context)
+            context.environment.stateStorage?.endRenderPass()
+            let staleServes = context.environment.renderCache?.renderMemoMismatches ?? []
             let trimmed = StackGuard.truncationCount - trimmedBefore
             // Dimensions alone are too weak a check: a frame of the right size
             // holding nothing passes it, which is exactly what a tripped stack
             // guard produces. Require visible content, and a whole tree.
-            let ok = buffer.width > 0 && buffer.height > 0 && !isBlank(buffer) && trimmed == 0
+            let ok =
+                buffer.width > 0 && buffer.height > 0 && !isBlank(buffer) && trimmed == 0
+                && staleServes.isEmpty
             if !ok { failures += 1 }
             let id = scenario.id.padding(toLength: 12, withPad: " ", startingAt: 0)
             let why =
                 trimmed > 0
                 ? "  (stack guard stopped \(trimmed) descents)"
-                : (isBlank(buffer) ? "  (blank)" : "")
+                : (isBlank(buffer)
+                    ? "  (blank)"
+                    : (staleServes.isEmpty
+                        ? "" : "  (STALE MEMO: \(staleServes.count))"))
             print("  \(ok ? "ok  " : "FAIL") \(id) \(buffer.width)x\(buffer.height)"
                 + "  \(scenario.title)\(why)")
+            for line in staleServes.prefix(3) { print("      \(line)") }
         }
         print(failures == 0 ? "selfcheck: all \(Scenarios.all.count) scenarios rendered" : "selfcheck: \(failures) FAILED")
         return failures

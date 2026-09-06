@@ -254,6 +254,14 @@ jobs:
         run: $SWIFT test
 
       - name: Smoke — headless render of every scenario
+        # With the buffer memo VERIFIED: `--selfcheck` renders each scenario
+        # twice, so the memo serves on the second, and this re-renders every
+        # served buffer and fails the scenario if the cells disagree. It is the
+        # standing net for a memo serving a stale picture — which is wrong
+        # pixels and no error otherwise, and which nothing else here would
+        # notice. Costs one extra render per scenario.
+        env:
+          TUIKIT_VERIFY_RENDER_MEMO: "1"
         run: $SWIFT run Stress --selfcheck
 
       - name: Smoke — drive both apps in a real PTY (${{ matrix.smoke }})
@@ -321,6 +329,8 @@ jobs:
         run: swift test
 
       - name: Smoke — headless render of every scenario
+        env:
+          TUIKIT_VERIFY_RENDER_MEMO: "1"
         run: swift run Stress --selfcheck
 
       - name: Smoke — drive both apps in a real PTY (${{ matrix.smoke }})
@@ -560,6 +570,8 @@ jobs:
       - name: "Smoke — headless render of every scenario"
         continue-on-error: true
         timeout-minutes: 30
+        env:
+          TUIKIT_VERIFY_RENDER_MEMO: "1"
         run: swift run Stress --selfcheck
 
   # ── WebAssembly ────────────────────────────────────────────────────────────
