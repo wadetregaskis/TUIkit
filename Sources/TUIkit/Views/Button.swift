@@ -293,6 +293,23 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         context: RenderContext
     ) -> Bool {
         guard let menuOrdinal else {
+            // A measure pass reaches the end of this branch having computed
+            // `false` and changed nothing, so it can start there instead.
+            // Every one of the three things below is already measure-gated at
+            // its own door — `FocusRegistration.register` returns on
+            // `!context.isMeasuring`, `isFocused` answers `false` outright, and
+            // `publishActivationLabel` needs both `isFocused` and not
+            // measuring. What is NOT gated is the work of getting to them: an
+            // `ActionHandler` object whose default `triggerKeys` builds a fresh
+            // `Set<Key>`, an environment read for its extras, and a
+            // `LocalizationService` lookup that takes a lock and returns a
+            // dictionary value by value. All of it allocated and thrown away.
+            //
+            // This is the measure/render asymmetry the project already knows
+            // about, met from the performance side rather than the correctness
+            // side: a button is rendered three times a frame inside a menu and
+            // twice of those are measures.
+            guard !context.isMeasuring else { return false }
             let handler = ActionHandler(
                 focusID: focusID, action: action, canBeFocused: !isDisabled,
                 // Read here rather than in the closure: the environment is out
