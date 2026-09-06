@@ -81,10 +81,16 @@ enum ProcessMemory {
         // that one small read is always the whole file.
         guard let handle = fopen("/proc/self/statm", "r") else { return nil }
         defer { fclose(handle) }
-        var total: UInt = 0
-        var resident: UInt = 0
-        guard fscanf(handle, "%lu %lu", &total, &resident) == 2 else { return nil }
-        return UInt64(resident) &* UInt64(sysconf(_SC_PAGESIZE))
+        // `fgets` and a split rather than `fscanf`: `fscanf` is variadic, and
+        // Swift will not pass `&resident` to a `CVarArg...` parameter — on
+        // Linux that is a hard error ("'&' used with non-inout argument of
+        // type 'Any'"), which a Darwin build never sees because this whole
+        // branch is `#elseif`'d out there.
+        var line = [CChar](repeating: 0, count: 128)
+        guard fgets(&line, Int32(line.count), handle) != nil else { return nil }
+        let fields = String(cString: line).split(separator: " ")
+        guard fields.count > 1, let resident = UInt64(fields[1]) else { return nil }
+        return resident &* UInt64(sysconf(_SC_PAGESIZE))
         #else
         return nil
         #endif
