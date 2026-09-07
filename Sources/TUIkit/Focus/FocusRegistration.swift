@@ -101,9 +101,14 @@ struct FocusRegistration {
             context.isMeasuring
             ? nil : context.environment.assignedFocusID?.claim(context.identity)
         let declared = explicitFocusID ?? assigned
-        let defaultID = declared ?? "\(defaultPrefix)-\(context.identity.path)"
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: propertyIndex)
-        let box: StateBox<String> = stateStorage.storage(for: key, default: defaultID)
+        // Written as an argument rather than a `let` on purpose: the default is
+        // an `@autoclosure`, and `context.identity.path` renders the whole
+        // identity chain into a string of demangled generic type names. Every
+        // focusable view asked for it on every measure and every render, and
+        // every frame after the first threw it away.
+        let box: StateBox<String> = stateStorage.storage(
+            for: key, default: declared ?? "\(defaultPrefix)-\(context.identity.path)")
 
         // A DECLARED id is the app's answer on every frame, not just the first.
         // Returning the stored one regardless froze whatever `.focusID(_:)`

@@ -166,17 +166,27 @@ extension StateStorage {
     /// (preserving the current value across render passes). Otherwise, a new storage
     /// is created with the provided default value.
     ///
+    /// `defaultValue` is an `@autoclosure` because the common case is a HIT, and
+    /// on a hit the default is built and thrown away. That is not free for every
+    /// caller: a control's focus id is `"\(prefix)-\(context.identity.path)"`,
+    /// and `path` walks the identity chain rendering a string of demangled
+    /// generic type names — on every measure and every render of every focusable
+    /// view, to be discarded on all but the frame that created the box.
+    ///
     /// - Parameters:
     ///   - key: The state key (identity + property index).
-    ///   - defaultValue: The initial value for newly created storage.
+    ///   - defaultValue: The initial value for newly created storage. Evaluated
+    ///     only when there is no storage yet.
     /// - Returns: The persistent `Storage` object for this property.
-    public func storage<Value>(for key: StateKey, default defaultValue: Value) -> StateBox<Value> {
+    public func storage<Value>(
+        for key: StateKey, default defaultValue: @autoclosure () -> Value
+    ) -> StateBox<Value> {
         if let existing = values[key] as? StateBox<Value> {
             existing.identity = key.identity
             existing.invalidationSink = renderCache
             return existing
         }
-        let fresh = StateBox(defaultValue)
+        let fresh = StateBox(defaultValue())
         fresh.identity = key.identity
         fresh.invalidationSink = renderCache
         values[key] = fresh
