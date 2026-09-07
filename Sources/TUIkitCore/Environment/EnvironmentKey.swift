@@ -92,6 +92,23 @@ public struct EnvironmentValues: @unchecked Sendable {
         set { storage[ObjectIdentifier(type)] = newValue }
     }
 
+    /// The object stored under `type`, looked up without knowing the type
+    /// statically — the untyped twin of ``subscript(observable:)``.
+    ///
+    /// It exists so `@Environment(SomeModel.self)` can hold a **metatype** for
+    /// its lookup instead of a closure that captures one. That is not a style
+    /// preference: a closure is two words, which pushed the property wrapper to
+    /// 32 bytes, past the three-word inline buffer of an existential — and the
+    /// renderer projects every `@Environment` property through `Any` to resolve
+    /// it, so every such property of every view was paying a heap box on every
+    /// body. With a metatype the wrapper is 16 bytes and the box is inline.
+    ///
+    /// - Parameter type: The observable type to look up.
+    /// - Returns: The stored object, or `nil` if none was injected.
+    public func storedObject(ofType type: Any.Type) -> Any? {
+        storage[ObjectIdentifier(type)]
+    }
+
     /// Creates a copy of this environment with a modified value.
     ///
     /// - Parameters:

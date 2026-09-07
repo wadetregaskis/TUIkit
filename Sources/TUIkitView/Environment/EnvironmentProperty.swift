@@ -68,9 +68,18 @@ import TUIkitCore
 @propertyWrapper
 public struct Environment<Value> {
     /// Strategy for resolving the environment value.
+    ///
+    /// Both cases are one pointer wide, deliberately. The observable case used
+    /// to hold a `(EnvironmentValues) -> Value?` closure, which is two words and
+    /// took the whole wrapper to 32 bytes — past the 24-byte inline buffer of an
+    /// existential. `resolveEnvironmentProperties` reaches every `@Environment`
+    /// property by projecting it out of its view through a `PartialKeyPath`,
+    /// which yields `Any`, so an over-large wrapper meant a heap allocation per
+    /// property per view per `body`. A metatype fits, and the lookup it stands
+    /// for is ``EnvironmentValues/storedObject(ofType:)``.
     private enum LookupStrategy {
         case keyPath(KeyPath<EnvironmentValues, Value>)
-        case observable((EnvironmentValues) -> Value?)
+        case observable(Any.Type)
     }
 
     /// The lookup strategy used by this instance.
@@ -99,9 +108,7 @@ public struct Environment<Value> {
     ///
     /// - Parameter type: The observable type to look up.
     public init(_ type: Value.Type) where Value: Observable {
-        self.strategy = .observable { env in
-            env[observable: type]
-        }
+        self.strategy = .observable(type)
     }
 
     /// The current environment value.
@@ -114,8 +121,8 @@ public struct Environment<Value> {
         switch strategy {
         case .keyPath(let keyPath):
             return env[keyPath: keyPath]
-        case .observable(let lookup):
-            guard let object = lookup(env) else {
+        case .observable(let type):
+            guard let object = env.storedObject(ofType: type) as? Value else {
                 fatalError(
                     "@Environment(\(Value.self).self): "
                         + "No object of type \(Value.self) found in the environment. "
