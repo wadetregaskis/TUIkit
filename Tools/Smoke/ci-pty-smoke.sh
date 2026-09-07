@@ -17,11 +17,16 @@
 #                      CI lane, which is the point: an interactive-only crash
 #                      that is specific to one Swift version or architecture
 #                      still gets caught.
-#   full             — every menu item, ~7 minutes. One lane per OS runs this.
+#   full             — every menu item, ~2 minutes. One lane per OS runs this.
 #
-# The split exists because tui_walk settles 0.25s after every keystroke and
-# returns the cursor to the top between items, so cost grows with the SQUARE of
-# the item count: 34 items is ~1,100 keystrokes, 12 items is ~130.
+# The split exists because tui_walk settles 0.25s after every keystroke, so the
+# walk is bounded by keystrokes rather than by anything the app does. It used to
+# return the cursor to the top between items, which made that cost grow with the
+# SQUARE of the item count (34 items ~1,100 keystrokes, six minutes); it now
+# carries on from where the page was opened, which is linear (~70 keystrokes,
+# two minutes). The quick/full split is kept anyway: `quick` is a minute on
+# every lane, and nine lanes of `full` would still be twenty minutes of runner
+# time for the same signal.
 
 set -euo pipefail
 

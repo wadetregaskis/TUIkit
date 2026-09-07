@@ -40,6 +40,10 @@ def main() -> int:
     parser.add_argument("binary")
     parser.add_argument("count", type=int)
     parser.add_argument("--per-item", default="down*3,up")
+    parser.add_argument("--from-top", action="store_true",
+                        help="return the menu cursor to the top between items "
+                             "(the original O(n^2) walk, kept as the check on "
+                             "the incremental one)")
     parser.add_argument("--cols", type=int, default=140)
     parser.add_argument("--rows", type=int, default=42)
     parser.add_argument("--scale", type=int, default=0)
@@ -109,16 +113,26 @@ def main() -> int:
 
     for item in range(args.count):
         ok = True
-        for _ in range(item):
-            ok = ok and send("down")
+        # ONE Down per item, not `item` of them: escaping a page leaves the menu
+        # cursor on the row it was opened from, so the walk carries on from
+        # there. That makes it O(n) keystrokes instead of O(n^2) — at 35 items
+        # and a 0.25 s settle, ~70 rather than ~1,200, and the Example's walk
+        # went from six minutes to two. `--from-top` restores the old walk; the
+        # two were compared page-title for page-title over the whole menu (see
+        # `tui_screens.py`, which captures the titles) before this became the
+        # default.
+        if item > 0:
+            for _ in range(item if args.from_top else 1):
+                ok = ok and send("down")
         ok = ok and send("enter") and pump(args.settle)
         for token in args.per_item.split(","):
             if token:
                 ok = ok and send(token)
         ok = ok and send("esc") and pump(0.3)
-        # Return the selection to the top for the next item's Down-walk.
-        for _ in range(item):
-            ok = ok and send("up")
+        if args.from_top:
+            # Return the selection to the top for the next item's Down-walk.
+            for _ in range(item):
+                ok = ok and send("up")
         if not ok:
             print(f"FAIL: app died while visiting item {item}")
             dump_screen()
