@@ -48,8 +48,21 @@ struct TightViewportTests {
             "\(width)×\(height): the padding hid the content it was decorating")
     }
 
+    /// A border costs a cell on each side of each axis, so it cannot show both
+    /// its chrome and its content in fewer than three, and something has to
+    /// give. What must NOT give is the whole view: before this, two rows drew
+    /// literally nothing, because the body was offered `max(0, 2 - 2)` rows,
+    /// rendered empty, and an empty body collapses its container.
+    ///
+    /// So the boundary is asserted rather than described. From 2×2 the content
+    /// is on screen with the border clipped around it; at one row or one
+    /// column there is no room for both and the box wins, which at least says
+    /// a box is there. The earlier spelling of this test only checked the
+    /// visible region was not blank — which the border's own glyphs satisfy,
+    /// so it would have passed with the content off-screen at every size, and
+    /// said nothing about the half that matters.
     @Test(
-        "A bordered view keeps its content on screen at every viewport size",
+        "A bordered view shows its content from 2×2, and its box below that",
         arguments: [1, 2, 3, 4, 8], [1, 2, 3, 4, 8])
     @MainActor
     func borderedContentStaysVisible(width: Int, height: Int) {
@@ -61,6 +74,11 @@ struct TightViewportTests {
         #expect(
             !shown.trimmingCharacters(in: .whitespaces).isEmpty,
             "\(width)×\(height): the border drew nothing at all")
+        if width >= 2 && height >= 2 {
+            #expect(
+                shown.contains("X"),
+                "\(width)×\(height): the border hid the content it was drawn around")
+        }
     }
 
     /// The shape the sweep actually failed on: a stack of content under a
