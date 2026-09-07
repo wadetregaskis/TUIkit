@@ -106,11 +106,49 @@ def main() -> int:
             if text:
                 print(f"{index:3}| {text}")
 
+    def snapshot() -> tuple:
+        """What the terminal is showing, as a comparable value.
+
+        Colour and reverse-video are part of it, not decoration. `screen
+        .display` is text only, and a menu highlight that moves by recolouring
+        a row — which is what the Example's does, having no marker glyph —
+        changes not one character of it. Compared on text alone the walk
+        concluded the cursor had not moved, and stopped after a single item
+        believing it had reached the end of a thirty-five item menu.
+        """
+        return tuple(
+            tuple(
+                (cell.data, cell.fg, cell.bg, cell.reverse, cell.bold)
+                for cell in (screen.buffer[y][x] for x in range(screen.columns))
+            )
+            for y in range(screen.lines)
+        )
+
+    def settled_change(before: tuple) -> bool:
+        """Whether the screen has changed since `before`, waiting to be sure.
+
+        `send` pumps a fixed quarter second, which is plenty to deliver a
+        keystroke and not always enough for the app to finish repainting: the
+        Example's menu answered a Down more slowly than that, and a snapshot
+        taken on the quarter second looked identical to the one before it. Read
+        as "nothing moved" that is a walk which stops at the first item and
+        calls it the end of the menu — which is exactly what it did.
+
+        So an unchanged screen is a question, not an answer, and it is asked
+        again with the full settle behind it. Only the negative path waits, so
+        this costs nothing on the item-by-item walk.
+        """
+        if snapshot() != before:
+            return True
+        pump(args.settle)
+        return snapshot() != before
+
     if not pump(1.5):
         print("FAIL: app died before the menu appeared")
         dump_screen()
         return 1
 
+    walked = 0
     for item in range(args.count):
         ok = True
         # ONE Down per item, not `item` of them: escaping a page leaves the menu
@@ -121,10 +159,30 @@ def main() -> int:
         # two were compared page-title for page-title over the whole menu (see
         # `tui_screens.py`, which captures the titles) before this became the
         # default.
-        if item > 0:
-            for _ in range(item if args.from_top else 1):
-                ok = ok and send("down")
+        #
+        # Whether the LAST of those Downs moved anything is how the walk knows
+        # it has reached the bottom of the menu, so `count` can be an upper
+        # bound instead of an exact tally that goes stale. It is the exact
+        # tally that failed: CI walked 19 of Stress's 21 scenarios, having
+        # never been raised when two were added, so the `menus` and
+        # `kitchensink` pages were silently not smoked at all.
+        downs = item if args.from_top else min(item, 1)
+        moved = item == 0
+        for index in range(downs):
+            before = snapshot()
+            ok = ok and send("down")
+            if index == downs - 1:
+                moved = settled_change(before)
+
+        # Opening the page must repaint. That is worth asserting on every item
+        # rather than trusting the process to be alive, because `alive()` is
+        # true of an app that has wedged and stopped drawing — the whole
+        # hang/livelock class used to walk green. It is also what tells a
+        # wedged app apart from the end of the menu: both leave the screen
+        # unchanged after a Down, and only one of them still repaints here.
+        before_open = snapshot()
         ok = ok and send("enter") and pump(args.settle)
+        opened = settled_change(before_open)
         for token in args.per_item.split(","):
             if token:
                 ok = ok and send(token)
@@ -137,6 +195,19 @@ def main() -> int:
             print(f"FAIL: app died while visiting item {item}")
             dump_screen()
             return 1
+        if not opened:
+            print(f"FAIL: app stopped painting at item {item} — Enter changed nothing")
+            dump_screen()
+            return 1
+        if not moved:
+            # The Down before this visit changed nothing and the app is
+            # demonstrably still painting, so the cursor was already on the
+            # last row: this visit re-opened the previous page and is not a
+            # new item. Worth the couple of seconds it cost — re-opening it is
+            # what proved the app was still painting rather than wedged.
+            print(f"reached the end of the menu after {walked} items")
+            break
+        walked += 1
         print(f"ok item {item}")
 
     os.write(fd, b"q")
@@ -146,7 +217,7 @@ def main() -> int:
     except ProcessLookupError:
         pass
     os.waitpid(pid, 0)
-    print(f"walked {args.count} items: all alive")
+    print(f"walked {walked} items: all alive")
     return 0
 
 

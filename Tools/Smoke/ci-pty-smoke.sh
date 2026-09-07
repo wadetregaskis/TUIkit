@@ -36,9 +36,14 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 VENV="${TMPDIR:-/tmp}/tuikit-smoke-venv"
 
+# `full` asks each app how many pages it has rather than carrying a literal.
+# The literals drifted: Stress gained two scenarios and `STRESS_ITEMS` stayed at
+# 19, so CI walked 19 of 21 and the `menus` and `kitchensink` pages went
+# unsmoked for weeks. `quick` is a deliberately shallow walk, so its counts are
+# literals on purpose.
 case "$DEPTH" in
     quick) EXAMPLE_ITEMS=12; STRESS_ITEMS=6 ;;
-    full)  EXAMPLE_ITEMS=35; STRESS_ITEMS=19 ;;
+    full)  EXAMPLE_ITEMS=""; STRESS_ITEMS="" ;;
     *)     echo "usage: $0 [quick|full] [build-dir]" >&2; exit 2 ;;
 esac
 
@@ -52,14 +57,31 @@ fi
 # Never the developer's — or the runner's — real preferences.
 export TUIKIT_CONFIG_DIR="${TUIKIT_CONFIG_DIR:-${TMPDIR:-/tmp}/tuikit-smoke-config}"
 
-# Item counts are entries in each app's top-level menu. Walking past the end is
-# harmless (Down saturates on the last row), so these stay correct as pages are
-# added — but raise the `full` counts to keep coverage complete.
+# Item counts are entries in each app's top-level menu. An empty count means
+# "ask the app": `Example --pages` prints `DemoPage.allCases.count` and
+# `Stress --help` lists its scenario ids, both from the registry that defines
+# them, so neither can fall behind the menu it describes.
+page_count() {
+    local binary="$1"
+    case "$binary" in
+        Example) "$REPO/$BUILD_DIR/Example" --pages ;;
+        Stress)  "$REPO/$BUILD_DIR/Stress" --help | tail -1 | tr ',' '\n' | grep -c . ;;
+    esac
+}
+
 walk() {
     local binary="$1" count="$2"
     if [ ! -x "$REPO/$BUILD_DIR/$binary" ]; then
         echo "error: $BUILD_DIR/$binary not built" >&2
         return 1
+    fi
+    if [ -z "$count" ]; then
+        count="$(page_count "$binary")"
+        # A derivation that silently yields nothing would walk zero items and
+        # pass, which is the failure this replaced.
+        case "$count" in
+            ''|*[!0-9]*|0) echo "error: could not read $binary's page count" >&2; return 1 ;;
+        esac
     fi
     echo "── PTY walk ($DEPTH): $binary, $count items ──"
     "$VENV/bin/python" "$HERE/tui_walk.py" "$REPO/$BUILD_DIR/$binary" "$count" --settle 0.5

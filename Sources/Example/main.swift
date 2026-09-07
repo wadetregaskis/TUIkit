@@ -7,6 +7,7 @@
 //  Use the menu to navigate between demos.
 //
 
+import Foundation
 import TUIkit
 
 // MARK: - Main App
@@ -56,6 +57,21 @@ struct ExampleApp: App {
 // Register the example app's own localized strings with the shared
 // LocalizationService before the UI renders, so `L(_:)` resolves them.
 registerExampleLocalizations()
+
+// How many entries the menu has, printed and nothing else.
+//
+// For the PTY smoke walk, which has to know when it has seen every page. The
+// number lived in `Tools/Smoke/ci-pty-smoke.sh` as a literal, and a literal
+// count of a list someone else maintains only ever drifts one way: two
+// scenarios were added to the sibling Stress app and its count was not raised,
+// so CI walked 19 of 21 and quietly stopped smoking two pages. Stress already
+// answers this from its registry rather than a literal (see the note above
+// `scenarioIDs` in its `main.swift`); this is the Example saying the same
+// thing about `DemoPage`, which is the only place that actually knows.
+if CommandLine.arguments.dropFirst().contains("--pages") {
+    print(DemoPage.allCases.count)
+    exit(0)
+}
 
 // Run the app
 await ExampleApp.main()
