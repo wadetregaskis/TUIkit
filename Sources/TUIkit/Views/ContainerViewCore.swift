@@ -142,7 +142,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let hasFooter = footer != nil
         let borderRows = hasBorder ? 2 : 0
         let chromeHeight = borderRows + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
-        let innerAvailableHeight = max(0, base.availableHeight - chromeHeight)
+        let innerAvailableHeight = RenderContext.extent(
+            base.availableHeight, insideChrome: chromeHeight)
 
         // Footer at its natural (full inner) width: gives the height the body
         // must share and the footer's contribution to the inner-width vote.
@@ -166,7 +167,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // wrapped tree and applies the preferred-width policy, and measuring it
         // any other way here would put this pass and the render back into
         // disagreement (see `scrollableBodySize`).
-        let bodyAvailableHeight = max(0, innerAvailableHeight - footerNaturalHeight)
+        let bodyAvailableHeight = RenderContext.extent(
+            innerAvailableHeight, insideChrome: footerNaturalHeight)
         var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
         let bodyWidth: Int
@@ -292,7 +294,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let hasFooter = footer != nil
         let borderRows = hasBorder ? 2 : 0
         let chromeHeight = borderRows + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
-        let innerAvailableHeight = max(0, context.availableHeight - chromeHeight)
+        let innerAvailableHeight = RenderContext.extent(
+            context.availableHeight, insideChrome: chromeHeight)
 
         // Measure the footer first (without side-effects) so the body knows
         // how much vertical space is left. Real focus registration happens in
@@ -310,7 +313,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let footerHeight = measuredFooter?.height ?? 0
 
         // Render the body into the space the chrome and footer leave.
-        let bodyAvailableHeight = max(0, innerAvailableHeight - footerHeight)
+        let bodyAvailableHeight = RenderContext.extent(
+            innerAvailableHeight, insideChrome: footerHeight)
         var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
         var bodyBuffer =

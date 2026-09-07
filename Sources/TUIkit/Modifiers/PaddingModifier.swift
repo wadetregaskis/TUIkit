@@ -150,25 +150,61 @@ public struct PaddingModifier: ViewModifier {
 
     /// `available` less `taken`, but never below one cell while `available` has
     /// one to give.
+    ///
+    /// The same rule a bordered container applies to its interior, and the same
+    /// implementation: padding and a border are both decoration subtracting
+    /// from an extent, and the day the two spellings drift is the day a
+    /// `.padding().border()` measures one size and draws another.
     private static func remaining(_ available: Int, less taken: Int) -> Int {
-        available <= 0 ? 0 : max(1, available - taken)
+        RenderContext.extent(available, insideChrome: taken)
+    }
+
+    /// How much padding an axis actually draws, split into the inset before the
+    /// content and the one after it.
+    ///
+    /// Not the same question as ``remaining(_:less:)``, which decides what the
+    /// CONTENT gets. This decides what the padding gets, and the two have to
+    /// add up: `adjustContext` hands the content `remaining`, so anything else
+    /// drawn on this axis makes the buffer wider than the view was measured to
+    /// be. Deriving both from one subtraction is what keeps the measure and the
+    /// render agreeing.
+    ///
+    /// The `before` cap is the part that is not just bookkeeping. A leading or
+    /// top inset is an OFFSET — it pushes the content away from the very edge
+    /// the viewport is measured from — so an inset the size of the viewport
+    /// moves every cell of content past its far side. One row of terminal and a
+    /// `.padding()` drew a blank row and put the text on row 1, and the screen
+    /// went empty: not clipped, erased. So the leading inset stops one cell
+    /// short of the space, and what it gives up the trailing inset cannot
+    /// claim — the content is what wins the cell back.
+    private static func drawnInsets(
+        _ before: Int, _ after: Int, in available: Int
+    ) -> (before: Int, after: Int) {
+        let total = max(0, available - remaining(available, less: before + after))
+        let drawnBefore = min(before, max(0, available - 1), total)
+        return (drawnBefore, total - drawnBefore)
     }
 
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
-        var result: [String] = []
-        result.reserveCapacity(insets.top + buffer.lines.count + insets.bottom)
+        let horizontal = Self.drawnInsets(
+            insets.leading, insets.trailing, in: context.availableWidth)
+        let vertical = Self.drawnInsets(
+            insets.top, insets.bottom, in: context.availableHeight)
 
-        let leadingCount = insets.leading
-        let trailingCount = insets.trailing
+        var result: [String] = []
+        result.reserveCapacity(vertical.before + buffer.lines.count + vertical.after)
+
+        let leadingCount = horizontal.before
+        let trailingCount = horizontal.after
 
         // Calculate line width
-        let lineWidth = buffer.width + insets.leading + insets.trailing
+        let lineWidth = buffer.width + leadingCount + trailingCount
         // The full-width blank pad rows are all identical, so build one and reuse
         // its value for every top/bottom row (cheaper than re-slicing per row).
         let emptyLine = String(asciiSpaces(lineWidth))
 
         // Top padding (full lines)
-        for _ in 0..<insets.top {
+        for _ in 0..<vertical.before {
             result.append(emptyLine)
         }
 
@@ -186,7 +222,7 @@ public struct PaddingModifier: ViewModifier {
         }
 
         // Bottom padding (full lines)
-        for _ in 0..<insets.bottom {
+        for _ in 0..<vertical.after {
             result.append(emptyLine)
         }
 
@@ -202,7 +238,7 @@ public struct PaddingModifier: ViewModifier {
         // Propagating this lets an enclosing border skip re-measuring in turn.
         return buffer.replacingLines(
             result, width: lineWidth, uniformWidth: buffer.linesAreUniformWidth,
-            overlayShiftX: insets.leading, overlayShiftY: insets.top)
+            overlayShiftX: leadingCount, overlayShiftY: vertical.before)
     }
 }
 

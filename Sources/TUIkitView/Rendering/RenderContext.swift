@@ -304,6 +304,30 @@ public struct RenderContext {
 
     // MARK: - Container Layout Helpers
 
+    /// What is left of `available` once `chrome` cells of decoration have taken
+    /// theirs — never the last cell, while there is one to give.
+    ///
+    /// Decoration losing to the thing it decorates is the only order that
+    /// degrades legibly, and the alternative is not a tighter box but a blank
+    /// screen: chrome subtracted flat to zero leaves the content no cell to
+    /// render into, an empty child collapses its container (a bordered box with
+    /// nothing inside is nothing), and the collapse propagates all the way up.
+    /// Two of the stress harness's scenarios drew literally nothing below three
+    /// rows for exactly that reason.
+    ///
+    /// Clamping here rather than at each subtraction site also keeps the two
+    /// halves of a container honest: measure and render both ask this, so they
+    /// cannot disagree about how much room the content was given.
+    ///
+    /// - Parameters:
+    ///   - available: The extent the container itself was offered, in cells.
+    ///   - chrome: The cells the decoration wants — borders, insets, separators.
+    /// - Returns: The extent to offer the content.
+    @inlinable
+    public static func extent(_ available: Int, insideChrome chrome: Int) -> Int {
+        available <= 0 ? 0 : max(1, available - chrome)
+    }
+
     /// Creates a context for rendering content inside a bordered container.
     ///
     /// Subtracts the border width (2 characters for left + right) from available width.
@@ -314,7 +338,7 @@ public struct RenderContext {
     public func forBorderedContent(hasBorder: Bool = true) -> Self {
         var copy = self
         if hasBorder {
-            copy.availableWidth = max(0, availableWidth - 2)
+            copy.availableWidth = Self.extent(availableWidth, insideChrome: 2)
         }
         // Propagate hasExplicitWidth from parent - if parent has explicit width,
         // children should also expand to fill the (reduced) available space.
