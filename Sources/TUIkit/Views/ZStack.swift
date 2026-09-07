@@ -191,18 +191,20 @@ extension _ZStackCore: Layoutable {
         }
         // A guide can push a layer off the alignment line and grow the frame
         // past the largest child; the render does this, so the measure must.
-        let drawn = children.indices.filter { !children[$0].isSpacer }
-        if let run = horizontalGuideRun(
-            drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
-            alignment: alignment.horizontal, minimumExtent: maxWidth)
-        {
-            maxWidth = run.extent
-        }
-        if let run = verticalGuideRun(
-            drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
-            alignment: alignment.vertical, minimumExtent: maxHeight)
-        {
-            maxHeight = run.extent
+        if anyAlignmentGuide(in: children) {
+            let drawn = children.indices.filter { !children[$0].isSpacer }
+            if let run = horizontalGuideRun(
+                drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
+                alignment: alignment.horizontal, minimumExtent: maxWidth)
+            {
+                maxWidth = run.extent
+            }
+            if let run = verticalGuideRun(
+                drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
+                alignment: alignment.vertical, minimumExtent: maxHeight)
+            {
+                maxHeight = run.extent
+            }
         }
         // Never advertise larger than the constraint (mirrors VStack/HStack).
         let widthLimit = proposal.width ?? context.availableWidth

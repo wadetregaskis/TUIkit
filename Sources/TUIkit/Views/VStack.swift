@@ -145,9 +145,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let heightLimit = proposal.height ?? context.availableHeight
         // A guide can make the column wider than its widest child; the report
         // has to say so or the parent reserves too little and clips it.
-        if let run = horizontalGuideRun(
-            children, sizes: guideSizes, alignment: alignment,
-            fixedExtent: hasFlexibleWidth ? max(0, widthLimit) : nil, minimumExtent: maxWidth)
+        if anyAlignmentGuide(in: children),
+            let run = horizontalGuideRun(
+                children, sizes: guideSizes, alignment: alignment,
+                fixedExtent: hasFlexibleWidth ? max(0, widthLimit) : nil,
+                minimumExtent: maxWidth)
         {
             maxWidth = run.extent
         }
@@ -366,12 +368,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // widest child (a child hanging left of the alignment line pushes every
         // other one right). Spacers have no visual box, so they place at the
         // leading edge and take no part in the run.
-        let guideRun = horizontalGuideRun(
-            children,
-            sizes: buffers.map { (width: $0?.width ?? 0, height: $0?.height ?? 0) },
-            alignment: alignment,
-            fixedExtent: hasFlexible ? context.availableWidth : nil,
-            minimumExtent: maxChildWidth)
+        var guideRun: AlignmentGuideRun?
+        if anyAlignmentGuide(in: children) {
+            guideRun = horizontalGuideRun(
+                children,
+                sizes: buffers.map { (width: $0?.width ?? 0, height: $0?.height ?? 0) },
+                alignment: alignment,
+                fixedExtent: hasFlexible ? context.availableWidth : nil,
+                minimumExtent: maxChildWidth)
+        }
 
         // === PASS 3: Assemble vertically ===
         // Empty children (e.g. `if false { ChildView() }`, which
@@ -571,6 +576,23 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// With a Spacer the column fills the available width (as the eager stack
     /// does); otherwise it hugs its widest *placed* child. A `nil` child marks a
     /// spacer's blank slot, which is never aligned.
+    /// The explicit-guide run over the rows a lazy column actually placed, or
+    /// `nil` — the common answer, which is why the question is asked before the
+    /// three arrays that would carry it are built. See ``anyAlignmentGuide(in:)``.
+    private func placedGuideRun(
+        _ collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)],
+        fixedExtent: Int?, minimumExtent: Int
+    ) -> AlignmentGuideRun? {
+        guard anyAlignmentGuide(in: collected.compactMap(\.child)) else { return nil }
+        let placed = collected.compactMap { entry in entry.child.map { ($0, entry.buffer) } }
+        return horizontalGuideRun(
+            placed.map(\.0),
+            sizes: placed.map { (width: $0.1.width, height: $0.1.height) },
+            alignment: alignment,
+            fixedExtent: fixedExtent,
+            minimumExtent: minimumExtent)
+    }
+
     private func assembleWindow(
         _ collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)],
         fillsWidth: Bool,
@@ -583,12 +605,8 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // A lazy stack stops at the first row that will not fit, so the run is
         // the realized rows — the same limit SwiftUI has, and the reason a guide
         // is best used on content whose realized set is stable.
-        let placed = collected.compactMap { entry in entry.child.map { ($0, entry.buffer) } }
-        let guideRun = horizontalGuideRun(
-            placed.map(\.0),
-            sizes: placed.map { (width: $0.1.width, height: $0.1.height) },
-            alignment: alignment,
-            fixedExtent: fillsWidth ? context.availableWidth : nil,
+        let guideRun = placedGuideRun(
+            collected, fixedExtent: fillsWidth ? context.availableWidth : nil,
             minimumExtent: maxWidth)
 
         var result = FrameBuffer()
@@ -640,6 +658,18 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// skipped. The full height + exact positions keep the ScrollView's clip and
     /// `contentHeight` correct. Only reached for a spacer-less lazy stack that is
     /// the direct content of a vertical ScrollView.
+    /// The explicit-guide run over a windowed stack's slots, or `nil` — the
+    /// common answer, which is why the question is asked before the two arrays
+    /// that would carry it are built. See ``anyAlignmentGuide(in:)``.
+    private func slotGuideRun(_ slots: [RowSlot], fixedExtent: Int) -> AlignmentGuideRun? {
+        guard anyAlignmentGuide(in: slots.map(\.child)) else { return nil }
+        return horizontalGuideRun(
+            slots.map(\.child),
+            sizes: slots.map { (width: $0.width, height: $0.height) },
+            alignment: alignment,
+            fixedExtent: fixedExtent)
+    }
+
     private func renderViewportWindow(
         children: [ChildView], window: ScrollContentWindow, context: RenderContext
     ) -> FrameBuffer {
@@ -745,11 +775,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // off-window row still contributes its guide — the alignment column
         // must not shift as rows scroll in and out. Costs nothing (one stored
         // `Bool` per row) unless a row actually set a guide.
-        let guideRun = horizontalGuideRun(
-            slots.map(\.child),
-            sizes: slots.map { (width: $0.width, height: $0.height) },
-            alignment: alignment,
-            fixedExtent: width)
+        let guideRun = slotGuideRun(slots, fixedExtent: width)
 
         // A ramp spanning this stack runs across the whole CONTENT, not the
         // viewport: a row keeps its colour as it scrolls, rather than the

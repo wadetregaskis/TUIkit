@@ -289,6 +289,23 @@ struct AlignmentGuideRun {
     }
 }
 
+/// Whether any of `children` sets an explicit alignment guide.
+///
+/// The test both guide-run builders open with, hoisted out so a caller can make
+/// it BEFORE building the arrays it would otherwise pass in. Every call site was
+/// assembling two or three temporary arrays — a spacer-filtered `placed`, its
+/// children, and their sizes — to hand to a function whose first line throws
+/// them away, and no view sets a guide in the overwhelming majority of stacks.
+///
+/// A caller that has only the unfiltered children may ask with those: a spacer
+/// never provides a guide, so the answer is the same, and a wider set can only
+/// ever say "yes" where the narrower one would have said "no" — which costs the
+/// arrays, not correctness.
+@MainActor
+func anyAlignmentGuide(in children: [ChildView]) -> Bool {
+    children.contains(where: \.providesAlignmentGuide)
+}
+
 /// The horizontal placement of `children`, or `nil` when none of them set a
 /// guide and the caller should keep its own arithmetic.
 ///

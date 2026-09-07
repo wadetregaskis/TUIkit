@@ -199,12 +199,18 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // buffers — measure and render must not be able to disagree about the
         // row's height, which a guide can grow past the tallest child. Spacers
         // have no visual box and take no part.
-        let placed = children.indices.filter { !children[$0].isSpacer }
-        let guideRun = verticalGuideRun(
-            placed.map { children[$0] },
-            sizes: placed.map { (width: widths[$0], height: finalHeight[$0]) },
-            alignment: alignment,
-            minimumExtent: height)
+        // Asked before the arrays are built: see ``anyAlignmentGuide(in:)``.
+        // This routine runs once per row per walk, and the three arrays below
+        // exist only to be thrown away by the guard inside the run builder.
+        var guideRun: AlignmentGuideRun?
+        if anyAlignmentGuide(in: children) {
+            let placed = children.indices.filter { !children[$0].isSpacer }
+            guideRun = verticalGuideRun(
+                placed.map { children[$0] },
+                sizes: placed.map { (width: widths[$0], height: finalHeight[$0]) },
+                alignment: alignment,
+                minimumExtent: height)
+        }
 
         let totalWidth = widths.reduce(0, +) + totalSpacing
         return ResolvedRowLayout(
@@ -218,6 +224,21 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             guideRun: guideRun,
             childrenAreNatural: childrenAreNatural,
             tallestConsumedChild: tallestConsumedChild)
+    }
+
+    /// The explicit-guide run over the columns a lazy row actually placed, or
+    /// `nil` — the common answer, which is why the question is asked before the
+    /// three arrays that would carry it are built. See ``anyAlignmentGuide(in:)``.
+    private func placedGuideRun(
+        _ collected: [(FrameBuffer, Int, ChildView?)], minimumExtent: Int
+    ) -> AlignmentGuideRun? {
+        guard anyAlignmentGuide(in: collected.compactMap(\.2)) else { return nil }
+        let placed = collected.compactMap { entry in entry.2.map { ($0, entry.0) } }
+        return verticalGuideRun(
+            placed.map(\.0),
+            sizes: placed.map { (width: $0.1.width, height: $0.1.height) },
+            alignment: alignment,
+            minimumExtent: minimumExtent)
     }
 
     /// Measures the HStack without rendering.
@@ -578,12 +599,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // === PASS 2: Apply vertical alignment and build result ===
         // Explicit guides resolve over the columns actually placed — a lazy row
         // stops at the first child that will not fit, so that is the run.
-        let placed = collected.compactMap { entry in entry.2.map { ($0, entry.0) } }
-        let guideRun = verticalGuideRun(
-            placed.map(\.0),
-            sizes: placed.map { (width: $0.1.width, height: $0.1.height) },
-            alignment: alignment,
-            minimumExtent: maxHeight)
+        let guideRun = placedGuideRun(collected, minimumExtent: maxHeight)
         let finalHeight = guideRun?.extent ?? maxHeight
 
         var result = FrameBuffer()
