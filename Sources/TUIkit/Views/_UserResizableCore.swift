@@ -162,8 +162,22 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // Measuring must not register focus or mutate the stored size — the
         // measure pass runs speculatively and more than once per frame. See
         // `Documentation/Discarded render passes and redundant frames.md`.
+        //
+        // But it MUST make the same size offer, and for a long time it did not:
+        // it returned here, handing the content the whole space. A flexible
+        // child takes all of it, so `ScrollView { … }.userResizable(height: 6...24)`
+        // measured as tall as the canvas it was measured against and drew 24 —
+        // 4,096 against 24 inside a page's ScrollView. Everything the enclosing
+        // stack placed AFTER it was therefore placed off the end of the canvas
+        // and never drawn: the Example's Scroll View page lost every control
+        // below its resizable demo, and its scrollbar went on advertising
+        // content that could not be reached.
         guard !context.isMeasuring, let stateStorage = context.stateStorage else {
-            return TUIkitView.renderToBuffer(content, context: context)
+            // The stored size still counts, so a dragged box measures at what
+            // it was dragged to — read without creating, which is what makes
+            // this safe on a measure pass.
+            return TUIkitView.renderToBuffer(
+                content, context: offering(context, handler: existingHandler(in: context)))
         }
 
         let focusID = FocusRegistration.persistFocusID(
@@ -192,36 +206,7 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         handler.heightBounds = heightBounds
         handler.canBeFocused = context.environment.isEnabled && !liveAxes.isEmpty
 
-        // The size this view may occupy: what the user asked for, else the
-        // ceiling the caller allowed, else whatever the layout was offering.
-        // Clamped by the bounds (what the CALLER allows) and by the space on
-        // offer (what the terminal allows), and neither clamp is stored back —
-        // so a narrow terminal never destroys a size a wide one can honour.
-        //
-        // Offered as available SPACE rather than imposed as a frame. A frame
-        // does not stretch a child that is not flexible; it pads around it, so
-        // imposing one on a `Text` in a border grew the wrapper and left the
-        // border where it was, with the grip stranded in the gap. Offering
-        // space is what a flexible child follows, and leaving a fixed child
-        // alone is right: a fixed size is the author saying "this size", and
-        // this modifier has no business overruling them.
-        //
-        // Note that a ceiling applies even before anything is dragged, which is
-        // what makes `width: 12...40` read as "at most 40 wide" rather than
-        // "unbounded until someone touches it".
-        var childContext = context
-        if axes.contains(.horizontal) {
-            let target =
-                handler.requestedWidth.map { widthBounds.clamping($0) }
-                ?? widthBounds.maximum ?? context.availableWidth
-            childContext.availableWidth = min(context.availableWidth, target)
-        }
-        if axes.contains(.vertical) {
-            let target =
-                handler.requestedHeight.map { heightBounds.clamping($0) }
-                ?? heightBounds.maximum ?? context.availableHeight
-            childContext.availableHeight = min(context.availableHeight, target)
-        }
+        let childContext = offering(context, handler: handler)
 
         // A disabled view is not resizable and does not take a place in the Tab
         // order — the same rule every other interactive view follows — and
@@ -246,6 +231,58 @@ struct _UserResizableCore<Content: View>: View, Renderable {
             into: &buffer, axes: liveAxes, isFocused: isFocused,
             isHovered: handler.isHovered, context: context)
         return buffer
+    }
+
+    /// The context the content is laid out in: the size this view may occupy —
+    /// what the user asked for, else the ceiling the caller allowed, else
+    /// whatever the layout was offering.
+    ///
+    /// Clamped by the bounds (what the CALLER allows) and by the space on offer
+    /// (what the terminal allows), and neither clamp is stored back — so a
+    /// narrow terminal never destroys a size a wide one can honour.
+    ///
+    /// Offered as available SPACE rather than imposed as a frame. A frame does
+    /// not stretch a child that is not flexible; it pads around it, so imposing
+    /// one on a `Text` in a border grew the wrapper and left the border where it
+    /// was, with the grip stranded in the gap. Offering space is what a flexible
+    /// child follows, and leaving a fixed child alone is right: a fixed size is
+    /// the author saying "this size", and this modifier has no business
+    /// overruling them.
+    ///
+    /// Note that a ceiling applies even before anything is dragged, which is
+    /// what makes `width: 12...40` read as "at most 40 wide" rather than
+    /// "unbounded until someone touches it".
+    ///
+    /// One function for both passes on purpose: this is the arithmetic that
+    /// decides the view's size, and a measure that skipped it answered a
+    /// different question from the one the render asked.
+    private func offering(
+        _ context: RenderContext, handler: _UserResizeHandler?
+    ) -> RenderContext {
+        var childContext = context
+        if axes.contains(.horizontal) {
+            let target =
+                handler?.requestedWidth.map { widthBounds.clamping($0) }
+                ?? widthBounds.maximum ?? context.availableWidth
+            childContext.availableWidth = min(context.availableWidth, target)
+        }
+        if axes.contains(.vertical) {
+            let target =
+                handler?.requestedHeight.map { heightBounds.clamping($0) }
+                ?? heightBounds.maximum ?? context.availableHeight
+            childContext.availableHeight = min(context.availableHeight, target)
+        }
+        return childContext
+    }
+
+    /// The drag handler this view has already persisted, or `nil` if it has not
+    /// been rendered yet. Never creates one — see
+    /// ``StateStorage/existingStorage(for:)``.
+    private func existingHandler(in context: RenderContext) -> _UserResizeHandler? {
+        let box: StateBox<_UserResizeHandler>? = context.stateStorage?.existingStorage(
+            for: StateStorage.StateKey(
+                identity: context.identity, propertyIndex: StateIndex.handler))
+        return box?.value
     }
 
     // MARK: - The drag target

@@ -193,6 +193,21 @@ extension StateStorage {
         return fresh
     }
 
+    /// The storage for a property **if one already exists**, never creating it.
+    ///
+    /// The measure pass's ``storage(for:default:)``. A measure runs
+    /// speculatively and more than once per frame, so it must not create a box
+    /// — that is a persistent mutation, at an identity that may never be
+    /// rendered. But it does have to READ what the render put there, or a view
+    /// that sizes itself from stored state measures one size and draws another.
+    ///
+    /// - Parameter key: The state key (identity + property index).
+    /// - Returns: The existing box, or `nil` if nothing has been stored under
+    ///   `key` (or something of another type has).
+    public func existingStorage<Value>(for key: StateKey) -> StateBox<Value>? {
+        values[key] as? StateBox<Value>
+    }
+
     /// Marks an identity as active during the current render pass.
     ///
     /// Called by `renderToBuffer` when hydrating a view. Identities not marked
