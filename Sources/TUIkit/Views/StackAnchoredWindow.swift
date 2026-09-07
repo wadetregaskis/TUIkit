@@ -719,11 +719,10 @@ extension _VStackCore {
         let sampleProposal = ProposedSize(width: widthLimit, height: nil)
 
         var estimate = state.estimatedPitch(spacing: spacing)
-        var maxWidth = 0
-        var widthFlexible = false
-        var heightFlexible = false
         var sampleTotal = 0
         let sampleSize = min(count, 16)
+        var sampled: [ViewSize] = []
+        sampled.reserveCapacity(sampleSize)
         for ordinal in 0..<sampleSize {
             let child = children[ordinal]
             guard !child.isSpacer else { return nil }
@@ -732,17 +731,44 @@ extension _VStackCore {
             // entries alive (see `AnchoredWindowFrame.pitch`).
             measureContext.renderCache?.markActive(child.identity(under: measureContext))
             sampleTotal += max(1, size.height) + (ordinal < count - 1 ? spacing : 0)
-            maxWidth = max(maxWidth, min(size.width, widthLimit))
-            if size.isWidthFlexible { widthFlexible = true }
-            if size.isHeightFlexible { heightFlexible = true }
+            sampled.append(size)
         }
         if state.measuredPitchCount < 1, sampleSize > 0 {
             estimate = max(1, sampleTotal / sampleSize)
+        }
+
+        // The PITCH is a property of the content, so it averages the whole
+        // sample. The WIDTH is not: this stack hugs the rows it draws, and at
+        // this budget it draws the ones the exact walk would have reached —
+        // so only those may widen it. Sampling sixteen rows for a width the
+        // budget has room for eight of made the same stack answer 24 wide to
+        // the natural-size ask on its first frame and 2 wide from its second
+        // (once the render's own band-derived hypothesis took over), for a
+        // tree nothing had changed.
+        let prefix = min(sampleSize, Self.walkedRowCount(
+            budget: heightLimit, pitch: estimate, spacing: spacing, count: count))
+        var maxWidth = 0
+        var widthFlexible = false
+        var heightFlexible = false
+        for size in sampled.prefix(prefix) {
+            maxWidth = max(maxWidth, min(size.width, widthLimit))
+            if size.isWidthFlexible { widthFlexible = true }
+            if size.isHeightFlexible { heightFlexible = true }
         }
 
         let total = count * estimate - spacing
         return ViewSize(
             width: maxWidth, height: min(total, max(0, heightLimit)),
             isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+    }
+
+    /// How many rows a walk of this stack touches under `budget`: the ones
+    /// that wholly fit, plus the first that does not — the exact walk measures
+    /// that one too, because a windowed stack under a `ScrollView` draws its
+    /// clipped remainder, and the stack hugs what it draws.
+    static func walkedRowCount(budget: Int, pitch: Int, spacing: Int, count: Int) -> Int {
+        guard pitch > 0 else { return count }
+        let whole = max(0, min(count, (max(0, budget) + spacing) / pitch))
+        return min(count, whole + (whole < count ? 1 : 0))
     }
 }
