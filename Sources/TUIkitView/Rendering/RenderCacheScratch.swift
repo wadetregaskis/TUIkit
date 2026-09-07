@@ -66,15 +66,20 @@ struct ScratchTrimmer {
     ///
     /// A fresh empty dictionary is how a buffer is released:
     /// `removeAll(keepingCapacity: false)` keeps the storage object, and
-    /// `reserveCapacity` only ever grows. Reserving twice the peak rather than
-    /// exactly it, because a pass that grows a little should not have to
-    /// reallocate — and a factor of two is one growth step, which is what the
-    /// dictionary would have done anyway.
+    /// `reserveCapacity` only ever grows.
+    ///
+    /// Reserving half again as much as the peak rather than exactly it, so a
+    /// pass that grows a little does not have to reallocate. Half and not
+    /// double, because a `Dictionary` rounds its bucket count up to a power of
+    /// two at a 75% load factor: `fanout`'s 4,009-entry peak asks for 8,192
+    /// buckets at either 1x or 1.5x and for 16,384 at 2x, so doubling bought no
+    /// extra headroom at all and cost **1.74 MB against 868 KB**.
     private func shrink<Key, Value>(_ dictionary: inout [Key: Value]) {
         let wanted = max(16, peak)
         guard dictionary.capacity > 4 * wanted else { return }
+        let reserve = wanted + wanted / 2
         let perBucket = MemoryLayout<Key>.stride + MemoryLayout<Value>.stride
-        guard (dictionary.capacity - 2 * wanted) * perBucket >= Self.floor else { return }
-        dictionary = Dictionary(minimumCapacity: 2 * wanted)
+        guard (dictionary.capacity - reserve) * perBucket >= Self.floor else { return }
+        dictionary = Dictionary(minimumCapacity: reserve)
     }
 }
