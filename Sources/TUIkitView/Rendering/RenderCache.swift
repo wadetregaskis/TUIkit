@@ -347,6 +347,11 @@ public final class RenderCache: @unchecked Sendable {
     /// work already done, not a guess about a different frame.
     private var measureEntries: [MeasureKey: MeasureEntry] = [:]
 
+    /// The memory policy for the two per-pass scratch dictionaries above — one
+    /// each, because they are sized by different things. See ``ScratchTrimmer``.
+    private var measureScratch = ScratchTrimmer()
+    private var childViewScratch = ScratchTrimmer()
+
     /// What ``verifiesMeasureMemo`` found: one line per served size that a fresh
     /// measurement disagreed with. Capped, because a broken memo produces them by
     /// the thousand and the first few say everything.
@@ -1015,8 +1020,8 @@ extension RenderCache {
         retainedSubtreeRoots.removeAll(keepingCapacity: true)
         frameCounter &+= 1
         // The measure memo is this frame's scratch space and nothing more.
-        measureEntries.removeAll(keepingCapacity: true)
-        childViewEntries.removeAll(keepingCapacity: true)
+        measureScratch.endOfPass(&measureEntries)
+        childViewScratch.endOfPass(&childViewEntries)
         measureHits = 0
         measureMisses = 0
     }
