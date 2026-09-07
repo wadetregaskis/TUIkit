@@ -42,12 +42,33 @@ UNSYMBOLICATED = "<unsymbolicated>"
 
 
 def export_table(trace: str, run: int, schema: str) -> str:
+    """The trace's `schema` table as XML, exported once and then reused.
+
+    `xctrace export` on a 20-second Time Profiler trace takes the best part of a
+    minute, and reading one trace properly means several passes over it — the
+    ranking, then `--callers` for two or three symbols, then `--blame` for the
+    allocator and again for ARC. That was five exports of identical bytes. The
+    export is cached beside the trace, keyed by (run, schema); the `.trace`
+    bundle is immutable once recorded, so the cache can never be stale for it,
+    and it is git-ignored along with the bundle.
+    """
+    cache = os.path.join(trace, f"analysis-cache-run{run}-{schema}.xml")
+    try:
+        with open(cache, "r") as handle:
+            return handle.read()
+    except OSError:
+        pass
     xpath = f'/trace-toc/run[@number="{run}"]/data/table[@schema="{schema}"]'
     proc = subprocess.run(
         ["xcrun", "xctrace", "export", "--input", trace, "--xpath", xpath],
         capture_output=True, text=True)
     if proc.returncode != 0 or not proc.stdout.strip():
         sys.exit(f"xctrace export failed for schema '{schema}':\n{proc.stderr}")
+    try:
+        with open(cache, "w") as handle:
+            handle.write(proc.stdout)
+    except OSError:
+        pass  # A read-only trace is still perfectly analysable, just not twice.
     return proc.stdout
 
 
