@@ -110,12 +110,22 @@ public struct ScrollView<Content: View>: View {
     }
 
     public var body: some View {
+        // `.disabled(isDisabled)` as well as the stored flag, because the two
+        // answer different questions. The flag decides whether this scroll view
+        // is a Tab stop; SwiftUI's `.disabled(_:)` is defined on the subtree —
+        // "disables interaction in this view and its child views" — and the
+        // concrete `disabled(_:) -> ScrollView` below wins overload resolution
+        // over `View.disabled(_:)`, so without this a `Button` inside a
+        // disabled scroll view stayed focusable, clickable and actionable.
+        // `.disabled(false)` is a no-op: the modifier ANDs, so it can never
+        // re-enable a subtree an ancestor disabled.
         _ScrollViewCore(
             axes: axes,
             content: content,
             explicitFocusID: explicitFocusID,
             isDisabled: isDisabled
         )
+        .disabled(isDisabled)
     }
 }
 

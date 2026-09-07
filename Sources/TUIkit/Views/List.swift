@@ -130,6 +130,11 @@ public struct List<SelectionValue: Hashable & Sendable, Content: View, Footer: V
     var primaryAction: ((SelectionValue) -> Void)?
 
     public var body: some View {
+        // `.disabled(isDisabled)` as well as the stored flag — see the same
+        // pairing in `ScrollView.body`. The flag governs this list's own focus;
+        // the modifier is what carries the disable into the rows, which is what
+        // SwiftUI's `.disabled(_:)` means and what the concrete
+        // `disabled(_:) -> List` below was quietly not doing.
         _ListCore(
             title: title,
             content: content,
@@ -143,6 +148,7 @@ public struct List<SelectionValue: Hashable & Sendable, Content: View, Footer: V
             showFooterSeparator: showFooterSeparator,
             primaryAction: primaryAction
         )
+        .disabled(isDisabled)
     }
 
     /// Sets an action run when a row is ACTIVATED — double-clicked, or

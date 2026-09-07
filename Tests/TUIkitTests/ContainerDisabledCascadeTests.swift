@@ -80,4 +80,33 @@ struct ContainerDisabledCascadeTests {
         }
         #expect(!registersFocus(VStack { list.disabled(false) }.disabled(true)))
     }
+
+    /// The other direction, and the half this suite was missing.
+    ///
+    /// Reading `\.isEnabled` fixed an ancestor's `.disabled(true)` reaching
+    /// these three. It did not make their OWN `.disabled(true)` reach what is
+    /// inside them: the concrete `disabled(_:) -> Self` sets a stored flag that
+    /// governs the container's focusability and nothing else, so it never
+    /// publishes `\.isEnabled` down. SwiftUI's `.disabled(_:)` is defined on
+    /// the subtree — "disables interaction in this view and its child views" —
+    /// so a `Button` inside a disabled `ScrollView` must be disabled, and here
+    /// it stayed focusable, clickable and actionable.
+    @Test("A container's own disabled(true) reaches the controls inside it")
+    func containerDisablesItsOwnContent() {
+        let scroll = ScrollView { Button("Save") {} }
+        #expect(registersFocus(scroll), "the control case: the button is focusable")
+        #expect(!registersFocus(scroll.disabled(true)), "the button inside is disabled too")
+
+        let list = List(selection: .constant(Int?.none)) {
+            Button("Save") {}
+        }
+        #expect(registersFocus(list), "the control case: the list is focusable")
+        #expect(!registersFocus(list.disabled(true)), "and its rows go with it")
+
+        let table = Table(people, selection: .constant(Int?.none)) {
+            TableColumn("Name", value: \.name)
+        }
+        #expect(registersFocus(table), "the control case")
+        #expect(!registersFocus(table.disabled(true)), "its own disable still holds")
+    }
 }

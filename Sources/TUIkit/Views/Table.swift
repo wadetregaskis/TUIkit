@@ -148,6 +148,12 @@ public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashab
             moveAction: moveAction,
             dropInsertion: dropInsertion
         )
+        // The same pairing as `ScrollView.body` and `List.body`. A table's rows
+        // are its own focus stops, so its stored flag alone already suppressed
+        // everything it draws today — but the flag and the subtree disable are
+        // still two different statements, and the three containers agreeing is
+        // what stops the next interactive cell from reintroducing the gap.
+        .disabled(isDisabled)
     }
 }
 
