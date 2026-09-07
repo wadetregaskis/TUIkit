@@ -562,13 +562,11 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
 @MainActor
 private func viewValueHash<V: View>(_ view: V) -> Int {
     withUnsafeBytes(of: view) { bytes in
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        var hash = hashFoldSeed
         let count = bytes.count
         var index = 0
         while index + 8 <= count {
-            let word = bytes.loadUnaligned(fromByteOffset: index, as: UInt64.self)
-            hash = (hash ^ word) &* 0x0000_0100_0000_01b3
-            hash ^= hash >> 29
+            hash = mixHashWord(hash, bytes.loadUnaligned(fromByteOffset: index, as: UInt64.self))
             index += 8
         }
         // The tail, packed into one word so a short struct still mixes every
@@ -581,14 +579,9 @@ private func viewValueHash<V: View>(_ view: V) -> Int {
                 shift &+= 8
                 index += 1
             }
-            hash = (hash ^ tail) &* 0x0000_0100_0000_01b3
+            hash = mixHashWord(hash, tail)
         }
-        hash ^= hash >> 30
-        hash = hash &* 0xbf58_476d_1ce4_e5b9
-        hash ^= hash >> 27
-        hash = hash &* 0x94d0_49bb_1331_11eb
-        hash ^= hash >> 31
-        return Int(bitPattern: UInt(hash))
+        return finalizeHashWord(hash)
     }
 }
 

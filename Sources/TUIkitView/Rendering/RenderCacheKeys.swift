@@ -1,0 +1,225 @@
+//  🖥️ TUIkit — Terminal UI Kit for Swift
+//  RenderCacheKeys.swift
+//
+//  The keys ``RenderCache``'s four tables are probed by, and how each one
+//  hashes. Split from the cache itself because they are a self-contained
+//  subject — what identifies a cached answer, and what a collision would and
+//  would not cost — and because every one of them now folds its fields before
+//  `Hasher` sees any of them (see `CacheKeyHashing.swift`), which is a decision
+//  a reader should be able to find in one place.
+//
+//  Created by Wade Tregaskis
+//  License: MIT
+
+import TUIkitCore
+
+extension RenderCache {
+
+    /// Key for a memoized *measurement* (one identity can be measured at several
+    /// proposals per frame, so — unlike the buffer cache — this is keyed by the
+    /// proposal and available extent as well as the identity).
+    public struct SizeKey: Hashable {
+        public let identity: ViewIdentity
+        public let proposalWidth: Int?
+        public let proposalHeight: Int?
+        public let availableWidth: Int
+        public let availableHeight: Int
+        public let hasExplicitWidth: Bool
+        public let hasExplicitHeight: Bool
+
+        public init(
+            identity: ViewIdentity,
+            proposalWidth: Int?,
+            proposalHeight: Int?,
+            availableWidth: Int,
+            availableHeight: Int,
+            hasExplicitWidth: Bool,
+            hasExplicitHeight: Bool
+        ) {
+            self.identity = identity
+            self.proposalWidth = proposalWidth
+            self.proposalHeight = proposalHeight
+            self.availableWidth = availableWidth
+            self.availableHeight = availableHeight
+            self.hasExplicitWidth = hasExplicitWidth
+            self.hasExplicitHeight = hasExplicitHeight
+        }
+
+        /// The fields folded into one word before `Hasher` sees any of them —
+        /// see ``mixHashWord(_:_:)``, and ``RenderCache/MeasureKey`` for why a
+        /// process-local cache key does not need SipHash per field.
+        public func hash(into hasher: inout Hasher) {
+            var folded = mixHashWord(
+                hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(proposalWidth ?? -1)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(proposalHeight ?? -1)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(availableWidth)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(availableHeight)))
+            folded = mixHashWord(
+                folded, (hasExplicitWidth ? 1 : 0) | (hasExplicitHeight ? 2 : 0))
+            hasher.combine(finalizeHashWord(folded))
+        }
+    }
+
+    /// A `measureChild` memo key: what a measurement is *of*, with nothing in it
+    /// about the space it was offered vertically.
+    ///
+    /// The type is what an identity-only key was missing. Transparent wrappers
+    /// descend under their parent's identity, so several distinct views share
+    /// one identity within a pass; keying on identity alone returned one view's
+    /// size for another (the abandoned cross-frame cache — it got Panel/Card/
+    /// Dialog wrong, and the equivalence harness caught it).
+    ///
+    /// The two widths are both here and both matter. ``effectiveWidth`` is
+    /// `proposal.width ?? availableWidth`, the number a measure actually lays out
+    /// against; ``availableWidth`` stays beside it because a container measures
+    /// its children against the *available* extent while sizing itself against
+    /// the proposal, so two calls that share one and not the other are two
+    /// different questions. What is NOT here is the vertical budget or whether
+    /// the width arrived as a proposal — those live in ``MeasureEntry``, which is
+    /// where a ``ViewSize/isNaturalSize`` answer gets to ignore them.
+    public struct MeasureKey: Hashable {
+        /// The identity's structural hash, not the identity.
+        ///
+        /// Two probes per measured view, and a `ViewIdentity` is a chain of
+        /// class nodes: hashing walks it, comparing two *equal* ones walks it
+        /// step for step (the `===` shortcut misses, because the two walks that
+        /// meet here built their chains separately), and every copy of the key
+        /// retains and releases it. Keyed by the chain's cached hash the whole
+        /// key is plain data — no ARC, no walk — which is what makes a memo
+        /// probed on every measured view affordable. (Measured: keying the
+        /// identity itself cost `deep` +45%, all of it in `structurallyEqual`
+        /// and retain/release.)
+        ///
+        /// This is the same bargain ``valueHash`` already strikes one field
+        /// down, with the same shape of failure: a collision would need two
+        /// distinct identity paths to hash identically *within one pass* AND to
+        /// carry the same view type, the same value bytes and the same two
+        /// widths — and it would show as one frame sized from a twin, never as
+        /// aliased state, because nothing here outlives the pass.
+        let identityHash: Int
+        let effectiveWidth: Int
+        let availableWidth: Int
+        let hasExplicitWidth: Bool
+        let hasExplicitHeight: Bool
+        let viewType: ObjectIdentifier
+        /// A hash of the view value's raw bytes — the discriminator that makes
+        /// this memo sound.
+        ///
+        /// Identity + type + proposal is *not* enough: two different view
+        /// values can share an identity within one pass (a transparent wrapper
+        /// descends under its parent's identity), and without this the memo
+        /// serves the first one's size for the second.
+        ///
+        /// Raw bytes work here for a reason that does **not** hold across
+        /// frames. The cross-frame byte key was abandoned because `@State`,
+        /// `@Environment`, `Binding` and existential boxes each embed a
+        /// freshly-allocated pointer every frame, so nothing ever matched.
+        /// Within a single pass those allocations are fixed: the same view
+        /// value, copied down the tree, has byte-identical storage including
+        /// its pointers. Two *different* values differ in the bytes that make
+        /// them different.
+        ///
+        /// The failure mode is asymmetric, which is what makes it safe. Struct
+        /// padding and enum payload slack are undefined bytes; when they differ
+        /// the lookup **misses** and the view is measured again — correct, just
+        /// not saved. A false *hit* would need two different values to hash
+        /// identically, i.e. a 64-bit collision among the few hundred entries a
+        /// pass stores.
+        let valueHash: Int
+
+        /// The six fields folded into one word before `Hasher` sees any of them
+        /// — see ``mixHashWord(_:_:)``. This key is probed around two thousand
+        /// times a frame, and the synthesised conformance made that six SipHash
+        /// rounds where one does.
+        public func hash(into hasher: inout Hasher) {
+            var folded = mixHashWord(hashFoldSeed, UInt64(bitPattern: Int64(identityHash)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(effectiveWidth)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(availableWidth)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(valueHash)))
+            folded = mixHashWord(folded, UInt64(UInt(bitPattern: viewType)))
+            folded = mixHashWord(
+                folded, (hasExplicitWidth ? 1 : 0) | (hasExplicitHeight ? 2 : 0))
+            hasher.combine(finalizeHashWord(folded))
+        }
+
+        public init(
+            identityHash: Int,
+            effectiveWidth: Int,
+            availableWidth: Int,
+            hasExplicitWidth: Bool,
+            hasExplicitHeight: Bool,
+            viewType: ObjectIdentifier,
+            valueHash: Int
+        ) {
+            self.identityHash = identityHash
+            self.effectiveWidth = effectiveWidth
+            self.availableWidth = availableWidth
+            self.hasExplicitWidth = hasExplicitWidth
+            self.hasExplicitHeight = hasExplicitHeight
+            self.viewType = viewType
+            self.valueHash = valueHash
+        }
+    }
+
+    /// A stack's resolved children for the pass — see
+    /// `resolveChildViews(from:context:)`. Identity plus the content's type
+    /// and raw bytes, like ``MeasureKey`` without a proposal: which children a
+    /// content value has does not depend on the space it is offered.
+    public struct ChildViewsKey: Hashable {
+        public let identity: ViewIdentity
+        public let viewType: ObjectIdentifier
+        public let valueHash: Int
+
+        public init(identity: ViewIdentity, viewType: ObjectIdentifier, valueHash: Int) {
+            self.identity = identity
+            self.viewType = viewType
+            self.valueHash = valueHash
+        }
+
+        /// The fields folded into one word before `Hasher` sees any of them —
+        /// see ``mixHashWord(_:_:)``, and ``RenderCache/MeasureKey`` for why a
+        /// process-local cache key does not need SipHash per field.
+        public func hash(into hasher: inout Hasher) {
+            var folded = mixHashWord(
+                hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash)))
+            folded = mixHashWord(folded, UInt64(UInt(bitPattern: viewType)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(valueHash)))
+            hasher.combine(finalizeHashWord(folded))
+        }
+    }
+
+    /// One `.environment(keyPath, value)` application site in the tree.
+    ///
+    /// Keyed by key path as well as identity because nested environment
+    /// modifiers can share one identity — and by application depth as well as
+    /// key path, because two modifiers injecting the SAME key path can too
+    /// (`.environment(\.x, a).environment(\.x, b)` with no identity node
+    /// between). On a shared slot only the first-visited modifier was ever
+    /// compared, so the inner one's changes went unseen.
+    public struct EnvironmentSlot: Hashable {
+        public let identity: ViewIdentity
+        public let keyPath: AnyKeyPath
+        public let depth: Int
+
+        public init(identity: ViewIdentity, keyPath: AnyKeyPath, depth: Int) {
+            self.identity = identity
+            self.keyPath = keyPath
+            self.depth = depth
+        }
+
+        /// The fields folded into one word before `Hasher` sees any of them —
+        /// see ``mixHashWord(_:_:)``, and ``RenderCache/MeasureKey`` for why a
+        /// process-local cache key does not need SipHash per field.
+        public func hash(into hasher: inout Hasher) {
+            var folded = mixHashWord(
+                hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash)))
+            // The key path's own hash: it has to be the VALUE's, not the
+            // object's, because two `\.foregroundStyle` literals from different
+            // call sites are equal and must hash alike.
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(keyPath.hashValue)))
+            folded = mixHashWord(folded, UInt64(bitPattern: Int64(depth)))
+            hasher.combine(finalizeHashWord(folded))
+        }
+    }
+}

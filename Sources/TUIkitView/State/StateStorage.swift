@@ -84,6 +84,16 @@ public final class StateStorage: @unchecked Sendable {
             self.identity = identity
             self.propertyIndex = propertyIndex
         }
+
+        /// Both fields folded into one word before `Hasher` sees either — see
+        /// ``mixHashWord(_:_:)``, and ``RenderCache/MeasureKey`` for why a
+        /// process-local cache key does not need SipHash per field.
+        public func hash(into hasher: inout Hasher) {
+            let folded = mixHashWord(
+                mixHashWord(hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash))),
+                UInt64(bitPattern: Int64(propertyIndex)))
+            hasher.combine(finalizeHashWord(folded))
+        }
     }
 
     // MARK: - Storage
