@@ -546,12 +546,49 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
 ///
 /// See ``RenderCache/MeasureKey/valueHash`` for why raw bytes are sound within
 /// a pass but were not across frames.
+///
+/// `Hasher` is the obvious spelling and the wrong one here. It is SipHash-1-3 —
+/// keyed, randomised per process, and built to resist an adversary choosing
+/// collisions. Nothing here has an adversary: this is a discriminator inside a
+/// per-pass memo whose key ALSO carries the identity's hash, the view's type
+/// and two widths, so a value collision on its own cannot serve a wrong answer.
+/// What it is, is hot — a whole-struct hash on every measured child, **3.4% of
+/// a `menus` frame between this and the `withUnsafeBytes` around it**.
+///
+/// So: FNV-style mixing over whole words with a splitmix64 finalizer, which
+/// avalanches the low bits a `Dictionary` probes on. A side effect worth having
+/// is that it is deterministic — `Hasher`'s seed is randomised per process, so
+/// the memo's key stream (and any bug that depends on it) differed run to run.
 @MainActor
 private func viewValueHash<V: View>(_ view: V) -> Int {
     withUnsafeBytes(of: view) { bytes in
-        var hasher = Hasher()
-        hasher.combine(bytes: bytes)
-        return hasher.finalize()
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        let count = bytes.count
+        var index = 0
+        while index + 8 <= count {
+            let word = bytes.loadUnaligned(fromByteOffset: index, as: UInt64.self)
+            hash = (hash ^ word) &* 0x0000_0100_0000_01b3
+            hash ^= hash >> 29
+            index += 8
+        }
+        // The tail, packed into one word so a short struct still mixes every
+        // byte it has. A view is a handful of words, so this runs at most once.
+        if index < count {
+            var tail: UInt64 = 0
+            var shift: UInt64 = 0
+            while index < count {
+                tail |= UInt64(bytes[index]) &<< shift
+                shift &+= 8
+                index += 1
+            }
+            hash = (hash ^ tail) &* 0x0000_0100_0000_01b3
+        }
+        hash ^= hash >> 30
+        hash = hash &* 0xbf58_476d_1ce4_e5b9
+        hash ^= hash >> 27
+        hash = hash &* 0x94d0_49bb_1331_11eb
+        hash ^= hash >> 31
+        return Int(bitPattern: UInt(hash))
     }
 }
 
