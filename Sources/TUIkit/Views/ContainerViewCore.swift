@@ -443,12 +443,25 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
     private func scrollableBodySize(
         availableHeight: Int, innerWidth: Int, context: RenderContext
     ) -> (width: Int, height: Int) {
-        // Measured against an unbounded budget: a nil height proposal is not
+        // Measured against a generous budget: a nil height proposal is not
         // "unbounded" here, because every stack clamps its report to
         // `availableHeight` — measuring in `context` would return the capped
         // height and never reveal the overflow.
+        //
+        // Generous, and a ceiling all the same, so be exact about what it
+        // bounds. NOT the dialog's height: that is clamped to the screen a
+        // moment later, so a body of 9,000 lines and one of 4,096 size the
+        // dialog identically. NOT the scrolling: the dialog renders a real
+        // `ScrollView`, which measures its own content through
+        // ``measureNaturalExtent``'s ladder and has no ceiling. What it bounds
+        // is the WIDTH CHOICE below — two candidate widths whose bodies both
+        // overflow the budget report the same height, tie, and the narrower
+        // wins. For a body past the budget that is a cosmetic difference in a
+        // case nobody has, and the alternatives are worse: the ladder returns
+        // this same first rung here, because a `ScrollView` reports
+        // `isHeightFlexible` and that is where the ladder stops.
         var probe = context
-        probe.availableHeight = max(availableHeight * 64, 4096)
+        probe.availableHeight = naturalExtentStartingBudget(forVisible: availableHeight)
         let probeView = ScrollView(.vertical) { content.padding(padding) }
         func measure(at width: Int) -> ViewSize {
             var sized = probe

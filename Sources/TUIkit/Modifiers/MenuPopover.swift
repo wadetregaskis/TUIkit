@@ -38,7 +38,7 @@ func renderMenuColumn(
 ) -> FrameBuffer {
     let menuView = menuColumnFrame(items, borderColor: borderColor)
     let plan = planMenuColumn(menuView, context: context, capHeight: capHeight)
-    guard let overflowHeight = plan.overflowHeight else {
+    guard plan.scrolls else {
         return renderToBuffer(menuView, context: plan.sized)
     }
     // Taller than its budget: scroll inside it. The scroll goes INSIDE the
@@ -50,7 +50,7 @@ func renderMenuColumn(
     let scrolled = ScrollView(.vertical) { menuColumnBody(items) }
         .frame(height: max(1, capHeight - 2))
         .bordered(style: nil, colour: borderColor.map(AnimatedColor.init), width: 1)
-    return renderToBuffer(scrolled, context: plan.sized.withAvailableHeight(overflowHeight))
+    return renderToBuffer(scrolled, context: plan.sized.withAvailableHeight(capHeight))
 }
 
 /// The size ``renderMenuColumn(_:context:capHeight:borderColor:)`` comes back
@@ -75,7 +75,7 @@ func measureMenuColumn(
 ) -> ViewSize {
     let menuView = menuColumnFrame(items, borderColor: borderColor)
     let plan = planMenuColumn(menuView, context: context, capHeight: capHeight)
-    guard plan.overflowHeight == nil else { return ViewSize.fixed(plan.width, capHeight) }
+    guard !plan.scrolls else { return ViewSize.fixed(plan.width, capHeight) }
     guard plan.isClamped else { return ViewSize.fixed(plan.width, plan.naturalHeight) }
     // The hug did not fit the space it was offered, so the rows reflow into what
     // they got and the natural height is not the one that gets drawn — a label
@@ -128,9 +128,9 @@ private struct MenuColumnPlan {
     /// The context it draws in: clamped to `width`, with the row width and the
     /// menu verb handed down.
     var sized: RenderContext
-    /// The content's untruncated height when it does not fit the cap, and `nil`
-    /// when it does — non-`nil` is exactly the scrolling arm.
-    var overflowHeight: Int?
+    /// Whether the content is taller than the cap, so the menu scrolls inside
+    /// its border rather than hugging.
+    var scrolls = false
 }
 
 /// Sizes `menuView` to its own content and prepares the context it draws in.
@@ -173,7 +173,7 @@ private func planMenuColumn(
     sized.environment.isInsideMenu = true
     let fits = MenuColumnPlan(
         width: menuWidth, naturalHeight: natural.height,
-        isClamped: natural.width >= context.availableWidth, sized: sized, overflowHeight: nil)
+        isClamped: natural.width >= context.availableWidth, sized: sized)
 
     // Does it fit? A measure is clamped to the context's `availableHeight` —
     // and for an inline menu the cap IS that height — so a measure in place
@@ -190,13 +190,22 @@ private func planMenuColumn(
     // the common path — the inline menu was measuring twice and rendering once
     // for every frame.
     guard capHeight > 0, natural.height >= capHeight else { return fits }
-    let canvas = sized.withAvailableHeight(max(capHeight * 64, 4096))
-    let fullHeight = measureChild(
-        menuView, proposal: ProposedSize(width: menuWidth, height: nil), context: canvas
+    // One cell taller than the cap is the whole question. A report that comes
+    // back at `capHeight + 1` was clamped, which is precisely "it does not
+    // fit"; one at or below the cap is the content's own height. Exact, and
+    // against a budget one row past the one the render uses — where this used
+    // to offer `max(capHeight * 64, 4096)`, which is a ceiling wearing a
+    // generous canvas's clothes and cost a walk 4,096 rows deep to learn one
+    // bit. How FAR past the cap the content goes is nobody's business here: the
+    // scrolled arm below frames its viewport at the cap and the `ScrollView`
+    // measures its own content with no limit at all.
+    let overflowProbe = sized.withAvailableHeight(capHeight + 1)
+    let probed = measureChild(
+        menuView, proposal: ProposedSize(width: menuWidth, height: nil), context: overflowProbe
     ).height
-    guard fullHeight > capHeight else { return fits }
+    guard probed > capHeight else { return fits }
     var scrolls = fits
-    scrolls.overflowHeight = fullHeight
+    scrolls.scrolls = true
     return scrolls
 }
 
@@ -237,22 +246,37 @@ func renderMenuPopup(
         rowsOnly, proposal: ProposedSize(width: widthCap, height: nil), context: context)
     let rowWidth = max(1, min(natural.width, widthCap)) + 2 * inset
 
-    // Rendered against a canvas TALLER than the screen, on purpose: the
-    // renderer below is what windows the menu, and it can only window rows that
-    // exist. Laid out in the space actually available, the column would be
+    // Rendered against a canvas as tall as the column actually is, on purpose:
+    // the renderer below is what windows the menu, and it can only window rows
+    // that exist. Laid out in the space actually available, the column would be
     // clipped to the overlay's height first and the rows past the fold would
     // never be drawn at all — so the scrollbar would have nothing to scroll to.
+    //
+    // The canvas used to be `max(context.availableHeight * 64, 4096)`, and that
+    // is a ceiling wearing a generous canvas's clothes: a menu of 9,000 rows
+    // rendered exactly **4,096** of them (measured), so the highlight could
+    // walk to ordinal 8,999 while the drop-down had no line to slice for it.
+    // `measureNaturalExtent`'s ladder starts at the same generous budget — one
+    // measure for every menu anybody will ever build by hand — and, unlike the
+    // constant, keeps going when the content is taller.
     var sized = context.withAvailableWidth(rowWidth)
-        .withAvailableHeight(max(context.availableHeight * 64, 4096))
     sized.environment.menuRowInset = inset
+    // Set before the extent is measured, not after: a row that hugs is measured
+    // against the menu's whole interior and a row that is drawn gets that
+    // interior less its hint column, and a label can wrap into the difference —
+    // which would make the canvas a row short of what the render then draws.
+    sized.environment.menuRowWidth = rowWidth
+    sized = sized.withAvailableHeight(
+        max(1, measureNaturalExtent(
+            rowsOnly, along: .vertical,
+            proposal: ProposedSize(width: rowWidth, height: nil), context: sized,
+            startingBudget: naturalExtentStartingBudget(forVisible: context.availableHeight)
+        ).height))
     // Rows report to the column, not to the focus ring. Only a render pass
     // claims an ordinal, so the measure above cannot shift the numbering.
     controller.sink.beginPass()
     sized.environment.menuRowSink = controller.sink
     sized.environment.menuHighlightedOrdinal = controller.highlightedOrdinal
-    // The highlight is a bar across the whole row, so the pointer can hit it
-    // anywhere the eye says it can.
-    sized.environment.menuRowWidth = rowWidth
     let column = TUIkit.renderToBuffer(rowsOnly, context: sized)
     controller.adoptRenderedRows()
 
