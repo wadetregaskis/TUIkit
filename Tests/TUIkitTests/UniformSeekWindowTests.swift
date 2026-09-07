@@ -62,8 +62,12 @@ struct UniformSeekWindowTests {
         let tuiContext = TUIContext()
 
         let lines = renderFrame(counter: counter, tuiContext: tuiContext, windowOffset: 50_000)
+        // The band (a viewport plus its margins and focus-ring probes) plus the
+        // ONE-TIME sixteen-row width seed, which the first uniform render takes
+        // so its later O(1) width answers match the walk a measure would have
+        // done. Both are constants; neither reads the row count.
         #expect(
-            counter.calls < 30,
+            counter.calls < 35,
             "a windowed frame must not touch all 100k rows; built \(counter.calls)")
 
         // And it is CORRECT: rows land at their exact arithmetic positions.

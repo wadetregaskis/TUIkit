@@ -233,6 +233,11 @@ extension _VStackCore {
     /// keeps small stacks byte-exact in absolute space.
     static var anchoredWindowThreshold: Int { 256 }
 
+    /// How many leading rows the anchored estimate measures for its pitch (and,
+    /// within the budget's reach, its width). The uniform seek's width records
+    /// seed from the same count, so the two paths answer alike.
+    static var anchoredWidthSampleCount: Int { 16 }
+
     /// Applies a DESIGNATED row anchor (`.anchorPosition(.row(id))`), which
     /// replaces the implicit top-visible anchor, and returns its key (or `nil`
     /// when no designation is in force).
@@ -720,7 +725,7 @@ extension _VStackCore {
 
         var estimate = state.estimatedPitch(spacing: spacing)
         var sampleTotal = 0
-        let sampleSize = min(count, 16)
+        let sampleSize = min(count, Self.anchoredWidthSampleCount)
         var sampled: [ViewSize] = []
         sampled.reserveCapacity(sampleSize)
         for ordinal in 0..<sampleSize {

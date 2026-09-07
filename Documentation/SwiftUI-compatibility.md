@@ -434,6 +434,14 @@ window**, not a deferred-creation machine:
 - **Cross-axis sizing** hugs the widest *placed* child (identical to
   `VStack`), which is stabler than SwiftUI's first-subview ideal — TUIkit
   has rendered every visible child anyway, so it knows the real width.
+  "Placed" is what a walk at the given height budget reaches: a stack asked
+  how wide it would be in eight lines answers for the rows those eight lines
+  hold, not for one far below the fold. A **windowed** stack cannot measure
+  every row (that is the point), so beyond the fold this is a heuristic — the
+  widest row it has ever drawn or sampled — but it is one heuristic, shared by
+  every path that answers, and it never shrinks while the content is
+  unchanged. It is also never narrower than the band on screen: a stack
+  scrolled to a wide row reports that row, however narrow the first rows are.
 - **`pinnedViews:` does not exist** (→ §4a).
 
 **Practical guidance (differs from SwiftUI's):** for large scrollable data

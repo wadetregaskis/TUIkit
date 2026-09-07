@@ -30,6 +30,59 @@ private enum VStackStateIndex {
     static let uniformWindow = -70
 }
 
+/// The widest rows a windowed stack has measured, kept as the running maxima
+/// of every row any of its paths has seen: records in increasing ordinal order
+/// whose widths strictly increase, so ``width(forFirst:)`` is the widest known
+/// row among the first `k`.
+///
+/// The ordinal is the part that matters. A windowed stack answers measures from
+/// three paths — the uniform arithmetic seek, the anchored estimate, the exact
+/// walk — and each reports for a different PREFIX of the stack: the rows its
+/// height budget has room for. A single global maximum answers the short
+/// budgets with a row they would never reach, which is how a stack came to
+/// measure one width on its first frame (an arm that walks the prefix) and
+/// another on its second (the seek, answering from a global maximum).
+struct RowWidthRecords {
+    private var records: [(ordinal: Int, width: Int)] = []
+
+    /// Whether any row has been recorded yet — distinct from "widest is zero".
+    private(set) var isSeeded = false
+
+    /// The widest row known among the first `count`, or 0 when none is.
+    func width(forFirst count: Int) -> Int {
+        var result = 0
+        // Widths increase with ordinal, so the last record before the fold is
+        // the maximum; the array holds only record-setting rows, so this is a
+        // handful of steps even for a stack of millions.
+        for record in records {
+            guard record.ordinal < count else { break }
+            result = record.width
+        }
+        return result
+    }
+
+    /// Marks the records seeded even when no row set one (an empty stack, or
+    /// rows of zero width): "seeded" is about whether the sample has run.
+    mutating func markSeeded() {
+        isSeeded = true
+    }
+
+    /// Records a measured row, keeping only what changes an answer.
+    mutating func note(ordinal: Int, width measured: Int) {
+        guard measured > width(forFirst: ordinal + 1) else { return }
+        let index = records.firstIndex { $0.ordinal >= ordinal } ?? records.count
+        if index < records.count, records[index].ordinal == ordinal {
+            records[index].width = measured
+        } else {
+            records.insert((ordinal, measured), at: index)
+        }
+        // A wider row earlier makes every narrower record after it unreachable.
+        while index + 1 < records.count, records[index + 1].width <= measured {
+            records.remove(at: index + 1)
+        }
+    }
+}
+
 /// The windowed stack's persisted window state: the uniformity
 /// hypothesis, and — for variable-height content — the scroll anchor
 /// (§5e: `ScrollAnchor { item, offsetWithin }`, held here in ordinal
@@ -46,15 +99,23 @@ final class StackWindowState {
         /// walk (small N) from then on.
         var broken = false
 
-        /// The widest row the render paths have measured — a one-time bounded
-        /// seed sample plus every verified band row, grow-only — with the
-        /// flexibility flags OR-ed over the same rows. `nil` until the first
-        /// uniform render seeds it (seeding is a render-path mutation, like
-        /// the extent). Lets `uniformSeekSizeThatFits` answer O(1): without
-        /// it, every measure re-sampled up to 64 rows for width/flexibility,
-        /// which on any cache-invalidating frame (any `@State` write clears
-        /// the memo) is the WHOLE stack for ≤64 rows — every frame.
-        var hypothesisRowWidth: Int?
+        /// The widest rows the render paths have measured — a one-time seed
+        /// sample plus every verified band row, grow-only — each remembered
+        /// with the ordinal it came from. Empty until the first uniform render
+        /// seeds it (seeding is a render-path mutation, like the extent).
+        /// Lets `uniformSeekSizeThatFits` answer without measuring: before it,
+        /// every measure re-sampled up to 64 rows for width/flexibility, which
+        /// on any cache-invalidating frame (any `@State` write clears the memo)
+        /// is the WHOLE stack for ≤64 rows — every frame.
+        var rowWidths = RowWidthRecords()
+
+        /// The widest row the LAST uniform render actually drew. The reported
+        /// width is never below it: a stack must not tell its parent it is
+        /// narrower than the band it is putting on screen, however few of the
+        /// first rows that band contains (scrolled to row 300, the first nine
+        /// rows are not what is drawn).
+        var bandWidth = 0
+
         var hypothesisWidthFlexible = false
         var hypothesisHeightFlexible = false
 
@@ -269,6 +330,9 @@ extension _VStackCore {
             state.broken = true
             return nil
         }
+        recordWidths(
+            band: rows, grafted: graftRows, children: children, state: state,
+            proposal: proposal, context: childContext)
 
         // Assemble: exact blank blocks between the rendered rows. With a
         // reply channel (Stage 6), the buffer is just the rendered band —
@@ -279,21 +343,9 @@ extension _VStackCore {
 
         var result = FrameBuffer()
         let sliceOrigin = window.reply != nil ? (rows.first.map { $0.ordinal * pitch } ?? 0) : 0
-        var cursor = sliceOrigin
-        var memo: [String: Int] = [:]
-        for (ordinal, child, rowWidth) in rows {
-            let rowY = ordinal * pitch
-            if rowY > cursor {
-                result.appendVertically(FrameBuffer(emptyWithHeight: rowY - cursor), spacing: 0)
-            }
-            let slot = uniformRowSlot(
-                child, extent: extent, width: width,
-                viewportHeight: window.viewportHeight,
-                context: rowContext(ordinal, rowWidth))
-            result.appendVertically(slot, spacing: 0)
-            cursor = rowY + extent
-            if let key = children.key(at: ordinal) { memo[key] = ordinal }
-        }
+        var (cursor, memo) = appendUniformRows(
+            rows, into: &result, from: sliceOrigin, children: children,
+            geometry: (extent, pitch, width, window.viewportHeight), rowContext: rowContext)
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = totalHeight
@@ -375,7 +427,9 @@ extension _VStackCore {
     /// Fidelity note: the answer is the max over VISITED rows, where the old
     /// per-measure sampling took the first 64 — both are heuristics for
     /// content the window has not reached, and the only consumer of a seeded
-    /// stack's width (a vertical ScrollView's extents) discards it.
+    /// stack's width (a vertical ScrollView's extents) discards it. Each width
+    /// is filed under its ordinal so a measure asking about a short prefix is
+    /// not answered with a row far below the fold.
     private func verifiedUniformRows(
         _ ordinals: [Int], children: ChildViewCollection, extent: Int,
         state: StackWindowState, proposal: ProposedSize, context: RenderContext
@@ -386,7 +440,7 @@ extension _VStackCore {
             let child = children[ordinal]
             let measured = child.measure(proposal: proposal, context: context)
             guard measured.height == extent, !child.isSpacer else { return nil }
-            state.hypothesisRowWidth = max(state.hypothesisRowWidth ?? 0, measured.width)
+            state.rowWidths.note(ordinal: ordinal, width: measured.width)
             if measured.isWidthFlexible { state.hypothesisWidthFlexible = true }
             if measured.isHeightFlexible { state.hypothesisHeightFlexible = true }
             // The measured width is kept for the ramp: it is what the row will
@@ -394,6 +448,85 @@ extension _VStackCore {
             result.append((ordinal, child, measured.width))
         }
         return result
+    }
+
+    /// Lays the band's rows into `result` at their exact arithmetic positions,
+    /// with a blank block for each gap, and returns where the walk left the
+    /// cursor plus the key→ordinal memo it built on the way.
+    private func appendUniformRows(
+        _ rows: [(ordinal: Int, child: ChildView, width: Int)], into result: inout FrameBuffer,
+        from sliceOrigin: Int, children: ChildViewCollection,
+        geometry: (extent: Int, pitch: Int, width: Int, viewportHeight: Int),
+        rowContext: (Int, Int) -> RenderContext
+    ) -> (cursor: Int, memo: [String: Int]) {
+        var cursor = sliceOrigin
+        var memo: [String: Int] = [:]
+        for (ordinal, child, rowWidth) in rows {
+            let rowY = ordinal * geometry.pitch
+            if rowY > cursor {
+                result.appendVertically(FrameBuffer(emptyWithHeight: rowY - cursor), spacing: 0)
+            }
+            let slot = uniformRowSlot(
+                child, extent: geometry.extent, width: geometry.width,
+                viewportHeight: geometry.viewportHeight,
+                context: rowContext(ordinal, rowWidth))
+            result.appendVertically(slot, spacing: 0)
+            cursor = rowY + geometry.extent
+            if let key = children.key(at: ordinal) { memo[key] = ordinal }
+        }
+        return (cursor, memo)
+    }
+
+    /// The two render-path width mutations, together: what this frame's band
+    /// is drawing (the floor the report may never fall below) and, once per
+    /// stack, the sample a measure of it would have walked.
+    private func recordWidths(
+        band: [(ordinal: Int, child: ChildView, width: Int)],
+        grafted: [(ordinal: Int, child: ChildView, width: Int)],
+        children: ChildViewCollection, state: StackWindowState,
+        proposal: ProposedSize, context: RenderContext
+    ) {
+        // Not `(band + grafted).reduce`: that concatenation would allocate a
+        // fresh array of the band on every frame of every windowed stack.
+        var bandWidth = 0
+        for row in band { bandWidth = max(bandWidth, row.width) }
+        for row in grafted { bandWidth = max(bandWidth, row.width) }
+        state.bandWidth = bandWidth
+        seedWidthRecords(children, state: state, proposal: proposal, context: context)
+    }
+
+    /// Fills the width records from the same prefix a measure of this stack
+    /// walks — every row for a small stack, the anchored estimate's sample for
+    /// a large one — so the seek's later answers match the walk's.
+    ///
+    /// Without it the records hold the band alone, and the seek answered the
+    /// whole-content question with the widest row on screen while the walk
+    /// that had run moments earlier in the same pass had seen the whole
+    /// prefix: a static tree measured 24 wide on its first frame and 2 on its
+    /// second. Runs at most once per stack (`markSeeded` records that it has,
+    /// even when no row set a record), and those same rows were measured by
+    /// that walk in this pass, so the memo serves most of them; the steady
+    /// state still measures nothing beyond the band.
+    private func seedWidthRecords(
+        _ children: ChildViewCollection, state: StackWindowState, proposal: ProposedSize,
+        context: RenderContext
+    ) {
+        guard !state.rowWidths.isSeeded else { return }
+        var measureContext = context
+        measureContext.isMeasuring = true
+        let count = children.count
+        // The exact walk measures every row it can reach; the anchored
+        // estimate samples sixteen. Mirror whichever would have answered, so
+        // the seek reproduces it rather than a third heuristic.
+        let sample = count > Self.anchoredWindowThreshold ? Self.anchoredWidthSampleCount : count
+        for ordinal in 0..<max(0, min(count, sample)) {
+            let child = children[ordinal]
+            let size = child.measure(proposal: proposal, context: measureContext)
+            // Measured but not drawn — keep the memo entry past the pass GC.
+            measureContext.renderCache?.markActive(child.identity(under: measureContext))
+            state.rowWidths.note(ordinal: ordinal, width: size.width)
+        }
+        state.rowWidths.markSeeded()
     }
 
     /// The id of the row under the sample line, when one was asked for.
@@ -519,14 +652,22 @@ extension _VStackCore {
         let height = fitCount > 0 ? fitCount * pitch - spacing : 0
         guard fitCount > 0 else { return ViewSize.fixed(0, 0) }
 
-        // O(1) once the render has seeded the width hypothesis: the answer is
-        // pure arithmetic plus the persisted widest-row width — no row
-        // measures at all, the steady state. (Before the first render only
-        // the sample below can answer, and it must not persist anything —
-        // measuring must not mutate.)
-        if let rowWidth = state.hypothesisRowWidth {
+        // O(1) once the render has seeded the width records: the answer is
+        // pure arithmetic plus the widest row already known within this
+        // budget's reach — no row measures at all, the steady state. (Before
+        // the first render only the sample below can answer, and it must not
+        // persist anything — measuring must not mutate.)
+        //
+        // Floored by the band the last render drew: a prefix answer is the
+        // right one for a parent asking "how wide are you in N lines", but a
+        // scrolled stack is drawing rows the prefix does not contain, and it
+        // must never report itself narrower than what it is putting on screen.
+        if state.rowWidths.isSeeded {
+            let walked = Self.walkedRowCount(
+                budget: heightLimit, pitch: pitch, spacing: spacing, count: count)
             return ViewSize(
-                width: min(rowWidth, widthLimit), height: height,
+                width: min(max(state.rowWidths.width(forFirst: walked), state.bandWidth), widthLimit),
+                height: height,
                 isWidthFlexible: state.hypothesisWidthFlexible,
                 isHeightFlexible: state.hypothesisHeightFlexible)
         }
