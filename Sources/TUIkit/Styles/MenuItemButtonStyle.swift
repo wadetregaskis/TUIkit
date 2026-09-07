@@ -48,15 +48,32 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
 
     /// The row without the bar — what is measured, and what each step of the
     /// cycle is painted over.
-    private var row: _MenuItemRow {
-        _MenuItemRow(configuration: configuration)
+    ///
+    /// The three environment values the row draws itself from are read HERE and
+    /// handed over as stored properties, rather than declared as `@Environment`
+    /// on the row. This view is `Renderable`, so it has the render context that
+    /// a `ButtonStyle`'s body does not — and the row sits directly inside it
+    /// with no modifier between, so the values are the same ones it would have
+    /// resolved for itself. What it saves is the resolution: three
+    /// `EnvironmentBox` allocations, three key-path projections through `Any`
+    /// and three existential casts, per row, on every measure and every render.
+    /// On the `menus` stress scenario `resolveEnvironmentProperties`'s inner
+    /// loop was **5.9% of the frame** and `Environment.wrappedValue` another
+    /// **5.0%**, and every reflecting view on that path was this row.
+    private func row(in context: RenderContext) -> _MenuItemRow {
+        _MenuItemRow(
+            configuration: configuration,
+            palette: context.environment.palette,
+            menuRowWidth: context.environment.menuRowWidth,
+            menuRowInset: context.environment.menuRowInset)
     }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(row, proposal: proposal, context: context)
+        measureChild(row(in: context), proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let row = row(in: context)
         var buffer = TUIkit.renderToBuffer(row, context: context)
         guard configuration.isFocused else { return buffer }
 
@@ -97,17 +114,26 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
 // MARK: - Row
 
 /// One menu row. A separate view because `ButtonStyle.makeBody` composes views
-/// and has no render context: the palette has to come from the environment (the
-/// same shape as the gradient editor's `_StopChipStyle`).
+/// and has no render context — but ``_MenuItemRowBar``, which builds this, is
+/// `Renderable` and does, so the values arrive as stored properties instead of
+/// being resolved here. (The gradient editor's `_StopChipStyle` is the same
+/// shape and still reads the environment, because nothing between it and the
+/// style has a context.)
 private struct _MenuItemRow: View {
     let configuration: ButtonStyleConfiguration
 
-    @Environment(\.palette) private var palette
+    /// The palette in force where the row sits.
+    ///
+    /// Passed in by ``_MenuItemRowBar`` rather than declared `@Environment`
+    /// here — see the note on its `row(in:)`. The doc comment above still holds
+    /// for a style's *body*: this row is one level below that, inside a
+    /// `Renderable` that has the context.
+    let palette: any Palette
 
     /// The width the highlight bar should span, injected by the menu once it
     /// knows it. See ``EnvironmentValues/menuRowWidth``.
-    @Environment(\.menuRowWidth) private var menuRowWidth
-    @Environment(\.menuRowInset) private var menuRowInset
+    let menuRowWidth: Int?
+    let menuRowInset: Int
 
     @ViewBuilder
     var body: some View {
