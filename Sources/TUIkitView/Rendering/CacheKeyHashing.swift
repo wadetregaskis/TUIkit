@@ -27,6 +27,17 @@ func mixHashWord(_ accumulated: UInt64, _ value: UInt64) -> UInt64 {
 
 /// The splitmix64 finalizer: avalanches the low bits, which is where a
 /// `Dictionary` takes its bucket from.
+///
+/// `truncatingIfNeeded` and not `Int(bitPattern: UInt(mixed))`, which is what
+/// this said first. `UInt.init(_:)` is the *exact* conversion — it traps when
+/// the source does not fit — and it fits only because `UInt` is 64 bits on
+/// every platform anyone ran this on. TUIkit also builds for
+/// `wasm32-unknown-wasip1`, where `UInt` is 32 bits and a splitmix64 output is
+/// above `UInt32.max` essentially always: the browser build would have trapped
+/// on its first `@State` lookup. Nothing caught it because the trap is a
+/// runtime precondition and the wasm CI lane only compiles. On a 64-bit target
+/// this spelling is the same no-op bit reinterpretation as before, so the
+/// measurements in 1e1cfe25 and 21c3675b still stand.
 @inline(__always)
 func finalizeHashWord(_ value: UInt64) -> Int {
     var mixed = value
@@ -35,7 +46,7 @@ func finalizeHashWord(_ value: UInt64) -> Int {
     mixed ^= mixed >> 27
     mixed = mixed &* 0x94d0_49bb_1331_11eb
     mixed ^= mixed >> 31
-    return Int(bitPattern: UInt(mixed))
+    return Int(truncatingIfNeeded: mixed)
 }
 
 /// The seed every fold starts from — FNV's offset basis.
