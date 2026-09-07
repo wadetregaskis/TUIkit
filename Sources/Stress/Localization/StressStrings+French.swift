@@ -130,6 +130,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "Suivi du défilement — {0} lignes, ancré en bas (une ligne ajoutée par image)",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "Barre de menus",
+        "stress.scenario.menus.blurb": "Menus intégrés de lignes à raccourcis, à côté de tous les styles de Button intégrés.",
+        "stress.scenario.menus.stresses": "mesure du corps du ButtonStyle · passe de largeur au plus juste du menu · colonne des raccourcis · résolution d'@Environment par ligne",
+        "stress.scenario.menus.heading": "Barre de menus — {0} menus de {1} lignes",
         "stress.scenario.kitchensink.title": "Tout-en-un",
         "stress.scenario.kitchensink.blurb": "Vue divisée : grande liste en barre latérale + détail en grille de panneaux dense, ensemble.",
         "stress.scenario.kitchensink.stresses": "disposition en vue divisée + fenêtrage de liste + grille de conteneurs simultanément",

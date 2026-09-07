@@ -128,6 +128,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "滚动跟随 — {0} 行，底部锚定（每帧追加一行）",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "菜单栏",
+        "stress.scenario.menus.blurb": "带快捷键行的内联菜单，以及全部内置 ButtonStyle。",
+        "stress.scenario.menus.stresses": "ButtonStyle 主体测量 · 菜单贴合宽度遍历 · 快捷键提示列 · 每行 @Environment 解析",
+        "stress.scenario.menus.heading": "菜单栏 — {0} 个菜单，每个 {1} 行",
         "stress.scenario.kitchensink.title": "大杂烩",
         "stress.scenario.kitchensink.blurb": "分栏视图：大列表侧边栏 + 密集面板网格详情，二者同时。",
         "stress.scenario.kitchensink.stresses": "分栏视图布局 + 列表窗口化 + 容器网格同时进行",

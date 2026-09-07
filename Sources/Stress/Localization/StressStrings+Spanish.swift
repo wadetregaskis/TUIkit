@@ -130,6 +130,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "Seguimiento de desplazamiento — {0} filas, anclado abajo (se añade una fila por fotograma)",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "Barra de menús",
+        "stress.scenario.menus.blurb": "Menús en línea de filas con atajos, junto a todos los ButtonStyle integrados.",
+        "stress.scenario.menus.stresses": "medición del cuerpo del ButtonStyle · pasada de ancho ajustado del menú · columna de atajos · resolución de @Environment por fila",
+        "stress.scenario.menus.heading": "Barra de menús — {0} menús de {1} filas",
         "stress.scenario.kitchensink.title": "Todo en uno",
         "stress.scenario.kitchensink.blurb": "Vista dividida: lista grande en la barra lateral + detalle de cuadrícula de paneles densa, juntos.",
         "stress.scenario.kitchensink.stresses": "disposición de vista dividida + ventaneo de lista + cuadrícula de contenedores simultáneamente",

@@ -130,6 +130,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "Scorrimento ancorato — {0} righe, ancorato in basso (una riga aggiunta per frame)",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "Barra dei menu",
+        "stress.scenario.menus.blurb": "Menu inline di righe con scorciatoie, accanto a ogni ButtonStyle integrato.",
+        "stress.scenario.menus.stresses": "misura del corpo del ButtonStyle · passata di larghezza aderente del menu · colonna delle scorciatoie · risoluzione di @Environment per riga",
+        "stress.scenario.menus.heading": "Barra dei menu — {0} menu da {1} righe",
         "stress.scenario.kitchensink.title": "Tutto in uno",
         "stress.scenario.kitchensink.blurb": "Vista divisa: grande elenco nella barra laterale + dettaglio a griglia di pannelli densa, insieme.",
         "stress.scenario.kitchensink.stresses": "layout vista divisa + windowing elenco + griglia di contenitori simultaneamente",

@@ -128,6 +128,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "スクロール追従 — {0} 行、下部アンカー（毎フレーム 1 行追加）",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "メニューバー",
+        "stress.scenario.menus.blurb": "ショートカット付きの行から成るインラインメニューと、組み込みの ButtonStyle 一式。",
+        "stress.scenario.menus.stresses": "ButtonStyle ボディの計測 · メニューの最小幅パス · ショートカット表示列 · 行ごとの @Environment 解決",
+        "stress.scenario.menus.heading": "メニューバー — {0} 個のメニュー × {1} 行",
         "stress.scenario.kitchensink.title": "全部入り",
         "stress.scenario.kitchensink.blurb": "分割ビュー：大きなリストのサイドバー + 高密度パネルグリッドの詳細を同時に。",
         "stress.scenario.kitchensink.stresses": "分割ビューのレイアウト + リストのウィンドウ化 + コンテナグリッドを同時に",

@@ -130,6 +130,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "Scroll-Verfolgung — {0} Zeilen, unten verankert (pro Frame kommt eine Zeile hinzu)",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "Menüleiste",
+        "stress.scenario.menus.blurb": "Inline-Menüs aus Zeilen mit Tastenkürzeln, daneben jeder eingebaute Button-Style.",
+        "stress.scenario.menus.stresses": "Messung des ButtonStyle-Body · Menü-Passbreitendurchlauf · Kürzelspalte · @Environment-Auflösung je Zeile",
+        "stress.scenario.menus.heading": "Menüleiste — {0} Menüs mit je {1} Zeilen",
         "stress.scenario.kitchensink.title": "Komplettpaket",
         "stress.scenario.kitchensink.blurb": "Geteilte Ansicht: große Listen-Seitenleiste + dichtes Panel-Raster-Detail, zusammen.",
         "stress.scenario.kitchensink.stresses": "Geteilte-Ansicht-Layout + Listenfensterung + Container-Raster gleichzeitig",

@@ -141,6 +141,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.heading": "Scroll Follow — {0} rows, bottom-anchored (a row appends every frame)",
 
         // MARK: kitchensink
+        "stress.scenario.menus.title": "Menu Bar",
+        "stress.scenario.menus.blurb": "Inline menus of shortcut-bearing rows, beside every built-in button style.",
+        "stress.scenario.menus.stresses": "ButtonStyle body measure · menu hug-width pass · shortcut hint column · per-row @Environment resolution",
+        "stress.scenario.menus.heading": "Menu bar — {0} menus of {1} rows",
         "stress.scenario.kitchensink.title": "Kitchen Sink",
         "stress.scenario.kitchensink.blurb": "Split view: big list sidebar + dense panel-grid detail, together.",
         "stress.scenario.kitchensink.stresses": "split-view layout + list windowing + container grid simultaneously",
