@@ -117,8 +117,20 @@ private struct _MenuStyleBody: View, Renderable, Layoutable {
         fatalError("_MenuStyleBody renders via Renderable")
     }
 
+    /// Measured through the style's own body rather than by rendering this menu
+    /// and discarding the buffer — the same trade ``Button`` makes, and sound
+    /// for the same reason: ``MenuStyle/makeBuffer(configuration:context:)`` is
+    /// `renderToBuffer(makeBody(configuration:))` and lives in an extension, not
+    /// a protocol requirement, so every style's buffer is its body's buffer.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureFixedByRendering(self, proposal: proposal, context: context)
+        let style = context.environment.menuStyle
+        // A body that cannot size itself is going to be drawn to be measured
+        // whichever way it is asked; going through the style would only build
+        // it twice for the same answer.
+        guard style.bodyCanMeasureItself else {
+            return measureFixedByRendering(self, proposal: proposal, context: context)
+        }
+        return style.makeSize(configuration: configuration, proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

@@ -36,13 +36,108 @@ import TUIkitCore
 func renderMenuColumn(
     _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil
 ) -> FrameBuffer {
-    // The items are `Button`s (SwiftUI's API, which TUIkit matches), but a
-    // menu's rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them
-    // as menu rows, the same idiom as the Picker drop-down.
-    let column = VStack(alignment: .leading, spacing: 0) { items }
+    let menuView = menuColumnFrame(items, borderColor: borderColor)
+    let plan = planMenuColumn(menuView, context: context, capHeight: capHeight)
+    guard let overflowHeight = plan.overflowHeight else {
+        return renderToBuffer(menuView, context: plan.sized)
+    }
+    // Taller than its budget: scroll inside it. The scroll goes INSIDE the
+    // border, not around it — a ScrollView's "N more above/below" indicators
+    // replace its first and last visible rows, which around the border would
+    // eat the border itself. The content renders at its full height inside the
+    // viewport, which is what lets the reveal bring an off-screen item back
+    // (`ScrollViewReveal`).
+    let scrolled = ScrollView(.vertical) { menuColumnBody(items) }
+        .frame(height: max(1, capHeight - 2))
+        .bordered(style: nil, colour: borderColor.map(AnimatedColor.init), width: 1)
+    return renderToBuffer(scrolled, context: plan.sized.withAvailableHeight(overflowHeight))
+}
+
+/// The size ``renderMenuColumn(_:context:capHeight:borderColor:)`` comes back
+/// as, without drawing a cell.
+///
+/// It can answer from the plan alone because the plan is what decides the
+/// menu's size: the width is its hug clamped to the space, and the height is
+/// either the content's or the cap it scrolls inside. Nothing downstream of
+/// that adds a row or a column — the border is already inside the measured
+/// view, and the scrolled arm is framed to exactly the cap.
+///
+/// It matters because a menu was drawn to be measured. Two-pass layout measures
+/// a stack's children before it renders them, so an inline `Menu` in a page
+/// rendered its whole column twice a frame and threw one away — and each of
+/// those renders measures the column again first, for the hug. Four walks of
+/// the tree to put one menu on screen; this makes it three.
+/// `MenuMeasureParityTests` renders the matrix and compares, because "the same
+/// plan" is a claim about code that has to be checked against what it draws.
+@MainActor
+func measureMenuColumn(
+    _ items: some View, context: RenderContext, capHeight: Int, borderColor: Color? = nil
+) -> ViewSize {
+    let menuView = menuColumnFrame(items, borderColor: borderColor)
+    let plan = planMenuColumn(menuView, context: context, capHeight: capHeight)
+    guard plan.overflowHeight == nil else { return ViewSize.fixed(plan.width, capHeight) }
+    guard plan.isClamped else { return ViewSize.fixed(plan.width, plan.naturalHeight) }
+    // The hug did not fit the space it was offered, so the rows reflow into what
+    // they got and the natural height is not the one that gets drawn — a label
+    // that wrapped is two rows where the hug counted one. Ask again at the width
+    // they will actually have, in the context they will actually have it in.
+    // Only on this arm: an unclamped menu gives every row at least the width it
+    // asked for, so nothing reflows and the first answer stands.
+    let height = measureChild(
+        menuView,
+        proposal: ProposedSize(width: plan.width, height: capHeight > 0 ? capHeight : nil),
+        context: plan.sized
+    ).height
+    return ViewSize.fixed(plan.width, height)
+}
+
+/// The menu's rows, styled and padded — everything inside the border.
+///
+/// The items are `Button`s (SwiftUI's API, which TUIkit matches), but a menu's
+/// rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them as menu
+/// rows, the same idiom as the Picker drop-down.
+@MainActor
+private func menuColumnBody(_ items: some View) -> some View {
+    VStack(alignment: .leading, spacing: 0) { items }
         .buttonStyle(_MenuItemButtonStyle())
         .padding(.horizontal, 1)
-    let menuView = column.bordered(style: nil, colour: borderColor.map(AnimatedColor.init), width: 1)
+}
+
+/// ``menuColumnBody(_:)`` in its border — the whole menu, as one view.
+@MainActor
+private func menuColumnFrame(_ items: some View, borderColor: Color?) -> some View {
+    menuColumnBody(items)
+        .bordered(style: nil, colour: borderColor.map(AnimatedColor.init), width: 1)
+}
+
+/// Where a menu column sits and how big it is — the one owner of the hug
+/// arithmetic, so the measure and the render cannot answer differently.
+private struct MenuColumnPlan {
+    /// The width the menu draws at.
+    var width: Int
+    /// The height the content came back as with its rows hugging.
+    var naturalHeight: Int
+    /// Whether the hug wanted every cell it was offered — the tell that
+    /// something was squeezed. The rows then reflow into what they got, so
+    /// ``naturalHeight`` is a lower bound rather than the height that is drawn:
+    /// a hugging row is measured against the menu's whole interior, while a
+    /// drawn one gets that interior less the hint column beside it, and a label
+    /// can wrap into the difference. Below that width the content had
+    /// everything it asked for and nothing reflows.
+    var isClamped: Bool
+    /// The context it draws in: clamped to `width`, with the row width and the
+    /// menu verb handed down.
+    var sized: RenderContext
+    /// The content's untruncated height when it does not fit the cap, and `nil`
+    /// when it does — non-`nil` is exactly the scrolling arm.
+    var overflowHeight: Int?
+}
+
+/// Sizes `menuView` to its own content and prepares the context it draws in.
+@MainActor
+private func planMenuColumn(
+    _ menuView: some View, context: RenderContext, capHeight: Int
+) -> MenuColumnPlan {
     // Size the menu to its own content before rendering it. Laying it out
     // against the whole screen made a menu of three short items span the
     // terminal: `Divider` MEASURES as one cell but RENDERS at the width it is
@@ -76,6 +171,9 @@ func renderMenuColumn(
     sized.environment.menuRowWidth = max(1, menuWidth - 6)
     // For the Return verb: a row of an open pop-up is a row of a menu too.
     sized.environment.isInsideMenu = true
+    let fits = MenuColumnPlan(
+        width: menuWidth, naturalHeight: natural.height,
+        isClamped: natural.width >= context.availableWidth, sized: sized, overflowHeight: nil)
 
     // Does it fit? A measure is clamped to the context's `availableHeight` —
     // and for an inline menu the cap IS that height — so a measure in place
@@ -91,25 +189,15 @@ func renderMenuColumn(
     // terminal-sized slot, so this skips a third full traversal of the tree on
     // the common path — the inline menu was measuring twice and rendering once
     // for every frame.
-    guard capHeight > 0 else { return renderToBuffer(menuView, context: sized) }
-    if natural.height < capHeight { return renderToBuffer(menuView, context: sized) }
+    guard capHeight > 0, natural.height >= capHeight else { return fits }
     let canvas = sized.withAvailableHeight(max(capHeight * 64, 4096))
     let fullHeight = measureChild(
         menuView, proposal: ProposedSize(width: menuWidth, height: nil), context: canvas
     ).height
-    guard fullHeight > capHeight else {
-        return renderToBuffer(menuView, context: sized)
-    }
-    // Taller than its budget: scroll inside it. The scroll goes INSIDE the
-    // border, not around it — a ScrollView's "N more above/below" indicators
-    // replace its first and last visible rows, which around the border would
-    // eat the border itself. The content renders at its full height inside the
-    // viewport, which is what lets the reveal bring an off-screen item back
-    // (`ScrollViewReveal`).
-    let scrolled = ScrollView(.vertical) { column }
-        .frame(height: max(1, capHeight - 2))
-        .bordered(style: nil, colour: borderColor.map(AnimatedColor.init), width: 1)
-    return renderToBuffer(scrolled, context: sized.withAvailableHeight(fullHeight))
+    guard fullHeight > capHeight else { return fits }
+    var scrolls = fits
+    scrolls.overflowHeight = fullHeight
+    return scrolls
 }
 
 /// Renders `items` as an open POP-UP menu, through the same drop-down renderer

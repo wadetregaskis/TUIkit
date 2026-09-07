@@ -23,10 +23,29 @@ struct _InlineMenuCore: View, Renderable, Layoutable {
         fatalError("_InlineMenuCore renders via Renderable")
     }
 
-    /// An inline menu hugs its widest row and is exactly as tall as it draws,
-    /// so one render is its exact measure.
+    /// An inline menu hugs its widest row and is exactly as tall as it draws —
+    /// which is what ``renderMenuColumn(_:context:capHeight:borderColor:)``
+    /// works out before it draws anything, so
+    /// ``measureMenuColumn(_:context:capHeight:borderColor:)`` asks for that
+    /// plan and stops there.
+    ///
+    /// It used to be one render, discarded. That is the difference between four
+    /// walks of a menu's tree per frame and three: the parent stack measures
+    /// this view before it renders it, and both used to draw the whole column.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureFixedByRendering(self, proposal: proposal, context: context)
+        var measureContext = context
+        measureContext.isMeasuring = true
+        // The same preparation `measureFixedByRendering` did before rendering:
+        // the proposal becomes the space, and no explicit width, so the rows
+        // hug rather than fill.
+        measureContext.hasExplicitWidth = false
+        if let width = proposal.width { measureContext.availableWidth = width }
+        if let height = proposal.height { measureContext.availableHeight = height }
+        // `renderToBuffer` sets this for the rows before it calls through; the
+        // measure has to agree, or a row reports a different verb's width.
+        measureContext.environment.isInsideMenu = true
+        return measureMenuColumn(
+            column, context: measureContext, capHeight: measureContext.availableHeight)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {

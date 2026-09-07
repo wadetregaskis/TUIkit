@@ -102,6 +102,26 @@ extension MenuStyle {
     func makeBuffer(configuration: Configuration, context: RenderContext) -> FrameBuffer {
         renderToBuffer(makeBody(configuration: configuration), context: context)
     }
+
+    /// Whether this style's body can answer its own size without being drawn.
+    ///
+    /// The same metatype check `ButtonStyle` makes, for the same reason: a
+    /// `Layoutable` body has a `sizeThatFits`, so measuring it paints nothing,
+    /// while a body without one would be rendered a level further down anyway.
+    var bodyCanMeasureItself: Bool { Body.self is any Layoutable.Type }
+
+    /// The size ``makeBuffer(configuration:context:)`` would come back as,
+    /// without building it.
+    ///
+    /// Here rather than at the call site so `Body` stays concrete: erasing it to
+    /// `AnyView` to measure would change the answer, because a flexible child
+    /// measures to the full available width through `AnyView`.
+    @MainActor
+    func makeSize(
+        configuration: Configuration, proposal: ProposedSize, context: RenderContext
+    ) -> ViewSize {
+        measureChild(makeBody(configuration: configuration), proposal: proposal, context: context)
+    }
 }
 
 // MARK: - Built-in styles
