@@ -96,17 +96,65 @@ enum ProcessMemory {
         #endif
     }
 
+    /// What the process is *charged* for right now, in bytes — the number
+    /// Activity Monitor calls "Memory" and the one the OS kills on — or `nil`
+    /// where the platform will not say.
+    ///
+    /// Not the same as ``currentResidentBytes()``, and the difference is the
+    /// whole reason this exists. When a large allocation is freed, macOS's
+    /// allocator hands the pages back to the kernel as *reusable*: they leave
+    /// the footprint at once and leave `resident_size` only when the kernel
+    /// gets round to reclaiming them, which under no memory pressure is never.
+    /// So a change that gives a megabyte back shows here and NOWHERE else —
+    /// measured, giving the render cache's oversized per-pass scratch back
+    /// moved `kitchensink` from 9.9 MB of footprint to 7.0 MB while its
+    /// resident size did not move at all.
+    ///
+    /// Darwin only. Linux has no single equivalent (`statm`'s resident is the
+    /// closest, and it is what ``currentResidentBytes()`` already reports), so
+    /// this answers `nil` there rather than inventing one.
+    static func currentFootprintBytes() -> UInt64? {
+        #if canImport(Darwin)
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        return UInt64(info.phys_footprint)
+        #else
+        return nil
+        #endif
+    }
+
     /// Running mean and peak of a sampled resident size.
     struct Samples {
         private var total: UInt64 = 0
         private var readings: UInt64 = 0
         private(set) var peakSampled: UInt64 = 0
+        private var footprintTotal: UInt64 = 0
+        private var footprintReadings: UInt64 = 0
+        private(set) var peakFootprint: UInt64 = 0
 
         mutating func sample() {
+            if let bytes = ProcessMemory.currentFootprintBytes() {
+                footprintTotal &+= bytes
+                footprintReadings &+= 1
+                peakFootprint = max(peakFootprint, bytes)
+            }
             guard let bytes = ProcessMemory.currentResidentBytes() else { return }
             total &+= bytes
             readings &+= 1
             peakSampled = max(peakSampled, bytes)
+        }
+
+        /// The mean of ``ProcessMemory/currentFootprintBytes()``, or `nil` where
+        /// the platform does not report one.
+        var meanFootprintBytes: UInt64? {
+            footprintReadings == 0 ? nil : footprintTotal / footprintReadings
         }
 
         /// `nil` until something has actually been sampled — an average of no

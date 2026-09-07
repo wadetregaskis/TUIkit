@@ -255,6 +255,15 @@ enum Headless {
             if let mean = memory.meanBytes {
                 print(String(format: "  rss-peak=%.1fMB  rss-mean=%.1fMB  rss-sampled-peak=%.1fMB",
                     mb(peak), mb(mean), mb(memory.peakSampled)))
+                // The footprint is the number a freed buffer actually moves —
+                // see `ProcessMemory.currentFootprintBytes()`. Printed beside
+                // the resident figures rather than instead of them, because
+                // they answer different questions and only one of them exists
+                // on Linux.
+                if let meanFootprint = memory.meanFootprintBytes {
+                    print(String(format: "  footprint-mean=%.1fMB  footprint-peak=%.1fMB",
+                        mb(meanFootprint), mb(memory.peakFootprint)))
+                }
             } else {
                 print(String(format: "  rss-peak=%.1fMB", mb(peak)))
             }
