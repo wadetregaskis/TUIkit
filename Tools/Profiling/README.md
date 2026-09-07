@@ -93,10 +93,32 @@ separate, and surprisingly easy to get wrong, question:
 swift build -c release --product Stress && cp .build/release/Stress /tmp/old
 # …make the change…
 swift build -c release --product Stress && cp .build/release/Stress /tmp/new
-Tools/Profiling/ab_bench.py /tmp/old /tmp/new                    # all 17 scenarios
+Tools/Profiling/ab_bench.py /tmp/old /tmp/new                    # every scenario, ~25 min
+Tools/Profiling/ab_bench.py /tmp/old /tmp/new --quick            # six of them, ~4 min
 Tools/Profiling/ab_bench.py /tmp/old /tmp/new --scenarios fanout --reps 40
 Tools/Profiling/ab_bench.py /tmp/old /tmp/new --cold             # all-miss frames
 ```
+
+**The scenario list comes from the binary**, not from this script — a hard-coded
+list goes stale silently, and did: `menus` and `gradients` were added to
+`Stress` and never added here, so every "full sweep" for weeks quietly skipped
+the only scenario with a `Menu` in it. Which is the same failure the `menus`
+scenario was written to fix. `animating` and `translucent` are still excluded by
+name: both are driven by the harness's frame counter, so a fixed-iteration run
+measures a different mix of in-flight work each time — ask for them explicitly
+when the question is about animation or compositing.
+
+**`--quick` is for iterating**, not for deciding. Six shapes — `deep`, `fanout`,
+`menus`, `modifiers`, `anyview`, `framedcolumns` — at 12 reps: a deep tree, a
+wide eager one, styled controls, modifier chains, type erasure, and an ordinary
+page. Measured null test (one binary against a copy of itself, 12 reps):
+
+    deep -0.2% [-0.8, +0.8]      fanout    -0.3% [-0.8, +0.3]
+    menus -0.5% [-1.0, +0.4]     modifiers +0.2% [-0.5, +0.4]
+    anyview -0.2% [-0.8, +1.0]   framedcolumns -0.4% [-1.8, +1.0]
+
+So it resolves ~2% and up. Anything smaller, or anything you are about to
+commit, gets the full sweep.
 
 `--cold` resets the state store and render cache before every frame, so nothing
 is ever served from a cache. The default (warm) run measures the steady state an

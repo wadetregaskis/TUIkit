@@ -46,16 +46,49 @@ import statistics
 import subprocess
 import sys
 
-# The default sweep. Not every scenario: `animating` and `translucent` are both
+# Scenarios the default sweep leaves out: `animating` and `translucent` are both
 # driven by the harness's frame counter, so a fixed-iteration run measures a
 # different mix of in-flight work each time — ask for them by name, where the
 # question is about animation or compositing rather than about layout.
-SCENARIOS = [
+EXCLUDED_FROM_SWEEP = {"animating", "translucent"}
+
+# The fallback list, for a binary too old to be asked. The live list comes from
+# the binary itself (`scenario_ids`) — a hard-coded one goes stale silently, and
+# did: `menus` and `gradients` were added to `Stress` and never added here, so
+# every "full sweep" for weeks quietly skipped the only scenario with a `Menu`
+# in it. That is the same failure the `menus` scenario was written to fix.
+FALLBACK_SCENARIOS = [
     "megalist", "scrollfollow", "table", "table-multiline", "tables-scroll",
     "tables-vstack", "deep", "fanout", "modifiers", "textwall", "anyview",
     "dashboard", "framedcolumns", "churn", "kitchensink", "customlayout",
-    "preferences",
+    "preferences", "gradients", "menus",
 ]
+
+# The `--quick` sweep: six shapes that between them cover a deep tree, a wide
+# eager one, styled controls, modifier chains, type erasure and an ordinary
+# page — and that all resolve tightly enough to trust at twelve reps (see
+# README.md for the measured floor). For iterating on a change; run the full
+# sweep before committing one.
+QUICK_SCENARIOS = ["deep", "fanout", "menus", "modifiers", "anyview", "framedcolumns"]
+
+
+def scenario_ids(binary):
+    """The scenarios `binary` actually has, minus the ones the sweep excludes.
+
+    Asked of the binary rather than hard-coded so a new scenario joins the sweep
+    the day it is written.
+    """
+    try:
+        out = subprocess.run([binary, "--help"], capture_output=True, text=True,
+                             timeout=30).stdout
+    except (OSError, subprocess.SubprocessError):
+        return list(FALLBACK_SCENARIOS)
+    for line in out.splitlines():
+        if "," in line and "scenario" not in line.lower():
+            ids = [part.strip() for part in line.split(",")]
+            if len(ids) > 5 and all(part and " " not in part for part in ids):
+                return [name for name in ids if name not in EXCLUDED_FROM_SWEEP]
+    return list(FALLBACK_SCENARIOS)
 
 WALL_RE = re.compile(r"(?<!-)\bper-frame=([0-9.]+)")  # not `cpu-per-frame=`
 CPU_RE = re.compile(r"cpu-per-frame=([0-9.]+)")
@@ -125,12 +158,19 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("old")
     parser.add_argument("new")
-    parser.add_argument("--scenarios", nargs="*", default=SCENARIOS)
+    parser.add_argument("--scenarios", nargs="*", default=None,
+                        help="scenario ids (default: every one the binary has, "
+                             "less the frame-counter-driven pair)")
+    parser.add_argument("--quick", action="store_true",
+                        help="six representative scenarios at 12 reps — about "
+                             "four minutes instead of twenty-five. For iterating; "
+                             "run the full sweep before committing.")
     parser.add_argument("--scale", type=int, default=1)
     parser.add_argument("--cols", type=int, default=120)
     parser.add_argument("--rows", type=int, default=40)
-    parser.add_argument("--reps", type=int, default=15,
-                        help="paired measurements per scenario (default 15)")
+    parser.add_argument("--reps", type=int, default=None,
+                        help="paired measurements per scenario (default 15, or "
+                             "12 with --quick)")
     parser.add_argument("--target-seconds", type=float, default=1.5,
                         help="how long one run should take (default 1.5)")
     parser.add_argument("--metric", choices=["cpu", "wall"], default="cpu")
@@ -144,6 +184,10 @@ def main():
                              "of a page, and the honest check on any change that "
                              "makes a cache MISS cost more than it used to.")
     args = parser.parse_args()
+    if args.scenarios is None:
+        args.scenarios = QUICK_SCENARIOS if args.quick else scenario_ids(args.old)
+    if args.reps is None:
+        args.reps = 12 if args.quick else 15
 
     load, busiest = quiesce_report()
     print(f"load {load:.2f} · busiest: {busiest or 'n/a'}")
