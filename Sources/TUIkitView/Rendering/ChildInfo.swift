@@ -182,15 +182,28 @@ public struct ChildView {
     /// the same parent, which is what the per-pass child memo guarantees:
     /// its key carries the parent identity.
     func resolvingIdentity(under parent: ViewIdentity) -> Self {
-        guard identityType != nil else { return self }
-        var probe = RenderContext(availableWidth: 0, availableHeight: 0)
-        probe.identity = parent
+        guard let identityType else { return self }
+        // The identity directly, rather than through a throwaway `RenderContext`
+        // built only to carry it. Constructing one is eleven stored properties
+        // including the whole `EnvironmentValues`, which was affordable while
+        // this ran on the memoised `ForEach` path alone and is not now that
+        // every spliced child resolves.
+        let resolved: ViewIdentity
+        if let resolvedIdentity {
+            resolved = resolvedIdentity
+        } else if let identityKey {
+            resolved = parent.child(
+                erasedType: identityType,
+                key: providerSlot >= 0 ? "\(providerSlot)#\(identityKey)" : identityKey)
+        } else {
+            resolved = parent.child(erasedType: identityType, index: childIndex)
+        }
         return Self(
             view: view, identityType: identityType, childIndex: childIndex,
             identityKey: identityKey, providerSlot: providerSlot, isSpacer: isSpacer,
             spacerMinLength: spacerMinLength, zIndex: zIndex,
             providesAlignmentGuide: providesAlignmentGuide,
-            resolvedIdentity: childContext(probe).identity)
+            resolvedIdentity: resolved)
     }
 
     /// A copy whose positional identity is rebased to `index`, and whose
@@ -209,7 +222,24 @@ public struct ChildView {
     /// with no identity type adopts its view's dynamic type, matching what it
     /// would get as a direct tuple child.
     func reindexed(to index: Int, providerSlot slot: Int) -> Self {
-        guard identityKey == nil else {
+        reindexed(to: index, providerSlot: slot, under: nil)
+    }
+
+    /// ``reindexed(to:providerSlot:)`` and ``resolvingIdentity(under:)`` in one
+    /// construction.
+    ///
+    /// Fused because the splice does both, on every child of every provider, and
+    /// each of them copies the whole struct — including the `any View`
+    /// existential, so a separate call is a second retain and release per child
+    /// for nothing. Passing `nil` is the plain reindex.
+    func reindexed(to index: Int, providerSlot slot: Int, under parent: ViewIdentity?) -> Self {
+        if let identityKey {
+            // The slot prefix is the namespace; see ``providerSlot``.
+            let resolved = parent.map {
+                $0.child(
+                    erasedType: identityType ?? type(of: view),
+                    key: slot >= 0 ? "\(slot)#\(identityKey)" : identityKey)
+            }
             return Self(
                 view: view,
                 identityType: identityType,
@@ -219,18 +249,21 @@ public struct ChildView {
                 isSpacer: isSpacer,
                 spacerMinLength: spacerMinLength,
                 zIndex: zIndex,
-                providesAlignmentGuide: providesAlignmentGuide)
+                providesAlignmentGuide: providesAlignmentGuide,
+                resolvedIdentity: resolved)
         }
+        let resolvedType = identityType ?? type(of: view)
         return Self(
             view: view,
-            identityType: identityType ?? type(of: view),
+            identityType: resolvedType,
             childIndex: index,
             identityKey: nil,
             providerSlot: -1,
             isSpacer: isSpacer,
             spacerMinLength: spacerMinLength,
             zIndex: zIndex,
-            providesAlignmentGuide: providesAlignmentGuide)
+            providesAlignmentGuide: providesAlignmentGuide,
+            resolvedIdentity: parent.map { $0.child(erasedType: resolvedType, index: index) })
     }
 
     /// Creates a child wrapper that renders `view` but derives its per-child
