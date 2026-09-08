@@ -264,8 +264,18 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             height = next
             maxWidth = max(maxWidth, min(slot.width, widthLimit))
         }
+        // An explicit `.alignmentGuide` can push a row off the alignment line,
+        // and the run that resolves it is allowed to come out WIDER than the
+        // widest row — `assembleWindow` places every buffer into `run.extent`.
+        // Measuring `maxWidth` alone therefore reported narrower than the
+        // render drew, and the parent clipped the difference. Resolved here
+        // with the same `fixedExtent: nil` the render uses, and the measure's
+        // own widest row as the floor (the render's floor is the widest
+        // buffer). Costs nothing when no row sets a guide, which is almost
+        // always: `anyAlignmentGuide` is asked first.
+        let guideRun = slotGuideRun(slots, fixedExtent: nil, minimumExtent: maxWidth)
         return ViewSize(
-            width: maxWidth, height: height,
+            width: min(guideRun?.extent ?? maxWidth, widthLimit), height: height,
             isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 
@@ -661,13 +671,16 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// The explicit-guide run over a windowed stack's slots, or `nil` — the
     /// common answer, which is why the question is asked before the two arrays
     /// that would carry it are built. See ``anyAlignmentGuide(in:)``.
-    private func slotGuideRun(_ slots: [RowSlot], fixedExtent: Int) -> AlignmentGuideRun? {
+    private func slotGuideRun(
+        _ slots: [RowSlot], fixedExtent: Int?, minimumExtent: Int = 0
+    ) -> AlignmentGuideRun? {
         guard anyAlignmentGuide(in: slots.map(\.child)) else { return nil }
         return horizontalGuideRun(
             slots.map(\.child),
             sizes: slots.map { (width: $0.width, height: $0.height) },
             alignment: alignment,
-            fixedExtent: fixedExtent)
+            fixedExtent: fixedExtent,
+            minimumExtent: minimumExtent)
     }
 
     private func renderViewportWindow(

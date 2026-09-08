@@ -344,8 +344,23 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
             width = next
             height = max(height, size.height)
         }
+        // The vertical twin of the run `_VStackCore.windowSizeThatFits`
+        // resolves, and here for the same reason: `renderWindow` computes
+        // `placedGuideRun(collected, minimumExtent: maxHeight)` and places
+        // every buffer into `guideRun?.extent ?? maxHeight`, which an explicit
+        // `.alignmentGuide` is allowed to push PAST the tallest column. Taking
+        // the tallest alone measured shorter than the render drew. Costs
+        // nothing where no column sets a guide — `anyAlignmentGuide` is asked
+        // first — which is almost always.
+        let guideRun = anyAlignmentGuide(in: children)
+            ? verticalGuideRun(
+                children,
+                sizes: sizes.map { (width: $0.width, height: $0.height) },
+                alignment: alignment,
+                minimumExtent: height)
+            : nil
         return ViewSize(
-            width: width, height: height,
+            width: width, height: guideRun?.extent ?? height,
             isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
     }
 
