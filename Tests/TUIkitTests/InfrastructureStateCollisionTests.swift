@@ -162,6 +162,28 @@ struct InfrastructureStateCollisionTests {
             "Gauge's labels shared one @State box")
     }
 
+    /// `.overlay()` is the two-slot shape in its most ordinary spelling: a
+    /// caller's base view and a caller's overlay view, rendered — and measured
+    /// — through the same unmodified context, so both bind their `@State` under
+    /// one `StateKey(identity, propertyIndex)`. Same-typed properties share a
+    /// box; differently-typed ones make `storage(for:default:)` swap the box
+    /// every frame, which resets both sides to their defaults forever.
+    ///
+    /// Not exotic: a badge, a focus ring, a loading veil over a card are all
+    /// `.overlay()`, and any of them holding state corrupts the view underneath.
+    @Test("overlay's base and overlay content")
+    func overlaySlots() {
+        expectSlotsKeepOwnState(
+            // Framed, and the overlay sent to the opposite corner: an overlay
+            // is composited OVER the base, and `SecondStatefulProbe`'s line is
+            // the wider of the two, so an unframed base would have its text
+            // covered and the test would read a layout as lost state.
+            StatefulProbe()
+                .frame(width: 30, height: 3)
+                .overlay(alignment: .bottomTrailing) { SecondStatefulProbe() },
+            "overlay's base and overlay shared one @State box")
+    }
+
     @Test("A windowed LazyVStack's lone composite child")
     func lazyStackWindowState() {
         expectStateSurvives(

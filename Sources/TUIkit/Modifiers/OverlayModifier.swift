@@ -36,9 +36,23 @@ extension OverlayModifier: @preconcurrency Equatable where Base: Equatable, Over
 
 extension OverlayModifier: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Render both contents
+        // Render both contents — the overlay under an identity of its OWN.
+        //
+        // Rendered through the same context, the two subtrees bind their
+        // `@State` under one `StateKey(identity, propertyIndex)`: same-typed
+        // properties silently share a box, and differently-typed ones make
+        // `storage(for:default:)` swap the box every frame, which resets BOTH
+        // sides to their defaults forever. A badge, a focus ring or a loading
+        // veil over a stateful card is an ordinary `.overlay()`, and any of
+        // them holding state corrupted the view underneath.
+        //
+        // Index 1, with the base left where it was: the same shape
+        // `ListRowStyleModifiers` uses for a row's background, and leaving the
+        // base at the parent identity means no existing view's `@State` slot or
+        // focus id moves.
         let baseBuffer = TUIkit.renderToBuffer(base, context: context)
-        let overlayBuffer = TUIkit.renderToBuffer(overlay, context: context)
+        let overlayBuffer = TUIkit.renderToBuffer(
+            overlay, context: context.withChildIdentity(type: Overlay.self, index: 1))
 
         // Shortcut a layer with NOTHING in it — but `isEmpty` only inspects
         // in-flow lines, and a line-empty buffer can still be carrying the
@@ -96,7 +110,11 @@ extension OverlayModifier: Layoutable {
     /// an axis if either layer does.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let baseSize = measureChild(base, proposal: proposal, context: context)
-        let overlaySize = measureChild(overlay, proposal: proposal, context: context)
+        // The same child identity the render uses, or the two passes resolve
+        // different `@State` and measure a different view than they draw.
+        let overlaySize = measureChild(
+            overlay, proposal: proposal,
+            context: context.withChildIdentity(type: Overlay.self, index: 1))
         return ViewSize(
             width: max(baseSize.width, overlaySize.width),
             height: max(baseSize.height, overlaySize.height),
