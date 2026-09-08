@@ -432,7 +432,7 @@ public enum StorageDefaults {
 /// - Arrays and Dictionaries of Codable types
 /// - Custom Codable structs and enums
 @propertyWrapper
-public struct AppStorage<Value: Codable>: @unchecked Sendable {
+public struct AppStorage<Value: Codable> {
     /// The key used for storage.
     private let key: String
 
@@ -484,3 +484,23 @@ public struct AppStorage<Value: Codable>: @unchecked Sendable {
         )
     }
 }
+
+// MARK: - Sendability
+
+/// Sendable exactly when the value it stores is — and checked, not asserted.
+///
+/// Conditional for the reason SwiftUI's own conformance is conditional
+/// (`extension AppStorage: Sendable where Value: Sendable`): the wrapper is a
+/// box, so it is only as safe to send as what is in the box. Every other stored
+/// property already qualifies — `key` is a `String` and ``StorageBackend``
+/// refines `Sendable` — so `defaultValue` is the only way anything can cross an
+/// isolation boundary inside this struct, and `Value: Codable` does not stop
+/// that being a mutable class.
+///
+/// It used to be spelled `@unchecked Sendable` on the struct itself, with no
+/// constraint. That is not SwiftUI parity and it is not sound: it laundered a
+/// non-`Sendable` `Value` through the wrapper, so `@AppStorage` was a hole in
+/// exactly the checking the rest of the package relies on. Nothing here needs
+/// `@unchecked` once the constraint is stated, which is the tell that the
+/// annotation was standing in for the constraint.
+extension AppStorage: Sendable where Value: Sendable {}

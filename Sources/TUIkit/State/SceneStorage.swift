@@ -45,7 +45,7 @@ import Foundation
 ///   durable storage is still a bad idea for the reason SwiftUI names: a value
 ///   nobody chose deliberately should not outlive the reason it was written.
 @propertyWrapper
-public struct SceneStorage<Value: Codable>: @unchecked Sendable {
+public struct SceneStorage<Value: Codable> {
     /// The scene-scoped key actually written.
     private let key: String
 
@@ -100,3 +100,14 @@ public struct SceneStorage<Value: Codable>: @unchecked Sendable {
         )
     }
 }
+
+// MARK: - Sendability
+
+/// Sendable exactly when the value it stores is — see the note on
+/// ``AppStorage``, which this mirrors down to the stored properties.
+///
+/// SwiftUI spells its own as `@unchecked Sendable where Value: Sendable`; this
+/// one needs no `@unchecked`, because the three things it stores are a
+/// `String`, a `Value` and a ``StorageBackend``, and the constraint covers the
+/// only one of those that isn't already `Sendable`.
+extension SceneStorage: Sendable where Value: Sendable {}
