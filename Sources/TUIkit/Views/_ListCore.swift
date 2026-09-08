@@ -299,8 +299,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let handler: ItemListHandler<SelectionValue>
         let focusID: String
         /// Where this frame was DRAWN from — the handler's raw scroll position
-        /// with any absorbed top clip already resolved away
-        /// (``ItemListHandler/resolvedWindowOrigin(firstRowHeight:)``). The
+        /// with any absorbed top clip already resolved away (see
+        /// ``ScrollWindowOrigin/absorbing(offset:topClip:firstRowHeight:)``). The
         /// click mapping must measure from this, not from the handler, or the
         /// absorbed frame puts every row a line off its hit band.
         let origin: WindowOrigin
@@ -329,8 +329,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     )
 
     /// The first row of the window and how many of its lines are scrolled off
-    /// above it — the one position the whole render path measures from. See
-    /// ``ItemListHandler/resolvedWindowOrigin(firstRowHeight:)``.
+    /// above it — the one position the whole render path measures from, settled by
+    /// ``ScrollRowWindow``.
     private typealias WindowOrigin = (offset: Int, topClip: Int)
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -563,30 +563,37 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let listHasFocus = context.indicatesFocus(
             handler.engageFocus(context: context, focusID: persistedFocusID))
 
-        let origin = windowOrigin(
-            handler: handler, source: source,
-            drawsTextIndicators: handler.drawsScrollIndicators)
-
-        // Reserve a line for each scroll indicator that is actually
-        // present at this offset, so the rows plus indicators fill
-        // the content area exactly — no wasted blank line at the
-        // ends (which used to push the "N more below" indicator one
-        // row too high), and no overflow in the middle. With a bar,
-        // the whole content area is the viewport (no reservation).
-        var visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
-        if !handler.drawsScrollIndicators {
-            // Nothing comes out of the content area: a bar spends a column, and
-            // hidden indicators spend nothing at all.
-            visibleRows = calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: rowBudget)
-        } else {
-            visibleRows = resolveVisibleWindow(
-                source: source,
-                origin: origin,
-                contentHeight: rowBudget,
-                overflowing: overflowing
-            )
-        }
+        // Which rows are on screen — the shared rule, so this cannot drift from
+        // the two `Table` composers again (`ScrollRowWindow`). It reserves a line
+        // for each indicator actually present at this offset, so the rows plus
+        // indicators fill the content area exactly: no wasted blank line at the
+        // ends (which used to push the "N more below" indicator one row too high)
+        // and no overflow in the middle.
+        //
+        // The CONJUNCTION with `overflowing`, because that is what the rule's
+        // `drawsTextIndicators` means to it — "does a line come out of the
+        // content area". A list whose rows all fit has nothing hidden to
+        // announce, and a bar or hidden indicators spend a column or nothing
+        // rather than a line. `Table` folds the same conjunction into
+        // `handler.drawsScrollIndicators` itself; this keeps the two apart and
+        // combines them here.
+        let window = ScrollRowWindow.resolve(
+            scrollOffset: handler.scrollOffset, count: source.count,
+            contentHeight: rowBudget, topClip: handler.scrollTopClipLines,
+            drawsTextIndicators: handler.drawsScrollIndicators && overflowing,
+            height: { source.row(at: $0).buffer.height })
+        // Where this frame is DRAWN from: the window may have absorbed a top clip
+        // (or a whole first row) an indicator would have cost more to announce
+        // than it hides. Threaded through every consumer — the indicators, the
+        // row clip, the published bands, the click mapping — because a renderer
+        // drawing from the absorbed origin while the hit test measures from the
+        // raw one puts every row a line off its band (exactly how the `Table`
+        // broke before it did the same).
+        let origin: WindowOrigin = (window.range.lowerBound, window.topClip)
+        // Materialised from the range the rule settled. `source.row(at:)` builds
+        // and renders the content box on demand and MEMOISES it, so the rows the
+        // walk already touched cost a dictionary hit here.
+        var visibleRows = window.range.map { (index: $0, row: source.row(at: $0)) }
         // Sync the viewport to the DATA rows this window covers — BEFORE the
         // reorder decoration rewrites them. The dragged row and the drop slot
         // are drawing, not data: a row in the user's hand is still counted by
@@ -898,7 +905,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let showsScrollbar = indicators.bar
         // Clamp the offset against the largest possible visible-row
         // count (one indicator, at an end); the exact viewport is
-        // finalised in resolveVisibleWindow once the offset is known.
+        // finalised by `ScrollRowWindow` once the offset is known.
         let provisionalViewport =
             overflowing ? max(1, contentHeight - 1) : contentHeight
         handler.contentHeight = contentHeight
@@ -2479,27 +2486,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// height equal to ``contentHeight`` everywhere — eliminating the
     /// wasted blank line at the ends that used to bump the "N more
     /// below" indicator one row too high.
-    /// Where this frame is DRAWN from. Resolved once and threaded through
-    /// every consumer — the window walk, the indicators, the row clip, the
-    /// published bands and the click mapping — because a renderer that draws
-    /// from the absorbed origin while the hit test measures from the raw one
-    /// puts every row a line off its band (exactly how the `Table` broke
-    /// before it did the same).
-    ///
-    /// A view drawing no "N more" line spends none, so there is nothing to
-    /// absorb: a scrollbar (which costs a column) and hidden indicators (which
-    /// cost nothing) both draw from the handler's raw position.
-    private func windowOrigin(
-        handler: ItemListHandler<SelectionValue>,
-        source: RowSource<SelectionValue>,
-        drawsTextIndicators: Bool
-    ) -> WindowOrigin {
-        guard drawsTextIndicators else {
-            return (handler.scrollOffset, handler.scrollTopClipLines)
-        }
-        return handler.resolvedWindowOrigin(firstRowHeight: source.row(at: 0).buffer.height)
-    }
-
     /// The width the rows are laid out at. The List is greedy on width (SwiftUI
     /// parity): fill the available interior, growing past it only when a row is
     /// itself wider than the space offered. Sizing to the widest *visible* row
@@ -2526,77 +2512,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let maxRowWidth = visibleRows.map { $0.row.buffer.width }.max() ?? 0
         let borderOverhead = style.showsBorder ? 2 : 0
         return max(maxRowWidth, context.availableWidth - borderOverhead)
-    }
-
-    private func resolveVisibleWindow(
-        source: RowSource<SelectionValue>,
-        origin: WindowOrigin,
-        contentHeight: Int,
-        overflowing: Bool
-    ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        guard overflowing else {
-            return calculateVisibleRows(
-                source: source, origin: origin, viewportHeight: contentHeight)
-        }
-        // A line-granularity top clip means the top row is partially hidden,
-        // which warrants the "above" indicator just like whole hidden rows.
-        let contentAbove = origin.offset > 0 || origin.topClip > 0
-        let aboveLines = contentAbove ? 1 : 0
-        // First fill assuming no "below" indicator…
-        let withoutBelow = calculateVisibleRows(
-            source: source,
-            origin: origin,
-            viewportHeight: max(1, contentHeight - aboveLines))
-        // …then, if rows remain past that window, a "below" indicator
-        // is needed, so reserve its line and refill.
-        let belowShown = origin.offset + withoutBelow.count < source.count
-        guard belowShown else { return withoutBelow }
-        return calculateVisibleRows(
-            source: source,
-            origin: origin,
-            viewportHeight: max(1, contentHeight - aboveLines - 1))
-    }
-
-    private func calculateVisibleRows(
-        source: RowSource<SelectionValue>,
-        origin: WindowOrigin,
-        viewportHeight: Int
-    ) -> [(index: Int, row: SelectableListRow<SelectionValue>)] {
-        var result: [(Int, SelectableListRow<SelectionValue>)] = []
-        // A line-granularity top clip hides the first `clip` lines of the top
-        // row, freeing that many lines for content further down.
-        var linesUsed = -origin.topClip
-        var currentIndex = origin.offset
-
-        // Only these rows are materialised — `source.row(at:)` builds (and
-        // renders) the content box on demand and memoises it.
-        while currentIndex < source.count && linesUsed < viewportHeight {
-            let row = source.row(at: currentIndex)
-            let rowHeight = row.buffer.height
-
-            if linesUsed + rowHeight <= viewportHeight {
-                result.append((currentIndex, row))
-                linesUsed += rowHeight
-                currentIndex += 1
-            } else {
-                // The row that straddles the remaining budget enters the
-                // window under EITHER granularity, and the renderer clips its
-                // tail: the viewport fills exactly. What granularity decides is
-                // the size of a scroll STEP and where the TOP may rest — held
-                // to whole rows at the bottom too, the viewport underfilled
-                // whenever the visible rows didn't sum to the budget, and the
-                // blank lines that left read as the list truncating itself.
-                //
-                // The clip is what makes this safe: without it the over-emitted
-                // row met the container's blind bottom clamp, which ate
-                // whatever came last — the "▼ N more below" indicator, or the
-                // tail of the bottom row on the scrollbar path.
-                result.append((currentIndex, row))
-                break
-            }
-        }
-
-        return result
     }
 
     // MARK: - Row Rendering

@@ -59,7 +59,7 @@ extension ItemListHandler {
         // hovering drag's landing slot are the same situation.
         //
         // The cost of the exclusion is that offsets 0 and 1 are then BOTH
-        // reachable while drawing the same picture (`resolvedWindowOrigin`
+        // reachable while drawing the same picture (`ScrollWindowOrigin.absorbing`
         // absorbs the difference). Everything derived from the offset has to
         // pick a side: the indicators count from `drawnOffset` and a page is
         // measured from it, while steps stay on `scrollOffset` — which is what
@@ -72,47 +72,6 @@ extension ItemListHandler {
             scrollGranularity == .line && (scrollTopClipLines > 0 || firstRowHeight() > 1)
         guard !restingMidRow else { return }
         scrollOffset = 0
-    }
-
-    /// The origin the viewport is DRAWN from this frame: the scroll offset and
-    /// top clip after absorbing any hidden content an "▲ N more" indicator
-    /// would cost more to announce than it hides.
-    ///
-    /// An indicator spends a line to report that content is hidden. Where no
-    /// more lines are hidden than the indicator itself costs, that is pure
-    /// loss — it says "1 more row above" in the very line the content would
-    /// have occupied (and calls a single clipped LINE a row while it is at
-    /// it). The window starts at the un-clipped origin instead and shows the
-    /// content; the freed indicator line pays for it exactly, so nothing below
-    /// moves.
-    ///
-    /// Resolution only, never a state change — which is why this is a query
-    /// and ``settleRestingOffset(overflowing:drawsTextIndicators:firstRowHeight:)``
-    /// is a mutation. The handler must keep counting fine steps: a clip
-    /// snapped back to zero would be re-made by the next step and snapped
-    /// again, stalling the wheel at the top forever. Only the drawing absorbs
-    /// it.
-    ///
-    /// Only an offset of 0 or 1 can qualify (every row is at least one line),
-    /// which keeps this O(1) — no walking a tall list's rows.
-    ///
-    /// - Parameter firstRowHeight: Row 0's height in lines, consulted only at
-    ///   offset 1, hence `@autoclosure`: a `List` resolves it by building the
-    ///   row, not worth doing on the frames that fail the offset test first.
-    /// - Returns: The offset and top clip to draw from. Callers must use BOTH
-    ///   for the rows, the indicators, the published bands and the click
-    ///   mapping — a renderer that draws from the absorbed origin while the
-    ///   hit test measures from the raw one puts every row a line off its band.
-    ///   Publish the result to ``ItemListHandler/drawnOffset`` as well: the
-    ///   indicator counts and the page-sized jumps are measured from it, and
-    ///   they cannot see this call. The `List` and `Table` both do, right where
-    ///   they sync `viewportHeight`.
-    func resolvedWindowOrigin(
-        firstRowHeight: @autoclosure () -> Int
-    ) -> (offset: Int, topClip: Int) {
-        ScrollWindowOrigin.absorbing(
-            offset: scrollOffset, topClip: scrollTopClipLines,
-            firstRowHeight: firstRowHeight())
     }
 
     /// Re-resolves this frame's overscroll allowance (§1.5) — how far past its
@@ -152,9 +111,41 @@ extension ItemListHandler {
 /// hiding the very line it was reporting until it learned it too).
 enum ScrollWindowOrigin {
 
-    /// See ``ItemListHandler/resolvedWindowOrigin(firstRowHeight:)``, which is
-    /// how a handler-holding caller asks. `Table` calls this directly, with an
-    /// offset it has already clamped into its row range.
+    /// The origin a viewport is DRAWN from: the offset and top clip after
+    /// absorbing any hidden content an "▲ N more" indicator would cost more to
+    /// announce than it hides.
+    ///
+    /// An indicator spends a line to report that content is hidden. Where no more
+    /// lines are hidden than the indicator itself costs, that is pure loss — it
+    /// says "1 more row above" in the very line the content would have occupied
+    /// (and calls a single clipped LINE a row while it is at it). The window
+    /// starts at the un-clipped origin instead and shows the content; the freed
+    /// indicator line pays for it exactly, so nothing below moves.
+    ///
+    /// Resolution only, never a state change — which is why this is a query and
+    /// ``ItemListHandler/settleRestingOffset(overflowing:drawsTextIndicators:firstRowHeight:)``
+    /// is a mutation. The handler must keep counting fine steps: a clip snapped
+    /// back to zero would be re-made by the next step and snapped again, stalling
+    /// the wheel at the top forever. Only the drawing absorbs it.
+    ///
+    /// Only an offset of 0 or 1 can qualify (every row is at least one line),
+    /// which keeps this O(1) — no walking a tall list's rows.
+    ///
+    /// Callers must use BOTH halves of the answer — for the rows, the indicators,
+    /// the published bands and the click mapping. A renderer that draws from the
+    /// absorbed origin while the hit test measures from the raw one puts every row
+    /// a line off its band, and publish it to ``ItemListHandler/drawnOffset`` too:
+    /// the indicator counts and the page-sized jumps are measured from there and
+    /// cannot see this call.
+    ///
+    /// ``ScrollRowWindow/resolve(scrollOffset:count:contentHeight:topClip:drawsTextIndicators:height:)``
+    /// is the only caller, and it clamps the offset into the row range first. It
+    /// used to be reached through an `ItemListHandler` convenience as well, which
+    /// went when the three window rules became one and left it with no callers.
+    ///
+    /// - Parameter firstRowHeight: Row 0's height in lines, consulted only at
+    ///   offset 1, hence `@autoclosure`: a `List` resolves it by building the row,
+    ///   which is not worth doing on the frames that fail the offset test first.
     static func absorbing(
         offset: Int, topClip: Int, firstRowHeight: @autoclosure () -> Int
     ) -> (offset: Int, topClip: Int) {
