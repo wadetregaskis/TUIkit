@@ -163,8 +163,15 @@ extension ASCIIPalette {
     /// This palette's index, built on first use and shared by every palette
     /// with these colours — so a `.shades(256)` made afresh each frame does
     /// not build one each frame, and every copy of one palette shares one.
-    var searchIndex: SearchIndex {
-        search.index(for: self)
+    /// `nil` for a palette with more entries than a byte can name, exactly as
+    /// ``quantisationTable()`` declines one and for the same reason: the
+    /// candidate lists store an entry index in a `UInt8`, so building an index
+    /// for the 257th entry trapped on `UInt8(index)` — on the FIRST pixel
+    /// looked up, taking the app with it. Those palettes take the exact walk
+    /// instead, which is what the index is measured against.
+    var searchIndex: SearchIndex? {
+        guard entries.count <= Self.indexableEntryLimit else { return nil }
+        return search.index(for: self)
     }
 
     /// The per-instance memo, and the process-wide cache behind it.

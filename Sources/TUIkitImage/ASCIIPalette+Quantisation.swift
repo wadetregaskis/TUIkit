@@ -20,6 +20,18 @@ extension ASCIIPalette {
     /// The number of cells in a ``quantisationTable()``.
     static let quantisationCells = 1 << (3 * quantisationBits)
 
+    /// The most entries a structure that names one with a byte can hold.
+    ///
+    /// Not a limit on palettes — an app may spell out as many colours as it
+    /// likes. It is a limit on the two ACCELERATORS, which both store an entry
+    /// index in a `UInt8`: ``quantisationTable()``'s answers, which have
+    /// declined above it from the start, and ``SearchIndex``'s candidate lists,
+    /// which did not and so trapped on `UInt8(index)` for the 257th entry.
+    /// Above it both decline and the search falls back to the exact walk they
+    /// are measured against, so the bound costs speed and not one answer.
+    /// Nothing built in is near it: ``ansi256`` is 240 entries.
+    static let indexableEntryLimit = Int(UInt8.max) + 1
+
     /// Which of the 32 buckets each byte value falls in, and the byte that
     /// best represents each bucket.
     ///
@@ -92,7 +104,7 @@ extension ASCIIPalette {
     ///
     /// The character renderer never consults this.
     func quantisationTable() -> QuantisationTable? {
-        guard entries.count <= 256 else { return nil }
+        guard entries.count <= Self.indexableEntryLimit else { return nil }
         // The terminal's own 256 are a constant, so their table is one too —
         // see ``terminalQuantisationTable``. Asked by equality rather than by a
         // flag on the palette, because that is the true statement: the table is

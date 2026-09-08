@@ -112,8 +112,9 @@ struct PaletteSearchIndexTests {
     }
 
     @Test("The lists are short: a few candidates a cell, not the palette")
-    func listsAreShort() {
-        let index = ASCIIPalette.ansi256.searchIndex
+    func listsAreShort() throws {
+        // 240 entries, so it is comfortably within the bound and has an index.
+        let index = try #require(ASCIIPalette.ansi256.searchIndex)
         let perCell = Double(index.candidateCount) / Double(ASCIIPalette.quantisationCells)
         #expect(perCell < 12, "\(perCell) candidates a cell against 240 entries")
     }
@@ -127,5 +128,31 @@ struct PaletteSearchIndexTests {
         let another = ASCIIPalette.shades(256)
         #expect(one.searchIndex === another.searchIndex, "the same colours share one index across instances")
         #expect(one.searchIndex !== ASCIIPalette.ansi256.searchIndex)
+    }
+
+    /// A palette with more entries than a byte can name declines an index
+    /// rather than truncating one, and still answers exactly.
+    ///
+    /// The candidate lists store an entry index in a `UInt8`, and nothing
+    /// bounded the palette — so `UInt8(index)` trapped for the 257th entry,
+    /// on the FIRST pixel ever looked up, taking the app with it. The sibling
+    /// accelerator has declined above the same bound from the start; that is
+    /// pinned by `PaletteTableFidelityTests.oversizePaletteDeclines`, and this
+    /// is its twin.
+    @Test("A palette too large to index declines one, and still answers exactly")
+    func oversizePaletteDeclinesAnIndex() {
+        // 300 distinct colours: past the bound, and no two alike, so the walk
+        // has a single unambiguous answer to agree with.
+        let huge = ASCIIPalette((0..<300).map { .rgb(UInt8($0 % 256), UInt8($0 / 256), 0) })
+        #expect(huge.entries.count > ASCIIPalette.indexableEntryLimit)
+        #expect(huge.searchIndex == nil, "it must decline rather than truncate an index")
+        // The point of declining: the answers are still right. Before the
+        // bound this line never ran — the lookup trapped.
+        for pixel in [
+            RGBA(r: 0, g: 0, b: 0, a: 255), RGBA(r: 255, g: 255, b: 255, a: 255),
+            RGBA(r: 40, g: 1, b: 0, a: 255), RGBA(r: 200, g: 0, b: 0, a: 255),
+        ] {
+            #expect(huge.nearestIndex(to: pixel) == Self.walked(huge, pixel))
+        }
     }
 }
