@@ -129,6 +129,29 @@ private struct MenuColumnPlan {
     var scrolls = false
 }
 
+/// The width a row of a menu `menuWidth` cells wide is actually drawn into — the
+/// one owner of that arithmetic, because it is the number every row pads its own
+/// label to and a row that believes a cell it does not have is clipped there.
+///
+/// The chrome is 6 cells, not 4: `.bordered()` is a `ContainerView`, which insets
+/// its content by one cell on each side on top of its two border columns, and
+/// ``menuColumnBody(_:)``'s `.padding(.horizontal, 1)` adds two more. Getting
+/// this wrong told the rows they had two cells they did not, which the border
+/// then clipped — invisible while a row was just a left-aligned label, fatal
+/// once a row has something at its trailing edge.
+///
+/// - Parameters:
+///   - menuWidth: The width the whole menu, border included, draws at.
+///   - scrollbarColumn: Whether a `ScrollView`'s vertical bar has taken a
+///     trailing column out of the interior as well — true only on the scrolled
+///     arm, and only when that arm's bar is the reserving kind. Ask
+///     ``EnvironmentValues/verticalScrollIndicators(overflowing:)``, which is
+///     what the `ScrollView` resolves its own bar from, rather than deriving it
+///     again here.
+private func menuRowWidth(menuWidth: Int, scrollbarColumn: Bool) -> Int {
+    max(1, menuWidth - 6 - (scrollbarColumn ? 1 : 0))
+}
+
 /// Sizes `menuView` to its own content and prepares the context it draws in.
 @MainActor
 private func planMenuColumn(
@@ -158,13 +181,10 @@ private func planMenuColumn(
     // AFTER the measure: a row that knew its width up front would report it, and
     // the menu would size itself from its own guess.
     //
-    // The chrome is 6 cells, not 4: `.border()` is a `ContainerView`, which
-    // insets its content by one cell on each side on top of its two border
-    // columns, and the `.padding(.horizontal, 1)` above adds two more. Getting
-    // this wrong told the rows they had two cells they did not, which the
-    // border then clipped — invisible while a row was just a left-aligned
-    // label, fatal once a row has something at its trailing edge.
-    sized.environment.menuRowWidth = max(1, menuWidth - 6)
+    // Without the scrollbar column: whether there IS one is not known until the
+    // overflow probe below has run, and the probe needs a row width to run at.
+    // The scrolled arm re-states it.
+    sized.environment.menuRowWidth = menuRowWidth(menuWidth: menuWidth, scrollbarColumn: false)
     // For the Return verb: a row of an open pop-up is a row of a menu too.
     sized.environment.isInsideMenu = true
     // Everything from here down is a DIFFERENT question from the hug above, and
@@ -223,6 +243,27 @@ private func planMenuColumn(
     guard drawnHeight > capHeight else { return fits }
     var scrolls = fits
     scrolls.scrolls = true
+    // The scrolled arm slips a `ScrollView` between the padding and the border,
+    // and a vertical scrollbar is a COLUMN out of its viewport for the bar's
+    // whole height — so a row there gets one cell less than the hugging arm's
+    // chrome accounts for. Told otherwise, every row drew one cell too wide and
+    // the border clipped the last of them: a menu whose rows carry key
+    // equivalents lost the entire hint the moment it began to scroll, because a
+    // one-character shortcut is one cell of hint behind one cell of gap.
+    //
+    // `overflowing: true` because taking this arm IS the overflow — `drawnHeight`
+    // cleared the cap. A subtree under `.scrollIndicators(.hidden)` or
+    // `.scrollIndicatorStyle(.text)` reserves no column and comes back false,
+    // which is the same answer the `ScrollView` will reach.
+    let scrollbarColumn = scrolls.sized.environment
+        .verticalScrollIndicators(overflowing: true).bar
+    guard scrollbarColumn else { return scrolls }
+    scrolls.sized.environment.menuRowWidth = menuRowWidth(
+        menuWidth: menuWidth, scrollbarColumn: true)
+    // …and, having changed what a row measures to, say so, or the `ScrollView`'s
+    // own extent walk can be answered from the probe just above, which asked the
+    // same rows at the wider chrome. See ``RenderContext/measureGeneration``.
+    scrolls.sized = scrolls.sized.invalidatingMeasureMemo()
     return scrolls
 }
 
