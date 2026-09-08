@@ -307,39 +307,6 @@ private struct BugCaseRow: View {
     }
 }
 
-/// One row in the browse list: cluster, codepoint, name.
-private struct EmojiRow: View {
-    let entry: EmojiEntry
-
-    var body: some View {
-        HStack(spacing: 2) {
-            Text(entry.cluster)
-            Text(entry.codepointLabel)
-                .foregroundStyle(.palette.foregroundSecondary)
-                .dim()
-            Text(entry.name)
-        }
-    }
-}
-
-/// One row in the SF Symbols list: the glyph, its codepoint, and its name. The
-/// glyph is a Plane-16 Private-Use character — 2 cells wide with Terminal.app
-/// cursor-advance compensation applied — so a cleanly-aligned row is proof that
-/// TUIkit resolved the name and laid the symbol out correctly.
-private struct SymbolRow: View {
-    let entry: SymbolEntry
-
-    var body: some View {
-        HStack(spacing: 2) {
-            Text(entry.glyph)
-            Text(entry.codepointLabel)
-                .foregroundStyle(.palette.foregroundSecondary)
-                .dim()
-            Text(entry.name)
-        }
-    }
-}
-
 // MARK: - Model
 
 private struct EmojiEntry: Identifiable, Equatable, Sendable {

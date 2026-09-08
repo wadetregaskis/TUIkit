@@ -62,14 +62,6 @@ enum ImageDemoHelpers {
     /// carries no shape calibration).
     static func usesShape(_ charset: Charset) -> Bool { charset != .custom }
 
-    /// The glyph-count knob applies to the sizeable charsets.
-    static func usesGlyphCount(_ charset: Charset) -> Bool {
-        switch charset {
-        case .ascii, .unicode: return true
-        case .blocks, .custom: return false
-        }
-    }
-
     /// The block-resolution knob applies to non-shape blocks (shape-aware
     /// blocks match over the block glyph repertoire instead).
     static func usesBlockStyle(_ charset: Charset, shapeAware: Bool) -> Bool {

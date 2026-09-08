@@ -295,13 +295,4 @@ extension SplitViewPage {
         guard let messageId = selectedMessage else { return nil }
         return Message.samples(for: selectedFolder ?? "inbox").first { $0.id == messageId }
     }
-
-    fileprivate var visibilityLabel: String {
-        switch visibility {
-        case .all: return L("page.splitView.visibilityAll")
-        case .doubleColumn: return L("page.splitView.visibilityDouble")
-        case .detailOnly: return L("page.splitView.visibilityDetail")
-        default: return L("page.splitView.visibilityAuto")
-        }
-    }
 }

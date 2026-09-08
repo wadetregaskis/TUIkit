@@ -59,7 +59,6 @@ struct Cluster: Identifiable {
 
 enum Clusters {
 
-    /// Every corpus cluster, in corpus order.
     /// The column every closing bar should sit in: the WIDEST claim in the
     /// corpus under the traits in force — recomputed per read, because the
     /// "Render as" and "Custom" screens change the traits mid-run. A constant
@@ -71,6 +70,7 @@ enum Clusters {
         all.map { $0.character.terminalWidth }.max() ?? 2
     }
 
+    /// Every corpus cluster, in corpus order.
     static let all: [Cluster] = TerminalWidthCorpus.all.map { entry in
         Cluster(
             name: entry.id,
@@ -78,12 +78,4 @@ enum Clusters {
             text: entry.text,
             note: TerminalWidthCorpus.categoryNotes[entry.category] ?? "")
     }
-
-    /// One representative per category — for screens where the whole corpus
-    /// would bury the signal, like the class-by-class quirk table. The representative is
-    /// the category's first corpus entry.
-    static let representatives: [Cluster] = {
-        var seen = Set<String>()
-        return all.filter { seen.insert($0.category).inserted }
-    }()
 }
