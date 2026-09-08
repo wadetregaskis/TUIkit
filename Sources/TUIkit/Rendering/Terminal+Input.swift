@@ -682,19 +682,6 @@ extension Terminal {
         return nil
     }
 
-    /// Reads raw event bytes — back-compat for the
-    /// ``TerminalProtocol`` interface. New code should prefer
-    /// ``readEvent()`` which gives you parsed events directly and
-    /// handles bracketed paste, mouse reports, and the bare-Esc
-    /// disambiguation in one place.
-    ///
-    /// - Returns: One event's bytes, or `[]` if no complete event
-    ///   is buffered.
-    func readBytes(maxBytes: Int = 32) -> [UInt8] {
-        if input.isEmpty { appendDrain() }
-        return tryExtractRegularEvent() ?? []
-    }
-
     /// Reads a key event from the terminal — back-compat for the
     /// ``TerminalProtocol`` interface. New code should call
     /// ``readEvent()`` and switch on the returned ``TerminalInput``.

@@ -127,10 +127,14 @@ public enum ViewConstants {
 
     /// Accent opacity for the background tint of a control while
     /// the cursor is hovering over it (not focused, not pressed).
-    /// Sits between the static unfocused tint
-    /// (``focusBorderDim`` = 0.20) and the focused max-pulse
-    /// (`buttonCapPulseBright` = 0.45) so the affordance is
-    /// visible without competing with focus itself.
+    /// Sits between the static unfocused tint (``focusBorderDim`` = 0.20) and
+    /// the focused row-background fill (``focusPulseMax`` = 0.50), so the
+    /// affordance is visible without competing with focus itself.
+    ///
+    /// The upper anchor used to be named as a button CAP's bright pulse, at a
+    /// value neither the constant nor the name has any more: it was renamed and
+    /// then deleted, and a cap is no longer bounded for readability at all — so
+    /// it was never the right thing to bracket a background tint against.
     public static let hoverBackground: Double = 0.32
 
     // MARK: - Interaction

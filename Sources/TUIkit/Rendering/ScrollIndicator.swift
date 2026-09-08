@@ -104,10 +104,6 @@ func localizedInteger(_ value: Int, locale: Locale = .current) -> String {
 ///     windowed stack's unmeasured remainder) — rendered as "~5.4K" so the
 ///     label doesn't assert precision the number doesn't have. Exact counts
 ///     (`List`/`Table` rows, fully measured content) keep full precision.
-///   - emphasis: When non-`nil`, the arrow and label are drawn in this colour
-///     instead of the quiet `foregroundTertiary` — used to PULSE the
-///     indicators (a scrollbar-less scrollable's focus cue). `nil` keeps the
-///     resting appearance.
 ///   - locale: Formats the count's grouping / decimal separators — the app's
 ///     current language locale, so the number reads "12,000" (en) / "12.000"
 ///     (de) / "12 000" (fr). Defaults to `.current`.
@@ -140,6 +136,13 @@ func renderScrollIndicator(
 /// that centre the indicator are not part of the animation, and repainting them
 /// on a clock would be bytes spent to redraw spaces. Its `offsetY` is 0 — the
 /// caller knows which row it landed on and shifts it there.
+///
+/// - Parameter cycle: The whole emphasis cycle of a focused scrollable. It
+///   does both jobs at once: its current phase colours the line drawn now, and
+///   the cycle itself becomes the ``AnimatedCellRun`` the run loop replays, so
+///   the pulse costs no further render passes. `nil` draws the resting
+///   appearance and yields no run. It replaced a single `emphasis:` colour,
+///   which could only say what to draw this instant.
 @MainActor
 func renderScrollIndicator(
     direction: ScrollIndicatorDirection,

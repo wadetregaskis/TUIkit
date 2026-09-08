@@ -103,7 +103,14 @@ extension PreferenceValues {
 
 // MARK: - Preference Storage
 
-/// Thread-local storage for collecting preferences during rendering.
+/// The stack of preference values collected during one render pass.
+///
+/// Not thread-local, which is what this said and what the `@unchecked Sendable`
+/// might otherwise be taken to mean: there is ONE instance per `TUIContext`,
+/// reached by every view through the environment, and it is unsynchronised.
+/// What makes that sound is that `push`, `pop` and `setValue` only ever run on
+/// the render path, which is main-actor isolated — the same terms, for the same
+/// reason, as `LifecycleManager`.
 public final class PreferenceStorage: @unchecked Sendable {
     /// Stack of preference values for nested rendering.
     private var stack: [PreferenceValues] = [PreferenceValues()]

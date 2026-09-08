@@ -1366,11 +1366,6 @@ where Value.ID: Hashable {
         return height
     }
 
-    /// The furthest the table can scroll: the largest first-visible row such that
-    /// the remaining rows still fill the content area (reserving a line for the
-    /// "above" indicator that shows whenever the first visible row isn't row 0 —
-    /// a table drawing no such line, because it has a bar or no indicator at
-    /// all, reserves nothing and can reach its true last screenful).
     /// Whether the "N more above / below" lines are this table's indicator:
     /// not when a scrollbar marks the hidden rows instead, and not when the
     /// view's indicators are hidden outright.
@@ -1420,6 +1415,11 @@ where Value.ID: Hashable {
         return furthest
     }
 
+    /// The furthest the table can scroll: the largest first-visible row such that
+    /// the remaining rows still fill the content area (reserving a line for the
+    /// "above" indicator that shows whenever the first visible row isn't row 0 —
+    /// a table drawing no such line, because it has a bar or no indicator at
+    /// all, reserves nothing and can reach its true last screenful).
     private func maxScrollOffset(
         count: Int, contentHeight: Int, drawsTextIndicators: Bool = true,
         height: (Int) -> Int
@@ -2375,9 +2375,11 @@ where Value.ID: Hashable {
     /// instead, three hundred lines above, having been separated from its
     /// function by an edit that left two doc blocks touching. That is not a
     /// tidiness point: the rule it states — bands must include the slide — is
-    /// the one `multiLineRowBands` does not follow, and it was added
-    /// while the rule was sitting on someone else's function where nobody
-    /// writing a second publisher would read it.
+    /// the one `multiLineRowBands` was written without, and it was written that
+    /// way while the rule was sitting on someone else's function where nobody
+    /// writing a second publisher would read it. (Fixed in 5d9fbaf2, which put
+    /// both views on one band builder; kept here as the reason the rule lives
+    /// on the function it governs.)
     @discardableResult
     private func publishRowBands(
         handler: ItemListHandler<Value.ID>,

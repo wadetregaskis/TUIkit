@@ -314,9 +314,10 @@ struct AlertButtonRow: View, Renderable {
             resultRegions.append(
                 contentsOf: buffer.shiftedHitTestRegions(byX: xCursor, y: 0))
             // …and its animated runs, so the focused button's caps keep
-            // breathing once the dialog composes the row. See the note in
-            // `_ButtonRowCore`: a dropped run freezes an animation rather than
-            // removing it.
+            // breathing once the dialog composes the row. See
+            // `FrameBuffer.replacingLines`, which states the rule and names
+            // `AnimatedRunPropagationTests`: a dropped run freezes an animation
+            // rather than removing it, so it reads as a win in a diff.
             resultRuns.append(contentsOf: buffer.shiftedAnimatedCells(byX: xCursor, y: 0))
             resultOverlays.append(contentsOf: buffer.shiftedOverlays(byX: xCursor, y: 0))
             resultFaded.append(contentsOf: buffer.shiftedOpacityRegions(byX: xCursor, y: 0))
@@ -394,9 +395,9 @@ struct AlertButtonColumn: View, Renderable {
                 lines.append(pad + line)
             }
             // Lift each button's hit-test regions — and its animated runs — to
-            // its position in the column. See `_ButtonRowCore` on why the runs
-            // are not optional: dropping one freezes the caps rather than
-            // merely failing to animate them.
+            // its position in the column. See `FrameBuffer.replacingLines` on
+            // why the runs are not optional: dropping one freezes the caps
+            // rather than merely failing to animate them.
             regions.append(
                 contentsOf: buffer.shiftedHitTestRegions(byX: leftPadding, y: startY))
             runs.append(contentsOf: buffer.shiftedAnimatedCells(byX: leftPadding, y: startY))

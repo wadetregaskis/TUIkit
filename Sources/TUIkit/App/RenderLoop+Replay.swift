@@ -90,7 +90,7 @@ extension RenderLoop {
     /// line it sits on, and the result goes through the ordinary content diff —
     /// which, seeing only those cells differ, emits only those cells.
     ///
-    /// - Parameter steps: The current step of each clock being advanced.
+    /// - Parameter elapsed: How far each clock being advanced has moved.
     /// - Returns: `true` if the tick was served. `false` means the caller must
     ///   render: there is no frame to patch yet, or nothing on screen animates
     ///   on those clocks.

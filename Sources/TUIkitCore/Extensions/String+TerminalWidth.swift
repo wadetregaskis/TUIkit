@@ -48,17 +48,6 @@ enum EscapeScanState {
 // MARK: - Terminal Character Width
 
 extension Character {
-    /// The display width of this character in a terminal (number of cells).
-    ///
-    /// Most characters occupy 1 cell. East Asian wide characters (CJK, most
-    /// emoji) occupy 2 cells. Zero-width characters (combining marks,
-    /// variation selectors, ZWJ) occupy 0 cells.
-    /// Whether `sv` is a scalar that adds no terminal-cell width when it
-    /// appears as a *non-first* scalar of a grapheme cluster: a variation
-    /// selector, a combining mark, a zero-width joiner/space, or a tag. Used
-    /// by ``terminalWidth`` to tell a base-plus-accent cluster (width = the
-    /// base's) from a genuine multi-glyph sequence like a ZWJ emoji or a flag
-    /// (width 2). Mirrors the single-scalar zero-width ranges above.
     /// Whether `scalar` adds no cells — the range check above, plus the
     /// general rule it only ever approximated.
     ///
@@ -119,6 +108,12 @@ extension Character {
         return false
     }
 
+    /// Whether `sv` is a scalar that adds no terminal-cell width when it
+    /// appears as a *non-first* scalar of a grapheme cluster: a variation
+    /// selector, a combining mark, a zero-width joiner/space, or a tag. Used
+    /// by ``terminalWidth`` to tell a base-plus-accent cluster (width = the
+    /// base's) from a genuine multi-glyph sequence like a ZWJ emoji or a flag
+    /// (width 2). Mirrors the single-scalar zero-width ranges above.
     static func isWidthNeutralExtraScalar(_ sv: UInt32) -> Bool {
         switch sv {
         case 0x200B, 0x200C, 0x200D, 0xFEFF, 0x00AD:  // ZWSP/ZWNJ/ZWJ/BOM, soft hyphen
@@ -848,13 +843,6 @@ extension String {
         return background
     }
 
-    /// How many parameters after `index` are the arguments of a `;`-form
-    /// extended-colour introducer (38 / 48 / 58).
-    ///
-    /// The selector says how many follow: `5` (indexed) takes one, `2`
-    /// (truecolor) takes three. Anything else — a truncated sequence, or a
-    /// selector this does not know — takes none, so an unparseable tail is
-    /// walked normally rather than swallowing the rest of the sequence.
     /// Whether SGR styling is still in force at the end of this string — i.e.
     /// whether text appended to it would inherit colour or attributes.
     ///
@@ -884,6 +872,13 @@ extension String {
             .allSatisfy { $0.isEmpty || Int($0) == 0 }
     }
 
+    /// How many parameters after `index` are the arguments of a `;`-form
+    /// extended-colour introducer (38 / 48 / 58).
+    ///
+    /// The selector says how many follow: `5` (indexed) takes one, `2`
+    /// (truecolor) takes three. Anything else — a truncated sequence, or a
+    /// selector this does not know — takes none, so an unparseable tail is
+    /// walked normally rather than swallowing the rest of the sequence.
     private static func extendedColorArgumentCount(
         after index: Int, in parameters: [Substring]
     ) -> Int {
