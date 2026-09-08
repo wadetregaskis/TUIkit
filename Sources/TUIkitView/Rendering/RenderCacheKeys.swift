@@ -97,6 +97,21 @@ extension RenderCache {
         /// carry the same view type, the same value bytes and the same two
         /// widths — and it would show as one frame sized from a twin, never as
         /// aliased state, because nothing here outlives the pass.
+        /// The identity's structural hash — with the measure generation folded
+        /// in when there is one, which is almost never (see
+        /// ``RenderContext/measureGeneration``).
+        ///
+        /// Folded rather than carried beside: this key is probed around two
+        /// thousand times a frame and copied on every probe, and an eighth field
+        /// grew it by a word — measured **+2.1% on the `anyview` stress
+        /// scenario**, the shape with the most probes, for a field that is 0 for
+        /// every view in almost every pass. Folded it costs one compare and one
+        /// mix, at the one call site, only when a container has opted in.
+        ///
+        /// The bargain is the one this field already strikes: a wrong answer
+        /// needs two distinct (identity, generation) pairs to hash identically
+        /// WITHIN one pass and to carry the same view type, the same value bytes
+        /// and the same two widths.
         let identityHash: Int
         let effectiveWidth: Int
         let availableWidth: Int

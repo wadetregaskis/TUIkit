@@ -541,7 +541,7 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // measurement paths (and off the cost of minting one per call).
     if let cache = context.renderCache, let tracker = context.environment.volatileReadTracker {
         let key = RenderCache.MeasureKey(
-            identityHash: context.identity.structuralHash,
+            identityHash: measureIdentityHash(context),
             effectiveWidth: proposal.width ?? context.availableWidth,
             availableWidth: context.availableWidth,
             hasExplicitWidth: context.hasExplicitWidth,
@@ -587,6 +587,29 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
         return size
     }
     return measureChildUncached(view, proposal: proposal, context: context)
+}
+
+/// The identity half of a ``RenderCache/MeasureKey``: the identity's structural
+/// hash, with ``RenderContext/measureGeneration`` folded in when a container has
+/// set one.
+///
+/// Folded here rather than carried as its own key field because the key is
+/// probed around two thousand times a frame and copied on every probe: an eighth
+/// field grew it by a word and cost **+2.1% on the `anyview` stress scenario**,
+/// for a value that is 0 for every view in almost every pass. This way the
+/// common path is one integer compare.
+/// Branchless, and deliberately: generation 0 multiplies to zero and the xor is
+/// the identity, so the common path is one multiply and one xor with no
+/// prediction to get wrong. A `guard generation != 0` here measured +1.5% on the
+/// `modifiers` stress scenario, which is the shape with the most `measureChild`
+/// calls per row.
+@inline(__always)
+private func measureIdentityHash(_ context: RenderContext) -> Int {
+    let structural = UInt64(bitPattern: Int64(context.identity.structuralHash))
+    // The golden-ratio odd constant: each of the 255 non-zero generations gets a
+    // distinct, well-spread mask, and generation 0 gets none at all.
+    let generation = UInt64(context.measureGeneration) &* 0x9E37_79B9_7F4A_7C15
+    return Int(truncatingIfNeeded: structural ^ generation)
 }
 
 /// Hashes a view value's raw storage, to tell two values of one type apart

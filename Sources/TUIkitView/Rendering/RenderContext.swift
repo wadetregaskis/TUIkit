@@ -97,6 +97,55 @@ public struct RenderContext {
     /// Views should skip side-effects like focus registration when this is true.
     public var isMeasuring: Bool = false
 
+    /// Which generation of the environment a measurement belongs to — the
+    /// measure memo's only handle on an environment change.
+    ///
+    /// ``RenderCache/MeasureKey`` deliberately carries no environment: it keys
+    /// on the identity, the two widths, the view's type and a hash of the view
+    /// value's raw bytes, and nothing else. That is sound for the case it was
+    /// built for, where the environment is fixed for the pass. It is NOT sound
+    /// for a container that ASSIGNS an environment value directly —
+    /// `context.environment.foo = x`, which several of them do — between two
+    /// measurements of one subtree at one identity and one width. Those are two
+    /// questions, and the key cannot tell them apart, so the memo answers the
+    /// second with the first one's size.
+    ///
+    /// That is not hypothetical; it is the shape of two reverted commits. A
+    /// menu measures its rows twice: hugging, to learn its width, and again at
+    /// that width, because a row drawn into the interior less its hint column
+    /// can wrap where the hug did not. On the arm where the hug wanted every
+    /// cell it was offered the two asks are at the SAME width — so the reflow
+    /// was answered by the hug, at `_ButtonCore`, whose size depends on the
+    /// `ButtonStyle` it reads from the environment. Twenty stale serves on one
+    /// walk of the Example, and the fix that read the reflow height silently did
+    /// nothing wherever the memo hit.
+    ///
+    /// This is the mechanism by which such a container says so. It is
+    /// deliberately NOT automatic — a digest of the whole environment would be
+    /// paid for on every one of the ~2,000 key probes a frame, by every view,
+    /// to serve the handful of containers that need it. Opting in costs one
+    /// multiply and one xor into a key hash that is computed anyway.
+    ///
+    /// It is scoped by the copy: only the subtree handed the bumped context sees
+    /// the new generation, so a menu invalidates its own rows and nothing else.
+    /// The sibling of this idea one memo over is
+    /// ``environmentApplicationDepth``, which disambiguates the BUFFER memo's
+    /// environment slots for the same underlying reason.
+    ///
+    /// Bump it with ``invalidatingMeasureMemo()``.
+    ///
+    /// A `UInt8`, declared here among the flags, because `RenderContext` is
+    /// copied down the whole tree and an `Int` grew it from 97 bytes to 105 —
+    /// past the 104-byte stride, so every context copy in the framework got a
+    /// word wider. That measured **+2.4% on `anyview` and +1.4% on
+    /// `modifiers`**, the two shapes that pass the most contexts. In the flag
+    /// run it lands in padding that was already there and the stride does not
+    /// move. It wraps (``invalidatingMeasureMemo()`` uses `&+`), which is
+    /// harmless: 256 opt-in bumps on one root-to-leaf path is not a shape that
+    /// exists, and the consequence of a wrap would be the stale serve that is
+    /// the status quo everywhere this is not called.
+    public var measureGeneration: UInt8 = 0
+
     /// How many environment applications lie between the root and here.
     ///
     /// The disambiguator for `RenderCache.EnvironmentSlot`: two modifiers
@@ -110,6 +159,20 @@ public struct RenderContext {
     /// `TintModifier`); plain `setting()` writes do not note, so they have
     /// no slot to disambiguate.
     public var environmentApplicationDepth: Int = 0
+
+    /// This context, with every measurement taken so far out of the memo's
+    /// reach for the subtree below.
+    ///
+    /// Call it immediately after assigning an environment value that changes
+    /// what the subtree measures to — see ``measureGeneration``. Answers taken
+    /// AFTER this share the new generation, so the work done under it is still
+    /// reused normally; what is put out of reach is only the answers from
+    /// before the environment changed.
+    public func invalidatingMeasureMemo() -> Self {
+        var copy = self
+        copy.measureGeneration &+= 1
+        return copy
+    }
 
     /// The rectangle a `.gradientExtent(.subtree)` gradient spans, and where
     /// this view sits in it — `nil` when no such gradient is in force, which is
