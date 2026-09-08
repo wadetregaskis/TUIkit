@@ -27,12 +27,23 @@ private enum StateIndex {
 ///
 /// Re-using `ASCIIConverter` output across frames is safe whenever every
 /// input that influences the output is unchanged. The cache key spans the
-/// loaded image's pixel dimensions, the output cell footprint, and every
-/// styling environment value that the converter reads. A `_ImageCore`
+/// SOURCE, the loaded image's pixel dimensions, the output cell footprint, and
+/// every styling environment value that the converter reads. A `_ImageCore`
 /// only keeps the most-recent entry because each instance hosts one
 /// image; on a hit the cached `[String]` is returned without touching
 /// `ASCIIConverter.convert`.
 private struct ImageRenderCache: Equatable {
+    /// WHICH picture this was converted from — not merely how big it decoded.
+    ///
+    /// Pixel dimensions are not an identity. Two photographs, two icons, two
+    /// frames of one sequence are routinely the same size, so a source change
+    /// that lands on a same-size file re-decoded into an entry that still
+    /// "matched", and the view drew the picture it used to show for as long as
+    /// that identity lived. Carried for the same reason, and named the same
+    /// way, as ``TerminalImageSignature/source`` on the pixel path — which had
+    /// it from the start, so the same app switching pictures was correct on a
+    /// Kitty-graphics terminal and stale on every other one.
+    var source: ImageSource
     var rawImageWidth: Int
     var rawImageHeight: Int
     var width: Int
@@ -53,6 +64,7 @@ private struct ImageRenderCache: Equatable {
     /// Returns whether `self` was built from the same inputs as the
     /// pending render. Compares everything except the cached `lines`.
     func matches(  // swiftlint:disable:this function_parameter_count
+        source: ImageSource,
         rawImageWidth: Int, rawImageHeight: Int,
         width: Int, height: Int,
         characterSet: ASCIICharacterSet, shapeAware: Bool, colorMode: ASCIIColorMode,
@@ -77,6 +89,10 @@ private struct ImageRenderCache: Equatable {
             && self.contentMode == contentMode
             && self.aspectRatioOverride == aspectRatioOverride
             && self.cellAspect == cellAspect
+            // Last: the scalar comparisons above reject the frequent miss — a
+            // resize — before this one runs. It is the field that decides
+            // correctness, not the one that usually decides the answer.
+            && self.source == source
     }
 }
 
@@ -467,6 +483,7 @@ extension _ImageCore {
         let cacheKey = StateStorage.StateKey(identity: identity, propertyIndex: StateIndex.renderCache)
         let cacheBox: StateBox<ImageRenderCache?> = stateStorage.storage(for: cacheKey, default: nil)
         if let cache = cacheBox.value, cache.matches(
+            source: source,
             rawImageWidth: rawImage.width,
             rawImageHeight: rawImage.height,
             width: targetSize.width,
@@ -499,6 +516,7 @@ extension _ImageCore {
         let lines = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
 
         cacheBox.value = ImageRenderCache(
+            source: source,
             rawImageWidth: rawImage.width,
             rawImageHeight: rawImage.height,
             width: targetSize.width,
