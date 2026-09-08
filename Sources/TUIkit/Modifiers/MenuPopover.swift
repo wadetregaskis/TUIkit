@@ -76,19 +76,10 @@ func measureMenuColumn(
     let menuView = menuColumnFrame(items, borderColor: borderColor)
     let plan = planMenuColumn(menuView, context: context, capHeight: capHeight)
     guard !plan.scrolls else { return ViewSize.fixed(plan.width, capHeight) }
-    guard plan.isClamped else { return ViewSize.fixed(plan.width, plan.naturalHeight) }
-    // The hug did not fit the space it was offered, so the rows reflow into what
-    // they got and the natural height is not the one that gets drawn — a label
-    // that wrapped is two rows where the hug counted one. Ask again at the width
-    // they will actually have, in the context they will actually have it in.
-    // Only on this arm: an unclamped menu gives every row at least the width it
-    // asked for, so nothing reflows and the first answer stands.
-    let height = measureChild(
-        menuView,
-        proposal: ProposedSize(width: plan.width, height: capHeight > 0 ? capHeight : nil),
-        context: plan.sized
-    ).height
-    return ViewSize.fixed(plan.width, height)
+    // ``MenuColumnPlan/drawnHeight`` has already accounted for any reflow: the
+    // plan had to know the drawn height to decide whether the menu scrolls at
+    // all, so the one walk that answers it serves both questions.
+    return ViewSize.fixed(plan.width, plan.drawnHeight)
 }
 
 /// The menu's rows, styled and padded — everything inside the border.
@@ -115,18 +106,23 @@ private func menuColumnFrame(_ items: some View, borderColor: Color?) -> some Vi
 private struct MenuColumnPlan {
     /// The width the menu draws at.
     var width: Int
-    /// The height the content came back as with its rows hugging.
-    var naturalHeight: Int
-    /// Whether the hug wanted every cell it was offered — the tell that
-    /// something was squeezed. The rows then reflow into what they got, so
-    /// ``naturalHeight`` is a lower bound rather than the height that is drawn:
-    /// a hugging row is measured against the menu's whole interior, while a
-    /// drawn one gets that interior less the hint column beside it, and a label
-    /// can wrap into the difference. Below that width the content had
-    /// everything it asked for and nothing reflows.
-    var isClamped: Bool
+    /// The height the column actually draws at ``width``.
+    ///
+    /// The hug height where nothing was squeezed, and the RE-MEASURED height
+    /// where it was. A hugging row is measured against the menu's whole
+    /// interior, while a drawn one gets that interior less the hint column
+    /// beside it, and a label can wrap into the difference — so where the hug
+    /// wanted every cell it was offered, its height is a lower bound and not the
+    /// number anything should be decided from.
+    ///
+    /// Deciding from it is exactly what went wrong: the overflow probe was gated
+    /// on the hug height, so a menu whose rows reflowed PAST the cap while
+    /// hugging under it never asked the question, took the non-scrolling arm, and
+    /// had its trailing rows clipped away with no scrollbar and no way to reach
+    /// them.
+    var drawnHeight: Int
     /// The context it draws in: clamped to `width`, with the row width and the
-    /// menu verb handed down.
+    /// menu verb handed down, in a measure generation of its own.
     var sized: RenderContext
     /// Whether the content is taller than the cap, so the menu scrolls inside
     /// its border rather than hugging.
@@ -171,39 +167,60 @@ private func planMenuColumn(
     sized.environment.menuRowWidth = max(1, menuWidth - 6)
     // For the Return verb: a row of an open pop-up is a row of a menu too.
     sized.environment.isInsideMenu = true
-    let fits = MenuColumnPlan(
-        width: menuWidth, naturalHeight: natural.height,
-        isClamped: natural.width >= context.availableWidth, sized: sized)
+    // Everything from here down is a DIFFERENT question from the hug above, and
+    // the measure memo has to be told so: it keys on identity, widths, view type
+    // and view bytes, and on this arm `menuWidth == context.availableWidth`, so
+    // the hug and the draw are one key. It answered the draw with the hug — at
+    // `_ButtonCore`, whose size comes from the `ButtonStyle` it reads out of the
+    // environment, so no amount of moving the row width into a view's value can
+    // separate them. See ``RenderContext/measureGeneration``; 20 stale serves on
+    // one walk of the Example without this line.
+    sized = sized.invalidatingMeasureMemo()
 
-    // Does it fit? A measure is clamped to the context's `availableHeight` —
-    // and for an inline menu the cap IS that height — so a measure in place
-    // can only ever answer "it fits", with the overflowing rows silently
-    // dropped. Answering properly needs a canvas TALLER than the cap, the same
-    // generous one `ScrollView` measures its own content against.
+    // Two questions remain, and ONE walk answers both: how tall the column
+    // actually draws, and whether that clears the cap.
     //
-    // But only when the first measure was AMBIGUOUS. That measure was taken at
-    // the same cap, so a height strictly under it was not clamped: the content
-    // demonstrably fits and the tall-canvas probe would re-walk the whole menu
-    // to learn nothing. Only a height that came back EQUAL to the cap might
-    // have been truncated. Menus are usually a handful of rows in a
-    // terminal-sized slot, so this skips a third full traversal of the tree on
-    // the common path — the inline menu was measuring twice and rendering once
-    // for every frame.
-    guard capHeight > 0, natural.height >= capHeight else { return fits }
-    // One cell taller than the cap is the whole question. A report that comes
-    // back at `capHeight + 1` was clamped, which is precisely "it does not
-    // fit"; one at or below the cap is the content's own height. Exact, and
-    // against a budget one row past the one the render uses — where this used
-    // to offer `max(capHeight * 64, 4096)`, which is a ceiling wearing a
-    // generous canvas's clothes and cost a walk 4,096 rows deep to learn one
+    // The hug height answers neither on its own. It is a lower bound: a hugging
+    // row is measured against the menu's whole interior while a drawn one gets
+    // that interior less the hint column beside it, so a label with a space in
+    // it wraps into the difference and the column comes out taller than the hug
+    // said. And it cannot answer the cap question in either direction, because a
+    // measure is CLAMPED to the context's `availableHeight` — for an inline menu
+    // the cap IS that height — so a hug that comes back exactly at the cap might
+    // have been truncated and one below it demonstrably was not.
+    //
+    // So the walk is against a budget ONE ROW past the cap, in the context the
+    // rows are actually drawn in. A report at `capHeight + 1` was clamped, which
+    // is precisely "it does not fit"; anything at or below the cap is the
+    // column's own drawn height, which is the other thing wanted. (Where this
+    // used to offer `max(capHeight * 64, 4096)` it was a ceiling wearing a
+    // generous canvas's clothes, and cost a walk 4,096 rows deep to learn one
     // bit. How FAR past the cap the content goes is nobody's business here: the
-    // scrolled arm below frames its viewport at the cap and the `ScrollView`
-    // measures its own content with no limit at all.
-    let overflowProbe = sized.withAvailableHeight(capHeight + 1)
-    let probed = measureChild(
-        menuView, proposal: ProposedSize(width: menuWidth, height: nil), context: overflowProbe
+    // scrolled arm frames its viewport at the cap and its `ScrollView` measures
+    // its own content with no limit at all.)
+    //
+    // Skipped when nothing can have moved: an unclamped menu gave every row at
+    // least the width it asked for, so nothing reflows, and a hug strictly under
+    // the cap was not truncated either — the hug height IS the drawn height and
+    // the answer is already known. That is the common case (a handful of rows in
+    // a terminal-sized slot), and it is what keeps this off the ordinary path.
+    //
+    // The gate used to be `natural.height >= capHeight` alone, and that is the
+    // bug: a menu whose rows reflowed PAST the cap while hugging under it never
+    // asked, took the non-scrolling arm, and had its trailing rows clipped away
+    // with no scrollbar and no way to reach them. Six rows at width 26 against a
+    // twelve-row cap: the hug is eight rows and the draw is fourteen.
+    let wasSqueezed = natural.width >= context.availableWidth
+    guard capHeight > 0, wasSqueezed || natural.height >= capHeight else {
+        return MenuColumnPlan(width: menuWidth, drawnHeight: natural.height, sized: sized)
+    }
+    let drawnHeight = measureChild(
+        menuView, proposal: ProposedSize(width: menuWidth, height: nil),
+        context: sized.withAvailableHeight(capHeight + 1)
     ).height
-    guard probed > capHeight else { return fits }
+    let fits = MenuColumnPlan(
+        width: menuWidth, drawnHeight: min(drawnHeight, capHeight), sized: sized)
+    guard drawnHeight > capHeight else { return fits }
     var scrolls = fits
     scrolls.scrolls = true
     return scrolls
@@ -266,6 +283,12 @@ func renderMenuPopup(
     // interior less its hint column, and a label can wrap into the difference —
     // which would make the canvas a row short of what the render then draws.
     sized.environment.menuRowWidth = rowWidth
+    // …and having changed what a row measures to, say so, or the extent walk and
+    // the render below can be answered from the hug above. The two asks here
+    // happen to differ in width today, so this is a guard rather than a fix —
+    // but it is the same two-question shape as the inline menu's, where it was
+    // not a guard. See ``RenderContext/measureGeneration``.
+    sized = sized.invalidatingMeasureMemo()
     sized = sized.withAvailableHeight(
         max(1, measureNaturalExtent(
             rowsOnly, along: .vertical,

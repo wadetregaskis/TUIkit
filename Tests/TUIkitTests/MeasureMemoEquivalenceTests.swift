@@ -258,8 +258,60 @@ struct MeasureMemoEquivalenceTests {
             width: 64, height: 30)
     }
 
+    /// A menu whose rows reflow past its cap: the shape the FIRST attempt at the
+    /// reflow fix got wrong, and the reason there is a menu in this corpus at
+    /// all. A menu measures its rows twice at one identity — hugging, to learn
+    /// its width, and again at that width, because a row drawn into the interior
+    /// less its hint column can wrap where the hug did not — and on the clamped
+    /// arm those two asks are at the SAME width.
+    ///
+    /// What it can and cannot claim, said out loud because the case it guards
+    /// against is a test that passed while the bug was present. This is a
+    /// PROBABILISTIC guard, not a proof: `viewValueHash` hashes raw storage, and
+    /// a menu row's `ButtonStyleConfiguration` carries an `AnyView` and closures,
+    /// so its bytes include freshly-allocated pointers. Run against the reverted
+    /// commit with `measureChild` instrumented, this exact fixture's rows MISSED
+    /// on every pass, so the collision never arose and this case passed — while
+    /// the same code on the live Example collided forty times in one walk. It
+    /// earns its place by putting a menu in the corpus at all (there was none),
+    /// and it will catch a collision on any run where the allocator hands back
+    /// the same addresses. The deterministic half of the claim is
+    /// `MenuRowMeasureKeyingTests`; the reliable end-to-end check is
+    /// `TUIKIT_VERIFY_MEASURE_MEMO` over a PTY walk of a real app.
+    ///
+    /// Width 26 is the band: narrower and the labels wrap during the hug too,
+    /// so both asks agree and there is nothing to get wrong; wider and nothing
+    /// wraps at all.
+    @Test("an inline menu that reflows past its cap draws the same either way")
+    func inlineMenuReflow() {
+        let menu = Menu {
+            ForEach(0..<6, id: \.self) { index in
+                Button("Delete Everything \(index)") {}
+                    .keyboardShortcut(KeyEquivalent("\u{7F}"))
+            }
+        } label: {
+            Text("Edit")
+        }
+        .menuStyle(.inline)
+
+        let (memoised, plain, hits) = bothWays(menu, width: 26, height: 12)
+        #expect(
+            memoised == plain,
+            """
+            the memoised menu differs from the un-memoised one — the hug's size \
+            was served to the reflow.
+            \(snapshotDiff(golden: plain, actual: memoised))
+            """)
+        #expect(hits > 0, "the memo never engaged here, so this case proves nothing")
+        // The fixture has to still be IN the band, or it is a menu that fits
+        // and the collision it guards cannot arise.
+        #expect(
+            plain.contains("▲") || plain.contains("▼"),
+            "the fixture stopped overflowing its cap, so it is no longer the reflow band:\n\(plain)")
+    }
+
     /// The other half of the harness's own guard: it must leave the
-    /// verification mode as it found it.
+    /// verification mode as it found it."""
     ///
     /// `bothWays` arms `verifiesMeasureMemo` for the duration of a case, and
     /// used to disarm it unconditionally afterwards. Under
