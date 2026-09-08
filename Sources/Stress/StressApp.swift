@@ -132,6 +132,19 @@ private struct RootView: View {
                 }
             }
             Divider()
+            // The highlighted scenario's one-line description. Here rather than
+            // per row for two reasons: the menu's height stays put as the
+            // cursor moves (a row that grew when selected would shift every row
+            // under it), and only one of these is ever worth reading at a time.
+            //
+            // It is also the only reader `blurb` has. The field and its seven
+            // translations existed with nothing drawing them — the parity test
+            // over the string tables required `stress.scenario.<id>.blurb` in
+            // every language, so 21 scenarios' worth of prose was written,
+            // checked, and never shown to anybody.
+            Text(Scenarios.all.indices.contains(menuIndex)
+                ? Scenarios.all[menuIndex].localizedBlurb : "")
+                .foregroundStyle(.secondary)
             Text("stress.shell.menu.help")
                 .foregroundStyle(.secondary)
         }
