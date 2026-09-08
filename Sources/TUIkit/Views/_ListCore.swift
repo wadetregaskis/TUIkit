@@ -544,7 +544,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // indicator line is wanted — cannot be settled before the handler is in
         // hand: a drag hovering this list borrows a row's worth of content for
         // its landing slot, and only the handler knows a drag is hovering.
-        let (handler, overflowing, wantsScrollbar) = resolvePopulatedHandler(
+        let (handler, wantsScrollbar) = resolvePopulatedHandler(
             source: source,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
@@ -716,7 +716,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             defaultPrefix: "list",
             propertyIndex: 1  // focusID
         )
-        let (handler, _, _) = resolvePopulatedHandler(
+        let (handler, _) = resolvePopulatedHandler(
             source: source,
             persistedFocusID: persistedFocusID,
             stateStorage: stateStorage,
@@ -843,18 +843,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// scrolling is independent of the focused row (matches
     /// Finder / Explorer / VS Code), and the focus-changing
     /// paths inside the handler already call it themselves.
-    /// Also decides `overflowing` and `showsScrollbar`, which it cannot be
-    /// handed: both depend on ``ItemListHandler/dropSlotAddsRow``, a question
-    /// about the handler's own drag state. That ordering — box, row count,
-    /// borrowed drop row, and only then "do the rows fit" — is the whole reason
-    /// this returns three things.
+    /// Also decides `showsScrollbar` — and, on the handler,
+    /// `drawsScrollIndicators` — which it cannot be handed: both depend on
+    /// ``ItemListHandler/dropSlotAddsRow``, a question about the handler's own
+    /// drag state. That ordering — box, row count, borrowed drop row, and only
+    /// then "do the rows fit" — is the whole reason this returns more than the
+    /// handler.
+    ///
+    /// It used to return `overflowing` as well. `f55a9f92` gave that answer its
+    /// one true home on the handler (`drawsScrollIndicators`, the conjunction
+    /// with the indicator style), which left the flag returned and read by
+    /// nobody — a warning on every build.
     private func resolvePopulatedHandler(
         source: RowSource<SelectionValue>,
         persistedFocusID: String,
         stateStorage: StateStorage,
         context: RenderContext,
         contentHeight: Int
-    ) -> (handler: ItemListHandler<SelectionValue>, overflowing: Bool, showsScrollbar: Bool) {
+    ) -> (handler: ItemListHandler<SelectionValue>, showsScrollbar: Bool) {
         let handlerKey = StateStorage.StateKey(
             identity: context.identity, propertyIndex: 0)
         let handlerBox: StateBox<ItemListHandler<SelectionValue>> = stateStorage.storage(
@@ -1042,7 +1048,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if !context.isMeasuring {
             handler.applyAnchorHold()
         }
-        return (handler, overflowing, showsScrollbar)
+        return (handler, showsScrollbar)
     }
 
     /// Stitches together the row content with top / bottom
