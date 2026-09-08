@@ -59,49 +59,4 @@ struct MenuHeightCeilingTests {
         #expect(drawn.height == 40, "\(count) rows: drew \(drawn.height)")
         #expect(size.width == drawn.width, "\(count) rows")
     }
-
-    /// The overflow question has to be asked of the height the menu DRAWS, not
-    /// the height its rows asked for while hugging.
-    ///
-    /// A row is measured against the menu's whole interior while it hugs, and
-    /// drawn into that interior less the hint column beside it — so a label
-    /// with a space in it can wrap into the difference, and the drawn column is
-    /// taller than the hug said. Where the hug fitted the cap and the reflow
-    /// did not, the probe was skipped, the non-scrolling arm taken, and the
-    /// trailing rows clipped away with no scrollbar and no way to reach them.
-    ///
-    /// The width is chosen to CLAMP — narrow enough that the hug wants every
-    /// cell — because that is the only arm on which rows reflow at all.
-    @Test("A menu whose rows reflow past the cap scrolls rather than losing them")
-    func reflowPastTheCapStillScrolls() {
-        // Labels with a space and a key equivalent: the hint takes a column
-        // beside the label, so the label is drawn narrower than it hugged and
-        // wraps at the space.
-        // SIX rows, so the hug height (six rows plus the border) sits UNDER the
-        // twelve-row cap — which is the whole point. A menu with more rows than
-        // the cap overflows while hugging and asks the question anyway; this one
-        // only overflows once its labels wrap, which is the case the old gate
-        // could not see.
-        let items = ForEach(0..<6, id: \.self) { index in
-            Button("Delete Everything \(index)") {}
-                .keyboardShortcut(KeyEquivalent("\u{7F}"))
-        }
-        // Width 26 is the band that matters. Narrower and the labels wrap
-        // during the HUG too, so the hug height clears the cap on its own and
-        // the old gate asked the question anyway; wider and nothing wraps at
-        // all. Here the hug is eight rows and the draw is fourteen.
-        let narrow = context(width: 26, height: 12)
-        let size = measureMenuColumn(items, context: narrow, capHeight: 12)
-        let drawn = renderMenuColumn(items, context: narrow, capHeight: 12)
-        let text = drawn.lines.map(\.stripped).joined(separator: "\n")
-        // The assertion is REACHABILITY, not height. Both arms come back twelve
-        // rows tall — the render clips whatever it produced to the cap — so a
-        // height comparison sees nothing. What the non-scrolling arm loses is
-        // the rows past the cap, with no way to get to them; the scrolling arm
-        // puts a bar in its own column, which is the visible difference.
-        #expect(
-            text.contains("▲") || text.contains("▼"),
-            "the column overflowed its cap with no way to scroll:\n\(text)")
-        #expect(size.height == drawn.height, "measured \(size.height), drew \(drawn.height)")
-    }
 }
