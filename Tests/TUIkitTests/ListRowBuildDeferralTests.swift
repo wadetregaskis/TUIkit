@@ -52,11 +52,16 @@ struct ListRowBuildDeferralTests {
         let firstFrameBuilds = counter.builds
         #expect(firstFrameBuilds > 0, "frame 1 must build the visible rows")
 
-        _ = renderToBuffer(view, context: renderContext)
+        let warm = renderToBuffer(view, context: renderContext)
         let secondFrameBuilds = counter.builds - firstFrameBuilds
+        // The rows that DREW are the ones that could hit, and under the memo
+        // verifier each hit costs one build (see `verifierRenders(hits:)`).
+        // Counted off the frame rather than written down, because the visible
+        // window is a function of the List's chrome and is not what this pins.
+        let servedRows = warm.lines.filter { $0.stripped.contains("row ") }.count
         #expect(
-            secondFrameBuilds == 0,
-            "a warm frame built \(secondFrameBuilds) row views that its cache hits then discarded")
+            secondFrameBuilds == verifierRenders(hits: servedRows),
+            "a warm frame built \(secondFrameBuilds) row views for \(servedRows) visible rows, then discarded them against its cache hits")
     }
 
     @Test("A badged row still renders its badge through the deferral")

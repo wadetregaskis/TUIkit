@@ -82,8 +82,8 @@ struct LazyChildViewsTests {
 
         _ = renderToBuffer(stack, context: makeCachedContext(cache: cache))
         #expect(
-            counter.calls == afterFirstFrame,
-            "a second frame whose rows all hit the memo must not rebuild one of them")
+            counter.calls == afterFirstFrame + verifierRenders(hits: 3),
+            "a second frame whose rows all hit the memo must not rebuild one: \(counter.calls) vs \(afterFirstFrame)")
     }
 
     /// A context wired like the render loop's, sharing `cache` across frames.

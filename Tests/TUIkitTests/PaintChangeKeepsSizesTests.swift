@@ -64,7 +64,11 @@ struct PaintChangeKeepsSizesTests {
         _ = Self.frame(colour: .red, tui: tui)
         Counters.reset()
         let steady = Self.frame(colour: .red, tui: tui)
-        #expect(Counters.measures == 0 && Counters.renders == 0, "warm: \(Counters.measures)/\(Counters.renders)")
+        // All 40 rows draw (the ScrollView clips, it does not window here), so a
+        // warm frame serves 40 buffers and the verifier re-renders each once.
+        #expect(
+            Counters.measures == 0 && Counters.renders == verifierRenders(hits: 40),
+            "warm: \(Counters.measures)/\(Counters.renders)")
 
         Counters.reset()
         let recoloured = Self.frame(colour: .green, tui: tui)

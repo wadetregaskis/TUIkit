@@ -40,10 +40,6 @@ import TUIkitCore
 ///     over a metatype, so neither the metadata read nor `String(describing:)` is
 ///     paid on the paths that never report — which is all of them, almost always.
 ///   - context: The render context.
-///   - verifies: Whether a served buffer is checked against a fresh render — see
-///     ``RenderCache/verifiesRenderMemo``. A parameter only because
-///     `_MemoizedRow` does not verify yet; arming it changes what happens under
-///     `TUIKIT_VERIFY_RENDER_MEMO` and belongs in its own commit.
 ///   - render: Renders the memoized content. Called ONLY on a miss, which is
 ///     what lets `_MemoizedRow` defer building the row view at all.
 ///
@@ -57,7 +53,6 @@ func renderValueMemoized<Key: Equatable>(
     key: Key,
     viewType: @autoclosure () -> Any.Type,
     context: RenderContext,
-    verifies: Bool,
     render: (RenderContext) -> FrameBuffer
 ) -> FrameBuffer {
     // No cache: standalone rendering, outside a render loop. Render straight
@@ -90,7 +85,13 @@ func renderValueMemoized<Key: Equatable>(
         // should have been two, and the first frame the OUTER value changed, every
         // inner row re-rendered from scratch though none of them had.
         cache.retainSubtree(identity)
-        if verifies, RenderCache.verifiesRenderMemo {
+        // Both callers verify. This used to be a `verifies` parameter that
+        // `_MemoizedRow` passed `false`, so under `TUIKIT_VERIFY_RENDER_MEMO`
+        // the standing CI net checked no row serve at all — and rows are what
+        // the net mostly has to check, since `ForEach` wraps every Equatable
+        // element in a `_MemoizedRow` and nothing in `Stress` uses
+        // `.equatable()`.
+        if RenderCache.verifiesRenderMemo {
             let fresh = render(context)
             if fresh.lines != cached.lines {
                 cache.noteRenderMemoMismatch(

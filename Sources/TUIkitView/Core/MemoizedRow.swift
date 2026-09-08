@@ -149,7 +149,7 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
     }
 
     /// Memoized by the row's DATA ELEMENT, through the shared value memo — see
-    /// `renderValueMemoized(key:viewType:context:verifies:render:)`.
+    /// `renderValueMemoized(key:viewType:context:render:)`.
     ///
     /// The soundness argument is this type's own, and it is the weaker of the
     /// two the shared memo serves. `EquatableView` keys on the whole view value,
@@ -159,17 +159,18 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
     /// one that captures mutable data from outside its own subtree, which is the
     /// known hole documented on the type above.
     ///
-    /// `verifies: false` — this half does not check a served buffer against a
-    /// fresh render yet. It should: every buffer the `Stress` harness serves is
-    /// one of these (no scenario uses `.equatable()`), so the CI step that exists
-    /// to catch a memo serving a stale picture has never checked a single serve.
-    /// Arming it changes what happens under `TUIKIT_VERIFY_RENDER_MEMO`, where
-    /// suites that count renders on memoized rows expect exactly zero, so it is
-    /// its own commit.
+    /// The weaker claim is exactly why this half is the one worth verifying, and
+    /// under `TUIKIT_VERIFY_RENDER_MEMO` it now is. It was not: the shared memo
+    /// took a `verifies` flag and this caller passed `false`, so the standing CI
+    /// net — `Stress --selfcheck` with that variable set, whose whole job is to
+    /// catch a memo serving a stale picture — checked **nothing**, because every
+    /// buffer that harness serves is one of these (no scenario uses
+    /// `.equatable()`). It now checks 4,565 of them across 14 of the 21
+    /// scenarios.
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        renderValueMemoized(
-            key: element, viewType: Content.self, context: context, verifies: false
-        ) { TUIkitView.renderToBuffer(content, context: $0) }
+        renderValueMemoized(key: element, viewType: Content.self, context: context) {
+            TUIkitView.renderToBuffer(content, context: $0)
+        }
     }
 
     /// The size twin, same shared implementation.

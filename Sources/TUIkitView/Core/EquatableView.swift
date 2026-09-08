@@ -86,7 +86,7 @@ public struct EquatableView<Content: View & Equatable>: View {
 
 extension EquatableView: Renderable {
     /// Memoized by the whole VIEW value, through the shared value memo — see
-    /// `renderValueMemoized(key:viewType:context:verifies:render:)`.
+    /// `renderValueMemoized(key:viewType:context:render:)`.
     ///
     /// The soundness argument is this type's own, and it is the strong form: the
     /// key IS the view, so a hit means the very thing that would have been
@@ -96,7 +96,7 @@ extension EquatableView: Renderable {
     /// at that type rather than once in the shared code.
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         renderValueMemoized(
-            key: content, viewType: Content.self, context: context, verifies: true
+            key: content, viewType: Content.self, context: context
         ) { TUIkitView.renderToBuffer(content, context: $0) }
     }
 }

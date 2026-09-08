@@ -79,7 +79,9 @@ struct ObservableInvalidationScopeTests {
         Renders.reset()
         let warm = Self.frame(view, tui: tui)
         #expect(warm.lines.first?.stripped.contains("count 0") == true)
-        #expect(Renders.count == [0, 0], "both rows are memoised by the second frame: \(Renders.count)")
+        #expect(
+            Renders.count == [verifierRenders(hits: 1), verifierRenders(hits: 1)],
+            "both rows are memoised by the second frame: \(Renders.count)")
         let before = tui.renderCache.stats
 
         model.count = 7
@@ -90,7 +92,12 @@ struct ObservableInvalidationScopeTests {
         // its content by rendering it (the leaf is not `Layoutable`) and then
         // renders it, so a miss is two draws. The pin is the sibling's zero.
         #expect(Renders.count[0] >= 1, "the reader re-rendered: \(Renders.count)")
-        #expect(Renders.count[1] == 0, "the sibling was served from the cache: \(Renders.count)")
+        // `hits: 2` — the counters are NOT reset between the warm frame and this
+        // one, so the sibling's tally holds a verifier render from each: it was
+        // served twice, which is the claim.
+        #expect(
+            Renders.count[1] == verifierRenders(hits: 2),
+            "the sibling was served from the cache: \(Renders.count)")
         #expect(delta.clears == 0, "nothing cleared the whole cache: \(delta)")
     }
 
@@ -112,7 +119,9 @@ struct ObservableInvalidationScopeTests {
         let changed = Self.frame(view, tui: tui)
         let delta = tui.renderCache.stats.delta(since: before)
         #expect(changed.lines.first?.stripped.contains("count 3") == true)
-        #expect(Renders.count[0] >= 1 && Renders.count[1] == 0, "\(Renders.count)")
+        #expect(
+            Renders.count[0] >= 1 && Renders.count[1] == verifierRenders(hits: 1),
+            "\(Renders.count)")
         #expect(delta.clears == 0, "\(delta)")
     }
 

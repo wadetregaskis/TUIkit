@@ -169,3 +169,23 @@ func renderToScreen(_ view: some View, context: RenderContext) -> FrameBuffer {
     return renderToBuffer(view, context: context)
         .resolvingOpacity(surface: palette.background, palette: palette)
 }
+
+// MARK: - Counting renders under the memo verifier
+
+/// The extra renders `TUIKIT_VERIFY_RENDER_MEMO` adds on top of the ones a test
+/// is counting: one per SERVED buffer, because that is how the verifier checks a
+/// serve — it renders the subtree again and compares the cells.
+///
+/// NOT a way to skip those tests. A suite that counts renders is pinning the
+/// memo's cost model, and expressing the allowance as a function of the hit
+/// count keeps the pin exact in both modes: `hits` extra renders means every one
+/// of those subtrees was *served* and the verifier drew it once, which is the
+/// same claim as "zero renders" with the verifier off. Skipping would drop the
+/// claim entirely on the run that most needs it.
+///
+/// - Parameter hits: How many memo hits the counted frame is expected to serve.
+/// - Returns: `hits` when the verifier is on, `0` otherwise.
+@MainActor
+func verifierRenders(hits: Int) -> Int {
+    RenderCache.verifiesRenderMemo ? hits : 0
+}
