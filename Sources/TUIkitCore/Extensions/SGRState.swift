@@ -172,6 +172,16 @@ public struct SGRState: Sendable, Equatable {
             foreground = nil
             return
         }
+        // An EMPTY list says nothing, and must therefore do nothing. It is not
+        // a colour, so it falls to the `apply` below — where it spells
+        // `ESC[m`, a bare SGR 0, which resets the WHOLE state. `Color
+        // .foregroundCodes()` returns `[]` at `ColorDepth.noColor`, so at the
+        // one depth whose entire contract is "emit no colour", asking for a
+        // colour stripped the bold, underline and inverse off the cell —
+        // `.opacity()` composites through these setters, so a faded heading
+        // came back unemphasised. `backgroundEscape(depth:)` already guards the
+        // same emptiness on its own path.
+        guard !parameters.isEmpty else { return }
         if let colour = Colour(parameters: parameters) {
             foreground = colour
         } else {
@@ -185,6 +195,8 @@ public struct SGRState: Sendable, Equatable {
             background = nil
             return
         }
+        // See ``setForeground(parameters:)``: an empty list is not a sequence.
+        guard !parameters.isEmpty else { return }
         if let colour = Colour(parameters: parameters) {
             background = colour
         } else {

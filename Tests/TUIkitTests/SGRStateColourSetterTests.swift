@@ -49,4 +49,38 @@ struct SGRStateColourSetterTests {
             }
         }
     }
+
+    /// `.noColor`, which the loop above deliberately does not cover — and
+    /// could not usefully cover, because its oracle is `apply(codes)` and that
+    /// is precisely the thing that was wrong. Adding the depth there would
+    /// compare the bug against itself and pass.
+    ///
+    /// At this depth a colour has NO parameters: `foregroundCodes()` returns
+    /// `[]`. An empty list is not a colour, so it fell through to `apply`,
+    /// where it spells `ESC[m` — a bare SGR 0, which resets the WHOLE state.
+    /// So at the one depth whose entire contract is "emit no colour", asking
+    /// for a colour stripped every attribute off the cell. `.opacity()`
+    /// composites through these setters, so a faded bold heading came back
+    /// unemphasised on a monochrome terminal.
+    ///
+    /// The assertion is that the state is UNCHANGED — stated against the
+    /// decorated base itself, not against what applying something would give.
+    @Test("At noColor, stating a colour changes nothing at all")
+    func noColorLeavesTheStateAlone() {
+        var decorated = SGRState()
+        decorated.apply("\u{1B}[1;4;7;31;44m")  // bold, underline, inverse, red on blue
+        for base in [SGRState(), decorated] {
+            for colour in Self.colours.compactMap({ $0 }) {
+                var foreground = base
+                foreground.setForeground(parameters: colour.foregroundCodes(depth: .noColor))
+                #expect(foreground == base, "fg \(colour) reset the state at .noColor")
+
+                var background = base
+                background.setBackground(parameters: colour.backgroundCodes(depth: .noColor))
+                #expect(background == base, "bg \(colour) reset the state at .noColor")
+            }
+        }
+        // The premise the case rests on: there really are no parameters here.
+        #expect(Color.red.foregroundCodes(depth: .noColor).isEmpty)
+    }
 }
