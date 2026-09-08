@@ -364,9 +364,38 @@ struct KeyEquivalentShortcutTests {
         let other = ViewIdentity(path: "Root/OtherButton")
         let assignment = KeyboardShortcutAssignment(KeyboardShortcut("s", modifiers: []))
 
-        #expect(assignment.claim(by: identity) != nil, "measure pass")
-        #expect(assignment.claim(by: identity) != nil, "render pass, same control")
-        #expect(assignment.claim(by: other) == nil, "a second control gets nothing")
+        #expect(assignment.claim(by: identity, isMeasuring: true) != nil, "measure pass")
+        #expect(
+            assignment.claim(by: identity, isMeasuring: false) != nil,
+            "render pass, same control")
+        #expect(
+            assignment.claim(by: other, isMeasuring: false) == nil,
+            "a second control gets nothing")
+        #expect(
+            assignment.claim(by: other, isMeasuring: true) == nil,
+            "…and nothing on the measure pass either, where the first control claimed")
+    }
+
+    /// A measure and a render need not lay the control out in the same place: a
+    /// menu measures its column hugging to decide whether it overflows, then
+    /// draws the overflowing one inside a `ScrollView`, and every row's identity
+    /// gains a component in between. With one latch the render looked like a
+    /// second control and was refused — so the row lost the key equivalent the
+    /// measure had just reserved space for.
+    @Test("A measure's claim does not bar the render from claiming elsewhere")
+    func measureClaimDoesNotBarADifferentRenderIdentity() {
+        let measured = ViewIdentity(path: "Root/Column/Button")
+        let drawn = ViewIdentity(path: "Root/Column/ScrollView/Button")
+        let assignment = KeyboardShortcutAssignment(KeyboardShortcut("s", modifiers: []))
+
+        #expect(assignment.claim(by: measured, isMeasuring: true) != nil, "measured here")
+        #expect(assignment.claim(by: drawn, isMeasuring: false) != nil, "drawn there")
+        // …and the render latch is still a latch: a genuine second control in the
+        // drawn tree gets nothing.
+        #expect(
+            assignment.claim(by: ViewIdentity(path: "Root/Column/ScrollView/Other"),
+                isMeasuring: false) == nil,
+            "the render's own latch still holds")
     }
 }
 

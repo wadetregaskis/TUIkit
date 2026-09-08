@@ -472,7 +472,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         var resolvedShortcut: KeyboardShortcut?
         if !isDisabled,
             let assignment = context.environment.assignedKeyboardShortcut,
-            let shortcut = assignment.claim(by: context.identity)
+            let shortcut = assignment.claim(by: context.identity, isMeasuring: context.isMeasuring)
         {
             // `.command` is not a key a terminal can report, so it is resolved
             // to whatever stands in for it here (`.commandKey(_:)`) — the one

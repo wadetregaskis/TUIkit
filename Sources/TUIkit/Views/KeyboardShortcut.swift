@@ -425,14 +425,8 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
 /// Main-loop-confined like the registry it feeds.
 final class KeyboardShortcutAssignment: @unchecked Sendable {
     let shortcut: KeyboardShortcut
-    private var claimant: ViewIdentity?
 
-    init(_ shortcut: KeyboardShortcut) {
-        self.shortcut = shortcut
-    }
-
-    /// Claims the assignment for the control at `identity`; returns nil if
-    /// some other control already holds it.
+    /// Who holds the claim, tracked SEPARATELY for measuring and for drawing.
     ///
     /// Keyed by identity rather than a bare "claimed" flag because a control
     /// asks more than once per frame: the measure pass needs the shortcut to
@@ -440,9 +434,39 @@ final class KeyboardShortcutAssignment: @unchecked Sendable {
     /// again to register the action. A one-shot claim would hand it to the
     /// measure and leave the render — the pass that actually registers — with
     /// nothing.
-    func claim(by identity: ViewIdentity) -> KeyboardShortcut? {
-        if let claimant, claimant != identity { return nil }
-        claimant = identity
+    ///
+    /// Two latches rather than one because **a measure and a render need not lay
+    /// the control out in the same place**, and one latch made the render's
+    /// different identity look like a second control muscling in. A scrolling
+    /// menu is exactly that: it measures its column bordered and hugging to
+    /// decide whether it overflows, then draws the overflowing one inside a
+    /// `ScrollView`, so every row's identity gains a component between the two
+    /// passes. The measure claimed, the render was refused, and each row lost the
+    /// key equivalent it had just been measured wide enough to print — silently,
+    /// and only once the menu grew past its cap.
+    private var measureClaimant: ViewIdentity?
+    private var renderClaimant: ViewIdentity?
+
+    init(_ shortcut: KeyboardShortcut) {
+        self.shortcut = shortcut
+    }
+
+    /// Claims the assignment for the control at `identity`; returns nil if some
+    /// other control already holds it for this kind of pass.
+    ///
+    /// - Parameters:
+    ///   - identity: The claiming control's identity.
+    ///   - isMeasuring: Whether this is a measuring pass (`RenderContext/isMeasuring`).
+    ///     Measuring and drawing hold their claims independently — see the
+    ///     latches above.
+    func claim(by identity: ViewIdentity, isMeasuring: Bool) -> KeyboardShortcut? {
+        if isMeasuring {
+            if let measureClaimant, measureClaimant != identity { return nil }
+            measureClaimant = identity
+        } else {
+            if let renderClaimant, renderClaimant != identity { return nil }
+            renderClaimant = identity
+        }
         return shortcut
     }
 }
