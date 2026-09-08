@@ -100,9 +100,15 @@ final class StdinArrivalNotifier {
     /// source fires on `DispatchQueue.main` whenever the
     /// kernel has data ready to deliver — see the type-level
     /// doc for why that queue choice matters.
-    func start() {
+    ///
+    /// - Parameter descriptor: The descriptor to watch. Only the tests pass
+    ///   anything but stdin, and they have to: a read source cannot be driven
+    ///   without a descriptor to close, and the EOF behaviour below is
+    ///   otherwise unobservable without a live TTY. The same seam, for the same
+    ///   reason, as `Terminal.readSource`.
+    func start(descriptor: Int32 = STDIN_FILENO) {
         let src = DispatchSource.makeReadSource(
-            fileDescriptor: STDIN_FILENO,
+            fileDescriptor: descriptor,
             queue: .main
         )
         src.setEventHandler { [weak self] in
@@ -121,11 +127,44 @@ final class StdinArrivalNotifier {
             // The executor is what serialises this against the
             // run loop; the thread is incidental.
             MainActor.assumeIsolated {
-                self?.wake()
+                self?.handleReadable()
             }
         }
         source = src
         src.activate()
+    }
+
+    /// One firing of the read source: wake the loop, unless the descriptor has
+    /// reached end of file, in which case take the source down.
+    ///
+    /// A read source is level-triggered, and EOF reads as permanently readable:
+    /// the handler is re-armed the moment it returns, fires again on a
+    /// descriptor that will never have another byte, and does so as fast as the
+    /// main queue can dispatch it. Each firing woke the loop, so the
+    /// demand-driven wait stopped waiting — the process sat at 100% of a core,
+    /// rendering nothing, for as long as it ran. Nothing downstream could catch
+    /// it either: `Terminal`'s reader returns 0 at EOF and `appendDrain` only
+    /// acts on `n > 0`, so EOF was indistinguishable from "no data yet" all the
+    /// way up.
+    ///
+    /// It is not a hypothetical descriptor. Stdin is at EOF whenever the app is
+    /// run with its input closed or redirected from `/dev/null` — a CI step, a
+    /// process supervisor, anything launching it non-interactively.
+    ///
+    /// The source is cancelled rather than left armed, and deliberately WITHOUT
+    /// signalling: a `wake()` here would set `pendingWake` and make the next
+    /// wait return at once, which is a smaller version of the same spin. Any
+    /// waiter suspended at that moment is bounded by its own timeout. A TTY does
+    /// not reach this — in raw mode Ctrl-D is the byte 0x04, not end of file —
+    /// so nothing cancels the source out from under a live terminal.
+    private func handleReadable() {
+        // `data` on a read source is the byte count the kernel says is ready.
+        if source?.data == 0 {
+            source?.cancel()
+            source = nil
+            return
+        }
+        wake()
     }
 
     /// Tears the dispatch source down. Safe to call multiple

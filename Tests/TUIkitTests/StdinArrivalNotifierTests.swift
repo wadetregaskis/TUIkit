@@ -6,18 +6,32 @@
 
 import Testing
 
+#if canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#elseif canImport(Darwin)
+    import Darwin
+#endif
+
 @testable import TUIkit
 
 /// Tests for `StdinArrivalNotifier` — the main-loop "wait for stdin OR a
 /// timeout" race.
 ///
 /// Only the deterministic behaviours are exercised: the timeout firing and
-/// `stop()` waking a pending waiter. The stdin-data path can't be unit
+/// `stop()` waking a pending waiter. The stdin-DATA path still can't be unit
 /// tested without redirecting `STDIN_FILENO` (flaky and process-global), so
-/// these tests never call `start()` — without a dispatch source attached,
+/// most of these never call `start()` — without a dispatch source attached,
 /// the timeout and `stop()` are the only wake sources, which is exactly
 /// what's being verified. The notifier is `@MainActor`, so the tests are
 /// too.
+///
+/// The one exception is ``eofDoesNotSpin()``, which needs a real source
+/// because what it pins is a property OF the source. It gets one without
+/// touching stdin: `start(descriptor:)` takes the read end of a pipe whose
+/// write end is already closed, which is a descriptor at EOF and nothing
+/// else's business.
 @Suite("StdinArrivalNotifier")
 struct StdinArrivalNotifierTests {
 
@@ -54,6 +68,40 @@ struct StdinArrivalNotifierTests {
         notifier.stop()
 
         await waiter.value  // returns only because stop() resumed the waiter
+    }
+
+    /// A read source is level-triggered, so a descriptor at EOF is permanently
+    /// "readable": the handler re-arms as it returns and fires again forever.
+    /// Every firing used to wake the loop, so the demand-driven wait stopped
+    /// waiting and the process burned a whole core rendering nothing — for any
+    /// app run with stdin closed or pointed at `/dev/null`, which is how a CI
+    /// step or a process supervisor launches one.
+    ///
+    /// The oracle is the wait itself. Spinning, `wake()` fires continuously and
+    /// `waitForArrival` returns immediately every time; quiescent, it lasts its
+    /// timeout. A pipe with its write end closed is the EOF descriptor, and a
+    /// `pipe(2)` is the only way to get one — hence `start(descriptor:)`.
+    @MainActor
+    @Test("A descriptor at EOF does not spin the run loop")
+    func eofDoesNotSpin() async {
+        var fds: [Int32] = [-1, -1]
+        #expect(pipe(&fds) == 0)
+        close(fds[1])  // write end gone: the read end is at EOF from here on
+        defer { close(fds[0]) }
+
+        let notifier = StdinArrivalNotifier()
+        notifier.start(descriptor: fds[0])
+        defer { notifier.stop() }
+
+        // Let the source fire and take itself down before measuring.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let clock = ContinuousClock()
+        let start = clock.now
+        await notifier.waitForArrival(timeoutNanoseconds: 60_000_000)  // 60 ms
+        #expect(
+            clock.now - start >= .milliseconds(30),
+            "an EOF descriptor kept waking the loop, so the wait never waited")
     }
 
     @MainActor
