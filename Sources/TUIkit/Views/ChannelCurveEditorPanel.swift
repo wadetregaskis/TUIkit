@@ -80,16 +80,6 @@ public struct ChannelCurveEditorPanel: View {
     /// read, so switching to a channel with fewer points can't strand it.
     @State private var selectedPoint = 0
 
-    /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type: the
-    /// dismissal callback must read the values as they are when it fires, not
-    /// as they were when the closure's frame was rendered.
-    @State private var session = Session()
-
-    private final class Session {
-        var original: ASCIIToneCurve.Channels?
-        var applied = false
-    }
-
     /// Which of the three is on the plot.
     enum Channel: Int, CaseIterable {
         case red, green, blue
@@ -201,7 +191,7 @@ public struct ChannelCurveEditorPanel: View {
     }
 
     public var body: some View {
-        Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
+        _EditorPanelChrome(title: title, edited: channels, isPresented: isPresented) {
             VStack(alignment: .center, spacing: 0) {
                 channelPicker
                 Text(verbatim: "")
@@ -211,24 +201,6 @@ public struct ChannelCurveEditorPanel: View {
                 axisRow("in ", value: inputBinding)
                 axisRow("out", value: outputBinding)
                 actionRow
-            }
-            .onAppear { session.original = channels.wrappedValue }
-            .onDisappear {
-                // ANY dismissal that isn't "Done" — Cancel, Esc, the page going
-                // away — restores what the dialog opened with. Live edits
-                // already wrote through `channels`, so this is the undo.
-                if !session.applied, let original = session.original {
-                    channels.wrappedValue = original
-                }
-            }
-        } footer: {
-            HStack(spacing: 2) {
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
-                    session.applied = true
-                    isPresented.wrappedValue = false
-                }
-                .buttonStyle(.primary)
             }
         }
     }

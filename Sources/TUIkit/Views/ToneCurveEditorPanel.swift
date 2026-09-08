@@ -85,16 +85,6 @@ public struct ToneCurveEditorPanel: View {
     /// read, so external shrinking of `stops` can't strand it.
     @State private var selectedStop = 0
 
-    /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type:
-    /// the dismissal callback must read the values as they are when it fires,
-    /// not as they were when the closure's frame was rendered.
-    @State private var session = Session()
-
-    private final class Session {
-        var original: [ASCIIToneCurve.Stop]?
-        var applied = false
-    }
-
     /// The strips' width in cells. ``GradientEditorPanel``'s, deliberately:
     /// the stop strip is laid out by that panel's own row-wrapping helper, and
     /// two budgets would let the chips and their preview disagree.
@@ -171,7 +161,7 @@ public struct ToneCurveEditorPanel: View {
     }
 
     public var body: some View {
-        Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
+        _EditorPanelChrome(title: title, edited: stops, isPresented: isPresented) {
             VStack(alignment: .center, spacing: 0) {
                 mappingDiagram
                 Text(verbatim: "")
@@ -184,24 +174,6 @@ public struct ToneCurveEditorPanel: View {
                 // dialog to the whole screen.
                 Divider().frame(width: Self.stripWidth + Self.gutter)
                 _ColorPickerBody(selection: selectedColorBinding)
-            }
-            .onAppear { session.original = stops.wrappedValue }
-            .onDisappear {
-                // ANY dismissal that isn't "Done" — Cancel, Esc, the page
-                // going away — restores what the dialog opened with. Live
-                // edits already wrote through `stops`, so this is the undo.
-                if !session.applied, let original = session.original {
-                    stops.wrappedValue = original
-                }
-            }
-        } footer: {
-            HStack(spacing: 2) {
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
-                    session.applied = true
-                    isPresented.wrappedValue = false
-                }
-                .buttonStyle(.primary)
             }
         }
     }

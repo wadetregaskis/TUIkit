@@ -48,17 +48,6 @@ public struct ColorPickerPanel: View {
     /// Which tab is currently showing.
     @State private var mode: Mode = .rgb
 
-    /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type:
-    /// the dismissal callback must read the values as they are when it fires,
-    /// not as they were when the closure's frame was rendered (a value capture
-    /// would miss "Done" setting `applied` in the same action that dismisses).
-    @State private var session = Session()
-
-    private final class Session {
-        var original: Color?
-        var applied = false
-    }
-
     /// Resolves a semantic ``selection`` to concrete RGB for the read-out.
     @Environment(\.palette) private var palette
 
@@ -157,29 +146,8 @@ public struct ColorPickerPanel: View {
     }
 
     public var body: some View {
-        Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
+        _EditorPanelChrome(title: title, edited: selection, isPresented: isPresented) {
             _ColorPickerBody(selection: selection)
-                .onAppear { session.original = selection.wrappedValue }
-                .onDisappear {
-                    // ANY dismissal that isn't "Done" — Cancel, Esc, the page
-                    // going away — restores what the dialog opened with. Live
-                    // edits already wrote through `selection`; this is the undo.
-                    if !session.applied, let original = session.original {
-                        selection.wrappedValue = original
-                    }
-                }
-        } footer: {
-            // No leading Spacer: a Spacer is width-flexible, which would make the
-            // dialog claim the full available width instead of sizing to its
-            // content. The footer sizes to the buttons; the dialog fits its tabs.
-            HStack(spacing: 2) {
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
-                    session.applied = true
-                    isPresented.wrappedValue = false
-                }
-                .buttonStyle(.primary)
-            }
         }
     }
 }

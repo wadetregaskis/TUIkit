@@ -74,20 +74,9 @@ public struct GradientEditorPanel: View {
     /// every read, so external shrinking of `stops` can't strand it.
     @State private var selectedStop = 0
 
-    /// Per-presentation bookkeeping for Cancel semantics. A REFERENCE type:
-    /// the dismissal callback must read the values as they are when it fires,
-    /// not as they were when the closure's frame was rendered (a value capture
-    /// would miss "Done" setting `applied` in the same action that dismisses).
-    @State private var session = Session()
-
     /// The last ``recentLimit`` gradients *applied* (Done), most recent first,
     /// persisted app-wide — see ``encodeRecents(_:)`` for the format.
     @AppStorage("tuikit.gradientEditor.recents") private var recentsRaw = ""
-
-    private final class Session {
-        var original: Gradient?
-        var applied = false
-    }
 
     /// The preview strip's width in cells — also the wrap budget for the stop
     /// and gradient chips, so no row grows the dialog past the preview.
@@ -166,7 +155,7 @@ public struct GradientEditorPanel: View {
 
     public var body: some View {
         let recents = Self.decodeRecents(recentsRaw)
-        Dialog(title: title, titleColor: .palette.accent, footerAlignment: .center) {
+        _EditorPanelChrome(title: title, edited: gradient, isPresented: isPresented) {
             VStack(alignment: .center, spacing: 1) {
                 modeSwitch
                 previewStrip
@@ -185,29 +174,14 @@ public struct GradientEditorPanel: View {
                 Divider().frame(width: Self.previewWidth)
                 _ColorPickerBody(selection: selectedStopBinding)
             }
-            .onAppear { session.original = gradient.wrappedValue }
-            .onDisappear {
-                // ANY dismissal that isn't "Done" — Cancel, Esc, the page
-                // going away — restores what the dialog opened with. Live
-                // edits already wrote through `stops`, so this is the undo.
-                if !session.applied, let original = session.original {
-                    gradient.wrappedValue = original
-                }
-            }
-        } footer: {
-            // No leading Spacer (it is width-flexible and would stretch the
-            // dialog); the footer sizes to the buttons, the dialog to its tabs.
-            HStack(spacing: 2) {
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.cancel)) { isPresented.wrappedValue = false }
-                Button(LocalizationService.shared.string(for: LocalizationKey.Button.done)) {
-                    session.applied = true
-                    recentsRaw = Self.encodeRecents(
-                        Self.recordingRecent(
-                            gradient.wrappedValue, in: Self.decodeRecents(recentsRaw)))
-                    isPresented.wrappedValue = false
-                }
-                .buttonStyle(.primary)
-            }
+        }
+        .onDone {
+            // Recorded on Done and only on Done: the recents list is a history of
+            // gradients the user KEPT, not of every ramp they dragged through on
+            // the way there.
+            recentsRaw = Self.encodeRecents(
+                Self.recordingRecent(
+                    gradient.wrappedValue, in: Self.decodeRecents(recentsRaw)))
         }
     }
 
