@@ -121,6 +121,28 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 
 // MARK: - List Core (Internal Rendering)
 
+/// `_ListCore`'s `StateStorage` slots, by name — the same two, in the same
+/// order, as `_TableCore`'s.
+///
+/// Required of every `_*Core` ("never use bare integer literals for
+/// `propertyIndex`"), and written out as `propertyIndex: 1  // focusID` at three
+/// call sites until now, where a comment is the only thing saying which slot
+/// that is and nothing checks it.
+///
+/// `0...`, not the negative reserved range: a List renders its caller's rows
+/// under CHILD identities, never at its own, so these cannot alias a composite
+/// content view's first `@State`. At file scope rather than nested, because
+/// `_ListCore` is generic and a nested type inherits that generic context, where
+/// a `static let` is not allowed (`_ImageCore` and `_UserResizableCore` do the
+/// same).
+private enum StateIndex {
+    /// The persisted ``ItemListHandler`` — selection, cursor, scroll offset.
+    static let handler = 0
+    /// The focus id, persisted so it survives a frame where the declaration is
+    /// momentarily absent (see `FocusRegistration.persistFocusID`).
+    static let focusID = 1
+}
+
 /// Internal core view that handles list rendering inside a
 /// ContainerView.
 ///
@@ -538,7 +560,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "list",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
         // Whether the rows overflow — and so whether a scrollbar or an
         // indicator line is wanted — cannot be settled before the handler is in
@@ -714,7 +736,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "list",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
         let (handler, _) = resolvePopulatedHandler(
             source: source,
@@ -862,7 +884,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         contentHeight: Int
     ) -> (handler: ItemListHandler<SelectionValue>, showsScrollbar: Bool) {
         let handlerKey = StateStorage.StateKey(
-            identity: context.identity, propertyIndex: 0)
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<ItemListHandler<SelectionValue>> = stateStorage.storage(
             for: handlerKey,
             default: ItemListHandler(

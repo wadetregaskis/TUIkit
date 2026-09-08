@@ -393,6 +393,27 @@ extension Table {
 
 // MARK: - Table Core (Internal Rendering)
 
+/// `_TableCore`'s `StateStorage` slots, by name.
+///
+/// Required of every `_*Core` — the project rule is "never use bare integer
+/// literals for `propertyIndex`" — and this was one of the last two views still
+/// writing `propertyIndex: 1  // focusID`, at seven call sites, where a comment
+/// is the only thing saying which slot that is and nothing checks it.
+///
+/// `0...`, not the negative reserved range: a table renders no caller-supplied
+/// content at its OWN identity, so these can never alias a composite content
+/// view's first `@State`. At file scope rather than nested, because
+/// `_TableCore` is generic and a nested type inherits that generic context,
+/// where a `static let` is not allowed (`_ImageCore` and `_UserResizableCore`
+/// do the same).
+private enum StateIndex {
+    /// The persisted ``ItemListHandler`` — selection, cursor, scroll offset.
+    static let handler = 0
+    /// The focus id, persisted so it survives a frame where the declaration is
+    /// momentarily absent (see `FocusRegistration.persistFocusID`).
+    static let focusID = 1
+}
+
 /// Internal core view that handles table rendering inside a ContainerView.
 private struct _TableCore<Value: Identifiable & Sendable>: View, Renderable, Layoutable
 where Value.ID: Hashable {
@@ -553,7 +574,8 @@ where Value.ID: Hashable {
             if data.count > rowArea {
                 let persistedFocusID = FocusRegistration.persistFocusID(
                     context: context, explicitFocusID: focusID,
-                    defaultPrefix: "table", propertyIndex: 1)
+                    defaultPrefix: "table",
+                    propertyIndex: StateIndex.focusID)
                 let (handler, _) = resolveHandler(
                     persistedFocusID: persistedFocusID,
                     stateStorage: context.stateStorage!,
@@ -871,7 +893,7 @@ where Value.ID: Hashable {
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "table",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
         let (handler, overflowing) = resolveHandler(
             persistedFocusID: persistedFocusID,
@@ -944,7 +966,8 @@ where Value.ID: Hashable {
     ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
         let contentHeight = max(1, context.availableHeight - 3)
         let persistedFocusID = FocusRegistration.persistFocusID(
-            context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
+            context: context, explicitFocusID: focusID, defaultPrefix: "table",
+            propertyIndex: StateIndex.focusID)
         let (handler, _) = resolveHandler(
             persistedFocusID: persistedFocusID, stateStorage: stateStorage, context: context,
             contentHeight: contentHeight, overflows: { data.count + $0 > contentHeight },
@@ -1101,8 +1124,10 @@ where Value.ID: Hashable {
         }
 
         let persistedFocusID = FocusRegistration.persistFocusID(
-            context: context, explicitFocusID: focusID, defaultPrefix: "table", propertyIndex: 1)
-        let handlerKey = StateStorage.StateKey(identity: context.identity, propertyIndex: 0)
+            context: context, explicitFocusID: focusID, defaultPrefix: "table",
+            propertyIndex: StateIndex.focusID)
+        let handlerKey = StateStorage.StateKey(
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
             for: handlerKey,
             default: ItemListHandler(
@@ -1707,7 +1732,7 @@ where Value.ID: Hashable {
         showsScrollbar: Bool = false
     ) -> (handler: ItemListHandler<Value.ID>, overflowing: Bool) {
         let handlerKey = StateStorage.StateKey(
-            identity: context.identity, propertyIndex: 0)
+            identity: context.identity, propertyIndex: StateIndex.handler)
         let handlerBox: StateBox<ItemListHandler<Value.ID>> = stateStorage.storage(
             for: handlerKey,
             default: ItemListHandler(
@@ -1899,7 +1924,7 @@ where Value.ID: Hashable {
             context: context,
             explicitFocusID: focusID,
             defaultPrefix: "table",
-            propertyIndex: 1  // focusID
+            propertyIndex: StateIndex.focusID
         )
         let (handler, _) = resolveHandler(
             persistedFocusID: persistedFocusID,
