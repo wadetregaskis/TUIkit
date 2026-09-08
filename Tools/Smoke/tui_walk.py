@@ -48,6 +48,9 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=42)
     parser.add_argument("--scale", type=int, default=0)
     parser.add_argument("--settle", type=float, default=1.0)
+    parser.add_argument("--paint-timeout", type=float, default=8.0,
+                        help="how long to keep looking for a repaint before "
+                             "calling the screen unchanged (see settled_change)")
     args = parser.parse_args()
 
     screen = pyte.Screen(args.cols, args.rows)
@@ -135,13 +138,30 @@ def main() -> int:
         calls it the end of the menu — which is exactly what it did.
 
         So an unchanged screen is a question, not an answer, and it is asked
-        again with the full settle behind it. Only the negative path waits, so
-        this costs nothing on the item-by-item walk.
+        again until `--paint-timeout` runs out. **Polled to a deadline, not
+        asked once more**, because one more look is still a fixed window and a
+        fixed window is still a race the slowest page can lose: `Stress`'s
+        Gradients page needs between 1.25 s and 1.75 s for its first paint in a
+        DEBUG build, and the smoke's `--settle 0.5` gave it 1.25 s, so the walk
+        called a page that paints perfectly well "stopped painting". The
+        threshold sat right where the machine's speed decided the answer.
+
+        Only the negative path waits, so this costs nothing on the
+        item-by-item walk: a Down that moved and an Enter that opened both
+        return on the first look. The one place that legitimately sees no
+        change is the bottom of the menu, which pays the deadline once, at the
+        end of the walk.
         """
-        if snapshot() != before:
-            return True
-        pump(args.settle)
-        return snapshot() != before
+        end = time.time() + args.paint_timeout
+        while True:
+            if snapshot() != before:
+                return True
+            if time.time() >= end:
+                return False
+            # A dead child will never repaint, so stop looking rather than
+            # burning the whole deadline — the caller's own `ok` reports it.
+            if not pump(min(args.settle, end - time.time())):
+                return snapshot() != before
 
     if not pump(1.5):
         print("FAIL: app died before the menu appeared")
