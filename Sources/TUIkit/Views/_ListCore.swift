@@ -911,48 +911,36 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.drawsScrollIndicators = indicators.text
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled(in: context)
-        // Captured at render so Shift+arrow can accelerate the focus cursor at
-        // event time, when the environment is no longer reachable.
-        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
-        // The app-customisable key bindings, resolved once here rather than
-        // per keystroke (see RowShortcuts.lookup).
-        handler.shortcuts = context.environment.rowShortcuts.lookup(
-            commandKey: context.environment.commandKey)
-        // `.cursor` feedback needs a session to float the row above the frame.
-        handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
-        // Captured so a cancel can take the floating preview down itself.
-        handler.dragSession = context.environment.dragAndDropSession
-        handler.isScrollEnabled = context.environment.isScrollEnabled
+        // Everything the handler's EVENTS will read out of the environment, in
+        // one shared call — see `ItemListHandler.syncFrameInputs`, which exists
+        // because this block used to be hand-copied here and in Table's two
+        // composers, and a capture added to one of the three was silently dead
+        // on the other two.
+        //
+        // `keyboardMoveIsLive: false` — a List's composer draws a drop slot, so
+        // the faint copy at it is the preview. Stated rather than left to the
+        // default, which is what makes this the same statement Table's two paths
+        // make and therefore comparable with them.
+        //
+        // `rowHeight` — List rows can be any height (the renderer already windows
+        // by real line heights), so the focus-reveal AND offset-clamp arithmetic
+        // must accumulate the same heights; otherwise a Down past the fold leaves
+        // the focused multi-line row off screen ("selection disappears") and the
+        // tail rows are unreachable. Set before the clamp below, so this frame's
+        // clamp uses this frame's rows. Lazy and memoised: only a viewport's
+        // worth is ever queried, so single-line lists pay nothing new and
+        // windowed lists stay O(visible).
+        handler.syncFrameInputs(
+            environment: context.environment,
+            reorderFeedback: context.environment.rowReorderFeedback,
+            keyboardMoveIsLive: false,
+            rowHeight: { source.row(at: $0).buffer.height })
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
         // terminal) and pulling any existing excursion back inside it.
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
             reservesIndicatorLine: indicators.text && overflowing)
-        // Captured at render so a USER wheel scroll can release a bound anchor
-        // to `.window` at event time. (The list's ARROW keys move the selection,
-        // which the spec shadow-switches to Row, not Window — that needs the
-        // selection↔anchor wiring and lands with it.)
-        handler.anchorPositionBinding = context.environment.anchorPosition
-        (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
-            context.environment.declaredAnchorModes
-        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
-        // List rows can be any height (the renderer already windows by real
-        // line heights), so the focus-reveal AND offset-clamp arithmetic must
-        // accumulate the same heights — otherwise a Down past the fold leaves
-        // the focused multi-line row off screen ("selection disappears"), and
-        // the tail rows are unreachable. Wired BEFORE the clamp below so this
-        // frame's clamp uses this frame's rows. Lazy + memoised: only a
-        // viewport's worth of rows is ever queried, so single-line lists pay
-        // nothing new and windowed lists stay O(visible).
-        handler.rowHeight = { source.row(at: $0).buffer.height }
-        // Captured at render for the same reason as the shift multiplier:
-        // wheel events arrive when the environment is out of reach.
-        handler.scrollGranularity = context.environment.scrollGranularity
-        // Same event-time capture: the reveal runs on key events.
-        handler.followMargin = context.environment.scrollFollowMargin
-        // …and again for a reorder drag, which runs entirely on mouse events.
-        handler.reorderFeedback = context.environment.rowReorderFeedback
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing

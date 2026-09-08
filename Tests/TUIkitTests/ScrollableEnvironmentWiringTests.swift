@@ -55,6 +55,38 @@ struct ScrollableEnvironmentWiringTests {
         return focus.currentFocused as? ItemListHandler<Int>
     }
 
+    /// The three viewports, by index, each wrapped in the same non-default
+    /// environment — which is the whole point: an assertion against a value that
+    /// is ALSO the default passes whether the capture happened or not, and this
+    /// suite exists to catch a capture that did not.
+    ///
+    /// The session is created by the CALLER and passed in, because
+    /// ``ItemListHandler/dragSession`` is `weak`: built and dropped here it would
+    /// be gone before the assertions run, and the case would report a defect that
+    /// is not there.
+    private func handler(
+        _ which: Int, session: DragAndDropSession
+    ) -> ItemListHandler<Int>? {
+        func wrapped(_ view: some View) -> some View {
+            view
+                .shiftStepMultiplier(9)
+                .scrollGranularity(.row)
+                .scrollFollowMargin(.steps(2))
+                .rowReorderFeedback(.dimmed)
+        }
+        return switch which {
+        case 0: focusedRowHandler(wrapped(singleLineTable()), session: session)
+        case 1: focusedRowHandler(wrapped(multiLineTable()), session: session)
+        default: focusedRowHandler(wrapped(list()), session: session)
+        }
+    }
+
+    /// The three viewports as `@Test` arguments. `nonisolated` because the
+    /// `@Test` macro reads it outside the suite's actor.
+    nonisolated static let arms = [
+        ("single-line Table", 0), ("multi-line Table", 1), ("List", 2),
+    ]
+
     private func singleLineTable() -> some View {
         Table(Self.rows, selection: .constant(Set<Int>())) {
             TableColumn("Name", value: \Row.name).width(.flexible)
@@ -122,5 +154,84 @@ struct ScrollableEnvironmentWiringTests {
         #expect(
             handler.dragSession === session,
             "\(name): the handler holds the session its gestures run in")
+    }
+
+    /// The captures that are the same on all three paths. One case rather than
+    /// one per property, because the failure mode being guarded is "a viewport
+    /// missed the block", not "a viewport got one line wrong" — and a single case
+    /// is what makes the whole block's absence show up as one clear failure.
+    ///
+    /// Not asserted here, for stated reasons rather than by omission:
+    /// `shortcuts` is a `RowShortcutLookup`, which is not `Equatable` and whose
+    /// `.default` answers every chord anyway, so only a behavioural oracle would
+    /// mean anything (`RowShortcutsTests` has one); and `anchorPositionBinding`
+    /// is a `Binding`, likewise not comparable. `wheelEdgeHold` and `dragSession`
+    /// have their own cases above.
+    @Test("The shared environment captures reach every row view", arguments: arms)
+    func sharedCapturesReachEveryRowView(name: String, which: Int) {
+        let session = DragAndDropSession()
+        guard let handler = handler(which, session: session) else {
+            Issue.record("\(name): expected the row view to take focus")
+            return
+        }
+        #expect(handler.shiftStepMultiplier == 9, "\(name): shiftStepMultiplier")
+        #expect(handler.scrollGranularity == .row, "\(name): scrollGranularity")
+        #expect(handler.followMargin == .steps(2), "\(name): followMargin")
+        #expect(handler.canFloatDraggedRow, "\(name): canFloatDraggedRow")
+        #expect(handler.isScrollEnabled, "\(name): isScrollEnabled")
+    }
+
+    /// `.scrollDisabled(true)` is the one shared capture whose non-default value
+    /// cannot share a fixture with the case above — it is a gate the other
+    /// assertions would then be measured through.
+    @Test("Scroll disabling reaches every row view", arguments: arms)
+    func scrollDisabledReachesEveryRowView(name: String, which: Int) {
+        let session = DragAndDropSession()
+        let view: any View =
+            switch which {
+            case 0: singleLineTable().scrollDisabled(true)
+            case 1: multiLineTable().scrollDisabled(true)
+            default: list().scrollDisabled(true)
+            }
+        guard let handler = focusedRowHandler(AnyView(view), session: session) else {
+            Issue.record("\(name): expected the row view to take focus")
+            return
+        }
+        #expect(!handler.isScrollEnabled, "\(name): .scrollDisabled did not reach the handler")
+    }
+
+    /// The three values that legitimately DIFFER per viewport, which is why
+    /// `syncFrameInputs` takes them as required arguments rather than reading
+    /// them all from the environment.
+    ///
+    /// The fixture puts `.dimmed` in the environment deliberately. Both the
+    /// handler's default and the environment's default are `.live`, so a case
+    /// that asserted `.live` on the multi-line arm from a default fixture would
+    /// pass with the assignment deleted — it has to assert `.live` DESPITE an
+    /// environment asking for `.dimmed`, and `.dimmed` on the two arms that
+    /// honour it.
+    @Test("The per-path values are what each path says they are", arguments: arms)
+    func perPathValuesDifferAsIntended(name: String, which: Int) {
+        let session = DragAndDropSession()
+        guard let handler = handler(which, session: session) else {
+            Issue.record("\(name): expected the row view to take focus")
+            return
+        }
+        let isMultiLineTable = which == 1
+        #expect(
+            handler.reorderFeedback == (isMultiLineTable ? .live : .dimmed),
+            """
+            \(name): a multi-line Table forces .live because its composer draws \
+            no slot; every other viewport honours the app's choice
+            """)
+        #expect(
+            handler.keyboardMoveIsLive == isMultiLineTable,
+            "\(name): keyboardMoveIsLive follows the same rule, on every path")
+        #expect(
+            (handler.rowHeight == nil) == (which == 0),
+            """
+            \(name): only uniform single-line rows may answer nil, where the \
+            scroll arithmetic counts rows instead of lines
+            """)
     }
 }

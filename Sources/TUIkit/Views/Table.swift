@@ -1132,44 +1132,29 @@ where Value.ID: Hashable {
         handler.onMove = moveAction
         // BEFORE the rows are composed — see the List's twin call site.
         handler.carryReorderTargetThroughAutoScroll()
-        // Multi-line rows reorder with `.live` feedback only: a drop slot would
-        // have to take part in the line-budget arithmetic below that lets a tall
-        // row be partially clipped, and moving the rows themselves needs no slot.
-        // Stated in ``Table/onMove(_:)``. That includes a KEYBOARD move, which
-        // the handler otherwise previews `.dimmed` — a slot this composer never
-        // draws, so Ctrl-R moved nothing visible and parked the cursor on the
-        // slot's neighbour.
-        handler.reorderFeedback = .live
-        handler.keyboardMoveIsLive = true
-        // Captured at render so Shift+arrow can accelerate the focus cursor at
-        // event time, when the environment is no longer reachable.
-        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
-        // The app-customisable key bindings, resolved once here rather than
-        // per keystroke (see RowShortcuts.lookup).
-        handler.shortcuts = context.environment.rowShortcuts.lookup(
-            commandKey: context.environment.commandKey)
-        // `.cursor` feedback needs a session to float the row above the frame.
-        handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
-        // Captured so a cancel can take the floating preview down itself.
-        handler.dragSession = context.environment.dragAndDropSession
-        handler.isScrollEnabled = context.environment.isScrollEnabled
-        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
-        // Captured at render so a USER wheel scroll can release a bound anchor
-        // at event time, and so the anchor hold below can resolve its mode.
-        // Mirrors _ListCore.resolvePopulatedHandler — a Table anchors exactly
-        // as a List does.
-        handler.anchorPositionBinding = context.environment.anchorPosition
-        (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
-            context.environment.declaredAnchorModes
+        // As on the single-line path, in one shared call — see
+        // `ItemListHandler.syncFrameInputs`.
+        //
+        // `reorderFeedback: .live` — multi-line rows reorder live only: a drop
+        // slot would have to take part in the line-budget arithmetic below that
+        // lets a tall row be partially clipped, and moving the rows themselves
+        // needs no slot. Stated in ``Table/onMove(_:)``.
+        //
+        // `keyboardMoveIsLive: true` — for the same reason. The handler
+        // otherwise previews a keyboard move `.dimmed`, at a slot this composer
+        // never draws, so Ctrl-R moved nothing visible and parked the cursor on
+        // the slot's neighbour.
+        //
+        // `rowHeight` — the reveal-on-focus arithmetic runs between renders, on
+        // key events, and answers heights lazily from this frame's data and
+        // column widths.
+        handler.syncFrameInputs(
+            environment: context.environment,
+            reorderFeedback: .live,
+            keyboardMoveIsLive: true,
+            rowHeight: { rowHeight(of: data[$0], columnWidths: columnWidths) })
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
-        // The reveal-on-focus arithmetic (run between renders, on key events)
-        // answers heights lazily too, from this frame's data and column widths.
-        handler.rowHeight = { rowHeight(of: data[$0], columnWidths: columnWidths) }
-        // Captured for wheel events, which arrive when the environment is out
-        // of reach — line granularity steps by lines through the tall rows.
-        handler.scrollGranularity = context.environment.scrollGranularity
-        handler.followMargin = context.environment.scrollFollowMargin
         // `viewportHeight` is set once the window is cut, below. It used to be
         // set HERE to the row count of the tail screenful — an
         // offset-independent number that once calibrated the handler's
@@ -1836,52 +1821,30 @@ where Value.ID: Hashable {
         handler.onMove = moveAction
         // BEFORE the rows are composed — see the List's twin call site.
         handler.carryReorderTargetThroughAutoScroll()
-        handler.reorderFeedback = context.environment.rowReorderFeedback
-        // Set — never merely left alone — for the same reason as the two below.
-        // `buildMultiLineContent` raises this because ITS composer draws no
-        // reorder slot, and the handler persists across frames at one identity,
-        // so a table whose columns stop reporting `lineLimit > 1` arrived here
-        // still claiming a keyboard move needs no preview. This path draws the
-        // slot, so the faint copy at it IS the indicator.
-        handler.keyboardMoveIsLive = false
-        handler.rowHeight = nil  // single-line path: uniform-height scroll math
-        // With uniform rows lines == rows, so granularity is moot here — but
-        // sync it (and zero any stale clip below) in case the table's rows
-        // switch between the single-line and multi-line paths across frames.
-        handler.scrollGranularity = context.environment.scrollGranularity
-        handler.followMargin = context.environment.scrollFollowMargin
-        handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
-        // The app-customisable key bindings, resolved once here rather than
-        // per keystroke (see RowShortcuts.lookup).
-        handler.shortcuts = context.environment.rowShortcuts.lookup(
-            commandKey: context.environment.commandKey)
-        // `.cursor` feedback needs a session to float the row above the frame.
-        handler.canFloatDraggedRow = context.environment.dragAndDropSession != nil
-        // Captured so a cancel can take the floating preview down itself, and so
-        // the mid-drag navigators reach the view under the POINTER rather than
-        // falling back to this one.
-        handler.dragSession = context.environment.dragAndDropSession
-        // The nested-scroll grace period. `.scrollChainingDelay(_:)` documents
-        // itself as reaching "List, Table, ScrollView, both axes" — without this
-        // a single-line Table was the one scroller in that list that kept the
-        // 500 ms default no matter what the app asked for.
-        handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds
-        // Table configures its handler from TWO independent places — here for
-        // single-line rows, and inline in `buildMultiLineContent` for multi-line
-        // ones. Anything captured in only one of them is silently dead on the
-        // other path, which is how `017683fa` found every anchor behaviour
-        // missing from Table while its twin List had them all. These two are the
-        // same class: `.scrollDisabled` reached only the multi-line path when it
-        // shipped, and the overscroll allowance would have had the same hole.
-        handler.isScrollEnabled = context.environment.isScrollEnabled
+        // Everything the handler's EVENTS will read out of the environment, in
+        // one shared call — see `ItemListHandler.syncFrameInputs`, which exists
+        // because this block used to be hand-copied here, in
+        // `buildMultiLineContent` and in `_ListCore`, and a capture added to one
+        // of the three was silently dead on the other two.
+        //
+        // `rowHeight: nil` — uniform single-line rows, so the scroll arithmetic
+        // counts rows and the granularity is moot (it is still captured, and any
+        // stale clip zeroed below, in case a table's rows switch between this
+        // path and the multi-line one across frames).
+        //
+        // `keyboardMoveIsLive: false` — this path's composer DOES draw a reorder
+        // slot, so the faint copy at it is the preview. Stated rather than left
+        // alone because the handler persists at one identity: a table whose
+        // columns stop reporting `lineLimit > 1` arrives here still carrying the
+        // other path's `true`.
+        handler.syncFrameInputs(
+            environment: context.environment,
+            reorderFeedback: context.environment.rowReorderFeedback,
+            keyboardMoveIsLive: false,
+            rowHeight: nil)
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
             reservesIndicatorLine: handler.drawsScrollIndicators)
-        // Same event-time capture as the multi-line path above: a user wheel
-        // scroll releases a bound anchor, and the hold below reads the mode.
-        handler.anchorPositionBinding = context.environment.anchorPosition
-        (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
-            context.environment.declaredAnchorModes
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`
