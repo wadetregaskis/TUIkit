@@ -118,7 +118,12 @@ enum FocusRegistration {
         // it before the ring files it, or `.focused($field, equals:)` and every
         // other by-id lookup goes on addressing a name the view has stopped
         // answering to.
-        if var persisted = handler as? any PersistedFocusable, persisted.focusID != focusID {
+        // `let`, not `var`, and the difference is nothing: ``Focusable`` refines
+        // `AnyObject`, so the binding is a reference and the write lands on the
+        // handler the ring holds. Written `var` it drew a compiler warning that
+        // it was never mutated — which is exactly right, and would be a real bug
+        // rather than a warning if the protocol ever stopped being class-bound.
+        if let persisted = handler as? any PersistedFocusable, persisted.focusID != focusID {
             persisted.focusID = focusID
         }
         // Focus registration is per-frame presence (sections are rebuilt every
