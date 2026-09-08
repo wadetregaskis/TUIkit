@@ -31,6 +31,10 @@ struct ScrollableEnvironmentWiringTests {
         Row(id: $0, name: "row \($0)", note: "note \($0) with several words to wrap")
     }
 
+    /// Two rows in a six-line frame: nothing is hidden, whatever the app asked
+    /// for. The `rows` fixture above is twelve in six and always overflows.
+    private static let fewRows = Array(rows.prefix(2))
+
     /// Renders `view` with a drag session and a zero chaining delay in scope,
     /// Tabs to focus it, and hands back whichever `ItemListHandler` that is —
     /// the one the view's own events will consult.
@@ -232,6 +236,67 @@ struct ScrollableEnvironmentWiringTests {
             """
             \(name): only uniform single-line rows may answer nil, where the \
             scroll arithmetic counts rows instead of lines
+            """)
+    }
+
+    /// `drawsScrollIndicators` has to mean the same thing on all three viewports,
+    /// because one rule reads it: `ScrollRowWindow` reserves a content line when
+    /// it is true.
+    ///
+    /// Its documented meaning is "whether this frame's render SPENDS content
+    /// lines on the indicators" — so a view with nothing hidden must report
+    /// false, however loudly the app asked for indicators. `Table` folded
+    /// `overflowing` in on both its paths; `_ListCore` did not, and reported true
+    /// on a list that reserved nothing.
+    ///
+    /// The fixture asks for `.visible` deliberately. Under the default
+    /// `.automatic`, `ScrollIndicatorVisibility.showsIndicator` returns
+    /// `overflowing` itself, so all three agree already and the case would pass
+    /// against the bug. `.visible` is the one visibility that says "yes" without
+    /// consulting the content.
+    @Test(
+        "Whether indicators spend lines means the same on every row view",
+        arguments: arms, [false, true])
+    func indicatorSpendMeansOneThing(arm: (name: String, which: Int), overflows: Bool) {
+        let session = DragAndDropSession()
+        let data = overflows ? Self.rows : Self.fewRows
+        func loud(_ view: some View) -> some View {
+            view.scrollIndicators(.visible).scrollIndicatorStyle(.text)
+        }
+        let handler: ItemListHandler<Int>? =
+            switch arm.which {
+            case 0:
+                focusedRowHandler(
+                    loud(
+                        Table(data, selection: .constant(Set<Int>())) {
+                            TableColumn("Name", value: \Row.name).width(.flexible)
+                        }
+                        .frame(height: 6)), session: session)
+            case 1:
+                focusedRowHandler(
+                    loud(
+                        Table(data, selection: .constant(Set<Int>())) {
+                            TableColumn("Note", value: \Row.note).width(.flexible).lineLimit(3)
+                        }
+                        .frame(height: 6)), session: session)
+            default:
+                focusedRowHandler(
+                    loud(
+                        List(selection: .constant(Set<Int>())) {
+                            ForEach(data) { Text($0.name) }
+                        }
+                        .frame(height: 6)), session: session)
+            }
+        guard let handler else {
+            Issue.record("\(arm.name): expected the row view to take focus")
+            return
+        }
+        #expect(
+            handler.drawsScrollIndicators == overflows,
+            """
+            \(arm.name), \(overflows ? "overflowing" : "everything fits"): reported \
+            \(handler.drawsScrollIndicators). The flag is "does a line come out of \
+            the content area this frame", and one shared window rule reserves on it.
             """)
     }
 }

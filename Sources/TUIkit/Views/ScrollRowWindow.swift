@@ -57,10 +57,9 @@ struct ScrollRowWindow {
     ///     in both cases the whole content area is viewport, nothing is
     ///     reserved, and there is no clip worth absorbing.
     ///
-    ///     Pass the CONJUNCTION with "does this view overflow": a view whose
-    ///     rows all fit has nothing hidden to announce and so reserves nothing.
-    ///     `Table` folds that into `handler.drawsScrollIndicators` already;
-    ///     `_ListCore` keeps them apart and combines them here.
+    ///     `ItemListHandler.drawsScrollIndicators` is exactly this question, on
+    ///     all three callers — including "does the view overflow", since a view
+    ///     whose rows all fit has nothing hidden to announce.
     ///   - height: A row's height in lines. Called at most once per row that
     ///     enters the window, plus once for the row that straddles its end —
     ///     never for a row beyond it. That bound is load-bearing rather than

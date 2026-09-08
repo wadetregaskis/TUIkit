@@ -570,17 +570,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // ends (which used to push the "N more below" indicator one row too high)
         // and no overflow in the middle.
         //
-        // The CONJUNCTION with `overflowing`, because that is what the rule's
-        // `drawsTextIndicators` means to it — "does a line come out of the
-        // content area". A list whose rows all fit has nothing hidden to
-        // announce, and a bar or hidden indicators spend a column or nothing
-        // rather than a line. `Table` folds the same conjunction into
-        // `handler.drawsScrollIndicators` itself; this keeps the two apart and
-        // combines them here.
+        // `handler.drawsScrollIndicators` is exactly what the rule's
+        // `drawsTextIndicators` means — "does a line come out of the content
+        // area" — on this view and on both of `Table`'s, which is what lets one
+        // rule serve all three.
         let window = ScrollRowWindow.resolve(
             scrollOffset: handler.scrollOffset, count: source.count,
             contentHeight: rowBudget, topClip: handler.scrollTopClipLines,
-            drawsTextIndicators: handler.drawsScrollIndicators && overflowing,
+            drawsTextIndicators: handler.drawsScrollIndicators,
             height: { source.row(at: $0).buffer.height })
         // Where this frame is DRAWN from: the window may have absorbed a top clip
         // (or a whole first row) an indicator would have cost more to announce
@@ -915,7 +912,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.showsScrollbar = showsScrollbar
         // …and neither does a list whose indicators are hidden outright, which
         // is why this is the resolved answer rather than `!showsScrollbar`.
-        handler.drawsScrollIndicators = indicators.text
+        //
+        // AND neither does a list whose rows all fit: the property means "this
+        // frame's render spends content lines on the indicators", and a list with
+        // nothing hidden draws none. `.automatic` visibility already folds
+        // `overflowing` in — `ScrollIndicatorVisibility.showsIndicator` returns it
+        // — but `.visible` does not, so an app that asked for the indicators
+        // outright had this reading true on a list that reserved nothing. `Table`
+        // has always folded it in on both its paths; this is the line that makes
+        // the two views mean the same thing by the same flag.
+        handler.drawsScrollIndicators = indicators.text && overflowing
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled(in: context)
         // Everything the handler's EVENTS will read out of the environment, in
@@ -947,7 +953,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // terminal) and pulling any existing excursion back inside it.
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
-            reservesIndicatorLine: indicators.text && overflowing)
+            reservesIndicatorLine: handler.drawsScrollIndicators)
         // Mutating the *persistent* scroll position must happen only on the
         // real render pass, never while measuring. A `List` with no explicit
         // height that shares space with a flexible sibling (e.g. a trailing
