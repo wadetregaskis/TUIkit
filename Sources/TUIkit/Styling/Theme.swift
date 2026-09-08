@@ -81,7 +81,59 @@ public struct ThemeModifier<Content: View>: View {
     /// Not used during rendering — ``Renderable`` conformance takes priority.
     public var body: some View { content }
 
+    /// A comparable stand-in for a control style, which is not `Equatable`.
+    ///
+    /// The built-in styles are stateless singletons distinguished only by their
+    /// type, so the type IS the value — and unlike the style itself it can be
+    /// compared, which is what keeps the note below from answering
+    /// `.incomparable` and refusing every memo store in the subtree.
+    private func styleToken(_ style: Any?) -> ObjectIdentifier? {
+        style.map { ObjectIdentifier(type(of: $0)) }
+    }
+
     private func modifiedContext(_ context: RenderContext) -> RenderContext {
+        // The same bookkeeping `EnvironmentModifier`, `TintModifier` and
+        // `_StyleEnvironmentView` do, and not optional here either. The render
+        // memo keys on identity, view value and size and deliberately carries
+        // no environment, so a memoized subtree under a `.theme(…)` that
+        // CHANGED serves the buffer painted in the old palette — wrong pixels,
+        // not merely stale work. A theme driven by `@State` on an ancestor is
+        // covered by accident, because that view's own invalidation reaches the
+        // subtree; one driven by `@AppStorage`, a cousin's state or a plain box
+        // is not.
+        //
+        // What is noted is the theme's INPUTS, never `environment.palette`.
+        // With a tint that slot holds a `TintedPalette`, which has no
+        // `Equatable` conformance — noting it would answer `.incomparable` and
+        // refuse every memo store below every tinted theme, which is a worse
+        // regression than the bug. The palette is a pure function of (base,
+        // tint) and both of those are comparable, so comparing them is the same
+        // question asked of values that can answer it. Same trade, same
+        // reasoning, as the note in `TintModifier.modifiedContext`.
+        if let cache = context.renderCache {
+            var changed = false
+            func note(_ value: Any, _ keyPath: PartialKeyPath<EnvironmentValues>) {
+                if case .changed = cache.noteAppliedEnvironment(
+                    value, identity: context.identity, keyPath: keyPath,
+                    depth: context.environmentApplicationDepth)
+                {
+                    changed = true
+                }
+            }
+            note(theme.appearance, \EnvironmentValues.appearance)
+            note(theme.palette, \EnvironmentValues.palette)
+            note(theme.tint as Any, \EnvironmentValues.tint)
+            note(theme.styles, \EnvironmentValues.styleCascade)
+            note(styleToken(theme.buttonStyle) as Any, \EnvironmentValues.buttonStyle)
+            note(styleToken(theme.listStyle) as Any, \EnvironmentValues.listStyle)
+            note(styleToken(theme.pickerStyle) as Any, \EnvironmentValues.pickerStyle)
+            if changed {
+                // A theme is ink; the sizes below it stay, as `TintModifier` and
+                // `_StyleEnvironmentView` both keep theirs.
+                cache.clearAffected(by: context.identity, keepingSizes: true)
+            }
+        }
+
         var environment = context.environment
         environment.appearance = theme.appearance
         if let tint = theme.tint {
@@ -100,7 +152,9 @@ public struct ThemeModifier<Content: View>: View {
             cascade = cascade.appending(entry.scope, entry.attributes)
         }
         environment.styleCascade = cascade
-        return context.withEnvironment(environment)
+        var modified = context.withEnvironment(environment)
+        modified.environmentApplicationDepth += 1
+        return modified
     }
 }
 

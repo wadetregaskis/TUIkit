@@ -111,11 +111,17 @@ public struct TintModifier<Content: View>: View {
         // ancestor, so its own invalidation reaches the row); a tint bound to
         // anything else — `@AppStorage`, a cousin's state, a plain box — is not.
         //
-        // The TINT is what is noted, not the `TintedPalette`: a palette is an
-        // existential with no `Equatable` conformance, so noting it would answer
-        // `.incomparable` and refuse every memo store in the subtree, and the
-        // palette is a pure function of (base, tint) anyway — whoever swaps the
-        // base palette notes that themselves.
+        // The TINT is what is noted, not the `TintedPalette`: THAT type has no
+        // `Equatable` conformance, so noting it would answer `.incomparable`
+        // and refuse every memo store in the subtree — and the palette is a
+        // pure function of (base, tint) anyway, so whoever swaps the base
+        // palette notes that themselves.
+        //
+        // Not because it is an existential, which is what this said until
+        // `ThemeModifier` needed the same answer and measured it: an `Any`
+        // holding `any Palette` reports the CONCRETE type's conformance, so a
+        // `SystemPalette` in that slot answers `is any Equatable` perfectly
+        // well. It is `TintedPalette` specifically that cannot.
         if let cache = context.renderCache,
             case .changed = cache.noteAppliedEnvironment(
                 tint, identity: context.identity, keyPath: \EnvironmentValues.tint,

@@ -251,6 +251,56 @@ struct RenderCacheContractTests {
         #expect(served.lines != redTruth.lines, "not the buffer from the old one")
     }
 
+    /// `.theme(_:)` is the same environment application as the two above, and
+    /// was the one that did none of the bookkeeping: it assigned the appearance,
+    /// palette, tint, control styles and style cascade straight onto the child
+    /// context and told the cache nothing. A memoized subtree below a theme that
+    /// changed therefore served the buffer painted in the OLD palette.
+    ///
+    /// What it notes is the theme's INPUTS, never the resolved
+    /// `environment.palette`: with a tint that slot holds a `TintedPalette`,
+    /// which has no `Equatable` conformance, so noting it would answer
+    /// `.incomparable` and refuse every memo store below every tinted theme.
+    /// That would be a worse regression than the bug, so the second case here
+    /// pins that memoization still WORKS under a theme.
+    @Test("A .theme change above an .equatable() re-renders it")
+    func scopedThemeChangeIsNotServedStale() {
+        let base = context()
+        let green = Theme(palette: SystemPalette(.green))
+        let blue = Theme(palette: SystemPalette(.blue))
+
+        let greenTruth = frame(
+            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().theme(green))
+        let blueTruth = frame(
+            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().theme(blue))
+        #expect(
+            greenTruth.lines != blueTruth.lines,
+            "precondition: the two themes must differ on screen")
+
+        let shared = context()
+        frame(shared, AccentLeaf(text: "hi").equatable().theme(green))
+        let served = frame(shared, AccentLeaf(text: "hi").equatable().theme(blue))
+        #expect(served.lines == blueTruth.lines, "the new theme must be rendered")
+        #expect(served.lines != greenTruth.lines, "not the buffer from the old one")
+    }
+
+    /// The other half, and the one a careless fix breaks: an UNCHANGED theme
+    /// must still let the subtree memoize. Noting the resolved palette instead
+    /// of the theme's inputs would answer `.incomparable` every frame and turn
+    /// the memo off under every tinted theme — which no output comparison would
+    /// catch, only the miss count.
+    @Test("An unchanged theme does not defeat the memo below it")
+    func unchangedThemeStillMemoizes() {
+        let shared = context()
+        // A TINTED theme: the resolved palette is the incomparable one.
+        let theme = Theme(palette: SystemPalette(.green), tint: .red)
+        frame(shared, AccentLeaf(text: "hi").equatable().theme(theme))
+        let before = shared.renderCache?.stats.subtreeClears ?? 0
+        frame(shared, AccentLeaf(text: "hi").equatable().theme(theme))
+        let after = shared.renderCache?.stats.subtreeClears ?? 0
+        #expect(after == before, "an unchanged theme cleared the subtree anyway")
+    }
+
     /// `.tint(_:)` swaps the environment palette for a `TintedPalette`, which is
     /// an environment application like any other: a memoized subtree below it
     /// keys on the view value, which does not change when the tint above it
