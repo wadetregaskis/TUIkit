@@ -1179,7 +1179,8 @@ where Value.ID: Hashable {
         // travel by the wrong count wherever the rows at the end are taller or
         // shorter than the rows on screen.
         let furthest = syncIndicatorChrome(
-            handler, showsScrollbar: showsScrollbar, rowArea: rowArea, context: context, heightOf: heightOf)
+            handler, showsScrollbar: showsScrollbar, rowArea: rowArea,
+            contentHeight: contentHeight, context: context, heightOf: heightOf)
         // §1.5, in LINES — not against `viewportHeight`, which on this path is
         // a ROW count (set from the window further down). Resolving against
         // that made `.viewport(minus:)` mean "rows visible − n" lines here
@@ -1378,10 +1379,17 @@ where Value.ID: Hashable {
     /// itself decided using this answer (see `maxScrollOffset`), so it cannot
     /// also be an input to it — and a table that turns out to fit reserves
     /// nothing either way, having nothing hidden to announce.
+    ///
+    /// `contentHeight` is the CONTENT AREA, and it must not be the row area.
+    /// The two differ by the drag landing slot, so gating on the row area would
+    /// blink the "N more" lines out mid-drag on a three-line table — where the
+    /// compose had three lines to spend and never overflowed anything.
     private func drawsTextIndicators(
-        _ showsScrollbar: Bool, _ context: RenderContext
+        _ showsScrollbar: Bool, _ context: RenderContext, contentHeight: Int
     ) -> Bool {
-        !showsScrollbar && context.environment.verticalScrollIndicators(overflowing: true).text
+        !showsScrollbar
+            && context.environment.verticalScrollIndicators(overflowing: true)
+                .fitting(contentHeight: contentHeight).text
     }
 
     /// The multi-line path's indicator chrome, published to the handler, and
@@ -1394,16 +1402,21 @@ where Value.ID: Hashable {
     /// arithmetic). Same divergence class as the `017683fa` capture notes on
     /// the single-line path.
     private func syncIndicatorChrome(
-        _ handler: ItemListHandler<Value.ID>, showsScrollbar: Bool, rowArea: Int, context: RenderContext,
+        _ handler: ItemListHandler<Value.ID>, showsScrollbar: Bool, rowArea: Int,
+        contentHeight: Int, context: RenderContext,
         heightOf: @escaping (Int) -> Int
     ) -> Int {
+        // `rowArea` budgets the rows; `contentHeight` decides whether the
+        // indicators fit at all. See ``drawsTextIndicators(_:_:contentHeight:)``
+        // for why the two must not be conflated here.
+        let draws = drawsTextIndicators(showsScrollbar, context, contentHeight: contentHeight)
         let furthest = maxScrollOffset(
             count: data.count, contentHeight: rowArea,
-            drawsTextIndicators: drawsTextIndicators(showsScrollbar, context), height: heightOf)
+            drawsTextIndicators: draws, height: heightOf)
         handler.showsScrollbar = showsScrollbar
         // Not `!showsScrollbar`: a table whose indicators are hidden draws
         // neither, and the "N more" arithmetic must know that.
-        handler.drawsScrollIndicators = drawsTextIndicators(showsScrollbar, context) && furthest > 0
+        handler.drawsScrollIndicators = draws && furthest > 0
         return furthest
     }
 
@@ -1813,7 +1826,7 @@ where Value.ID: Hashable {
         // passes `showsScrollbar: true` and composes its own rows, so this is
         // the "N more" answer for both.
         handler.drawsScrollIndicators =
-            overflowing && drawsTextIndicators(showsScrollbar, context)
+            overflowing && drawsTextIndicators(showsScrollbar, context, contentHeight: contentHeight)
         // Provisional, and RENDER-ONLY for the reason `reserveIndicatorLines`
         // spells out: a measure pass is handed a height the frame may not get,
         // and this value outlives the pass that wrote it.

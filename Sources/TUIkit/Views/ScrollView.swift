@@ -569,7 +569,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // view, with the content it advertises never visible at any offset.
         // Content always wins the last lines: indicators need 3+ rows (both
         // may show and at least one content line survives).
-        if drawsTextIndicators(context), visibleBuffer.height >= 3 {
+        if drawsTextIndicators(context),
+            visibleBuffer.height >= ResolvedScrollIndicators.minimumTextHeight
+        {
             visibleBuffer = applyScrollIndicators(
                 to: visibleBuffer,
                 handler: handler,

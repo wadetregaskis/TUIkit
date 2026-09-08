@@ -887,7 +887,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // edge (the default), the "N more" text lines, or — when the visibility
         // says so — nothing at all. Decided before the offset-1 snap below,
         // which only saves an indicator line a bar doesn't have.
-        let indicators = context.environment.verticalScrollIndicators(overflowing: overflowing)
+        // `.fitting(contentHeight:)`: below three lines the "N more" pair would
+        // take the whole content area and the rows would be unreachable at any
+        // offset. Applied HERE, at the one point the list resolves them, so
+        // every consumer downstream — the window origin, the row budget, the
+        // max offset, the overscroll settle, the composers — agrees.
+        let indicators = context.environment
+            .verticalScrollIndicators(overflowing: overflowing)
+            .fitting(contentHeight: contentHeight)
         let showsScrollbar = indicators.bar
         // Clamp the offset against the largest possible visible-row
         // count (one indicator, at an end); the exact viewport is

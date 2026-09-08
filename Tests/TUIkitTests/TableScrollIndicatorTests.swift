@@ -37,12 +37,14 @@ struct TableScrollIndicatorTests {
     private func renderFrame(
         tui: TUIContext, fm: FocusManager,
         twoLineRows: Bool = false,
+        singleLinePath: Bool = false,
         granularity: ScrollGranularity = .row,
-        scrollbar: ScrollIndicatorVisibility = .hidden
+        scrollbar: ScrollIndicatorVisibility = .hidden,
+        height: Int = Self.height
     ) -> [String] {
         renderBuffer(
-            tui: tui, fm: fm, twoLineRows: twoLineRows, granularity: granularity,
-            scrollbar: scrollbar
+            tui: tui, fm: fm, twoLineRows: twoLineRows, singleLinePath: singleLinePath,
+            granularity: granularity, scrollbar: scrollbar, height: height
         ).lines.map { $0.stripped }
     }
 
@@ -51,7 +53,8 @@ struct TableScrollIndicatorTests {
         twoLineRows: Bool = false,
         singleLinePath: Bool = false,
         granularity: ScrollGranularity = .row,
-        scrollbar: ScrollIndicatorVisibility = .hidden
+        scrollbar: ScrollIndicatorVisibility = .hidden,
+        height: Int = Self.height
     ) -> FrameBuffer {
         let rows = (0..<20).map(Note.init(id:))
         // A line limit above 1 takes the MULTI-line layout path even for
@@ -64,7 +67,7 @@ struct TableScrollIndicatorTests {
                     ? TableColumn("Name", value: \Note.twoLine).lineLimit(2)
                     : TableColumn("Name", value: \Note.name).lineLimit(2)
         }
-        .frame(height: Self.height)
+        .frame(height: height)
 
         var env = EnvironmentValues()
         env.focusManager = fm
@@ -77,7 +80,7 @@ struct TableScrollIndicatorTests {
         env.horizontalScrollIndicatorVisibility = .automatic
         env.applyRuntimeServices(from: tui)
         let context = RenderContext(
-            availableWidth: 30, availableHeight: Self.height, environment: env, tuiContext: tui)
+            availableWidth: 30, availableHeight: height, environment: env, tuiContext: tui)
 
         tui.preferences.beginRenderPass()
         tui.stateStorage.beginRenderPass()
@@ -114,6 +117,55 @@ struct TableScrollIndicatorTests {
         // The cursor's row stays visible — absorbing the offset must not cost
         // the reveal its target.
         #expect(lines.contains { $0.contains("row 9") }, "cursor row scrolled off: \(lines)")
+    }
+
+    /// A content area too short for the "N more" pair drops them and draws
+    /// rows, rather than spending the whole area saying rows exist.
+    ///
+    /// `height` 4 is top border + header + bottom border + ONE content line.
+    /// Scrolled away from the top, that line used to read "▲ N more rows
+    /// above" — the composer emitted the indicator, one row and the bottom
+    /// indicator into a one-line budget, and the container clips from the
+    /// BOTTOM, so the indicator was the line that survived. The table then
+    /// advertised rows that no offset could reach.
+    ///
+    /// `ScrollView` has guarded this since it was written, with a comment
+    /// naming the failure; `List` and `Table` had no equivalent. The rule is
+    /// one constant now, `ResolvedScrollIndicators.minimumTextHeight`.
+    @Test("A one-line content area draws a row, not an indicator", arguments: [4, 5])
+    func shortContentAreaKeepsItsRows(height: Int) {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, height: height)
+        var lines: [String] = []
+        for _ in 0..<9 {
+            _ = fm.dispatchKeyEvent(KeyEvent(key: .down))
+            lines = renderFrame(tui: tui, fm: fm, height: height)
+        }
+        #expect(
+            lines.contains { $0.contains("row ") },
+            "height \(height): no data row survived the indicators: \(lines)")
+        #expect(
+            !lines.contains { $0.contains("more row") },
+            "height \(height): an indicator took content the view could not spare: \(lines)")
+    }
+
+    /// The other side of the floor: as soon as the area can hold both
+    /// indicators and a row, they come back. Without this the fix could be
+    /// "never draw them" and still pass the case above.
+    @Test("A content area that can afford the indicators still draws them")
+    func tallEnoughContentAreaStillIndicates() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, height: 6)  // 3 content lines
+        var lines: [String] = []
+        for _ in 0..<9 {
+            _ = fm.dispatchKeyEvent(KeyEvent(key: .down))
+            lines = renderFrame(tui: tui, fm: fm, height: 6)
+        }
+        #expect(
+            lines.contains { $0.contains("more row") },
+            "the indicators were dropped where they fit: \(lines)")
     }
 
     /// The single-line path, while STEERING — the one state where offset 1

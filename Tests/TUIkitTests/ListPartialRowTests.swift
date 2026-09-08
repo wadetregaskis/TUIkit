@@ -153,4 +153,26 @@ struct ListPartialRowTests {
             #expect(contiguous, "\(previous) is followed by \(current): \(visible)")
         }
     }
+
+    /// The `Table` twin of this is `TableScrollIndicatorTests
+    /// .shortContentAreaKeepsItsRows`, and the two exist separately because
+    /// these two views keep drifting apart on rules they are supposed to share.
+    ///
+    /// A List's borders take two lines, so height 3 leaves ONE for content.
+    /// Scrolled off the top, that line used to read "▲ N more rows above": the
+    /// composer emitted an indicator, a row and another indicator into a
+    /// one-line budget, and the container clips from the BOTTOM, so the
+    /// indicator was what survived. The list then advertised rows that no
+    /// offset could reach.
+    @Test("A one- or two-line content area draws rows, not indicators",
+        arguments: [3, 4], [1, 3])
+    func shortContentAreaKeepsItsRows(height: Int, wheel: Int) {
+        let visible = listLines(height: height, wheel: wheel)
+        #expect(
+            visible.contains { $0.contains("r") && $0.contains("L") },
+            "height \(height), wheel \(wheel): no row line survived: \(visible)")
+        #expect(
+            !visible.contains { $0.contains("more row") },
+            "height \(height), wheel \(wheel): an indicator took the only line: \(visible)")
+    }
 }

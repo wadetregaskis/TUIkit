@@ -120,6 +120,34 @@ struct ResolvedScrollIndicators {
 
     /// Nothing is drawn: the content scrolls silently.
     static let none = Self(bar: false, text: false)
+
+    /// The shortest content area the "▲/▼ N more" lines can be drawn into:
+    /// both may show at once, and at least one line of content has to survive
+    /// them.
+    ///
+    /// A hard floor rather than a tolerance. The text indicators are LINES of
+    /// the content area — `ScrollView` writes them over its first and last,
+    /// `List` and `Table` reserve them out of the rows' budget — so a one- or
+    /// two-line view scrolled away from the top is 100% chrome: "▲ N more rows
+    /// above" as the entire view, advertising content that is then unreachable
+    /// at every offset.
+    static let minimumTextHeight = 3
+
+    /// The same answer with the "N more" lines dropped when `contentHeight`
+    /// cannot hold both of them and a row.
+    ///
+    /// Dropped rather than clipped, and dropped rather than swapped for a bar.
+    /// A bar was tempting — it costs a COLUMN, so it fits a viewport of any
+    /// height, and it would keep some affordance where this keeps none — but
+    /// it silently overrides the style the app asked for, and `ScrollView`
+    /// would then be the only one of the three that omits. Showing some
+    /// content beats showing none, and three views agreeing beats cleverness
+    /// in two of them. The resulting state is exactly `.scrollIndicators
+    /// (.hidden)`, which every consumer downstream already handles.
+    func fitting(contentHeight: Int) -> Self {
+        guard text, contentHeight < Self.minimumTextHeight else { return self }
+        return Self(bar: bar, text: false)
+    }
 }
 
 extension EnvironmentValues {
