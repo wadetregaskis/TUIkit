@@ -168,6 +168,36 @@ struct TableScrollIndicatorTests {
             "the indicators were dropped where they fit: \(lines)")
     }
 
+    /// A flag the multi-line composer raises must be lowered by the other path.
+    ///
+    /// It lives in this file for the harness rather than the subject: this is
+    /// the one place that renders a `Table` down BOTH layout paths at a single
+    /// identity, which is exactly the state the defect needs.
+    ///
+    /// `buildMultiLineContent` sets `keyboardMoveIsLive = true` because its
+    /// composer draws no reorder slot, so a keyboard move has nothing to
+    /// preview and the row moving under the cursor is the only indication.
+    /// The handler persists across frames at one identity and the path is
+    /// chosen per frame by whether any column reports `lineLimit > 1` — a
+    /// public modifier — so a table that stopped being multi-line arrived at
+    /// the single-line path still claiming that, and previewed `.live`: a
+    /// keyboard move that shuffles the data with no slot and no indication.
+    /// Nothing else in the package ever wrote the flag.
+    @Test("Leaving the multi-line path clears the flag only that path sets")
+    func singleLinePathClearsMultiLineFlag() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderBuffer(tui: tui, fm: fm)  // multi-line path: raises the flag
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler?.keyboardMoveIsLive == true, "the multi-line path did not set it")
+
+        // Same table, same identity, columns no longer multi-line.
+        _ = renderBuffer(tui: tui, fm: fm, singleLinePath: true)
+        #expect(
+            handler?.keyboardMoveIsLive == false,
+            "the single-line path inherited a flag it cannot honour")
+    }
+
     /// The single-line path, while STEERING — the one state where offset 1
     /// survives to render, because the resting settle deliberately does not
     /// snap it while an auto-scroll / reorder / external drag is in flight.

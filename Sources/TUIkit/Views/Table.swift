@@ -1837,6 +1837,13 @@ where Value.ID: Hashable {
         // BEFORE the rows are composed — see the List's twin call site.
         handler.carryReorderTargetThroughAutoScroll()
         handler.reorderFeedback = context.environment.rowReorderFeedback
+        // Set — never merely left alone — for the same reason as the two below.
+        // `buildMultiLineContent` raises this because ITS composer draws no
+        // reorder slot, and the handler persists across frames at one identity,
+        // so a table whose columns stop reporting `lineLimit > 1` arrived here
+        // still claiming a keyboard move needs no preview. This path draws the
+        // slot, so the faint copy at it IS the indicator.
+        handler.keyboardMoveIsLive = false
         handler.rowHeight = nil  // single-line path: uniform-height scroll math
         // With uniform rows lines == rows, so granularity is moot here — but
         // sync it (and zero any stale clip below) in case the table's rows
