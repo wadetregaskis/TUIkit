@@ -1200,22 +1200,12 @@ where Value.ID: Hashable {
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
             reservesIndicatorLine: handler.drawsScrollIndicators)
-        if !context.isMeasuring {
-            handler.clampScrollOffset()
-            handler.clampTopClip()
-            // Never rest at offset 1 — see `settleRestingOffset`, the rule
-            // shared with _ListCore and the single-line path below. The
-            // line-granularity exception (a wheel tick legitimately resting
-            // mid-row) reads the first row's height, resolved lazily.
-            handler.settleRestingOffset(
-                overflowing: furthest > 0, drawsTextIndicators: handler.drawsScrollIndicators,
-                firstRowHeight: heightOf(0))
-            // Apply whichever anchor is in effect (§1.1) — a `.row` designation
-            // pins that row, a `.bottom` edge follows the tail. Render pass only
-            // (it mutates the persistent offset), and after `idAt` above so a row
-            // key resolves. A no-op for an unanchored Table. Mirrors _ListCore.
-            handler.applyAnchorHold()
-        }
+        // Clamp, snap off the resting duplicate, apply the anchor — the sequence
+        // `_ListCore` and the single-line path below run too, and the render-pass
+        // guard that has to wrap it. See `settleScrollPosition`.
+        handler.settleScrollPosition(
+            measuring: context.isMeasuring, overflowing: furthest > 0,
+            drawsTextIndicators: handler.drawsScrollIndicators, firstRowHeight: heightOf(0))
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
 
@@ -1823,28 +1813,11 @@ where Value.ID: Hashable {
         // windowed List path (_ListCore.resolvePopulatedHandler).
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
-        // Mutate the *persistent* scroll offset only on the real render pass.
-        // A measure pass may be offered a larger height than the Table finally
-        // renders into (e.g. when it shares space with fixed siblings), so a
-        // measure-time clamp computes `maxOffset` against too large a viewport
-        // and pulls the offset back every frame — the last rows then can't be
-        // reached. The render pass runs last and clamps with the true viewport,
-        // so legitimate clamping (e.g. the data shrinking) still happens.
-        // Mirrors _ListCore / ScrollView.
-        if !context.isMeasuring {
-            handler.clampScrollOffset()
-            handler.clampTopClip()
-            // Never rest at offset 1 — see `settleRestingOffset`, shared with
-            // _ListCore. Rows on this path are one line each, so the
-            // line-granularity exception can never apply here; the shared rule
-            // is what keeps a drag auto-scroll able to leave the top.
-            handler.settleRestingOffset(
-                overflowing: overflowing,
-                drawsTextIndicators: handler.drawsScrollIndicators,
-                firstRowHeight: 1)
-            // Apply the anchor in effect — see the multi-line path above.
-            handler.applyAnchorHold()
-        }
+        // As the multi-line path — see `settleScrollPosition`. Rows here are one
+        // line each, so the snap's line-granularity exception can never apply.
+        handler.settleScrollPosition(
+            measuring: context.isMeasuring, overflowing: overflowing,
+            drawsTextIndicators: handler.drawsScrollIndicators, firstRowHeight: 1)
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         return (handler, overflowing)

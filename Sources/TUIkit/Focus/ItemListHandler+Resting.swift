@@ -74,6 +74,57 @@ extension ItemListHandler {
         scrollOffset = 0
     }
 
+    /// The whole settle, once per frame: clamp the offset and the top clip, snap
+    /// off the resting duplicate, then apply the anchor — in that order.
+    ///
+    /// The order is not a detail. `applyAnchorHold` is documented as running
+    /// "after the frame's row count, viewport, row heights and id resolver are
+    /// wired and the ordinary clamp has run", and the clamp has to precede the
+    /// resting snap because the snap tests `scrollOffset == 1`, a value the clamp
+    /// can produce. Written out at all three call sites — `Table`'s two paths and
+    /// `_ListCore` — the sequence was one thing a reader had to reconstruct from
+    /// three places and check against a doc comment on a fourth.
+    ///
+    /// `Table` had them adjacent; `_ListCore` split them, running the anchor forty
+    /// lines later because its id wiring sat in between. Sharing them meant moving
+    /// that wiring above the clamp, which is where the contract above says it
+    /// belongs anyway — the clamps read the row count, the viewport and the row
+    /// heights, and none of them read an id.
+    ///
+    /// - Parameters:
+    ///   - measuring: Whether this is a measuring pass, in which case this does
+    ///     NOTHING. The rule it enforces is the reason the guard is in here
+    ///     rather than at each call site: everything below mutates the
+    ///     *persistent* scroll position, and a measure pass may be offered a
+    ///     larger height than the view finally renders into — a `List` with no
+    ///     explicit height sharing space with a flexible sibling is measured with
+    ///     the FULL available height. Clamping there computes `maxOffset` against
+    ///     a viewport that is not the real one and pulls the offset back every
+    ///     frame; the symptom is a view that cannot be scrolled its last
+    ///     screenful. The render pass runs last and clamps with the true
+    ///     viewport, so legitimate clamping — a filter shrinking the row count —
+    ///     still happens every frame.
+    ///   - overflowing: Whether the content is taller than the viewport.
+    ///   - drawsTextIndicators: Whether the "N more" lines are the indicator this
+    ///     view draws — see ``settleRestingOffset(overflowing:drawsTextIndicators:firstRowHeight:)``.
+    ///   - firstRowHeight: The first row's height in lines, `@autoclosure` for the
+    ///     reason the snap's own parameter is: a `List` resolves it by building
+    ///     the row.
+    func settleScrollPosition(
+        measuring: Bool,
+        overflowing: Bool,
+        drawsTextIndicators: Bool,
+        firstRowHeight: @autoclosure () -> Int
+    ) {
+        guard !measuring else { return }
+        clampScrollOffset()
+        clampTopClip()
+        settleRestingOffset(
+            overflowing: overflowing, drawsTextIndicators: drawsTextIndicators,
+            firstRowHeight: firstRowHeight())
+        applyAnchorHold()
+    }
+
     /// Re-resolves this frame's overscroll allowance (§1.5) — how far past its
     /// edges this view may be pushed — in the LINES the excursion is drawn in.
     ///

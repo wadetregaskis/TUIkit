@@ -982,28 +982,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.resolveOverscroll(
             environment: context.environment, contentHeight: contentHeight,
             reservesIndicatorLine: handler.drawsScrollIndicators)
-        // Mutating the *persistent* scroll position must happen only on the
-        // real render pass, never while measuring. A `List` with no explicit
-        // height that shares space with a flexible sibling (e.g. a trailing
-        // `Spacer`) is measured with the FULL available height — much larger
-        // than the height it ends up rendering into — so a measure-pass
-        // `clampScrollOffset()` would clamp `scrollOffset` against a viewport
-        // (and therefore a `maxOffset`) far smaller than the real one, pulling
-        // the offset back every frame. The symptom: the list can't be scrolled
-        // (wheel / arrows / Page Down / End) the last screenful to its bottom.
-        // The render pass below runs last and clamps with the true viewport, so
-        // legitimate clamping (e.g. a filter shrinking the row count) still
-        // happens every frame.
-        if !context.isMeasuring {
-            handler.clampScrollOffset()
-            handler.clampTopClip()
-            // Never rest at offset 1 — see `settleRestingOffset`, which both
-            // List and Table call so the rule cannot drift between them again.
-            handler.settleRestingOffset(
-                overflowing: overflowing, drawsTextIndicators: indicators.text,
-                firstRowHeight: source.row(at: 0).buffer.height)
-        }
-
         // Wire up id resolution + the selectable-index set. For an all-content
         // windowed list (the hot path) both are O(1): ids resolve lazily per
         // visible row through `idAt`, and an empty `selectableIndices` already
@@ -1035,6 +1013,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             handler.itemIDs = itemIDs
             handler.selectableIndices = selectableIndices
         }
+        // Clamp, snap off the resting duplicate, apply the anchor — one sequence,
+        // shared with `Table`'s two paths, along with the render-pass guard that
+        // has to wrap it. The id wiring above is here rather than below because
+        // the anchor step reads the resolver; nothing in the clamp does. See
+        // `settleScrollPosition`.
+        handler.settleScrollPosition(
+            measuring: context.isMeasuring, overflowing: overflowing,
+            drawsTextIndicators: indicators.text,
+            firstRowHeight: source.row(at: 0).buffer.height)
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         // A hierarchical list's rows come from an `OutlineGroup`, which is what
@@ -1062,14 +1049,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let dynamicActions = source.allContent ? content as? DynamicViewContentActions : nil
         handler.onDelete = dynamicActions?.deleteAction
         handler.onMove = dynamicActions?.moveAction
-        // Apply whichever anchor is in effect (§1.1): a `.row` designation pins
-        // that row as data changes around it, a `.bottom` edge follows the tail.
-        // Render pass only — it mutates the persistent offset — and after the id
-        // resolver above so a row key resolves. A no-op for every list with
-        // neither `.anchorPosition` nor `defaultScrollAnchor`.
-        if !context.isMeasuring {
-            handler.applyAnchorHold()
-        }
         return (handler, showsScrollbar)
     }
 
