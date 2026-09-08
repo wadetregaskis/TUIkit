@@ -64,6 +64,29 @@ struct GridTests {
         #expect(measured.height == rendered.lines.count)
     }
 
+    /// The case the test above cannot see, because every row in it has content.
+    ///
+    /// `renderToBuffer` gives each row a canvas of `max(1, rowHeight)` — a row
+    /// is at least a line, whatever it holds — while `sizeThatFits` summed the
+    /// raw heights. So every row that measures zero tall made the reported
+    /// height one line short of the drawn one, and the parent clipped the
+    /// difference off the bottom: with one empty row, the grid's LAST row does
+    /// not appear.
+    @Test("A row with nothing in it is measured the height it is drawn")
+    func emptyRowMeasuresAsDrawn() {
+        let view = Grid {
+            GridRow { Text("one") }
+            GridRow { EmptyView() }
+            GridRow { Text("three") }
+        }
+        let context = makeRenderContext(width: 60, height: 12)
+        let measured = measureChild(view, proposal: .unspecified, context: context)
+        let rendered = renderToBuffer(view, context: context)
+        #expect(
+            measured.height == rendered.lines.count,
+            "measured \(measured.height) but drew \(rendered.lines.count)")
+    }
+
     @Test("Spacing is in whole cells and defaults to 1 column, 0 rows")
     func spacingDefaults() {
         let tight = lines(

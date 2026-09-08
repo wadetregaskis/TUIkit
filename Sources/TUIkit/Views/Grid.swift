@@ -285,8 +285,17 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
         let rows = rows(context: context)
         guard !rows.isEmpty else { return ViewSize.fixed(0, 0) }
         let lattice = lattice(rows, context: context)
+        // `max(1, …)` per row, because that is what `renderToBuffer` draws: it
+        // gives every row a canvas of `max(1, rowHeight)`, so a row is at least
+        // a line whatever it holds. Summing the raw heights made the reported
+        // height one line short for each row that measured zero tall, and the
+        // parent clips what overflows — with one empty row, the grid's LAST row
+        // did not appear. Aligned to the render rather than the other way
+        // round: the render is what anyone has ever seen, so this changes no
+        // pixels, only the number the grid tells its parent about them.
         let height =
-            lattice.heights.reduce(0, +) + max(0, lattice.heights.count - 1) * verticalSpacing
+            lattice.heights.reduce(0) { $0 + max(1, $1) }
+            + max(0, lattice.heights.count - 1) * verticalSpacing
         return ViewSize(
             width: min(totalWidth(lattice.columns), max(0, proposal.width ?? context.availableWidth)),
             height: min(height, max(0, proposal.height ?? context.availableHeight)))
