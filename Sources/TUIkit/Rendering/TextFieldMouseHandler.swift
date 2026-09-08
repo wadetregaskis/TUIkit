@@ -34,7 +34,7 @@ enum TextFieldMouseHandler {
     ///   - persistedFocusID: The field's stable focus identifier.
     ///   - hoverBox: Persisted hover flag, toggled on `.entered` / `.exited`.
     ///   - contentWidth: The width of the content area between the caps.
-    ///   - displayCharacter: The same index → display character mapping the
+    ///   - displayCharacter: The same character → display character mapping the
     ///     field's ``TextFieldContentRenderer`` uses; the click-to-caret math
     ///     needs the *display* cell widths (a `SecureField` bullet is one cell
     ///     however wide the hidden character is).
@@ -51,7 +51,7 @@ enum TextFieldMouseHandler {
         persistedFocusID: String,
         hoverBox: StateBox<Bool>,
         contentWidth: Int,
-        displayCharacter: @escaping (_ index: Int, _ text: String) -> Character,
+        displayCharacter: @escaping (Character) -> Character,
         leadingCapWidth: Int = 1,
         disclosureRange: Range<Int>? = nil
     ) {

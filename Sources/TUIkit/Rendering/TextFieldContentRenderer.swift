@@ -26,7 +26,17 @@ struct TextFieldContentRenderer {
 
     /// Returns the display character for a given index in the text.
     /// For TextField: the actual character. For SecureField: a bullet.
-    let displayCharacter: (_ index: Int, _ text: String) -> Character
+    /// Maps one character of the text to the character actually drawn — itself
+    /// for a `TextField`, a bullet for a `SecureField`.
+    ///
+    /// Takes the CHARACTER, not its index, and that is not a style preference.
+    /// The index form was resolved as `text[text.index(text.startIndex,
+    /// offsetBy: index)]`, an O(index) grapheme walk, and three loops call it
+    /// once per character — so a field cost O(n²) grapheme steps in its own
+    /// text, on every render, plus once per mouse event and so once per drag
+    /// motion. Taking the character lets every loop walk the string ONCE,
+    /// sequentially, and materialises no array to do it.
+    let displayCharacter: (Character) -> Character
 
     /// The field's surface, or `nil` for a `.plain` field that draws none.
     /// See ``TextFieldStyle``.
@@ -107,9 +117,9 @@ struct TextFieldContentRenderer {
                 background: backgroundColor,
                 width: contentWidth,
                 foregroundOverride: Self.promptColor(palette: palette, on: backgroundColor),
-                displayOverride: { index, text in
-                    text[text.index(text.startIndex, offsetBy: index)]
-                }
+                // The PROMPT is never masked, so it draws itself even under a
+                // secure field's bullet mapping.
+                displayOverride: { $0 }
             )
         } else if isFocused {
             return buildTextWithCursor(
@@ -144,12 +154,12 @@ struct TextFieldContentRenderer {
     /// the field's width from its neighbours and its hit regions — the combo
     /// disclosure drifting off its click target was exactly that.
     nonisolated static func displayCellWidths(
-        of text: String, displayCharacter: (_ index: Int, _ text: String) -> Character
+        of text: String, displayCharacter: (Character) -> Character
     ) -> [Int] {
         var widths: [Int] = []
         widths.reserveCapacity(text.count)
-        for index in 0..<text.count {
-            widths.append(max(1, displayCharacter(index, text).terminalWidth))
+        for character in text {
+            widths.append(max(1, displayCharacter(character).terminalWidth))
         }
         return widths
     }
@@ -209,8 +219,8 @@ struct TextFieldContentRenderer {
     ) -> String {
         var displayText = ""
         var cells = 0
-        for index in 0..<text.count {
-            let character = displayCharacter(index, text)
+        for source in text {
+            let character = displayCharacter(source)
             let characterWidth = max(1, character.terminalWidth)
             if cells + characterWidth > width { break }
             displayText.append(character)
@@ -271,7 +281,7 @@ struct TextFieldContentRenderer {
         background: Color?,
         width: Int,
         foregroundOverride: Color? = nil,
-        displayOverride: ((_ index: Int, _ text: String) -> Character)? = nil
+        displayOverride: ((Character) -> Character)? = nil
     ) -> FieldContent {
         // A SecureField masks its CONTENT, never its prompt — a placeholder
         // rendered as bullets tells the user nothing.
@@ -393,9 +403,9 @@ struct TextFieldContentRenderer {
             (cellX, outputCells) = (cellX + cells, outputCells + cells)
         }
 
-        for index in 0..<characterCount {
+        for (index, source) in text.enumerated() {
             let isSelected = selectionRange.map { index >= $0.lowerBound && index < $0.upperBound } ?? false
-            let char = displayCharacter(index, text)
+            let char = displayCharacter(source)
             if index == clampedPosition {
                 emitCaret(cells: widths[index], underlying: char, isSelected: isSelected)
                 continue

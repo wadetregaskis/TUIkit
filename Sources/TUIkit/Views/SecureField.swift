@@ -379,7 +379,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
             isDisabled: isDisabled,
-            displayCharacter: { _, _ in TerminalSymbols.maskBullet },
+            displayCharacter: { _ in TerminalSymbols.maskBullet },
             surface: chrome.surface,
             contentForeground: cascaded.foreground
         )
@@ -424,7 +424,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
                 persistedFocusID: persistedFocusID,
                 hoverBox: hoverBox,
                 contentWidth: contentWidth,
-                displayCharacter: { _, _ in TerminalSymbols.maskBullet },
+                displayCharacter: { _ in TerminalSymbols.maskBullet },
                 leadingCapWidth: chrome.leadingCells)
         }
 

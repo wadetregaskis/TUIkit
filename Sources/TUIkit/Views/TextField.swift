@@ -445,9 +445,9 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         // honours a `.control(.textField)` cascade foreground (`.textFieldTextStyle`).
         let cascaded = context.environment.styleCascade.resolve(
             for: [.all, .text, .control(.textField)])
-        let displayCharacter: (Int, String) -> Character = { index, text in
-            text[text.index(text.startIndex, offsetBy: index)]
-        }
+        // Identity: a text field draws what was typed. Written out rather than
+        // passed as `{ $0 }` so the secure field's bullet has a visible twin.
+        let displayCharacter: (Character) -> Character = { $0 }
         let renderer = TextFieldContentRenderer(
             prompt: prompt,
             isDisabled: isDisabled,

@@ -192,7 +192,7 @@ struct TextFieldRenderTests {
         let renderer = TextFieldContentRenderer(
             prompt: nil,
             isDisabled: false,
-            displayCharacter: { index, text in text[text.index(text.startIndex, offsetBy: index)] },
+            displayCharacter: { $0 },
             contentForeground: nil
         )
         let raw = renderer.buildContent(
