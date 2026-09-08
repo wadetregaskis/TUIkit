@@ -149,6 +149,17 @@ extension ConditionalView: ChildViewProvider {
             resolveChildViews(from: content, context: context)
         }
     }
+
+    /// The branch step `renderToBuffer` applies, made available to the
+    /// FLATTENING path — which is the one a stack takes, and which had no way
+    /// to tell the branches apart. The labels match that method's exactly, or
+    /// an identity built by one would not equal an identity built by the other.
+    public var identityBranchLabel: String? {
+        switch self {
+        case .trueContent: "true"
+        case .falseContent: "false"
+        }
+    }
 }
 
 /// An optional view (an `if` without `else`) flattens the same way: present

@@ -448,11 +448,32 @@ public protocol ChildViewProvider {
     /// takes to look it up. `ForEach` answers `true` once it has enough rows
     /// for the reverse to hold.
     var childViewsAreWorthMemoising: Bool { get }
+
+    /// A label naming WHICH content this provider is currently offering, when
+    /// it can offer more than one and they must not share an identity.
+    ///
+    /// Only `ConditionalView` answers it. An `if`/`else` renders one branch or
+    /// the other, and `renderToBuffer` distinguishes them with
+    /// `withBranchIdentity` — but a stack does not reach that method: it
+    /// FLATTENS the conditional through `childViews`, which resolved both
+    /// branches against the same context. Two same-typed branches then landed
+    /// on one identity and shared a `@State` box, so flipping the condition
+    /// carried the old branch's state into the new one.
+    ///
+    /// A label on the provider rather than a field on `ChildView`, because
+    /// `ChildView` is built and copied per child per pass and its size is
+    /// load-bearing — the last field added to it cost `churn` ~16% (see
+    /// ``ChildView/providerSlot``). This costs a word on a protocol nothing
+    /// else implements.
+    var identityBranchLabel: String? { get }
 }
 
 extension ChildViewProvider {
     /// Not worth it, unless a provider says otherwise.
     public var childViewsAreWorthMemoising: Bool { false }
+
+    /// Nothing to distinguish, unless a provider says otherwise.
+    public var identityBranchLabel: String? { nil }
 }
 
 /// Creates a ChildInfo for a single view.

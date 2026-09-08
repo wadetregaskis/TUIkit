@@ -37,6 +37,36 @@ private struct TestLazy<Content: View>: View {
     var body: some View { content() }
 }
 
+/// Both branches the SAME type, told apart only by an initial value.
+///
+/// The existing fixtures are two different types, which a type-keyed identity
+/// step separates on its own; this is the case that needs the BRANCH step.
+private struct Tagged: View {
+    // Internal for the same reason as the fixtures above: the test reads back
+    // what the framework hydrated.
+    @State var text: String  // swiftlint:disable:this private_swiftui_state
+
+    init(_ initial: String) {
+        _text = State(initialValue: initial)
+    }
+
+    var body: some View { Text("T=\(text)") }
+}
+
+/// Same-typed branches inside a STACK, which is the flattening path: a stack
+/// resolves its content through `ChildViewProvider.childViews`, never through
+/// `ConditionalView.renderToBuffer`, so the branch step that method applies
+/// was not reached at all.
+private struct StackedSameTypeHost: View {
+    let showA: Bool
+    var body: some View {
+        VStack {
+            Text("header")
+            if showA { Tagged("A") } else { Tagged("B") }
+        }
+    }
+}
+
 /// Swaps two stateful views directly in the body.
 private struct DirectHost: View {
     let showA: Bool
@@ -75,6 +105,27 @@ struct ConditionalStateIdentityTests {
         #expect(a.contains("A=A"))
         let b = text(renderToBuffer(DirectHost(showA: false), context: ctx))
         #expect(b.contains("B=B"), "B's @State must be independent of A's (render-identity keyed)")
+    }
+
+    /// A stack FLATTENS a conditional: it resolves its content through
+    /// `ChildViewProvider.childViews`, which reached neither branch step, so
+    /// two branches of the same type landed on one identity and shared a
+    /// `@State` box. Flipping the condition carried the old branch's value
+    /// into the new one.
+    ///
+    /// Same type in both branches deliberately. The identity step is keyed by
+    /// type as well as position, so branches of DIFFERENT types were separated
+    /// by accident — which is why the two cases above pass either way and this
+    /// one does not.
+    @Test("Same-typed branches inside a stack keep independent @State")
+    func stackedSameTypeBranchesIsolateState() {
+        let ctx = makeRenderContext()
+        let a = text(renderToBuffer(StackedSameTypeHost(showA: true), context: ctx))
+        #expect(a.contains("T=A"))
+        let b = text(renderToBuffer(StackedSameTypeHost(showA: false), context: ctx))
+        #expect(
+            b.contains("T=B"),
+            "the false branch read the true branch's state out of a shared box: \(b)")
     }
 
     @Test("Deferred construction also keeps independent @State")

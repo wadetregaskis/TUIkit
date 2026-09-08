@@ -165,7 +165,15 @@ extension TupleView: ChildViewProvider {
             // the present view actually rendered at — which is now under this
             // step, not beside it. Handing it the stack's context instead makes
             // every removal transition inside an `if` stop playing.
-            let providerContext = context.withChildIdentity(erasedType: C.self, index: slot)
+            var providerContext = context.withChildIdentity(erasedType: C.self, index: slot)
+            // An `if`/`else` offers one branch or the other from the same slot,
+            // and the two must not share an identity — see
+            // ``ChildViewProvider/identityBranchLabel``. The same step
+            // `ConditionalView.renderToBuffer` applies, so the flattened path
+            // and the whole-view path agree on where a branch's children live.
+            if let branch = provider.identityBranchLabel {
+                providerContext = providerContext.withBranchIdentity(branch)
+            }
             for entry in provider.childViews(context: providerContext) {
                 if entry.identityChildKey != nil {
                     // A KEYED row needs none of this and must not pay for it.
