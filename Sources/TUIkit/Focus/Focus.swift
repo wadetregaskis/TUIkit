@@ -272,6 +272,23 @@ public final class FocusManager: @unchecked Sendable {
         sections.flatMap { $0.focusables.map(\.focusID) }
     }
 
+    /// Whether anything registered so far can actually take the focus.
+    ///
+    /// The question a PROBE render asks of a throwaway manager — "did this
+    /// subtree contribute a focus stop?" — answered without the manager having
+    /// to focus something in order to answer it. `_VStackCore
+    /// .nearestFocusableRow` used to read `currentFocusedID != nil`, which
+    /// works only because `register` auto-focuses the first focusable element
+    /// on an empty manager; the probe's rows carry the app's REAL handlers, so
+    /// that auto-focus fired `onFocusReceived()` on a row nobody had focused.
+    ///
+    /// "Registered anything" is not the same question and would be the wrong
+    /// one: a disabled control still registers, with `canBeFocused` false, so
+    /// the ring can filter it at move time.
+    var hasFocusableElement: Bool {
+        sections.contains { $0.focusables.contains(where: { $0.canBeFocused }) }
+    }
+
     /// Whether any sections are registered (besides potentially the default).
     var hasSections: Bool {
         !sections.isEmpty

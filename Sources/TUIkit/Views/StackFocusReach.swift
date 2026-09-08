@@ -45,17 +45,24 @@ extension _VStackCore {
         var steps = 0
         while probe >= 0, probe < count, steps < Self.focusReachProbeCap {
             let scratch = FocusManager()
+            // The scratch manager must not FOCUS anything. It is throwaway, but
+            // the rows it registers are not: the probe shares the live
+            // `StateStorage`, so each one resolves the app's real persisted
+            // `Focusable` — and `register` auto-focuses the first focusable
+            // element on an empty manager, which called `onFocusReceived()` on
+            // a row nobody had focused, every frame, for as many rows as the
+            // probe walked. A `TextField` reached that way began editing.
+            scratch.suppressesAutoFocus = true
             var probeContext = context
             probeContext.environment.focusManager = scratch
             probeContext.environment.mouseEventDispatcher = nil
             _ = child(probe).render(
                 width: width, height: viewportHeight, context: probeContext)
-            // A disabled control still REGISTERS (with canBeFocused false —
-            // the ring filters it at move time), so "registered anything" is
-            // not the discriminator. `register` auto-focuses the first
-            // canBeFocused element on a fresh manager, so a non-nil focus
-            // here means exactly "this row contributed a focusABLE stop".
-            if scratch.currentFocusedID != nil { return probe }
+            // Asked directly now, rather than inferred from the side effect of
+            // an auto-focus. A disabled control still REGISTERS (with
+            // `canBeFocused` false — the ring filters it at move time), so
+            // "registered anything" would be the wrong question.
+            if scratch.hasFocusableElement { return probe }
             probe += direction
             steps += 1
         }

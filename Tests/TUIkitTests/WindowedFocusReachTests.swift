@@ -53,6 +53,41 @@ struct WindowedFocusReachTests {
         tuiContext.renderCache.removeInactive()
     }
 
+    /// The probe must not START anything on the rows it walks past.
+    ///
+    /// `nearestFocusableRow` renders candidate rows against a throwaway
+    /// `FocusManager` but the LIVE `StateStorage`, so every probed row resolves
+    /// the app's real persisted handler. Reading `currentFocusedID != nil` as
+    /// the discriminator meant relying on `register`'s auto-focus — so the
+    /// probe called `onFocusReceived()` on rows nobody had focused, and
+    /// `TextFieldHandler.onFocusReceived` is `onEditingChanged(true)`. Whole
+    /// runs of off-screen fields began editing sessions, every frame.
+    ///
+    /// `onEditingChanged` is the public spelling of that callback, which makes
+    /// it the honest oracle: nothing here reaches inside the focus system.
+    @Test("Probing for the next focus stop does not begin editing in the rows it walks")
+    func probeDoesNotDisturbTheRowsItWalks() {
+        final class Log { var began: [Int] = [] }
+        let log = Log()
+        let text = Binding.constant("")
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<40, id: \.self) { index in
+                TextField("field \(index)", text: text)
+                    .onEditingChanged { if $0 { log.began.append(index) } }
+            }
+        }
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        // Two frames: the first registers and auto-focuses row 0, the second is
+        // the steady state in which the probe walks for the ring continuation.
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, windowOffset: 0)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager, windowOffset: 0)
+
+        #expect(
+            log.began.allSatisfy { $0 == 0 },
+            "rows the probe only counted began editing: \(log.began)")
+    }
+
     /// Row 499's focus ID, captured the honest way: while it is on screen.
     /// (Default focus IDs embed the identity path; an app would capture one
     /// via FocusReference or use focus(id:) with an ID it saw while visible.)

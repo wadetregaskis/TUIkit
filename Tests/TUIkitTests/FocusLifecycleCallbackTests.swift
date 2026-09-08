@@ -48,6 +48,58 @@ struct FocusLifecycleCallbackTests {
         #expect(second.focusReceivedCount == 1, "and the successor is told it arrived")
     }
 
+    /// A PROBE render must be able to ask "did this subtree contribute a focus
+    /// stop?" without focusing anything to find out.
+    ///
+    /// `_VStackCore.nearestFocusableRow` renders candidate rows against a
+    /// throwaway `FocusManager` — but the same `StateStorage`, so each row
+    /// resolves the app's REAL persisted handler. It then read
+    /// `currentFocusedID != nil`, which works only because `register`
+    /// auto-focuses the first focusable element on an empty manager. So the
+    /// probe fired `onFocusReceived()` on the real handler of a row nobody had
+    /// focused, every frame, for as many rows as it walked — and that callback
+    /// is where a control hangs its transient state: a text field's editing
+    /// session, a multi-select's extend latch.
+    ///
+    /// Both halves are asserted, because either alone would let the bug back:
+    /// the suppression must silence the callback, and the accessor must still
+    /// answer the question the auto-focus was standing in for.
+    @Test("A suppressed manager answers what registered without focusing it")
+    func suppressedManagerDoesNotFocusWhileProbing() {
+        let manager = FocusManager()
+        manager.suppressesAutoFocus = true
+        let element = MockFocusable(id: "probed")
+
+        // No `endRenderPass`: the probe renders and reads, exactly this much.
+        // (That call has its own auto-focus, for resolving `.defaultFocus`,
+        // which is why suppressing only `register`'s is enough here and would
+        // not be for a manager driven through a whole frame.)
+        manager.beginRenderPass()
+        manager.register(element)
+
+        #expect(element.focusReceivedCount == 0, "the probe focused a row it was only counting")
+        #expect(manager.currentFocusedID == nil)
+        #expect(manager.hasFocusableElement, "the probe could not tell that a stop registered")
+    }
+
+    /// The discriminator must not answer "yes" to a DISABLED control: it still
+    /// registers, with `canBeFocused` false, so the ring can filter it at move
+    /// time. Reading "registered anything" instead would make the probe stop
+    /// walking at the first disabled row.
+    @Test("A registered but unfocusable element is not a focus stop")
+    func disabledElementIsNotAFocusStop() {
+        let manager = FocusManager()
+        manager.suppressesAutoFocus = true
+        let element = MockFocusable(id: "disabled")
+        element.canBeFocused = false
+
+        manager.beginRenderPass()
+        manager.register(element)
+
+        #expect(!manager.hasFocusableElement)
+        #expect(element.focusReceivedCount == 0)
+    }
+
     /// An element that leaves the tree entirely while focused: it is only
     /// reachable through LAST frame's ring (this frame never registered it),
     /// which is exactly where the loss notification must find it.
