@@ -504,8 +504,8 @@ extension Unicode.Scalar {
     ///
     /// This is the single source of truth for per-codepoint width;
     /// ``Character/terminalWidth`` is this plus the multi-scalar cluster rules.
-    /// Splitting it out is what lets the width scanners
-    /// (``Swift/StringProtocol/visibleRunWidth``) measure a run of
+    /// Splitting it out is what lets the width scanner
+    /// (``Swift/Unicode/Scalar/terminalRunWidth``) measure a run of
     /// non-combining scalars without paying for grapheme-cluster segmentation —
     /// see ``Character/isStandaloneClusterScalar(_:)``.
     var loneTerminalWidth: Int {
@@ -650,28 +650,6 @@ extension Unicode.Scalar {
 }
 
 // MARK: - ANSI String Helpers
-
-extension StringProtocol {
-    /// Terminal width of a run that contains NO ANSI escapes, fast-pathing pure
-    /// ASCII.
-    ///
-    /// ASCII is exactly one cell per byte, so for an all-ASCII run the width is
-    /// the byte count — computed by a plain byte scan that skips grapheme-cluster
-    /// segmentation. That segmentation (`_opaqueCharacterStride` /
-    /// `getGraphemeBreakProperty` / `_GraphemeBreakingState.shouldBreak`) is the
-    /// single dominant cost in render profiling, and the overwhelming majority of
-    /// terminal text — labels, wrapped words, table cells — is ASCII. The first
-    /// non-ASCII byte falls back to summing per-`Character` ``Character/terminalWidth``,
-    /// so results are byte-identical to the grapheme path.
-    var visibleRunWidth: Int {
-        var width = 0
-        for byte in utf8 {
-            if byte >= 0x80 { return unicodeScalars.terminalRunWidth }
-            width += 1
-        }
-        return width
-    }
-}
 
 extension Sequence where Element == Unicode.Scalar {
     /// Terminal width of an escape-free run of scalars.

@@ -20,64 +20,30 @@
 ///
 /// ```swift
 /// // In _*Core.renderToBuffer(context:):
-/// let registration = FocusRegistration.resolve(
+/// let persistedFocusID = FocusRegistration.persistFocusID(
 ///     context: context,
 ///     explicitFocusID: focusID,
 ///     defaultPrefix: "button",
-///     focusIDPropertyIndex: 0
-/// )
-///
-/// // Use registration.persistedFocusID and registration.isFocused
+///     propertyIndex: StateIndex.focusID)
+/// let handler: StateBox<MyHandler> = /* built or fetched from StateStorage */
+/// FocusRegistration.register(
+///     context: context, handler: handler.value, focusID: persistedFocusID)
+/// let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 /// ```
-struct FocusRegistration {
-    /// The stable focusID persisted across renders.
-    let persistedFocusID: String
-
-    /// Whether this view currently has focus.
-    let isFocused: Bool
-
-    /// Resolves focus state and registers a handler with the focus system.
-    ///
-    /// This is the primary entry point for views that create their handler
-    /// inline (Button, Toggle) using `ActionHandler`.
-    ///
-    /// - Parameters:
-    ///   - context: The current render context.
-    ///   - handler: The focusable handler to register.
-    ///   - explicitFocusID: An explicit focusID from the view's init, or `nil`.
-    ///   - defaultPrefix: The prefix for auto-generated focusIDs (e.g. `"button"`).
-    ///   - focusIDPropertyIndex: The `StateStorage` property index for persisting the focusID.
-    /// - Returns: A `FocusRegistration` with the persisted focusID and focus state.
-    static func resolve(
-        context: RenderContext,
-        handler: Focusable,
-        explicitFocusID: String?,
-        defaultPrefix: String,
-        focusIDPropertyIndex: Int
-    ) -> Self {
-        let persistedFocusID = persistFocusID(
-            context: context,
-            explicitFocusID: explicitFocusID,
-            defaultPrefix: defaultPrefix,
-            propertyIndex: focusIDPropertyIndex
-        )
-
-        register(context: context, handler: handler, focusID: persistedFocusID)
-
-        let isFocused = context.isMeasuring
-            ? false
-            : (context.environment.focusManager?.isFocused(id: persistedFocusID) ?? false)
-
-        return Self(persistedFocusID: persistedFocusID, isFocused: isFocused)
-    }
+///
+/// An `enum` rather than a `struct` because nothing is ever an instance of it:
+/// it had two stored properties that existed only to be a `resolve` return
+/// value, and every caller went the three-step way above instead.
+enum FocusRegistration {
 
     /// Persists the focusID in StateStorage and returns it, without registering a handler.
     ///
     /// Use this when the handler is also persisted in StateStorage and needs the
     /// focusID before construction (e.g. TextField, Slider, Stepper).
     ///
-    /// After creating/retrieving the handler, call ``register(context:handler:)``
-    /// and ``isFocused(context:focusID:)`` separately.
+    /// After creating/retrieving the handler, call
+    /// ``register(context:handler:focusID:)`` and ``isFocused(context:focusID:)``
+    /// separately.
     ///
     /// - Parameters:
     ///   - context: The current render context.
