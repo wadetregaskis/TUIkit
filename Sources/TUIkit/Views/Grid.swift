@@ -233,6 +233,10 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
             while columns.count < count { columns.append(0) }
         }
 
+        // The widest child that spans the whole grid, which belongs to no
+        // column — see Pass C.
+        var fullWidthNeed = 0
+
         // Pass A: single-column cells set their column's width.
         for row in rows {
             var height = 0
@@ -241,11 +245,22 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
                 let size = cell.measure(proposal: .unspecified, context: context)
                 height = max(height, size.height)
                 widen(to: index + span)
-                if span == 1 {
+                // `span == 1` is not enough on its own. A child that is not a
+                // `GridRow` arrives here as a one-cell row with span 1, and the
+                // render draws it at `x: 0` across the FULL width — it is not in
+                // column 0, so its width must not become column 0's. It did,
+                // which pushed every other column right by the difference: two
+                // short cells beside a sentence put the second column a
+                // sentence-width away. Pass B already excludes these rows; Pass
+                // A is where it was missed.
+                if span == 1 && !row.spansFullWidth {
                     columns[index] = max(columns[index], size.width)
                     if let guide = cell.gridColumnAlignment, columnAlignment[index] == nil {
                         columnAlignment[index] = guide
                     }
+                }
+                if row.spansFullWidth {
+                    fullWidthNeed = max(fullWidthNeed, size.width)
                 }
                 index += span
             }
@@ -270,6 +285,20 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
                 if size.width > covered {
                     columns[index + span - 1] += size.width - covered
                 }
+            }
+        }
+
+        // Pass C: a full-width child is a cell spanning every column, so it
+        // grows the last one when it still does not fit — exactly what Pass B
+        // does for an explicit `gridCellColumns` span. Excluding it from the
+        // per-column vote must not shrink the grid: the render lays it out at
+        // the grid's own width, and a grid narrower than its widest child would
+        // clip the child instead of moving a column.
+        if fullWidthNeed > 0 {
+            widen(to: 1)
+            let shortfall = fullWidthNeed - totalWidth(columns)
+            if shortfall > 0 {
+                columns[columns.count - 1] += shortfall
             }
         }
         return (columns, heights, columnAlignment)

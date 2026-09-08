@@ -87,6 +87,38 @@ struct GridTests {
             "measured \(measured.height) but drew \(rendered.lines.count)")
     }
 
+    /// A child that is not a `GridRow` spans the whole grid — the render places
+    /// it at `x: 0` across the full width, and `Grid`'s own doc comment calls
+    /// out the `Divider` case. But `lattice`'s first pass voted it into a
+    /// COLUMN: it arrives as a one-cell row with `span == 1`, and the vote is
+    /// guarded on the span alone, so its full measured width became column 0's
+    /// width and pushed every other column right by the difference. The second
+    /// pass already knows better and skips full-width rows; the first did not.
+    @Test("A child that spans the grid does not widen the first column")
+    func spanningChildDoesNotWidenFirstColumn() {
+        func columnOfB(_ line: String) -> Int? {
+            line.firstIndex(of: "b").map { line.distance(from: line.startIndex, to: $0) }
+        }
+        let withoutSpanner = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("a")
+                    Text("b")
+                }
+            })
+        let withSpanner = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("a")
+                    Text("b")
+                }
+                Text("a spanning child much wider than either column")
+            })
+        #expect(
+            columnOfB(withSpanner[0]) == columnOfB(withoutSpanner[0]),
+            "the spanning child moved the second column")
+    }
+
     @Test("Spacing is in whole cells and defaults to 1 column, 0 rows")
     func spacingDefaults() {
         let tight = lines(
