@@ -16,8 +16,8 @@ import TUIkitStyling
 /// resizing split columns for longer: it records raw INTENT and lets the layout
 /// clamp, which is what keeps the arrow keys stepping from the size actually on
 /// screen rather than from a stored wish the layout never honoured.
-final class _UserResizeHandler: Focusable {
-    let focusID: String
+final class _UserResizeHandler: PersistedFocusable {
+    var focusID: String
     var canBeFocused = true
 
     /// What the user has asked for, or `nil` while the layout's own size stands.
@@ -216,7 +216,7 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         guard handler.canBeFocused else {
             return TUIkitView.renderToBuffer(content, context: childContext)
         }
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(context: context, handler: handler, focusID: focusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
 
         var buffer = TUIkitView.renderToBuffer(content, context: childContext)

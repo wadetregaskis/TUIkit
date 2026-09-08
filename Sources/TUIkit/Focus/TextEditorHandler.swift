@@ -14,8 +14,8 @@
 /// keeps only the cursor/scroll position. Each edit reads the bound string into
 /// per-line character arrays, mutates, and writes it back — simple and correct
 /// for the interactive editing sizes a terminal handles.
-final class TextEditorHandler: Focusable {
-    let focusID: String
+final class TextEditorHandler: PersistedFocusable {
+    var focusID: String
     var canBeFocused: Bool
     var text: Binding<String>
 

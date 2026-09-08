@@ -36,7 +36,7 @@
 ///   nonisolated class conforms cleanly to the nonisolated
 ///   `Focusable` protocol without crossing an isolation
 ///   boundary.
-public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
+public final class ScrollViewHandler: PersistedFocusable, ScrollableOffsetState {
 
     /// The offset the reveal's last snap SETTLED on, or `nil` when no reveal
     /// pursuit is in flight.
@@ -69,7 +69,7 @@ public final class ScrollViewHandler: Focusable, ScrollableOffsetState {
     var verticalScrollbarMemoHits = 0
 
     /// The unique focus identifier for this scroll view.
-    public let focusID: String
+    public var focusID: String
 
     /// Whether this scroll view can currently receive focus.
     ///

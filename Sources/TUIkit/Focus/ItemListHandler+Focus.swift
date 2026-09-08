@@ -45,7 +45,7 @@ extension ItemListHandler {
     /// - Returns: Whether the control holds the keyboard focus this frame.
     @discardableResult
     func engageFocus(context: RenderContext, focusID: String) -> Bool {
-        FocusRegistration.register(context: context, handler: self)
+        FocusRegistration.register(context: context, handler: self, focusID: focusID)
         let hasFocus = FocusRegistration.isFocused(context: context, focusID: focusID)
         publishEscapeClaim(context: context, isFocused: hasFocus)
         // What Return does to the focused row: run the row's action where the

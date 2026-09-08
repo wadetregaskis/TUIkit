@@ -17,8 +17,8 @@ import TUIkitCore
 /// or Down opens the drop-down; while open, the arrow keys move the
 /// highlight, Enter or Space commits it, and Escape closes without changing
 /// the selection.
-final class _PickerMenuHandler: Focusable {
-    let focusID: String
+final class _PickerMenuHandler: PersistedFocusable {
+    var focusID: String
     var selection: Binding<AnyHashable>
     var itemValues: [AnyHashable]
     var canBeFocused: Bool

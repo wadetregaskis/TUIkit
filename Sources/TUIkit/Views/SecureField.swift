@@ -355,7 +355,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         handler.textContentType = context.environment.textContentType
         handler.clampCursorPosition()
 
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         // Return submits, when the caller gave it something to submit to.
         FocusRegistration.publishActivationLabel(

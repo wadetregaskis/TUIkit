@@ -467,7 +467,8 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         handler.onEditingChanged = onEditingChanged
         handler.clampValue()
 
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         // Everything below this line is drawing, so the gate goes here —
         // see `RenderContext.indicatesFocus(_:)`. Key handling is the
         // registered handler's and is untouched: the slider still moves.

@@ -258,7 +258,8 @@ extension ContextMenuModifier: Renderable {
             defaultPrefix: "contextmenu-target", propertyIndex: StateIndex.focusID)
         FocusRegistration.register(
             context: context,
-            handler: ActionHandler(focusID: focusID, action: {}, triggerKeys: []))
+            handler: ActionHandler(focusID: focusID, action: {}, triggerKeys: []),
+            focusID: focusID)
 
         context.environment.keyEventDispatcher!.addHandler(
             sectionID: context.environment.activeFocusSectionID

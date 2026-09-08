@@ -491,7 +491,8 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             let geometry = navigationGeometry(context: context)
             handler.rows = geometry.rows
             handler.centers = geometry.centers
-            FocusRegistration.register(context: context, handler: handler)
+            FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         }
         // Drawing only — see `RenderContext.indicatesFocus(_:)`. The strip is
         // the only consumer of this flag, and all it does with it is breathe

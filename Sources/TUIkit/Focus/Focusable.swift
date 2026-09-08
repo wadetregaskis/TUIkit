@@ -59,3 +59,21 @@ extension Focusable {
     /// a dropdown, stop a caret blinking.
     public func onFocusLost() {}
 }
+
+/// A ``Focusable`` that is kept in `StateStorage` and so outlives the frame
+/// that built it.
+///
+/// Its ``Focusable/focusID`` is settable for exactly one reason. A control
+/// re-resolves its declared id every frame — `.focusID(_:)` is an ordinary
+/// modifier and its argument may be computed from state — while a persisted
+/// handler is built ONCE, inside a `storage(for:default:)` autoclosure, from
+/// whatever id was in force the first time the control drew. The focus ring
+/// files a control under `handler.focusID` and nothing else, so from the second
+/// frame on the ring knew it by its old name while the view drew and queried
+/// focus under the new one, and the two could never agree again.
+///
+/// Handlers rebuilt every frame (``ActionHandler``) already agree with the
+/// declaration by construction, and deliberately do not conform.
+protocol PersistedFocusable: Focusable {
+    var focusID: String { get set }
+}

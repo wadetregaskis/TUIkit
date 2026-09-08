@@ -9,8 +9,8 @@
 /// Switches the active tab with the arrow keys when the strip is focused:
 /// left/right step through the tabs in order; up/down move between rows of a
 /// wrapped strip, to the tab nearest above/below the current one's centre.
-final class TabStripHandler: Focusable {
-    let focusID: String
+final class TabStripHandler: PersistedFocusable {
+    var focusID: String
     var canBeFocused: Bool
     var selection: Binding<AnyHashable>
     var values: [AnyHashable]

@@ -395,7 +395,8 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             stateStorage: stateStorage,
             isDisabled: isDisabled,
             context: context)
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         FocusRegistration.publishActivationLabel(submitVerb, context: context, isFocused: isFocused)
 

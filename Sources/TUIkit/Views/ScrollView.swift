@@ -484,7 +484,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // handler's `canBeFocused` (above) keeps a non-scrollable view out of
         // the Tab ring. When it IS focused + scrollable we highlight the
         // scrollbar (below) so there's a visible focus indicator.
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(context: context, handler: handler, focusID: persistedFocusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
         // Build the windowed buffer. With a sliced reply the buffer's own

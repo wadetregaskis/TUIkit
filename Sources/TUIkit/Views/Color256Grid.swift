@@ -168,8 +168,8 @@ enum Palette256Layout {
 /// and moves to the nearest swatch in the arrow's direction — left/right stay
 /// within the visual row, up/down jump to the nearest cell by column, skipping
 /// the gaps between sections.
-final class Color256GridHandler: Focusable {
-    let focusID: String
+final class Color256GridHandler: PersistedFocusable {
+    var focusID: String
     var canBeFocused: Bool
 
     /// The cursor's palette index, 0–255.
@@ -298,7 +298,8 @@ struct _Color256GridCore: View, Renderable {
         handler.syncCursor(to: Self.nearestIndex(of: selection.wrappedValue, palette: context.environment.palette))
 
         if !context.isMeasuring {
-            FocusRegistration.register(context: context, handler: handler)
+            FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         // The CYCLE, not this tick's colour: the cursor swatch's mark is handed

@@ -491,7 +491,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             handler, selection: erasedSelection, itemValues: itemValues,
             isDisabled: isDisabled, context: context)
 
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         // Drawing only — see `RenderContext.indicatesFocus(_:)`. The group
         // keeps the focus and the arrows keep moving between items.
         let groupHasFocus = context.indicatesFocus(
@@ -830,8 +831,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
 ///
 /// Persisted across renders via StateStorage to maintain focusedIndex and enable
 /// Tab navigation between radio button groups.
-final class RadioButtonGroupHandler: Focusable {
-    let focusID: String
+final class RadioButtonGroupHandler: PersistedFocusable {
+    var focusID: String
     var selection: Binding<AnyHashable>
     var itemValues: [AnyHashable]
     /// Mutable because the handler persists across renders while a responsive

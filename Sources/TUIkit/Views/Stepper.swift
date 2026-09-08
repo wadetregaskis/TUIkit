@@ -504,7 +504,8 @@ private struct _StepperCore: View, Renderable, Layoutable {
         handler.onEditingChanged = onEditingChanged
         handler.clampValue()
 
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         // Drawing only — see `RenderContext.indicatesFocus(_:)`. The
         // registered handler still has the focus and still takes the keys.
         let isFocused = context.indicatesFocus(

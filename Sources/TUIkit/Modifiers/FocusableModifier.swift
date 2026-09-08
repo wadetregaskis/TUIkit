@@ -144,7 +144,8 @@ extension FocusableModifier: Renderable {
         // keeps whatever key behaviour it already has (Enter/Space fall through).
         FocusRegistration.register(
             context: context,
-            handler: ActionHandler(focusID: id, action: {}, triggerKeys: []))
+            handler: ActionHandler(focusID: id, action: {}, triggerKeys: []),
+            focusID: id)
         return id
     }
 }

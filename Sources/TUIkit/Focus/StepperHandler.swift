@@ -43,9 +43,9 @@ protocol StepperDriving: Focusable {
 /// | `<-` or `-` | Decrement by step |
 /// | `Home` | Jump to minimum (if bounds defined) |
 /// | `End` | Jump to maximum (if bounds defined) |
-final class StepperHandler<V: Strideable>: Focusable where V.Stride: SignedNumeric {
+final class StepperHandler<V: Strideable>: PersistedFocusable where V.Stride: SignedNumeric {
     /// The unique identifier for this focusable element.
-    let focusID: String
+    var focusID: String
 
     /// The binding to the current value.
     var value: Binding<V>

@@ -69,9 +69,9 @@ public enum SelectionMode: Sendable {
 /// list adds Ctrl+R to pick the focused row up, after which the movement keys
 /// move its landing slot and Return/Escape place it or put it back.
 /// | Escape | Exit extend mode, else clear a non-empty selection; otherwise falls through (page navigation is never blocked) |
-final class ItemListHandler<SelectionValue: Hashable>: Focusable, ScrollableOffsetState {
+final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, ScrollableOffsetState {
     /// The unique identifier for this focusable element.
-    let focusID: String
+    var focusID: String
 
     /// The total number of items in the list.
     ///

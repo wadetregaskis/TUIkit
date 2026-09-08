@@ -20,8 +20,8 @@ private enum SwatchGridStateIndex {
 /// the entries and moves it with the arrow keys (left/right by one, up/down by a
 /// row), committing the chosen colour through `selection` live. Enter/Space
 /// re-commit the current cell.
-final class SwatchGridHandler: Focusable {
-    let focusID: String
+final class SwatchGridHandler: PersistedFocusable {
+    var focusID: String
     var canBeFocused: Bool
 
     /// The cursor's index into ``entries``.
@@ -134,7 +134,8 @@ struct _SwatchGridCore: View, Renderable {
         handler.syncCursor(to: Self.nearestIndex(of: selection.wrappedValue, in: entries, palette: palette))
 
         if !context.isMeasuring {
-            FocusRegistration.register(context: context, handler: handler)
+            FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
         // The CYCLE, not this tick's colour: the cursor swatch's mark is handed

@@ -331,7 +331,8 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let clamped = model.clamp(selection.wrappedValue)
         if clamped != selection.wrappedValue { selection.wrappedValue = clamped }
 
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         // Drawing only — see `RenderContext.indicatesFocus(_:)`. The arrows
         // still move between fields and still change the value; what goes is
         // the mark saying which field they are on.

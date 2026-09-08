@@ -348,7 +348,10 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                 // of reach by the time a key arrives, exactly as the menu's
                 // dismiss action is.
                 extras: context.environment.buttonKeyExtras)
-            FocusRegistration.register(context: context, handler: handler)
+            // `ActionHandler` is rebuilt from `focusID` on every frame, so it
+            // agrees with the declaration by construction — see
+            // ``PersistedFocusable``.
+            FocusRegistration.register(context: context, handler: handler, focusID: focusID)
             let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
             // What Return does here, for the status bar: a menu trigger opens
             // its menu, a row of a menu chooses, and a button on the page

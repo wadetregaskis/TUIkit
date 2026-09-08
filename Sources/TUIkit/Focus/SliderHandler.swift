@@ -21,9 +21,9 @@
 /// | `Shift+→` / `Shift+←` | Increment / decrement by 5× the step |
 /// | `Home` | Jump to minimum |
 /// | `End` | Jump to maximum |
-final class SliderHandler<V: BinaryFloatingPoint>: Focusable where V.Stride: BinaryFloatingPoint {
+final class SliderHandler<V: BinaryFloatingPoint>: PersistedFocusable where V.Stride: BinaryFloatingPoint {
     /// The unique identifier for this focusable element.
-    let focusID: String
+    var focusID: String
 
     /// The binding to the current value.
     var value: Binding<V>

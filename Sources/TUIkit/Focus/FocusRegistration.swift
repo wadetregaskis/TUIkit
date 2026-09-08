@@ -62,7 +62,7 @@ struct FocusRegistration {
             propertyIndex: focusIDPropertyIndex
         )
 
-        register(context: context, handler: handler)
+        register(context: context, handler: handler, focusID: persistedFocusID)
 
         let isFocused = context.isMeasuring
             ? false
@@ -139,8 +139,22 @@ struct FocusRegistration {
     /// - Parameters:
     ///   - context: The current render context.
     ///   - handler: The focusable handler to register.
-    static func register(context: RenderContext, handler: Focusable) {
+    ///   - focusID: The id the control DECLARES this frame, from
+    ///     ``persistFocusID(context:explicitFocusID:defaultPrefix:propertyIndex:)``.
+    ///     Required, and required of every site rather than defaulted, so the
+    ///     compiler asks the question of the next handler somebody persists —
+    ///     the silent version of this is a control the focus ring can no longer
+    ///     find. Pass the handler's own id where it is rebuilt each frame.
+    static func register(context: RenderContext, handler: Focusable, focusID: String) {
         guard !context.isMeasuring else { return }
+        // A persisted handler was built once, from the id in force on the frame
+        // it first drew; the declaration is re-resolved on every frame. Re-point
+        // it before the ring files it, or `.focused($field, equals:)` and every
+        // other by-id lookup goes on addressing a name the view has stopped
+        // answering to.
+        if var persisted = handler as? any PersistedFocusable, persisted.focusID != focusID {
+            persisted.focusID = focusID
+        }
         // Focus registration is per-frame presence (sections are rebuilt every
         // pass), so a value-memoized row serving a cached buffer would drop
         // its focusables from the ring while still on screen. In practice an

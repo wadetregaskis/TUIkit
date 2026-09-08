@@ -162,7 +162,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         handler.tabWidth = tabWidth
         handler.clampCursor()
 
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: persistedFocusID)
 
         let displayLines = lines(of: text.wrappedValue)

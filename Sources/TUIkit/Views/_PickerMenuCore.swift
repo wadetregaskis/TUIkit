@@ -73,7 +73,8 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             stateStorage: stateStorage,
             context: context
         )
-        FocusRegistration.register(context: context, handler: handler)
+        FocusRegistration.register(
+            context: context, handler: handler, focusID: persistedFocusID)
         // Drawing only — see `RenderContext.indicatesFocus(_:)`. Return still
         // opens the menu, and the arrows still move within it; the accent
         // value, the bold and the breathing caps are the advertisement, and

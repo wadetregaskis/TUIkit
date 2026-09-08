@@ -53,9 +53,9 @@
 /// | Ctrl+V | Paste from clipboard |
 /// | Ctrl+Z | Undo last change |
 /// | Enter | Trigger submit action |
-final class TextFieldHandler: Focusable {
+final class TextFieldHandler: PersistedFocusable {
     /// The unique identifier for this focusable element.
-    let focusID: String
+    var focusID: String
 
     /// The binding to the text content.
     var text: Binding<String>

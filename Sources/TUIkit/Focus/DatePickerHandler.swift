@@ -17,8 +17,8 @@ import Foundation
 /// auto-advances when full. Tab/Enter/Escape are not consumed, so focus can
 /// leave the control. All calendar math is delegated to the value-type
 /// ``DateFieldModel``.
-final class DatePickerHandler: Focusable {
-    let focusID: String
+final class DatePickerHandler: PersistedFocusable {
+    var focusID: String
     var canBeFocused: Bool
     var selection: Binding<Date>
     var model: DateFieldModel
