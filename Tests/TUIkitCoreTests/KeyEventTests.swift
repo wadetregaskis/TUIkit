@@ -115,6 +115,33 @@ struct KeyEventParseTests {
         #expect(shiftUp?.key == .up && shiftUp?.shift == true)
     }
 
+    /// The sibling of the case above, and the same contract: the answer to a
+    /// malformed sequence is to drop it, never to kill the app while it holds
+    /// the terminal in raw mode.
+    ///
+    /// The modifier was read with `Int(_: String)`, which accepts a SIGN — so
+    /// `ESC [ 1 ; -9223372036854775808 A` parsed cleanly and the very next line,
+    /// `modifier - 1`, overflowed. Reachable from anything that can write to
+    /// the tty: a corrupted ssh stream, `cat` of a crafted file, another
+    /// process sharing the terminal. `MouseEvent` had already been fixed the
+    /// same way; the key parser had not, so both now read digits through
+    /// `ASCIIDecimal`.
+    @Test(
+        "A modifier that cannot be decremented is ignored rather than trapped on",
+        arguments: [
+            "\u{1B}[1;-9223372036854775808A",  // Int.min: the one value `- 1` overflows
+            "\u{1B}[1;-1A",  // any sign at all
+            "\u{1B}[1;99999999999999999999A",  // wider than an Int
+            "\u{1B}[1;+2A",
+        ])
+    func unrepresentableModifierIsIgnored(sequence: String) {
+        // No modifier is decoded, and — the point — the process is still here.
+        let event = KeyEvent.parse(Array(sequence.utf8))
+        #expect(event?.shift != true)
+        #expect(event?.alt != true)
+        #expect(event?.ctrl != true)
+    }
+
     @Test("Parse enter (carriage return)")
     func parseEnter() {
         let event = KeyEvent.parse([0x0D])

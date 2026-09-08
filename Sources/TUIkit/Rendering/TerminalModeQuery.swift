@@ -87,15 +87,17 @@ enum TerminalModeQuery {
                 continue
             }
             var cursor = index + prefix.count
-            var value = 0
-            var sawDigit = false
+            let digitsBegin = cursor
             while cursor < bytes.count, bytes[cursor] >= 0x30, bytes[cursor] <= 0x39 {
-                value = value * 10 + Int(bytes[cursor] - 0x30)
-                sawDigit = true
                 cursor += 1
             }
-            // The reply ends `$ y`; anything else with this prefix is not one.
-            guard sawDigit, cursor + 1 < bytes.count,
+            // `ASCIIDecimal` rather than accumulating here: `value * 10` over an
+            // unbounded digit run traps, and the run comes off the wire. It
+            // also subsumes the old `sawDigit` flag, an empty run being one of
+            // the shapes it declines. The reply ends `$ y`; anything else with
+            // this prefix is not one.
+            guard let value = ASCIIDecimal.value(of: bytes[digitsBegin..<cursor]),
+                cursor + 1 < bytes.count,
                 bytes[cursor] == 0x24, bytes[cursor + 1] == 0x79
             else {
                 index += 1

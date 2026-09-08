@@ -356,9 +356,12 @@ extension KeyEvent {
             return (shift: false, alt: false, ctrl: false)
         }
         let modifierBytes = params[(semicolonIndex + 1)..<(params.count - 1)]
-        guard let string = String(bytes: modifierBytes, encoding: .ascii),
-            let modifier = Int(string)
-        else {
+        // `ASCIIDecimal`, not `Int(_: String)`, which accepts a SIGN — so
+        // `ESC [ 1 ; -9223372036854775808 A` parsed, and `modifier - 1` below
+        // overflowed and trapped, killing the app from inside the key parser
+        // with the terminal still in raw mode. The bytes come from anything
+        // that can write to the tty.
+        guard let modifier = ASCIIDecimal.value(of: modifierBytes) else {
             return (shift: false, alt: false, ctrl: false)
         }
 
