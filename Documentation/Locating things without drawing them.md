@@ -1092,9 +1092,11 @@ happens for the workloads that need 50M rows.
   *is* render. (§5h's probe confirmed this from the outside: every
   off-window row's body evaluates every frame, today.)
 - **No general measure cache.** `lookupSize`/`storeSize` are called from
-  exactly two places in the whole codebase (`EquatableView.swift:178`,
-  `MemoizedRow.swift:180`). A plain `VStack { ForEach { … } }` of
-  non-`Equatable` content is fully re-measured every frame. Any claim that
+  exactly ONE place in the whole codebase — `measureValueMemoized` in
+  `ValueMemo.swift`, reached only by `EquatableView` and `_MemoizedRow` (it used
+  to be the same code written twice, in those two types). A plain
+  `VStack { ForEach { … } }` of non-`Equatable` content is fully re-measured
+  every frame. Any claim that
   locate "rides the existing measure cache" is false — §5e's cache has to be
   built, not borrowed.
 

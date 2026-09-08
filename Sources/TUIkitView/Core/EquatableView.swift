@@ -85,160 +85,40 @@ public struct EquatableView<Content: View & Equatable>: View {
 // MARK: - Rendering
 
 extension EquatableView: Renderable {
+    /// Memoized by the whole VIEW value, through the shared value memo — see
+    /// `renderValueMemoized(key:viewType:context:verifies:render:)`.
+    ///
+    /// The soundness argument is this type's own, and it is the strong form: the
+    /// key IS the view, so a hit means the very thing that would have been
+    /// rendered compares equal. `_MemoizedRow`, the other caller, keys on a
+    /// `ForEach` element instead and so claims something weaker — that the row is
+    /// a pure function of that element — which is why the argument lives here and
+    /// at that type rather than once in the shared code.
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let cache = context.renderCache!
-        let identity = context.identity
-
-        cache.markActive(identity)
-
-        // Cache hit: view unchanged and context size matches
-        if let cached = cache.lookup(
-            identity: identity,
-            view: content,
-            contextWidth: context.availableWidth,
-            contextHeight: context.availableHeight,
-            gradientFrame: context.gradientFrame,
-            surfaceBackground: context.environment.surfaceBackground
-        ) {
-            // Still need to run hydration for @State properties inside
-            // the cached subtree, so they stay active for GC.
-            // But we skip the actual rendering work.
-            markSubtreeActive(context: context)
-            if RenderCache.verifiesRenderMemo {
-                let fresh = TUIkitView.renderToBuffer(content, context: context)
-                if fresh.lines != cached.lines {
-                    cache.noteRenderMemoMismatch(
-                        viewType: String(describing: Content.self), served: cached,
-                        fresh: fresh, identity: identity.path)
-                }
-            }
-            return cached
-        }
-
-        // Cache miss: render under a volatile-read tracker (reusing an
-        // ancestor's, so nesting bubbles up) and only store buffers that are
-        // safe to serve again — the same gate as `_MemoizedRow`:
-        //   • never a measure-pass buffer (incomplete: interactive controls
-        //     suppress their hit-test regions while measuring — and it would
-        //     clobber the render-pass entry at a different size every frame);
-        //   • never an interactive subtree (its regions/overlays capture
-        //     per-frame handler state, and a focused control pulses);
-        //   • never a time-varying subtree (a pulse-phase read or an animation
-        //     request means the next frame differs even though the value
-        //     compares equal — a cached Spinner would freeze, issue #1).
-        let existingTracker = context.environment.volatileReadTracker
-        let tracker = existingTracker ?? VolatileReadTracker()
-        let renderContext =
-            existingTracker == nil
-            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
-            : context
-        let unsafeBefore = tracker.cacheUnsafeCount
-        // See _MemoizedRow: a synchronous `clearAffected` during this render
-        // (an environment change, a ScrollViewReader publish — not a @State
-        // write, which is queued) invalidates first, so storing afterwards
-        // would resurrect the pre-clear buffer.
-        let clearsBefore = cache.stats.subtreeClears
-
-        let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
-
-        let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
-        if RenderCache.isStorable(
-            buffer: buffer, context: context, readVolatile: readVolatile,
-            invalidatedDuringRender: cache.stats.subtreeClears > clearsBefore)
-        {
-            cache.store(
-                identity: identity,
-                view: content,
-                buffer: buffer,
-                contextWidth: context.availableWidth,
-                contextHeight: context.availableHeight,
-                gradientFrame: context.gradientFrame,
-                surfaceBackground: context.environment.surfaceBackground
-            )
-        }
-
-        return buffer
+        renderValueMemoized(
+            key: content, viewType: Content.self, context: context, verifies: true
+        ) { TUIkitView.renderToBuffer(content, context: $0) }
     }
 }
 
 // MARK: - Layout
 
 extension EquatableView: Layoutable {
-    /// Measures the wrapped content, memoizing the result by the content's
-    /// *value* (`Equatable.==`) — the size twin of the buffer cache in
-    /// `renderToBuffer`.
+    /// Measures the wrapped content, memoized by the content's *value*
+    /// (`Equatable.==`) — the size twin of the buffer memo above, and the same
+    /// shared implementation.
     ///
     /// Two-pass layout measures the same subtree repeatedly, and across frames a
-    /// static subtree measures to the same size every time. Because the cache is
+    /// static subtree measures to the same size every time. Because the memo is
     /// keyed by the whole view value (not just identity), a hit means identical
-    /// content — and therefore, between cache invalidations (which also bound
-    /// the environment changes a measure could depend on), an identical size.
-    /// That value comparison is exactly why this is safe where an
-    /// identity-keyed measure memo is not. The cache shares `RenderCache`'s
-    /// lifecycle: cleared on `@State`/global-environment change, GC'd with the
-    /// buffer entries. When no cache is present (standalone measurement) this
-    /// forwards straight to the content, uncached.
+    /// content — and therefore, between cache invalidations (which also bound the
+    /// environment changes a measure could depend on), an identical size. That
+    /// value comparison is exactly why this is safe where an identity-keyed
+    /// measure memo is not.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        guard let cache = context.renderCache else {
-            return measureChild(content, proposal: proposal, context: context)
+        measureValueMemoized(key: content, proposal: proposal, context: context) {
+            measureChild(content, proposal: proposal, context: $0)
         }
-        // Deliberately NO markActive here — see `_MemoizedRow.sizeThatFits`:
-        // marking every measured identity is O(tree) per frame on eager
-        // trees. Measure-only persistence is the windowed band's concern.
-        let key = RenderCache.SizeKey(
-            identity: context.identity,
-            proposalWidth: proposal.width,
-            proposalHeight: proposal.height,
-            availableWidth: context.availableWidth,
-            availableHeight: context.availableHeight,
-            hasExplicitWidth: context.hasExplicitWidth,
-            hasExplicitHeight: context.hasExplicitHeight)
-        if let cached = cache.lookupSize(key: key, view: content) {
-            return cached
-        }
-        // Measure under the volatile tracker — see the matching gate in
-        // `_MemoizedRow.sizeThatFits`: a subtree declaring a render side
-        // effect (`.onRenderPass`) or reading a per-frame-volatile value must
-        // not have its measurement memoised away.
-        let existingTracker = context.environment.volatileReadTracker
-        let tracker = existingTracker ?? VolatileReadTracker()
-        let measureContext =
-            existingTracker == nil
-            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
-            : context
-        let unsafeBefore = tracker.cacheUnsafeCount
-        let size = measureChild(content, proposal: proposal, context: measureContext)
-        if tracker.cacheUnsafeCount == unsafeBefore
-            && !context.environment.hasUncomparableEnvironmentValue
-        {
-            cache.storeSize(key: key, view: content, size: size)
-        }
-        return size
-    }
-}
-
-// MARK: - Private Helpers
-
-extension EquatableView {
-    /// Keeps the cached subtree's state alive in StateStorage for GC.
-    ///
-    /// When returning a cached buffer, the subtree's views aren't visited, so
-    /// nothing below marks its own identity this pass. Marking only the
-    /// wrapper's identity covered a direct child (which can share it) but not
-    /// anything deeper — a `@State` two levels down was pruned on the first
-    /// hit frame and silently reset to its default the next time the subtree
-    /// actually re-rendered. `retainSubtree` protects every identity below,
-    /// exactly as the windowing containers do for their off-screen rows.
-    fileprivate func markSubtreeActive(context: RenderContext) {
-        let storage = context.stateStorage!
-        storage.markActive(context.identity)
-        storage.retainSubtree(context.identity)
-        // And the same declaration to the render cache, for the same reason one
-        // layer over: a *nested* `.equatable()` below this one never reaches
-        // `markActive` on a hit frame, so without this its entry is collected
-        // while still live and has to re-render the moment this view's value
-        // finally changes.
-        context.renderCache?.retainSubtree(context.identity)
     }
 }
 

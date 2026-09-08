@@ -30,6 +30,11 @@ private struct EffectLeaf<Content: View>: View, @MainActor Equatable {
     }
 }
 
+/// The row arm's key. Constant, so the memo always WANTS to hit and the only
+/// thing that can stop it is the gate under test — which is the point: keyed on
+/// anything that varied, a decline would be indistinguishable from a miss.
+private struct AlwaysEqual: Equatable {}
+
 private struct CountKey: PreferenceKey {
     static let defaultValue = 0
     static func reduce(value: inout Int, nextValue: () -> Int) { value += nextValue() }
@@ -124,6 +129,63 @@ struct EquatableViewEffectGateTests {
             !storesBuffer {
                 EffectLeaf(label: "x") { $0.preference(key: CountKey.self, value: 1) }.equatable()
             })
+    }
+
+    /// Every decline condition above, run through the OTHER memo wrapper too.
+    ///
+    /// `EquatableView` and `_MemoizedRow` are one implementation now
+    /// (`renderValueMemoized`), and the reason they are is that written twice
+    /// they drifted: `_MemoizedRow` was missing the uncomparable-environment
+    /// clause its twin had. This is what would notice a wrapper that stopped
+    /// going through the shared path — the eight conditions asserted once are
+    /// asserted for both.
+    ///
+    /// The row arm keys on a CONSTANT element, so the memo always wants to hit
+    /// and only the gate can stop it. Keyed on anything that varied, a decline
+    /// would be indistinguishable from a miss.
+    @Test(
+        "Every gate condition holds through both memo wrappers",
+        arguments: [0, 1], 0..<8)
+    func gateHoldsThroughBothWrappers(wrapper: Int, condition: Int) {
+        @MainActor func wrapped<V: View & Equatable>(_ inner: V) -> AnyView {
+            wrapper == 0
+                ? AnyView(inner.equatable())
+                : AnyView(_MemoizedRow(element: AlwaysEqual(), content: inner))
+        }
+        let (name, view, shouldStore): (String, AnyView, Bool) =
+            switch condition {
+            case 0: ("inert (the control)", wrapped(EffectLeaf(label: "inert") { $0 }), true)
+            case 1:
+                (
+                    "an effect ABOVE the boundary",
+                    AnyView(wrapped(EffectLeaf(label: "x") { $0 }).onAppear {}), true
+                )
+            case 2: ("onAppear inside", wrapped(EffectLeaf(label: "x") { $0.onAppear {} }), false)
+            case 3: ("task inside", wrapped(EffectLeaf(label: "x") { $0.task {} }), false)
+            case 4:
+                (
+                    "onChange inside",
+                    wrapped(EffectLeaf(label: "x") { $0.onChange(of: 1) { _, _ in } }), false
+                )
+            case 5:
+                (
+                    "a key handler inside",
+                    wrapped(EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }), false
+                )
+            case 6:
+                ("focus registration inside", wrapped(EffectLeaf(label: "x") { $0.focusable() }), false)
+            default:
+                (
+                    "a preference write inside",
+                    wrapped(
+                        EffectLeaf(label: "x") { $0.preference(key: CountKey.self, value: 1) }),
+                    false
+                )
+            }
+        let arm = wrapper == 0 ? ".equatable()" : "_MemoizedRow"
+        #expect(
+            storesBuffer { view } == shouldStore,
+            "\(arm): \(name) should \(shouldStore ? "store" : "decline")")
     }
 
     @Test("A measure pass never stores")

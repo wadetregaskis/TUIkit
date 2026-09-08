@@ -197,7 +197,7 @@ public final class RenderCache: @unchecked Sendable {
         let size: ViewSize
     }
 
-    /// Memoized `EquatableView` measurements (see ``lookupSize`` / ``storeSize``).
+    /// Memoized value-keyed measurements (see ``lookupSize`` / ``storeSize``).
     private var sizeEntries: [SizeKey: SizeEntry] = [:]
 
     /// One measurement under one vertical budget: what ``MeasureKey`` leaves out.
@@ -455,7 +455,10 @@ extension RenderCache {
         logDebug("STORE \(identity.path)")
     }
 
-    /// Looks up a memoized *measurement* for an `EquatableView`.
+    /// Looks up a memoized *measurement* keyed by a view value or a row element.
+    ///
+    /// One caller: `measureValueMemoized`, which both ``EquatableView`` and
+    /// `_MemoizedRow` reach — they were the same code written twice.
     ///
     /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``:
     /// returns the cached ``ViewSize`` only when the view value compares equal
@@ -529,7 +532,7 @@ extension RenderCache {
         return entry.size
     }
 
-    /// Stores a memoized measurement for an `EquatableView`.
+    /// Stores a memoized measurement — see ``lookupSize(key:view:)`` for who asks.
     public func storeSize<V: Equatable>(key: SizeKey, view: V, size: ViewSize) {
         stats.stores += 1
         sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size)

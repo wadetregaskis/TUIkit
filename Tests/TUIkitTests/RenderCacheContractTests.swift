@@ -452,6 +452,91 @@ struct RenderCacheContractTests {
         #expect(cache.isEmpty, "a row cached under an uncomparable environment value")
     }
 
+    /// The SIZE half of the same clause, on both arms, with an oracle that can
+    /// see a stored size.
+    ///
+    /// This is the drift the two memos are now one implementation to prevent, and
+    /// it went the other way: the clause was added to `EquatableView`'s size memo
+    /// and MISSED on `_MemoizedRow`'s "when the buffer half was unified" — the
+    /// code says so — so a Form row under an injected uncomparable value measured
+    /// once and served that size forever.
+    ///
+    /// `cache.isEmpty` is no use as the oracle here: it and `count` inspect only
+    /// the BUFFER dictionary, and `sizeEntries` has no accessor at all. A stored
+    /// size shows up as a `hits` delta on the next measure of the same value, so
+    /// that is what these count.
+    @Test("A non-Equatable environment value declines a stored SIZE too", arguments: [false, true])
+    func incomparableEnvironmentDeclinesStoredSizes(asRow: Bool) {
+        let proposal = ProposedSize(width: nil, height: nil)
+
+        // Built the same way the buffer cases above are — no `AnyView` between
+        // the modifier and the wrapper, because the uncomparable flag is set
+        // where the value is APPLIED and an erasure in between loses it. (The
+        // first draft of this test put one there and both arms reported a stored
+        // size that was not really there.)
+        @MainActor func measureView(_ shared: RenderContext, uncomparable: Bool) {
+            let cache = shared.environment.renderCache!
+            cache.beginRenderPass()
+            if uncomparable {
+                _ = measureChild(
+                    CacheLeaf(text: "hi").equatable()
+                        .environment(\.incomparableProbe, Incomparable()),
+                    proposal: proposal, context: shared)
+            } else {
+                _ = measureChild(
+                    CacheLeaf(text: "hi").equatable(), proposal: proposal, context: shared)
+            }
+        }
+
+        @MainActor func measureRow(_ shared: RenderContext, uncomparable: Bool) {
+            let cache = shared.environment.renderCache!
+            cache.beginRenderPass()
+            let rows = VStack(spacing: 0) {
+                ForEach(["a", "b"], id: \.self) { CacheLeaf(text: $0) }
+            }
+            if uncomparable {
+                _ = measureChild(
+                    rows.environment(\.incomparableProbe, Incomparable()),
+                    proposal: proposal, context: shared)
+            } else {
+                _ = measureChild(rows, proposal: proposal, context: shared)
+            }
+        }
+
+        // A FRESH cache per arm. `SizeKey` carries the identity, the proposal
+        // and the extents — not the environment — so a size stored by the
+        // control would be served straight back to the uncomparable run, and the
+        // hit counted would be the control's own entry rather than a new one.
+        // (The first draft shared one cache and reported exactly that.)
+        @MainActor func hitsOnSecondMeasure(uncomparable: Bool) -> Int {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+            @MainActor func measure() {
+                if asRow {
+                    measureRow(shared, uncomparable: uncomparable)
+                } else {
+                    measureView(shared, uncomparable: uncomparable)
+                }
+            }
+            measure()
+            let before = cache.stats
+            measure()
+            return cache.stats.delta(since: before).hits
+        }
+
+        // The control first: without it, "no hits" would pass for a memo that
+        // never stores a size at all.
+        #expect(
+            hitsOnSecondMeasure(uncomparable: false) >= 1,
+            "\(asRow ? "a row" : "an .equatable() view") stopped memoizing sizes entirely")
+        #expect(
+            hitsOnSecondMeasure(uncomparable: true) == 0,
+            """
+            a size was stored under an uncomparable environment value — nothing \
+            can ever invalidate it, because the key cannot see the value
+            """)
+    }
+
     @Test("…and a ForEach row IS cached when nothing uncomparable is in force")
     func rowsAreCachedNormally() {
         // The control for the case above: without it, "cache is empty" would

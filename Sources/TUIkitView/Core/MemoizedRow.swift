@@ -148,150 +148,41 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
         fatalError("_MemoizedRow renders via Renderable")
     }
 
+    /// Memoized by the row's DATA ELEMENT, through the shared value memo — see
+    /// `renderValueMemoized(key:viewType:context:verifies:render:)`.
+    ///
+    /// The soundness argument is this type's own, and it is the weaker of the
+    /// two the shared memo serves. `EquatableView` keys on the whole view value,
+    /// so a hit means the very thing that would have been rendered compares
+    /// equal. Here the key is the element and the claim is that the row is a pure
+    /// function of it — true for a row built from its element, and NOT true for
+    /// one that captures mutable data from outside its own subtree, which is the
+    /// known hole documented on the type above.
+    ///
+    /// `verifies: false` — this half does not check a served buffer against a
+    /// fresh render yet. It should: every buffer the `Stress` harness serves is
+    /// one of these (no scenario uses `.equatable()`), so the CI step that exists
+    /// to catch a memo serving a stale picture has never checked a single serve.
+    /// Arming it changes what happens under `TUIKIT_VERIFY_RENDER_MEMO`, where
+    /// suites that count renders on memoized rows expect exactly zero, so it is
+    /// its own commit.
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        guard let cache = context.renderCache else {
-            return TUIkitView.renderToBuffer(content, context: context)
-        }
-        let identity = context.identity
-        cache.markActive(identity)
-        if let cached = cache.lookup(
-            identity: identity, view: element,
-            contextWidth: context.availableWidth, contextHeight: context.availableHeight,
-            gradientFrame: context.gradientFrame,
-            surfaceBackground: context.environment.surfaceBackground)
-        {
-            // Keep the cached subtree's state alive for GC — the WHOLE
-            // subtree, not just this identity: nothing below is visited on a
-            // hit, and a `@State` deeper than a direct child would otherwise
-            // be pruned this pass and reset on the next real render (see
-            // `EquatableView.markSubtreeActive`, the same rule).
-            context.stateStorage?.markActive(identity)
-            context.stateStorage?.retainSubtree(identity)
-            // The same declaration to the render cache, for the same reason
-            // one layer over. `markActive(identity)` above covers THIS row
-            // only; a nested `_MemoizedRow` or `.equatable()` below it — the
-            // ordinary nested-`ForEach` shape, since `ForEach` wraps every
-            // Equatable element row in one of these — is never visited on a
-            // hit, so `removeInactive()` collected its entry while it was
-            // still live, and `sizeThatFits` deliberately marks nothing, so
-            // the measure walk could not rescue it either. The steady state
-            // was one entry where there should have been two, and the first
-            // frame the OUTER element changed, every inner row re-rendered
-            // from scratch though none of them had.
-            cache.retainSubtree(identity)
-            return cached
-        }
-        // Render the content under a volatile-read tracker (reusing an
-        // ancestor row's, so nesting bubbles up). @State / @Observable changes
-        // already invalidate the cache (StateBox.didSet → clearAffected), so
-        // stateful rows stay correct. The two things the cache does NOT catch:
-        //   • interactive content — a focused, pulsing control would freeze;
-        //     it shows up as hit-test regions / overlays in the row's buffer.
-        //   • a non-interactive view whose output is time-varying — it reads a
-        //     per-frame-volatile value (e.g. pulsePhase) or requests a scheduled
-        //     animation (e.g. Spinner) — caught by the tracker delta.
-        // Only memoize a row that exhibits neither.
-        let existingTracker = context.environment.volatileReadTracker
-        let tracker = existingTracker ?? VolatileReadTracker()
-        let renderContext =
-            existingTracker == nil
-            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
-            : context
-        let unsafeBefore = tracker.cacheUnsafeCount
-        // Snapshot the cache's invalidation generation too: a `clearAffected`
-        // DURING this render — an environment or colour-environment change, a
-        // `ScrollViewReader` publish; those are its synchronous callers —
-        // fires before we store, and storing afterwards would resurrect the
-        // pre-clear buffer and serve it until the element value next changes.
-        // NOT a @State write: since 44660d87 those are queued
-        // (`pendingInvalidations`) and drained at the next `beginRenderPass`,
-        // so this counter does not move for them and the store goes ahead —
-        // which is right, because the drain clears the entry before it can
-        // be served.
-        let clearsBefore = cache.stats.subtreeClears
-
-        let buffer = TUIkitView.renderToBuffer(content, context: renderContext)
-
-        let readVolatile = tracker.cacheUnsafeCount > unsafeBefore
-        let invalidatedDuringRender = cache.stats.subtreeClears > clearsBefore
-        // Never store a buffer produced during a measure pass. Two reasons, both
-        // load-bearing:
-        //   • It is INCOMPLETE. Interactive controls suppress their hit-test
-        //     regions while `isMeasuring` (regions are meaningless without final
-        //     positions), so a measure-pass buffer of, say, a Button has none. If
-        //     the render pass then served that cached buffer, the control would
-        //     render with no clickable region and no focus rect — e.g. a
-        //     ScrollView could no longer locate a focused control to scroll it
-        //     into view.
-        //   • It CLOBBERS. A non-Layoutable ancestor (List, ScrollView) renders
-        //     its children once per measure and again per render — at different
-        //     available sizes. With a single entry per identity, the measure
-        //     store overwrites the render store every frame, so the render lookup
-        //     always misses on a different size and the row re-renders every
-        //     frame (0% hit rate on exactly the rows the memo exists for). Only
-        //     the render pass populates the cache, so its entry survives to the
-        //     next frame.
-        // The measure pass still benefits — it reads sizes through the size memo
-        // (`sizeThatFits`), which is keyed by proposal and so does not clobber.
-        if RenderCache.isStorable(
-            buffer: buffer, context: context,
-            readVolatile: readVolatile, invalidatedDuringRender: invalidatedDuringRender)
-        {
-            cache.store(
-                identity: identity, view: element, buffer: buffer,
-                contextWidth: context.availableWidth, contextHeight: context.availableHeight,
-                gradientFrame: context.gradientFrame,
-            surfaceBackground: context.environment.surfaceBackground)
-        }
-        return buffer
+        renderValueMemoized(
+            key: element, viewType: Content.self, context: context, verifies: false
+        ) { TUIkitView.renderToBuffer(content, context: $0) }
     }
 
+    /// The size twin, same shared implementation.
+    ///
+    /// `content` is a computed property that BUILDS the row, so it must be
+    /// touched only inside the closure — which the memo calls only on a miss.
+    /// That is the whole reason the row view is not a stored property: 94% of
+    /// rows hit in the `fanout` stress scenario, and building the view eagerly
+    /// once per row per pass was `ForEach.makeChild`'s 21% of that frame, nearly
+    /// all of it thrown away.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        guard let cache = context.renderCache else {
-            return measureChild(content, proposal: proposal, context: context)
+        measureValueMemoized(key: element, proposal: proposal, context: context) {
+            measureChild(content, proposal: proposal, context: $0)
         }
-        // Deliberately NO markActive here: marking EVERY measured identity
-        // is O(total rows) per frame on a giant eager tree (fanout at scale
-        // 100 measures ~200k memoized rows — the Set inserts and identity
-        // hashing alone regressed it 13%). A measure-only row whose entries
-        // must survive the pass is the WINDOWED band's concern, and the
-        // band paths mark the specific rows they measure (pitch and the
-        // width samples) — bounded by the window, not the tree.
-        let key = RenderCache.SizeKey(
-            identity: context.identity,
-            proposalWidth: proposal.width, proposalHeight: proposal.height,
-            availableWidth: context.availableWidth, availableHeight: context.availableHeight,
-            hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight)
-        if let cached = cache.lookupSize(key: key, view: element) {
-            return cached
-        }
-        // Measure under the volatile tracker, as the render path above does:
-        // a subtree that declares a render side effect (`.onRenderPass`
-        // instrumentation) or reads a per-frame-volatile value must not have
-        // its measurement memoised away — a served size would silently hide
-        // real layout participation, breaking the OnRenderPassModifier
-        // contract ("observation must not be memoised away"). Store-gating
-        // suffices: such a subtree never stores, so it never hits either.
-        let existingTracker = context.environment.volatileReadTracker
-        let tracker = existingTracker ?? VolatileReadTracker()
-        let measureContext =
-            existingTracker == nil
-            ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
-            : context
-        let unsafeBefore = tracker.cacheUnsafeCount
-        let size = measureChild(content, proposal: proposal, context: measureContext)
-        // The uncomparable-environment clause its two siblings carry — the
-        // render-store's `isStorable` and `EquatableView.sizeThatFits` both
-        // refuse when a non-Equatable environment value is in force, because
-        // the `element` key cannot see it, so a change to that value could
-        // never invalidate a stored size. This half was missed when the
-        // buffer half was unified: a Form row under an injected uncomparable
-        // value measured once and served that size forever.
-        if tracker.cacheUnsafeCount == unsafeBefore,
-            !context.environment.hasUncomparableEnvironmentValue
-        {
-            cache.storeSize(key: key, view: element, size: size)
-        }
-        return size
     }
 }
