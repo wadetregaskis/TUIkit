@@ -51,8 +51,17 @@ struct MeasureMemoEquivalenceTests {
         // the pixels below: a wrong size only redraws the screen when it reaches
         // something that draws differently for it, so the picture alone would
         // let a real one through.
+        // Restored to what it WAS, not to `false`. Under
+        // `TUIKIT_VERIFY_MEASURE_MEMO=1` the flag starts true for the whole
+        // process and every suite's memo hits are checked against a fresh
+        // measurement; a `defer` that put it back to `false` disarmed that for
+        // everything scheduled after this suite, in the one mode whose entire
+        // purpose is to be armed. The `Stress` and PTY verifier runs are
+        // separate processes and were never affected, which is why it went
+        // unnoticed.
+        let wasVerifying = RenderCache.verifiesMeasureMemo
         RenderCache.verifiesMeasureMemo = true
-        defer { RenderCache.verifiesMeasureMemo = false }
+        defer { RenderCache.verifiesMeasureMemo = wasVerifying }
         let memoContext = context(width: width, height: height, memoised: true)
         memoContext.renderCache?.beginRenderPass()
         let memoised = snapshotText(renderToScreen(view, context: memoContext))
@@ -247,6 +256,29 @@ struct MeasureMemoEquivalenceTests {
             "colorpicker-rgb",
             ColorPickerPanel("Accent", selection: .constant(.rgb(80, 160, 255)), isPresented: .constant(true)),
             width: 64, height: 30)
+    }
+
+    /// The other half of the harness's own guard: it must leave the
+    /// verification mode as it found it.
+    ///
+    /// `bothWays` arms `verifiesMeasureMemo` for the duration of a case, and
+    /// used to disarm it unconditionally afterwards. Under
+    /// `TUIKIT_VERIFY_MEASURE_MEMO=1` — where the whole unit suite is supposed
+    /// to check every hit — that turned the mode off for every suite scheduled
+    /// after this one, silently, in the run whose only purpose is to have it on.
+    ///
+    /// Asserted from inside the suite rather than by a sibling that reads the
+    /// flag: nothing orders two suites, so a sibling would catch this only on
+    /// the runs where the scheduler happened to put it second.
+    @Test("the harness restores the verification mode it found")
+    func restoresVerificationMode() {
+        let was = RenderCache.verifiesMeasureMemo
+        defer { RenderCache.verifiesMeasureMemo = was }
+        RenderCache.verifiesMeasureMemo = true
+        agrees("restore-probe", Text("hi"), width: 8, height: 1)
+        #expect(
+            RenderCache.verifiesMeasureMemo,
+            "the harness left verification OFF, disarming every suite that runs after it")
     }
 
     /// The harness's own guard: if the memo stops engaging, every case above
