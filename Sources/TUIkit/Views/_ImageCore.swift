@@ -609,7 +609,16 @@ extension _ImageCore {
         return centerContent([errorText], width: width, height: height)
     }
 
-    /// Centers content lines vertically and horizontally within the given dimensions.
+    /// Centers content lines vertically and horizontally within the given
+    /// dimensions, cutting any line wider than `width` to it (and closing the
+    /// styling the cut interrupts).
+    ///
+    /// The returned buffer's declared `width` is therefore an upper bound on
+    /// every row it carries — which the general clamp assumes and cannot check
+    /// here (see the clip below). Rows may be NARROWER than `width` (the
+    /// centring pads on the left only), so the buffer stays non-uniform: do not
+    /// pass `uniformWidth: true`, or `appendHorizontally` skips the pad for a
+    /// centred row and lands the next sibling mid-box.
     private func centerContent(_ contentLines: [String], width: Int, height: Int) -> FrameBuffer {
         let emptyLine = String(repeating: " ", count: width)
         var lines = [String](repeating: emptyLine, count: height)
@@ -621,9 +630,41 @@ extension _ImageCore {
             guard y < height else { break }
 
             // Calculate visible width of content (excluding ANSI codes, accounting for wide chars)
-            let visibleWidth = content.strippedLength
+            var line = content
+            var visibleWidth = line.strippedLength
+
+            // Cut it, rather than merely failing to pad it. "Loading..." is 10
+            // cells and an "Error: <path>" far more, while this buffer declares
+            // only `width` columns — and that is a lie the general net cannot
+            // catch: every ancestor clamps with `clamped(toWidth:height:)`,
+            // whose `self.width <= maxWidth` fast path TRUSTS the declaration,
+            // and `width` here IS that clamp target (`availableWidth`). The
+            // over-wide row then reaches `appendHorizontally`, which measures
+            // the row's REAL width and starts the next `HStack` sibling past
+            // it — shearing that one row from the rest of the same box. Same
+            // clip primitive as `clamped` and `_ListCore.fitted`: counts cells,
+            // never splits a wide glyph, keeps the styling in force.
+            if visibleWidth > width {
+                let (cut, cutWidth) = line.ansiAwarePrefixWithWidth(
+                    visibleCount: width, knownVisibleWidth: visibleWidth)
+                // Closed, because the cut lands mid-run and drops the reset
+                // `colorize` had put at the end — the clip primitive closes an
+                // open hyperlink but never SGR. Without this the placeholder's
+                // colour stays in force and paints whatever the row holds next:
+                // the very `HStack` sibling this clip just pulled back to the
+                // box edge. `BorderRenderer.contentLine` closes its clip the
+                // same way; `_ListCore.fitted` gets away without it only
+                // because it pads with plain spaces, where a leaked foreground
+                // cannot be seen. The reset is stripped by every width scan, so
+                // it costs no columns.
+                line = cut + ANSIRenderer.reset
+                visibleWidth = cutWidth
+            }
+
+            // Still `max(0,)`: the clip above makes this non-negative, and
+            // `String(repeating:count:)` traps if it ever stops being.
             let padding = max(0, (width - visibleWidth) / 2)
-            let padded = String(repeating: " ", count: padding) + content
+            let padded = String(repeating: " ", count: padding) + line
             lines[y] = padded
         }
 

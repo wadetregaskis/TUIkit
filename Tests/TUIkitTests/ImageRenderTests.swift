@@ -171,4 +171,43 @@ struct ImageRenderTests {
         #expect(buffer.lines.count == 1)
         #expect(buffer.lines.allSatisfy { $0.stripped.count <= 1 })
     }
+
+    // MARK: Over-wide content
+
+    @Test("A placeholder wider than its box is cut to the box, not painted past it")
+    func overWidePlaceholderIsClippedToTheBox() {
+        // "Loading..." is 10 cells; the box is 6. Before the clip in
+        // `centerContent` the content row measured 10 on a buffer declaring 6,
+        // and no container could cut it: every clamp passes `availableWidth` as
+        // its limit, which is the number this buffer already declares, so
+        // `FrameBuffer.clamped`'s `self.width <= maxWidth` fast path returned it
+        // untouched.
+        let buffer = renderToBuffer(
+            Image(.file("/nope.png")).imagePlaceholderSpinner(false),
+            context: createTestContext(width: 6, height: 3))
+        #expect(buffer.width == 6)
+        // Cells, not Characters: the declared width is a promise about columns.
+        #expect(
+            buffer.lines.allSatisfy { $0.strippedLength <= buffer.width },
+            "declared \(buffer.width) columns, rows measure \(buffer.lines.map { $0.strippedLength })")
+    }
+
+    @Test("An over-wide placeholder does not push an HStack sibling off the box edge")
+    func overWidePlaceholderDoesNotShearItsSibling() {
+        // The symptom the clip removes: `appendHorizontally` measures the REAL
+        // width of the over-wide row, so the bar landed at column 10 on that one
+        // row and at column 6 on the two blank rows of the same box — while the
+        // composite went on reporting 7 columns.
+        let buffer = renderToBuffer(
+            HStack(spacing: 0) {
+                Image(.file("/nope.png"))
+                    .imagePlaceholderSpinner(false)
+                    .frame(width: 6, height: 3)
+                Text("|")
+            },
+            context: createTestContext(width: 20, height: 3))
+        #expect(
+            buffer.lines.allSatisfy { $0.strippedLength <= buffer.width },
+            "declared \(buffer.width) columns, rows measure \(buffer.lines.map { $0.strippedLength })")
+    }
 }
