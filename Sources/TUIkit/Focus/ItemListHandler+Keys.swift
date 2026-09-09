@@ -597,7 +597,8 @@ extension ItemListHandler {
             // instead spends the slack above, where it hides content the user
             // has already passed.
             var top = tail
-            var covered = rowHeight(tail)
+            let tailHeight = rowHeight(tail)
+            var covered = tailHeight
             while covered < budget, top > 0 {
                 covered += rowHeight(top - 1)
                 top -= 1
@@ -612,7 +613,18 @@ extension ItemListHandler {
             // margin never asked for: with a margin of 1, arrowing onto row 19
             // revealed 21. Granularity sizes a scroll step; it does not get to
             // round off a reveal.
-            let clip = max(0, covered - budget)
+            // The clip spends only the lines the rows ABOVE `tail` contributed
+            // — never `tail`'s own. NOT a redundant bound: when `tail` is
+            // taller than the whole budget the walk-up above never ran, so
+            // `covered - budget` is a slice of `tail` ITSELF, and taking it hid
+            // the HEAD of the very row this reveal was called to show — row 0
+            // on Home included, where there is nothing above it to have
+            // scrolled past, and where the scroll-up branch had just cleared
+            // the clip for exactly that reason. A row that cannot fit is shown
+            // from its first line, which is also the only position row
+            // granularity can hold: `scrollFine` zeroes the clip, so a
+            // tail-flush position there is unreachable as well as unwanted.
+            let clip = max(0, min(covered - budget, covered - tailHeight))
             // Only ever scroll DOWN here — the scroll-up branch above owns the
             // other direction, and re-deciding it would fight a user who has
             // scrolled away and is arrowing back.

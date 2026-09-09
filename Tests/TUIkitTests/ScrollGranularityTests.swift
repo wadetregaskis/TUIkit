@@ -154,6 +154,54 @@ struct ScrollGranularityTests {
         #expect(handler.scrollOffset == 0)
     }
 
+    /// A row taller than the row budget cannot be shown whole, and the reveal
+    /// must show its HEAD. The scroll-up branch says so outright — "A focused row
+    /// must be FULLY visible" — and the scroll-down branch overrode it, because
+    /// `covered` starts at the tail row's own height: when that alone exceeds the
+    /// budget the walk-up never runs, so `covered - budget` is a slice of the
+    /// FOCUSED row rather than of a row above it.
+    ///
+    /// Not parameterised over granularity: `ensureFocusedItemVisible` never reads
+    /// it on this path, and with `followMargin == .none` the margin is 0 rows
+    /// either way, so a second arm would run the same arithmetic twice.
+    @Test("A row taller than the budget is revealed from its head, not its tail")
+    func oversizedRowRevealsItsHead() {
+        // 5-line rows in a 6-line content area: both "N more" lines are
+        // reserved, so the rows get 4 — one less than a single row needs.
+        let handler = makeHandler(count: 10, rowHeight: 5, contentHeight: 6, granularity: .line)
+        #expect(handler.rowLineBudget == 4, "precondition: a 5-line row overflows the budget")
+        handler.scrollOffset = 5
+        handler.focusedIndex = 3
+        handler.ensureFocusedItemVisible()
+        #expect(handler.scrollOffset == 3, "the row the cursor moved onto is the top row")
+        #expect(
+            handler.scrollTopClipLines == 0,
+            "revealing an oversized row must show its FIRST line, not its last")
+
+        // Down onto an oversized row goes through the guard's OTHER arm
+        // (`top > scrollOffset`), which moves the offset and carried the same bad
+        // clip — so bounding the clip fixes both arms where gating the guard
+        // would have fixed one.
+        let down = makeHandler(count: 10, rowHeight: 5, contentHeight: 6, granularity: .line)
+        down.focusedIndex = 2
+        down.ensureFocusedItemVisible()
+        #expect(down.scrollOffset == 2, "the reveal scrolls down to the focused row")
+        #expect(
+            down.scrollTopClipLines == 0,
+            "arriving from ABOVE must also show the oversized row's head")
+
+        // Row 0 with nothing above it, and a two-line clip — more than an
+        // "▲ N more" line costs, so `ScrollWindowOrigin.absorbing` cannot fold
+        // the loss away either: it is on screen.
+        let tall = makeHandler(count: 10, rowHeight: 6, contentHeight: 6, granularity: .line)
+        tall.focusedIndex = 0
+        tall.ensureFocusedItemVisible()
+        #expect(tall.scrollOffset == 0)
+        #expect(
+            tall.scrollTopClipLines == 0,
+            "row 0 has nothing above it — its head cannot be scrolled past")
+    }
+
     @Test("clampTopClip keeps a sub-row position under either granularity")
     func clampTopClipRules() {
         let handler = makeHandler(count: 10, rowHeight: 3, contentHeight: 9, granularity: .line)
