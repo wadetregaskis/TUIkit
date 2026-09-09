@@ -76,16 +76,21 @@ struct ScrollGeometryUnitTests {
         #expect(label(10) == "▼ 14")
         #expect(label(5) == "▼ 14")
         #expect(label(4) == "▼")
-        // Zero count (edge callers): "more below" with no number, and it
-        // degrades to the bare arrow.
+        // Zero is a real count and reads as one, down the same ladder as any
+        // other value: `.scrollIndicators(.visible)` draws this line at the very
+        // edge, where nothing is hidden, and "0 more lines below" is what is true
+        // there. It used to say a countless "more below", which at zero is false.
         func zero(_ width: Int) -> String {
             renderScrollIndicator(
                 direction: .down, count: 0, unit: .lines,
                 width: width, palette: palette
             ).stripped.trimmingCharacters(in: .whitespaces)
         }
-        #expect(zero(13) == "▼ more below")
-        #expect(zero(12) == "▼")
+        #expect(zero(21) == "▼ 0 more lines below")
+        #expect(zero(20) == "▼ 0 lines below")
+        #expect(zero(13) == "▼ 0 lines")
+        #expect(zero(9) == "▼ 0")
+        #expect(zero(3) == "▼")
         // No rendered form ever exceeds its width budget.
         for width in 1...25 {
             let body = label(width)

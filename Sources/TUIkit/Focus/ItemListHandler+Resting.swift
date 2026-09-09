@@ -157,16 +157,16 @@ extension ItemListHandler {
     /// - Parameters:
     ///   - environment: This frame's environment, for the two allowances.
     ///   - contentHeight: The content area, in lines.
-    ///   - reservesIndicatorLine: Whether a "N more" indicator comes out of that
-    ///     area. A scrollbar costs a column rather than a line, and a view whose
-    ///     content fits draws no indicator at all.
-    func resolveOverscroll(
-        environment: EnvironmentValues, contentHeight: Int, reservesIndicatorLine: Bool
-    ) {
+    ///   - contentHeight: The content area, in lines.
+    func resolveOverscroll(environment: EnvironmentValues, contentHeight: Int) {
+        // ``reservedIndicatorLines`` rather than a Bool the caller passes:
+        // a scrollbar costs a column rather than a line, a view whose content
+        // fits draws no indicator at all, and under `.visible` BOTH lines are
+        // out at every offset. One number, on the handler that knows all three.
         overscrollState.resolve(
             top: environment.scrollOverscrollTop,
             bottom: environment.scrollOverscrollBottom,
-            viewportHeight: reservesIndicatorLine ? max(1, contentHeight - 1) : contentHeight)
+            viewportHeight: max(1, contentHeight - reservedIndicatorLines))
     }
 }
 

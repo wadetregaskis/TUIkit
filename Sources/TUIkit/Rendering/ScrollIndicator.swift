@@ -93,9 +93,10 @@ func localizedInteger(_ value: Int, locale: Locale = .current) -> String {
 ///
 /// - Parameters:
 ///   - direction: Whether the indicator points up or down.
-///   - count: The number of rows/lines hidden in that direction. Omitted
-///     from the label (along with the unit word) when zero — in normal use
-///     the caller only renders the indicator when at least one is hidden.
+///   - count: The number of rows/lines hidden in that direction. Zero is a real
+///     value and reads as one ("0 more rows above"): with
+///     ``EnvironmentValues/alwaysShowsVerticalTextIndicators`` the line is drawn
+///     at the edges, where nothing is hidden.
 ///   - unit: What `count` denominates — the label spells it out
 ///     ("42 more rows below" vs "~200M more lines below").
 ///   - width: The total width available for the indicator line.
@@ -209,14 +210,17 @@ private func scrollIndicatorParts(
     // The label degrades to fit a narrow viewport rather than clipping
     // mid-word: the count and its unit survive as long as possible, and
     // the arrow already carries the direction once the words must go.
-    let bodies: [String] = count > 0
-        ? [
-            "\(countText) more \(unitWord) \(directionWord)",
-            "\(countText) \(unitWord) \(directionWord)",
-            "\(countText) \(unitWord)",
-            countText,
-        ]
-        : ["more \(directionWord)"]
+    // Zero is a real count, not a missing one: under
+    // `EnvironmentValues.alwaysShowsVerticalTextIndicators` the line is drawn at
+    // the very top and the very bottom, where nothing is hidden, and it should
+    // say "0 more rows above" like every other value says its own. It used to
+    // fall to a countless "more above", which at zero is simply false.
+    let bodies: [String] = [
+        "\(countText) more \(unitWord) \(directionWord)",
+        "\(countText) \(unitWord) \(directionWord)",
+        "\(countText) \(unitWord)",
+        countText,
+    ]
     let body = bodies.first { 1 + $0.count + 2 <= width } ?? ""
     let label = body.isEmpty ? " " : " \(body) "
 

@@ -909,7 +909,10 @@ where Value.ID: Hashable {
         let tableHasFocus = context.indicatesFocus(
             handler.engageFocus(context: context, focusID: persistedFocusID))
 
-        if overflowing {
+        // Also when nothing overflows but `.scrollIndicators(.visible)` asked for
+        // the lines anyway: they come out of the rows' budget there too, and this
+        // is what publishes that. Skipped only where no line is spent at all.
+        if overflowing || handler.alwaysReservesIndicatorLines {
             // The landing slot is drawn among the rows and takes one of their
             // lines, so the rows are budgeted the content area minus it.
             reserveIndicatorLines(
@@ -941,8 +944,7 @@ where Value.ID: Hashable {
                 // multi-line twin already spells it out. Its consumer is the
                 // ScrollView cursor-follow marker, which was aiming one line
                 // low in the same configuration.
-                scrollOffsetAbove:
-                    (handler.reservesIndicatorLine && handler.drawnOffset > 0) ? 1 : 0,
+                scrollOffsetAbove: handler.drawnIndicators.above ? 1 : 0,
                 drawnBands: composed.bands,
                 columnWidths: columnWidths,
                 rowContentWidth: innerWidth
@@ -1198,14 +1200,14 @@ where Value.ID: Hashable {
         // stale, the first blocked tick resolved against a fresh handler's
         // default of 1.
         handler.resolveOverscroll(
-            environment: context.environment, contentHeight: contentHeight,
-            reservesIndicatorLine: handler.drawsScrollIndicators)
+            environment: context.environment, contentHeight: contentHeight)
         // Clamp, snap off the resting duplicate, apply the anchor — the sequence
         // `_ListCore` and the single-line path below run too, and the render-pass
         // guard that has to wrap it. See `settleScrollPosition`.
         handler.settleScrollPosition(
             measuring: context.isMeasuring, overflowing: furthest > 0,
-            drawsTextIndicators: handler.drawsScrollIndicators, firstRowHeight: heightOf(0))
+            drawsTextIndicators: handler.drawsScrollIndicators,
+            firstRowHeight: heightOf(0))
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
 
@@ -1219,7 +1221,9 @@ where Value.ID: Hashable {
         let window = ScrollRowWindow.resolve(
             scrollOffset: handler.scrollOffset, count: data.count,
             contentHeight: contentHeight, topClip: handler.scrollTopClipLines,
-            drawsTextIndicators: handler.drawsScrollIndicators, height: heightOf)
+            drawsTextIndicators: handler.drawsScrollIndicators,
+            alwaysDrawsIndicators: context.environment.alwaysShowsVerticalTextIndicators,
+            height: heightOf)
         // The window may have absorbed a top clip (or a whole first row) that
         // an indicator would otherwise have announced — the rows are drawn
         // from ITS position, so the mouse mapping must measure from it too.
@@ -1247,7 +1251,7 @@ where Value.ID: Hashable {
         // `composeMultiLineRows` just drew — `window.showsAbove` rather than the
         // handler's `hasContentAbove`, which is false for a top clip inside
         // row 0 while the indicator is on screen.
-        let indicatorLines = (window.showsAbove && handler.drawsScrollIndicators) ? 1 : 0
+        let indicatorLines = window.reservesAbove ? 1 : 0
         let bands = multiLineRowBands(
             handler: handler, range: window.range,
             heights: onScreenRowHeights(window.range, height: heightOf, topClip: topClip),
@@ -1411,7 +1415,12 @@ where Value.ID: Hashable {
         handler.showsScrollbar = showsScrollbar
         // Not `!showsScrollbar`: a table whose indicators are hidden draws
         // neither, and the "N more" arithmetic must know that.
-        handler.drawsScrollIndicators = draws && furthest > 0
+        // `.visible` asks for the affordance, not for a hint: the lines are drawn
+        // even where the rows all fit, so the overflow test does not gate them.
+        handler.alwaysReservesIndicatorLines =
+            draws && !showsScrollbar && context.environment.alwaysShowsVerticalTextIndicators
+        handler.drawsScrollIndicators =
+            draws && (furthest > 0 || handler.alwaysReservesIndicatorLines)
         return furthest
     }
 
@@ -1500,9 +1509,15 @@ where Value.ID: Hashable {
         /// — so each sits at the assembled line it was appended to, whatever
         /// the rows did.
         var chromeRuns: [AnimatedCellRun] = []
-        if window.showsAbove, drawsText {
+        // Drawn iff a line was RESERVED — see `ScrollRowWindow.reservesAbove`. The
+        // count is legitimately 0 under `alwaysShowsVerticalTextIndicators`.
+        if window.reservesAbove {
             let indicator = renderScrollIndicator(
-                direction: .up, count: max(1, window.range.lowerBound),
+                // At least one whenever anything IS hidden — a top clip hides
+                // part of the first row, so the whole-row count can be 0 with a
+                // row genuinely off screen. See the `List` twin.
+                direction: .up,
+                count: window.showsAbove ? max(1, window.range.lowerBound) : 0,
                 unit: .rows,
                 width: contentWidth, palette: palette, cycle: indicatorCycle,
                 locale: numberLocale)
@@ -1516,7 +1531,7 @@ where Value.ID: Hashable {
         // whenever the visible rows don't sum to the budget, and the blank
         // lines that left at the bottom read as the table truncating itself.
         let rowLineBudget =
-            max(1, contentHeight - lines.count - ((window.showsBelow && drawsText) ? 1 : 0))
+            max(1, contentHeight - lines.count - (window.reservesBelow ? 1 : 0))
         var rowLinesEmitted = 0
         // The rows are collected apart from the indicator chrome so that only
         // they take an overscroll slide (§1.5).
@@ -1569,7 +1584,7 @@ where Value.ID: Hashable {
         let runs = rowRuns(
             pulseRuns, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
             lineCount: rowsTop + slidableRows.count)
-        if window.showsBelow, drawsText {
+        if window.reservesBelow {
             let indicator = renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
                 unit: .rows,
@@ -1586,7 +1601,9 @@ where Value.ID: Hashable {
         // must not breathe as rows of different heights scroll through.
         // A non-overflowing table (no indicators, no clip) keeps its
         // natural, content-sized height.
-        if window.showsAbove || window.showsBelow || window.topClip > 0 {
+        if window.showsAbove || window.showsBelow || window.topClip > 0
+            || window.reservesAbove || window.reservesBelow
+        {
             while lines.count < contentHeight {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
@@ -1769,8 +1786,15 @@ where Value.ID: Hashable {
         // …and neither does a table whose indicators are hidden. The bar path
         // passes `showsScrollbar: true` and composes its own rows, so this is
         // the "N more" answer for both.
+        let drawsText = drawsTextIndicators(
+            showsScrollbar, context, contentHeight: contentHeight)
+        // `.visible` asks for the affordance, not for a hint that appears when it
+        // has something to say — so the overflow test does not gate it.
+        handler.alwaysReservesIndicatorLines =
+            drawsText && !showsScrollbar
+            && context.environment.alwaysShowsVerticalTextIndicators
         handler.drawsScrollIndicators =
-            overflowing && drawsTextIndicators(showsScrollbar, context, contentHeight: contentHeight)
+            drawsText && (overflowing || handler.alwaysReservesIndicatorLines)
         // Provisional, and RENDER-ONLY for the reason `reserveIndicatorLines`
         // spells out: a measure pass is handed a height the frame may not get,
         // and this value outlives the pass that wrote it.
@@ -1802,8 +1826,7 @@ where Value.ID: Hashable {
             keyboardMoveIsLive: false,
             rowHeight: nil)
         handler.resolveOverscroll(
-            environment: context.environment, contentHeight: contentHeight,
-            reservesIndicatorLine: handler.drawsScrollIndicators)
+            environment: context.environment, contentHeight: contentHeight)
         // Resolve row ids lazily: the selection handler only ever asks for the
         // visible window + the focused row (O(1) each via `data[index].id`), so
         // materialising a full id array here was O(total) waste — and `_TableCore`
@@ -1817,7 +1840,8 @@ where Value.ID: Hashable {
         // line each, so the snap's line-granularity exception can never apply.
         handler.settleScrollPosition(
             measuring: context.isMeasuring, overflowing: overflowing,
-            drawsTextIndicators: handler.drawsScrollIndicators, firstRowHeight: 1)
+            drawsTextIndicators: handler.drawsScrollIndicators,
+            firstRowHeight: 1)
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         return (handler, overflowing)
@@ -1845,7 +1869,7 @@ where Value.ID: Hashable {
     @discardableResult
     private func reserveIndicatorLines(
         handler: ItemListHandler<Value.ID>, contentHeight: Int, context: RenderContext
-    ) -> (viewport: Int, origin: Int) {
+    ) -> (viewport: Int, origin: Int) {  // publishes `handler.drawnIndicators` too
         // Nothing is set aside when the "N more" lines are not what this table
         // draws — hidden indicators cost nothing, and the bar path never calls
         // this at all.
@@ -1859,7 +1883,9 @@ where Value.ID: Hashable {
         let window = ScrollRowWindow.resolve(
             scrollOffset: handler.scrollOffset, count: data.count,
             contentHeight: contentHeight, topClip: 0,
-            drawsTextIndicators: handler.drawsScrollIndicators, height: { _ in 1 })
+            drawsTextIndicators: handler.drawsScrollIndicators,
+            alwaysDrawsIndicators: context.environment.alwaysShowsVerticalTextIndicators,
+            height: { _ in 1 })
         let origin = window.range.lowerBound
         let viewport = max(1, window.range.count)
         // A MEASURE pass must not publish either of these. It is offered a
@@ -1877,6 +1903,9 @@ where Value.ID: Hashable {
             // Published for the same reason the scrollbar path does — and the
             // indicators and the row window below count from it.
             handler.drawnOffset = origin
+            // …and which indicator lines that viewport gave up, so the composer
+            // draws exactly those rather than deciding again from what is hidden.
+            handler.drawnIndicators = (window.reservesAbove, window.reservesBelow)
         }
         return (viewport, origin)
     }
@@ -1944,11 +1973,11 @@ where Value.ID: Hashable {
         // `pulsePhase` read (8ebc3385).
         // …and only when they are this table's indicator at all: hidden ones
         // draw nothing, and the bar has its own compose path.
-        let drawsText = handler.drawsScrollIndicators
         let drawnAbove = handler.drawnOffset
         let drawnBelow = max(0, handler.itemCount - handler.drawnVisibleRange.upperBound)
+        let indicators = handler.drawnIndicators
         let indicatorCycle =
-            drawsText && (drawnAbove > 0 || drawnBelow > 0)
+            indicators.above || indicators.below
             ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
         // The "N more" indicators are chrome — they describe where the content
@@ -1958,7 +1987,7 @@ where Value.ID: Hashable {
         /// The indicators' own runs, at the assembled lines they were appended
         /// to — the rows slide past them, so those positions are final.
         var chromeRuns: [AnimatedCellRun] = []
-        if drawsText, drawnAbove > 0 {
+        if indicators.above {
             let indicator = renderScrollIndicator(
                 direction: .up,
                 count: drawnAbove,
@@ -2056,7 +2085,7 @@ where Value.ID: Hashable {
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         let runs = rowRuns(
             pulseRuns, slide: slide, topOffset: rowsTop, lineCount: rowsTop + rowLines.count)
-        if drawsText, drawnBelow > 0 {
+        if indicators.below {
             let indicator = renderScrollIndicator(
                 direction: .down,
                 count: drawnBelow,

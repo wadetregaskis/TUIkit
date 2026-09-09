@@ -331,16 +331,23 @@ extension _ScrollViewCore {
     /// scroll-indicator strings when the content extends past
     /// the visible area. Returns `buffer` unchanged when there
     /// is nothing to scroll to.
+    ///
+    /// - Parameter always: Whether both lines are drawn whatever is hidden —
+    ///   ``EnvironmentValues/alwaysShowsVerticalTextIndicators``. Then the
+    ///   viewport gives up its first and last line at every offset, which is the
+    ///   point: `.visible` asks for the affordance, not for a hint that comes and
+    ///   goes and resizes the content under the reader as it does.
     func applyScrollIndicators(
         to buffer: FrameBuffer,
         handler: ScrollViewHandler,
         width: Int,
         palette: any Palette,
         cycle: SelectionEmphasisCycle?,
-        locale: Locale
+        locale: Locale,
+        always: Bool = false
     ) -> FrameBuffer {
         guard buffer.height > 0 else { return buffer }
-        guard handler.hasContentAbove || handler.hasContentBelow else {
+        guard always || handler.hasContentAbove || handler.hasContentBelow else {
             return buffer
         }
 
@@ -352,7 +359,7 @@ extension _ScrollViewCore {
         /// animating on them goes with them.
         var replacedRows: Set<Int> = []
 
-        if handler.hasContentAbove, !lines.isEmpty {
+        if always || handler.hasContentAbove, !lines.isEmpty {
             // Indicator rows are padded to full viewport width
             // — without padding the resulting buffer's effective
             // width collapses to the indicator's own length.
@@ -371,7 +378,7 @@ extension _ScrollViewCore {
             if let animation = indicator.animation { runs.append(animation) }
         }
 
-        if handler.hasContentBelow, lines.count >= 1 {
+        if always || handler.hasContentBelow, lines.count >= 1 {
             let indicator = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,

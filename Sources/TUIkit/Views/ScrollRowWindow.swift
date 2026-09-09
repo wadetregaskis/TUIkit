@@ -39,6 +39,20 @@ struct ScrollRowWindow {
     let showsBelow: Bool
     /// Lines of the top row hidden above the viewport, after any absorb.
     let topClip: Int
+    /// Whether a line was taken out of the content area for an "N more above"
+    /// indicator — and therefore whether one must be DRAWN.
+    ///
+    /// Not the same question as ``showsAbove``, and the two used to be conflated:
+    /// a view is `false` here when it draws a scrollbar (which spends a column)
+    /// or hides its indicators (which spend nothing) while content is still
+    /// hidden above, and `true` with nothing hidden at all when
+    /// ``EnvironmentValues/alwaysShowsVerticalTextIndicators`` asked for the
+    /// affordance rather than for a hint. Reserved and drawn are ONE answer, so
+    /// they cannot disagree — which is the shape of every off-by-one this rule
+    /// has produced (`f55a9f92`, and a blank line at the bottom of a table).
+    let reservesAbove: Bool
+    /// The same for the "N more below" line.
+    let reservesBelow: Bool
 
     /// Resolves the window.
     ///
@@ -60,6 +74,12 @@ struct ScrollRowWindow {
     ///     `ItemListHandler.drawsScrollIndicators` is exactly this question, on
     ///     all three callers — including "does the view overflow", since a view
     ///     whose rows all fit has nothing hidden to announce.
+    ///   - alwaysDrawsIndicators: Whether both lines are drawn whatever is
+    ///     hidden — ``EnvironmentValues/alwaysShowsVerticalTextIndicators``.
+    ///     Then the reservation is constant, which is the point: the rows get
+    ///     the same budget at every offset, so the content area does not resize
+    ///     as the view scrolls. Meaningless without `drawsTextIndicators`, and
+    ///     ignored there.
     ///   - height: A row's height in lines. Called at most once per row that
     ///     enters the window, plus once for the row that straddles its end —
     ///     never for a row beyond it. That bound is load-bearing rather than
@@ -79,10 +99,14 @@ struct ScrollRowWindow {
         contentHeight: Int,
         topClip: Int = 0,
         drawsTextIndicators: Bool,
+        alwaysDrawsIndicators: Bool = false,
         height: (Int) -> Int
     ) -> Self {
+        let always = drawsTextIndicators && alwaysDrawsIndicators
         guard count > 0 else {
-            return Self(range: 0..<0, showsAbove: false, showsBelow: false, topClip: 0)
+            return Self(
+                range: 0..<0, showsAbove: false, showsBelow: false, topClip: 0,
+                reservesAbove: always, reservesBelow: always)
         }
         let clamped = min(max(0, scrollOffset), count - 1)
         // Absorb a top clip an indicator would cost more to announce than it
@@ -132,7 +156,8 @@ struct ScrollRowWindow {
 
         // A bar marks the hidden rows itself and hidden indicators mark nothing,
         // so in both cases the whole content area is viewport.
-        let aboveReserve = (showsAbove && drawsTextIndicators) ? 1 : 0
+        let reservesAbove = drawsTextIndicators && (always || showsAbove)
+        let aboveReserve = reservesAbove ? 1 : 0
         // The budget is floored at one line, which is `_ListCore`'s spelling and
         // not the two `Table` paths'. It is the only place the three copies did
         // NOT agree, and the disagreement sits in a region none of them can
@@ -143,14 +168,19 @@ struct ScrollRowWindow {
         // unfloored budget of 0 admits one row, a floored 1 admits as many
         // single-line rows as fit), and the floored one is chosen because a
         // budget that can go negative is the sharper edge to leave lying around.
-        var end = fill(budget: max(1, contentHeight - aboveReserve))
-        if end < count, drawsTextIndicators {
+        // Under `always` the below line is reserved before the first fill rather
+        // than discovered by a second one: it is there whether or not this fill
+        // leaves anything past the window, so there is nothing to discover.
+        var end = fill(budget: max(1, contentHeight - aboveReserve - (always ? 1 : 0)))
+        if !always, end < count, drawsTextIndicators {
             end = fill(budget: max(1, contentHeight - aboveReserve - 1))
         }
         return Self(
             range: offset..<min(count, end),
             showsAbove: showsAbove,
             showsBelow: end < count,
-            topClip: resolvedClip)
+            topClip: resolvedClip,
+            reservesAbove: reservesAbove,
+            reservesBelow: drawsTextIndicators && (always || end < count))
     }
 }

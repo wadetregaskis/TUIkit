@@ -191,6 +191,28 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// this cannot — indicators hidden outright, which spends nothing either.
     var reservesIndicatorLine: Bool { drawsScrollIndicators && !showsScrollbar }
 
+    /// Whether BOTH "N more" lines come out of the content area at every offset,
+    /// whatever is hidden — ``EnvironmentValues/alwaysShowsVerticalTextIndicators``.
+    ///
+    /// Synced by the owning view beside ``drawsScrollIndicators``, and consulted
+    /// wherever a bound is worked out from the content height: the reservation
+    /// stops depending on where the viewport is, which is the whole point of
+    /// `.visible`, and every one of those bounds has to say so or the view can
+    /// scroll a line past its own last row.
+    var alwaysReservesIndicatorLines = false
+
+    /// How many lines the "N more" chrome takes out of the content area.
+    ///
+    /// One number, so the several places that budget against the content height
+    /// cannot each decide for themselves — under
+    /// ``alwaysReservesIndicatorLines`` it is 2 at every offset, and otherwise it
+    /// is at most 1 (the "above" line; the "below" one is discovered by filling,
+    /// because whether rows remain past the window is what it depends on).
+    var reservedIndicatorLines: Int {
+        guard reservesIndicatorLine else { return 0 }
+        return alwaysReservesIndicatorLines ? 2 : 1
+    }
+
     /// A closure giving the height in lines of row `i`, for rows that can span
     /// multiple lines — `List` rows are arbitrary views and `Table` cells can
     /// wrap, so both wire this. `nil` (single-line tables, plus the handler's
@@ -269,8 +291,13 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
             // Reserve the "above" indicator's line only when there IS one — a
             // scrollbar draws no such line and hidden indicators draw nothing at
             // all, so in both cases the rows fill the full height.
+            // Under `always` both lines are there at every offset, including at
+            // the bottom this walk is finding and at row 0 — so the budget is a
+            // constant rather than a question about where the top lands.
             let budget =
-                (!reservesIndicatorLine || top - 1 == 0) ? contentHeight : contentHeight - 1
+                alwaysReservesIndicatorLines
+                ? max(1, contentHeight - 2)
+                : ((!reservesIndicatorLine || top - 1 == 0) ? contentHeight : contentHeight - 1)
             // The row a hovering drag borrows (``dropSlotAddsRow``) sits past
             // the last real one and has no data to measure: it is the slot,
             // one blank line. Asking `rowHeight` for it indexes past the data.
@@ -460,6 +487,11 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// Backing storage for ``drawnOffset``; see there.
     var drawnWindowOffset: Int?
 
+    /// Backing storage for ``drawnIndicators``; see there. Cleared with
+    /// ``drawnWindowOffset`` on a scroll, for the same reason: what the last
+    /// frame reserved describes the last frame's offset.
+    var drawnIndicatorLines: (above: Bool, below: Bool)?
+
     /// One visible row's extent within the list's rendered content, in lines
     /// measured from the first content line (i.e. below the border and padding,
     /// and below the "N more above" indicator when one is drawn).
@@ -525,7 +557,10 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// a scroll UP, pinning the viewport one page from the top.
     var scrollOffset: Int = 0 {
         didSet {
-            if scrollOffset != oldValue { drawnWindowOffset = nil }
+            if scrollOffset != oldValue {
+                drawnWindowOffset = nil
+                drawnIndicatorLines = nil
+            }
         }
     }
 

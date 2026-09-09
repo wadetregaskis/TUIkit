@@ -168,6 +168,23 @@ extension EnvironmentValues {
         }
     }
 
+    /// Whether a vertical "N more" line is drawn even with nothing hidden that
+    /// way — so the two lines are always there and the content area never
+    /// changes size as the view scrolls.
+    ///
+    /// ``ScrollIndicatorVisibility/visible`` means visible. It used to mean
+    /// "visible when it has something to say": at the top the "▲ N more above"
+    /// line was absent, at the bottom the "▼ N more below" line was, and the rows
+    /// gained a line at each end — so the thing an app asks for `.visible` to get,
+    /// a viewport that does not resize under it, was the one thing it did not get.
+    ///
+    /// Only the text form has anything to answer here. A scrollbar spends a
+    /// column for its whole height whatever is hidden, so it is already always
+    /// there, and hidden indicators are always absent.
+    var alwaysShowsVerticalTextIndicators: Bool {
+        verticalScrollIndicatorVisibility == .visible && scrollIndicatorStyle == .text
+    }
+
     /// Whether this subtree's horizontally scrolling views reserve a bottom
     /// scrollbar. There is no horizontal text indicator, so the style does not
     /// enter into it — a `.text` subtree still gets its horizontal bar.

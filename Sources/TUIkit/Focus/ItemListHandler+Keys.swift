@@ -330,7 +330,10 @@ extension ItemListHandler {
         // The landing slot is drawn among the rows and takes one of their
         // lines — the same subtraction `_ListCore` makes before its walk.
         var budget = contentHeight - (dropSlotAddsRow ? 1 : 0)
-        if reservesIndicatorLine {
+        if alwaysReservesIndicatorLines {
+            // Both lines, at every offset — nothing to discover.
+            budget -= 2
+        } else if reservesIndicatorLine {
             // A scrollbar spends a column, not a line, so it reserves nothing.
             // Otherwise: a line for "▲ N more" whenever anything is hidden
             // above…
@@ -393,6 +396,23 @@ extension ItemListHandler {
     var drawnOffset: Int {
         get { drawnWindowOffset ?? scrollOffset }
         set { drawnWindowOffset = newValue }
+    }
+
+    /// Which "N more" lines the frame being drawn RESERVED — published where the
+    /// row window is resolved, beside ``drawnOffset``, and read where the chrome
+    /// is composed.
+    ///
+    /// Published rather than re-derived because reserved and drawn have to be one
+    /// answer: a composer that decided for itself, from "is anything hidden
+    /// above", drew nothing at the top while the rows had given up a line for it
+    /// (`.scrollIndicators(.visible)`, where the affordance is unconditional) —
+    /// and the blank line that left is the same defect `f55a9f92` was.
+    ///
+    /// Only the single-line `Table` path needs it: `_ListCore` and the multi-line
+    /// path carry their `ScrollRowWindow` to the composer directly.
+    var drawnIndicators: (above: Bool, below: Bool) {
+        get { drawnIndicatorLines ?? (false, false) }
+        set { drawnIndicatorLines = newValue }
     }
 
     /// The rows on screen, and therefore DATA indices — `Table` subscripts

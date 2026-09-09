@@ -260,6 +260,11 @@ struct ScrollableEnvironmentWiringTests {
     func indicatorSpendMeansOneThing(arm: (name: String, which: Int), overflows: Bool) {
         let session = DragAndDropSession()
         let data = overflows ? Self.rows : Self.fewRows
+        // `.visible` + text: the affordance is unconditional, so a line comes out
+        // of the content area whether or not anything is hidden — that is what
+        // `.visible` is for, a viewport that does not resize under the reader.
+        // (It used to consult the content here, which is `.automatic`'s job; the
+        // sibling test below pins that one.)
         func loud(_ view: some View) -> some View {
             view.scrollIndicators(.visible).scrollIndicatorStyle(.text)
         }
@@ -292,11 +297,65 @@ struct ScrollableEnvironmentWiringTests {
             return
         }
         #expect(
-            handler.drawsScrollIndicators == overflows,
+            handler.drawsScrollIndicators,
             """
             \(arm.name), \(overflows ? "overflowing" : "everything fits"): reported \
             \(handler.drawsScrollIndicators). The flag is "does a line come out of \
             the content area this frame", and one shared window rule reserves on it.
             """)
+        #expect(
+            handler.alwaysReservesIndicatorLines,
+            "\(arm.name): `.visible` reserves both lines at every offset")
+    }
+
+    /// The `.automatic` half of the same rule, on the same three views: there the
+    /// indicator IS a hint, so a line comes out only when something is hidden.
+    /// Without this, "`.visible` always reserves" could be satisfied by every
+    /// visibility always reserving.
+    @Test(
+        "Automatic indicators spend a line only when the content overflows",
+        arguments: arms, [false, true])
+    func automaticIndicatorsSpendOnOverflow(
+        arm: (name: String, which: Int), overflows: Bool
+    ) {
+        let session = DragAndDropSession()
+        let data = overflows ? Self.rows : Self.fewRows
+        func quiet(_ view: some View) -> some View {
+            view.scrollIndicators(.automatic).scrollIndicatorStyle(.text)
+        }
+        let handler: ItemListHandler<Int>? =
+            switch arm.which {
+            case 0:
+                focusedRowHandler(
+                    quiet(
+                        Table(data, selection: .constant(Set<Int>())) {
+                            TableColumn("Name", value: \Row.name).width(.flexible)
+                        }
+                        .frame(height: 6)), session: session)
+            case 1:
+                focusedRowHandler(
+                    quiet(
+                        Table(data, selection: .constant(Set<Int>())) {
+                            TableColumn("Note", value: \Row.note).width(.flexible).lineLimit(3)
+                        }
+                        .frame(height: 6)), session: session)
+            default:
+                focusedRowHandler(
+                    quiet(
+                        List(selection: .constant(Set<Int>())) {
+                            ForEach(data) { Text($0.name) }
+                        }
+                        .frame(height: 6)), session: session)
+            }
+        guard let handler else {
+            Issue.record("\(arm.name): expected the row view to take focus")
+            return
+        }
+        #expect(
+            handler.drawsScrollIndicators == overflows,
+            "\(arm.name), \(overflows ? "overflowing" : "everything fits")")
+        #expect(
+            !handler.alwaysReservesIndicatorLines,
+            "\(arm.name): `.automatic` reserves only what it has something to say about")
     }
 }

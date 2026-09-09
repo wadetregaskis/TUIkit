@@ -582,9 +582,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 // `AnimatedCellRun`). Still only when one will be drawn —
                 // building a cycle is cheap but not free, and a scroll view
                 // that scrolls only horizontally has no vertical indicators.
-                cycle: handler.hasContentAbove || handler.hasContentBelow
+                cycle: context.environment.alwaysShowsVerticalTextIndicators
+                    || handler.hasContentAbove || handler.hasContentBelow
                     ? scrollIndicatorCycle(isFocused: isFocused, context: context) : nil,
-                locale: context.environment.locale
+                locale: context.environment.locale,
+                always: context.environment.alwaysShowsVerticalTextIndicators
             )
             attachIndicatorMouseHandlers(
                 to: &visibleBuffer, contentWidth: contentWidth,

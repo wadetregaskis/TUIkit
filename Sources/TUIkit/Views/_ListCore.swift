@@ -353,7 +353,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// The first row of the window and how many of its lines are scrolled off
     /// above it — the one position the whole render path measures from, settled by
     /// ``ScrollRowWindow``.
-    private typealias WindowOrigin = (offset: Int, topClip: Int)
+    /// Where this frame draws from, and which "N more" lines it draws.
+    ///
+    /// The two reservations travel WITH the origin because every consumer needs
+    /// both together — the composer to draw the lines, the bands and the click
+    /// map to know how far down the rows start — and a consumer that re-derived
+    /// "is there an indicator" from the offset was how the table put every row a
+    /// line off its band.
+    private typealias WindowOrigin = (
+        offset: Int, topClip: Int, reservesAbove: Bool, reservesBelow: Bool
+    )
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
@@ -600,6 +609,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             scrollOffset: handler.scrollOffset, count: source.count,
             contentHeight: rowBudget, topClip: handler.scrollTopClipLines,
             drawsTextIndicators: handler.drawsScrollIndicators,
+            alwaysDrawsIndicators: context.environment.alwaysShowsVerticalTextIndicators,
             height: { source.row(at: $0).buffer.height })
         // Where this frame is DRAWN from: the window may have absorbed a top clip
         // (or a whole first row) an indicator would have cost more to announce
@@ -608,7 +618,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // drawing from the absorbed origin while the hit test measures from the
         // raw one puts every row a line off its band (exactly how the `Table`
         // broke before it did the same).
-        let origin: WindowOrigin = (window.range.lowerBound, window.topClip)
+        let origin: WindowOrigin = (
+            window.range.lowerBound, window.topClip, window.reservesAbove,
+            window.reservesBelow)
         // Materialised from the range the rule settled. `source.row(at:)` builds
         // and renders the content box on demand and MEMOISES it, so the rows the
         // walk already touched cost a dictionary hit here.
@@ -751,7 +763,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return PopulatedRenderState(
             handler: handler,
             focusID: persistedFocusID,
-            origin: (0, 0),
+            origin: (0, 0, false, false),
             visibleRowYRanges: [],
             visibleRows: [],
             dropInsertion: (source.allContent
@@ -949,7 +961,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // outright had this reading true on a list that reserved nothing. `Table`
         // has always folded it in on both its paths; this is the line that makes
         // the two views mean the same thing by the same flag.
-        handler.drawsScrollIndicators = indicators.text && overflowing
+        // `.visible` asks for the affordance, not for a hint: both lines are drawn
+        // even where the rows all fit, so the overflow test does not gate them.
+        handler.alwaysReservesIndicatorLines =
+            indicators.text && context.environment.alwaysShowsVerticalTextIndicators
+        handler.drawsScrollIndicators =
+            indicators.text && (overflowing || handler.alwaysReservesIndicatorLines)
         handler.viewportHeight = provisionalViewport
         handler.canBeFocused = !isDisabled(in: context)
         // Everything the handler's EVENTS will read out of the environment, in
@@ -980,8 +997,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // every frame (a `.viewport`-relative allowance moves with the
         // terminal) and pulling any existing excursion back inside it.
         handler.resolveOverscroll(
-            environment: context.environment, contentHeight: contentHeight,
-            reservesIndicatorLine: handler.drawsScrollIndicators)
+            environment: context.environment, contentHeight: contentHeight)
         // Wire up id resolution + the selectable-index set. For an all-content
         // windowed list (the hot path) both are O(1): ids resolve lazily per
         // visible row through `idAt`, and an empty `selectableIndices` already
@@ -1100,10 +1116,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             ? scrollIndicatorCycle(isFocused: listHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
 
-        if handler.drawsScrollIndicators, origin.offset > 0 || origin.topClip > 0 {
+        // Drawn iff a line was RESERVED for it — one answer, so the rows' budget
+        // and the chrome cannot disagree. Under
+        // `alwaysShowsVerticalTextIndicators` that is true at the top too, and
+        // the count is then legitimately 0 ("0 more rows above").
+        if origin.reservesAbove {
             topIndicator = renderScrollIndicator(
                 direction: .up,
-                count: max(1, origin.offset),
+                // At least one whenever anything IS hidden: a top clip hides part
+                // of row 0, so the whole-row count is 0 while a row is genuinely
+                // off screen. Exactly 0 only where nothing is hidden at all,
+                // which is the `always` case.
+                count: (origin.offset > 0 || origin.topClip > 0) ? max(1, origin.offset) : 0,
                 unit: .rows,
                 width: rowWidth,
                 palette: palette,
@@ -1117,8 +1141,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // `scrollTopClipLines`), so the list's height never changes with which
         // rows happen to be visible.
         let indicatorLines =
-            (topIndicator == nil ? 0 : 1)
-            + (handler.drawsScrollIndicators && handler.hasContentBelow ? 1 : 0)
+            (origin.reservesAbove ? 1 : 0) + (origin.reservesBelow ? 1 : 0)
         let rowLineBudget = max(1, contentHeight - indicatorLines)
         var rowLinesEmitted = 0
 
@@ -1189,7 +1212,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 budget: rowLineBudget)
         }
 
-        if handler.drawsScrollIndicators, handler.hasContentBelow {
+        if origin.reservesBelow {
             bottomIndicator = renderScrollIndicator(
                 direction: .down,
                 count: handler.rowsBelow,
