@@ -44,9 +44,12 @@ public enum ScrollIndicatorVisibility: Sendable, Hashable, CaseIterable {
     case automatic
     /// Always show the indicator (even when everything fits).
     ///
-    /// A scrollbar then draws a full-length thumb. The text style has nothing
-    /// to say about content that isn't there, so it still draws nothing —
-    /// ``automatic`` and ``visible`` are the same thing for it.
+    /// A scrollbar then draws a full-length thumb; the text style draws both
+    /// "N more" lines at every offset, with a count that is legitimately zero.
+    /// It used to draw nothing at an edge with nothing behind it, which made
+    /// ``automatic`` and ``visible`` the same thing for it — and denied an app
+    /// the one thing it asks `.visible` for, a viewport that does not resize
+    /// under the reader as it scrolls (`d1c54212`).
     case visible
     /// Do not show any indicator.
     case hidden
@@ -73,10 +76,14 @@ public enum ScrollIndicatorStyle: Sendable, Hashable, CaseIterable {
     ///
     /// The default, and the only style the horizontal axis has.
     case scrollbar
-    /// A line of text at each edge that has content behind it — "3 more rows
-    /// above", "42 more rows below". Names *how much* is hidden rather than
-    /// showing where the viewport sits, and costs a row only at an edge that
-    /// actually has something to report.
+    /// A line of text at an edge with content behind it — "3 more rows above",
+    /// "42 more rows below". Names *how much* is hidden rather than showing
+    /// where the viewport sits, and under the default
+    /// ``ScrollIndicatorVisibility/automatic`` costs a row only at an edge that
+    /// actually has something to report. Under
+    /// ``ScrollIndicatorVisibility/visible`` both lines are there at every
+    /// offset, count and all, so the content area never changes size as the
+    /// view scrolls (`d1c54212`).
     ///
     /// Vertical only: there is no horizontal equivalent, so a horizontally
     /// scrolling view under this style still draws its bar.
@@ -110,12 +117,15 @@ extension ScrollIndicatorVisibility {
 ///
 /// The two are separate flags rather than an enum because the arithmetic reads
 /// them separately — a bar narrows the content by a column for its whole
-/// height, text steals a row at an overflowing edge — and because "neither" is
+/// height, text steals a row at an edge — and because "neither" is
 /// a real answer (``ScrollIndicatorVisibility/hidden``).
 struct ResolvedScrollIndicators {
     /// A scrollbar is reserved down the trailing edge.
     let bar: Bool
-    /// "N more above / below" lines are reserved at the overflowing edges.
+    /// "N more above / below" lines are reserved — at the overflowing edges, or
+    /// at BOTH edges at every offset under
+    /// ``ScrollIndicatorVisibility/visible`` (`d1c54212`). Which of the two this
+    /// is, the flag does not say: each of the three views works it out per frame.
     let text: Bool
 
     /// Nothing is drawn: the content scrolls silently.

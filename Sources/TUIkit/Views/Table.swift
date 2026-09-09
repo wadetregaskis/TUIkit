@@ -1426,8 +1426,11 @@ where Value.ID: Hashable {
     ///
     /// Asked at `overflowing: true` because whether the rows DO overflow is
     /// itself decided using this answer (see `maxScrollOffset`), so it cannot
-    /// also be an input to it — and a table that turns out to fit reserves
-    /// nothing either way, having nothing hidden to announce.
+    /// also be an input to it — and under the default `.automatic` a table that
+    /// turns out to fit reserves nothing either way, having nothing hidden to
+    /// announce. Under `.scrollIndicators(.visible)` it reserves both lines
+    /// whatever is hidden (`d1c54212`), which is a reservation this answer gates
+    /// — see `alwaysReservesIndicatorLines` below — but does not decide.
     ///
     /// `contentHeight` is the CONTENT AREA, and it must not be the row area.
     /// The two differ by the drag landing slot, so gating on the row area would

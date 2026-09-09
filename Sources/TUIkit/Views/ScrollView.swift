@@ -41,7 +41,9 @@ import TUIkitCore
 /// "N more below" lines under `.scrollIndicatorStyle(.text)`, matching
 /// the indicators used by `List`. `.scrollIndicators(.hidden)` suppresses
 /// them — note that scrolling itself still works, it's only the visual
-/// indicator that disappears.
+/// indicator that disappears. `.scrollIndicators(.visible)` goes the other
+/// way and keeps both text lines at every offset, counts and all, so the
+/// content area does not change size as the view scrolls (`d1c54212`).
 ///
 /// # Example
 ///
