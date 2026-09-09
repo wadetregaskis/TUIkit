@@ -3,8 +3,13 @@
 *A design for reveal-on-focus, viewport-only rendering, and incremental
 layout — which turn out to be one problem, not three.*
 
-**Status:** proposed. Nothing here is implemented except the prerequisite
-fix in §11. Revised twice after adversarial review: §7 records every
+**Status:** largely shipped — Stages 0, 1, 3, 4 and 6 of §10, plus §5e, §5f,
+§5h and §5i, landed between 2026-07-14 and 2026-07-17; §11 lists each with its
+commit and its acceptance test. Stage 2, and Stage 5's hoist of locate above
+`renderedContent` which depends on it, are the parts still outstanding.
+Everything below is kept in its original present tense as the design record: it
+is what was argued, not a description of today's code.
+Revised twice after adversarial review: §7 records every
 alternative considered and why it lost; §4 places the design against what
 Compose, SwiftUI, Flutter, the web, and UIKit actually shipped; §5g–§5j
 and §9 came out of the second review (windowing semantics, state
@@ -15,7 +20,8 @@ SwiftUI portability).
 
 ## 1. Start with the bug
 
-Type this into TUIkit today:
+Type this into TUIkit as it stood before Stage 1 landed (`e89b802e`,
+2026-07-16):
 
 ```swift
 ScrollView {
@@ -31,7 +37,7 @@ Six buttons work. The other 494 cannot be focused or Tabbed to. Not "are
 hard to reach" — they do not exist as far as the focus system is
 concerned.
 
-Measured (how many rows `focus(id:)` can actually land on; viewport ≈ 6):
+Measured then (how many rows `focus(id:)` could actually land on; viewport ≈ 6):
 
 | Composition | Reachable |
 |---|---|
@@ -497,7 +503,7 @@ Two corollaries:
   recorded this frame "disappears", cancelling its task); the design
   keeps it, because it is also SwiftUI's lazy-container behaviour.
 
-### 5h. State must outlive the window — today it doesn't
+### 5h. State must outlive the window — and until `fa26a872` it didn't
 
 The GC contract for `@State` is currently: `markActive(identity)` runs on
 body hydration in the *render* path (`Renderable.swift:207`), and
@@ -523,8 +529,11 @@ Two findings, one worse than the other:
   window.** A `Toggle` in a lazy row silently resets when scrolled away
   and back. SwiftUI does not do this: lazy stacks keep instantiated views
   (their documented memory trade), and `List` preserves per-identity row
-  state through cell recycling. This is a live portability bug **today**,
-  independent of everything else in this design.
+  state through cell recycling. This was a live portability bug, independent of
+  everything else in this design — and the retained-subtree mechanism proposed
+  just below is what fixed it (`fa26a872`, 2026-07-16):
+  `StateStorage.retainSubtree(_:)`, which `endRenderPass` consults before
+  pruning, declared by each windowing container (`VStack.swift:692`).
 - The same probe shows every off-window row's **body still evaluates
   every frame** (the measure pass hydrates it — rows 4–19 recorded a
   value at body time in all five frames). So the current `LazyVStack`
@@ -1032,12 +1041,12 @@ parameters — so SwiftUI source stays valid TUIkit source.
 | Stage | Goal | Test |
 |---|---|---|
 | **0** ✅ | `focusID` survives the scroll clip | `ScrollRevealTests` (`df23e1f2`) |
-| **1** | `LayoutPlacing` + enumerate visitor on the stacks; focus becomes a directional query (§5d). **The 500-button bug is fixed.** | `focus(id:)` reaches row 499 |
+| **1** ✅ | `LayoutPlacing` + enumerate visitor on the stacks; focus becomes a directional query (§5d). **The 500-button bug is fixed.** | `focus(id:)` reaches row 499 — `LayoutPlacingTests`, `WindowedFocusReachTests` (`1e7dc2d9`, `e89b802e`) |
 | **2** | Locate visitor + reveal generation, conditional (§5c). Menu-in-ScrollView reveals. | reveal through 2 nested ScrollViews |
-| **3** | Remove `measureFixedByRendering` from the stacks; `sizeThatFits` = union of placements | measuring draws nothing |
-| **4** | **Lazy `childViews`** (below) | 50M-row `ForEach` builds no array |
+| **3** ✅ | Remove `measureFixedByRendering` from the stacks; `sizeThatFits` = union of placements | measuring draws nothing (`4fc180bc`) — spacers excepted, see below |
+| **4** ✅ | **Lazy `childViews`** (below) | 50M-row `ForEach` builds no array — `LazyChildViewsTests` (`1f609f57`) |
 | **5** | `ScrollPosition` anchors; hoist locate above `renderedContent` | scroll one line touches one row |
-| **6** | `renderedContent` draws only the window | 50M-row list renders O(visible) |
+| **6** ✅ | `renderedContent` draws only the window | 50M-row list renders O(visible) — `SlicedWindowTests` (`1ca37d88`) |
 
 **Stage 6 must require no protocol change.** It is: a window predicate, an
 extent source, an offset hoist, over an unchanged `LayoutPlacing`. If it
@@ -1080,7 +1089,7 @@ pay Ω(N) on the rare id-lookup miss instead. Both are defensible;
 `ItemListHandler` (index-addressed) shows the miss essentially never
 happens for the workloads that need 50M rows.
 
-### Two more things that are false today
+### Two more things that were false when this was written
 
 - `_VStackCore.windowSizeThatFits` (`VStack.swift:143`) — the sizing path
   *for the windowed stack* — calls `measureFixedByRendering` →
@@ -1090,7 +1099,13 @@ happens for the workloads that need 50M rows.
   defeated by its own measure pass. 16 files call `measureFixedByRendering`.
   Until Stage 3, "measure is cheaper than render" is **false** — measure
   *is* render. (§5h's probe confirmed this from the outside: every
-  off-window row's body evaluates every frame, today.)
+  off-window row's body evaluated every frame.) **Stage 3 fixed exactly this**
+  (`4fc180bc`, 2026-07-16): `windowSizeThatFits` (now `VStack.swift:191`) walks
+  width-aware slots analytically and renders nothing. The one survivor is a
+  stack containing a `Spacer`, which keeps the render-based measure on purpose
+  — a spacer's height comes from distributing the leftover after every sibling
+  has rendered, so it is a property of the fill, not of any one child
+  (`VStack.swift:235-240`).
 - **No general measure cache.** `lookupSize`/`storeSize` are called from
   exactly ONE place in the whole codebase — `measureValueMemoized` in
   `ValueMemo.swift`, reached only by `EquatableView` and `_MemoizedRow` (it used
@@ -1109,6 +1124,32 @@ region *without* `focusID`. The parameter defaults to `nil`, so it was
 silent. Since reveal matches on `focusID`, every `ScrollView` handed its
 parent anonymous regions and **nested ScrollViews could never reveal
 anything.** Fixed; `ScrollRevealTests` pins it at one and two levels.
+
+**Also landed: most of §10.** Built out on `main` over two days, each stage
+with an acceptance test whose header names this document and the section it
+answers:
+
+| What | Commit | Test |
+|---|---|---|
+| Stage 1a — `LayoutPlacing`, placements from measurement | `1e7dc2d9` (2026-07-16) | `LayoutPlacingTests` |
+| Stage 1b — focus reaches windowed-out rows: §1's 500-button bug | `e89b802e` (2026-07-16) | `WindowedFocusReachTests` |
+| §5h — a windowed-out row keeps its `@State` | `fa26a872` (2026-07-16) | `StateWindowRetentionTests` |
+| Stage 3 — the windowed stack measures without rendering | `4fc180bc` (2026-07-16) | `LazyStackWindowingTests` |
+| Stage 4 — lazy `childViews` | `1f609f57` (2026-07-16) | `LazyChildViewsTests` |
+| §5e — anchored windowing for variable heights | `2db0cafb` (2026-07-17) | `AnchoredWindowTests` |
+| §5f — the anchor ladder | `73df238a` (2026-07-17) | `AnchorLadderTests` |
+| §5i — the uniform fast path | `c3ecc31d` (2026-07-17) | `UniformSeekWindowTests` |
+| Stage 6 — `renderedContent` draws only the window | `1ca37d88` (2026-07-17) | `SlicedWindowTests` |
+
+Stage 6 needed no protocol change, so §10's falsification criterion held.
+One honest limit: `LayoutPlacing` has exactly one conformer, `_VStackCore`
+(`StackLayoutPlacing.swift:80`) — TUIkit's only windowing stack — not
+`_HStackCore`, `List` or `Section`. **Left:** Stage 2 (§5c's locate visitor and
+reveal generation; neither a `LocateResult` nor a reveal generation exists yet)
+and Stage 5's hoist of locate above `renderedContent`, which waits on it.
+`.scrollPosition` arrived separately in `663156c5` (2026-08-09), and
+`ScrollViewReader` in `e62b8c4e` (2026-07-17), answering §13's fourth open
+question.
 
 ---
 
