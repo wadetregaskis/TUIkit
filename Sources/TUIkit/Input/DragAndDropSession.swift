@@ -903,14 +903,14 @@ final class DragAndDropSession: @unchecked Sendable {
                     position: cursorY, start: rect.offsetY + zone.topInset,
                     extent: max(0, rect.height - zone.topInset - zone.bottomInset),
                     canBackward: zone.vertical.hasContentAbove,
-                    canForward: zone.vertical.hasContentBelow)
+                    canForward: zone.vertical.canScrollForward)
                 : 0
             let dx: Int
             if let horizontal = zone.horizontal, withinRows {
                 dx = Self.autoScrollDelta(
                     position: cursorX, start: rect.offsetX, extent: rect.width,
                     canBackward: horizontal.hasContentAbove,
-                    canForward: horizontal.hasContentBelow)
+                    canForward: horizontal.canScrollForward)
             } else {
                 dx = 0
             }

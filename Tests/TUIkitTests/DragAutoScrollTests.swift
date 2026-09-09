@@ -117,6 +117,57 @@ struct DragAutoScrollTests {
         #expect(handler.scrollOffset > 0, "hovering the bottom edge scrolls toward the end")
     }
 
+    /// The reachability question, asked of the BOUND rather than of the
+    /// indicator predicate.
+    ///
+    /// Six two-line rows in an 11-line content area: the window covers every row
+    /// with the last one straddling the bottom edge, so `viewportHeight` — the
+    /// rows actually on screen — is 6 and `extent` is 6, while `maxOffset`,
+    /// walked from real row heights, is 1. `hasContentBelow` in the
+    /// `ScrollableOffsetState` extension is `scrollOffset + viewportHeight <
+    /// extent`, which reads `0 + 6 < 6`: false. So the drag's `canForward` said
+    /// there was nowhere to go while there was exactly one offset left — the one
+    /// that draws the last row whole, and the one a hovering drag needs to reach
+    /// the landing slot past it.
+    ///
+    /// The same mixed-unit subtraction `663d98cc` took out of `scroll(by:)`,
+    /// surviving in the drag path because the auto-scroller asked a different
+    /// question. `hasContentBelow` is the "▼ N more" indicator's predicate and
+    /// counts the DATA (`ItemListHandler` shadows it to say so); the auto-scroll
+    /// is asking whether the viewport may move, which is `scrollOffset <
+    /// maxOffset` — a protocol requirement, so a conformer's exact walk answers
+    /// it. The two are the same number only where every row is one line.
+    @Test("A drag reaches the tail when the last row straddles the bottom edge")
+    func straddlingLastRowIsReachable() {
+        let handler = ItemListHandler<Int>(
+            focusID: "list", itemCount: 6, viewportHeight: 6,
+            selectionMode: .single, canBeFocused: true)
+        handler.rowHeight = { _ in 2 }
+        handler.contentHeight = 11
+        #expect(handler.maxOffset == 1, "the fixture really has an offset to reach")
+        #expect(
+            (handler as any ScrollableOffsetState).hasContentBelow == false,
+            "…and the indicator predicate really does deny it")
+
+        let harness = oneZone(vertical: handler, cursorX: 20, cursorY: 9)
+        harness.run(ticks: 3)
+        #expect(
+            handler.scrollOffset == 1,
+            "the drag reaches the tail, got \(handler.scrollOffset)")
+    }
+
+    /// …and it still stops AT the bottom rather than grinding against it. The
+    /// bound is the same one every other reachability test in this subsystem
+    /// uses, so a zone already at its end must not engage.
+    @Test("A drag at the very bottom does not keep scrolling")
+    func bottomStops() {
+        let handler = scrollHandler(offset: 90, content: 100, viewport: 10)
+        #expect(handler.maxOffset == 90, "already at the end")
+        let harness = oneZone(vertical: handler, cursorX: 20, cursorY: 9)
+        harness.run(ticks: 3)
+        #expect(handler.scrollOffset == 90, "nothing below, got \(handler.scrollOffset)")
+    }
+
     @Test("A drag near the top edge scrolls the content up")
     func topEdgeScrollsUp() {
         let handler = scrollHandler(offset: 50, content: 100, viewport: 10)

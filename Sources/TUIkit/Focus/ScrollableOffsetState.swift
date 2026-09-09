@@ -334,9 +334,37 @@ extension ScrollableOffsetState {
     }
 
     /// Whether there is content below the visible viewport.
+    ///
+    /// The "▼ N more" indicator's predicate, and an INDICATOR question: it is
+    /// about the content, and `ItemListHandler` shadows it to count the data
+    /// rather than the line a hovering drag borrowed. To ask whether the
+    /// viewport may still MOVE, ask ``canScrollForward`` — the two are the same
+    /// number only where every row is one unit tall.
     public var hasContentBelow: Bool {
         scrollOffset + viewportHeight < extent
     }
+
+    /// Whether a forward step would move this viewport at all.
+    ///
+    /// **Not ``hasContentBelow``**, which is the indicator's question. This is
+    /// the BOUND's, asked through ``resolvedMaxOffset(reaching:)`` — a protocol
+    /// requirement, so a conformer that walks real row heights answers it, and a
+    /// caller holding `any ScrollableOffsetState` gets that answer rather than
+    /// the uniform-unit arithmetic.
+    ///
+    /// The distinction is not academic: `ItemListHandler.extent` counts ROWS
+    /// while its ``viewportHeight`` counts the rows actually on screen, and the
+    /// row straddling the bottom edge IS on screen — so `scrollOffset +
+    /// viewportHeight < extent` reads `0 + 6 < 6` for six two-line rows in an
+    /// 11-line area while ``maxOffset`` names an offset at which the last row is
+    /// whole. `663d98cc` took that mixed-unit subtraction out of
+    /// ``scroll(by:)``; the drag auto-scroller was asking it in a different
+    /// spelling, and could not reach the tail or the landing slot past it.
+    ///
+    /// For every conformer but `ItemListHandler` the two expressions are
+    /// literally equal (`maxOffset` is `extent - viewportHeight`), which is why
+    /// this went unnoticed.
+    public var canScrollForward: Bool { scrollOffset < maxOffset }
 
     /// The number of rows / lines above the visible viewport.
     /// Zero when ``hasContentAbove`` is `false`. Used to

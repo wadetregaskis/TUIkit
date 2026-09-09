@@ -854,7 +854,16 @@ extension ItemListHandler {
 //  dispatches to these versions, while ``hasContentBelow``,
 //  ``rowsBelow`` and ``visibleRange`` exist only in that extension and
 //  are merely SHADOWED here — a caller holding
-//  `any ScrollableOffsetState` still gets the extension's arithmetic,
-//  as the drag auto-scroll's `canForward` does. Each says at its own
-//  declaration why it differs. The list-specific arithmetic lives in
+//  `any ScrollableOffsetState` still gets the extension's arithmetic.
+//  That used to be load-bearing by accident: the drag auto-scroller's
+//  `canForward` read ``hasContentBelow`` through the existential and so
+//  got the arithmetic, which happens to be what a drag wants because it
+//  counts the borrowed drop slot — and which also carried the mixed-unit
+//  subtraction, so the drag could not reach a straddling last row. It
+//  asks ``ScrollableOffsetState/canScrollForward`` now, which goes
+//  through the ``resolvedMaxOffset(reaching:)`` REQUIREMENT and reaches
+//  this class. Nothing outside this file depends on the shadowing any
+//  more, which is what makes promoting one of the three to a requirement
+//  a decision rather than a silent behaviour change. Each says at its
+//  own declaration why it differs. The list-specific arithmetic lives in
 //  ``ensureFocusedItemVisible()``.)
