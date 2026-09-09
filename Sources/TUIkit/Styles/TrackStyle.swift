@@ -147,12 +147,3 @@ public enum SegmentColoring: Sendable, Equatable {
     /// fall back to the control's filled colour).
     case gradient(Gradient)
 }
-
-// MARK: - Backwards Compatibility
-
-/// Backwards-compatible type alias for `TrackStyle`.
-///
-/// Use `TrackStyle` in new code. This alias exists to maintain
-/// compatibility with existing code using `ProgressBarStyle`.
-@available(*, deprecated, renamed: "TrackStyle")
-public typealias ProgressBarStyle = TrackStyle

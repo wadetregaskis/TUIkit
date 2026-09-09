@@ -254,26 +254,6 @@ extension ProgressView {
         copy.style = style
         return copy
     }
-
-    /// Sets the visual style of the progress view.
-    ///
-    /// - Parameter style: The progress view style.
-    /// - Returns: A progress view with the specified style.
-    /// - Note: Renamed to ``progressViewStyle(_:)`` for SwiftUI parity.
-    @available(*, deprecated, renamed: "progressViewStyle(_:)")
-    public func trackStyle(_ style: TrackStyle) -> ProgressView {
-        progressViewStyle(style)
-    }
-
-    /// Sets the visual style of the progress view.
-    ///
-    /// - Parameter style: The progress view style.
-    /// - Returns: A progress view with the specified style.
-    /// - Note: Renamed to ``progressViewStyle(_:)`` for SwiftUI parity.
-    @available(*, deprecated, renamed: "progressViewStyle(_:)")
-    public func progressBarStyle(_ style: TrackStyle) -> ProgressView {
-        progressViewStyle(style)
-    }
 }
 
 // MARK: - Equatable Conformance

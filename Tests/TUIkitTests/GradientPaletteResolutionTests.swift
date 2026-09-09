@@ -102,7 +102,7 @@ struct GradientPaletteResolutionTests {
     @Test("A role in a track's ramp paints")
     func trackRamp() {
         let line = renderToBuffer(
-            ProgressView(value: 1).trackStyle(.shadeRamp(gradient: ramp)).frame(width: 12),
+            ProgressView(value: 1).progressViewStyle(.shadeRamp(gradient: ramp)).frame(width: 12),
             context: context()
         ).lines.first ?? ""
         let painted = inks(line)
