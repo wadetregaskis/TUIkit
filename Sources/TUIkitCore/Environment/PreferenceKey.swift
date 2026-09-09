@@ -68,8 +68,26 @@ extension PreferenceKey {
 
 /// A collection of preference values propagated up the view hierarchy.
 public struct PreferenceValues: @unchecked Sendable {
+    /// One key's value, and the key's own way of combining two of them.
+    ///
+    /// The fold is carried WITH the value because the only place that knows the
+    /// key's type is the subscript that wrote it: ``merge(_:)`` walks
+    /// `[ObjectIdentifier: …]` and has no `K` to call ``PreferenceKey/reduce``
+    /// through. Without it merge could only assign, which for an accumulating
+    /// key means a child scope's value REPLACING everything the parent had
+    /// already collected — two nested `.onPreferenceChange` observers over a
+    /// summing key reported the inner subtree's total as the whole tree's.
+    private struct Entry {
+        var value: Any
+        /// `reduce(value: &accumulated) { next }`, with both sides erased.
+        /// Applied parent-first, which is the order `reduce` is specified in:
+        /// `value` is what has been collected so far and `nextValue()` is the
+        /// child arriving now.
+        let fold: (Any, Any) -> Any
+    }
+
     /// Storage for preference values.
-    private var storage: [ObjectIdentifier: Any] = [:]
+    private var storage: [ObjectIdentifier: Entry] = [:]
 
     /// Creates empty preference values.
     public init() {}
@@ -77,13 +95,17 @@ public struct PreferenceValues: @unchecked Sendable {
     /// Accesses the preference value for the given key.
     public subscript<K: PreferenceKey>(key: K.Type) -> K.Value {
         get {
-            if let value = storage[ObjectIdentifier(key)] as? K.Value {
+            if let value = storage[ObjectIdentifier(key)]?.value as? K.Value {
                 return value
             }
             return K.defaultValue
         }
         set {
-            storage[ObjectIdentifier(key)] = newValue
+            storage[ObjectIdentifier(key)] = Entry(value: newValue) { accumulated, next in
+                var value = (accumulated as? K.Value) ?? K.defaultValue
+                K.reduce(value: &value) { (next as? K.Value) ?? K.defaultValue }
+                return value
+            }
         }
     }
 }
@@ -93,10 +115,20 @@ public struct PreferenceValues: @unchecked Sendable {
 extension PreferenceValues {
     /// Merges another set of preference values into this one.
     ///
+    /// Through each key's own ``PreferenceKey/reduce``, not by assignment: a key
+    /// that accumulates — summing heights, unioning a set — must accumulate here
+    /// too, and this is the only place a scope's collected values meet its
+    /// parent's. The default `reduce` is `value = nextValue()`, so a key that
+    /// names a single winner still lets the inner scope win, exactly as before.
+    ///
     /// - Parameter other: The other preference values to merge.
     public mutating func merge(_ other: Self) {
-        for (key, value) in other.storage {
-            storage[key] = value
+        for (key, entry) in other.storage {
+            guard let mine = storage[key] else {
+                storage[key] = entry
+                continue
+            }
+            storage[key] = Entry(value: entry.fold(mine.value, entry.value), fold: entry.fold)
         }
     }
 }
