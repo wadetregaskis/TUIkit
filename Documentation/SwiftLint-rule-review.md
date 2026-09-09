@@ -221,5 +221,5 @@ same day (`direct_return` and `private_swiftui_state`, `b08531db`), and the rest
 decline for reasons
 that are now written down rather than rediscovered.
 
-The linter now enforces 50 opt-in rules on top of the defaults, at 0
+The linter now enforces 54 opt-in rules on top of the defaults, at 0
 violations across 1,094 files.
