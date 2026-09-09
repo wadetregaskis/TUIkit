@@ -197,7 +197,7 @@ controls to exactly these:
 
 ```swift
 let replayed = buffer.composited(
-    with: FrameBuffer(lines: [run.frame(at: 0)]), at: (x: run.offsetX, y: run.offsetY))
+    with: FrameBuffer(lines: [run.frame(atIndex: 0)]), at: (x: run.offsetX, y: run.offsetY))
 #expect(replayed.lines.map(\.stripped) == buffer.lines.map(\.stripped))
 ```
 
