@@ -176,6 +176,20 @@ extension RGBAImage {
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: result)
     }
 
+    /// One output column's share of the resample: which two source columns it
+    /// samples, and how far it stands between them.
+    ///
+    /// Hoisted out of the row loop in ``scaledBilinear(to:_:)`` because not one
+    /// of the four depends on `y`. One struct rather than four parallel arrays,
+    /// so the inner loop reads one entry per pixel instead of taking four
+    /// subscripts — at -Onone each of those is a call.
+    private struct ColumnGeometry {
+        let x0: Int
+        let x1: Int
+        let xFrac: Double
+        let oneMinusX: Double
+    }
+
     /// Returns a scaled copy using bilinear interpolation for smoother results.
     ///
     /// All four channels are interpolated, alpha included — see the note at
@@ -217,90 +231,119 @@ extension RGBAImage {
         // this away on its own, and a debug build is what the framework is
         // developed and demoed in.
         let count = targetWidth * targetHeight
-        let scaled = pixels.withUnsafeBufferPointer { source -> [RGBA] in
-            [RGBA](unsafeUninitializedCapacity: count) { destination, initialized in
-                for y in 0..<targetHeight {
-                    let sourceY = Double(y) * yRatio
-                    var y0 = Int(sourceY)
-                    if y0 > sourceHeight - 1 { y0 = sourceHeight - 1 }
-                    var y1 = y0 + 1
-                    if y1 > sourceHeight - 1 { y1 = sourceHeight - 1 }
-                    let yFrac = sourceY - Double(y0)
-                    let oneMinusY = 1.0 - yFrac
-                    let row0 = y0 * sourceWidth
-                    let row1 = y1 * sourceWidth
-                    let out = y * targetWidth
 
-                    for x in 0..<targetWidth {
-                        let sourceX = Double(x) * xRatio
-                        var x0 = Int(sourceX)
-                        if x0 > sourceWidth - 1 { x0 = sourceWidth - 1 }
-                        var x1 = x0 + 1
-                        if x1 > sourceWidth - 1 { x1 = sourceWidth - 1 }
-                        let xFrac = sourceX - Double(x0)
-                        let oneMinusX = 1.0 - xFrac
+        // The per-COLUMN geometry, hoisted out of the row loop. `x0`, `x1` and
+        // the two horizontal weights depend only on `x`, and the loop below
+        // recomputed all four for every row — ten operations per output pixel
+        // to arrive at one of `targetWidth` distinct answers. The pixel path's
+        // 960×850 conversion did that 816,000 times for 960 answers.
+        //
+        // Transcribed, not re-derived. `xFrac` is `sourceX` less the CLAMPED
+        // `x0`, and both clamps still test `> sourceWidth - 1` in that order:
+        // taking `xFrac` from an unclamped `Int(sourceX)` is the one way this
+        // could change a pixel, and it would show only where the clamp bites —
+        // an upscale's last column, which `ResamplingEquivalenceTests` covers.
+        //
+        // One four-field entry read once, not four parallel arrays: at -Onone
+        // every `UnsafeBufferPointer` subscript is a call, and four of them
+        // would eat what the hoist buys. Same reason the four pixel reads below
+        // go through one buffer rather than four `pixel(at:)` calls.
+        let columns = [ColumnGeometry](unsafeUninitializedCapacity: targetWidth) { entries, initialized in
+            for x in 0..<targetWidth {
+                let sourceX = Double(x) * xRatio
+                var x0 = Int(sourceX)
+                if x0 > sourceWidth - 1 { x0 = sourceWidth - 1 }
+                var x1 = x0 + 1
+                if x1 > sourceWidth - 1 { x1 = sourceWidth - 1 }
+                let xFrac = sourceX - Double(x0)
+                entries[x] = ColumnGeometry(x0: x0, x1: x1, xFrac: xFrac, oneMinusX: 1.0 - xFrac)
+            }
+            initialized = targetWidth
+        }
+        let scaled = columns.withUnsafeBufferPointer { column -> [RGBA] in
+            pixels.withUnsafeBufferPointer { source -> [RGBA] in
+                [RGBA](unsafeUninitializedCapacity: count) { destination, initialized in
+                    for y in 0..<targetHeight {
+                        let sourceY = Double(y) * yRatio
+                        var y0 = Int(sourceY)
+                        if y0 > sourceHeight - 1 { y0 = sourceHeight - 1 }
+                        var y1 = y0 + 1
+                        if y1 > sourceHeight - 1 { y1 = sourceHeight - 1 }
+                        let yFrac = sourceY - Double(y0)
+                        let oneMinusY = 1.0 - yFrac
+                        let row0 = y0 * sourceWidth
+                        let row1 = y1 * sourceWidth
+                        let out = y * targetWidth
 
-                        let p00 = source[row0 + x0]
-                        let p10 = source[row0 + x1]
-                        let p01 = source[row1 + x0]
-                        let p11 = source[row1 + x1]
-                        // PREMULTIPLIED: each colour is weighted by its own
-                        // coverage as well as its distance, and divided back
-                        // out at the end. Straight RGBA cannot be filtered
-                        // channel-wise — a transparent pixel's colour is
-                        // meaningless, yet it got full weight, and the decoder
-                        // writes every fully transparent pixel as BLACK, so a
-                        // soft edge pulled its opaque neighbours toward black:
-                        // a dark fringe one pixel wide around every PNG with a
-                        // transparent surround, on a terminal that composites
-                        // the pixels itself. Opaque images are unchanged: with
-                        // every coverage 255 the weights are the plain ones.
-                        let w00 = oneMinusX * oneMinusY
-                        let w10 = xFrac * oneMinusY
-                        let w01 = oneMinusX * yFrac
-                        let w11 = xFrac * yFrac
-                        let k00 = w00 * Double(Int(p00.a))
-                        let k10 = w10 * Double(Int(p10.a))
-                        let k01 = w01 * Double(Int(p01.a))
-                        let k11 = w11 * Double(Int(p11.a))
-                        let coverage = k00 + k10 + k01 + k11
+                        for x in 0..<targetWidth {
+                            let geometry = column[x]
+                            let x0 = geometry.x0
+                            let x1 = geometry.x1
+                            let xFrac = geometry.xFrac
+                            let oneMinusX = geometry.oneMinusX
 
-                        // `Double(Int(byte))`, not `Double(byte)`, and not a
-                        // typo: Swift has no `Double.init(UInt8)`, so the short
-                        // spelling binds the generic `init<T: BinaryInteger>`
-                        // and — unspecialised, in a debug build — calls it
-                        // through a protocol witness. Going via `Int` picks a
-                        // concrete initializer. Same value, every time: every
-                        // byte is exactly representable as a Double, and as an
-                        // Int on the way. See the note above the loop.
-                        // A fully transparent sample has no colour to keep,
-                        // and `0 / 0` would be NaN: it takes zero outright.
-                        let red = coverage > 0
-                            ? (Double(Int(p00.r)) * k00 + Double(Int(p10.r)) * k10
-                                + Double(Int(p01.r)) * k01 + Double(Int(p11.r)) * k11) / coverage
-                            : 0
-                        let green = coverage > 0
-                            ? (Double(Int(p00.g)) * k00 + Double(Int(p10.g)) * k10
-                                + Double(Int(p01.g)) * k01 + Double(Int(p11.g)) * k11) / coverage
-                            : 0
-                        let blue = coverage > 0
-                            ? (Double(Int(p00.b)) * k00 + Double(Int(p10.b)) * k10
-                                + Double(Int(p01.b)) * k01 + Double(Int(p11.b)) * k11) / coverage
-                            : 0
-                        // Alpha is interpolated like every other channel. It
-                        // used to be dropped — `RGBA(r:g:b:)` defaults it to
-                        // opaque — so this function silently flattened every
-                        // transparent picture it touched.
-                        let alpha = coverage
+                            let p00 = source[row0 + x0]
+                            let p10 = source[row0 + x1]
+                            let p01 = source[row1 + x0]
+                            let p11 = source[row1 + x1]
+                            // PREMULTIPLIED: each colour is weighted by its own
+                            // coverage as well as its distance, and divided back
+                            // out at the end. Straight RGBA cannot be filtered
+                            // channel-wise — a transparent pixel's colour is
+                            // meaningless, yet it got full weight, and the decoder
+                            // writes every fully transparent pixel as BLACK, so a
+                            // soft edge pulled its opaque neighbours toward black:
+                            // a dark fringe one pixel wide around every PNG with a
+                            // transparent surround, on a terminal that composites
+                            // the pixels itself. Opaque images are unchanged: with
+                            // every coverage 255 the weights are the plain ones.
+                            let w00 = oneMinusX * oneMinusY
+                            let w10 = xFrac * oneMinusY
+                            let w01 = oneMinusX * yFrac
+                            let w11 = xFrac * yFrac
+                            let k00 = w00 * Double(Int(p00.a))
+                            let k10 = w10 * Double(Int(p10.a))
+                            let k01 = w01 * Double(Int(p01.a))
+                            let k11 = w11 * Double(Int(p11.a))
+                            let coverage = k00 + k10 + k01 + k11
 
-                        destination[out + x] = RGBA(
-                            r: UInt8(clamping: Int(red.rounded())),
-                            g: UInt8(clamping: Int(green.rounded())),
-                            b: UInt8(clamping: Int(blue.rounded())),
-                            a: UInt8(clamping: Int(alpha.rounded())))
+                            // `Double(Int(byte))`, not `Double(byte)`, and not a
+                            // typo: Swift has no `Double.init(UInt8)`, so the short
+                            // spelling binds the generic `init<T: BinaryInteger>`
+                            // and — unspecialised, in a debug build — calls it
+                            // through a protocol witness. Going via `Int` picks a
+                            // concrete initializer. Same value, every time: every
+                            // byte is exactly representable as a Double, and as an
+                            // Int on the way. See the note above the loop.
+                            // A fully transparent sample has no colour to keep,
+                            // and `0 / 0` would be NaN: it takes zero outright.
+                            let red = coverage > 0
+                                ? (Double(Int(p00.r)) * k00 + Double(Int(p10.r)) * k10
+                                    + Double(Int(p01.r)) * k01 + Double(Int(p11.r)) * k11) / coverage
+                                : 0
+                            let green = coverage > 0
+                                ? (Double(Int(p00.g)) * k00 + Double(Int(p10.g)) * k10
+                                    + Double(Int(p01.g)) * k01 + Double(Int(p11.g)) * k11) / coverage
+                                : 0
+                            let blue = coverage > 0
+                                ? (Double(Int(p00.b)) * k00 + Double(Int(p10.b)) * k10
+                                    + Double(Int(p01.b)) * k01 + Double(Int(p11.b)) * k11) / coverage
+                                : 0
+                            // Alpha is interpolated like every other channel. It
+                            // used to be dropped — `RGBA(r:g:b:)` defaults it to
+                            // opaque — so this function silently flattened every
+                            // transparent picture it touched.
+                            let alpha = coverage
+
+                            destination[out + x] = RGBA(
+                                r: UInt8(clamping: Int(red.rounded())),
+                                g: UInt8(clamping: Int(green.rounded())),
+                                b: UInt8(clamping: Int(blue.rounded())),
+                                a: UInt8(clamping: Int(alpha.rounded())))
+                        }
                     }
+                    initialized = count
                 }
-                initialized = count
             }
         }
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: scaled)
