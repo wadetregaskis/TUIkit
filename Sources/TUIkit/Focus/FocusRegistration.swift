@@ -144,6 +144,27 @@ enum FocusRegistration {
                 handler, inSection: context.environment.activeFocusSectionID)
         }
         context.stateStorage!.markActive(context.identity)
+        publishHelpText(context: context, focusID: focusID)
+    }
+
+    /// Claims the subtree's ``EnvironmentValues/helpText`` for this control, if
+    /// it holds the focus.
+    ///
+    /// Called from ``register(context:handler:focusID:)`` rather than from each
+    /// control, because every focusable control already funnels through there
+    /// and a per-control call is the version somebody forgets — a control whose
+    /// `help(_:)` silently does nothing on the keyboard, with no way to tell
+    /// from the call site that it was meant to.
+    ///
+    /// Publishing does not SHOW anything: a focus candidate is revealed by the
+    /// help key. See ``TooltipState/keyboardRevealed``.
+    private static func publishHelpText(context: RenderContext, focusID: String) {
+        guard let text = context.environment.helpText,
+            context.environment.tooltipVisibility == .automatic,
+            let tooltips = context.environment.tooltipState,
+            context.environment.focusManager?.isFocused(id: focusID) == true
+        else { return }
+        tooltips.focusing(text, handlerID: nil, nowNanos: context.environment.frameNowNanos)
     }
 
     /// Determines whether the given focusID currently has focus.

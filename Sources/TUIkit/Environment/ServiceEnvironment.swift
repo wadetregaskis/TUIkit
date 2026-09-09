@@ -242,6 +242,7 @@ extension EnvironmentValues {
         synthesizeKeyEvent = context.synthesizeKeyEvent
         mouseEventDispatcher = context.mouseEventDispatcher
         dragAndDropSession = context.dragAndDropSession
+        tooltipState = context.tooltipState
         terminalImageStore = context.terminalImageStore
         renderCache = context.renderCache
         preferenceStorage = context.preferences

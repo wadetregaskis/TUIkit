@@ -277,6 +277,13 @@ final class TUIContext: @unchecked Sendable {
     /// contexts would delete one context's images out from under the other.
     let terminalImageStore = TerminalImageStore()
 
+    /// The help text a frame may show, and how it became the candidate.
+    ///
+    /// A plain stored property with no init parameter, like
+    /// ``terminalImageStore``: nothing needs to substitute one, and there is no
+    /// sensible meaning to two contexts sharing a tooltip.
+    let tooltipState = TooltipState()
+
     /// App-wide drag-and-drop state (active drag + per-frame drop targets).
     let dragAndDropSession: DragAndDropSession
 

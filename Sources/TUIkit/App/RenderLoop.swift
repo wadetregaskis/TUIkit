@@ -949,6 +949,12 @@ extension RenderLoop {
         // holds the focus this frame, so its absence has to be the default or a
         // control that lost the focus would leave its verb on the bar.
         statusBar.activationLabelOverride = nil
+        // And for a tooltip's FOCUS candidate, republished by the focused
+        // control every render for the same reason. Its hover candidate is not
+        // cleared here: the pointer stays where it is between frames, and only
+        // an `.exited` event knows it has left.
+        tuiContext.tooltipState.beginRenderPass()
+        tuiContext.tooltipState.syncReveal(focusID: focusManager.currentFocusedID)
     }
 
     /// Evaluates `App.body` with the environment published so `@Environment`
