@@ -65,7 +65,7 @@ extension View {
     /// badge over the content rather than colliding with the character next to
     /// it — bear that in mind when picking a wide style. It OVERLAYS the top row
     /// rather than insetting it, and `.overlay` sizes to the larger of the two,
-    /// so a multi-cell style (`.bouncing`, `.bars`) can widen content narrower
+    /// so a multi-cell style (`.bouncing`) can widen content narrower
     /// than the indicator for as long as a refresh is in flight. One-cell styles
     /// (`.dots`, `.line`, `.pie`, …) never can.
     ///

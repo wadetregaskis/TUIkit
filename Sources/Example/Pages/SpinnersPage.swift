@@ -97,12 +97,10 @@ struct SpinnersPage: View {
         // this list was written. It is the only row they reach, which is why it
         // is built apart from the eleven fixed ones.
         let styles: [CatalogueEntry] =
-            [
-                ("dots", SpinnerStyle.dots), ("line", .line), ("bouncing", .bouncing),
-                ("pie", .pie), ("beachball", .beachball), ("box", .box), ("bars", .bars),
-                ("blockWedge", .blockWedge), ("moon", .moon), ("earth", .earth),
-                ("clock", .clock),
-            ].map { CatalogueEntry(name: $0.0, style: $0.1, label: nil, colorKey: colorKey) }
+            SpinnerStyleChoice.allCases.map {
+                CatalogueEntry(
+                    name: $0.rawValue, style: $0.style, label: nil, colorKey: colorKey)
+            }
             + [
                 CatalogueEntry(
                     name: "custom(\"\(frames)\")", style: .custom(frames),

@@ -14,12 +14,17 @@ import Foundation
 ///
 /// - ``dots``: Braille character rotation (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`)
 /// - ``line``: ASCII line rotation (`|/-\`)
+/// - ``dancingLine``: A large bracket walking around its corners (`⎛⎜⎞⎜⎝⎜⎠⎜`)
 /// - ``bouncing``: A highlight block (`▇`) bouncing across a track with a fading trail (Knight Rider / Larson scanner)
 /// - ``pie``: A rotating pie wedge (`◴◷◶◵`)
 /// - ``beachball``: A spinning half-shaded circle (`◐◓◑◒`)
 /// - ``box``: A rotating quadrant square (`◰◳◲◱`)
-/// - ``bars``: A single bar rising and falling (`▁▂▃▄▅▆▇█`)
+/// - ``curve``: A quarter-circle arc rotating around the cell (`◜◝◞◟`)
+/// - ``column``: A single bar rising and falling (`▁▂▃▄▅▆▇█`)
+/// - ``bar``: The same, sideways — a bar shrinking and growing (`█▉▊▋▌▍▎▏`)
+/// - ``shade``: A cell fading up through the shade blocks and back (` ░▒▓▒░`)
 /// - ``blockWedge``: A rotating three-quarter block (`▙▛▜▟`)
+/// - ``spinningTriangle``: A triangle pointing around the compass (`▶▼◀▲`)
 /// - ``moon``: Moon-phase emoji (`🌑🌒🌓🌔🌕🌖🌗🌘`)
 /// - ``earth``: Rotating globe emoji (`🌎🌍🌏`)
 /// - ``clock``: Clock-face emoji stepping through the day (`🕐🕜🕑…🕧`)
@@ -40,6 +45,12 @@ public enum SpinnerStyle: Sendable {
     /// Cycles through: `| / - \`
     case line
 
+    /// A large bracket walking around its four corners: `⎛ ⎜ ⎞ ⎜ ⎝ ⎜ ⎠ ⎜`.
+    ///
+    /// The straight extension (`⎜`) between each corner is what makes it read as
+    /// one stroke travelling rather than four glyphs taking turns.
+    case dancingLine
+
     /// A highlight block bouncing across a track of small squares with a
     /// fading trail behind it (Larson scanner / Knight Rider effect).
     ///
@@ -57,11 +68,38 @@ public enum SpinnerStyle: Sendable {
     /// A rotating filled quadrant of a square: `◰ ◳ ◲ ◱`.
     case box
 
+    /// A quarter-circle arc rotating around the cell: `◜ ◝ ◞ ◟`.
+    case curve
+
     /// A single bar rising then falling: `▁▂▃▄▅▆▇█▇▆▅▄▃▂`.
-    case bars
+    ///
+    /// Named for what it draws — one column of the cell filling upward. (It was
+    /// `bars`, plural, which promised the several-bar equaliser this is not, and
+    /// left no name for its sideways twin ``bar``.)
+    case column
+
+    /// A bar shrinking and growing sideways: `█▉▊▋▌▍▎▏▎▍▌▋▊▉`.
+    ///
+    /// ``column``'s horizontal twin, from the left-eighth blocks rather than the
+    /// bottom ones. In code point order the eighths run from full to thinnest, so
+    /// the sequence empties and refills rather than sweeping in one direction.
+    case bar
+
+    /// A cell fading up through the shade blocks and back: `⎵ ░ ▒ ▓ ▒ ░`.
+    ///
+    /// The first frame is a SPACE, deliberately: the cycle passes through empty,
+    /// which is what makes it a pulse rather than a flicker between three shades.
+    case shade
 
     /// A rotating three-quarter block: `▙ ▛ ▜ ▟`.
     case blockWedge
+
+    /// A triangle pointing around the compass: `▶ ▼ ◀ ▲`.
+    ///
+    /// All four are East Asian Ambiguous, so a terminal that renders geometric
+    /// shapes double-width renders all four that way and the spinner still does
+    /// not jitter. TUIkit's own width model reserves one cell for each.
+    case spinningTriangle
 
     /// Moon-phase emoji (double-width): `🌕🌖🌗🌘🌑🌒🌓🌔`.
     case moon
@@ -84,6 +122,8 @@ public enum SpinnerStyle: Sendable {
             return ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         case .line:
             return ["|", "/", "-", "\\"]
+        case .dancingLine:
+            return ["⎛", "⎜", "⎞", "⎜", "⎝", "⎜", "⎠", "⎜"]
         case .bouncing:
             return Self.bouncingPositions(trackLength: Self.trackWidth)
                 .map { String($0) }
@@ -93,10 +133,18 @@ public enum SpinnerStyle: Sendable {
             return ["◐", "◓", "◑", "◒"]
         case .box:
             return ["◰", "◳", "◲", "◱"]
-        case .bars:
+        case .curve:
+            return ["◜", "◝", "◞", "◟"]
+        case .column:
             return ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃", "▂"]
+        case .bar:
+            return ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
+        case .shade:
+            return [" ", "░", "▒", "▓", "▒", "░"]
         case .blockWedge:
             return ["▙", "▛", "▜", "▟"]
+        case .spinningTriangle:
+            return ["▶", "▼", "◀", "▲"]
         case .moon:
             return ["🌕", "🌖", "🌗", "🌘", "🌑", "🌒", "🌓", "🌔"]
         case .earth:
@@ -118,12 +166,17 @@ public enum SpinnerStyle: Sendable {
         switch self {
         case .dots: return 0.110
         case .line: return 0.140
+        case .dancingLine: return 0.110
         case .bouncing: return 0.100
         case .pie: return 0.120
         case .beachball: return 0.130
         case .box: return 0.125
-        case .bars: return 0.080
+        case .curve: return 0.120
+        case .column: return 0.080
+        case .bar: return 0.080
+        case .shade: return 0.130
         case .blockWedge: return 0.120
+        case .spinningTriangle: return 0.120
         case .moon: return 0.120
         case .earth: return 0.150
         case .clock: return 0.090

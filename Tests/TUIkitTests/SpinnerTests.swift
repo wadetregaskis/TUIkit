@@ -260,29 +260,66 @@ struct SpinnerRenderingTests {
 
     // MARK: - New styles
 
-    @Test("Each new frame-based style has the expected frames, positive interval")
+    @Test("Each frame-based style has the expected frames, positive interval")
     func newStyleFrames() {
         #expect(SpinnerStyle.pie.frames == ["◴", "◷", "◶", "◵"])
         #expect(SpinnerStyle.beachball.frames == ["◐", "◓", "◑", "◒"])
         #expect(SpinnerStyle.box.frames == ["◰", "◳", "◲", "◱"])
-        #expect(SpinnerStyle.bars.frames.first == "▁")
+        #expect(SpinnerStyle.curve.frames == ["◜", "◝", "◞", "◟"])
+        #expect(SpinnerStyle.column.frames.first == "▁")
+        #expect(SpinnerStyle.bar.frames.first == "█")
         #expect(SpinnerStyle.blockWedge.frames == ["▙", "▛", "▜", "▟"])
+        #expect(SpinnerStyle.spinningTriangle.frames == ["▶", "▼", "◀", "▲"])
+        #expect(SpinnerStyle.dancingLine.frames == ["⎛", "⎜", "⎞", "⎜", "⎝", "⎜", "⎠", "⎜"])
         #expect(SpinnerStyle.moon.frames.count == 8)
         #expect(SpinnerStyle.earth.frames.count == 3)
         #expect(SpinnerStyle.clock.frames.count == 24)
-        for style: SpinnerStyle in [.pie, .beachball, .box, .bars, .blockWedge, .moon, .earth, .clock] {
+        for style in Self.frameBasedStyles {
             #expect(style.interval > 0)
             #expect(!style.frames.isEmpty)
         }
     }
 
-    @Test("The emoji styles render as double-width glyphs, uniform across frames")
-    func emojiStyleWidths() {
+    /// `.shade`'s cycle passes through EMPTY, which is what makes it a pulse
+    /// rather than a flicker between three shades — so the leading space is part
+    /// of the style, not a typo waiting to be tidied away.
+    @Test("The shade style's first frame is a space")
+    func shadeStartsEmpty() {
+        #expect(SpinnerStyle.shade.frames == [" ", "░", "▒", "▓", "▒", "░"])
+    }
+
+    /// `column` and `bar` are the same animation on the two axes, so they have
+    /// the same number of frames and each begins at the opposite extreme: the
+    /// column starts nearly empty and fills, the bar starts full and empties.
+    @Test("column and bar are the same cycle on different axes")
+    func columnAndBarAreTwins() {
+        #expect(SpinnerStyle.column.frames.count == SpinnerStyle.bar.frames.count)
+        #expect(SpinnerStyle.column.frames.contains("█"))
+        #expect(SpinnerStyle.bar.frames.contains("▏"))
+    }
+
+    /// Every style's frames are one width, or the spinner jitters as it cycles —
+    /// which is the whole reason the built-in catalogue exists rather than
+    /// leaving people to `.custom(_:)`. The emoji ones are two cells, the rest
+    /// one; what matters is that no style mixes.
+    @Test("Every built-in style's frames share one width")
+    func everyStyleHasUniformWidth() {
+        for style in Self.frameBasedStyles {
+            let widths = Set(style.frames.map(\.strippedLength))
+            #expect(widths.count == 1, "\(style) frames differ in width: \(widths)")
+        }
         for style: SpinnerStyle in [.moon, .earth, .clock] {
             let widths = Set(style.frames.map(\.strippedLength))
             #expect(widths == [2], "\(style) frames must all be width-2: \(widths)")
         }
     }
+
+    /// Every built-in style except `.bouncing`, whose frames are positions on a
+    /// track rather than glyphs, and `.custom(_:)`, which has no fixed frames.
+    private static let frameBasedStyles: [SpinnerStyle] = [
+        .dots, .line, .dancingLine, .pie, .beachball, .box, .curve,
+        .column, .bar, .shade, .blockWedge, .spinningTriangle, .moon, .earth, .clock,
+    ]
 
     @Test("A custom spinner cycles each character of its sequence")
     func customStyleFrames() {
