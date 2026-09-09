@@ -46,16 +46,20 @@ import Dispatch
 /// ## How it integrates with the MainActor
 ///
 /// The dispatch source's target queue is **`DispatchQueue.main`**,
-/// not a global concurrent queue. That means the source's
-/// event handler runs on the main thread — the same thread
-/// the MainActor's executor lives on, on both macOS (where
-/// the main actor's executor pumps the main queue via the
-/// Cocoa run-loop) and Linux (where Swift's cooperative
-/// executor pumps it). So when stdin has data, the handler is
-/// already executing in the right place to enter MainActor
+/// not a global concurrent queue. The main queue IS the main
+/// actor's executor — pumped by the Cocoa run-loop on macOS,
+/// by Swift's cooperative executor on Linux — so the source's
+/// event handler is already running in the main actor's
+/// context. Note the claim is about the EXECUTOR, not a
+/// thread: which OS thread drains the main actor is not
+/// fixed, and on Linux it is a cooperative pool thread rather
+/// than the process main thread from the first suspension
+/// point onward (measured — see the "Thread correctness" note
+/// on TUIkitCore's `StackGuard`). So when stdin has data, the
+/// handler is already in the right place to enter MainActor
 /// isolation via `MainActor.assumeIsolated`, signal the
 /// pending continuation, and resume the main loop — no
-/// cross-thread hop, no global-queue worker, no lock around
+/// executor hop, no global-queue worker, no lock around
 /// continuation state.
 ///
 /// The earlier draft of this file ran the source on
@@ -63,7 +67,7 @@ import Dispatch
 /// continuation with an `NSLock`. That cost an extra
 /// thread plus a continuation-resumption hop per keystroke,
 /// for code whose only job was to flip a `Bool`. Targeting
-/// `.main` collapses both back to "the main thread does it
+/// `.main` collapses both back to "the main actor does it
 /// when it gets there."
 ///
 /// ## What the kernel does
