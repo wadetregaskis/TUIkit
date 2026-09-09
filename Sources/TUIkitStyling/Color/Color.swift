@@ -56,6 +56,19 @@ public struct Color: Sendable, Hashable {
     /// emitter asserts.
     public var isOpaque: Bool { alpha == .max }
 
+    /// This colour at full strength — what goes into the SGR bytes when the
+    /// alpha travels separately, as an `OpacityRegion`.
+    ///
+    /// Named rather than spelled `var c = self; c.alpha = .max` at each site so
+    /// the intent is legible: the bytes and the region are two halves of one
+    /// claim, and a reader has to be able to see that the byte half was
+    /// deliberately opaque.
+    public var opaqueSpelling: Self {
+        var copy = self
+        copy.alpha = .max
+        return copy
+    }
+
     /// This colour with `alpha` carried over from `source`.
     ///
     /// Every `Color` → `Color` derivation ends in this, so "did it carry the

@@ -177,3 +177,117 @@ struct ColourAlphaResolutionTests {
             "blended toward the surface: \(resolved.lines[0].debugDescription)")
     }
 }
+
+// MARK: - A translucent colour used as a view
+
+/// `Color.blue.opacity(0.4)` in a `ZStack` — the first real translucent pane, and
+/// the case the whole design exists for: resolved against what is ACTUALLY behind
+/// the cell, not against the palette's background and not toward black.
+@MainActor
+@Suite("A translucent colour as a view")
+struct TranslucentColourViewTests {
+
+    private func rendered<V: View>(_ view: V, width: Int = 12, height: Int = 2) -> [String] {
+        let context = RenderContext(
+            availableWidth: width, availableHeight: height, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        return renderToBuffer(view, context: context).lines
+    }
+
+    /// A blue at `value` opacity, plus the fraction the byte ACTUALLY holds.
+    ///
+    /// Not `value`: alpha is a byte, so 0.5 stores as 128 and reads back as
+    /// 0.50196…, and the blend uses the stored number. A test comparing against
+    /// the number it asked for is off by one in the last channel — which is a
+    /// property of the storage the tests should state, not paper over.
+    private func alpha(_ value: Double) -> (colour: Color, exact: Double) {
+        var colour = Color.blue
+        colour.alpha = UInt8((value * 255).rounded())
+        return (colour, Double(colour.alpha) / 255)
+    }
+
+    private func codes(_ color: Color) -> String {
+        color.backgroundCodes().joined(separator: ";")
+    }
+
+    /// Over a red pane, a 40% blue veil must land 40% of the way from RED — not
+    /// from black, and not from the palette's background.
+    @Test("A veil blends toward the sibling actually behind it")
+    func veilBlendsTowardTheSibling() {
+        let veil = alpha(0.4)
+        let lines = rendered(
+            ZStack {
+                Color.red
+                veil.colour
+            })
+        let expected = codes(Color.blue.opacity(veil.exact, over: .red))
+        #expect(
+            lines[0].contains(expected),
+            "40% blue over red (\(expected)): \(lines[0].debugDescription)")
+        // And emphatically not the two wrong answers.
+        #expect(
+            !lines[0].contains(codes(Color.blue.opacity(veil.exact, over: .black))),
+            "not toward black")
+        #expect(!lines[0].contains(codes(.blue)), "not at full strength")
+    }
+
+    /// The same veil over a DIFFERENT sibling gives a different answer, which is
+    /// the property that distinguishes composite-time resolution from every
+    /// approximation of it. One assertion; the whole point.
+    @Test("The same veil over a different sibling resolves differently")
+    func veilDependsOnWhatIsBehind() {
+        let veil = alpha(0.5)
+        let overRed = rendered(ZStack { Color.red; veil.colour })[0]
+        let overGreen = rendered(ZStack { Color.green; veil.colour })[0]
+        #expect(
+            overRed != overGreen,
+            "the veil is not a fixed colour: \(overRed.debugDescription)")
+        #expect(overRed.contains(codes(Color.blue.opacity(veil.exact, over: .red))))
+        #expect(overGreen.contains(codes(Color.blue.opacity(veil.exact, over: .green))))
+    }
+
+    /// A veil over TEXT tints the field under the letters and leaves the letters
+    /// legible — the pane rule the ½ threshold encodes, now reached by a colour's
+    /// own alpha rather than by `View.opacity`.
+    @Test("A veil over text keeps the text")
+    func veilOverTextKeepsTheGlyphs() {
+        let lines = rendered(
+            ZStack {
+                Text("hello")
+                alpha(0.5).colour
+            })
+        #expect(lines[0].stripped.contains("hello"), "the letters survive: \(lines[0].stripped)")
+    }
+
+    /// **Alpha 0 needs its region, and this is the test that says why.**
+    ///
+    /// Bare spaces are not transparent to the compositor: it inherits an unstated
+    /// FIELD but a space is still a character, so it overwrites the glyph
+    /// underneath. Skipping the region as an optimisation rendered
+    /// `ZStack { Text("hello"); Color.clear }` as twelve spaces.
+    @Test("A fully transparent colour reveals what is behind it")
+    func transparentRevealsWhatIsBehind() {
+        let context = RenderContext(
+            availableWidth: 6, availableHeight: 1, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        let buffer = renderToBuffer(alpha(0).colour, context: context)
+        #expect(
+            buffer.opacityRegions.count == 1 && buffer.opacityRegions[0].fieldOpacity == 0,
+            "the region is what routes these cells through the blend")
+
+        let stacked = rendered(ZStack { Text("hello"); alpha(0).colour })
+        #expect(stacked[0].stripped.contains("hello"), "the letters survive: \(stacked[0].stripped)")
+    }
+
+    /// An opaque colour is byte-identical to what it drew before this feature
+    /// existed — no region, no blend, nothing changed.
+    @Test("An opaque colour emits no region")
+    func opaqueEmitsNoRegion() {
+        let context = RenderContext(
+            availableWidth: 6, availableHeight: 1, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        let buffer = renderToBuffer(Color.blue, context: context)
+        #expect(buffer.opacityRegions.isEmpty)
+        #expect(buffer.lines[0].contains(codes(.blue)))
+    }
+}

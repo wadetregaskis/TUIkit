@@ -67,15 +67,42 @@ extension _StyleFillBlock: Renderable, Layoutable {
         // fades rather than jumping — the same call `BackgroundModifier` makes
         // for the same reason.
         let animated = ColorAnimation.resolving(colour, owner: Self.self, context: context)
-        let escape = animated.resolve(with: context.environment.palette).backgroundEscape()
+        let resolved = animated.resolve(with: context.environment.palette)
+        // The OPAQUE spelling into the bytes, with the alpha travelling as a
+        // region: the compositor blends against what is actually behind these
+        // cells, and it can only do that if the line states a real colour to
+        // blend FROM. A translucent colour has no SGR spelling at all — see
+        // `Color+ANSICodes.swift`'s assertion.
+        let escape = resolved.opaqueSpelling.backgroundEscape()
         // Nothing but spaces, so there is no interior reset for a background to
         // survive: one escape, the cells, one reset. That is byte-for-byte what
         // a persistent background produces over a blank row.
         let line = escape.isEmpty ? row : escape + row + "\u{1B}[0m"
-        return FrameBuffer(
+        var buffer = FrameBuffer(
             lines: Array(repeating: line, count: height),
             width: width,
             lineWidths: Array(repeating: width, count: height))
+        if !resolved.isOpaque {
+            // A FIELD claim: this rectangle's background is translucent. The ink
+            // channel stays at 1 — there is no ink here, only spaces, and saying
+            // otherwise would fade a glyph that a sibling drew over the fill
+            // (see `OpacityRegion.inkOpacity`).
+            //
+            // Emitted at alpha 0 as well, which is not an optimisation left on
+            // the table — it is required. Bare spaces are NOT transparent to the
+            // compositor: `composited(with:at:)` inherits an unstated FIELD but
+            // the space is still a character, so it overwrites the glyph
+            // underneath. Measured: `ZStack { Text("hello"); Color.clear }`
+            // rendered twelve spaces. The region is what routes those cells
+            // through the blend, whose "painting nothing at all leaves the
+            // destination exactly as it was" rule yields the letters back.
+            buffer.opacityRegions = [
+                OpacityRegion(
+                    offsetX: 0, offsetY: 0, width: width, height: height, opacity: 1,
+                    fieldOpacity: Double(resolved.alpha) / 255)
+            ]
+        }
+        return buffer
     }
 }
 
