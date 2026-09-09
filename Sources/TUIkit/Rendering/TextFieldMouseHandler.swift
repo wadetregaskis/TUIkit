@@ -13,8 +13,9 @@
 /// — and share ``TextFieldHandler`` and ``TextFieldContentRenderer``, so they
 /// share this too. A click:
 /// - focuses the field,
-/// - moves the caret to the clicked column (mapping the column back through the
-///   field's horizontal scroll via ``TextFieldHandler/characterIndex(forColumn:contentWidth:)``),
+/// - moves the caret to the clicked column (mapping the column back through
+///   the field's horizontal scroll via
+///   ``TextFieldHandler/characterIndex(forColumn:contentWidth:displayWidths:)``),
 /// - and begins a selection anchored there; dragging extends it.
 ///
 /// Shift-click extends the existing selection to the clicked column instead of
