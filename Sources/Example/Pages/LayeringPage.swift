@@ -27,6 +27,15 @@ import TUIkit
 struct LayeringPage: View {
     @State private var opacity: Double = 0.5
     @State private var outer: Double = 1
+
+    /// The opacity of the layer UNDERNEATH, which is the other half of every
+    /// composite on this page and had no control at all.
+    ///
+    /// A faded layer under a faded layer is the case worth being able to see: the
+    /// lower one resolves against the PAGE first, and the upper one then resolves
+    /// against the result — so two 50% layers do not make an opaque one, and the
+    /// only way to find that out here was to edit the source.
+    @State private var lowerOpacity: Double = 1
     @State private var breathes = false
     @State private var breathingOpacity: Double = 1
 
@@ -157,6 +166,14 @@ struct LayeringPage: View {
                         "\(L("page.layering.slider.outer")) "
                             + "\(Self.percent(outer)) → \(Self.percent(outer * opacity))")
                 }
+                // The layer beneath. Reaches every demo on the page — the coloured
+                // blocks, the text behind text, and the three fields — because
+                // every one of them is a composite and the thing being composited
+                // ONTO is half of it.
+                Slider(value: $lowerOpacity, in: 0...1, step: 0.01) {
+                    Text(
+                        "\(L("page.layering.slider.lower")) \(Self.percent(lowerOpacity))")
+                }
                 // What the top layer PAINTS, which is the other half of what a
                 // composite depends on. Turning the background on makes the
                 // layer opaque cell for cell whatever the alpha; turning the
@@ -210,6 +227,9 @@ struct LayeringPage: View {
         Text(String(repeating: "\n", count: max(0, height - 1)))
             .frame(width: width, height: height, alignment: .leading)
             .background(color)
+            // Every block on the page is a LOWER layer, so the one slider reaches
+            // all of them from here.
+            .opacity(lowerOpacity)
     }
 
     // MARK: - Text through text
@@ -221,6 +241,7 @@ struct LayeringPage: View {
                     .foregroundStyle(.palette.foregroundSecondary)
                 ZStack(alignment: .leading) {
                     Text("page.layering.text.behind")
+                        .opacity(lowerOpacity)
                         .foregroundStyle(.palette.foregroundSecondary)
                     Text("page.layering.text.front")
                         .foregroundStyle(.palette.accent)
