@@ -347,6 +347,27 @@ extension AnimationStore {
     ///
     /// Stamps the pass in place when rendering, so the record stays alive
     /// without being copied out and written back.
+    ///
+    /// **It pays only where records EXIST, which is why the other three
+    /// `value(for:…)` call sites deliberately do not use it.** Where there is no
+    /// record — a `.padding()` or `.foregroundStyle` on a view that has never
+    /// animated, which is nearly all of them — this is a dictionary lookup that
+    /// misses, and `value(for:…)` then does the same lookup again: pure added
+    /// cost. Measured (`ab_bench.py`, 15 reps, idle box) with the guard added to
+    /// `ViewModifier._animated`, `ColorAnimation.resolving` and
+    /// `PaintAnimation.scalar`:
+    ///
+    ///     modifiers      +0.8%  (CI +0.4% … +1.1%)   slower
+    ///     deep           −0.9%  (CI −1.6% … −0.7%)   faster
+    ///     menus          −1.2%  (CI −2.2% … −0.9%)   faster
+    ///     framedcolumns  −0.1%   dashboard −0.9%   gradients −0.0%   all inside noise
+    ///
+    /// A wash, with a real regression on the modifier-dense scenario it was
+    /// aimed at, so it was reverted. The view half above keeps it because its
+    /// records DO exist: an `Animatable` view that reached the store once has a
+    /// record from then on, and the guard answers from it. Anything that
+    /// revisits this needs the settled test and the value fetch to share ONE
+    /// lookup, not two.
     public func isSettled<D: VectorArithmetic>(_ key: Key, at target: D, isMeasuring: Bool) -> Bool {
         guard let index = records.index(forKey: key),
             records.values[index].animation == nil,
