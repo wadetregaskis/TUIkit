@@ -41,6 +41,12 @@ import TUIkitView
 /// target, so the triangle quietly extends over the blank cell on either side:
 /// four cells to hit, one glyph to read.
 ///
+/// Where nothing WILL claim the text, that reasoning says the row is free: in a
+/// ``List`` with no selection binding a click anywhere on the row discloses it,
+/// since the click has no selection to make (`8c363353`). A child view with a
+/// click handler of its own still wins, and a bare `OutlineGroup` — in a
+/// `VStack`, a `ScrollView` — still discloses only from its triangle.
+///
 /// ## From the keyboard
 ///
 /// On its own — in a `VStack`, a `ScrollView` — each branch's triangle is a Tab
