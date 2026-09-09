@@ -241,10 +241,6 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// terminal can display. See ``ASCIIPalette``.
     case palette(ASCIIPalette)
 
-    /// This mode with every colour it names made concrete.
-    ///
-    /// Only ``palette(_:)`` names any; the rest are returned unchanged. Callers
-    /// that render do this once, before consulting a cache keyed on the mode —
     /// This mode with any adaptive palette's colours chosen from `image`.
     ///
     /// The converters call it once per conversion, on the picture AFTER the
@@ -265,6 +261,10 @@ public enum ASCIIColorMode: Sendable, Equatable {
         return .palette(colors.derived(from: image, depth: depth))
     }
 
+    /// This mode with every colour it names made concrete.
+    ///
+    /// Only ``palette(_:)`` names any; the rest are returned unchanged. Callers
+    /// that render do this once, before consulting a cache keyed on the mode —
     /// see ``ASCIIPalette/resolved(with:)``.
     public func resolved(with palette: any Palette) -> Self {
         guard case .palette(let colors) = self else { return self }
