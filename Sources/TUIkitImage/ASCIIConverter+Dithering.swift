@@ -247,10 +247,48 @@ struct PixelQuantiser {
     /// ``ASCIIColorMode/ansi16``) keep the sRGB carry, byte-for-byte: they
     /// span the gamut, so there is no direction the error cannot go, and the
     /// OKLab round trip per pixel is a cost they need not pay.
+    ///
+    /// **``ASCIIColorMode/grayscale`` and ``ASCIIColorMode/mono`` decide on
+    /// luminance, so they carry only the NEUTRAL part of their error** — one
+    /// delta on all three channels, which moves a neighbour's luminance by
+    /// that same delta, the BT.601 coefficients summing to 1. Where the
+    /// channels have room: a negative delta into a saturated colour still
+    /// stops at 0, so this bounds the runaway rather than abolishing it —
+    /// measured on flat fields, mono ink density goes from 0% to 24% against
+    /// a target of 23% for RGBA(200, 0, 0), and to 24% against 30% for a
+    /// pure red, which is as close as an integer buffer gets.
+    ///
+    /// A grey ramp has no more chroma than a grey palette does, and an sRGB
+    /// carry hands it chroma anyway: a flat `RGBA(200, 0, 0)` field through
+    /// `.grayscale` quantises to grey 59 and hands its neighbour
+    /// (+61, -25, -25); red pins at 255, the two negative errors are
+    /// discarded at 0, the neighbour's grey is 76 — and so is every pixel
+    /// after it, so eight identical source pixels drew [59, 76, 76, …], 17
+    /// levels lighter than the same field undithered. Through `.mono` the
+    /// pinning destroyed the error rather than spreading it: that field never
+    /// accumulated past luminance 106 against a threshold of 128 and drew as
+    /// solid paper, where 59.8/255 = 23% of it should have been ink.
+    ///
+    /// For `.grayscale` the neutral part is under one level — `grey` returns
+    /// the pixel's own luminance truncated to a byte — and an integer spread
+    /// of one level is `1 * 7 / 16 == 0`, so nothing is carried at all and the
+    /// result is the plain mapping `apply(to:)` gives. That is NOT quite what
+    /// `.none` draws through the glyph renderer, which quantises nothing:
+    /// `cellColor` computes `232 + Int(luminance / 255 * 24)` from the raw
+    /// pixel there and from a whole-level luminance here, one ramp step apart
+    /// for about 4% of colours. On the pixel path they are identical, because
+    /// `recoloured` quantises either way.
     func dither(_ pixels: inout [RGBA], width: Int, height: Int) {
         guard width > 0, height > 0, pixels.count >= width * height else { return }
         if carriesInOKLab, kind == .palette {
             ditherInOKLab(&pixels, width: width, height: height)
+            return
+        }
+        if kind == .grayscale {
+            // The whole of a grey's carry is under one level — see above — so
+            // the diffusion cannot spread anything an integer buffer holds,
+            // and running it would only spread the chroma it must not.
+            apply(to: &pixels)
             return
         }
         withTables { colours, bucket, answers, trusted in
@@ -261,6 +299,12 @@ struct PixelQuantiser {
             let palette = self.palette ?? .ansi16
             let kind = self.kind
             let threshold = self.threshold
+            // Bound with the rest: a mode that decides on luminance carries
+            // only the neutral part of its error — see the doc comment. For
+            // `.grayscale` that part is at most one level, and `1 * 7 / 16` is
+            // 0 in Int16, so the spread is a no-op and the loop draws the plain
+            // mapping without needing a case of its own.
+            let neutral = kind == .mono || kind == .grayscale
             pixels.withUnsafeMutableBufferPointer { buffer in
                 @inline(__always)
                 func spread(_ index: Int, _ r: Int16, _ g: Int16, _ b: Int16) {
@@ -290,9 +334,8 @@ struct PixelQuantiser {
                                 alpha: oldPixel.a)
                         }
                         buffer[index] = newPixel
-                        let rErr = Int16(oldPixel.r) - Int16(newPixel.r)
-                        let gErr = Int16(oldPixel.g) - Int16(newPixel.g)
-                        let bErr = Int16(oldPixel.b) - Int16(newPixel.b)
+                        let (rErr, gErr, bErr) = Self.carriedError(
+                            from: oldPixel, to: newPixel, neutral: neutral)
                         if x + 1 < width {
                             spread(index + 1, rErr * 7 / 16, gErr * 7 / 16, bErr * 7 / 16)
                         }
@@ -418,6 +461,31 @@ struct PixelQuantiser {
         var quantized = colours[index]
         quantized.a = alpha
         return quantized
+    }
+
+    /// The part of `old` → `new` this mode's neighbours can actually make up,
+    /// as a per-channel delta — see `dither`.
+    ///
+    /// `neutral` is for the modes that decide on luminance alone: their
+    /// neighbours can only be made lighter or darker, so what they are handed
+    /// is one delta on all three channels rather than three independent ones.
+    @inline(__always)
+    private static func carriedError(
+        from old: RGBA, to new: RGBA, neutral: Bool
+    ) -> (r: Int16, g: Int16, b: Int16) {
+        if neutral {
+            // Every mode that asks for this quantises to a grey, so `new`'s
+            // luminance IS `new.r` — there is no second luminance to compute.
+            //
+            // ROUNDED, not truncated as `grey` does: for a pixel that is
+            // already neutral the BT.601 sum is `v` to within 1e-14, so
+            // rounding makes the neutral delta EXACTLY the per-channel delta
+            // there, and every grey image dithers byte-for-byte as it did.
+            // Truncating would shift some of them by a level.
+            let delta = Int16(clamping: Int(old.luminance.rounded())) - Int16(new.r)
+            return (delta, delta, delta)
+        }
+        return (Int16(old.r) - Int16(new.r), Int16(old.g) - Int16(new.g), Int16(old.b) - Int16(new.b))
     }
 
     @inline(__always)

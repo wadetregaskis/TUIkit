@@ -31,9 +31,15 @@ struct DitherCarryTests {
         pixels.reduce(0.0) { $0 + Color.oklab(red: $1.r, green: $1.g, blue: $1.b).l } / Double(pixels.count)
     }
 
-    private static func dithered(_ pixels: [RGBA], mode: ASCIIColorMode, width: Int = 120, height: Int = 60) -> [RGBA] {
+    /// The threshold defaults to the mid-luminance split the binary renderers
+    /// fall back to; every mode here but `.mono` ignores it entirely.
+    private static func dithered(
+        _ pixels: [RGBA], mode: ASCIIColorMode, width: Int = 120, height: Int = 60,
+        monoThreshold: Double = ASCIIConverter.midLuminance
+    ) -> [RGBA] {
         var out = pixels
-        PixelQuantiser(mode: mode, monoThreshold: 0.5, table: nil).dither(&out, width: width, height: height)
+        PixelQuantiser(mode: mode, monoThreshold: monoThreshold, table: nil)
+            .dither(&out, width: width, height: height)
         return out
     }
 
@@ -95,6 +101,37 @@ struct DitherCarryTests {
         #expect(out[7].a == 0)
         #expect(out[8].a == 128)
         #expect(out[9].a == 255)
+    }
+
+    /// A grey ramp has no more chroma than a grey palette does. Before, a flat
+    /// saturated red dithered to grey 59 and then 76 for every pixel after it
+    /// — the red pinned at 255 and the two negative errors were discarded at 0
+    /// — so eight identical source pixels drew 237, 239, 239, … out of the
+    /// 24-step ramp, 17 levels lighter than the same field undithered.
+    @Test("A grey ramp carries no chroma")
+    func greyRampCarriesNoChroma() {
+        let source = Self.flat(RGBA(r: 200, g: 0, b: 0), width: 8, height: 2)
+        let out = Self.dithered(source, mode: .grayscale, width: 8, height: 2)
+        #expect(out.allSatisfy { $0 == RGBA(r: 59, g: 59, b: 59) }, "\(Array(out.prefix(8)))")
+        // The neutral part of a grey's error is under one level, so there is
+        // nothing an integer buffer can carry: the dither IS the mapping.
+        #expect(out == Self.mapped(source, mode: .grayscale))
+    }
+
+    /// The same rule through `.mono`, where the pinning destroyed the error
+    /// rather than merely lightening it: that field's luminance is 59.8, so
+    /// 23% of it is ink at a threshold of 128 — and all 1024 pixels came out
+    /// paper, because the error went into red, pinned, and stopped the
+    /// accumulation at luminance 106.
+    @Test("A mono dither carries luminance, not chroma")
+    func monoCarriesLuminance() {
+        let source = Self.flat(RGBA(r: 200, g: 0, b: 0), width: 32, height: 32)
+        let out = Self.dithered(source, mode: .mono, width: 32, height: 32)
+        let ink = out.count(where: { $0.r == 255 })
+        #expect(ink > 0, "a field of luminance 59.8 drew as solid paper")
+        let density = Double(ink) / Double(out.count)
+        #expect(abs(density - 59.8 / 255) < 0.02, "ink density \(density), expected about 0.234 (240 of 1024)")
+        #expect(out.allSatisfy { $0.r == $0.g && $0.g == $0.b }, "every mono pixel is black or white")
     }
 
     /// The terminal's own palettes span the gamut, so nothing there needed

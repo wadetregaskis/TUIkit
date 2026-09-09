@@ -314,6 +314,12 @@ public enum ASCIIColorMode: Sendable, Equatable {
 /// The dithering algorithm applied during color quantization.
 public enum DitheringMode: Sendable, Equatable {
     /// Floyd-Steinberg error diffusion. Good for smooth gradients.
+    ///
+    /// Each mode diffuses only the error it can express. ``ASCIIColorMode/mono``
+    /// and ``ASCIIColorMode/grayscale`` decide on luminance, so they carry the
+    /// neutral part of theirs and no chroma; for `.grayscale` that part is under
+    /// one level of 255, so there this draws the plain quantisation, which the
+    /// glyph renderer's 24-step ramp then rounds to within one step of `none`.
     case floydSteinberg
 
     /// No dithering. Fastest.
