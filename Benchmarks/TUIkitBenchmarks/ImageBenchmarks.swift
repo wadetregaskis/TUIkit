@@ -64,7 +64,7 @@ enum ImageBenchmarks {
     private static func registerStyleBenchmarks() {
         Benchmark("image/Style: fine-blocks (small)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .ansi256,
                 dithering: .none
             )
@@ -75,7 +75,7 @@ enum ImageBenchmarks {
 
         Benchmark("image/Style: braille (small)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .braille,
+                characterSet: .blocks(.braille),
                 colorMode: .ansi256,
                 dithering: .none
             )
@@ -85,8 +85,12 @@ enum ImageBenchmarks {
         }
 
         Benchmark("image/Style: shape-based (small)") { benchmark in
+            // Shape-awareness became a CONVERTER flag rather than a character set
+            // of its own: it changes how the blocks are matched (glyph shape over
+            // the pixel block) rather than which glyphs are available.
             let converter = ASCIIConverter(
-                characterSet: .shapeBased,
+                characterSet: .blocks(.fine),
+                shapeAware: true,
                 colorMode: .ansi256,
                 dithering: .none
             )
@@ -103,7 +107,7 @@ enum ImageBenchmarks {
     private static func registerColorBenchmarks() {
         Benchmark("image/Color: mono (small)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .mono,
                 dithering: .none
             )
@@ -114,7 +118,7 @@ enum ImageBenchmarks {
 
         Benchmark("image/Color: grayscale (small)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .grayscale,
                 dithering: .none
             )
@@ -125,7 +129,7 @@ enum ImageBenchmarks {
 
         Benchmark("image/Color: ANSI 256 (small)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .ansi256,
                 dithering: .none
             )
@@ -136,7 +140,7 @@ enum ImageBenchmarks {
 
         Benchmark("image/Color: true-color (small)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .trueColor,
                 dithering: .none
             )
@@ -154,7 +158,7 @@ enum ImageBenchmarks {
     private static func registerDitheringBenchmarks() {
         Benchmark("image/Dithering: off (large)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .ansi256,
                 dithering: .none
             )
@@ -165,7 +169,7 @@ enum ImageBenchmarks {
 
         Benchmark("image/Dithering: floyd-steinberg (large)") { benchmark in
             let converter = ASCIIConverter(
-                characterSet: .fineBlocks,
+                characterSet: .blocks(.fine),
                 colorMode: .ansi256,
                 dithering: .floydSteinberg
             )

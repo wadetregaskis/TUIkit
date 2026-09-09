@@ -65,11 +65,14 @@ enum ScrollViewBenchmarks {
             let iterations = benchmark.scaledIterations
             await MainActor.run {
                 let lines = (0..<100).map { "Row \($0)" }
-                let view = ScrollView(showsIndicators: false) {
+                // `showsIndicators:` became the `.scrollIndicators(_:)` modifier,
+                // as in SwiftUI — the init no longer takes it.
+                let view = ScrollView {
                     VStack {
                         ForEach(lines, id: \.self) { Text($0) }
                     }
                 }
+                .scrollIndicators(.hidden)
                 .frame(height: 10)
                 let context = standardContext()
                 for _ in iterations {
