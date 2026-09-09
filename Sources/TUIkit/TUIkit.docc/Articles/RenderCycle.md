@@ -187,9 +187,14 @@ The free function `renderToBuffer()` is the single entry point for all view rend
 
 ```swift
 func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
-    // Priority 1: Direct rendering
-    if let renderable = view as? Renderable {
-        return renderable.renderToBuffer(context: context)
+    // Priority 1: Direct rendering, through a static witness on `View`.
+    // `_renderSelf` returns the buffer for a `Renderable` and nil otherwise,
+    // and the result is clamped to the available space — the universal layout
+    // safety net, so a view that mis-sizes itself can never overwrite a
+    // sibling.
+    if let buffer = V._renderSelf(view, context: context) {
+        return buffer.clamped(
+            toWidth: context.availableWidth, height: context.availableHeight)
     }
 
     // Priority 2: Composite: bind this view's @State to its own identity,
@@ -206,7 +211,18 @@ func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
 }
 ```
 
-@Image(source: "render-cycle-dispatch.svg", alt: "Decision tree showing the dual rendering dispatch: renderToBuffer checks Renderable conformance first, then body recursion, then returns an empty buffer as fallback.")
+> Note: `_renderSelf` is a **static witness**, not a `view as? Renderable`
+> cast, and `_measureSelf` is its measure-side twin. The distinction is a
+> performance one and it is large: the cast ran once per view per render and
+> `swift_dynamicCast` under it was 4.5% of a `fanout` frame. It is the cast
+> that *succeeds* most often, which is what made it expensive — a failing
+> conformance check can stop at the metadata, while a succeeding one builds
+> the existential. Returning the buffer rather than an `any Renderable` is the
+> other half: `Self` is concrete at the call, so nothing is boxed. Do not
+> implement either witness by hand; conform to `Renderable` or `Layoutable`
+> and the default does it.
+
+@Image(source: "render-cycle-dispatch.svg", alt: "Decision tree showing the dual rendering dispatch: renderToBuffer asks the static render witness first, then body recursion, then returns an empty buffer as fallback.")
 
 > Important: If a view conforms to `Renderable`, its `body` is never evaluated. This is intentional: `Renderable` views produce output directly and don't need compositional decomposition.
 
