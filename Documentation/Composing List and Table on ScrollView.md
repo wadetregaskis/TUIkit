@@ -114,8 +114,22 @@ shape gets messy because:
   enclosing ScrollView's snap-to-focused-control logic can
   find them.
 
-This is a real abstraction that doesn't exist yet. It's a
-project in itself.
+This abstraction now exists — for lazy stacks, not for List.
+``ScrollContentWindow`` (`445ba4f6`, 2026-07-09; deepened by
+stages 3 and 6 of `Documentation/Locating things without
+drawing them.md` — `4fc180bc`, `1ca37d88`) publishes the
+visible slice into the environment, and a `LazyVStack` that is
+the ScrollView's *direct* content renders only the rows
+intersecting it, reporting the compact band back through the
+window's reply slot. The first bullet's row-versus-line problem
+it answers by anchoring — variable-height rows scroll by anchor
+rather than by offset (`2db0cafb`). What it is not is a
+row-*provider* protocol: it addresses one stack at the scroll
+origin, says nothing about Section chrome, and List and Table
+still resolve their own windows (through ``ScrollRowWindow``)
+rather than being handed one. Those remaining bullets are what
+that difference is made of, and closing it is still a project
+in itself.
 
 ### 2. Focus-registration interaction
 
@@ -250,11 +264,12 @@ absent a real driver. Two reasons to take it on:
    A virtualised grid view, a virtualised tree view, a `Lazy`
    variant of `ScrollView` — any of these forces mismatch #1
    to be solved, at which point composing List on the same
-   primitive is a small additional step. If you find
-   yourself reaching for `LazyVStack` inside a `ScrollView`
-   and discovering that the lazy doesn't actually defer
-   rendering for off-screen children, that's the same
-   trigger.
+   primitive is a small additional step. That trigger has
+   since fired, and been answered only halfway: a `LazyVStack`
+   inside a `ScrollView` does now defer rendering for
+   off-screen children (`445ba4f6`, 2026-07-09 — see mismatch
+   #1), and List was not composed on it. The additional step
+   turned out not to be small.
 
 Don't compose speculatively just to "tidy up." The current
 two-tracks design works, the deduplication makes the
