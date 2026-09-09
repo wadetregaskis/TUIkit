@@ -124,6 +124,24 @@ extension HelpModifier: Renderable {
                 offsetX: 0, offsetY: 0, width: buffer.width, height: buffer.height,
                 handlerID: handlerID))
 
+        // The popover presentation, attached HERE rather than by the run loop,
+        // because the anchor is this buffer and an overlay's offsets are in its
+        // own buffer's coordinates — carried and shifted as the buffer travels
+        // up, exactly as a `Menu`'s drop-down is. The run loop has only the root
+        // buffer and could not say where the control ended up.
+        //
+        // Identified by its TEXT, which is how `TooltipState.leaving` already
+        // identifies a candidate: handler ids are per-frame, and the resolved
+        // candidate's id belongs to the frame that published it. Two views with
+        // identical help text would both draw a panel; they would also be
+        // indistinguishable to a reader, and the cost is a duplicate rather than
+        // a wrong answer.
+        if let showing = tooltips.resolved(nowNanos: context.environment.frameNowNanos),
+            showing.style == .popover, showing.text == text
+        {
+            TooltipPopover.attach(text: text, to: &buffer, context: context)
+        }
+
         // The delay expires between frames, and nothing else will redraw for it.
         // Declared every frame while a hover is pending, and it stops as soon as
         // the tooltip is showing or the pointer leaves — one wake per hover, not

@@ -1,8 +1,16 @@
 # Tooltips — `help(_:)` in a terminal
 
-**Status: being built, 2026-09-10.** `help(_:)`, `TooltipState`,
-`TooltipStyle`, `TooltipVisibility`, the three subtree modifiers and the `?` help
-key have landed; the two presentations are next. Written before building because
+**Status: shipped, 2026-09-10.** `help(_:)`, `TooltipState`, `TooltipStyle`,
+`TooltipVisibility`, the three subtree modifiers, the `?` help key and **both
+presentations** are on `main`. What is not built is §5's rules 4 and 5 — prefer a
+placement not under the pointer, and re-wrap to a narrower box before rejecting a
+placement. Both are new constraints on
+`OverlayLayer.placed(maxWidth:maxHeight:)` rather than uses of it, and the design
+itself ranks rule 4 below 1–3; the panel takes the placement the shared rule
+gives it. §7's three open questions are answered by the code: the tooltip row
+sits ABOVE the shortcut items so both show (Q1), innermost wins by ordinary
+environment cascade (Q2), and `help(_:)` does make a `Text` hit-testable, which
+its own doc comment now says (Q3). Written before building because
 the affordance is the expensive part to change later, and because mapping the
 spec onto the render loop turned up two things the spec could not have known.
 

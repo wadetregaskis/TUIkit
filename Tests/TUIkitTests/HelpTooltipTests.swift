@@ -190,7 +190,11 @@ struct HelpTooltipTests {
         let region = buffer.hitTestRegions.first { $0.offsetY == 1 }
         #expect(region != nil, "the Text's region: \(buffer.hitTestRegions)")
         _ = h.dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 1, y: 1))
-        let shown = h.tooltips.resolved(nowNanos: Self.second)
+        // At the hover candidate's own deadline: the closure stamps the real
+        // monotonic clock (the pointer arrived between frames), so a synthetic
+        // "now" is not comparable with it. Reading the deadline back is the only
+        // honest way to ask "is it due yet" from a test.
+        let shown = h.tooltips.resolved(nowNanos: h.tooltips.hovered!.showAtNanos)
         #expect(shown?.source == .hover, "the pointer wins, got \(String(describing: shown))")
         #expect(shown?.text == "Lines executed at least once")
     }
@@ -409,5 +413,110 @@ struct TooltipStatusBarTests {
                 #expect(tooltipRow < itemRow, "\(style): tooltip must precede items")
             }
         }
+    }
+}
+
+// MARK: - The popover presentation
+
+/// The tooltip drawn as a panel attached to the control.
+@MainActor
+@Suite("Tooltip as a popover")
+struct TooltipPopoverTests {
+
+    private func harness() -> (context: RenderContext, tooltips: TooltipState,
+        focus: FocusManager, dispatcher: MouseEventDispatcher)
+    {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        var env = EnvironmentValues()
+        env.applyRuntimeServices(from: tui)
+        env.focusManager = focus
+        env.tooltipStyle = .popover
+        env.tooltipDelay = 0
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        return (
+            RenderContext(
+                availableWidth: 40, availableHeight: 10, environment: env, tuiContext: tui),
+            tui.tooltipState, focus, tui.mouseEventDispatcher
+        )
+    }
+
+    private func frame<V: View>(
+        _ view: V, _ h: (context: RenderContext, tooltips: TooltipState,
+            focus: FocusManager, dispatcher: MouseEventDispatcher)
+    ) -> FrameBuffer {
+        h.focus.beginRenderPass()
+        let buffer = renderToBuffer(view, context: h.context)
+        h.focus.endRenderPass()
+        h.dispatcher.setRegions(buffer.hitTestRegions)
+        return buffer
+    }
+
+    /// The candidate carries the style it was published under, so a popover
+    /// tooltip attaches an overlay and does NOT ask the status bar for a row.
+    @Test("A revealed popover tooltip attaches an overlay to its own control")
+    func revealAttachesAnOverlay() {
+        let h = harness()
+        let view = Button("Rebuild") {}.help("Rebuild the index from scratch")
+        let first = frame(view, h)
+        #expect(first.overlays.isEmpty, "nothing showing yet")
+        #expect(h.tooltips.focused?.style == .popover, "the candidate carries the style")
+
+        #expect(h.tooltips.toggleKeyboardReveal(focusID: h.focus.currentFocusedID))
+        let shown = frame(view, h)
+        #expect(shown.overlays.count == 1, "the panel is attached: \(shown.overlays.count)")
+        let panel = shown.overlays[0].content.lines.map { $0.stripped }
+        #expect(
+            panel.contains { $0.contains("Rebuild the index") },
+            "and carries the text: \(panel)")
+        // Anchored beneath the control, and the anchor is the whole control so a
+        // flipped placement clears it.
+        #expect(shown.overlays[0].offsetY == first.height)
+        #expect(shown.overlays[0].anchorHeight == first.height)
+        #expect(shown.overlays[0].level == .popover)
+    }
+
+    /// It must steal nothing. A tooltip is not in the focus ring and claims no
+    /// keys — the whole reason it is modelled on `TextFieldSuggestions.attach`
+    /// rather than on `PopoverPresentationModifier`.
+    @Test("A popover tooltip takes no focus and claims no keys")
+    func popoverStealsNothing() {
+        let h = harness()
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        _ = frame(view, h)
+        let focusedBefore = h.focus.currentFocusedID
+        #expect(h.tooltips.toggleKeyboardReveal(focusID: focusedBefore))
+        _ = frame(view, h)
+
+        #expect(h.focus.currentFocusedID == focusedBefore, "the focus did not move")
+        #expect(!h.focus.activeSectionIsModal, "no modal section was marked")
+        #expect(
+            h.context.environment.statusBar?.escapeLabelOverride == nil,
+            "Escape still means what it meant")
+    }
+
+    /// A short tooltip is a short box: boxed at the widest wrapped line, not at
+    /// the wrap width.
+    @Test("The panel is only as wide as its text")
+    func panelHugsItsText() {
+        let h = harness()
+        let narrow = TooltipPopover.panel(text: "Hi", maxWidth: 40, context: h.context)
+        let wide = TooltipPopover.panel(
+            text: String(repeating: "word ", count: 30), maxWidth: 40, context: h.context)
+        #expect(narrow.width < wide.width, "\(narrow.width) vs \(wide.width)")
+        #expect(narrow.width <= 8, "a two-letter tooltip is a small box, got \(narrow.width)")
+        #expect(wide.lines.count > 3, "long text wraps to several rows: \(wide.lines.count)")
+    }
+
+    /// Wrapping is capped, so help text does not stretch a panel across a wide
+    /// terminal.
+    @Test("The panel does not stretch across a wide terminal")
+    func panelIsCapped() {
+        let h = harness()
+        let panel = TooltipPopover.panel(
+            text: String(repeating: "word ", count: 60), maxWidth: 300, context: h.context)
+        #expect(
+            panel.width <= TooltipPopover.maxTextWidth + 4,
+            "capped at \(TooltipPopover.maxTextWidth) plus chrome, got \(panel.width)")
     }
 }
