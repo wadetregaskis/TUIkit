@@ -162,11 +162,12 @@ For more details, see <doc:FocusSystem>.
 
 ## Default Bindings
 
-Layer 4 provides three built-in key bindings, but only quit is enabled without configuration:
+Layer 4 provides four built-in key bindings, but only quit and suspend are enabled without configuration:
 
 | Key | Action | Condition |
 |-----|--------|-----------|
 | `q` / `Q` | Quit application | Enabled by default; gated by ``QuitBehavior`` |
+| Ctrl-Z | Suspend the app, as the shell's `^Z` would | Always — but only once no view has claimed the key, so a text field's undo binding wins |
 | `t` / `T` | Cycle to next color theme | Opt-in: requires `statusBarSystemItems(theme: true)` (or `showThemeItem = true`) |
 | `a` / `A` | Cycle to next appearance | Active unless a modal surface has grabbed input (its status bar item is hidden by default) |
 

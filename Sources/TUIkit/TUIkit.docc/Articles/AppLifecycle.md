@@ -47,7 +47,7 @@ Before the main loop starts, `run()` prepares the terminal:
 
 | Step | What | Why |
 |------|------|-----|
-| 1 | Install signal handlers | Catch Ctrl+C (SIGINT) and terminal resize (SIGWINCH) |
+| 1 | Arm the signal sources | Observe Ctrl+C (SIGINT), `kill` (SIGTERM), resize (SIGWINCH) and job control (SIGTSTP / SIGCONT), and ignore SIGPIPE |
 | 2 | Enter alternate screen | Preserve the user's existing terminal content |
 | 3 | Hide cursor | Avoid cursor flicker during rendering |
 | 4 | Enable raw mode | Disable line buffering, echo, and signal processing |
@@ -89,7 +89,7 @@ clock ticked, and the loop first tries to serve it from the frame already on
 screen — see <doc:RenderCycle> — rendering only when some view would build a
 different picture from the new phase.
 
-The rest set boolean flags and wake the loop; the actual rendering always happens on the main thread — signal handlers never render directly.
+The rest set boolean flags and wake the loop; the actual rendering always happens in the main loop — a signal source's handler never renders directly.
 
 ## Signal Handling
 
@@ -163,9 +163,10 @@ Built-in key bindings that apply when no handler consumed the event:
 
 | Key | Action | Condition |
 |-----|--------|-----------|
-| `q` / `Q` | Quit application | `statusBar.isQuitAllowed` |
-| `t` / `T` | Cycle to next palette | `statusBar.showThemeItem` |
-| `a` / `A` | Cycle to next appearance | Always |
+| `q` / `Q` | Quit application | `statusBar.isQuitAllowed` — offered even behind a modal, as its escape hatch |
+| Ctrl-Z | Suspend the app | Always. Raw mode clears `ISIG`, so the driver never turns `^Z` into SIGTSTP; reaching layer 4 means no view claimed it (a text field's undo wins), so it is re-raised as the signal |
+| `t` / `T` | Cycle to next palette | `statusBar.showThemeItem`, and no transient surface has grabbed input |
+| `a` / `A` | Cycle to next appearance | No transient surface has grabbed input — otherwise `a` would restyle the app from behind a modal the user cannot see the controls for |
 
 ## Render Pipeline
 
