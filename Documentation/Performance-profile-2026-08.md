@@ -2035,8 +2035,7 @@ nobody got to.
    **silently** lost. The one shape not foreclosed is moving the question off
    the element and onto the row-memo maker, resolved once per `ForEach` at
    `init` where `Data.Element` is still concrete.
-4. **The identity trio — PARTLY ADDRESSED, and `structurallyEqual` measured
-   HIGHER than the 2.1% here.** The three key-side sites are fixed:
+4. **The identity trio — PARTLY ADDRESSED.** The three key-side sites are fixed:
    `0217d67e` took the identity chain out of `MeasureKey`, `21c3675b` folded
    every composite key to one word before hashing, and `7db94fe9` moved `SizeKey`
    and `ChildViewsKey` onto an `identityHash` for `fanout` −6.4%, `modifiers`
@@ -2047,9 +2046,25 @@ nobody got to.
    `[ViewIdentity: CacheEntry]` (`RenderCache.swift:215`), so every *hit* walks
    the chain through `IdentityNode.structurallyEqual`, whose `===` shortcut
    cannot fire because the storing and probing walks build separate chains.
-   §55's `--blame` table puts it at **3.8% of a menu frame** (2026-09-06), and
-   `7db94fe9` measured `menus` at +0.3% — which localises that 3.8% precisely: it
-   was never in the two keys that changed.
+
+   **Correction, 2026-09-10 — the attribution first written here was a non
+   sequitur, and it pointed at the wrong table.** It said §55's `--blame` figure
+   of 3.8% for `IdentityNode.structurallyEqual` localised to `entries`, because
+   `7db94fe9` had left `menus` flat. It cannot: §55's trace is of the **Mode A
+   `menu` tree** (`Tools/Profiling/RenderHarness/Trees.swift:229`), a `Menu` and
+   three `Button`s with no `ForEach` and no `.equatable()` — so
+   `renderValueMemoized` is never entered and `entries` is never probed there at
+   all. Ruling out `SizeKey` and `ChildViewsKey` does not implicate `entries`
+   either: `structurallyEqual` has at least seven callers, including
+   `StateStorage.StateKey`, both `activeIdentities` sets, `appliedEnvironment`'s
+   `EnvironmentSlot`, `isAncestor(of:)` and `RetainedSubtreeIndex.retains`.
+
+   `entries` is still worth converting, on a different argument — it is hot where
+   the buffer memo actually SERVES, which is `fanout` far ahead of anything else,
+   then `gradients`, `textwall` and `churn`. `menus` should be **predicted flat**
+   there rather than hoped for. Two lessons, and the second one cost something: a
+   percentage has a date, and a percentage also has a TREE — a `--blame` figure
+   means nothing until you know which harness shape produced it.
 
 **What to measure first**, given the above: item 4's `entries` table, on
 `7db94fe9`'s own recipe — an `identityHash` key with the `ViewIdentity` moved
