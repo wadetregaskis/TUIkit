@@ -71,7 +71,15 @@ extension String {
         let keep = width - 1
         switch mode {
         case .tail:
-            let prefix = ansiAwarePrefix(visibleCount: keep)
+            // `visible` IS this string's `strippedLength`, and the clip's own
+            // first act is to compute that again (see
+            // `ansiAwarePrefixWithWidth(visibleCount:)`). Carry it in instead —
+            // the same "pass the width you already know" shape as
+            // `padToVisibleWidth(_:knownVisibleWidth:)`, and it additionally
+            // unlocks the clip's O(excess) trailing-spaces path. Byte-identical
+            // by construction, and pinned that way by
+            // `ANSIPrefixKnownWidthTests`.
+            let prefix = ansiAwarePrefix(visibleCount: keep, knownVisibleWidth: visible)
             let body =
                 atWordBoundary
                 ? (Self.keepingLeadingWords(of: prefix) ?? Self.droppingTrailingSpaces(prefix))
@@ -97,7 +105,8 @@ extension String {
             // always cuts by character.
             let leftKeep = keep / 2
             let rightKeep = keep - leftKeep
-            return ansiAwarePrefix(visibleCount: leftKeep)
+            // Same carried width as `.tail` above.
+            return ansiAwarePrefix(visibleCount: leftKeep, knownVisibleWidth: visible)
                 + ellipsis
                 + ansiAwareSuffix(droppingVisible: max(0, visible - rightKeep))
         }

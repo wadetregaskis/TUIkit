@@ -1746,24 +1746,29 @@ where Value.ID: Hashable {
                     cellColumn += columnSpacing
                 }
                 let column = columns[index]
+                let cellWidth = columnWidths[index]
                 let cellLines = layout.cells[index]
                 let text = lineIndex < cellLines.count ? cellLines[lineIndex] : ""
-                let aligned = alignText(
-                    text, width: columnWidths[index], alignment: column.alignment,
-                    truncationMode: column.truncationMode)
                 if let ramp, bandsAcrossRow {
                     var walked = cellColumn
                     PaintRenderer.band(
-                        aligned, column: &walked, row: row, style: cellStyle,
+                        alignText(
+                            text, width: cellWidth, alignment: column.alignment,
+                            truncationMode: column.truncationMode),
+                        column: &walked, row: row, style: cellStyle,
                         sampler: ramp, sequences: &rampSequences, into: &content)
                 } else if let cellSequence {
                     content += cellSequence
-                    content += aligned
+                    appendAligned(
+                        text, width: cellWidth, alignment: column.alignment,
+                        truncationMode: column.truncationMode, into: &content)
                     content += ANSIRenderer.reset
                 } else {
-                    content += aligned
+                    appendAligned(
+                        text, width: cellWidth, alignment: column.alignment,
+                        truncationMode: column.truncationMode, into: &content)
                 }
-                cellColumn += columnWidths[index]
+                cellColumn += cellWidth
             }
 
             guard case .none = visual.background else {
@@ -3302,25 +3307,30 @@ where Value.ID: Hashable {
                 cellColumn += columnSpacing
             }
             let column = columns[index]
-            let aligned = alignText(
-                column.value(for: item),
-                width: columnWidths[index],
-                alignment: column.alignment,
-                truncationMode: column.truncationMode
-            )
+            let cellWidth = columnWidths[index]
+            // Hoisted, so the column's value closure still runs exactly once and
+            // in the same order whichever branch below draws it.
+            let cellText = column.value(for: item)
             if let ramp, bandsAcrossRow {
                 var walked = cellColumn
                 PaintRenderer.band(
-                    aligned, column: &walked, row: row, style: cellStyle,
+                    alignText(
+                        cellText, width: cellWidth, alignment: column.alignment,
+                        truncationMode: column.truncationMode),
+                    column: &walked, row: row, style: cellStyle,
                     sampler: ramp, sequences: &rampSequences, into: &content)
             } else if let cellSequence {
                 content += cellSequence
-                content += aligned
+                appendAligned(
+                    cellText, width: cellWidth, alignment: column.alignment,
+                    truncationMode: column.truncationMode, into: &content)
                 content += ANSIRenderer.reset
             } else {
-                content += aligned
+                appendAligned(
+                    cellText, width: cellWidth, alignment: column.alignment,
+                    truncationMode: column.truncationMode, into: &content)
             }
-            cellColumn += columnWidths[index]
+            cellColumn += cellWidth
         }
 
         // The background is applied to the FINISHED line, so a pulse is one
@@ -3538,12 +3548,26 @@ where Value.ID: Hashable {
 
     // MARK: - Text Alignment
 
-    private func alignText(
+    /// A cell's text clipped and padded into its column, written straight into
+    /// the row buffer the caller is already assembling.
+    ///
+    /// This is the whole rule; `alignText` below is a wrapper for the two
+    /// callers that need the cell as a value. It runs once per CELL per drawn
+    /// line per frame — 1,040 times a frame on the `tables-scroll` shape (8
+    /// tables x 25 rows x 5 columns, plus the headers) — and the previous form
+    /// built two pad strings and a third for the `+`-chain result, only for the
+    /// caller to copy that result into `content` and drop it. Appending instead
+    /// reuses the two pieces every other pad site in the framework uses: the
+    /// borrowed `asciiSpaces` run, and a buffer that was already reserved. Same
+    /// reason the row itself stopped building a `[String]` of cells (see the
+    /// one-buffer note in `renderRow`): a table's time goes to the allocator.
+    private func appendAligned(
         _ text: String,
         width: Int,
         alignment: HorizontalAlignment,
-        truncationMode: TruncationMode
-    ) -> String {
+        truncationMode: TruncationMode,
+        into content: inout String
+    ) {
         // Clip the value to the column width *first*: a cell that is wider
         // than its column would otherwise shove every column to its right
         // out of alignment. An over-long value is shown truncated with an
@@ -3556,8 +3580,41 @@ where Value.ID: Hashable {
         // text is a `visibleLength`-wide child inside a `width`-wide column.
         let leftPad = alignment.childOffset(childWidth: visibleLength, in: width)
         let rightPad = padding - leftPad
-        return String(repeating: " ", count: leftPad) + clipped
-            + String(repeating: " ", count: rightPad)
+        // Not a `String(repeating:)` pair. `childOffset(childWidth:in:)` clamps
+        // its answer to `0...max(0, width - visibleLength)`, so both pads are
+        // non-negative and both runs are plain ASCII U+0020 — byte-for-byte what
+        // the `+` chain produced, minus the three temporaries.
+        content += asciiSpaces(leftPad)
+        content += clipped
+        content += asciiSpaces(rightPad)
+    }
+
+    /// `appendAligned` as a value, for the two callers that cannot append.
+    ///
+    /// A banded cell goes to
+    /// ``PaintRenderer/band(_:column:row:style:sampler:sequences:into:)`` whole
+    /// — that call emits one SGR introducer per ramp entry across its argument,
+    /// so splitting the cell into pad/text/pad would restart the run at each
+    /// piece and change the bytes. The header wraps its cell in
+    /// `ANSIRenderer.colorize`. Both share the body above rather than keeping a
+    /// second copy of the clip-and-pad rule.
+    ///
+    /// Deliberately no `reserveCapacity`: reserving on an empty String forces
+    /// native heap storage, and a header title or a narrow cell padded to its
+    /// column usually fits the 15-byte small-string form, which the appends
+    /// below keep. Reserving here would make this wrapper allocate where the
+    /// `+` chain it replaces did not.
+    private func alignText(
+        _ text: String,
+        width: Int,
+        alignment: HorizontalAlignment,
+        truncationMode: TruncationMode
+    ) -> String {
+        var aligned = ""
+        appendAligned(
+            text, width: width, alignment: alignment, truncationMode: truncationMode,
+            into: &aligned)
+        return aligned
     }
 }
 
