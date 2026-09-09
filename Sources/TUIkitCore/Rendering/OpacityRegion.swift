@@ -60,6 +60,27 @@ public struct OpacityRegion: Equatable, Sendable {
     /// repainted on the very next tick.
     public var opacity: Double
 
+    /// How opaque the INK in these cells is, beyond whatever ``opacity`` says
+    /// about the layer as a whole. 1 when no colour asked for less.
+    ///
+    /// A translucent `Color` used as a FOREGROUND. Kept apart from ``opacity``
+    /// because they are different claims, not different amounts of one: a layer
+    /// at 0.3 is 30% *present*, so its glyph competes with whatever is behind it
+    /// and the ½ rule decides; ink at 0.3 is faint text that is definitely
+    /// drawn. The same number, two questions. Folding them would make
+    /// `Text(…).foregroundStyle(.red.opacity(0.3))` vanish rather than fade.
+    ///
+    /// They compose by multiplication at the blend, so
+    /// `.foregroundStyle(.red.opacity(0.5)).opacity(0.5)` is ink at 0.25 inside
+    /// a layer contest at 0.5.
+    public var inkOpacity: Double
+
+    /// How opaque the FIELD painted in these cells is, beyond ``opacity``. 1
+    /// when no colour asked for less.
+    ///
+    /// A translucent `Color` used as a background, or as a view.
+    public var fieldOpacity: Double
+
     /// The whole of a repeating fade, when this region is one.
     ///
     /// A fade that never ends would otherwise cost a render pass for as long
@@ -74,14 +95,31 @@ public struct OpacityRegion: Equatable, Sendable {
 
     public init(
         offsetX: Int, offsetY: Int, width: Int, height: Int, opacity: Double,
+        inkOpacity: Double = 1, fieldOpacity: Double = 1,
         cycle: OpacityCycle? = nil
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.width = width
         self.height = height
+        // Clamped in this order for the reason `Color.opacity(_:)`'s is: it
+        // folds a NaN to the low end, which is the only answer available.
         self.opacity = min(max(opacity, 0), 1)
+        self.inkOpacity = min(max(inkOpacity, 0), 1)
+        self.fieldOpacity = min(max(fieldOpacity, 0), 1)
         self.cycle = cycle
+    }
+
+    /// Whether this region says anything at all — the test that decides whether
+    /// it is worth resolving.
+    ///
+    /// All three channels, because any one of them under 1 is a claim. A region
+    /// at `opacity: 1, inkOpacity: 0.5` is translucent INK at full layer
+    /// strength, and dropping it would make a faded colour work inside a `ZStack`
+    /// and render opaque on a plain page — the worst shape of bug, because the
+    /// plain page is the common case.
+    public var isTranslucent: Bool {
+        opacity < 1 || inkOpacity < 1 || fieldOpacity < 1
     }
 
     /// This region moved by `(x, y)` — what a combining operation applies when

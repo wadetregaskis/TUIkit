@@ -31,6 +31,28 @@ extension FrameBuffer {
         var background: Color?
     }
 
+    /// What one cell's three channels are worth, resolved from the region
+    /// covering it.
+    ///
+    /// Three numbers rather than one because a layer's opacity and a colour's
+    /// are different claims — see ``OpacityRegion/inkOpacity``. `layer` decides
+    /// the glyph contest; `ink` and `field` only scale their own channel, and
+    /// each multiplies the layer's on the way in.
+    struct CellAlpha {
+        var layer: Double
+        var ink: Double
+        var field: Double
+
+        init(layer: Double, ink: Double = 1, field: Double = 1) {
+            self.layer = layer
+            self.ink = ink
+            self.field = field
+        }
+
+        /// The layer-only spelling, for a caller that has one number.
+        static func layer(_ value: Double) -> Self { Self(layer: value) }
+    }
+
     /// The blended replacement for `columns` of `source`, as a self-contained
     /// string that starts and ends at the terminal's default state.
     ///
@@ -44,7 +66,7 @@ extension FrameBuffer {
         columns: Range<Int>,
         destinationShift: Int,
         fieldsFrom: String? = nil,
-        alpha: (Int) -> Double?,
+        alpha: (Int) -> CellAlpha?,
         surface: Color,
         defaultForeground: Color
     ) -> String {
@@ -221,7 +243,7 @@ extension FrameBuffer {
 
     /// One cell's answer.
     private static func blend(
-        source: RowCell, destination: RowCell?, alpha: Double?,
+        source: RowCell, destination: RowCell?, alpha: CellAlpha?,
         surface: Color, defaultForeground: Color
     ) -> RowCell {
         // Uncovered: the source stands as it is.
@@ -247,7 +269,11 @@ extension FrameBuffer {
         // discontinuity is the deliberate one, and it is in the character
         // rather than the colour, which is where a cell grid puts every other
         // one.
-        if alpha >= 1 {
+        // Every channel, not just the layer: `opacity: 1, inkOpacity: 0.5` is a
+        // translucent ink at full layer strength, and the old single test took
+        // "the layer wins the cell outright" and returned the source verbatim —
+        // eating the colour's alpha whole.
+        if alpha.layer >= 1, alpha.ink >= 1, alpha.field >= 1 {
             guard source.background == nil else { return source }
             // Painting nothing at all — no background and no ink — leaves the
             // destination exactly as it was, which is what keeps a fully opaque
@@ -266,7 +292,10 @@ extension FrameBuffer {
         // attributes — re-emitted through the span, so equivalent styling
         // rather than identical bytes. Every blend below converges here as
         // alpha does, so this is a shortcut, not a discontinuity.
-        guard alpha > 0 else {
+        // The LAYER only. Ink at 0 with the layer at 1 is "no glyph, but the
+        // field still paints" — not "the source contributes nothing", which
+        // would make `.clear` text erase the background it was drawn on.
+        guard alpha.layer > 0 else {
             return destination ?? RowCell(character: " ", style: SGRState())
         }
         // Each channel blends with its own counterpart and nothing else: ink
@@ -293,10 +322,14 @@ extension FrameBuffer {
         // ``Color/opacity(_:over:)``, the ENCODED-sRGB mix, not
         // ``Color/compositing(_:over:)``'s linear-light one — see
         // `OpacityFade.fading` and `Documentation/Opacity as composition.md`.
+        // The PRODUCT of the layer's alpha and the channel's own, which is what
+        // makes them compose: a translucent ink inside a fading pane is faint
+        // twice over, and neither number has to know about the other.
         let foreground =
-            sourceInk.map { $0.opacity(alpha, over: destinationInk) } ?? destination?.foreground
+            sourceInk.map { $0.opacity(alpha.layer * alpha.ink, over: destinationInk) }
+            ?? destination?.foreground
         let background =
-            source.background.map { $0.opacity(alpha, over: destinationField) }
+            source.background.map { $0.opacity(alpha.layer * alpha.field, over: destinationField) }
             ?? destination?.background
 
         // Only the glyph needs a DECISION, because a cell can hold one and
@@ -304,10 +337,17 @@ extension FrameBuffer {
         // one, and where both do, ½ decides. A side painting no glyph is not a
         // candidate — it has nothing to draw, and "drawing" it would mean
         // erasing the side that does.
-        let sourcePaintsInk = source.character != " " || source.style.paintsInkOnBlankCell
+        // `alpha.ink > 0` removes a `.clear` ink from the contest: it has no
+        // glyph to draw, and "drawing" it would erase the side that does.
+        let sourcePaintsInk =
+            (source.character != " " || source.style.paintsInkOnBlankCell) && alpha.ink > 0
         let destinationPaintsInk =
             destination.map { $0.character != " " || $0.style.paintsInkOnBlankCell } ?? false
-        let sourceDraws = sourcePaintsInk && (!destinationPaintsInk || alpha >= 0.5)
+        // The LAYER's alpha decides the contest, never the ink's. The contest is
+        // between two layers' glyphs — how present this layer is — while a
+        // translucent ink has no contest at all: it is one cell's own glyph over
+        // its own field, and at 0.4 it should draw faintly rather than disappear.
+        let sourceDraws = sourcePaintsInk && (!destinationPaintsInk || alpha.layer >= 0.5)
         // Weight cannot blend — bold, underline and their kin are on or off —
         // so the non-colour styling comes from whichever side drew the glyph.
         var result = sourceDraws ? source : (destination ?? RowCell(character: " ", style: SGRState()))
@@ -523,5 +563,19 @@ extension Color {
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
             )
         }
+    }
+}
+
+// MARK: - A region's three channels
+
+extension OpacityRegion {
+    /// This region's three channels, as one cell's worth of alpha.
+    ///
+    /// On `OpacityRegion` rather than in the resolver so every caller that
+    /// substitutes an alpha for a region — the row rebuild, the run replay, the
+    /// cycle phases — reads the same three fields. `OpacityRegion` lives a module
+    /// below `FrameBuffer.CellAlpha`, hence the extension here rather than there.
+    var cellAlpha: FrameBuffer.CellAlpha {
+        FrameBuffer.CellAlpha(layer: opacity, ink: inkOpacity, field: fieldOpacity)
     }
 }

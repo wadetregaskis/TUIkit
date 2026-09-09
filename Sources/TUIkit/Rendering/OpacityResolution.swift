@@ -94,7 +94,7 @@ extension FrameBuffer {
         // all and never ran.
         let opaqueMatters = !destination.isEmpty
         let translucent = opacityRegions.filter {
-            $0.opacity < 1 || $0.cycle != nil || opaqueMatters
+            $0.isTranslucent || $0.cycle != nil || opaqueMatters
         }
         guard !translucent.isEmpty else {
             var resolved = self
@@ -112,9 +112,9 @@ extension FrameBuffer {
         // frame the loop splices at the tick just drawn is byte-identical to
         // the line the render produced, because it came out of this call with
         // the same argument.
-        func rebuild(_ row: Int, _ line: String, substituting: (OpacityRegion) -> Double?)
-            -> String?
-        {
+        func rebuild(
+            _ row: Int, _ line: String, substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
+        ) -> String? {
             let covering = translucent.filter { $0.spans(row: row) }
             guard !covering.isEmpty else { return nil }
             // A row drawing an image is left alone. Its FOREGROUND is not a
@@ -177,7 +177,7 @@ extension FrameBuffer {
 
         var rewritten = lines
         for row in rewritten.indices {
-            if let rebuilt = rebuild(row, rewritten[row], substituting: { $0.opacity }) {
+            if let rebuilt = rebuild(row, rewritten[row], substituting: { $0.cellAlpha }) {
                 rewritten[row] = rebuilt
             }
         }
@@ -236,7 +236,7 @@ extension FrameBuffer {
                     fieldsFrom: ownLine,
                     alpha: { column in
                         covering.first { $0.contains(column: column, row: run.offsetY) }?
-                            .opacity
+                            .cellAlpha
                     },
                     surface: resolvedSurface,
                     defaultForeground: resolvedForeground)
@@ -281,7 +281,7 @@ extension FrameBuffer {
     private static func cyclingRuns(
         of regions: [OpacityRegion],
         over lines: [String],
-        rebuilding rebuild: (Int, String, (OpacityRegion) -> Double?) -> String?
+        rebuilding rebuild: (Int, String, (OpacityRegion) -> FrameBuffer.CellAlpha?) -> String?
     ) -> [AnimatedCellRun] {
         let cycling = regions.filter { ($0.cycle?.phases.count ?? 0) >= 2 }
         guard !cycling.isEmpty else { return [] }
@@ -318,12 +318,19 @@ extension FrameBuffer {
                         guard let values = region.cycle?.phases, values.count >= 2,
                             region.cycle?.clock == cycle.clock,
                             merged != nil || region == innermost
-                        else { return region.opacity }
+                        else { return region.cellAlpha }
                         // Its OWN phase at this one tick. Pinning the others at
                         // `opacity` — which is what a per-region run did — is
                         // exactly what let the run applied second revert the
                         // first's cells.
-                        return values[tick % values.count]
+                        //
+                        // The LAYER channel is the one that cycles; a colour's
+                        // alpha does not animate itself (an animated one is a
+                        // fresh region per frame through the ordinary render
+                        // path), so the other two ride along unchanged.
+                        return FrameBuffer.CellAlpha(
+                            layer: values[tick % values.count],
+                            ink: region.inkOpacity, field: region.fieldOpacity)
                     })
                 phases.append([rebuilt ?? lines[row]])
             }

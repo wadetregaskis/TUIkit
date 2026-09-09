@@ -34,7 +34,7 @@ struct OpacitySurfaceTests {
         let label = "AB CD"
         let span = FrameBuffer.blendedSpan(
             source: label, destination: band, columns: 0..<5, destinationShift: 0,
-            alpha: { _ in 0.25 }, surface: surface, defaultForeground: .rgb(200, 200, 200))
+            alpha: { _ in .layer(0.25) }, surface: surface, defaultForeground: .rgb(200, 200, 200))
         #expect(
             !span.contains(defaultBackground),
             "the span hands a cell to the terminal's background: \(span.debugDescription)")
@@ -52,7 +52,7 @@ struct OpacitySurfaceTests {
         for alpha in [0.0, 0.01, 0.25, 0.5, 0.75, 1.0] {
             let span = FrameBuffer.blendedSpan(
                 source: "  x  ", destination: band, columns: 0..<5, destinationShift: 0,
-                alpha: { _ in alpha }, surface: surface, defaultForeground: .rgb(200, 200, 200))
+                alpha: { _ in .layer(alpha) }, surface: surface, defaultForeground: .rgb(200, 200, 200))
             #expect(
                 !span.contains(defaultBackground),
                 "alpha \(alpha) handed a cell to the terminal: \(span.debugDescription)")
@@ -67,7 +67,7 @@ struct OpacitySurfaceTests {
         let band = ANSIRenderer.colorize(String(repeating: "▒", count: 8), foreground: accent)
         let span = FrameBuffer.blendedSpan(
             source: band, destination: band, columns: 0..<4, destinationShift: 0,
-            alpha: { column in column == 0 ? 0.5 : nil },
+            alpha: { column in column == 0 ? .layer(0.5) : nil },
             surface: surface, defaultForeground: .rgb(200, 200, 200))
         let named = surface.backgroundCodes().joined(separator: ";")
         // Exactly one cell was covered, so the surface is named at most once —
@@ -89,7 +89,7 @@ struct OpacitySurfaceTests {
         func backgrounds(atAlpha alpha: Double) -> Set<String> {
             let span = FrameBuffer.blendedSpan(
                 source: label, destination: band, columns: 0..<5, destinationShift: 0,
-                alpha: { _ in alpha }, surface: surface, defaultForeground: .rgb(200, 200, 200))
+                alpha: { _ in .layer(alpha) }, surface: surface, defaultForeground: .rgb(200, 200, 200))
             return Set(
                 span.components(separatedBy: "\u{1B}[").compactMap { part in
                     part.contains("48;") ? String(part.prefix(while: { $0 != "m" })) : nil
@@ -123,7 +123,7 @@ struct OpacitySurfaceTests {
         ColorDepth.withCurrent(.truecolor) {
             let span = FrameBuffer.blendedSpan(
                 source: label, destination: band, columns: 0..<5, destinationShift: 0,
-                alpha: { _ in 0.01 }, surface: surface, defaultForeground: .rgb(200, 200, 200))
+                alpha: { _ in .layer(0.01) }, surface: surface, defaultForeground: .rgb(200, 200, 200))
             let page = surface.backgroundCodes().joined(separator: ";")
             #expect(
                 !span.components(separatedBy: "\u{1B}[").allSatisfy {
