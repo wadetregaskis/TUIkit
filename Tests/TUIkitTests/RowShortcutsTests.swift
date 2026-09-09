@@ -153,6 +153,52 @@ struct RowShortcutsTests {
         #expect(lookup.action(for: KeyEvent(key: .character("a"), ctrl: true))?.action == .extendSelection)
     }
 
+    // MARK: - The table is memoised, and the memo notices
+
+    /// The chord table is built once per handler now, not once per pass — it is
+    /// a fresh `Dictionary` and some fifty hashes for a value that is identical
+    /// for every list on the page and, in most apps, never changes.
+    ///
+    /// So the memo has to notice when it DOES change. A list whose
+    /// `.rowShortcuts` are swapped between frames must answer the new chord on
+    /// the next frame, not the one it captured first.
+    @Test("Rebinding between frames rebuilds the captured table")
+    func rebindingInvalidatesTheMemo() {
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        var selection: Set<String> = []
+        let view = List(
+            selection: Binding(get: { selection }, set: { selection = $0 })
+        ) {
+            ForEach(["a", "b", "c"], id: \.self) { Text($0) }
+        }
+
+        func frame(_ shortcuts: RowShortcuts) {
+            env.rowShortcuts = shortcuts
+            let context = RenderContext(
+                availableWidth: 20, availableHeight: 8, environment: env, tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            env.focusManager?.beginRenderPass()
+            _ = renderToBuffer(view, context: context)
+            env.focusManager?.endRenderPass()
+            tui.stateStorage.endRenderPass()
+        }
+
+        // Frame 1 binds extend-selection to Ctrl-E, frame 2 moves it to Ctrl-X.
+        frame(RowShortcuts([.extendSelection: [ctrlE]]))
+        frame(RowShortcuts([.extendSelection: [KeyboardShortcut("x", modifiers: .control)]]))
+
+        let focus = env.focusManager
+        // The OLD chord must no longer be answered…
+        #expect(
+            focus?.dispatchKeyEvent(KeyEvent(key: .character("e"), ctrl: true)) != true,
+            "the memo kept the first frame's table")
+        // …and the new one must be.
+        #expect(focus?.dispatchKeyEvent(KeyEvent(key: .character("x"), ctrl: true)) == true)
+    }
+
     // MARK: - End to end
 
     /// The list itself has to answer the rebound key — the table is captured at

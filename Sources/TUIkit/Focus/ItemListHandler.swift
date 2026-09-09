@@ -123,6 +123,24 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// environment to consult.
     var shortcuts: RowShortcutLookup = .default
 
+    /// What ``shortcuts`` was built from, so it is not built again from the same
+    /// pair. Memoised for the reason ``extentMeanCache`` is: the inputs change
+    /// almost never and the work is not free.
+    ///
+    /// `lookup` builds a fresh `Dictionary`, walks every ``RowAction`` twice
+    /// (defaults, then overrides) and hashes some fifty chords — to produce a
+    /// value that is identical for every list on the page and, for the vast
+    /// majority of apps, never changes at all. It ran once per List/Table per
+    /// PASS, and the measure pass counts: eight tables in a stack, each measured
+    /// and then rendered, paid it sixteen times a frame.
+    var shortcutsKey: ShortcutsKey?
+
+    /// The pair ``shortcuts`` is a function of.
+    struct ShortcutsKey: Equatable {
+        let shortcuts: RowShortcuts
+        let commandKey: CommandKeyBinding
+    }
+
     /// The full height of the scrollable content area, in rows —
     /// the space available for visible rows *plus* whichever
     /// scroll indicators are showing.

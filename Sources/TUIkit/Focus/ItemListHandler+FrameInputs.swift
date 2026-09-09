@@ -74,8 +74,14 @@ extension ItemListHandler {
         // Shift+arrow accelerates the focus cursor, at event time.
         shiftStepMultiplier = environment.shiftStepMultiplier
         // The app-customisable key bindings, resolved once here rather than per
-        // keystroke (see `RowShortcuts.lookup`).
-        shortcuts = environment.rowShortcuts.lookup(commandKey: environment.commandKey)
+        // keystroke (see `RowShortcuts.lookup`) — and now once per HANDLER
+        // rather than once per pass, which is what ``shortcutsKey`` is for.
+        let wanted = ShortcutsKey(
+            shortcuts: environment.rowShortcuts, commandKey: environment.commandKey)
+        if shortcutsKey != wanted {
+            shortcuts = environment.rowShortcuts.lookup(commandKey: environment.commandKey)
+            shortcutsKey = wanted
+        }
         // `.cursor` feedback needs a session to float the row above the frame,
         // so whether it can is whether there is one.
         canFloatDraggedRow = environment.dragAndDropSession != nil
