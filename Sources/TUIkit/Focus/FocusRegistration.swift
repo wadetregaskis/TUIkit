@@ -147,7 +147,7 @@ enum FocusRegistration {
         publishHelpText(context: context, focusID: focusID)
     }
 
-    /// Claims the subtree's ``EnvironmentValues/helpText`` for this control, if
+    /// Claims the subtree's `EnvironmentValues.helpText` for this control, if
     /// it holds the focus.
     ///
     /// Called from ``register(context:handler:focusID:)`` rather than from each
@@ -157,7 +157,7 @@ enum FocusRegistration {
     /// from the call site that it was meant to.
     ///
     /// Publishing does not SHOW anything: a focus candidate is revealed by the
-    /// help key. See ``TooltipState/keyboardRevealed``.
+    /// help key. See `TooltipState.keyboardRevealed`.
     private static func publishHelpText(context: RenderContext, focusID: String) {
         guard let text = context.environment.helpText,
             context.environment.tooltipVisibility == .automatic,

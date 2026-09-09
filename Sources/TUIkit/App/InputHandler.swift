@@ -65,6 +65,10 @@ internal struct InputHandler {
     /// drag is in flight so the navigators reach the view under the pointer.
     let dragAndDropSession: DragAndDropSession?
 
+    /// The tooltip state, for the help key. Optional and defaulted so a test
+    /// harness driving the chain need not wire a service it is not exercising.
+    var tooltipState: TooltipState?
+
     /// Called when the user requests to quit the application.
     let onQuit: () -> Void
 
@@ -223,6 +227,18 @@ extension InputHandler {
     /// restyle the app — swallowing it here mutated chrome as a surprise.
     private func handleGlobalShortcut(_ event: KeyEvent, inputGrabbed: Bool) -> Bool {
         guard !event.ctrl, !event.alt else { return false }
+        // The help key, before the chrome shortcuts and NOT suppressed by
+        // `inputGrabbed`: a tooltip explains the control that has the focus, and
+        // inside a modal that control is the one the reader is looking at. It
+        // mutates no app state, so the argument for grounding `t` and `a` behind
+        // a modal does not transfer.
+        //
+        // Declining when there is nothing to reveal is the point of the returned
+        // Bool: this is the last layer, so a `true` here would swallow the key
+        // and report that something happened when nothing did.
+        if let tooltipState, let helpKey = tooltipState.helpKey, event.key == helpKey {
+            return tooltipState.toggleKeyboardReveal(focusID: focusManager.currentFocusedID)
+        }
         switch event.key {
         case .character(let character) where character == "t" || character == "T":
             if statusBar.showThemeItem && !inputGrabbed {

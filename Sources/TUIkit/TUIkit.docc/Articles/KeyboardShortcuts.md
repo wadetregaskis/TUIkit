@@ -8,7 +8,7 @@ TUIkit uses a layered event dispatch system. When a key is pressed, it passes th
 
 Three additional stages refine the layer sequence. When an open drop-down (e.g. a ``Picker`` menu) has claimed Escape for the frame, ESC is pre-routed through the focus system *before* Layer 1, so the surface closes instead of a page-level handler firing. Layer 0.5 then offers the key to a drag in flight, which is how you scroll to an off-screen destination without letting go — it has to beat every layer below, all of which would otherwise spend the key on the focused control. And between Layer 3 and Layer 4, a semantic-shortcut stage (Layer 3.5) fires the default button on Return and the cancel button on Escape — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)` — when the focused control let the key fall through.
 
-@Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the keyboard dispatch: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField/TextEditor). Without text focus, an ESC-claimed-by-an-open-surface check pre-routes Escape through the focus system so an open drop-down closes before any page-level handler. Layer 0.5 Drag Navigators (while a drag is in flight, arrows and paging scroll whatever the pointer is over). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 3.5 Semantic Shortcuts (Return fires the default button, Escape the cancel button). Layer 4 Default Bindings (q quit always; t theme and a appearance gated while a modal grabs input). Unmatched events are dropped.")
+@Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the keyboard dispatch: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField/TextEditor). Without text focus, an ESC-claimed-by-an-open-surface check pre-routes Escape through the focus system so an open drop-down closes before any page-level handler. Layer 0.5 Drag Navigators (while a drag is in flight, arrows and paging scroll whatever the pointer is over). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 3.5 Semantic Shortcuts (Return fires the default button, Escape the cancel button). Layer 4 Default Bindings (q quit and ? help always; t theme and a appearance gated while a modal grabs input). Unmatched events are dropped.")
 
 Additionally, `Ctrl+C` (SIGINT) is handled at the OS signal level **before** any of these layers: it always terminates the application.
 
@@ -162,14 +162,35 @@ For more details, see <doc:FocusSystem>.
 
 ## Default Bindings
 
-Layer 4 provides four built-in key bindings, but only quit and suspend are enabled without configuration:
+Layer 4 provides five built-in key bindings, but only quit, suspend and help are enabled without configuration:
 
 | Key | Action | Condition |
 |-----|--------|-----------|
 | `q` / `Q` | Quit application | Enabled by default; gated by ``QuitBehavior`` |
 | Ctrl-Z | Suspend the app, as the shell's `^Z` would | Always — but only once no view has claimed the key, so a text field's undo binding wins |
+| `?` | Show the focused view's `View.help(_:)` tooltip | Enabled by default; falls through when the focused view has no help text. Reachable behind a modal, unlike `t` and `a` |
 | `t` / `T` | Cycle to next color theme | Opt-in: requires `statusBarSystemItems(theme: true)` (or `showThemeItem = true`) |
 | `a` / `A` | Cycle to next appearance | Active unless a modal surface has grabbed input (its status bar item is hidden by default) |
+
+### The help key, and the one place it cannot reach
+
+`?` toggles the tooltip for whatever holds the focus. It is settable —
+`tooltipState.helpKey = .f1`, or `nil` to claim no key at all — and, like `q`, an
+app beats it at any earlier layer: a status-bar item with shortcut `"?"`, an
+`.onKeyPress`, or a `.keyboardShortcut(KeyboardShortcut("?", modifiers: []))`.
+
+> Important: **A focused text control swallows `?`.** It is punctuation, and
+> Layer 0 gives a focused ``TextField``, ``SecureField``, ``TextEditor`` or
+> ``DatePicker`` first refusal on every printable key — so inside one the
+> question mark is typed and Layer 4 is never reached. That precedence is
+> correct: a help key must not stop the reader typing a question mark. It is
+> also a real gap, and the awkward part of it is that the controls whose help
+> most needs explaining are exactly the ones the key cannot reach. Their
+> tooltips are still available by hovering, and an app wanting a keyboard route
+> inside a text field should move `helpKey` to something text input does not
+> consume. (An F-key would not have this problem, and was declined for a
+> different one: F-keys are frequently claimed system-wide, so they fail
+> elsewhere and less visibly.)
 
 ### Quit Behavior
 

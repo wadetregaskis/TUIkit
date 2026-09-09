@@ -1,9 +1,36 @@
 # Tooltips — `help(_:)` in a terminal
 
-**Status: design, 2026-08-24. Nothing implemented.** Written before building
-because the affordance is the expensive part to change later, and because
-mapping the spec onto the render loop turned up two things the spec could not
-have known.
+**Status: being built, 2026-09-10.** `help(_:)`, `TooltipState`,
+`TooltipStyle`, `TooltipVisibility`, the three subtree modifiers and the `?` help
+key have landed; the two presentations are next. Written before building because
+the affordance is the expensive part to change later, and because mapping the
+spec onto the render loop turned up two things the spec could not have known.
+
+**Two decisions taken during implementation, both departures from §1 and §8.**
+
+1. **The presentation choice was confirmed as the owner's own** — both
+   presentations, app-selectable — and the owner asked for the popover as well as
+   the bar rather than the bar first. §4 and §5 both stand; §8's staging order is
+   the only thing that changed.
+2. **A focus candidate is revealed by the help key, not automatically** — and
+   that **deletes §3 entirely**. §3 wants `focus(id:reason:)` because a tooltip
+   that auto-shows on focus has to tell a Tab from a click, or it pops up under
+   every click. A key press is unambiguously the keyboard asking, so the question
+   never arises, and a shared API that turned out to have 33 call sites (not the
+   five §3 counted) did not have to change. §3 is kept below as the record of a
+   problem that dissolved rather than one that was solved.
+
+**The key is `?`, and it has one known hole.** `?` is punctuation, and
+`InputHandler`'s layer 0 gives a focused text control first refusal on every
+printable key — so inside a `TextField`, `SecureField`, `TextEditor` or
+`DatePicker`, `?` is typed and the help key is never reached. That precedence is
+right (a help key must not stop the reader typing a question mark) and the gap is
+real: the controls whose help most needs explaining are the ones the key cannot
+reach. Hover still works there, and `TooltipState.helpKey` is settable. An F-key
+would not have the problem and was declined by the owner for a worse one — F-keys
+are frequently claimed system-wide, so they fail elsewhere and less visibly.
+`HelpKeyTests.textFieldSwallowsTheHelpKey` pins the behaviour, so a change to
+that precedence fails a test rather than surprising someone.
 
 The specification is the project owner's, and is taken as given:
 

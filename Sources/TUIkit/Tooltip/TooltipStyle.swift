@@ -97,7 +97,7 @@ extension View {
     /// Sets whether tooltips in this subtree are shown.
     ///
     /// `help(_:)` still compiles and still publishes under
-    /// ``TooltipVisibility/hidden``; nothing draws it. That is deliberate — the
+    /// `TooltipVisibility.hidden`; nothing draws it. That is deliberate — the
     /// alternative is a modifier whose effect depends on where in the tree the
     /// reader happens to look.
     public func tooltips(_ visibility: TooltipVisibility) -> some View {

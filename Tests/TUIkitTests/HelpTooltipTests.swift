@@ -215,3 +215,126 @@ struct HelpTooltipTests {
         #expect(h.tooltips.hovered?.sinceNanos == 7 + Self.second, "a new view, a new deadline")
     }
 }
+
+// MARK: - The help key
+
+/// The `?` key, at layer 4 of `InputHandler`, and the hole it has.
+@MainActor
+@Suite("The help key")
+struct HelpKeyTests {
+
+    private struct Fixture {
+        let handler: InputHandler
+        let tooltips: TooltipState
+        let focus: FocusManager
+    }
+
+    /// A minimal ``Cyclable``: `ThemeManager` preconditions on a non-empty list.
+    private struct FakeCyclable: Cyclable {
+        let id: String
+        let name: String
+    }
+
+    private func makeFixture() -> Fixture {
+        let appState = AppState()
+        let statusBar = StatusBarState(appState: appState)
+        let focus = FocusManager()
+        let tooltips = TooltipState()
+        let handler = InputHandler(
+            statusBar: statusBar,
+            keyEventDispatcher: KeyEventDispatcher(),
+            focusManager: focus,
+            paletteManager: ThemeManager(items: [FakeCyclable(id: "p", name: "p")]),
+            appearanceManager: ThemeManager(items: [FakeCyclable(id: "a", name: "a")]),
+            keyboardShortcuts: KeyboardShortcutRegistry(),
+            dragAndDropSession: nil,
+            tooltipState: tooltips,
+            onQuit: {}, onSuspend: {})
+        return Fixture(handler: handler, tooltips: tooltips, focus: focus)
+    }
+
+    /// A candidate, as the focused control would have published it during the
+    /// frame.
+    private func publishFocusCandidate(_ fixture: Fixture, text: String = "Rebuild the index") {
+        fixture.tooltips.focusing(text, handlerID: nil, nowNanos: 0)
+    }
+
+    @Test("? reveals the focused view's tooltip, and again hides it")
+    func questionMarkToggles() {
+        let fixture = makeFixture()
+        publishFocusCandidate(fixture)
+        #expect(fixture.handler.handle(KeyEvent(key: .character("?"))), "the key was consumed")
+        #expect(fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6)?.source == .focus)
+
+        #expect(fixture.handler.handle(KeyEvent(key: .character("?"))))
+        #expect(fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6) == nil, "toggled off")
+    }
+
+    /// With nothing to reveal the key must fall through rather than report that
+    /// something happened — this is the last layer, so a `true` here is a key
+    /// that silently does nothing AND wakes the run loop to redraw an identical
+    /// frame.
+    @Test("? with no help text is not consumed")
+    func questionMarkFallsThrough() {
+        let fixture = makeFixture()
+        #expect(fixture.handler.handle(KeyEvent(key: .character("?"))) == false)
+    }
+
+    /// The key is reachable from inside a modal, unlike `t` and `a`. A tooltip
+    /// explains the control that has the focus, and inside a modal that is the
+    /// control the reader is looking at; it mutates no app state, so the reason
+    /// the chrome shortcuts are grounded there does not transfer.
+    @Test("? still works behind a modal")
+    func questionMarkSurvivesAModal() {
+        let fixture = makeFixture()
+        publishFocusCandidate(fixture)
+        fixture.focus.registerSection(id: "modal")
+        fixture.focus.activateSection(id: "modal")
+        fixture.focus.markSectionModal(id: "modal")
+        #expect(fixture.focus.activeSectionIsModal, "the fixture really is modal")
+        #expect(fixture.handler.handle(KeyEvent(key: .character("?"))), "and the key still lands")
+    }
+
+    /// **The known caveat, pinned rather than described.**
+    ///
+    /// `?` is punctuation and layer 0 gives a focused text control first refusal
+    /// on every printable key, so inside one the question mark is typed and layer
+    /// 4 is never reached. That is the correct precedence — a help key must not
+    /// stop the reader typing a `?` — and it is a real hole in the feature: the
+    /// controls whose help most needs explaining are the ones the key cannot
+    /// reach. Their tooltips remain available by hovering.
+    ///
+    /// If this test ever fails, the precedence changed and `TextField` stopped
+    /// accepting a question mark; that is a worse bug than the one this documents.
+    @Test("A focused text field swallows ? — the documented caveat")
+    func textFieldSwallowsTheHelpKey() {
+        let fixture = makeFixture()
+        publishFocusCandidate(fixture)
+        var text = ""
+        let field = TextFieldHandler(
+            focusID: "field", text: Binding(get: { text }, set: { text = $0 }))
+        fixture.focus.register(field)
+        fixture.focus.focus(field)
+        #expect(fixture.focus.hasTextInputFocus, "the fixture really has text-input focus")
+
+        #expect(fixture.handler.handle(KeyEvent(key: .character("?"))), "layer 0 consumed it")
+        #expect(text == "?", "…by typing it, got \(text)")
+        #expect(
+            fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6) == nil,
+            "so no tooltip was revealed — the caveat")
+    }
+
+    /// The key is the app's to take back, which is the other half of claiming a
+    /// bare character by default.
+    @Test("An app can disable or move the help key")
+    func helpKeyIsConfigurable() {
+        let fixture = makeFixture()
+        publishFocusCandidate(fixture)
+        fixture.tooltips.helpKey = nil
+        #expect(fixture.handler.handle(KeyEvent(key: .character("?"))) == false, "disabled")
+
+        fixture.tooltips.helpKey = .f1
+        #expect(fixture.handler.handle(KeyEvent(key: .f1)), "moved")
+        #expect(fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6)?.source == .focus)
+    }
+}

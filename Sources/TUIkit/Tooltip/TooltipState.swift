@@ -12,7 +12,7 @@ import TUIkitCore
 
 /// The help text a frame may show, and where it came from.
 ///
-/// One per ``TUIContext``, published to the environment each frame — the same
+/// One per `TUIContext`, published to the environment each frame — the same
 /// shape as `StatusBarState`, and a service rather than a singleton for the
 /// same reason: two renders sharing one would read each other's tooltips.
 ///
@@ -73,6 +73,31 @@ public final class TooltipState: @unchecked Sendable {
 
     /// The focus identity `keyboardRevealed` was granted for.
     private var revealedFocusID: String?
+
+    /// The key that reveals the focused view's tooltip. `?` by default, `nil` to
+    /// claim no key at all.
+    ///
+    /// Settable for the same reason `StatusBarState.quitShortcut` is: the
+    /// framework claiming a bare letter has to be something an app can take
+    /// back. An app can also simply bind the key itself — a status-bar item, an
+    /// `.onKeyPress`, or a `.keyboardShortcut` all run before this does.
+    ///
+    /// ## Known caveat: a focused text control swallows `?`
+    ///
+    /// `?` is punctuation, and `InputHandler`'s layer 0 gives a focused
+    /// `TextField`, `SecureField`, `TextEditor` or `DatePicker` first refusal on
+    /// every printable key — so inside one, `?` is typed and this is never
+    /// reached. That is the correct precedence (a help key must not stop the
+    /// reader typing a question mark) and it is a real hole: the controls whose
+    /// help most needs explaining are exactly the ones the key cannot reach.
+    /// Their tooltips are still available by hovering, and an app that wants a
+    /// keyboard route inside a text field should set this to a key text input
+    /// does not consume.
+    ///
+    /// The alternative was an F-key, declined by the project owner because F-keys
+    /// are frequently claimed system-wide and would fail differently and less
+    /// visibly.
+    public var helpKey: Key? = .character("?")
 
     public init() {}
 

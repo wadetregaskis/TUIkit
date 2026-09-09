@@ -143,6 +143,7 @@ extension AppRunner {
             appearanceManager: appearanceManager,
             keyboardShortcuts: tuiContext.keyboardShortcuts,
             dragAndDropSession: tuiContext.dragAndDropSession,
+            tooltipState: tuiContext.tooltipState,
             onQuit: { [weak self] in
                 self?.isRunning = false
             },

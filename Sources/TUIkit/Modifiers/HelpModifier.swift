@@ -49,9 +49,9 @@ extension EnvironmentValues {
 ///   ``EnvironmentValues/tooltipDelay``, and the delay needs a clock the
 ///   demand-driven run loop does not otherwise have, so the modifier schedules a
 ///   one-shot wake at the deadline.
-/// - **Focus.** It writes ``EnvironmentValues/helpText`` for its content, and the
+/// - **Focus.** It writes `EnvironmentValues.helpText` for its content, and the
 ///   focused control claims it from there. Revealed by the help key rather than
-///   automatically — see ``TooltipState/keyboardRevealed``.
+///   automatically — see `TooltipState.keyboardRevealed`.
 public struct HelpModifier<Content: View>: View {
     /// The content view.
     let content: Content
@@ -160,10 +160,10 @@ extension View {
     /// Adds help text to this view, shown as a tooltip.
     ///
     /// The text appears when the pointer rests on the view for
-    /// ``View/tooltipDelay(_:)``, or when the view holds the keyboard focus and
+    /// `View.tooltipDelay(_:)`, or when the view holds the keyboard focus and
     /// the reader presses the help key (`?` by default). It is presented either
     /// as a row in the status bar or as a popover attached to the control — the
-    /// app's choice, through ``View/tooltipStyle(_:)``.
+    /// app's choice, through `View.tooltipStyle(_:)`.
     ///
     /// ```swift
     /// Button("Rebuild") { rebuild() }
