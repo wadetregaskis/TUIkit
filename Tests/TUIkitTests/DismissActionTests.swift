@@ -39,9 +39,12 @@ struct DismissActionTests {
         drainExitFlag()
         AppState.shared.didRender()  // clear needsRender
         AppState.shared.requestExit()
-        // Exit flag is set but consumeNeedsCacheClear still reflects only
-        // observable-property changes, which we haven't triggered here.
+        // Only the exit flag is asserted. `needsCacheClear` lives on
+        // `AppState.shared`, which every suite in this process shares, so
+        // "nobody set it" was never this test's claim to make: an `@AppStorage`
+        // write or a translation registration in a concurrently running suite
+        // sets it legitimately, and `.serialized` orders this suite only
+        // against itself.
         #expect(AppState.shared.consumeShouldExit() == true)
-        #expect(AppState.shared.consumeNeedsCacheClear() == false)
     }
 }

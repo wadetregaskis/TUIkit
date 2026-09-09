@@ -17,6 +17,27 @@ private struct LabelView: View, Equatable {
     }
 }
 
+/// A view whose `==` sees only its identity, drawing something that lives in
+/// `@AppStorage`.
+///
+/// Not a contrived shape: `AppStorage` is not `Equatable`, so ANY view that
+/// reads a stored preference and participates in the value memo looks like
+/// this — either with a hand-written `==` over its other fields, or as a
+/// `ForEach` element that `ForEach` wraps in a `_MemoizedRow` and keys by the
+/// element, which a preference toggle does not touch.
+/// The conformance is `@MainActor`-isolated (Swift 6.2) because `AppStorage` is:
+/// a nonisolated `==` reading it would cross into main-actor state.
+private struct StoredLabel: View, @MainActor Equatable {
+    let id: Int
+    let flag: AppStorage<String>
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+
+    var body: some View {
+        Text(flag.wrappedValue)
+    }
+}
+
 @MainActor
 @Suite("EquatableView Tests", .serialized)
 struct EquatableViewTests {
@@ -149,6 +170,41 @@ struct EquatableViewTests {
         cache.clearAll()
 
         #expect(cache.isEmpty)
+    }
+
+    // MARK: - Cache Invalidation on a Storage Write
+
+    @Test("An @AppStorage write invalidates the memo, not only the frame")
+    func appStorageWriteClearsTheMemo() {
+        let backend = MockStorageBackend()
+        let flag = AppStorage(wrappedValue: "off", "memo.flag", store: backend)
+        let context = testContext()
+        let cache = context.environment.renderCache!
+
+        let first = renderToBuffer(
+            EquatableView(content: StoredLabel(id: 1, flag: flag)), context: context)
+        #expect(first.lines[0].stripped == "off")
+
+        flag.wrappedValue = "on"
+
+        // ONE read of the flag, asserted, and the clear driven from that same
+        // read — exactly what `RenderLoop` does at the top of every frame.
+        //
+        // Asserted rather than `if`-ed because the flag lives on the shared
+        // `AppState` and `LocalizationServiceTests` consumes it too, from a
+        // suite that is neither `@MainActor` nor `.serialized`. If that steal
+        // ever wins the race, this expectation names it; the string check below
+        // would have blamed the memo instead.
+        let requestedClear = AppState.shared.consumeNeedsCacheClear()
+        #expect(requestedClear)
+        if requestedClear { cache.clearAll() }
+
+        // The view value is unchanged — `==` compares only `id` — so without the
+        // clear the lookup hits and this still reads "off".
+        let second = renderToBuffer(
+            EquatableView(content: StoredLabel(id: 1, flag: flag)), context: context)
+        #expect(second.lines[0].stripped == "on")
+        #expect(cache.count == 1)
     }
 
     // MARK: - .equatable() Modifier
