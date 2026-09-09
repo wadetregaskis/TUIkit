@@ -61,7 +61,9 @@ final class CursorTimer {
     /// are no longer a fixed length: each is however long the frame on screen
     /// says nothing can change for, so a run animating at 1/30 s and one at
     /// 0.11 s each get exactly their own cadence. See
-    /// ``RenderLoop/timeUntilNextChange(from:)``.
+    /// `RenderLoop.timeUntilNextChange(elapsed:)`, which takes a per-clock
+    /// lookup rather than one number because the clocks no longer share a zero
+    /// (`7c5514aa`, 2026-09-01).
     private(set) var elapsedSeconds: Double = 0
 
     /// Where ``AnimationClock/cursor``'s zero currently sits, in
@@ -123,7 +125,7 @@ final class CursorTimer {
     /// appearance from the phase as it renders needs, because only that view
     /// knows what it would draw next. A frame whose animation is all
     /// pre-rendered runs can say exactly when the picture next changes
-    /// (`RenderLoop.timeUntilNextChange(from:)`), and the clock then sleeps
+    /// (`RenderLoop.timeUntilNextChange(elapsed:)`), and the clock then sleeps
     /// precisely that long instead of waking to compare identical pictures —
     /// or, for a run asking for a rate finer than the interval, sooner than the
     /// interval.
@@ -225,10 +227,10 @@ extension CursorTimer {
     /// - 0.0: Dimmest
     /// - 1.0: Brightest
     ///
-    /// Starting bright is what makes ``reset()`` mean "show me now". The clock
-    /// is reset whenever the focus moves, and a breath that began at its dim
-    /// end left the newly focused control looking unfocused for a third of a
-    /// second — the moment it most needs to be visible.
+    /// Starting bright is what makes `restartFocusPhase()` mean "show me now".
+    /// The clock is reset whenever the focus moves, and a breath that began at
+    /// its dim end left the newly focused control looking unfocused for a third
+    /// of a second — the moment it most needs to be visible.
     ///
     /// - Parameter speed: The cursor speed setting.
     /// - Returns: Phase value between 0 and 1.
