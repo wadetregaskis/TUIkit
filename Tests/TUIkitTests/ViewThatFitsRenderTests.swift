@@ -91,6 +91,82 @@ struct ViewThatFitsRenderTests {
         )
     }
 
+    // MARK: - A candidate that fills the axis being tested
+
+    @Test("A Spacer in a candidate row does not veto the row")
+    func flexibleRowIsNotRejected() {
+        let view = ViewThatFits {
+            HStack(spacing: 1) { Text("Name"); Spacer(); Text("Size") }
+            VStack(alignment: .leading, spacing: 0) { Text("Name"); Text("Size") }
+        }
+        // The row's rigid content is 10 cells (4 + 4 + two 1-cell gaps) and the
+        // Spacer takes the other 30. Measured against the unbounded probe the
+        // row reports the probe's own extent as its MINIMUM width — a number no
+        // terminal can satisfy — so it used to lose at every width.
+        let wide = renderToBuffer(view, context: ctx(width: 40, height: 8))
+        #expect(wide.lines.count == 1, "The filling row wins, not the 2-line column")
+        #expect(wide.width == 40)
+        #expect(wide.lines[0].stripped == "Name" + String(repeating: " ", count: 32) + "Size")
+    }
+
+    @Test("A candidate that fills both axes is not rejected by either")
+    func fillingCandidateIsAccepted() {
+        // A GeometryReader reports `availableWidth` x `availableHeight` and flags
+        // both axes flexible, so under the probe it over-reports both at once.
+        let buffer = renderToBuffer(
+            ViewThatFits {
+                GeometryReader { _ in Text("reader") }
+                Text("fallback")
+            },
+            context: ctx(width: 12, height: 3)
+        )
+        #expect(buffer.lines.count == 3, "The reader fills 12x3, so it fits it")
+        #expect(buffer.lines[0].stripped == "reader" + String(repeating: " ", count: 6))
+    }
+
+    /// The cost of the rule, stated rather than discovered. `_SliderCore` names a
+    /// real minimum for an unspecified proposal (`defaultTrackWidth + chrome`),
+    /// but `Slider`'s BODY is an `HStack`, and a stack reports the budget it
+    /// distributes — so a bare slider tracks the budget like everything else here
+    /// and wins at four cells, clipped, where it used to lose to the `Text`.
+    ///
+    /// That is the SwiftUI deviation the type doc records, in the smallest form
+    /// that shows it. It is here so the trade is pinned by a test and not only by
+    /// a comment: if a later change makes a stack report a rigid ideal, this test
+    /// says which behaviour changed back.
+    @Test("A filling candidate wins even where its rigid content overflows")
+    func fillingCandidateWinsAndClips() {
+        let buffer = renderToBuffer(
+            ViewThatFits(in: .horizontal) {
+                Slider(value: .constant(0.5), in: 0...1)
+                Text("v")
+            },
+            context: ctx(width: 4, height: 3)
+        )
+        #expect(buffer.lines[0].stripped != "v", "the filling candidate is taken, not the Text")
+        #expect(buffer.width == 4, "…and clipped to the space there is")
+    }
+
+    /// The escape hatch the type doc points at, and the other half of the rule:
+    /// bound the candidate and it is rigid again, so it can lose. `.frame(width:)`
+    /// makes the reported width the frame's, at both probes, so the comparison
+    /// against the real extent is the one it always was.
+    ///
+    /// Passes before the fix as well as after — it guards against a later
+    /// simplification to "flexible implies fits", which would take the slider
+    /// here and clip it into four cells.
+    @Test("A bounded candidate is rigid again, and can still lose")
+    func boundedCandidateStillLoses() {
+        let buffer = renderToBuffer(
+            ViewThatFits(in: .horizontal) {
+                Slider(value: .constant(0.5), in: 0...1).frame(width: 20)
+                Text("v")
+            },
+            context: ctx(width: 4, height: 3)
+        )
+        #expect(buffer.lines[0].stripped == "v", "20 cells do not fit 4")
+    }
+
     // MARK: - Single-axis constraint
 
     @Test("ViewThatFits(in:.horizontal) ignores height when choosing")

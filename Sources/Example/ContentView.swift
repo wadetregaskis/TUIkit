@@ -142,12 +142,14 @@ struct ContentView: View {
             // the image pages fill the viewport themselves — and a gutter that
             // appeared on two thirds of the app would read as a mistake.
             //
-            // Unconditional, not fitted. `ViewThatFits` chooses on IDEAL width,
-            // and a page holding a List or a Table has an ideal width of "all
-            // of it", so a padded candidate would never be taken there: the
-            // gutter would be missing from exactly the wide, busy pages that
-            // most want it. Two columns cost 1% of a 200-column terminal and 5%
-            // of a 40-column one, and the alternative is text against the bezel.
+            // Unconditional, not fitted. A page holding a List or a Table fills
+            // whatever width it is offered, and `ViewThatFits` now accepts a
+            // candidate that fills the axis it is testing — so the padded
+            // candidate would be taken at EVERY width, gutter and all, and the
+            // unpadded one below it would be unreachable. A fit test that can
+            // only ever answer yes is not a fit test. Two columns cost 1% of a
+            // 200-column terminal and 5% of a 40-column one, and the
+            // alternative is text against the bezel.
             .padding(.horizontal, 1)
             // App-wide styling from the Theme page: the scene's `.theme` handles
             // tint; these add chrome + control text styling across every page.
