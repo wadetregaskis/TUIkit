@@ -134,6 +134,15 @@ public struct RenderContext {
     ///
     /// Bump it with ``invalidatingMeasureMemo()``.
     ///
+    /// BOTH measure keys carry it, and they carry it differently.
+    /// ``RenderCache/MeasureKey`` folds it into its identity hash, because it
+    /// cannot afford an eighth field; ``RenderCache/SizeKey`` stores it as a
+    /// field, because it must — a hash-only fold leaves the synthesised `==`
+    /// calling two keys equal, and that table is cross-frame, so the value memo
+    /// would answer a post-change ask with a pre-change size until the memoized
+    /// value itself changed. A third key would have to choose one of the two on
+    /// the same grounds.
+    ///
     /// A `UInt8`, declared here among the flags, because `RenderContext` is
     /// copied down the whole tree and an `Int` grew it from 97 bytes to 105 —
     /// past the 104-byte stride, so every context copy in the framework got a

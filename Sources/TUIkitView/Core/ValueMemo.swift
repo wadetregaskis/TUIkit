@@ -168,11 +168,20 @@ func measureValueMemoized<Key: Equatable>(
     measure: (RenderContext) -> ViewSize
 ) -> ViewSize {
     guard let cache = context.renderCache else { return measure(context) }
+    // The generation is in the key for the same reason `measureChild`'s is (see
+    // `measureIdentityHash`), and it has to be in BOTH or the pair is worse than
+    // useless. A container that changed an environment value its subtree's size
+    // depends on says so with `invalidatingMeasureMemo()`; the outer key then
+    // misses and this wrapper is re-entered — and without the generation here
+    // this probe answered the post-change ask with the pre-change size and never
+    // measured the subtree at all. From the CROSS-frame table, so it stood until
+    // the memoized value itself changed.
     let sizeKey = RenderCache.SizeKey(
         identity: context.identity,
         proposalWidth: proposal.width, proposalHeight: proposal.height,
         availableWidth: context.availableWidth, availableHeight: context.availableHeight,
-        hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight)
+        hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight,
+        measureGeneration: context.measureGeneration)
     if let cached = cache.lookupSize(key: sizeKey, view: key) { return cached }
 
     // The same gate as the buffer half: a subtree that declares a render side

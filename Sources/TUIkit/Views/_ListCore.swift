@@ -261,7 +261,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // with the height the list was offered, and the measure and
             // render passes offer different ones.
             availableWidth: context.availableWidth, availableHeight: 0,
-            hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight)
+            hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight,
+            // Zero for every List that exists today — nothing that bumps the
+            // generation has a List below it — but the entry is cross-frame and
+            // the key carries what the answer depended on, or the next container
+            // that opts in gets a widest-row width from before it changed.
+            measureGeneration: context.measureGeneration)
         let memo: (cache: RenderCache, signature: AnyEquatableBox)? =
             if let cache = context.renderCache, let signature = source.signature {
                 (cache, signature)

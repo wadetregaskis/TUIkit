@@ -27,7 +27,7 @@ extension EnvironmentValues {
 /// one view. Hugs its own content when no hint is in force, fills the hint when
 /// one is — exactly the shape of a menu row, which hugs while the menu is
 /// measuring itself and fills once the width is known.
-private struct HintedLeaf: View, Renderable, Layoutable {
+private struct HintedLeaf: View, Renderable, Layoutable, Equatable {
     var body: Never { fatalError("HintedLeaf renders via Renderable") }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
@@ -86,6 +86,34 @@ struct MeasureGenerationTests {
         return (hugged.width, second.width)
     }
 
+    /// The same two asks with the leaf behind the VALUE memo. `.equatable()`
+    /// here; the production shape is `_MemoizedRow`, which every `ForEach` row
+    /// over an `Equatable` element becomes — same `measureValueMemoized`, same
+    /// `RenderCache.SizeKey`.
+    ///
+    /// The `beginRenderPass()` between the asks is LOAD-BEARING, and not for the
+    /// reason a pass boundary usually is. Without it the second ask never
+    /// reaches the value memo at all: `measureChild`'s own per-pass `MeasureKey`
+    /// table answers it first, and that memo is live here because `liveContext`
+    /// installs the `VolatileReadTracker` it gates on. The boundary drops that
+    /// table and KEEPS `sizeEntries`, which is the cross-frame asymmetry this
+    /// case is about. `RenderCacheContractTests`'
+    /// `incomparableEnvironmentDeclinesStoredSizes` does the same thing for the
+    /// same reason.
+    private func askTwiceMemoized(bumping: Bool) -> (hugged: Int, hinted: Int) {
+        let context = liveContext(width: 12)
+        let cache = context.renderCache!
+        let hugged = measureChild(
+            HintedLeaf().equatable(), proposal: .unspecified, context: context)
+        var hinted = context
+        hinted.environment.widthHint = 9
+        if bumping { hinted = hinted.invalidatingMeasureMemo() }
+        cache.beginRenderPass()
+        let second = measureChild(
+            HintedLeaf().equatable(), proposal: .unspecified, context: hinted)
+        return (hugged.width, second.width)
+    }
+
     /// The hazard. Without the bump the second ask is answered by the first, so
     /// a container that changed the environment gets the answer from before it
     /// did. If this ever starts passing, the memo has learnt to see the
@@ -141,5 +169,62 @@ struct MeasureGenerationTests {
         var mutated = context
         mutated.environment.widthHint = 4
         #expect(mutated.measureGeneration == 1, "assigning the environment reset it")
+    }
+
+    /// The half of the mechanism this suite did not cover. `RenderCache.SizeKey`
+    /// carried no generation, so `measureValueMemoized` answered the post-bump
+    /// ask out of the pre-bump entry — 3 cells where the hinted leaf is 9 — even
+    /// though the outer `measureChild` had correctly missed and re-entered the
+    /// wrapper. And `sizeEntries` is the cross-frame table, so that answer stood
+    /// for as long as the row kept being marked active.
+    @Test("The generation reaches the value memo's size half too")
+    func generationReachesTheValueMemo() {
+        let (hugged, hinted) = askTwiceMemoized(bumping: true)
+        #expect(hugged == 3, "the hug should be the leaf's own width")
+        #expect(
+            hinted == 9,
+            """
+            the value memo served the pre-change size (\(hinted)) through a \
+            bumped generation — its SizeKey cannot see the generation.
+            """)
+    }
+
+    /// The hazard at the wrapper, so the case above is known to guard something.
+    /// Note what makes this the VALUE memo's hazard and not the one
+    /// `hazardIsReal` already pins: the pass boundary inside
+    /// `askTwiceMemoized` has dropped `measureChild`'s per-pass table, so the
+    /// only thing that can answer the second ask is `sizeEntries`.
+    @Test("Without the generation, the value memo is blind to the change too")
+    func memoizedHazardIsReal() {
+        let (hugged, hinted) = askTwiceMemoized(bumping: false)
+        #expect(hugged == 3)
+        #expect(
+            hinted == 3,
+            "the value memo answered correctly without being told (\(hinted))")
+    }
+
+    /// And the memo must still pay for itself under a bumped generation: two
+    /// asks that share one generation are one question at the wrapper too, or
+    /// every container that opts in walks its whole subtree twice.
+    @Test("Two memoized asks in one generation still share an answer")
+    func memoizedSameGenerationStillMemoizes() {
+        var context = liveContext(width: 12)
+        context.environment.widthHint = 9
+        context = context.invalidatingMeasureMemo()
+        let cache = context.renderCache!
+        _ = measureChild(
+            HintedLeaf().equatable(), proposal: .unspecified, context: context)
+        // Same boundary, same reason as `askTwiceMemoized`: without it the
+        // per-pass `MeasureKey` memo answers the second ask before the value
+        // memo sees it, and ITS hits land in `measureMemoTotals` rather than
+        // `stats` — so this would read a delta of zero and fail while the memo
+        // it is about worked perfectly.
+        cache.beginRenderPass()
+        let before = cache.stats
+        _ = measureChild(
+            HintedLeaf().equatable(), proposal: .unspecified, context: context)
+        #expect(
+            cache.stats.delta(since: before).hits >= 1,
+            "the second ask in one generation missed the value memo")
     }
 }

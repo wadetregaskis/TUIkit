@@ -26,6 +26,28 @@ extension RenderCache {
         public let availableHeight: Int
         public let hasExplicitWidth: Bool
         public let hasExplicitHeight: Bool
+        /// The measure generation this size was taken in — see
+        /// ``RenderContext/measureGeneration``.
+        ///
+        /// A STORED field, where ``RenderCache/MeasureKey`` folds its generation
+        /// into the identity hash instead. That key cannot afford an eighth
+        /// field; this one already carries seven and compares them all — and a
+        /// generation that reached only the hash would be unsound here, because
+        /// `Hashable`'s synthesised `==` is built from the stored properties and
+        /// would still call two keys equal, which a `Dictionary`'s linear probe
+        /// can act on when it meets the old entry on its way past its bucket.
+        ///
+        /// It costs nothing to carry: the two `Bool`s above end the struct at 58
+        /// bytes of a 64-byte stride, so this lands in padding already there.
+        ///
+        /// Without it ``RenderContext/invalidatingMeasureMemo()`` did not mean
+        /// what it says. `MeasureKey` misses on a bump, so a value-memoized
+        /// wrapper IS re-entered — and then `measureValueMemoized`'s probe hit on
+        /// the pre-change size and short-circuited before the subtree was
+        /// measured at all. This table is the cross-frame one (only
+        /// `clearAffected`/`clearAll` drop an entry), so the stale size stood
+        /// until the memoized value itself changed.
+        public let measureGeneration: UInt8
 
         public init(
             identity: ViewIdentity,
@@ -34,7 +56,8 @@ extension RenderCache {
             availableWidth: Int,
             availableHeight: Int,
             hasExplicitWidth: Bool,
-            hasExplicitHeight: Bool
+            hasExplicitHeight: Bool,
+            measureGeneration: UInt8
         ) {
             self.identity = identity
             self.proposalWidth = proposalWidth
@@ -43,6 +66,7 @@ extension RenderCache {
             self.availableHeight = availableHeight
             self.hasExplicitWidth = hasExplicitWidth
             self.hasExplicitHeight = hasExplicitHeight
+            self.measureGeneration = measureGeneration
         }
 
         /// The fields folded into one word before `Hasher` sees any of them —
@@ -55,8 +79,13 @@ extension RenderCache {
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(proposalHeight ?? -1)))
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(availableWidth)))
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(availableHeight)))
+            // The generation rides in the flags word rather than a seventh mix
+            // round: it is one byte, the two flags occupy bits 0 and 1, so bits
+            // 8…15 are free and folding it in costs a shift and an or.
             folded = mixHashWord(
-                folded, (hasExplicitWidth ? 1 : 0) | (hasExplicitHeight ? 2 : 0))
+                folded,
+                (hasExplicitWidth ? 1 : 0) | (hasExplicitHeight ? 2 : 0)
+                    | (UInt64(measureGeneration) << 8))
             hasher.combine(finalizeHashWord(folded))
         }
     }
