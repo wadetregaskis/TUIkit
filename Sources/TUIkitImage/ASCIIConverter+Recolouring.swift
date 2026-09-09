@@ -143,7 +143,7 @@ extension ASCIIConverter {
         if dithering == .floydSteinberg {
             scaled = applyFloydSteinbergDithering(
                 scaled, mode: colorMode, monoThreshold: monoThreshold, table: table)
-        } else {
+        } else if colorMode != .grayscale {
             // Without dithering the quantisation still has to happen: the glyph
             // path quantises when it emits each cell's SGR, and there is no SGR
             // here — the pixels ARE the output.
@@ -154,6 +154,30 @@ extension ASCIIConverter {
             // retain of the palette's storage — a million times, for an answer
             // that could not change between pixels.
             scaled.quantise(with: PixelQuantiser(mode: colorMode, monoThreshold: monoThreshold, table: table))
+        }
+
+        // `.grayscale` is 24 shades in this rendering too — the terminal's own
+        // ramp — and a transmitted picture has no `38;5;n` to send, so it sends
+        // the RGB the terminal paints for that n. It used to send the raw
+        // luminance, and 246 of the 256 neutral levels then came out a
+        // different grey here than in the cells beside them, by up to 17 of 255.
+        //
+        // HERE, and not in `PixelQuantiser.grey`, because here is where the
+        // glyph path does it: that path posterises when it emits each cell
+        // (`cellColor`), which is AFTER its dither and INSTEAD OF a quantise
+        // pass. Same stages in the same order, so the two renderings agree
+        // level for level. Putting it in the quantiser instead would put a ramp
+        // entry into the buffer the glyph path's emitter re-posterises, and the
+        // entries are not fixed points of the bands — 138…238 each land a step
+        // low, so a dithered highlight would come out a step dark. And putting
+        // it AFTER the quantiser rather than instead of it would posterise a
+        // truncated luminance, which crosses a band boundary for eight levels,
+        // 64 and 128 among them. See `ASCIIConverter.greyRampStep(for:)`.
+        if colorMode == .grayscale {
+            scaled.mapPixels { pixel in
+                let grey = Self.greyRampGrey(for: pixel)
+                return RGBA(r: grey, g: grey, b: grey, a: pixel.a)
+            }
         }
 
         // Mono's two values become mono's two COLOURS. Done after the

@@ -103,4 +103,53 @@ struct GreyRampBandTests {
         #expect(converter.foregroundColorCode(for: RGBA(r: 255, g: 255, b: 255), mode: .grayscale).contains("38;5;255"))
         #expect(converter.foregroundColorCode(for: RGBA(r: 0, g: 0, b: 0), mode: .grayscale).contains("38;5;232"))
     }
+
+    /// The same invariant `ImageQuantiserRuleTests` pins for `.ansi256` — what a
+    /// picture is transmitted as is what the cell beside it would be painted —
+    /// for the other mode whose cells are `38;5;n`. It was never checked for
+    /// `.grayscale`, and `.grayscale` was the mode that broke it: the pixel path
+    /// sent raw luminance, so 246 of the 256 neutral levels arrived as a
+    /// different grey from their glyph, by up to 17 of 255.
+    ///
+    /// Driven through `recoloured` rather than the quantiser, because that is the
+    /// stage `_ImageCore` calls and the stage the posterisation lives in — the
+    /// quantiser deliberately still answers luminance, so the glyph path's own
+    /// emitter is the only thing that bands.
+    @Test("A transmitted grey is the grey its cell would have been painted")
+    func transmittedGreyMatchesTheCellsGrey() throws {
+        let converter = ASCIIConverter(colorMode: .grayscale)
+        let ramp = RGBAImage(
+            width: 16, height: 16,
+            pixels: (0..<256).map { RGBA(r: UInt8($0), g: UInt8($0), b: UInt8($0)) })
+        let drawn = converter.recoloured(ramp, width: 16, height: 16)
+
+        for value in 0...255 {
+            let pixel = RGBA(r: UInt8(value), g: UInt8(value), b: UInt8(value))
+            let colour = try #require(converter.cellColor(for: pixel, mode: .grayscale))
+            guard case .palette256(let index) = colour.value else {
+                Issue.record("level \(value) named \(colour), which is not a ramp entry")
+                continue
+            }
+            let painted = Color.palette256ToRGB(index)
+            let transmitted = drawn.pixels[value]
+            #expect(transmitted.r == painted.red, "level \(value) → 38;5;\(index)")
+            #expect(transmitted.g == painted.green, "level \(value) → 38;5;\(index)")
+            #expect(transmitted.b == painted.blue, "level \(value) → 38;5;\(index)")
+        }
+    }
+
+    /// …and the whole picture, stated as the set it is allowed to be: the ramp's
+    /// 24 greys, which reach neither black nor white.
+    @Test("A transmitted greyscale picture holds only the ramp's 24 greys")
+    func recolouredHoldsOnlyRampGreys() {
+        let ramp = RGBAImage(
+            width: 16, height: 16,
+            pixels: (0..<256).map { RGBA(r: UInt8($0), g: UInt8($0), b: UInt8($0)) })
+        let drawn = ASCIIConverter(colorMode: .grayscale).recoloured(ramp, width: 16, height: 16)
+        let steps = Set((0..<24).map { UInt8(8 + 10 * $0) })
+        let levels = Set(drawn.pixels.map(\.r))
+        #expect(levels.isSubset(of: steps), "not the terminal's ramp: \(levels.sorted())")
+        #expect(!levels.contains(0), "the ramp's darkest is #080808, not black")
+        #expect(!levels.contains(255), "and its lightest is #eeeeee, not white")
+    }
 }

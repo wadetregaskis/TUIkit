@@ -27,12 +27,55 @@ extension ASCIIConverter {
         case .ansi16:
             return ASCIIPalette.ansi16.color(nearestTo: pixel)
         case .grayscale:
-            return .palette(UInt8(232 + min(Int(pixel.luminance / 255.0 * 24.0), 23)))
+            return .palette(UInt8(232 + Self.greyRampStep(for: pixel)))
         case .mono:
             return nil
         case .palette(let palette):
             return palette.color(nearestTo: pixel)
         }
+    }
+
+    /// Which of the terminal's 24 grey-ramp steps a pixel takes: 0 for palette
+    /// entry 232 (`#080808`) through 23 for entry 255 (`#eeeeee`).
+    ///
+    /// A function rather than an expression inside `cellColor` because
+    /// `.grayscale` is 24 shades in BOTH renderings of a picture. The glyph
+    /// path sends the step as an index, `38;5;232`…`38;5;255`; a picture
+    /// transmitted to the terminal as pixels has no index to send, so
+    /// `recoloured` posterises with `greyRampGrey(for:)` instead — the RGB the
+    /// terminal would have painted for that same index, at the same stage this
+    /// is consulted at. It used to send the raw luminance, and then 246 of the
+    /// 256 neutral levels came out a different grey on a terminal with graphics
+    /// support than on one without, by up to 17 of 255: pure white drew as
+    /// white there and as `#eeeeee` next door.
+    ///
+    /// Equal slices of the luminance range, deliberately — scaling by 23 gave
+    /// the top step exactly one input and clipped every highlight a step dark.
+    /// See `GreyRampBandTests`.
+    ///
+    /// Equal slices also mean the ramp's own entries are NOT fixed points of
+    /// this: the bands have pitch 10.625 and the entries pitch 10, so entries
+    /// 138…238 each fall one band low. Nothing may write a ramp entry into a
+    /// buffer that is later posterised again — see the `PixelQuantiser.grey`
+    /// comment.
+    @inline(__always)
+    static func greyRampStep(for pixel: RGBA) -> Int {
+        min(Int(pixel.luminance / 255.0 * 24.0), 23)
+    }
+
+    /// The grey the terminal paints for `pixel`'s ramp step: 8, 18, … 238, the
+    /// RGB of palette entries 232…255, and so neither pure black nor pure
+    /// white. See `greyRampStep(for:)`.
+    ///
+    /// Not `Color.palette256ToRGB`, which answers the same question: it is
+    /// `package` and not inlinable, so it would be a cross-module call — with a
+    /// `switch` and the colour cube's array literal behind it — on a loop that
+    /// runs per pixel of a megapixel picture. The duplication is pinned to that
+    /// function by `GreyRampBandTests`, which asserts the two agree on every
+    /// one of the 256 neutral levels.
+    @inline(__always)
+    static func greyRampGrey(for pixel: RGBA) -> UInt8 {
+        UInt8(8 + 10 * greyRampStep(for: pixel))
     }
 }
 

@@ -231,7 +231,13 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// for "red". See `ASCIIConverter.recoloured`.
     case ansi16
 
-    /// 24 shades of gray.
+    /// 24 shades of gray: the terminal's own grey ramp, emitted as `38;5;n`
+    /// with `n` in 232…255, whose RGB is 8, 18, … 238.
+    ///
+    /// 24 in both renderings of a picture. Drawn as pixels through terminal
+    /// graphics there is no palette index to send, so the RGB of the step is
+    /// sent instead — the same 24 shades, and so neither pure black nor pure
+    /// white in either rendering. See `ASCIIConverter.greyRampStep(for:)`.
     case grayscale
 
     /// Black and white only. Universal compatibility.
