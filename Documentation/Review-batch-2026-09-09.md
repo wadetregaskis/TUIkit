@@ -15,6 +15,109 @@ Each open item below is a *verified* finding, not a suspicion: a lens proposed
 it, a second agent tried to refute it and could not. They are not ranked against
 each other beyond their severity.
 
+## Closed — the second pass, later the same day
+
+**Everything below was drained.** All 25 open defects are fixed, all the
+documentation inaccuracies are corrected, and the 23 performance candidates were
+re-derived, staged as patches, and each either measured or declined for a stated
+reason. Eighty-seven commits.
+
+The re-derivation was not a formality, and this is the part worth keeping. Every
+item was handed to a fresh agent to prove from the code at HEAD, and then to a
+second agent told to refute both the finding and the proposed fix. All 25 defects
+survived — but **six of the fixes did not**, and two of those would have shipped
+a new bug:
+
+- The `ViewThatFits` fix (`199dd147`) was refuted with a counterexample: its
+  detector missed a `Table` with a `.ratio(_:)` column, which reports a
+  *fraction* of the probe. The landed version compares two probes one cell apart
+  instead, which is sound for every greedy shape. Then running it falsified the
+  review's claim that a bare `Slider` names a real minimum — it does not, because
+  its body is an `HStack` — so the deviation is pinned by a test rather than a
+  footnote.
+- The stack-gap fix (`ad1b7b25`) would have introduced a new UNDER-report: a
+  `Text("")` renders one line of pure escape bytes, so it took the contributing
+  branch while the new measure counted it unoccupied. Which exposed the more
+  interesting bug behind it — the drawn width of such a row was colour-depth
+  dependent, 6 cells in colour and 4 with `--no-color`.
+- The greyscale fix (`5631fde3`) was refuted for its *placement*: putting the
+  ramp posterisation in the shared quantiser would have fed the glyph path a
+  value it bands a second time, and the ramp entries are not fixed points of the
+  bands, so a dithered highlight would have come out a step dark — silently,
+  since nothing covers `.grayscale` with dithering.
+- `@AppStorage` (`3b4d779f`) kept its mechanism but not its cost story: the claim
+  that it pays "the same cost an `@Observable` mutation already pays" is false at
+  HEAD, and this is the framework's first per-user-action full cache clear.
+- `D12`'s fix was replaced by the two-line grounding idiom the codebase already
+  uses, and `D20`/`D21`'s test plans were rewritten around tests that could not
+  fail.
+
+### Performance: measured, not assumed
+
+Eighteen candidates were staged as applyable patches. Eleven measured as wins and
+landed, three measured and were reverted, four were declined without measuring
+and for the record why:
+
+| Landed | Scenario | Change |
+|---|---|---|
+| `bff6f47e` | `tables-scroll` | −7.6% [−8.3, −6.7], `table-multiline` −6.5% |
+| `0f2db8f2` | `table-multiline` | −8.7% [−10.0, −8.2] |
+| `7db94fe9` | `fanout` / `modifiers` / `anyview` | −6.4% / −6.3% / −6.3% |
+| `5e239298` | `deep` / `menus` | −5.1% / −5.3%, and 1.7 MB off `deep` |
+| `9348de75` | image pixel path | −19.8% (sharpened), glyph −8.0% |
+| `5d9e7006` | image pixel path | −16.5% ansi256, −23.5% truecolor |
+| `21be6743` | `translucent` | −3.5% [−4.1, −3.1] |
+| `3b935ee5` | `translucent` | −3.6% [−4.1, −2.3] |
+| `fa71351d` | `menus` / `fanout` / `anyview` | −2.6% / −2.4% / −1.9% |
+| `097a0c2d` | `gradients` | −1.4% [−2.3, −0.9], its pre-registered prediction |
+| `288d33ce` | `modifiers` / `fanout` | −1.3% / −0.9% |
+
+Reverted after measuring: **P06** (`RenderContext`'s depth as a packed
+`UInt16`) — `anyview` **+3.0%**, `modifiers` **+1.6%**, both CIs clear of zero;
+**P20** (static `childViews` requirements) — warm `deep` **+1.6%** against a cold
+`fanout` −1.8%, so a steady-state regression to buy one first frame; **P04** (one
+POD slot array per HStack row) — a wash with `menus` **+0.8% slower**.
+
+Declined: **P02** and **P09**, whose hotness the adversarial pass refuted (both
+below what the harness resolves — P02's own multiplier is rows-rebuilt-per-frame,
+not per cell); **P16**, whose own pre-registered prediction is "the WASH of the
+batch" behind a profiling gate; **P13**, whose anchors drifted under two of the
+dithering fixes and which needs re-deriving before it can be trusted; **P08**,
+superseded by `fa71351d`.
+
+### What the drain itself turned up
+
+Four things worth their own entries, all found while fixing something else:
+
+- **`ItemListHandler+Resting.swift`'s resting-offset snap.** With text indicators
+  drawn, a resting offset of 1 is pushed back to 0 on every render pass, and the
+  `restingMidRow` escape that would let it stand is `.line`-only. Its premise —
+  offset 0 shows strictly more content, because the row is whole and the
+  indicator is gone — is false when the row at offset 0 is itself clipped. This is
+  why `663d98cc` reaches the tail on the scrollbar arm and not the text one.
+- **`DragAndDropSession` reads `hasContentBelow` through
+  `any ScrollableOffsetState`,** so a mid-drag auto-scroller gets the extension's
+  arithmetic — extent including the borrowed drop slot — rather than
+  `ItemListHandler`'s override. That happens to be what a drag wants, but by
+  luck: promoting any of `hasContentBelow` / `rowsBelow` / `visibleRange` to a
+  protocol requirement would silently take it away. `ee2cc94a` writes the split
+  down at both declarations.
+- **`contentY(in:)`, `_ListCore.dragContentY` and `Table`'s equivalent are three
+  copies of the same two questions** in two coordinate spaces. `c9ae127f` fixed
+  the copy that had drifted; consolidating them needs `contentColumns` and
+  `topInset` on a shared type.
+- **`StderrSuppressionTests`' concurrency case is order-dependent.** It failed
+  once under `swift test --filter 'Image'` — stderr left redirected — and passes
+  alone and in the full suite. Nothing in the change being tested is even
+  compiled on macOS, so it is a pre-existing race with whatever else suppresses
+  stderr concurrently, and the suite's silence about it should not be trusted
+  until it is reproduced under a seeded order.
+
+The three reverts are the reason this section exists in this shape: the ratio
+this batch actually produced is 11 wins to 3 reverts to 4 declines, and the
+predictions were wrong in both directions — `bff6f47e` beat its own by a factor
+of two, `P06` and `P20` were predicted as wins and measured as regressions.
+
 ## Fixed
 
 - **Sources/TUIkit/Views/ScrollView+Content.swift:362** — `.scrollIndicators(.visible)` with the text style makes a ScrollView permanently overwrite its first and last content lines, so those lines are unreachable at every offset.
@@ -34,9 +137,11 @@ them, the front-door doc counts, and two measured performance changes (an Otsu
 pass every non-mono picture paid for, −13.6% on the pixel path; and the row
 shortcut table, −2.8% on `tables-vstack`).
 
-## Open — defects
+## Defects — all fixed 2026-09-09
 
-Severity as the verifier rated it after checking.
+Severity as the verifier rated it after checking. Every one of these is closed;
+the entries stay because the traces in them are the record of how each was
+proved.
 
 ### `Sources/TUIkit/Focus/ItemListHandler.swift:331` — medium
 
@@ -232,7 +337,7 @@ The Toggle page's checkbox comparison table never shows which glyph style is act
 
 **How it fails.** Open the Toggle demo page (any terminal, e.g. Terminal.app or a plain terminal). In the "toggleCharacterSet" comparison section, none of the three columns (.unicode / .emoji / .ascii) ever shows the "(default)" suffix, regardless of which glyph style `.automatic` actually resolves to on that terminal — because checkboxColumn (TogglePage.swift:69-71) is only ever invoked with the three concrete ToggleCharacterSet values, never with `.automatic`, so the guard `style == .automatic` at line 106 compares a concrete value against a marker it can structurally never equal (per ToggleCharacterSet.swift's deliberate Equatable semantics) and is always false. This silently defeats the doc comment's and the page's own stated purpose of visually indicating the terminal's actual default glyph style.</correctedFailure> <parameter name="fixSketch">Compare against the resolved value instead of the literal marker: read `EnvironmentValues.supportsEmojiChrome` (already used by RenderLoop/TerminalHost to decide automatic's resolution) in TogglePage, compute `let resolvedAutomatic: ToggleCharacterSet = supportsEmojiChrome ? .emoji : .unicode` once per render, and change line 106 to `style == resolvedAutomatic ? ... : name`.
 
-## Open — documentation
+## Documentation — all fixed 2026-09-09
 
 Every one is a statement that is no longer true, checked against the code by a
 second pass. The DocC *link* rot is already fixed; these are the sentences.
@@ -434,7 +539,7 @@ second pass. The DocC *link* rot is already fixed; these are the sentences.
   <br>truth: Their sibling property immediately above, `buttonStyle` (line 39), is documented at line 38: '/// Control styles to install, or `nil` to keep the inherited/default style.' Per DocC's adjacency rule that comment attaches only to `buttonStyle`; `listStyle` and `pickerStyle` — otherwise identical in shape and semantics — 
 
 
-## Open — performance
+## Performance — 11 landed, 3 reverted, 4 declined (see above)
 
 Twenty-three candidates survived screening (thirteen more were rejected as
 not-hot, four as too risky for the gain, two as already tried and reverted). Each
