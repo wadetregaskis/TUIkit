@@ -139,9 +139,17 @@ extension ScrollView {
         return copy
     }
 
-    /// Creates a disabled version of this scroll view. Wheel
-    /// scrolling continues to work (the user can still inspect
-    /// content); keyboard focus is suppressed.
+    /// Creates a disabled version of this scroll view: no keyboard focus, and
+    /// the wheel does not scroll it either — `_ScrollViewCore` registers no
+    /// viewport mouse handler while disabled, so a tick falls through to
+    /// whatever is behind. The body also applies
+    /// ``TUIkit/View/disabled(_:)`` to the content, so what is inside is
+    /// disabled too, as it is everywhere else.
+    ///
+    /// To pin a scroll view's offset while leaving its content live, use
+    /// ``TUIkit/View/scrollDisabled(_:)`` instead: the view stays enabled, and
+    /// an unconsumed wheel tick passes out to an enclosing scroller rather
+    /// than being swallowed.
     public func disabled(_ disabled: Bool = true) -> ScrollView<Content> {
         var copy = self
         copy.isDisabled = disabled
