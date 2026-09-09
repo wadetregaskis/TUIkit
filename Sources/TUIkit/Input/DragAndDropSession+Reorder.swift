@@ -302,35 +302,30 @@ extension DragAndDropSession {
     }
 
     /// Where the cursor sits in a host's content-line space — the coordinates
-    /// its rows are laid out in — or `nil` when it is off the rows: outside the
-    /// columns they occupy, or outside the lines.
+    /// its rows are laid out in — or `nil` when it is off the rows.
+    ///
+    /// This is the LOCALISATION; the two bounds it feeds are
+    /// ``RowReorderHosting/rowSpaceContentY(x:y:contentColumns:topInset:)``'s,
+    /// shared with the two view paths that ask the same pair of questions.
     ///
     /// Derived from the ABSOLUTE cursor and this frame's rectangle, never from
     /// the coordinates the captured mouse closure was handed: the dispatcher
     /// localises a captured gesture by the offsets stamped at the *press*, which
     /// stop describing anything real the moment the control moves under it.
     ///
-    /// Both bounds matter, and only the horizontal one was here. A cursor
-    /// dragged past the top or bottom edge kept naming a line — a negative one,
-    /// or one past the content area — which reads as "somewhere I can't resolve"
-    /// rather than "not on this control", and auto-scroll's retarget clamps the
-    /// former onto the nearest row. So a drag held outside the control showed a
-    /// drop slot at whichever edge it had left by, and releasing there landed
-    /// the rows at the start or the end of the list. See
-    /// ``ItemListHandler/rowSpaceContentY(_:)``.
+    /// `localOriginX`/`localOriginY`, not `offsetX`/`offsetY`: `contentColumns`
+    /// counts the control's OWN columns, so the cursor has to be measured from
+    /// where those columns start — which, inside a horizontally scrolled
+    /// `ScrollView`, is `leftClip` columns left of the clipped rectangle. The Y
+    /// line always measured from the unclipped origin and the X one did not, so
+    /// the leftmost visible content column read as "off the rows" here while the
+    /// view paths said it was on them (`c9ae127f`).
     private func contentY(in host: ReorderHost) -> Int? {
         guard let event = lastAbsoluteEvent,
             let rect = dispatcher?.regionRect(for: host.handlerID)
         else { return nil }
-        // `localOriginX`, not `offsetX`: `contentColumns` counts the control's
-        // OWN columns, so the cursor has to be measured from where those
-        // columns start — which, inside a horizontally scrolled `ScrollView`,
-        // is `leftClip` columns left of the clipped rectangle. The Y line
-        // below always measured from the unclipped origin and this one did not,
-        // so the leftmost visible content column read as "off the rows" here
-        // while `_ListCore`'s `dragContentY` twin (localised by the dispatcher,
-        // through `localOriginX`) said it was on them.
-        guard host.contentColumns.contains(event.x - rect.localOriginX) else { return nil }
-        return host.handler.rowSpaceContentY(event.y - rect.localOriginY - host.topInset)
+        return host.handler.rowSpaceContentY(
+            x: event.x - rect.localOriginX, y: event.y - rect.localOriginY,
+            contentColumns: host.contentColumns, topInset: host.topInset)
     }
 }

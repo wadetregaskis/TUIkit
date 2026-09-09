@@ -134,3 +134,46 @@ protocol RowReorderHosting: AnyObject {
     /// Drops the gesture without moving anything.
     func cancelReorder()
 }
+
+// MARK: - Both halves of "is the cursor on a row?"
+
+extension RowReorderHosting {
+
+    /// The row-space content line a cursor sits on, or `nil` when it is off the
+    /// rows in EITHER axis: outside the columns they occupy, or outside the
+    /// lines.
+    ///
+    /// `x` and `y` are in the control's own region space, wherever the caller
+    /// localised them from — the session subtracts a hit rect's
+    /// ``HitTestRegion/localOriginX``/``HitTestRegion/localOriginY`` from an
+    /// absolute cursor, while a captured mouse closure is handed localised
+    /// coordinates already. What must not differ is the two questions asked of
+    /// them, and this exists because they did: three call sites asked the same
+    /// pair — `_ListCore`'s `dragContentY`, `Table`'s, and
+    /// ``DragAndDropSession/contentY(in:)`` — and the third one measured its
+    /// horizontal half from the CLIPPED origin, so the leftmost visible column
+    /// of a horizontally scrolled list read as "off the rows" on the session
+    /// path and "on them" on the view path (`c9ae127f`).
+    ///
+    /// Both bounds matter, and the vertical one is the subtle one: a `contentY`
+    /// off the rows still names a LINE, so a consumer that merely fails to find
+    /// a band there reads "somewhere I can't resolve" rather than "not on this
+    /// control", and auto-scroll's retarget clamps it onto the nearest row. That
+    /// is why the answer is an `Optional` rather than a clamped line, and why the
+    /// two questions travel together.
+    ///
+    /// - Parameters:
+    ///   - x: The cursor's column, in the control's region space.
+    ///   - y: The cursor's line, in the control's region space.
+    ///   - contentColumns: The columns within the region that are rows rather
+    ///     than chrome. Only the caller knows these.
+    ///   - topInset: Lines of chrome between the region's top and the first row
+    ///     line — a border, a title, a `Table`'s column header and scroll
+    ///     indicator.
+    func rowSpaceContentY(
+        x: Int, y: Int, contentColumns: Range<Int>, topInset: Int
+    ) -> Int? {
+        guard contentColumns.contains(x) else { return nil }
+        return rowSpaceContentY(y - topInset)
+    }
+}

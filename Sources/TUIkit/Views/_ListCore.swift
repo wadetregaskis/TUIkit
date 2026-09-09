@@ -2244,11 +2244,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
                 /// The drag's position in the handler's content-line space, or
                 /// `nil` once the cursor leaves the rows, in either axis. The
-                /// session path asks the same two questions in
-                /// `DragAndDropSession.contentY(in:)`, and the two must agree.
+                /// session path asks the same two questions of the same shared
+                /// rule, having localised the cursor itself.
                 var dragContentY: Int? {
-                    contentColumns.contains(event.x)
-                        ? captureHandler.rowSpaceContentY(event.y - topInset) : nil
+                    captureHandler.rowSpaceContentY(
+                        x: event.x, y: event.y, contentColumns: contentColumns,
+                        topInset: topInset)
                 }
 
                 switch event.phase {

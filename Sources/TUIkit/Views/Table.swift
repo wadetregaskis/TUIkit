@@ -2908,11 +2908,12 @@ where Value.ID: Hashable {
                 /// the interior's first CONTENT line, the same origin
                 /// ``ItemListHandler/DrawnBand/yStart`` counts from — or `nil`
                 /// once the cursor leaves the rows, in either axis. The session
-                /// path asks the same two questions in
-                /// `DragAndDropSession.contentY(in:)`, and the two must agree.
+                /// path asks the same two questions of the same shared rule,
+                /// having localised the cursor itself.
                 var dragContentY: Int? {
-                    contentColumns.contains(event.x)
-                        ? captureHandler.rowSpaceContentY(event.y - interiorTopY) : nil
+                    captureHandler.rowSpaceContentY(
+                        x: event.x, y: event.y, contentColumns: contentColumns,
+                        topInset: interiorTopY)
                 }
 
                 switch event.phase {
