@@ -2066,8 +2066,25 @@ nobody got to.
    percentage has a date, and a percentage also has a TREE — a `--blame` figure
    means nothing until you know which harness shape produced it.
 
-**What to measure first**, given the above: item 4's `entries` table, on
-`7db94fe9`'s own recipe — an `identityHash` key with the `ViewIdentity` moved
+**Item 4's `entries` table was then converted and measured — 2026-09-10,
+`01008650`.** Warm: `textwall` **−3.2%**, `fanout` **−2.9%**, `modifiers`
+**−1.9%**, `megalist` −0.8%, `scrollfollow` −0.6%, all with intervals clear of
+zero; nothing slower. `--cold` (no hits, so purely the miss path): nineteen
+scenarios indistinguishable. `menus` flat at −1.0%, as the correction above
+predicted — the scenarios that moved are exactly the ones where the buffer memo
+SERVES, and `--bench` prints `render: 2000` entries a frame on `fanout`, which is
+why it is the headline. Checksums and prune summaries identical,
+`TUIKIT_VERIFY_RENDER_MEMO` clean on 21/21.
+
+What is left of item 4 is `activeIdentities: Set<ViewIdentity>`
+(`RenderCache.swift`), which pays the same walk in `removeInactive`'s `contains`
+once per cached entry per frame — ~2,000 times a frame on `fanout`. Its safety
+argument is one-sided rather than a bargain: equal identities have equal hashes,
+so a live entry can never be MISSED, and a collision can only keep a dead one a
+pass longer. Memory, never wrong pixels. Its own commit, its own measurement.
+
+**The original "what to measure first" recommendation**, kept for the reasoning:
+item 4's `entries` table, on `7db94fe9`'s own recipe — an `identityHash` key with the `ViewIdentity` moved
 into `CacheEntry` (already a `final class`) for `isLive`/`affects`. It is the
 only survivor with a current measured size, a proven recipe, and a standing
 verification net (`TUIKIT_VERIFY_RENDER_MEMO` checks 4,565 row serves). Two
