@@ -72,24 +72,28 @@ extension AppHeader: Renderable {
             break  // content alone; the background colour is the only boundary
         }
 
-        // Preserve any hit-test regions the header content
-        // emitted (e.g. a Button inside `.appHeader { ... }`).
-        // Without this, `FrameBuffer(lines:)` builds a fresh
-        // buffer with empty hitTestRegions and the regions
-        // disappear before they can be merged into the
-        // dispatcher's set in RenderLoop. Same class of bug
-        // as the status-bar one fixed in commit e5382a77.
-        var result = FrameBuffer(lines: lines)
-        // A box shifts the content right by its wall and down by its top rule;
-        // the other styles leave it where it was.
-        result.hitTestRegions =
-            style == .bordered
-            ? contentBuffer.shiftedHitTestRegions(byX: 1, y: 1)
-            : contentBuffer.hitTestRegions
-        result.opacityRegions =
-            style == .bordered
-            ? contentBuffer.shiftedOpacityRegions(byX: 1, y: 1)
-            : contentBuffer.opacityRegions
-        return result
+        // `FrameBuffer(lines:)` builds a fresh buffer, so every side payload the
+        // header content emitted has to be carried over ONE BY ONE — and each
+        // one that was not is a feature that silently does nothing inside
+        // `.appHeader { … }`. That is the bare-`FrameBuffer(lines:)` tell: hit
+        // regions went first (`e5382a77`, a Button in the header that could not
+        // be clicked), opacity followed, and the two below were still missing.
+        //
+        // `replacingLines` does all four at once, with the shift a box needs —
+        // right by its wall, down by its top rule — applied to each. Written as
+        // four assignments it was four chances to forget one, which is what
+        // happened twice.
+        return contentBuffer.replacingLines(
+            lines,
+            // Animated runs: a `Spinner` or any `.animatedCells` in the header
+            // was frozen at frame 0, because a dropped run does not look like a
+            // dropped animation — it looks like a still one.
+            //
+            // Overlays: a `Menu`, `.popover` or `.alert` declared in the header
+            // OPENED (its state flipped, its hit region was live) and then drew
+            // nothing at all, because the layer carrying its picture was thrown
+            // away before anything could composite it.
+            overlayShiftX: style == .bordered ? 1 : 0,
+            overlayShiftY: style == .bordered ? 1 : 0)
     }
 }

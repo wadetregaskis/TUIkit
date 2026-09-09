@@ -581,7 +581,9 @@ extension RenderLoop {
 
         return recordActivity(
             usesPulse: (environment.volatileReadTracker?.reads ?? 0) > 0,
-            usesCursor: cursorTimer?.didReadThisFrame ?? false)
+            usesCursor: cursorTimer?.didReadThisFrame ?? false,
+            chromeRuns: (appHeaderBuffer?.animatedCells ?? [])
+                + (statusBarBuffer?.animatedCells ?? []))
     }
 
     /// Advances the two drag flights and keeps the frames coming while either
@@ -1149,11 +1151,24 @@ extension RenderLoop {
 
     /// Stores and returns what this frame reported, so the run loop can decide
     /// whether the next animation tick needs a render at all.
-    private func recordActivity(usesPulse: Bool, usesCursor: Bool) -> RenderActivity {
+    ///
+    /// The chrome's runs count towards LIVENESS even though they are not
+    /// replayable. Only the content's runs can be patched — the replay knows one
+    /// set of lines at one start row, and the header and the status bar are
+    /// written by their own passes at their own rows — so a run up there needs a
+    /// whole render to advance. Left out of this set entirely, it got neither: a
+    /// `Spinner` in `.appHeader { … }` over a still page reported no live clock,
+    /// so the loop stopped waking and the spinner was frozen at frame 0 while
+    /// looking, for all the world, like a spinner that simply was not spinning.
+    private func recordActivity(
+        usesPulse: Bool, usesCursor: Bool, chromeRuns: [AnimatedCellRun] = []
+    ) -> RenderActivity {
+        let content = (replayable?.runs ?? []).lazy.map(\.clock)
+        let chrome = chromeRuns.lazy.filter(\.isAnimating).map(\.clock)
         lastActivity = RenderActivity(
             usesPulse: usesPulse,
             usesCursor: usesCursor,
-            animatedClocks: Set((replayable?.runs ?? []).lazy.map(\.clock)))
+            animatedClocks: Set(content).union(chrome))
         return lastActivity
     }
 
