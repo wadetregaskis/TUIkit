@@ -187,20 +187,6 @@ public final class FocusManager: @unchecked Sendable {
 
     // MARK: @FocusState binding registry
 
-    /// One `.focused(_:equals:)` binding: which focusID a value maps to, and
-    /// the render generation it was last registered in (for per-frame pruning).
-    private struct FocusBinding {
-        let focusID: String
-        var generation: UInt64
-    }
-
-    /// One `.defaultFocus(_:_:)` declaration.
-    private struct DefaultFocusDeclaration {
-        let value: AnyHashable
-        let priority: DefaultFocusEvaluationPriority
-        var generation: UInt64
-    }
-
     /// Per-`@FocusState` value→binding maps, keyed by the store's stable id.
     /// Rebuilt as `.focused(_:equals:)` modifiers render, but kept HERE — on the
     /// manager that outlives any single frame's view structs — so a
@@ -216,6 +202,9 @@ public final class FocusManager: @unchecked Sendable {
     /// The declared default-focus value per store (from `.defaultFocus`), used
     /// to pick the initial focus once its bound control's id is known.
     private var focusDefaultValues: [String: DefaultFocusDeclaration] = [:]
+
+    /// Hands out ``DefaultFocusDeclaration/sequence``.
+    private var defaultFocusSequence: UInt64 = 0
 
     /// Store ids whose `.automatic` default focus has been applied —
     /// `.defaultFocus` sets the INITIAL focus once, then leaves the user in
@@ -563,8 +552,15 @@ extension FocusManager {
     func setDefaultFocusValue(
         _ value: AnyHashable, priority: DefaultFocusEvaluationPriority, forStore store: String
     ) {
+        // First-write-wins: a store that re-declares every frame keeps the
+        // sequence it was first given, so the order two defaults resolve in is
+        // the order they appear in the TREE rather than the order this frame
+        // happened to reach them.
+        if focusDefaultValues[store] == nil { defaultFocusSequence += 1 }
+        let sequence = focusDefaultValues[store]?.sequence ?? defaultFocusSequence
         focusDefaultValues[store] = DefaultFocusDeclaration(
-            value: value, priority: priority, generation: focusRenderGeneration)
+            value: value, priority: priority, sequence: sequence,
+            generation: focusRenderGeneration)
     }
 
     /// Whether a store has a default focus that still wants to steal the initial
@@ -588,15 +584,33 @@ extension FocusManager {
     /// not-yet-windowed control) the shot is spent and the automatic
     /// first-focusable stands — so the default never lies in wait to yank focus
     /// off the user's later choice.
+    /// **Two live declarations resolve to ONE focus, in a defined order.** There
+    /// is a single `focusedID` for the app, so applying every declaration meant
+    /// the last one applied simply won — and the loop walked a `Dictionary`,
+    /// whose order over `String` keys is seeded per process, so *which* one won
+    /// changed from launch to launch. The losers were not merely ignored either:
+    /// each was focused and then unfocused in turn, firing a spurious
+    /// `onFocusReceived`/`onFocusLost` pair on a control the user never reached.
+    ///
+    /// The order is `.userInitiated` before `.automatic` (that is what the
+    /// priority means), then declaration order — so of two ordinary defaults the
+    /// one earlier in the tree wins, every run.
+    ///
+    /// Every automatic declaration still SPENDS its shot on the pass it is seen,
+    /// including the ones that did not win: that is the one-shot rule above, and
+    /// leaving a shot unspent would let it fire later and yank focus off the
+    /// user's own choice.
     private func resolvePendingDefaultFocus() {
-        for (store, declaration) in focusDefaultValues {
+        var applied = false
+        for (store, declaration) in focusDefaultValues.sorted(by: DefaultFocusDeclaration.precedes) {
             let isAutomatic = declaration.priority == .automatic
             if isAutomatic && appliedDefaultFocus.contains(store) { continue }
             if isAutomatic { appliedDefaultFocus.insert(store) }
-            guard let binding = focusBindings[store]?[declaration.value] else { continue }
+            guard !applied, let binding = focusBindings[store]?[declaration.value] else { continue }
             // `focus(id:)` fires the old element's onFocusLost and the new one's
             // onFocusReceived (and no-ops if it is already focused).
             focus(id: binding.focusID)
+            applied = true
         }
     }
 

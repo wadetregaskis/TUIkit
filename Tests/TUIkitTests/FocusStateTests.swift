@@ -352,3 +352,106 @@ struct FocusStateTests {
         #expect(first.focusLostCount == 0)
     }
 }
+
+// MARK: - Two defaults, one focus
+
+/// There is one `focusedID` for the app, so two live `.defaultFocus`
+/// declarations cannot both be honoured — and which one wins must not depend on
+/// the run.
+///
+/// It did. `resolvePendingDefaultFocus` applied every declaration in
+/// `Dictionary` order, so the last one applied won outright, and `Dictionary`
+/// order over `String` keys is seeded per process: the same app focused a
+/// different control on different launches. The losers were not merely passed
+/// over either — each was focused and then unfocused in turn, firing an
+/// `onFocusReceived`/`onFocusLost` pair on a control the user never reached.
+@MainActor
+@Suite("Two default-focus declarations resolve deterministically")
+struct DefaultFocusOrderTests {
+
+    private enum Left: Hashable { case first, second }
+    private enum Right: Hashable { case third, fourth }
+
+    /// Two sibling views, each with its own `@FocusState` and its own default —
+    /// the shape the defect was found in, and the one an app actually writes.
+    ///
+    /// Which one won is read back off the stores themselves rather than off a
+    /// focus id: ids are path-derived, and the question is which CONTROL the
+    /// user is on.
+    private struct FirstPane: View {
+        @FocusState var field: Left?
+        let seen: Box<(left: Left?, right: Right?)>
+        var body: some View {
+            seen.value = (field, seen.value.right)
+            return VStack {
+                TextField("first", text: .constant("")).focused($field, equals: .first)
+                TextField("second", text: .constant("")).focused($field, equals: .second)
+            }
+            .defaultFocus($field, .second)
+        }
+    }
+
+    private struct SecondPane: View {
+        @FocusState var field: Right?
+        let seen: Box<(left: Left?, right: Right?)>
+        var body: some View {
+            seen.value = (seen.value.left, field)
+            return VStack {
+                TextField("third", text: .constant("")).focused($field, equals: .third)
+                TextField("fourth", text: .constant("")).focused($field, equals: .fourth)
+            }
+            .defaultFocus($field, .fourth)
+        }
+    }
+
+    private struct TwoStores: View {
+        let seen: Box<(left: Left?, right: Right?)>
+        var body: some View {
+            VStack {
+                FirstPane(seen: seen)
+                SecondPane(seen: seen)
+            }
+        }
+    }
+
+    /// Two frames: the first declares and resolves the defaults, the second is
+    /// where a body reads the resulting store values back.
+    private func settledStores() -> (left: Left?, right: Right?) {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let seen = Box<(left: Left?, right: Right?)>((nil, nil))
+        var environment = EnvironmentValues()
+        environment.focusManager = focus
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 16, environment: environment, tuiContext: tui)
+        for _ in 0..<2 {
+            tui.stateStorage.beginRenderPass()
+            focus.beginRenderPass()
+            _ = renderToBuffer(TwoStores(seen: seen), context: context)
+            focus.endRenderPass()
+            tui.stateStorage.endRenderPass()
+        }
+        return seen.value
+    }
+
+    /// The rule: `.userInitiated` first, then declaration order — so of two
+    /// ordinary defaults the one declared EARLIER in the tree wins, which for
+    /// two sibling panes is the first pane.
+    @Test("The earlier declaration wins, and the later one does not steal it")
+    func theEarlierDeclarationWins() {
+        let settled = settledStores()
+        #expect(settled.left == .second, "the earlier default did not land: \(settled)")
+        #expect(settled.right == nil, "the later default stole the focus: \(settled)")
+    }
+
+    /// Ten managers in one process cannot see a per-process hash seed change, so
+    /// this does not prove determinism ACROSS launches by itself — what proves
+    /// that is the ordering rule above. This is the cheap guard that exactly one
+    /// answer comes out, every time.
+    @Test("The same tree focuses the same control every time")
+    func theWinnerIsStable() {
+        let winners = Set((0..<10).map { _ in "\(settledStores())" })
+        #expect(winners.count == 1, "the winner moved between runs: \(winners)")
+    }
+}
