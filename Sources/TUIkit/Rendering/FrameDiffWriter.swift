@@ -634,8 +634,9 @@ extension FrameDiffWriter {
     ///   - frame: The run's picture for this tick, as the view rendered it.
     ///   - column: The run's first visible column.
     ///   - width: How many cells the run covers.
-    ///   - terminalWidth: The row's full width, which is what says whether the
-    ///     row continues past the run — see `compensatingCursorAdvance`.
+    ///   - bgCode: The row's own background, put back under the frame before the
+    ///     splice because the view rendered the frame without one — the comment
+    ///     in the body says why that has to come before the compensation.
     func patchingAnimatedRun(
         in line: String, with frame: String, atColumn column: Int, width: Int, bgCode: String
     ) -> String {
