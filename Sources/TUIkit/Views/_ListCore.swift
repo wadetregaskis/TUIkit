@@ -1859,14 +1859,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
             let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
             for region in visible.row.buffer.opacityRegions {
-                let top = max(region.offsetY, clip)
-                let bottom = min(region.offsetY + region.height, clip + position.height)
-                let right = min(region.offsetX + region.width, state.rowContentWidth)
-                guard bottom > top, right > region.offsetX else { continue }
-                var clipped = region
-                clipped.offsetY = top
-                clipped.height = bottom - top
-                clipped.width = right - region.offsetX
+                // The shared trim, so this is not a third spelling of it: the
+                // rows the window kept of this row, and the columns the row
+                // has. (The ScrollView copy was the one that drifted, clipping
+                // rows and letting columns run past the scrollbar.)
+                guard
+                    let clipped = region.clipped(
+                        toColumns: 0..<state.rowContentWidth,
+                        rows: clip..<(clip + position.height))
+                else { continue }
                 buffer.opacityRegions.append(
                     clipped.shifted(byX: rowContentX, y: topInset + position.yStart - clip))
             }

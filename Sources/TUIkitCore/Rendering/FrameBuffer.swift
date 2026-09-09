@@ -982,17 +982,7 @@ extension FrameBuffer {
         // whatever a later sibling put there: a TabView's filler rows and its
         // bottom rule faded because a tab's content had been cut to the panel.
         result.opacityRegions = opacityRegions.compactMap { region -> OpacityRegion? in
-            let left = max(0, region.offsetX)
-            let top = max(0, region.offsetY)
-            let right = min(region.offsetX + region.width, maxWidth)
-            let bottom = min(region.offsetY + region.height, maxHeight)
-            guard right > left, bottom > top else { return nil }
-            var trimmed = region
-            trimmed.offsetX = left
-            trimmed.offsetY = top
-            trimmed.width = right - left
-            trimmed.height = bottom - top
-            return trimmed
+            region.clipped(toColumns: 0..<maxWidth, rows: 0..<maxHeight)
         }
         result.hitTestRegions = hitTestRegions.compactMap { region -> HitTestRegion? in
             region.clipped(toColumns: 0..<maxWidth, rows: 0..<maxHeight)

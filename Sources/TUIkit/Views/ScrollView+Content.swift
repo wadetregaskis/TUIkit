@@ -303,16 +303,39 @@ extension _ScrollViewCore {
         // still faded for the part of it that shows, and keeping its full
         // height would fade rows belonging to whatever sits outside the
         // scroller.
+        //
+        // Which makes it the SAME two-axis trim, through the same shared
+        // helper, that the hit regions above already take — not a second piece
+        // of arithmetic. It was a second piece, and it clipped only Y. A
+        // horizontally-scrolling view renders its content at its NATURAL width
+        // (`contentExtents`: `max(contentWidth, natural.width)`) while this
+        // function slices the LINES to the window, so a fade over a 60-cell
+        // line inside a 20-cell viewport was carried up as a rectangle 60 wide
+        // on a buffer declaring 20 — and nothing downstream cut it either,
+        // because `clamped`'s fast path only asks whether the buffer's DECLARED
+        // width fits. At the root that reached forty columns which were never
+        // this scroller's: an `HStack` sibling beside it faded, and so did the
+        // view's OWN vertical scrollbar, which `appendVerticalScrollbar` writes
+        // at column `contentWidth`. The commit that introduced this block said
+        // "a region wider than a row must not reach the scrollbar", and clipped
+        // one axis.
+        //
+        // Trimmed to the buffer's DECLARED width, unconditionally — the rule
+        // `clamped` already applies to a region, and the rule the hit regions
+        // take here. Not free: the vertical-only path above keeps a line WIDER
+        // than the viewport whole rather than slicing it, so there the columns
+        // past `viewportWidth` are drawn and now come out unfaded. That is the
+        // declared-vs-drawn width defect showing through rather than this trim
+        // — a region naming columns its buffer disclaims cannot be placed by
+        // anything upstream, and every container that clips would cut it
+        // anyway.
+        //
+        // Shifted first and clipped second, for the reason the hit-region block
+        // gives — and here without even that block's caveat: an opacity region
+        // carries no clip counters for a translation to disturb.
         let visibleOpacity = full.opacityRegions.compactMap { region -> OpacityRegion? in
-            let topY = region.offsetY
-            let bottomY = region.offsetY + region.height
-            guard bottomY > viewportTop, topY < viewportBottom else { return nil }
-            let clippedTop = max(topY, viewportTop)
-            let clippedBottom = min(bottomY, viewportBottom)
-            var clipped = region
-            clipped.offsetY = clippedTop
-            clipped.height = clippedBottom - clippedTop
-            return clipped.shifted(byX: dx, y: -scrollOffset)
+            region.shifted(byX: dx, y: -scrollOffset)
+                .clipped(toColumns: 0..<viewportWidth, rows: 0..<viewportHeight)
         }
 
         var result = FrameBuffer(

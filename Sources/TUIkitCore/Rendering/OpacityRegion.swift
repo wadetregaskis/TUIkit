@@ -93,6 +93,50 @@ public struct OpacityRegion: Equatable, Sendable {
         return copy
     }
 
+    /// The part of this region inside `columns` × `rows`, or `nil` when none of
+    /// it is.
+    ///
+    /// The trim a CLIPPING CONTAINER performs — a scroll window, a
+    /// `clamped(toWidth:height:)` at a container edge, a list row. A region
+    /// names cells that are IN the buffer carrying it, so when the container
+    /// keeps only some of those cells the claim has to be cut to them: left
+    /// whole it goes on naming columns and rows that now belong to a sibling,
+    /// and the root reads the alpha of those cells off it.
+    ///
+    /// The mirror of `HitTestRegion.clipped(toColumns:rows:)`, and deliberately
+    /// WITHOUT its `topClip` / `leftClip` accumulators: those exist so a mouse
+    /// handler is handed points measured from where its region really BEGAN, and
+    /// nothing localises a point against an opacity region — so there is nothing
+    /// here for a trim to lose, and shifting and clipping commute freely.
+    ///
+    /// The ranges are in the carrying buffer's own coordinates and nothing is
+    /// re-based, so a caller clipping to a box that does not start at the origin
+    /// passes that box's ranges and shifts afterwards (see ``shifted(byX:y:)``).
+    ///
+    /// - Parameters:
+    ///   - columns: The surviving column range.
+    ///   - rows: The surviving row range.
+    /// - Returns: The trimmed region, `self` when it was already inside, or
+    ///   `nil` when nothing of it survives.
+    public func clipped(toColumns columns: Range<Int>, rows: Range<Int>) -> Self? {
+        let left = Swift.max(offsetX, columns.lowerBound)
+        let right = Swift.min(offsetX + width, columns.upperBound)
+        let top = Swift.max(offsetY, rows.lowerBound)
+        let bottom = Swift.min(offsetY + height, rows.upperBound)
+        guard right > left, bottom > top else { return nil }
+        guard left != offsetX || top != offsetY || right != offsetX + width
+            || bottom != offsetY + height
+        else { return self }
+        // A copy rather than a fresh value: `opacity` and `cycle` are the whole
+        // point of the region, and the initializer would re-clamp the first.
+        var trimmed = self
+        trimmed.offsetX = left
+        trimmed.offsetY = top
+        trimmed.width = right - left
+        trimmed.height = bottom - top
+        return trimmed
+    }
+
     /// Whether `row` falls inside this region, at any column.
     ///
     /// The resolution walks rows and asks this first: a buffer of forty rows

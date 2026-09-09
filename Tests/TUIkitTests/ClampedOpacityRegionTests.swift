@@ -46,3 +46,65 @@ struct ClampedOpacityRegionTests {
         #expect(clipped.opacityRegions == [OpacityRegion(offsetX: 2, offsetY: 0, width: 2, height: 1, opacity: 0.25)])
     }
 }
+
+/// The scroll window trimmed the region's ROWS and left its COLUMNS whole, so a
+/// horizontally-scrolling view carried a fade wider than its own viewport out
+/// into the page: over a sibling beside it, and over its own scrollbar column.
+/// The commit that introduced the clip said "a region wider than a row must not
+/// reach the scrollbar" and clipped one axis.
+@MainActor
+@Suite("The scroll window trims the opacity region on both axes")
+struct ScrollWindowOpacityClipTests {
+
+    private static func core() -> _ScrollViewCore<Text> {
+        _ScrollViewCore(
+            axes: .horizontal, content: Text("x"), explicitFocusID: nil, isDisabled: false)
+    }
+
+    /// One 60-cell line under a 40% fade — what `Text(60 cells).opacity(0.4)`
+    /// leaves when a horizontal ScrollView renders it at its natural width.
+    private static func wideFadedContent() -> FrameBuffer {
+        var full = FrameBuffer(
+            lines: [String(repeating: "x", count: 60)], width: 60, uniformWidth: true)
+        full.opacityRegions = [
+            OpacityRegion(offsetX: 0, offsetY: 0, width: 60, height: 1, opacity: 0.4)
+        ]
+        return full
+    }
+
+    @Test("A region wider than the viewport is cut to it, not carried into the page")
+    func widerThanTheViewport() {
+        let window = Self.core().windowedBuffer(
+            full: Self.wideFadedContent(), scrollOffset: 0, viewportHeight: 3, viewportWidth: 20,
+            horizontalEnabled: true, horizontalOffset: 0)
+        #expect(
+            window.opacityRegions == [
+                OpacityRegion(offsetX: 0, offsetY: 0, width: 20, height: 1, opacity: 0.4)
+            ])
+
+        // The consequence, and the shape the bug was found in: a sibling to the
+        // right of the scroller is left alone. Uncut, the region reached column
+        // 26 and all seven cells of "SIDEBAR" came back with a blended
+        // foreground they never asked for.
+        var row = window
+        row.appendHorizontally(FrameBuffer(text: "SIDEBAR"))
+        let palette = EnvironmentValues().palette
+        let resolved = row.resolvingOpacity(surface: palette.background, palette: palette)
+        #expect(
+            resolved.lines[0].hasSuffix("SIDEBAR"),
+            "the sibling's cells were faded: \(resolved.lines[0].debugDescription)")
+    }
+
+    @Test("Scrolled right, the region still stops at the viewport's edge")
+    func scrolledRight() {
+        // dx = -12 moves the rectangle to columns -12…47; the viewport is 0…19,
+        // and the scrollbar the page draws next sits at column 20.
+        let window = Self.core().windowedBuffer(
+            full: Self.wideFadedContent(), scrollOffset: 0, viewportHeight: 3, viewportWidth: 20,
+            horizontalEnabled: true, horizontalOffset: 12)
+        #expect(
+            window.opacityRegions == [
+                OpacityRegion(offsetX: 0, offsetY: 0, width: 20, height: 1, opacity: 0.4)
+            ])
+    }
+}
