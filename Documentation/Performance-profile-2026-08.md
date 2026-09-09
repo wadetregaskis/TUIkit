@@ -4075,6 +4075,37 @@ floor: the remaining ~72 ns of an `ansi256` cell is `Color.oklab` (three table
 loads and three `cbrt` per call) and the candidate walk inside
 `SearchIndex.nearestIndex`. Neither is addressed here.
 
+### The pixel half, measured and reverted
+
+P13 staged a second commit doing the same hoist inside `PixelQuantiser` — the
+distrusted-cell fallback and both dither arms. It is a wash, and its own
+pre-registered prediction said it would be ("commit 2 is a wash and gets
+reverted"). Five alternating pairs per case, checksums identical throughout:
+
+| pixel, ns/pixel | before | after | |
+|---|---|---|---|
+| ansi256 + Floyd–Steinberg | 17.15 | 17.13 | −0.1% |
+| ansi256 | 7.11 | 7.25 | **+2.0%** |
+| ansi16 + Floyd–Steinberg | 35.69 | 36.13 | +1.2% |
+| ansi16 | 14.74 | 14.25 | −3.3% |
+| shades8 + Floyd–Steinberg | 85.48 | 84.73 | −0.9% |
+| shades8 | 12.95 | 12.57 | −2.9% |
+| truecolor | 5.61 | 5.60 | −0.2% |
+
+Movement in both directions with no mechanism behind either sign, which is the
+signature to revert on rather than to bank the favourable half of. `ansi16` and
+`shades8` have sixteen entries or fewer, so they never read `searchIndex` and
+there is no lock in them to remove — a −3% there cannot be this change. And the
+one case with a real mechanism, `ansi256 + Floyd–Steinberg` over a 240-entry
+palette, is the one that did not move: the quantisation table answers almost
+every pixel, so the fallback that takes the lock fires for the few percent near
+a cell boundary and there was never per-pixel lock traffic to remove. The
+glyph path had 12,000 locks a conversion because it has no table.
+
+The asymmetry is the finding: **a table upstream of a lock makes the lock
+unmeasurable**, and the per-cell path is fast now for the same reason the
+per-pixel path always was.
+
 This was **P13** of the 2026-09-09 batch, declined that day rather than
 measured: its staged patch had drifted under the greyscale fix (`5631fde3`
 replaced an inline luminance expression with `greyRampStep(for:)`, and the

@@ -81,9 +81,16 @@ POD slot array per HStack row) — a wash with `menus` **+0.8% slower**.
 Declined: **P02** and **P09**, whose hotness the adversarial pass refuted (both
 below what the harness resolves — P02's own multiplier is rows-rebuilt-per-frame,
 not per cell); **P16**, whose own pre-registered prediction is "the WASH of the
-batch" behind a profiling gate; **P13**, whose anchors drifted under two of the
-dithering fixes and which needs re-deriving before it can be trusted; **P08**,
-superseded by `fa71351d`.
+batch" behind a profiling gate; **P08**, superseded by `fa71351d`.
+
+**P13 was re-derived and measured on 2026-09-10.** Both of its drifts were real:
+the staged patch would have silently reverted `5631fde3`'s greyscale fix, and its
+measurement plan named two `ImageHarness` modes that do not exist. Its first
+commit landed — the glyph renderer's per-cell lock, **ansi256 −18.3%**
+(`4f1d89ea`) — and its second measured as a wash and was reverted, as its own
+pre-registered prediction had bet. §57 of
+`Documentation/Performance-profile-2026-08.md` has both tables and the reason
+they differ.
 
 ### What the drain itself turned up
 
