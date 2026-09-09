@@ -1988,21 +1988,84 @@ longer leave a mirror stale (commit 5691dff4). `fanout` −8.0%, `modifiers`
 
 ### Still open, in rough order of size
 
-1. **`ForEach.childViews` is 28.1% of a `fanout` frame** — `Collection.map`
-   over every element building a `ChildView` array eagerly, of which
-   `makeChild` is 19.6%. The lazy path (`childViewCollection`) exists; the
-   eager one is what non-lazy stacks still call.
-2. **`renderToBuffer`'s `view as? Renderable`** is the top Swift-level caller
-   of `swift_dynamicCast` (3.8%), twice per view counting
-   `measureChildUncached`'s `as? Layoutable`.
-3. **`element as? any Equatable` + `AnyEquatableBox`** per row per pass in
-   `makeChild` — a protocol conformance cast and an allocation.
-4. `RenderContext.withChildIdentity(erasedType:key:)` 5.3%,
-   `RenderCache.lookup` 7.2%, `IdentityNode.structurallyEqual` 2.1%.
+**Re-derived against HEAD on 2026-09-10** — every percentage below was measured
+on 2026-08-13 and three of the four have moved since. The verdicts are stated
+first because a stale backlog is worse than none: it reads as a list of things
+nobody got to.
+
+1. **`ForEach.childViews`, "28.1% of a `fanout` frame" — PARTLY ADDRESSED; the
+   percentage is dead.** `data.map(makeChild(for:))` is still there
+   (`ForEach.swift:177`) and non-lazy stacks still call it, but two commits cut
+   it from opposite ends. `6a7171bb` stopped `makeChild` calling
+   `content(element)` at all for an `Equatable` element — `_MemoizedRow` stores
+   `source` + `build` and builds only past a memo miss — for `fanout` −22.3%,
+   `churn` −49.8%, `anyview` −36.3%, at up to +2.7% cold. `90a608df` then made
+   `resolveChildViews` memoise the resolved array once per pass rather than once
+   per walk (it ran five times a frame), for `fanout` −17.8%, `anyview` −16.9%,
+   `textwall` −14.1%. What is left per row per pass is structural — an
+   `identityKey` string, an `AnyEquatableBox`, a `_MemoizedRow` boxed into
+   `ChildView.view`, and a 112-byte array element — and **three attempts on that
+   shape are on the record as measured failures**: the reserve-and-append loop
+   (`ba703f09`, reverted by `30bab0dc`, `modifiers` **+23.9%**), an uncommitted
+   `@inline(never)` on `makeChild` (**+28.2%**), and P20's static
+   `ChildViewProvider` witness (warm `deep` **+1.6%**). Do not re-run any of
+   them. §35 names the real target — the unspecialised `RandomAccessCollection`
+   index advance behind the `ChildViewProvider` existential — and the honest
+   first step is a `--callers` profile confirming that cost survives
+   `90a608df`, which no measurement has yet checked.
+   *(§31's shas for the reverted attempt are wrong: `bdca102c`/`048708c2` are
+   not ancestors of HEAD. The reachable pair is `ba703f09` → `30bab0dc`.)*
+2. **`renderToBuffer`'s `view as? Renderable` — FIXED (`96953702`).** Both casts
+   are gone: `View._renderSelf` and `View._measureSelf` are static witnesses
+   (`View.swift:160`, `:170`), and no `as? Renderable` or `as? Layoutable`
+   survives anywhere in `Sources/`. Eleven of seventeen scenarios faster, none
+   slower — `preferences` −8.0%, `anyview` −7.5%, `framedcolumns` −5.4%,
+   `modifiers` −4.4%, `deep` −2.4%. Note this **contradicts** `perf-dead-ends`
+   item 5 ("eliminating succeeding dynamic casts buys nothing", from an earlier
+   neutral `_isLayoutable` attempt); the later measurement wins.
+3. **`element as? any Equatable` + `AnyEquatableBox` — STILL OPEN**, and the only
+   one of the four with no prior measured failure. Still at `ForEach.swift:238`
+   and `:246`, and now in two more places (`ListRowExtractor.swift:165`, `:199`,
+   per *visible* row). `90a608df` divided its frequency by ~5 without removing
+   it. The 26-line comment at `ForEach.swift:208` forecloses the three obvious
+   fixes and is right to: a static witness cannot ask about `Data.Element`,
+   which `ForEach` is deliberately unconstrained over; an
+   `extension ForEach where Data.Element: Equatable` compiles and then binds
+   statically, so the unconstrained overload wins for everyone and the memo is
+   **silently** lost. The one shape not foreclosed is moving the question off
+   the element and onto the row-memo maker, resolved once per `ForEach` at
+   `init` where `Data.Element` is still concrete.
+4. **The identity trio — PARTLY ADDRESSED, and `structurallyEqual` measured
+   HIGHER than the 2.1% here.** The three key-side sites are fixed:
+   `0217d67e` took the identity chain out of `MeasureKey`, `21c3675b` folded
+   every composite key to one word before hashing, and `7db94fe9` moved `SizeKey`
+   and `ChildViewsKey` onto an `identityHash` for `fanout` −6.4%, `modifiers`
+   −6.3%, `anyview` −6.3%. `withChildIdentity` was never touched and got cheaper
+   anyway — `5e239298` removed the `didSet` that re-derived two service mirrors
+   on every context copy, `deep` −5.1%, `menus` −5.3%, 1.7 MB. What did **not**
+   move is the buffer memo itself: `RenderCache.entries` is still
+   `[ViewIdentity: CacheEntry]` (`RenderCache.swift:215`), so every *hit* walks
+   the chain through `IdentityNode.structurallyEqual`, whose `===` shortcut
+   cannot fire because the storing and probing walks build separate chains.
+   §55's `--blame` table puts it at **3.8% of a menu frame** (2026-09-06), and
+   `7db94fe9` measured `menus` at +0.3% — which localises that 3.8% precisely: it
+   was never in the two keys that changed.
+
+**What to measure first**, given the above: item 4's `entries` table, on
+`7db94fe9`'s own recipe — an `identityHash` key with the `ViewIdentity` moved
+into `CacheEntry` (already a `final class`) for `isLive`/`affects`. It is the
+only survivor with a current measured size, a proven recipe, and a standing
+verification net (`TUIKIT_VERIFY_RENDER_MEMO` checks 4,565 row serves). Two
+risks worth stating: a collision here shows as **wrong pixels** rather than a
+wrong number, and `perf-dead-ends` item 7's prohibition on hash-keying
+`ViewIdentity` **does** still bind `StateStorage.StateKey` — where a collision
+would alias `@State` — so that table must not be swept in alongside.
 
 The pattern to keep: the leaf profile names ARC and casts, and that is never
 where the fix is. Both wins above came from `--callers`, not from the
-self-time table.
+self-time table. And the pattern this re-derivation adds: **a percentage has a
+date**, and four weeks of commits in the same subsystem is long enough for three
+of four to stop being true.
 
 ---
 
