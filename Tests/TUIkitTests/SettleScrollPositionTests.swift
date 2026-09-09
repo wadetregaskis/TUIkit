@@ -98,11 +98,13 @@ struct SettleScrollPositionTests {
     /// `applyAnchorHold` deleted outright — which is how the first version of
     /// this test was written, and what it was worth.
     ///
-    /// This does NOT pin the anchor's POSITION in the sequence, only its
-    /// presence. Moving it above the clamp changes nothing measurable here or
-    /// anywhere in the suite; the case that would tell them apart is a `.row`
-    /// anchor whose placement carries a top clip that a later `clampTopClip`
-    /// would shrink, and that fixture is not yet written.
+    /// This pins the anchor step's PRESENCE, not its position, and that is all
+    /// there is to pin: the position is not observable. The two candidate
+    /// distinguishing cases were built and measured — a `.row` anchor adopted on a
+    /// stranded offset, and a `.bottom` anchor whose list shrinks under it — and
+    /// both orders give identical offsets, held rows and cursors, because the
+    /// anchor paths clamp their own destination and zero their own top clip. The
+    /// doc comments that claimed otherwise now say so.
     @Test("The anchor step is part of the sequence: a .bottom view opens on the tail")
     func anchorRunsInTheSequence() {
         let handler = ItemListHandler<Int>(

@@ -77,19 +77,33 @@ extension ItemListHandler {
     /// The whole settle, once per frame: clamp the offset and the top clip, snap
     /// off the resting duplicate, then apply the anchor — in that order.
     ///
-    /// The order is not a detail. `applyAnchorHold` is documented as running
-    /// "after the frame's row count, viewport, row heights and id resolver are
-    /// wired and the ordinary clamp has run", and the clamp has to precede the
-    /// resting snap because the snap tests `scrollOffset == 1`, a value the clamp
-    /// can produce. Written out at all three call sites — `Table`'s two paths and
-    /// `_ListCore` — the sequence was one thing a reader had to reconstruct from
-    /// three places and check against a doc comment on a fourth.
+    /// **The clamp must precede the snap**, because the snap tests
+    /// `scrollOffset == 1` and the clamp is one of the things that can produce 1;
+    /// run the other way round, an offset stranded above a `maxOffset` of 1 rests
+    /// on the very line whose indicator hides the only row it could show.
+    /// `SettleScrollPositionTests` pins that.
+    ///
+    /// **The anchor's position is not observable**, and this comment used to imply
+    /// it was. Measured both ways over a `.row` anchor adopted on a stranded
+    /// offset and a `.bottom` anchor whose list shrinks under it: identical
+    /// offsets, held rows and cursors. The anchor steps are defensive about the
+    /// offset they are handed — `applyRowAnchorHold` re-derives its held row when
+    /// its own clamp moves the destination, and both it and `followBottomEdge`
+    /// zero `scrollTopClipLines` rather than leaving a clip for `clampTopClip` to
+    /// shrink — so there is nothing for the ordering to change. It stays last
+    /// because that is the clearer reading, not because anything depends on it.
+    ///
+    /// What the anchor DOES depend on is the id resolver, which is why
+    /// `_ListCore`'s id wiring had to move above this call. Written out at all
+    /// three call sites — `Table`'s two paths and `_ListCore` — the sequence was
+    /// one thing a reader had to reconstruct from three places and check against a
+    /// doc comment on a fourth.
     ///
     /// `Table` had them adjacent; `_ListCore` split them, running the anchor forty
     /// lines later because its id wiring sat in between. Sharing them meant moving
-    /// that wiring above the clamp, which is where the contract above says it
-    /// belongs anyway — the clamps read the row count, the viewport and the row
-    /// heights, and none of them read an id.
+    /// that wiring above the clamp, which is safe in both directions: the id block
+    /// reads only the row source, and the clamps read the row count, the viewport
+    /// and the row heights and never an id.
     ///
     /// - Parameters:
     ///   - measuring: Whether this is a measuring pass, in which case this does

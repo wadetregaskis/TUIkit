@@ -21,9 +21,20 @@
 extension ItemListHandler {
 
     /// Applies whichever anchor mode is in effect. Called once per RENDER pass
-    /// (it mutates the persistent scroll offset), after the frame's row count,
-    /// viewport, row heights and id resolver are wired and the ordinary clamp
-    /// has run.
+    /// (it mutates the persistent scroll offset) by
+    /// ``settleScrollPosition(measuring:overflowing:drawsTextIndicators:firstRowHeight:)``,
+    /// after the frame's row count, viewport, row heights and **id resolver** are
+    /// wired — the resolver because a `.row` anchor is a row KEY, and without it
+    /// there is nothing to hold.
+    ///
+    /// This used to say "and the ordinary clamp has run" as though that mattered.
+    /// It does not: measured both ways, over a `.row` anchor adopted on a stranded
+    /// offset and a `.bottom` anchor whose list shrinks under it, the offsets,
+    /// held rows and cursors come out identical. Both paths below are defensive
+    /// about the offset they are handed — ``applyRowAnchorHold()`` re-derives its
+    /// held row when its own clamp moves the destination, and it and
+    /// `followBottomEdge()` each zero `scrollTopClipLines` rather than leaving a
+    /// clip behind — so the clamp has nothing left to correct.
     ///
     /// A no-op for a list that neither binds `.anchorPosition` nor declares a
     /// `defaultScrollAnchor` — which is every list written before this feature.
