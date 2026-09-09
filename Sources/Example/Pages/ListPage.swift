@@ -309,8 +309,12 @@ struct ListPage: View {
                     // How early the list scrolls to follow the moving
                     // selection: at the edge (default), 2 lines early, or
                     // keeping the selection centred.
+                    // NOT disabled with the selection off. The follow margin is
+                    // about the FOCUS cursor, which every row view has whether or
+                    // not it has a selection binding — `moveFocus(by:)` moves it
+                    // and `ensureFocusedItemVisible()` scrolls to it, and this is
+                    // how early. Only the highlight goes away with the binding.
                     FollowMarginPicker(selection: $multiLineFollowMargin)
-                        .disabled(!multiLineSelectable)
                     multiLineList
                 }
             }

@@ -307,8 +307,12 @@ struct TablePage: View {
                     Toggle("demo.selectionEnabled", isOn: $notesSelectable)
                     // How early the table scrolls to follow the moving
                     // cursor: at the edge (default), 2 lines early, or centred.
+                    // NOT disabled with the selection off. The follow margin is
+                    // about the FOCUS cursor, which every row view has whether or
+                    // not it has a selection binding — `moveFocus(by:)` moves it
+                    // and `ensureFocusedItemVisible()` scrolls to it, and this is
+                    // how early. Only the highlight goes away with the binding.
                     FollowMarginPicker(selection: $fixedHeightFollowMargin)
-                        .disabled(!notesSelectable)
                     // 300 rows in a fixed 20-row viewport → it scrolls. The Note
                     // column is `.flexible` with `.lineLimit(3)`, so each row's
                     // height varies: short notes stay one line, longer ones wrap
