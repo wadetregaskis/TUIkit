@@ -285,10 +285,22 @@ extension FrameDiffWriter {
     /// before any content is drawn, preventing stale content from previous pages
     /// from showing through when `strippedLength` miscalculates padding.
     ///
-    /// This is a **pure function** — no side effects.
+    /// Building a row is pure — `buildLine` is a function of `(rawLine,
+    /// terminalWidth, bgCode, reset)` and the rendering model in force. This
+    /// entry point is not, and the model is why: which host's walk a row gets
+    /// became switchable at runtime in 0745a47b (2026-08-26), so the first
+    /// thing here is to ask whether it moved since the last frame
+    /// (`invalidateIfProgramChanged()`) and, when it did, call `invalidate()`
+    /// — dropping the previous frames, all three reuse caches, all three cell
+    /// caches and the belief about what the terminal is wearing. Nothing else
+    /// here writes.
     ///
     /// - Parameters:
     ///   - buffer: The rendered frame buffer.
+    ///   - terminalWidth: The number of columns every row is clipped and
+    ///     padded to. Not a hint: it is what decides the right edge, so a
+    ///     caller passing the wrong number sees a sheared or an unfilled
+    ///     column rather than an error.
     ///   - terminalHeight: The number of rows to fill.
     ///   - bgCode: The ANSI background color code.
     ///   - reset: The ANSI reset code.
@@ -320,9 +332,12 @@ extension FrameDiffWriter {
     /// built line for any row whose raw buffer content — and the render
     /// parameters (width, background, reset) — are unchanged.
     ///
-    /// A built line is a pure function of `(rawLine, width, bgCode, reset,
-    /// isAppleTerminal, isITerm2, isGhostty, isWarp)` — the host flags are
-    /// fixed for the writer's lifetime, so the reuse key need not carry them.
+    /// A built line is a pure function of `(rawLine, width, bgCode, reset)` and
+    /// the rendering model in force, which the reuse key does not carry — and
+    /// does not have to, because a model change is not gradual:
+    /// `invalidateIfProgramChanged()` empties this cache on the frame it
+    /// happens, so every line the key can still match was built under the
+    /// model in force now.
     /// When the rest match the previous frame the
     /// previously-built line IS exactly what the builder would produce: output
     /// is byte-identical to ``buildOutputLines(buffer:terminalWidth:terminalHeight:bgCode:reset:)``.
