@@ -1030,6 +1030,12 @@ containers, and those carry it.
 `scrollPosition(_:)` family). Our internal struct (§5e) must not go
 public under that name with a different shape — rename it internally
 (`ScrollAnchorState`) or match the SwiftUI API if it ever surfaces.
+(Both branches were taken, and by two different types. The anchor half
+surfaced first as `ScrollAnchor<ID>` — a TUI-specific name for a
+TUI-specific shape, `db9d3e8a`, 2026-07-21 — and a SwiftUI-matching
+`ScrollPosition` shipped separately on 2026-08-09, `663156c5`, with
+`.scrollPosition(_:)` and `isPositionedByUser`. So the name is spent, on
+the thing SwiftUI spends it on.)
 TUI-specific surface stays where it always goes: optional modifiers
 (`.focusID`, an extent-oracle hint if we ever expose one), never required
 parameters — so SwiftUI source stays valid TUIkit source.
@@ -1197,7 +1203,9 @@ question.
    `ItemListHandler` has *already* made this move — its `scrollOffset` is an
    index, not a cell count. Aligning the two names would remove a real trap.
    (And whatever the internal name, not `ScrollPosition` if it ever goes
-   public — SwiftUI owns that name with a different shape, §9.)
+   public — SwiftUI owns that name with a different shape, §9. Settled:
+   `ScrollPosition` went public in `663156c5` as SwiftUI's shape, so the
+   name is no longer available for an internal offset type.)
 2. **Do `List`/`Table` drop internal windowing?** The consistent end state.
    Much larger; sequence separately.
 3. **Over-draw margin**: one row, or a viewport fraction? Sets how often
