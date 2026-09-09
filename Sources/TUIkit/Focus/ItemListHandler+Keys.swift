@@ -279,8 +279,11 @@ extension ItemListHandler {
     }
 
     /// The extent that ``ScrollableOffsetState`` measures
-    /// against. For ``ItemListHandler`` that's
-    /// ``itemCount`` — total rows.
+    /// against. For ``ItemListHandler`` that is everything
+    /// DRAWABLE, in rows: ``itemCount``, plus the row a
+    /// hovering drag borrows so a drop can reach past the last
+    /// one. (The indicators deliberately do not follow it —
+    /// see ``hasContentBelow`` immediately below.)
     ///
     /// (``scroll(by:)`` and ``clampScrollOffset()`` are
     /// supplied by the ``ScrollableOffsetState`` extension
@@ -789,7 +792,16 @@ extension ItemListHandler {
     }
 }
 
-// (``hasContentAbove`` / ``hasContentBelow`` / ``visibleRange``
-//  are provided by the ``ScrollableOffsetState`` extension and
-//  read the ``extent`` defined above. The list-specific
-//  arithmetic lives in ``ensureFocusedItemVisible()``.)
+// (``hasContentAbove``, ``rowsAbove``, ``scroll(by:)``,
+//  ``clampScrollOffset()`` and the wheel routing are provided by the
+//  ``ScrollableOffsetState`` extension and read the ``extent`` defined
+//  above. What this class answers for itself splits two ways, and the
+//  split decides who sees the answer: ``maxOffset`` and
+//  ``scrollFine(by:)`` are protocol REQUIREMENTS, so every caller
+//  dispatches to these versions, while ``hasContentBelow``,
+//  ``rowsBelow`` and ``visibleRange`` exist only in that extension and
+//  are merely SHADOWED here — a caller holding
+//  `any ScrollableOffsetState` still gets the extension's arithmetic,
+//  as the drag auto-scroll's `canForward` does. Each says at its own
+//  declaration why it differs. The list-specific arithmetic lives in
+//  ``ensureFocusedItemVisible()``.)

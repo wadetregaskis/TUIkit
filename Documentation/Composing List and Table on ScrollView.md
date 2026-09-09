@@ -26,14 +26,48 @@ every formula and predicate they previously open-coded:
 - ``clampScrollOffset()``
 - ``handleWheelEvent(_:linesPerTick:)``
 
-The two handlers differ in exactly one place: their `extent`.
+The two handlers' one deliberate difference is their `extent`.
 ``ScrollViewHandler.extent`` returns `contentHeight` (lines);
-``ItemListHandler.extent`` returns `itemCount` (rows). Every
+``ItemListHandler.extent`` counts rows. Every
 formula above is written in terms of `extent`, so the math
 works for both shapes without forcing them into a common unit.
 (Line-granularity scrolling has since landed in List/Table as
 internal ``ItemListHandler`` state without changing this
 contract — its `extent` is still row-based.)
+
+It stopped being the *only* difference within weeks of this
+being written. The drop-slot work of 2026-08-05 gave a full
+list a borrowed row so a drag could reach past the last one
+(`2423110e`), so ``ItemListHandler.extent`` is
+`itemCount + (dropSlotAddsRow ? 1 : 0)` — everything DRAWABLE,
+landing slot included — and four of the formulas listed above
+are answered by the handler itself rather than inherited, each
+for a reason the protocol cannot know. ``hasContentBelow`` and
+``rowsBelow`` count `itemCount`, from the offset actually drawn
+(`9b40f259`), because an indicator must never promise a row
+that is really the landing slot. ``visibleRange`` bounds by
+`itemCount` (`b9ff995e`), because `Table` subscripts `data`
+with it and there is nothing to subscript for a slot.
+``maxOffset`` walks real row heights back from the tail
+(`dca33038`), because the default's `extent - viewportHeight`
+mixes rows with lines and clamps a jump short of the bottom.
+The wheel path dispatches through an overridden
+``scrollFine(by:)`` besides.
+
+Not all of that is drift, and the difference decides who sees
+it. ``maxOffset`` and ``scrollFine(by:)`` are protocol
+*requirements* — declared, as the protocol's own notes say, for
+exactly this conformer — so every caller dispatches to the
+list's versions and the arithmetic is still stated once.
+``hasContentBelow``, ``rowsBelow`` and ``visibleRange`` are not
+requirements: they exist only in the extension, and
+``ItemListHandler`` shadows them. A caller holding the concrete
+handler gets the list's answer; a caller holding
+`any ScrollableOffsetState` gets the extension's — which is
+what the drag auto-scroll's `canForward` reads. So "differ in
+exactly one place" is not merely history: a reader taking it
+literally will mis-predict what a List does at its bottom edge,
+and which of two answers a mid-drag scroller gets there.
 
 What used to be three places where a wheel handler's
 `switch event.button` case-`.scrollUp`-and-case-`.scrollDown`
