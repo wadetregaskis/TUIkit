@@ -14,8 +14,11 @@ extension Color {
     /// - `.standard` and `.bright` already map to palette indices 0–15;
     ///   returned unchanged.
     /// - `.palette256` already in range; returned unchanged.
-    /// - `.rgb` is quantized to the nearest 6×6×6 cube color (16–231)
-    ///   or grayscale ramp entry (232–255), whichever is closer.
+    /// - `.rgb` is quantized to the nearest 6×6×6 cube color (16–231) in
+    ///   OKLab, hue weighted so it stays in the original's color family. A
+    ///   grayscale ramp entry (232–255) is reachable only by a near-neutral
+    ///   color: one with a hue of its own may land only on an entry that has a
+    ///   hue too, or on black, so a fading accent never steps through gray.
     /// - `.semantic` must be resolved before calling this method.
     public func downsampledToPalette256() -> Color {
         switch value {
@@ -317,9 +320,10 @@ extension Color {
 extension Color {
     /// Finds the nearest 256-color palette index for an RGB color.
     ///
-    /// "Nearest" is perceptual, not per-channel: candidates (the whole 6×6×6
-    /// cube plus the grayscale ramp) are compared in OKLab with the HUE
-    /// difference weighted double. The 216-colour cube is coarse in the pale
+    /// "Nearest" is perceptual, not per-channel: candidates (the 6×6×6 cube and
+    /// the grayscale ramp, less the neutral entries a colour that HAS a hue may
+    /// not take — see `keepsItsHue`) are compared in OKLab with the HUE
+    /// difference weighted ×4. The 216-colour cube is coarse in the pale
     /// range, where per-channel rounding shifts hue — Solid Colors' warm
     /// cream #F2DEC9 rounded to pink (255,215,215) instead of the warm
     /// (255,215,175), turning a whole background rosy. Weighting hue keeps a

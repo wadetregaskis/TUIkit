@@ -102,8 +102,9 @@ public enum ASCIICharacterSet: Sendable, Equatable {
     /// Printable ASCII. Works in every terminal.
     ///
     /// - Parameter glyphs: How many glyphs to use — the ideal subset is
-    ///   chosen from the calibrated repertoire (95 glyphs; ~19 distinct
-    ///   density levels for luminance rendering). `nil` uses them all.
+    ///   chosen from the calibrated repertoire (95 glyphs, which collapse to
+    ///   15 distinct density levels for luminance rendering: near-equal ink
+    ///   coverages add banding, not levels). `nil` uses them all.
     ///   `10` approximates the classic ASCII-art ramp.
     case ascii(glyphs: Int?)
 
