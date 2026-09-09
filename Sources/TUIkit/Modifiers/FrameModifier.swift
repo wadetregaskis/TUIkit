@@ -151,6 +151,15 @@ extension FlexibleFrameView: Renderable {
         if minWidth != nil || idealWidth != nil || maxWidth != nil {
             contentContext.hasExplicitWidth = true
         }
+        // …and the height half, which was missing. `hasExplicitHeight` is the flag
+        // by which "child views (like List) know to expand to fill the available
+        // height" (see `RenderContext.withAvailableHeight(_:)`), and a
+        // `.frame(height:)` is precisely a container giving a height — but only
+        // the width half was ever set, so a `Table` inside one hugged its rows and
+        // left the rest of the frame blank.
+        if minHeight != nil || idealHeight != nil || maxHeight != nil {
+            contentContext.hasExplicitHeight = true
+        }
 
         // Render content
         let buffer = TUIkit.renderToBuffer(content, context: contentContext)
@@ -316,6 +325,10 @@ extension FlexibleFrameView: Layoutable {
             contentContext.availableHeight = targetHeight
         }
         contentContext.hasExplicitWidth = true
+        // As the render path: a height constraint is an explicit height.
+        if minHeight != nil || idealHeight != nil || maxHeight != nil {
+            contentContext.hasExplicitHeight = true
+        }
         let contentSize = measureChild(
             content,
             proposal: ProposedSize(width: availableWidth, height: targetHeight),
@@ -394,6 +407,10 @@ extension FlexibleFrameView: Layoutable {
         contentContext.availableHeight = targetHeight ?? availableHeight
         if minWidth != nil || idealWidth != nil || maxWidth != nil {
             contentContext.hasExplicitWidth = true
+        }
+        // As the render path: a height constraint is an explicit height.
+        if minHeight != nil || idealHeight != nil || maxHeight != nil {
+            contentContext.hasExplicitHeight = true
         }
         let contentSize = measureChild(
             content,

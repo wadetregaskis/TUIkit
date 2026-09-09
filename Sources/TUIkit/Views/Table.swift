@@ -836,6 +836,33 @@ where Value.ID: Hashable {
             renderState = result.state
         }
 
+        // A table that was GIVEN a height fills it. `hasExplicitHeight` is
+        // documented on ``RenderContext/withAvailableHeight(_:)`` as the flag by
+        // which "child views (like List) know to expand to fill the available
+        // height", and `Table` was the one row view that did not keep it:
+        // `Table(threeRows).frame(height: 12)` drew a six-line bordered box with
+        // six blank lines beneath it. On the Example's Emoji page, where a filter
+        // narrows 1,212 rows to one, the box collapsed from twenty lines to three
+        // on a keystroke and jumped the page under the cursor.
+        //
+        // Padded to the width the rows already have, so the box's width cannot
+        // move either — a wider blank line would widen the container, a narrower
+        // one is fine but says nothing.
+        //
+        // An unframed table in a `VStack` reaches none of this and still hugs,
+        // which is what it wants.
+        let filledContentLines: [String]
+        if context.hasExplicitHeight, contentLines.count < rowArea {
+            let padWidth = contentLines.map(\.strippedLength).max() ?? 0
+            filledContentLines =
+                contentLines
+                + Array(
+                    repeating: String(repeating: " ", count: padWidth),
+                    count: rowArea - contentLines.count)
+        } else {
+            filledContentLines = contentLines
+        }
+
         let container = ContainerView(
             title: nil,
             style: ContainerStyle(showHeaderSeparator: true, showFooterSeparator: false),
@@ -848,7 +875,7 @@ where Value.ID: Hashable {
             // full interior, keeping every line the same width.
             VStack(alignment: .leading, spacing: 0) {
                 _TableHeaderView(line: headerLine)
-                _TableContentView(lines: contentLines, runs: contentRuns)
+                _TableContentView(lines: filledContentLines, runs: contentRuns)
             }
         }
         var buffer = TUIkit.renderToBuffer(container, context: context)
@@ -1599,8 +1626,8 @@ where Value.ID: Hashable {
         // whatever the granularity: whole rows can underfill under row
         // granularity, so pad the shortfall — a fixed-height table's frame
         // must not breathe as rows of different heights scroll through.
-        // A non-overflowing table (no indicators, no clip) keeps its
-        // natural, content-sized height.
+        // A non-overflowing table keeps its natural, content-sized height, unless
+        // it was GIVEN one — which `renderToBuffer` handles for both paths at once.
         if window.showsAbove || window.showsBelow || window.topClip > 0
             || window.reservesAbove || window.reservesBelow
         {
