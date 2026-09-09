@@ -119,12 +119,26 @@ public enum StorageDiagnostics {
     private struct State: Sendable {
         var last: StorageFailure?
         var count: Int = 0
+        var onFailure: (@Sendable (StorageFailure) -> Void)?
     }
 
     /// Called for every storage failure, on whichever thread raised it.
     ///
     /// Set to `nil` (the default) to rely on ``lastFailure`` alone.
-    nonisolated(unsafe) public static var onFailure: (@Sendable (StorageFailure) -> Void)?
+    ///
+    /// Behind the same lock as the rest of the state, and not
+    /// `nonisolated(unsafe)`, because the two ends of this property are on
+    /// different threads BY DESIGN: the app assigns it from the main actor
+    /// (installing a handler when a screen appears, clearing it when it goes)
+    /// while ``report(_:)`` reads it from the background save queue that
+    /// `@AppStorage`'s flush runs on. A closure is a two-word value — context
+    /// pointer and function pointer — so an unsynchronised read racing an
+    /// unsynchronised write can see one word of each and call a function with
+    /// another closure's context.
+    public static var onFailure: (@Sendable (StorageFailure) -> Void)? {
+        get { state.withLock { $0.onFailure } }
+        set { state.withLock { $0.onFailure = newValue } }
+    }
 
     /// The most recent failure, or `nil` if storage has not failed.
     public static var lastFailure: StorageFailure? {
@@ -141,17 +155,24 @@ public enum StorageDiagnostics {
     /// Public so a custom ``StorageBackend`` reports through the same channel as
     /// the built-in ones.
     public static func report(_ failure: StorageFailure) {
-        state.withLock {
-            $0.last = failure
-            $0.count += 1
+        // Taken under the lock, called outside it: a handler is app code and may
+        // do anything — including touching storage again, which would deadlock
+        // on a non-recursive lock. The same snapshot-then-act shape `flushToDisk`
+        // uses on the cache.
+        let handler = state.withLock { state -> (@Sendable (StorageFailure) -> Void)? in
+            state.last = failure
+            state.count += 1
+            return state.onFailure
         }
-        onFailure?(failure)
+        handler?(failure)
     }
 
     /// Clears ``lastFailure`` and ``failureCount``.
     ///
     /// For an app that has shown and dismissed the error, and for tests that
     /// assert on a specific operation.
+    /// The handler is deliberately NOT cleared: it is the app's installation,
+    /// not part of the failure record this clears.
     public static func reset() {
         state.withLock {
             $0.last = nil
