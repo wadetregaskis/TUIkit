@@ -7,17 +7,19 @@ ships at all. No framework code has changed. The recommendation is
 *provisional on the spike clearing the thresholds in §7*.
 
 **One-paragraph summary.** Move styling metadata out of the buffer's line
-strings. Keep one **plain-text** `String` per row (no ANSI), and carry style
-in a parallel, **by-value, cell-addressed** sidecar — `[[StyleRun]]`, one
+strings. Keep one **plain-text** `String` per row (no ANSI), and carry style in
+a parallel, **by-value, cell-addressed** sidecar — `[[StyleRun]]`, one
 `[StyleRun]` per line, each run a small POD covering a half-open range of
 terminal *columns*. ANSI is **generated once at flush** for changed rows and
-**parsed never** during layout. `overlays` and `hitTestRegions` are carried
-byte-for-byte. This is the AttributedString-style separation the owner asked
-for, at ~1.2–1.5× the current string memory and ~50–70× lighter than a cell
-grid, and it deletes the `ansiAware*` / `forEachVisibleANSIRun` /
-`insertOverlay`-SGR-restore family. It is **consolidation, not a bug fix** —
-the wide-char correctness a cell grid would buy us has already been paid down
-per-site (see §1).
+**parsed never** during layout. The side payloads are carried byte-for-byte —
+`overlays` and `hitTestRegions` when this was written, joined since by
+`animatedCells` and `opacityRegions`, which ride the same way
+(`FrameBuffer.swift:135`, `:145`, `:150`, `:164`). This is the
+AttributedString-style separation the owner asked for, at ~1.2–1.5× the current
+string memory and ~50–70× lighter than a cell grid, and it deletes the
+`ansiAware*` / `forEachVisibleANSIRun` / `insertOverlay`-SGR-restore family. It
+is **consolidation, not a bug fix** — the wide-char correctness a cell grid
+would buy us has already been paid down per-site (see §1).
 
 ---
 
@@ -115,9 +117,11 @@ transitions), not O(cells).
   `applyPersistentBackground` re-apply hacks.
 - **G4 — profile-aligned CPU.** The plain-line fast path must reach every
   `strippedLength`; ANSI parses must fall off the layout path.
-- **G5 — preserve `overlays` + `hitTestRegions` semantics exactly.** The
-  mouse/overlay system threads them through every combining op; that must not
-  change.
+- **G5 — preserve the side payloads' semantics exactly.** `overlays` and
+  `hitTestRegions` when this was written, and `animatedCells` and
+  `opacityRegions` since, which ride identically and are covered by the same
+  goal. The mouse/overlay system threads them through every combining op; that
+  must not change.
 - **G6 — measure before committing.** Runtime cost is gated on the spike in
   §7, not asserted on paper.
 
@@ -213,6 +217,8 @@ public struct FrameBuffer: Sendable, Equatable {
 
     public var overlays: [OverlayLayer] = []          // UNCHANGED
     public var hitTestRegions: [HitTestRegion] = []   // UNCHANGED
+    public var animatedCells: [AnimatedCellRun] = []  // UNCHANGED (added since)
+    public var opacityRegions: [OpacityRegion] = []   // UNCHANGED (added since)
 }
 ```
 
@@ -237,14 +243,16 @@ and gaps between runs meaning "default style". Normalization is mandatory and
 cheap. It (a) keeps run counts minimal — memory and encode speed — and (b)
 makes `==` canonical, so the render/measure memo still works: two buffers are
 equal iff same `text` + same normalized `styleRuns` + same `overlays` +
-`hitTestRegions`. This is **self-contained** — no external table to consult, so
-value/COW semantics hold and cross-frame memo stability is preserved.
+`hitTestRegions` + `animatedCells` + `opacityRegions`. This is
+**self-contained** — no external table to consult, so value/COW semantics hold
+and cross-frame memo stability is preserved.
 
-`Equatable` extends today's contract (`lines == overlays == hitTestRegions ==`)
-to `text == styleRuns == overlays == hitTestRegions`. `width` /
-`linesAreUniformWidth` / `lineWidths` remain excluded as pure-function-of-text
-perf hints. **Note:** color-only changes now correctly break equality — as they
-already do today, because color lives in the string.
+`Equatable` extends today's contract — now five fields, `lines == overlays ==
+hitTestRegions == animatedCells == opacityRegions` (`FrameBuffer.swift:319-329`)
+— by swapping `lines` for `text == styleRuns` and leaving the rest alone.
+`width` / `linesAreUniformWidth` / `lineWidths` remain excluded as
+pure-function-of-text perf hints. **Note:** color-only changes now correctly
+break equality — as they already do today, because color lives in the string.
 
 ### 2.4 Why by-value, no interning
 
@@ -396,8 +404,10 @@ identically. They are **non-negotiable** (G5).
 
 ### 4.2 The reconciliation contract
 
-Both are **orthogonal to row content** — they carry cell offsets, not text or
-style — so they survive every op verbatim, exactly as today:
+Every side payload is **orthogonal to row content** — `overlays` and
+`hitTestRegions` above, and `animatedCells` and `opacityRegions`, which arrived
+since and ride the same way — they carry cell offsets, not text or style, so
+they survive every op verbatim, exactly as today:
 
 | Op | Overlay/region handling (unchanged) |
 |---|---|
@@ -496,8 +506,9 @@ Store `text: [String]` + `styleRuns: [[StyleRun]]`. Keep `lines` as a
 **computed** shim: `get` = encode(text+runs)→ANSI (reusing the encode pass);
 `set` = ingest-parse ANSI→(plain, runs) via the `ansiSegments` scanner. All 187
 files touching `FrameBuffer` and all 56 `FrameBuffer(lines:)` producers compile
-**unchanged**. `width`/`linesAreUniformWidth`/`lineWidths`/`overlays`/
-`hitTestRegions` carry over verbatim. Rekey the render/measure memo and golden
+**unchanged**. `width`/`linesAreUniformWidth`/`lineWidths` and every side
+payload — `overlays`, `hitTestRegions`, `animatedCells`, `opacityRegions` —
+carry over verbatim. Rekey the render/measure memo and golden
 snapshots to structural `(text, styleRuns)` equality (§7 correctness gate).
 
 **Step 2 — migrate the hot combining ops** to operate on runs directly:
