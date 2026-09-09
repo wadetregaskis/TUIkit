@@ -90,6 +90,8 @@ extension HelpModifier: Renderable {
         dispatcher.requestFeature(.motion)
 
         let captured = text
+        let capturedStyle = context.environment.tooltipStyle
+        let capturedDelay = context.environment.tooltipDelay
         // The handler wants its own id, to hand a popover something to anchor
         // to — and cannot have it at the point the closure is formed. A box is
         // the smallest thing that closes the loop; the id is written before any
@@ -103,7 +105,8 @@ extension HelpModifier: Renderable {
                 // stale frame stamp would let a tooltip appear early by up to a
                 // frame.
                 tooltips.hovering(
-                    captured, handlerID: idBox.id, nowNanos: FrameClock.nowNanos)
+                    captured, handlerID: idBox.id, nowNanos: FrameClock.nowNanos,
+                    style: capturedStyle, delaySeconds: capturedDelay)
                 return true
             case .exited:
                 tooltips.leaving(captured)
@@ -125,8 +128,7 @@ extension HelpModifier: Renderable {
         // Declared every frame while a hover is pending, and it stops as soon as
         // the tooltip is showing or the pointer leaves — one wake per hover, not
         // a poll.
-        if let deadline = tooltips.hoverDeadlineNanos(
-            delaySeconds: context.environment.tooltipDelay),
+        if let deadline = tooltips.hoverDeadlineNanos(),
             deadline > context.environment.frameNowNanos
         {
             let seconds = Double(deadline - context.environment.frameNowNanos) / 1_000_000_000

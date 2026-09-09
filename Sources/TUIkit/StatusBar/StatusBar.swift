@@ -58,6 +58,13 @@ public struct StatusBar: View {
     /// The label color.
     public let labelColor: Color?
 
+    /// This frame's tooltip, already wrapped to the bar's content width.
+    ///
+    /// Passed in rather than read from the environment so `height` — which the
+    /// run loop reads before it renders anything — and the render agree by
+    /// construction. See `StatusBarState.tooltipLines`.
+    public var tooltipLines: [String] = []
+
     /// Creates a status bar with separate user and system items.
     ///
     /// - Parameters:
@@ -67,18 +74,22 @@ public struct StatusBar: View {
     ///   - alignment: The alignment of user items (default: `.leading`).
     ///   - highlightColor: The color for shortcut keys (default: `.cyan`).
     ///   - labelColor: The color for labels (default: nil, terminal default).
+    ///   - tooltipLines: This frame's tooltip, already wrapped to the bar's
+    ///     content width (default: none).
     public init(
         userItems: [any StatusBarItemProtocol] = [],
         systemItems: [any StatusBarItemProtocol] = [],
         style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .leading,
         highlightColor: Color = .cyan,
-        labelColor: Color? = nil
+        labelColor: Color? = nil,
+        tooltipLines: [String] = []
     ) {
         self.userItems = userItems
         self.systemItems = systemItems
         self.style = style
         self.alignment = alignment
+        self.tooltipLines = tooltipLines
         self.highlightColor = highlightColor
         self.labelColor = labelColor
     }
@@ -153,7 +164,8 @@ public struct StatusBar: View {
             style: style,
             alignment: alignment,
             highlightColor: highlightColor,
-            labelColor: labelColor
+            labelColor: labelColor,
+            tooltipLines: tooltipLines
         )
     }
 }
@@ -171,6 +183,7 @@ private struct _StatusBarCore: View, Renderable {
     let alignment: StatusBarAlignment
     let highlightColor: Color
     let labelColor: Color?
+    let tooltipLines: [String]
 
     var body: Never {
         fatalError("_StatusBarCore renders via Renderable")
@@ -201,7 +214,7 @@ private struct _StatusBarCore: View, Renderable {
         let sortedUserItems = visibleUserItems.sorted { $0.order < $1.order }
         let combinedItems = sortedUserItems + filteredSystemItems.sorted { $0.order < $1.order }
 
-        guard !combinedItems.isEmpty else {
+        guard !combinedItems.isEmpty || !tooltipLines.isEmpty else {
             return FrameBuffer()
         }
 
@@ -234,10 +247,14 @@ private struct _StatusBarCore: View, Renderable {
 
         switch style {
         case .compact:
+            let tips = tooltipContent(
+                width: style.barContentWidth(context.availableWidth), context: context)
             let result = renderCompact(layouts: layouts, width: context.availableWidth)
-            buffer = result.buffer
+            buffer = tips.isEmpty
+                ? result.buffer
+                : FrameBuffer(lines: tips + (combinedItems.isEmpty ? [] : result.buffer.lines))
             itemColumnOffset = 0
-            itemRowOffset = 0
+            itemRowOffset = tips.count
             // The placed columns on `result.placedColumns` are
             // already absolute on a single-row compact bar.
             return applyHitTestRegions(
@@ -253,13 +270,14 @@ private struct _StatusBarCore: View, Renderable {
             // A rule ABOVE the items, mirroring the app header's rule below
             // its content — the two are meant to read as one frame around the
             // page, so both come from `ChromeStyle.ruleRow`.
+            let tips = tooltipContent(
+                width: style.barContentWidth(context.availableWidth), context: context)
             let result = alignContent(layouts: layouts, width: context.availableWidth)
-            buffer = FrameBuffer(lines: [
-                ChromeStyle.ruleRow(width: context.availableWidth, context: context),
-                result.line,
-            ])
+            buffer = FrameBuffer(
+                lines: [ChromeStyle.ruleRow(width: context.availableWidth, context: context)]
+                    + tips + (combinedItems.isEmpty ? [] : [result.line]))
             itemColumnOffset = 0
-            itemRowOffset = 1
+            itemRowOffset = 1 + tips.count
             return applyHitTestRegions(
                 buffer: buffer,
                 layouts: layouts,
@@ -270,17 +288,21 @@ private struct _StatusBarCore: View, Renderable {
             )
 
         case .bordered:
+            let tips = tooltipContent(
+                width: style.barContentWidth(context.availableWidth), context: context)
             let result = renderBordered(
                 layouts: layouts,
                 width: context.availableWidth,
-                context: context
+                context: context,
+                tooltipRows: tips,
+                drawsItemRow: !combinedItems.isEmpty
             )
             buffer = result.buffer
             // The bordered renderer reports columns relative to
             // the inner content; offset by the border + the
             // single-space content padding it added on the left.
             itemColumnOffset = 1 + 1
-            itemRowOffset = 1
+            itemRowOffset = 1 + tips.count
             return applyHitTestRegions(
                 buffer: buffer,
                 layouts: layouts,
@@ -289,6 +311,19 @@ private struct _StatusBarCore: View, Renderable {
                 rowOffset: itemRowOffset,
                 context: context
             )
+        }
+    }
+
+    /// The tooltip's rows, styled and padded to the bar's content width.
+    ///
+    /// Padded rather than left ragged because a `FrameBuffer`'s lines are
+    /// compared as strings by the frame diff, and a short row would let whatever
+    /// the previous frame drew show through to its right.
+    private func tooltipContent(width: Int, context: RenderContext) -> [String] {
+        guard !tooltipLines.isEmpty else { return [] }
+        let colour = context.environment.palette.foregroundSecondary
+        return tooltipLines.map {
+            ANSIRenderer.colorize($0.padToVisibleWidth(width), foreground: colour)
         }
     }
 
@@ -642,22 +677,42 @@ private struct _StatusBarCore: View, Renderable {
     private func renderBordered(
         layouts: [ItemLayout],
         width: Int,
-        context: RenderContext
+        context: RenderContext,
+        tooltipRows: [String] = [],
+        drawsItemRow: Bool = true
     ) -> LaidOutBuffer {
         let contentPadding = 2  // 1 char padding left + right
         let innerWidth = width - BorderRenderer.borderWidthOverhead
+        // The same figure `ChromeStyle.barContentWidth` gives the tooltip
+        // wrapper, so the rows this boxes are the width it boxes them at.
         let contentWidth = innerWidth - contentPadding
         let aligned = alignContent(layouts: layouts, width: contentWidth)
         let content = " " + aligned.line + " "
 
         let border = context.environment.appearance.borderStyle
         let borderColor = context.environment.palette.border
+        func contentLine(_ text: String) -> String {
+            BorderRenderer.standardContentLine(
+                content: " " + text + " ", innerWidth: innerWidth, style: border,
+                color: borderColor)
+        }
 
-        let buffer = FrameBuffer(lines: [
-            BorderRenderer.standardTopBorder(style: border, innerWidth: innerWidth, color: borderColor),
-            BorderRenderer.standardContentLine(content: content, innerWidth: innerWidth, style: border, color: borderColor),
-            BorderRenderer.standardBottomBorder(style: border, innerWidth: innerWidth, color: borderColor),
-        ])
+        let buffer = FrameBuffer(
+            lines: [
+                BorderRenderer.standardTopBorder(
+                    style: border, innerWidth: innerWidth, color: borderColor)
+            ]
+                + tooltipRows.map(contentLine)
+                + (drawsItemRow
+                    ? [
+                        BorderRenderer.standardContentLine(
+                            content: content, innerWidth: innerWidth, style: border,
+                            color: borderColor)
+                    ] : [])
+                + [
+                    BorderRenderer.standardBottomBorder(
+                        style: border, innerWidth: innerWidth, color: borderColor)
+                ])
         return LaidOutBuffer(buffer: buffer, placedColumns: aligned.placedColumns)
     }
 }
@@ -665,9 +720,9 @@ private struct _StatusBarCore: View, Renderable {
 // MARK: - Status Bar Height Helper
 
 extension StatusBar {
-    /// The height of the status bar in lines: its one row of items plus
-    /// whatever chrome the style draws around it.
+    /// The height of the status bar in lines: its one row of items, any tooltip
+    /// rows above them, plus whatever chrome the style draws around it.
     public var height: Int {
-        style.barHeight(contentRows: 1)
+        style.barHeight(contentRows: (hasItems ? 1 : 0) + tooltipLines.count)
     }
 }

@@ -88,6 +88,17 @@ extension ChromeStyle {
     var contentWidthInset: Int {
         self == .bordered ? BorderRenderer.borderWidthOverhead : 0
     }
+
+    /// How wide a status bar's content may be at a terminal width of `width`.
+    ///
+    /// The bordered style spends its two walls AND a space of padding either
+    /// side of the content. Wanted in two places that must agree — the tooltip
+    /// row wraps its text to this, and `_StatusBarCore.renderBordered` lays the
+    /// items out at it — so it is one function rather than the same subtraction
+    /// written twice.
+    func barContentWidth(_ width: Int) -> Int {
+        max(1, width - contentWidthInset - (self == .bordered ? 2 : 0))
+    }
 }
 
 // MARK: - Shared drawing

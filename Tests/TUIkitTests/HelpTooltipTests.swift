@@ -114,18 +114,18 @@ struct HelpTooltipTests {
         let h = harness()
         _ = frame(Button("Rebuild") {}.help("Rebuild the index"), h)
         #expect(
-            h.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6) == nil,
+            h.tooltips.resolved(nowNanos: 0) == nil,
             "focus alone shows nothing")
 
         #expect(h.tooltips.toggleKeyboardReveal(focusID: h.focus.currentFocusedID))
         #expect(
-            h.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6)?.text == "Rebuild the index",
+            h.tooltips.resolved(nowNanos: 0)?.text == "Rebuild the index",
             "the key revealed it")
-        #expect(h.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6)?.source == .focus)
+        #expect(h.tooltips.resolved(nowNanos: 0)?.source == .focus)
 
         // …and it is a toggle.
         #expect(h.tooltips.toggleKeyboardReveal(focusID: h.focus.currentFocusedID))
-        #expect(h.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6) == nil, "toggled off")
+        #expect(h.tooltips.resolved(nowNanos: 0) == nil, "toggled off")
     }
 
     /// Nothing to reveal must report `false`, so the caller lets the key fall
@@ -166,12 +166,11 @@ struct HelpTooltipTests {
 
         let since = h.tooltips.hovered!.sinceNanos
         #expect(
-            h.tooltips.resolved(nowNanos: since, delaySeconds: 0.6) == nil,
-            "not yet — the pointer has not rested")
+            h.tooltips.hovered!.showAtNanos == since + Int64(0.6 * Double(Self.second)),
+            "the deadline came from the modifier's own tooltipDelay")
+        #expect(h.tooltips.resolved(nowNanos: since) == nil, "not yet — the pointer has not rested")
         #expect(
-            h.tooltips.resolved(
-                nowNanos: since + Int64(0.6 * Double(Self.second)), delaySeconds: 0.6)?.source
-                == .hover,
+            h.tooltips.resolved(nowNanos: h.tooltips.hovered!.showAtNanos)?.source == .hover,
             "…and now it has")
     }
 
@@ -185,13 +184,13 @@ struct HelpTooltipTests {
         }
         let buffer = frame(view, h)
         #expect(h.tooltips.toggleKeyboardReveal(focusID: h.focus.currentFocusedID))
-        #expect(h.tooltips.resolved(nowNanos: 0, delaySeconds: 0)?.source == .focus)
+        #expect(h.tooltips.resolved(nowNanos: 0)?.source == .focus)
 
         // Hover the Text on the second row.
         let region = buffer.hitTestRegions.first { $0.offsetY == 1 }
         #expect(region != nil, "the Text's region: \(buffer.hitTestRegions)")
         _ = h.dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 1, y: 1))
-        let shown = h.tooltips.resolved(nowNanos: Self.second, delaySeconds: 0)
+        let shown = h.tooltips.resolved(nowNanos: Self.second)
         #expect(shown?.source == .hover, "the pointer wins, got \(String(describing: shown))")
         #expect(shown?.text == "Lines executed at least once")
     }
@@ -264,10 +263,10 @@ struct HelpKeyTests {
         let fixture = makeFixture()
         publishFocusCandidate(fixture)
         #expect(fixture.handler.handle(KeyEvent(key: .character("?"))), "the key was consumed")
-        #expect(fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6)?.source == .focus)
+        #expect(fixture.tooltips.resolved(nowNanos: 0)?.source == .focus)
 
         #expect(fixture.handler.handle(KeyEvent(key: .character("?"))))
-        #expect(fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6) == nil, "toggled off")
+        #expect(fixture.tooltips.resolved(nowNanos: 0) == nil, "toggled off")
     }
 
     /// With nothing to reveal the key must fall through rather than report that
@@ -320,7 +319,7 @@ struct HelpKeyTests {
         #expect(fixture.handler.handle(KeyEvent(key: .character("?"))), "layer 0 consumed it")
         #expect(text == "?", "…by typing it, got \(text)")
         #expect(
-            fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6) == nil,
+            fixture.tooltips.resolved(nowNanos: 0) == nil,
             "so no tooltip was revealed — the caveat")
     }
 
@@ -335,6 +334,80 @@ struct HelpKeyTests {
 
         fixture.tooltips.helpKey = .f1
         #expect(fixture.handler.handle(KeyEvent(key: .f1)), "moved")
-        #expect(fixture.tooltips.resolved(nowNanos: 0, delaySeconds: 0.6)?.source == .focus)
+        #expect(fixture.tooltips.resolved(nowNanos: 0)?.source == .focus)
+    }
+}
+
+// MARK: - The status-bar presentation
+
+/// The tooltip drawn as a row of the status bar, above the shortcut items.
+@MainActor
+@Suite("Tooltip in the status bar")
+struct TooltipStatusBarTests {
+
+    private func bar(
+        items: [any StatusBarItemProtocol], tooltipLines: [String],
+        style: ChromeStyle = .bordered, width: Int = 40
+    ) -> [String] {
+        let view = StatusBar(
+            userItems: items, style: style, tooltipLines: tooltipLines)
+        let context = RenderContext(
+            availableWidth: width, availableHeight: view.height, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        return renderToBuffer(view, context: context).lines.map { $0.stripped }
+    }
+
+    @Test("The row is drawn above the items, inside the bar's own chrome")
+    func rowSitsAboveTheItems() {
+        let lines = bar(
+            items: [StatusBarItem(shortcut: "q", label: "quit")],
+            tooltipLines: ["Rebuild the index"])
+        #expect(lines.count == 4, "top border, tooltip, items, bottom border: \(lines)")
+        #expect(lines[1].contains("Rebuild the index"), "the tooltip row: \(lines)")
+        #expect(lines[2].contains("quit"), "the items below it: \(lines)")
+        // Inside the box, not above it — a bordered bar with a bare line over its
+        // top border reads as a rendering fault.
+        #expect(lines[0].contains("─") || lines[0].contains("━"), "top border first: \(lines)")
+    }
+
+    /// Two wrapped lines cost two rows, and `height` has to agree with the render
+    /// or the content area is sized against a bar of a different height. This is
+    /// the assertion that would fail if the two ever drifted.
+    @Test("height counts the wrapped rows, and the render draws exactly that many")
+    func heightMatchesTheRender() {
+        for rows in [["one"], ["one", "two"], ["one", "two", "three"]] {
+            let view = StatusBar(
+                userItems: [StatusBarItem(shortcut: "q", label: "quit")], tooltipLines: rows)
+            let lines = bar(
+                items: [StatusBarItem(shortcut: "q", label: "quit")], tooltipLines: rows)
+            #expect(
+                view.height == lines.count,
+                "\(rows.count) rows: height \(view.height) vs drawn \(lines.count)")
+        }
+    }
+
+    /// A bar with no items at all still makes room for a tooltip, or the row is
+    /// computed and then drawn nowhere.
+    @Test("A tooltip shows on an otherwise empty bar")
+    func tooltipWithoutItems() {
+        let lines = bar(items: [], tooltipLines: ["Nothing else to say"])
+        #expect(lines.count == 3, "top border, tooltip, bottom border: \(lines)")
+        #expect(lines[1].contains("Nothing else to say"), "\(lines)")
+    }
+
+    @Test("Each bar style puts the row above its items")
+    func everyStyleDrawsIt() {
+        for style in ChromeStyle.allCases {
+            let lines = bar(
+                items: [StatusBarItem(shortcut: "q", label: "quit")],
+                tooltipLines: ["Help me"], style: style)
+            let tooltipRow = lines.firstIndex { $0.contains("Help me") }
+            let itemRow = lines.firstIndex { $0.contains("quit") }
+            #expect(tooltipRow != nil, "\(style): no tooltip row in \(lines)")
+            #expect(itemRow != nil, "\(style): no item row in \(lines)")
+            if let tooltipRow, let itemRow {
+                #expect(tooltipRow < itemRow, "\(style): tooltip must precede items")
+            }
+        }
     }
 }

@@ -164,7 +164,9 @@ enum FocusRegistration {
             let tooltips = context.environment.tooltipState,
             context.environment.focusManager?.isFocused(id: focusID) == true
         else { return }
-        tooltips.focusing(text, handlerID: nil, nowNanos: context.environment.frameNowNanos)
+        tooltips.focusing(
+            text, handlerID: nil, nowNanos: context.environment.frameNowNanos,
+            style: context.environment.tooltipStyle)
     }
 
     /// Determines whether the given focusID currently has focus.

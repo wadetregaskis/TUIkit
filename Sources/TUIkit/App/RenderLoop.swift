@@ -479,6 +479,11 @@ extension RenderLoop {
         // against the right config.
         tuiContext.mouseEventDispatcher.setActiveSupport(baseMouseSupport)
         applyChromeStyle(from: scene)
+        // Before the height is read, which is the whole trick: a tooltip's
+        // triggers all land between frames (a mouse event, a key press, the
+        // scheduled wake for the hover delay), so the candidate is already known
+        // and the bar can be sized for it in this pass rather than the next.
+        resolveStatusBarTooltip(terminalWidth: terminalWidth, nowNanos: frameNowNanos)
         let statusBarHeight = statusBar.height
         invalidateCacheIfEnvironmentChanged(environment: environment)
 
@@ -957,6 +962,31 @@ extension RenderLoop {
         tuiContext.tooltipState.syncReveal(focusID: focusManager.currentFocusedID)
     }
 
+    /// Resolves this frame's tooltip into the status bar's rows, or clears them.
+    ///
+    /// The rows are wrapped HERE rather than by the bar, because the height the
+    /// content area is given is `statusBar.height` and that has to already know
+    /// how many lines the text takes. Wrapped to `ChromeStyle.barContentWidth`,
+    /// the one function the bordered renderer also lays its items out at.
+    ///
+    /// A popover-styled tooltip clears the rows: it is drawn by the content pass
+    /// as an overlay and must not also spend a row of chrome. The style comes
+    /// from the CANDIDATE, not from the root environment — `tooltipStyle` is a
+    /// subtree setting, so a panel asking for a popover inside an app that uses
+    /// the bar is answered by the panel.
+    fileprivate func resolveStatusBarTooltip(terminalWidth: Int, nowNanos: Int64) {
+        let tooltips = tuiContext.tooltipState
+        guard
+            let showing = tooltips.resolved(nowNanos: nowNanos),
+            showing.style == .statusBar
+        else {
+            statusBar.tooltipLines = []
+            return
+        }
+        statusBar.tooltipLines = TextWrapping.wrap(
+            showing.text, width: statusBar.style.barContentWidth(terminalWidth))
+    }
+
     /// Evaluates `App.body` with the environment published so `@Environment`
     /// reads from it. (`@State` binds to each view's render identity later, in
     /// `renderToBuffer` — not at construction here.)
@@ -1349,7 +1379,8 @@ extension RenderLoop {
             style: statusBar.style,
             alignment: statusBar.alignment,
             highlightColor: highlightColor,
-            labelColor: labelColor
+            labelColor: labelColor,
+            tooltipLines: statusBar.tooltipLines
         )
 
         let context = RenderContext(

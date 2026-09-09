@@ -47,8 +47,23 @@ public final class TooltipState: @unchecked Sendable {
         /// RECT is not stored: only the dispatcher knows where the compositor
         /// finally put the region, and it knows it after this is published.
         var handlerID: HitTestRegion.HandlerID?
-        /// The frame clock when this became the candidate, for the hover delay.
+        /// The frame clock when this became the candidate — the re-entry test,
+        /// not the deadline.
         var sinceNanos: Int64
+        /// The earliest moment it may be drawn: entry plus the hover delay, or
+        /// `sinceNanos` for a focus candidate, which waits on the key instead.
+        ///
+        /// The DEADLINE rather than the delay, because the delay is a subtree
+        /// setting (``EnvironmentValues/tooltipDelay``) and only the view that
+        /// carries the help can read it. Resolving against a delay fetched
+        /// somewhere else is how the two halves of one number drift apart.
+        var showAtNanos: Int64
+        /// How to present it — read from the environment of the view that
+        /// carries the help, not from the root's. `tooltipStyle` is a subtree
+        /// setting, so a panel asking for a popover inside an app that uses the
+        /// bar is answered by the panel; the run loop has only the root
+        /// environment and could not tell.
+        var style: TooltipStyle
     }
 
     /// The pointer's candidate. Set on `.entered`, cleared on `.exited`.
@@ -111,7 +126,8 @@ public final class TooltipState: @unchecked Sendable {
     ///   - nowNanos: The frame's monotonic clock, which the hover delay is
     ///     measured from.
     func hovering(
-        _ text: String, handlerID: HitTestRegion.HandlerID?, nowNanos: Int64
+        _ text: String, handlerID: HitTestRegion.HandlerID?, nowNanos: Int64,
+        style: TooltipStyle = .statusBar, delaySeconds: Double = 0
     ) {
         // Re-entering the SAME region must not restart the delay: the
         // dispatcher synthesises `.entered` whenever the cursor crosses a
@@ -119,7 +135,10 @@ public final class TooltipState: @unchecked Sendable {
         // frame is still the same view under the pointer. Compared on the text
         // rather than the id for exactly that reason — ids are per-frame.
         if let hovered, hovered.text == text { return }
-        hovered = Candidate(text: text, handlerID: handlerID, sinceNanos: nowNanos)
+        hovered = Candidate(
+            text: text, handlerID: handlerID, sinceNanos: nowNanos,
+            showAtNanos: nowNanos &+ Int64(max(0, delaySeconds) * 1_000_000_000),
+            style: style)
     }
 
     /// Records that the pointer has left the view it was over.
@@ -134,8 +153,13 @@ public final class TooltipState: @unchecked Sendable {
     }
 
     /// Records the focused view's help text for this frame.
-    func focusing(_ text: String, handlerID: HitTestRegion.HandlerID?, nowNanos: Int64) {
-        focused = Candidate(text: text, handlerID: handlerID, sinceNanos: nowNanos)
+    func focusing(
+        _ text: String, handlerID: HitTestRegion.HandlerID?, nowNanos: Int64,
+        style: TooltipStyle = .statusBar, delaySeconds: Double = 0
+    ) {
+        focused = Candidate(
+            text: text, handlerID: handlerID, sinceNanos: nowNanos,
+            showAtNanos: nowNanos, style: style)
     }
 
     /// Clears the per-frame focus slot. Called by the run loop before the frame,
@@ -179,22 +203,28 @@ public final class TooltipState: @unchecked Sendable {
 
     /// The tooltip to draw this frame, or `nil`.
     ///
-    /// - Parameters:
-    ///   - nowNanos: The frame's monotonic clock.
-    ///   - delaySeconds: How long the pointer must rest before a hover tooltip
-    ///     appears. A focus reveal ignores it — a key press has already waited.
-    /// - Returns: The text, its source, and the region to anchor a popover to.
-    func resolved(
-        nowNanos: Int64, delaySeconds: Double
-    ) -> (text: String, source: Source, handlerID: HitTestRegion.HandlerID?)? {
+    /// - Parameter nowNanos: The frame's monotonic clock.
+    /// - Returns: The text, its source, the region to anchor a popover to, and
+    ///   how to present it.
+    func resolved(nowNanos: Int64) -> Resolved? {
         if let hovered {
-            let elapsed = max(0, nowNanos - hovered.sinceNanos)
-            let needed = Int64(max(0, delaySeconds) * 1_000_000_000)
-            guard elapsed >= needed else { return nil }
-            return (hovered.text, .hover, hovered.handlerID)
+            guard nowNanos >= hovered.showAtNanos else { return nil }
+            return Resolved(
+                text: hovered.text, source: .hover, handlerID: hovered.handlerID,
+                style: hovered.style)
         }
         guard keyboardRevealed, let focused else { return nil }
-        return (focused.text, .focus, focused.handlerID)
+        return Resolved(
+            text: focused.text, source: .focus, handlerID: focused.handlerID,
+            style: focused.style)
+    }
+
+    /// The tooltip a frame is drawing.
+    struct Resolved {
+        var text: String
+        var source: Source
+        var handlerID: HitTestRegion.HandlerID?
+        var style: TooltipStyle
     }
 
     /// When the hover delay expires, as a monotonic deadline — `nil` when
@@ -203,10 +233,7 @@ public final class TooltipState: @unchecked Sendable {
     /// The run loop is demand-driven, so a tooltip whose delay expires between
     /// frames appears only if something else happens to redraw. This is what
     /// `HelpModifier` schedules a one-shot wake against.
-    func hoverDeadlineNanos(delaySeconds: Double) -> Int64? {
-        guard let hovered else { return nil }
-        return hovered.sinceNanos &+ Int64(max(0, delaySeconds) * 1_000_000_000)
-    }
+    func hoverDeadlineNanos() -> Int64? { hovered?.showAtNanos }
 }
 
 // MARK: - Environment

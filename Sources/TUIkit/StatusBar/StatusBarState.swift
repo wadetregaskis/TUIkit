@@ -329,10 +329,26 @@ public final class StatusBarState: @unchecked Sendable {
     public var hasUserItems: Bool { !currentUserItems.isEmpty }
 
     /// The height of the status bar in lines, or 0 when it has nothing to show.
+    ///
+    /// A tooltip row counts, and counts even with no items: a bar that is
+    /// otherwise empty still has to make room for one, or the tooltip is
+    /// computed and then drawn nowhere.
     public var height: Int {
-        guard hasItems else { return 0 }
-        return style.barHeight(contentRows: 1)
+        guard hasItems || !tooltipLines.isEmpty else { return 0 }
+        return style.barHeight(contentRows: (hasItems ? 1 : 0) + tooltipLines.count)
     }
+
+    /// This frame's tooltip, wrapped to the bar's content width — empty when no
+    /// tooltip is showing or the showing one is a popover.
+    ///
+    /// Resolved by the run loop BEFORE ``height`` is read, which is what makes
+    /// the row cost one pass rather than two. That works because the tooltip's
+    /// triggers all land between frames: a mouse event, a key press, and a
+    /// scheduled wake for the hover delay. What the render publishes is the
+    /// `.onHover` REGISTRATION; the invocation has already happened. (The one
+    /// case that does lag a frame is a help string that changes while the
+    /// pointer is stationary, which is not worth a second pass.)
+    public internal(set) var tooltipLines: [String] = []
 }
 
 // MARK: - Public API
