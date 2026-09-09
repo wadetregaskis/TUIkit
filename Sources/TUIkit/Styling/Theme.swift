@@ -35,9 +35,11 @@ public struct Theme: Sendable {
     /// more specific entries win over its broader ones; any deeper subtree
     /// modifier still wins by proximity.
     public var styles: [StyleCascade.Entry]
-    /// Control styles to install, or `nil` to keep the inherited/default style.
+    /// The button style to install, or `nil` to keep the inherited/default style.
     public var buttonStyle: (any ButtonStyle)?
+    /// The list style to install, or `nil` to keep the inherited/default style.
     public var listStyle: (any ListStyle)?
+    /// The picker style to install, or `nil` to keep the inherited/default style.
     public var pickerStyle: (any PickerStyle)?
 
     public init(
