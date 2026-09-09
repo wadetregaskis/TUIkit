@@ -145,17 +145,35 @@ extension Color {
         }
 
         var entries = sampled.map { $0.downsampledToPalette256() }
-        var banned: Set<UInt8> = []
+        // The survivors, ASCENDING and built once. Both halves matter, and both
+        // used to be paid per pass: the set was rebuilt from `(16...255)` minus a
+        // banned set on every pass, and `nearestPalette256Index(among:)` sorted
+        // whatever it was handed — 240 entries — once per SAMPLE. A 36-cell
+        // gradient samples 145 times and can retire dozens of entries, so that is
+        // thousands of 240-element sorts to answer a question whose candidate
+        // order never changes.
+        //
+        // Free at -O, most of this function at -Onone, and the Example is run from
+        // a debug build: the Progress & Gauges page's first open was **1,182 ms**,
+        // of which 861 ms was one custom-stop gradient bar and 330 ms the rainbow
+        // one. Release was 30 ms before and after — this is a -Onone story, like
+        // `ASCIIPalette+Adaptive`'s buffer walks, and it is worth the same
+        // treatment for the same reason.
+        var survivors = Array(UInt8(16)...UInt8(255))
         // One entry retired per pass, and never below two, so this cannot spin.
         for _ in 0..<max(1, sampled.count) {
             guard let offender = firstMonotonicityBreak(in: entries, along: sampled) else { break }
-            guard let index = paletteIndex(of: entries[offender]) else { break }
-            banned.insert(index)
-            let survivors = Set((16...255).map(UInt8.init)).subtracting(banned)
+            guard let retired = paletteIndex(of: entries[offender]) else { break }
+            guard let position = survivors.firstIndex(of: retired) else { break }
+            survivors.remove(at: position)
             guard survivors.count > 2 else { break }
-            entries = sampled.map { colour in
-                guard let rgb = colour.rgbComponents else { return colour }
-                return .palette(
+            // Only the samples that had CHOSEN the retired entry can move. For any
+            // other sample the nearest survivor is unchanged by definition — its
+            // choice is still in the set — so re-deriving it produced the identical
+            // answer at the cost of a full sweep per pass.
+            for index in entries.indices where paletteIndex(of: entries[index]) == retired {
+                guard let rgb = sampled[index].rgbComponents else { continue }
+                entries[index] = .palette(
                     nearestPalette256Index(
                         red: rgb.red, green: rgb.green, blue: rgb.blue, among: survivors))
             }
@@ -251,15 +269,19 @@ extension Color {
     /// The nearest entry among a restricted candidate set — the repair's
     /// re-assignment, using the very same metric as the unrestricted search so
     /// that dropping an entry is the ONLY difference between them.
+    /// - Parameter candidates: The palette indices to choose from, **ascending**.
+    ///   An array rather than a `Set` because the walk needs an order — the lowest
+    ///   index wins a tie — and sorting a set to get one, per call, was most of
+    ///   this function's cost at -Onone (see `quantisedRamp`).
     private static func nearestPalette256Index(
-        red: UInt8, green: UInt8, blue: UInt8, among candidates: Set<UInt8>
+        red: UInt8, green: UInt8, blue: UInt8, among candidates: [UInt8]
     ) -> UInt8 {
         let target = oklab(red: red, green: green, blue: blue)
         let mustKeepHue = (target.a * target.a + target.b * target.b).squareRoot() >= Self.hueFloor
         var bestIndex: UInt8 = 16
         var bestDistance = Double.infinity
         let targetChroma = (target.a * target.a + target.b * target.b).squareRoot()
-        for index in candidates.sorted() {
+        for index in candidates {
             if mustKeepHue && !Self.keepsItsHue[Int(index) - 16] { continue }
             let distance = hueWeightedDistanceSquared(
                 target, chroma: targetChroma, palette256Lab[Int(index) - 16])
