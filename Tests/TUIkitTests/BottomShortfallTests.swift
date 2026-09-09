@@ -39,9 +39,10 @@ struct BottomShortfallTests {
         return handler
     }
 
-    private func settle(_ handler: ItemListHandler<Int>) {
+    private func settle(_ handler: ItemListHandler<Int>, firstRowHeight: Int = 3) {
         handler.settleScrollPosition(
-            measuring: false, overflowing: true, drawsTextIndicators: true, firstRowHeight: 3)
+            measuring: false, overflowing: true, drawsTextIndicators: true,
+            firstRowHeight: firstRowHeight)
     }
 
     @Test("The whole-row bottom really does leave a line over")
@@ -115,6 +116,51 @@ struct BottomShortfallTests {
         settle(handler)
         #expect(handler.scrollOffset == walk.top)
         #expect(handler.scrollTopClipLines == 0)
+    }
+
+    /// The `top == 1` exit, where the accepted top still pays for the
+    /// "▲ N more above" line and the candidate it rejected would not have.
+    ///
+    /// Every other fixture here uses 300 rows, so their walks stop ~295 rows from
+    /// the top, where the candidate's budget and the accepted top's are the same
+    /// number and the distinction is invisible.
+    @Test("Stopping one row from the top: the shortfall is the accepted top's")
+    func shortfallAtTopOneIsTheAcceptedBudget() throws {
+        // Rows of 5, 6 and 3 lines in a 10-line area. Row 0 does not fit, so the
+        // walk stops at top 1 — where the "▲ 1 more row above" line leaves the
+        // rows 9, and rows 1 and 2 are exactly 9. There is nothing to spend.
+        let handler = handler(rows: 3, contentHeight: 10)
+        let heights = [5, 6, 3]
+        handler.rowHeight = { heights[$0] }
+        let walk = try #require(handler.bottomWalk())
+        #expect(walk.top == 1, "the fixture really does stop one row from the top: \(walk)")
+        #expect(walk.shortfall == 0, "9 lines of budget, 9 lines of rows: \(walk)")
+
+        handler.scrollOffset = walk.top
+        settle(handler, firstRowHeight: heights[0])
+        #expect(handler.scrollOffset == 1, "nothing to spend, so the bottom stays whole-row")
+        #expect(handler.scrollTopClipLines == 0, "…and keeps no clip")
+    }
+
+    /// The reported shape at a row count that reaches the `top == 1` exit: six
+    /// three-line rows in a seventeen-line area. Fifteen lines of rows in a
+    /// sixteen-line budget, so one line IS owed — and the clip that spends it is
+    /// two, not one. At one, `ScrollWindowOrigin.absorbing` absorbs the clip
+    /// instead, the rows get all seventeen lines, and the sixth row is clipped to
+    /// two with no "▼ N more below" drawn.
+    @Test("Six three-line rows in seventeen: the clip spends the whole shortfall")
+    func shortfallAtTopOneSpendsTheWholeClip() throws {
+        let handler = handler(rows: 6)
+        let walk = try #require(handler.bottomWalk())
+        #expect(walk.top == 1, "the fixture really does stop one row from the top: \(walk)")
+        #expect(walk.shortfall == 1, "16 lines of budget, 15 lines of rows: \(walk)")
+
+        handler.scrollOffset = walk.top
+        settle(handler)
+        #expect(handler.scrollOffset == 0, "one row further back")
+        #expect(
+            handler.scrollTopClipLines == 2,
+            "…with two of its three lines clipped away, so its tail fills the line")
     }
 }
 

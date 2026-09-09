@@ -316,37 +316,53 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// whole-row screenful fifteen lines, and the sixteenth is blank — see
     /// ``fillBottomShortfall()``, which is what spends it.
     ///
+    /// The budget the shortfall is measured against is the ACCEPTED top's, never
+    /// the candidate the walk rejected — the local `budget(forTop:)` is asked
+    /// about a named top for exactly that reason.
+    ///
     /// `nil` when there are no row heights to walk (a single-line `Table`, the
     /// handler's own unit tests); the bound is arithmetic there.
     func bottomWalk() -> (top: Int, shortfall: Int, straddlingHeight: Int)? {
         guard let rowHeight, let contentHeight, contentHeight > 0 else { return nil }
+        // Reserve the "above" indicator's line only when there IS one — a
+        // scrollbar draws no such line and hidden indicators draw nothing at
+        // all, so in both cases the rows fill the full height.
+        // Under `always` both lines are there at every offset, including at
+        // the bottom this walk is finding and at row 0 — so the budget is a
+        // constant rather than a question about where the top lands.
+        //
+        // Asked about a top rather than carried in a running variable, because
+        // the two askers mean different tops: the fit test asks about the
+        // CANDIDATE (`top - 1`, the row it is trying to admit) and the shortfall
+        // about the ACCEPTED one. They differ by a line exactly when the walk
+        // stops at top 1 — row 0 did not fit, so the "▲ N more above" line stays
+        // and the rows keep only `contentHeight - 1`. Reporting the candidate's
+        // budget there made the shortfall a line too large, and
+        // ``fillBottomShortfall()`` then clipped a line too FEW off the row it
+        // backs up to: the destination overfilled its budget by one, the last row
+        // lost its last line, and the window had reached `count` so no
+        // "▼ N more below" was drawn to say so.
+        func budget(forTop topRow: Int) -> Int {
+            alwaysReservesIndicatorLines
+                ? max(1, contentHeight - 2)
+                : ((!reservesIndicatorLine || topRow == 0) ? contentHeight : contentHeight - 1)
+        }
         var used = 0
         var top = extent
-        var budget = contentHeight
         var straddling = 0
         while top > 0 {
-            // Reserve the "above" indicator's line only when there IS one — a
-            // scrollbar draws no such line and hidden indicators draw nothing at
-            // all, so in both cases the rows fill the full height.
-            // Under `always` both lines are there at every offset, including at
-            // the bottom this walk is finding and at row 0 — so the budget is a
-            // constant rather than a question about where the top lands.
-            budget =
-                alwaysReservesIndicatorLines
-                ? max(1, contentHeight - 2)
-                : ((!reservesIndicatorLine || top - 1 == 0) ? contentHeight : contentHeight - 1)
             // The row a hovering drag borrows (``dropSlotAddsRow``) sits past
             // the last real one and has no data to measure: it is the slot,
             // one blank line. Asking `rowHeight` for it indexes past the data.
             let height = top - 1 < itemCount ? max(1, rowHeight(top - 1)) : 1
-            if used + height > budget {
+            if used + height > budget(forTop: top - 1) {
                 straddling = height
                 break
             }
             used += height
             top -= 1
         }
-        return (top, max(0, budget - used), straddling)
+        return (top, max(0, budget(forTop: top) - used), straddling)
     }
 
     /// The row-activation action (``List``/``Table`` `.onRowActivate(_:)`):
