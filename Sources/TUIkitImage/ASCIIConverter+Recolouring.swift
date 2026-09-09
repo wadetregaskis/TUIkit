@@ -98,11 +98,27 @@ extension ASCIIConverter {
             scaled = scaled.sharpened(amount: edgeContrast)
         }
 
+        guard colorMode != .trueColor else { return scaled }
+
         // The split between ink and background, measured from THIS picture —
         // and before any dithering, which quantises against it.
-        let monoThreshold = Self.monoInkThreshold(for: scaled)
-
-        guard colorMode != .trueColor else { return scaled }
+        //
+        // Only `.mono` reads it. It reaches exactly one place,
+        // `PixelQuantiser.threshold`, which is consulted in the `.mono` arms and
+        // nowhere else — so every other mode was paying an Otsu histogram over
+        // every pixel of the picture for a number it then threw away. On a
+        // full-screen placement that is about a million pixels, per conversion,
+        // and a conversion happens on every store miss: first paint, resize,
+        // zoom, and every tick of a settings drag. Measured on the harness's
+        // 816k-pixel picture (release, medians of three): truecolor 7.64 → 6.60
+        // ns/pixel (−13.6%), ansi256 8.85 → 7.77 (−12.2%), `.mono` unchanged at
+        // 8.27 → 8.25 — and the harness's checksum is identical either side, so
+        // every mode draws exactly what it drew.
+        //
+        // `colorMode` is knowable here because `derived(from:depth:)` below only
+        // rewrites `.palette`, so it can neither produce nor consume `.mono`.
+        let monoThreshold =
+            colorMode == .mono ? Self.monoInkThreshold(for: scaled) : Self.midLuminance
 
         // An adaptive palette's colours come from the picture as it will be
         // drawn — after the curve and the lift, before anything quantises.
