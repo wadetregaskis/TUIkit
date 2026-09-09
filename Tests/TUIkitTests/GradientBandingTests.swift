@@ -2,7 +2,7 @@
 //  GradientBandingTests.swift
 //
 //  A gradient drawn on a 256-colour terminal is smooth when its cells move in
-//  ONE direction. `Color.quantisedRamp(stops:count:depth:)` is what makes that
+//  ONE direction. `Color.quantisedRamp(_:count:depth:)` is what makes that
 //  true; these are about everything that has to go through it.
 //
 //  The rule keeps being re-learned one strip at a time, because drawing a
@@ -27,7 +27,7 @@ struct GradientBandingTests {
     /// entries, and then any channel that moves against the way the source ramp
     /// moves it there. Zero is smooth.
     ///
-    /// The same test ``Color/quantisedRamp(stops:count:depth:)`` repairs
+    /// The same test ``Color/quantisedRamp(_:count:depth:)`` repairs
     /// against, restated here rather than reached into — a test that asks the
     /// implementation what "correct" means asks nothing.
     private func reversals(_ entries: [Color], along ramp: [Color]) -> Int {

@@ -219,7 +219,7 @@ extension Color {
     ///
     /// Returns the cell belonging to the SHORTER of the two runs at the break,
     /// because that is the one more likely to be a lateral excursion than a
-    /// step (see ``quantisedRamp(stops:count:depth:)``).
+    /// step (see ``quantisedRamp(_:count:depth:)``).
     private static func firstMonotonicityBreak(in entries: [Color], along ramp: [Color]) -> Int? {
         var runs: [(start: Int, end: Int)] = []
         for index in entries.indices {

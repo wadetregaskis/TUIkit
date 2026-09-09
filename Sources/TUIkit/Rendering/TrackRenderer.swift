@@ -158,7 +158,7 @@ enum TrackRenderer {
     ///
     /// Not `Gradient.color(at:)` per cell, because a per-cell nearest
     /// match has no memory of its neighbours and a gradient's smoothness is a
-    /// property of the SEQUENCE — see ``Color/quantisedRamp(stops:count:depth:)``,
+    /// property of the SEQUENCE — see ``Color/quantisedRamp(_:count:depth:)``,
     /// which is where the whole ramp is quantised at once and repaired into a
     /// monotone one. At truecolor depth it returns the same interpolation this
     /// always produced, so no caller has to branch on the terminal.
