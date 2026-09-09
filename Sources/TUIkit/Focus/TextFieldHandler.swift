@@ -10,7 +10,7 @@
 /// `TextField`. It handles:
 /// - Character insertion at cursor position
 /// - Backspace/delete for removing characters
-/// - Cursor navigation (left/right/home/end)
+/// - Cursor navigation (left/right/home/end, and by word with Option/Alt)
 /// - Text selection with Shift+Arrow keys
 /// - Copy/Cut/Paste via system clipboard
 /// - Submit action on Enter
@@ -37,22 +37,37 @@
 /// | Delete | Delete selection or character at cursor |
 /// | Left | Move cursor left (clears selection) |
 /// | Right | Move cursor right (clears selection) |
-/// | Home | Move cursor to start (clears selection) |
-/// | End | Move cursor to end (clears selection) |
+/// | Option+Left / Alt+b | Move to the previous word boundary (clears selection) |
+/// | Option+Right / Alt+f | Move to the next word boundary (clears selection) |
+/// | Home / Up | Move cursor to start (clears selection) |
+/// | End / Down | Move cursor to end (clears selection) |
 /// | Shift+Left | Extend selection left |
 /// | Shift+Right | Extend selection right |
+/// | Shift+Option+Left / Shift+Alt+b | Extend selection to the previous word boundary |
+/// | Shift+Option+Right / Shift+Alt+f | Extend selection to the next word boundary |
 /// | Shift+Up | Select to start of text |
 /// | Shift+Down | Select to end of text |
 /// | Shift+Home | Select to start of text |
 /// | Shift+End | Select to end of text |
 /// | Ctrl+A | Start of line |
 /// | Ctrl+E | End of line |
+/// | Ctrl+U | Erase the field — ALL of it, not just back to the caret |
 /// | Option+Ctrl+A | Select all text |
 /// | Ctrl+C | Copy selection to clipboard |
 /// | Ctrl+X | Cut selection to clipboard |
 /// | Ctrl+V | Paste from clipboard |
 /// | Ctrl+Z | Undo last change |
-/// | Enter | Trigger submit action |
+/// | Enter | Trigger the submit action — with no `onSubmit` the field declines Return, so a dialog's default button fires |
+///
+/// Option+Left and Alt+b are one binding, not two — likewise Option+Right and
+/// Alt+f: macOS Terminal sends the readline escapes `ESC b` / `ESC f` when
+/// Option is held with an arrow, in addition to the modified-arrow CSI
+/// sequences, so both spellings have to mean the same thing (`e9fc5b38` and
+/// `ac33ebbd`, both 2026-05-26). And a field carrying `textInputSuggestions`
+/// takes Down at the caret to open its pop-up, then the arrows — and, once a
+/// row is highlighted, the paging and jump keys too — plus Enter and Escape to
+/// drive it, before any row above applies; that half of the map is documented
+/// on the modifier.
 final class TextFieldHandler: PersistedFocusable {
     /// The unique identifier for this focusable element.
     var focusID: String
