@@ -72,7 +72,7 @@ public struct PreferenceValues: @unchecked Sendable {
     ///
     /// The fold is carried WITH the value because the only place that knows the
     /// key's type is the subscript that wrote it: ``merge(_:)`` walks
-    /// `[ObjectIdentifier: …]` and has no `K` to call ``PreferenceKey/reduce``
+    /// `[ObjectIdentifier: …]` and has no `K` to call ``PreferenceKey/reduce(value:nextValue:)``
     /// through. Without it merge could only assign, which for an accumulating
     /// key means a child scope's value REPLACING everything the parent had
     /// already collected — two nested `.onPreferenceChange` observers over a
@@ -115,7 +115,7 @@ public struct PreferenceValues: @unchecked Sendable {
 extension PreferenceValues {
     /// Merges another set of preference values into this one.
     ///
-    /// Through each key's own ``PreferenceKey/reduce``, not by assignment: a key
+    /// Through each key's own ``PreferenceKey/reduce(value:nextValue:)``, not by assignment: a key
     /// that accumulates — summing heights, unioning a set — must accumulate here
     /// too, and this is the only place a scope's collected values meet its
     /// parent's. The default `reduce` is `value = nextValue()`, so a key that
