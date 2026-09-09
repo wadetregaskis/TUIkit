@@ -216,6 +216,72 @@ struct UserResizableTests {
         #expect(buffer.hitTestRegions.isEmpty, "a disabled view registered a drag target")
     }
 
+    /// The size the user asked for lives in `StateStorage` at the wrapper's OWN
+    /// identity, and `FocusRegistration.register` is the only thing in
+    /// `_UserResizableCore` that marks that identity active for the end-of-pass
+    /// prune. Content that is itself `Renderable` — a `Text` behind nothing but
+    /// a frame — hydrates no body there to mark it, so skipping `register` on
+    /// the disabled path collected the handler one frame later, and the size
+    /// with it. Deliberately no `.border()`: that expands to a `ContainerView`,
+    /// which HAS a body and would mark the identity by accident.
+    @Test("A disabled resizable keeps the size it was dragged to")
+    func disabledKeepsItsStoredSize() {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = focus
+        environment.applyRuntimeServices(from: tui)
+        environment.statusBar = StatusBarState()
+        let context = RenderContext(
+            availableWidth: 60, availableHeight: 4, environment: environment,
+            tuiContext: tui
+        ).isolatingRenderCache()
+
+        // ONE spelling, so `.disabled(true)` and `.disabled(false)` are the same
+        // static type and therefore the same render identity — which is what
+        // keys the stored size.
+        func pass(disabled: Bool) -> Int {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.stateStorage.beginRenderPass()
+            focus.beginRenderPass()
+            let width = renderToBuffer(
+                Text("hello").frame(maxWidth: .infinity)
+                    .userResizable(width: 20...80)
+                    .disabled(disabled),
+                context: context
+            ).width
+            tui.stateStorage.endRenderPass()
+            focus.endRenderPass()
+            return width
+        }
+
+        // Nothing asked for yet, so the offer is the ceiling clamped to the 60
+        // cells the context has.
+        #expect(pass(disabled: false) == 60)
+
+        let ids = focus.registeredFocusIDsInActiveSection()
+        guard let id = ids.first(where: { $0.hasPrefix("resizable") }) else {
+            Issue.record("the resizable did not register: \(ids)")
+            return
+        }
+        focus.focus(id: id)
+        guard let handler = focus.currentFocused as? _UserResizeHandler else {
+            Issue.record("the focused element is not the resize handler")
+            return
+        }
+        // Home is "as small as allowed": the range's floor, 20.
+        #expect(handler.handleKeyEvent(KeyEvent(key: .home)))
+        #expect(pass(disabled: false) == 20)
+
+        // The frame it is disabled ON still draws 20 — the handler is still there.
+        #expect(pass(disabled: true) == 20)
+        // The frame after is the bug: unmarked, the handler was pruned at the end
+        // of the one above, so a fresh one asks for nothing and the offer reverts
+        // to `widthBounds.maximum` — 80, clamped to 60.
+        #expect(pass(disabled: true) == 20, "a disabled resizable forgot its size")
+        #expect(pass(disabled: false) == 20, "re-enabling did not bring the size back")
+    }
+
     @Test("The whole of each live edge is a drag target, and the corner is its own")
     func dragTargetCoversTheEdges() {
         let context = makeRenderContext(width: 30, height: 8)

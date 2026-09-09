@@ -208,15 +208,34 @@ struct _UserResizableCore<Content: View>: View, Renderable {
 
         let childContext = offering(context, handler: handler)
 
-        // A disabled view is not resizable and does not take a place in the Tab
-        // order — the same rule every other interactive view follows — and
-        // neither is one whose every axis is pinned. Both still get the offer
-        // above: the bounds are the caller's, not the user's, and a `.disabled`
-        // box that forgot its ceiling would jump the moment it was disabled.
+        // Registered whether or not it can be focused, with `canBeFocused`
+        // carrying the answer — the convention every other interactive view
+        // follows, and the one `FocusManager.hasFocusableElement` is written
+        // against: the ring filters a disabled control at move time, and
+        // `FocusManager.register` gates auto-focus on the same flag.
+        //
+        // Unconditional for a second reason as well. `register` is also what
+        // marks this identity active for state GC, and nothing else in this view
+        // does: `persistFocusID` and `storage(for:)` do not, and `content`
+        // renders at this SAME identity, so content that is itself `Renderable`
+        // (a `Text` or a `Divider` behind nothing but modifiers) hydrates no
+        // body here to mark it either. Skipped on the path below,
+        // `StateStorage.endRenderPass` collected the handler at the end of the
+        // very first disabled or fully-pinned frame, and the frame after built a
+        // fresh one that asked for nothing: a view dragged to 20 of
+        // `width: 20...80` went back to the ceiling, 80. Permanently —
+        // re-enabling finds nothing left to restore.
+        FocusRegistration.register(context: context, handler: handler, focusID: focusID)
+
+        // A disabled view is not resizable, and neither is one whose every axis
+        // is pinned: no target, no mark, no keys, and no place in the Tab order,
+        // which is what the `canBeFocused` the registration above carried says.
+        // Both still get the offer above: the bounds are the caller's, not the
+        // user's, and a `.disabled` box that forgot its ceiling would jump the
+        // moment it was disabled.
         guard handler.canBeFocused else {
             return TUIkitView.renderToBuffer(content, context: childContext)
         }
-        FocusRegistration.register(context: context, handler: handler, focusID: focusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
 
         var buffer = TUIkitView.renderToBuffer(content, context: childContext)
