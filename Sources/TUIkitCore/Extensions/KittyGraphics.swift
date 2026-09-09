@@ -101,6 +101,28 @@ public enum KittyGraphics {
     /// chunked", which is a different statement from "the last chunk of one".
     ///
     /// - Parameters:
+    ///   - pixels: The picture, row-major and 8-bit, `format.stride` bytes a
+    ///     pixel with nothing between rows. Flat bytes rather than a pixel
+    ///     type because a full-screen picture is millions of pixels and the
+    ///     caller packs them once per image — an `RGBAImage`'s `[RGBA]` is NOT
+    ///     this layout. The whole array is then sent, so bytes past the stated
+    ///     size are wire cost for nothing; fewer than the size claims is
+    ///     refused outright, because the terminal decodes by the geometry it
+    ///     was given and would draw the garbled remainder rather than nothing.
+    ///   - format: Whether those bytes carry alpha, which is also the
+    ///     protocol's `f` key — ``PixelFormat`` says why the narrower one is
+    ///     worth choosing rather than always sending `rgba`.
+    ///   - width: The picture's width in pixels. The payload carries no shape
+    ///     of its own, which is why the size is stated here and why it is
+    ///     checked against `pixels.count`.
+    ///   - height: Its height in pixels.
+    ///   - id: The store slot it occupies, `1` through ``maximumImageID``. `0`
+    ///     is not an id but the protocol's word for "none", and the ceiling is
+    ///     what a direct-colour foreground carries whole — which is why the
+    ///     third mark every placeholder cell spells, the id's high byte, is
+    ///     always the mark for zero rather than absent. An id outside that
+    ///     range is refused rather than stored under a name no placement could
+    ///     spell.
     ///   - compressed: Whether to deflate the pixels first and say so with
     ///     `o=z`. Only where the terminal answered the compression probe
     ///     (``isCompressionSupported``) — a host that does not understand
@@ -110,7 +132,8 @@ public enum KittyGraphics {
     ///     the same either way: the protocol compresses BEFORE base64, and
     ///     chunks after.
     /// - Returns: the escapes, or `""` for a request that cannot be honoured
-    ///   (a non-positive size, or fewer pixels than the size claims).
+    ///   (a non-positive size, an id outside `1...maximumImageID`, or fewer
+    ///   pixels than the size claims).
     public static func transmit(
         pixels: [UInt8], format: PixelFormat = .rgba, width: Int, height: Int, id: ImageID,
         compressed: Bool = false
