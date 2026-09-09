@@ -573,7 +573,7 @@ extension String {
         withCursorForwardCompensation(erasingUnderGlyph: true) { $0.iTerm2CursorAdvance }
     }
 
-    /// Returns a copy of this string with Ghostty's two cursor-advance quirks
+    /// Returns a copy of this string with Ghostty's cursor-advance quirks
     /// worked around, by the same `ECH` + `CUF` treatment
     /// ``withITerm2CursorCompensation()`` uses: the VS-15 chrome glyphs
     /// (⬛︎ ⬜︎ — painted 2 cells, advanced 1, so an uncompensated label
@@ -582,9 +582,14 @@ extension String {
     /// the SF Symbols (measured 2026-08-28): the claimed second cell is one
     /// the glyph never paints, so with `CUF` alone it kept the terminal's
     /// default background on a coloured run. Ghostty has no
-    /// over-advancers in any class TUIkit emits — it is the only measured
-    /// terminal that advances VS-16, ZWJ, keycaps, flags and skin tones
-    /// exactly as claimed, so nothing else is rewritten on this path.
+    /// over-advancers left in any class TUIkit emits — it is the only measured
+    /// terminal that advances VS-16, ZWJ, keycaps and flags exactly as
+    /// claimed, and the one skin-tone spelling that over-advances here (a tone
+    /// with a redundant VS-16, which detaches to 4 cells against a claim of 2)
+    /// is normalized away before Ghostty sees it: the walk strips the selector
+    /// (`Character.withoutRedundantToneVS16`), and the plain pair then merges
+    /// to 1 and takes the same ECH+CUF repair as the glyphs above. Apart from
+    /// that strip, nothing is rewritten on this path.
     /// ANSI escape sequences are preserved.
     public func withGhosttyCursorCompensation() -> String {
         withCursorForwardCompensation(erasingUnderGlyph: true) { $0.ghosttyCursorAdvance }

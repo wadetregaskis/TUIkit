@@ -1107,7 +1107,9 @@ render as one merged glyph (👍🏽 = 2 cells), so the iTerm2/Warp swatch strip
 is deliberately NOT applied here — it would discard a correct rendering.
 
 - **Colour:** truecolor.
-- **Two under-advancers** (the only compensation Ghostty needs —
+- **Two under-advancers of its own** (on top of the classes every measured
+  host under-advances — bare pictographs, and the chrome whose ink overhangs
+  its cell (`↵`, below) — all repaired by the one walk,
   `withGhosttyCursorCompensation()`):
   - **VS-15 chrome glyphs** (⬛︎ ⬜︎ = emoji-presentation base + U+FE0E):
     paints 2, **advances 1**. Uncompensated this collides the following

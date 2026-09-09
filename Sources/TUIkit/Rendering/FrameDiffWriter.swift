@@ -66,8 +66,14 @@ final class FrameDiffWriter {
 
     /// Whether the host terminal is Ghostty, which advances every composed
     /// emoji class exactly as claimed (alone among the measured terminals)
-    /// but under-advances the VS-15 chrome glyphs ⬛︎ / ⬜︎ and Plane-16 PUA
-    /// SF Symbols. Its build path erases-then-CUFs just those two —
+    /// save one — a Fitzpatrick tone on a TEXT-presentation base merges to ONE
+    /// cell against a 2-cell claim, and with a redundant VS-16 riding along
+    /// detaches to FOUR (BMP measured 2026-08-26, SMP by the 2026-08-28 DSR
+    /// sweep) — and under-advances bare pictographs, the chrome whose ink
+    /// overhangs its cell, the VS-15 chrome glyphs ⬛︎ / ⬜︎ and Plane-16 PUA
+    /// SF Symbols. Its build path erases-then-CUFs every one of them, and
+    /// strips a redundant tone VS-16 first because that selector is what
+    /// defeats the merge —
     /// `String.withGhosttyCursorCompensation()`; no skin-tone strip, which
     /// would needlessly discard the correct merged rendering. Same
     /// detection/injection story as `isAppleTerminal`.

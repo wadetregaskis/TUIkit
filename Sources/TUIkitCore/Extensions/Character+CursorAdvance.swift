@@ -513,9 +513,17 @@ extension Character {
     ///
     /// Ghostty is by far the most Unicode-correct terminal TUIkit has
     /// measured: VS-16 clusters, keycaps, flags, lone regional indicators,
-    /// ZWJ sequences and Fitzpatrick skin tones ALL advance exactly the 2
-    /// cells ``terminalWidth`` claims — no compensation needed for any of the
-    /// classes Terminal.app and iTerm2 get wrong. Only two under-advance:
+    /// ZWJ sequences ALL advance exactly the 2 cells ``terminalWidth`` claims
+    /// — no compensation needed for the composed classes Terminal.app and
+    /// iTerm2 get wrong. Fitzpatrick tones do too on an emoji-presentation
+    /// base; on a TEXT-presentation base they are the one composed class
+    /// Ghostty gets wrong, merging to 1 against a claim of 2 (and detaching to
+    /// 4 when a redundant VS-16 rides along) — the first arm below, measured
+    /// 2026-08-26 for BMP bases and by the 2026-08-28 DSR sweep for SMP. Two
+    /// more classes under-advance, the first of them Ghostty's alone, on top
+    /// of the two every measured host under-advances (bare pictographs and the
+    /// chrome whose ink overhangs its cell, both read from the shared
+    /// predicates the body ends with):
     ///
     /// - **VS-15 chrome glyphs** (⬛︎ ⬜︎ — an emoji-presentation base plus
     ///   U+FE0E): painted 2 cells, cursor advances 1, so an uncompensated
