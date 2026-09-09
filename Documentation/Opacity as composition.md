@@ -35,6 +35,14 @@ worth recording here because it is not what §1 predicted:
   and they know their rectangles already. What the other 166 get is an
   `assert(isOpaque)` at the four emitters, so an unmigrated path is loud in a
   debug build and renders exactly as it does today otherwise.
+- **It costs nothing when nothing is translucent.** `ab_bench.py`, 14 reps,
+  `main` against the branch: `translucent` **+0.3%** [−0.5%, +1.5%],
+  `kitchensink` **+0.3%** [−0.7%, +0.5%], `deep` **−0.1%** [−0.4%, +0.1%] — all
+  three indistinguishable, RAM flat to 0.1 MB. Expected, and worth having
+  measured rather than assumed: an opaque colour stamps no region, so the only
+  per-frame addition on the common path is `OpacityRegion.isTranslucent` in the
+  resolver's drop filter (over a list that is usually empty) and an `assert` that
+  compiles out of a release build.
 - **Not honoured yet**, each said at its own line: a translucent gradient (a ramp
   states a colour per cell, and a region carries one alpha for a rectangle — the
   one place a rectangle is genuinely the wrong shape), `Text`'s attributed-run
