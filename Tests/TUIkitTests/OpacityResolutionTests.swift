@@ -814,4 +814,39 @@ struct OpacityForeignRunTests {
         #expect(resolved.animatedCells.count == 1)
         #expect(resolved.animatedCells.first?.offsetX == 6)
     }
+
+    /// Two cycling fades on one row each built a WHOLE-ROW run, and
+    /// `patchingAnimatedRun` replaces the span a run claims rather than merging
+    /// into it — so the run the replay applied second reverted the first's region
+    /// to the static opacity its rebuild had pinned, on every tick, and one of
+    /// the two fades never moved.
+    @Test("Two cycling fades on one row become one run, not two")
+    func twoCyclingFadesOnOneRowMerge() throws {
+        // Characters rather than colours as the oracle: over a destination that
+        // paints its own glyphs, alpha at or above 1/2 draws the source's
+        // character and below it the destination's, so each phase is legible in
+        // `stripped` without any colour arithmetic in the expectation.
+        var buffer = FrameBuffer(lines: ["AB"])
+        var left = OpacityRegion(offsetX: 0, offsetY: 0, width: 1, height: 1, opacity: 0.9)
+        left.cycle = OpacityCycle(phases: [0.9, 0.1], clock: .content)
+        var right = OpacityRegion(offsetX: 1, offsetY: 0, width: 1, height: 1, opacity: 0.9)
+        right.cycle = OpacityCycle(phases: [0.9, 0.9, 0.1], clock: .content)
+        buffer.opacityRegions = [left, right]
+
+        let resolved = buffer.resolvingOpacity(
+            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .black,
+            palette: palette())
+
+        #expect(resolved.animatedCells.count == 1, "one row, one run")
+        let run = try #require(resolved.animatedCells.first)
+        #expect(run.offsetY == 0)
+        #expect(run.width == 2)
+        // Two phases and three share a six-tick space, and each region reads its
+        // own phase at every tick of it.
+        #expect(
+            run.frames.map(\.stripped) == ["AB", "xB", "Ay", "xB", "AB", "xy"],
+            "\(run.frames.map(\.stripped))")
+        // And the frame for the tick the render drew IS the line it drew.
+        #expect(run.frames.first == resolved.lines[0])
+    }
 }
