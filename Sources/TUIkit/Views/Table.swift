@@ -254,7 +254,6 @@ extension Table {
     ///     Ctrl-D sort from the keyboard; omitting it leaves them inert, as a
     ///     SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
-
     ///   - columnSpacing: Spacing between columns (default: 2).
     ///   - emptyPlaceholder: Placeholder text when empty (default: the localized "No items").
     ///   - columns: A builder that defines the table columns.
@@ -263,7 +262,6 @@ extension Table {
         selection: Binding<Value.ID?>,
         sortOrder: Binding<[KeyPathComparator<Value>]>? = nil,
         focusID: String? = nil,
-
         columnSpacing: Int = 2,
         emptyPlaceholder: String = ViewConstants.localizedEmptyListPlaceholder,
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
@@ -366,7 +364,6 @@ extension Table {
     ///     Ctrl-D sort from the keyboard; omitting it leaves them inert, as a
     ///     SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
-
     ///   - columnSpacing: Spacing between columns (default: 2).
     ///   - emptyPlaceholder: Placeholder text when empty (default: the localized "No items").
     ///   - columns: A builder that defines the table columns.
@@ -375,7 +372,6 @@ extension Table {
         selection: Binding<Set<Value.ID>>,
         sortOrder: Binding<[KeyPathComparator<Value>]>? = nil,
         focusID: String? = nil,
-
         columnSpacing: Int = 2,
         emptyPlaceholder: String = ViewConstants.localizedEmptyListPlaceholder,
         @TableColumnBuilder<Value> columns: () -> [TableColumn<Value>]
