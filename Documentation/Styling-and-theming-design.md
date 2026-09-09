@@ -50,10 +50,17 @@ The heart of the design. One mechanism spans broad → specific.
 
 ### 3.1 `StyleAttributes` — a partial bag of styleable properties
 
-All fields optional; `nil` means "inherit / not set at this level".
+All fields optional; `nil` means "inherit / not set at this level" — except
+`textCase`, which needs a third state and is a DOUBLE Optional (`d4c9d403`,
+2026-08-25). SwiftUI's `textCase(nil)` *clears* an ancestor's transform rather
+than declining to speak, and one Optional cannot tell those apart: collapsing
+them made `.textCase(nil)` a silent no-op, so an inherited `.uppercase` could
+not be escaped from anywhere in the subtree. `nil` is "nothing was said",
+`.some(nil)` is "cleared here"; `effectiveTextCase` flattens the two that mean
+the same thing at render.
 
 ```swift
-public struct StyleAttributes: Sendable, Equatable {
+public struct StyleAttributes: Sendable, Hashable {
     public var foreground: Color?
     public var background: Color?
     public var bold: Bool?
@@ -61,7 +68,7 @@ public struct StyleAttributes: Sendable, Equatable {
     public var underline: Bool?
     public var strikethrough: Bool?
     public var dim: Bool?
-    public var textCase: TextCase?            // .uppercase / .lowercase / nil
+    public var textCase: TextCase??           // three states — see above
     // (extensible: border colour, etc.)
 
     /// `self` wins where non-nil, otherwise `base`. The merge primitive.
