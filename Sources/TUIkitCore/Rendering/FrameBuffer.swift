@@ -191,6 +191,11 @@ public struct FrameBuffer: Sendable, Equatable {
     /// Use this when the width is already known to avoid redundant computation.
     ///
     /// - Parameters:
+    ///   - lines: The buffer's content, one string per terminal row, ANSI included.
+    ///   - width: The visible width in cells, which the caller is asserting
+    ///     rather than the buffer measuring. It is what every consumer lays out
+    ///     against, so a wrong value misplaces content as surely as wrong
+    ///     lines would; `uniformWidth` and `lineWidths` are claims ABOUT it.
     ///   - uniformWidth: Pass `true` only when the caller knows every line in
     ///     `lines` is exactly `width` visible columns (e.g. it just padded them
     ///     to that width). Defaults to `false` — "unknown", the safe value that
@@ -1023,10 +1028,20 @@ extension FrameBuffer {
     ///
     /// - Parameters:
     ///   - newLines: The rebuilt line content.
+    ///   - width: The result's visible width, when the caller already knows it
+    ///     (padding: the input width plus its horizontal insets). Skips the
+    ///     per-line re-measure `FrameBuffer(lines:)` would do. `nil` keeps that
+    ///     measuring path.
+    ///   - uniformWidth: As ``init(lines:width:uniformWidth:lineWidths:)``, and
+    ///     honoured only alongside an explicit `width` — the measuring path
+    ///     works uniformity out for itself.
+    ///   - lineWidths: Likewise, and carried verbatim rather than shifted:
+    ///     per-line widths are position-independent.
     ///   - overlayShiftX: How far the content moved horizontally.
     ///   - overlayShiftY: How far the content moved vertically.
-    /// - Returns: A buffer with the new lines, shifted overlay layers and
-    ///   shifted hit-test regions.
+    /// - Returns: A buffer with the new lines and all four side payloads
+    ///   shifted: overlay layers, hit-test regions, animated cell runs and
+    ///   opacity regions.
     public func replacingLines(
         _ newLines: [String],
         width: Int? = nil,
