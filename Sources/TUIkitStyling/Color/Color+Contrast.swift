@@ -134,20 +134,25 @@ extension Color {
 
         let up = firstSatisfying(step: 1)
         let down = firstSatisfying(step: -1)
+        // One carry at the end rather than one per arm: this switch has four
+        // exits and three of them were already the same shape, which is exactly
+        // where a per-return field gets forgotten.
+        let floored: Color
         switch (up, down) {
         case (let brighter?, let darker?):
             let nearest =
                 abs(brighter - lightness) <= abs(darker - lightness) ? brighter : darker
-            return Self.hsl(hue, saturation, nearest)
+            floored = Self.hsl(hue, saturation, nearest)
         case (let brighter?, nil):
-            return Self.hsl(hue, saturation, brighter)
+            floored = Self.hsl(hue, saturation, brighter)
         case (nil, let darker?):
-            return Self.hsl(hue, saturation, darker)
+            floored = Self.hsl(hue, saturation, darker)
         case (nil, nil):
             let white = Self.rgb(255, 255, 255)
             let black = Self.rgb(0, 0, 0)
-            return ratio(white) >= ratio(black) ? white : black
+            floored = ratio(white) >= ratio(black) ? white : black
         }
+        return floored.carryingAlpha(of: self)
     }
 }
 

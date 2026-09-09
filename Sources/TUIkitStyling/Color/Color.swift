@@ -28,6 +28,46 @@ public struct Color: Sendable, Hashable {
     /// The internal color value.
     public let value: ColorValue
 
+    /// How opaque this colour is, 0 (invisible) through 255 (fully opaque).
+    ///
+    /// ## Why a byte and not a `Double`
+    ///
+    /// `ColorValue`'s widest payload is `.rgb(UInt8, UInt8, UInt8)`, so `Color`
+    /// is four bytes at alignment 1. A `UInt8` makes it five, still with no
+    /// padding; a `Double` makes it sixteen, aligned to eight, WITH padding
+    /// bytes — and `viewValueHash` hashes the raw bytes of every view struct,
+    /// where padding is undefined. A `Double` alpha would make the render memo's
+    /// key non-deterministic for two identical views. 1/255 steps are also finer
+    /// than the 256-colour cube can show. The public API is `Double`, quantised
+    /// on the way in.
+    ///
+    /// ## What honours it
+    ///
+    /// Nothing yet, and that is deliberate rather than unfinished: the paths that
+    /// resolve a colour to SGR bytes assert on it (see `Color+ANSICodes.swift`),
+    /// so a translucent colour reaching one is a debug failure rather than a
+    /// silently opaque cell. The public spellings — `Color.clear`, a real
+    /// `opacity(_:)`, the `opacity:` initialisers — land only once the paths a
+    /// reader will actually use honour it. See `Documentation/Opacity as
+    /// composition.md`.
+    public var alpha: UInt8 = 255
+
+    /// Whether this colour is fully opaque — the common case, and the one every
+    /// emitter asserts.
+    public var isOpaque: Bool { alpha == .max }
+
+    /// This colour with `alpha` carried over from `source`.
+    ///
+    /// Every `Color` → `Color` derivation ends in this, so "did it carry the
+    /// alpha" is one call to look for rather than a field to remember at each
+    /// `return`. `ColourAlphaStorageTests.derivationsCarryAlpha` is the table
+    /// that fails when a new derivation forgets.
+    func carryingAlpha(of source: Self) -> Self {
+        var copy = self
+        copy.alpha = source.alpha
+        return copy
+    }
+
     /// Internal enum for different color types.
     public enum ColorValue: Sendable, Hashable {
         case standard(ANSIColor)
@@ -279,11 +319,15 @@ extension Color {
         // 16 > the number of palette roles, so any acyclic reference chain
         // resolves fully within the cap; only a cycle reaches it.
         for _ in 0..<16 {
-            guard case .semantic(let token) = resolved.value else { return resolved }
+            guard case .semantic(let token) = resolved.value else {
+                return resolved.carryingAlpha(of: self)
+            }
             resolved = token.resolve(with: palette)
         }
-        if case .semantic = resolved.value { return .rgb(128, 128, 128) }
-        return resolved
+        if case .semantic = resolved.value {
+            return Color.rgb(128, 128, 128).carryingAlpha(of: self)
+        }
+        return resolved.carryingAlpha(of: self)
     }
 
     /// Creates a color from the 256-color palette.
@@ -421,7 +465,14 @@ extension Color {
     ///     view draws over.
     /// - Returns: The blended color, or `self` if either side is semantic.
     public func opacity(_ opacity: Double, over surface: Color) -> Self {
-        Self.lerp(self, surface, phase: 1 - opacity)
+        // CONSUMES the alpha rather than carrying it: this composites over a
+        // surface that is known, so its answer is a concrete colour and any
+        // further alpha would apply the same fade twice. `lerp` interpolates
+        // alpha as a fourth channel, which is right for an animation and wrong
+        // here, so the result is stamped opaque.
+        var result = Self.lerp(self, surface, phase: 1 - opacity)
+        result.alpha = .max
+        return result
     }
 
     /// This colour mixed with another — SwiftUI's spelling of ``lerp(_:_:phase:)``.
@@ -484,7 +535,20 @@ extension Color {
             l: start.l + (end.l - start.l) * clamped,
             a: start.a + (end.a - start.a) * clamped,
             b: start.b + (end.b - start.b) * clamped)
-        return .rgb(blended.red, blended.green, blended.blue)
+        var result = Color.rgb(blended.red, blended.green, blended.blue)
+        // The fourth channel, interpolated linearly — alpha has no perceptual
+        // space of its own, and OKLab has nothing to say about it. Both arms of
+        // this function therefore agree about alpha even though they disagree
+        // about colour, which is what a caller switching `colorSpace` expects.
+        result.alpha = UInt8(
+            min(
+                255,
+                max(
+                    0,
+                    (Double(from.alpha)
+                        + (Double(to.alpha) - Double(from.alpha)) * min(1, max(0, phase)))
+                        .rounded())))
+        return result
     }
 
     /// Linearly interpolates between two colors.
@@ -527,10 +591,15 @@ extension Color {
             return UInt8(min(255, max(0, value.rounded())))
         }
 
-        return .rgb(
+        var result = Color.rgb(
             blend(fromRGB.red, toRGB.red),
             blend(fromRGB.green, toRGB.green),
             blend(fromRGB.blue, toRGB.blue))
+        // Alpha is a fourth channel and interpolates like the others. Both colour
+        // animators go through here, so this is what makes a `withAnimation` fade
+        // of a colour's own opacity work rather than snap.
+        result.alpha = blend(from.alpha, to.alpha)
+        return result
     }
 }
 

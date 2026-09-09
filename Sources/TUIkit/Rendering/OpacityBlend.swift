@@ -530,6 +530,7 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for, never `.noColor`.
     /// - Returns: The colour in `SGRState`'s own form.
     fileprivate func sgrForeground(depth: ColorDepth) -> SGRState.Colour {
+        assert(isOpaque, "translucent colour reached sgrForeground: alpha \(alpha)")
         switch downsampled(to: depth).value {
         case .standard(let ansi): return .named(Int(ansi.foregroundCode))
         case .bright(let ansi): return .named(Int(ansi.brightForegroundCode))
@@ -553,6 +554,7 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for, never `.noColor`.
     /// - Returns: The colour in `SGRState`'s own form.
     fileprivate func sgrBackground(depth: ColorDepth) -> SGRState.Colour {
+        assert(isOpaque, "translucent colour reached sgrBackground: alpha \(alpha)")
         switch downsampled(to: depth).value {
         case .standard(let ansi): return .named(Int(ansi.backgroundCode))
         case .bright(let ansi): return .named(Int(ansi.brightBackgroundCode))

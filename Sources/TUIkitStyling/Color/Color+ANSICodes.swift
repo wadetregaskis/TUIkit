@@ -34,6 +34,19 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for.
     /// - Returns: The parameter strings, ready to join with `;`.
     package func foregroundCodes(depth: ColorDepth = ColorDepth.current) -> [String] {
+        // A translucent colour has no SGR spelling — the terminal has no alpha
+        // channel, so the only honest answer is the one the compositor gives,
+        // which is a concrete colour blended against what is behind the cell.
+        // Reaching here with one means a path emitted a colour without stamping
+        // an `OpacityRegion` for it; the cell renders at full strength and the
+        // reader sees a solid colour where they asked for a faint one.
+        //
+        // An assertion rather than a `fatalError` (which is what `.semantic`
+        // gets) because unlike an unresolved semantic colour this degrades to
+        // exactly today's behaviour: opaque. Loud in every debug and test build,
+        // and never a crash in someone's terminal. The paths still to be
+        // migrated are listed in `Documentation/Opacity as composition.md`.
+        assert(isOpaque, "translucent colour reached \(#function): alpha \(alpha)")
         if depth == .noColor { return [] }
         switch downsampled(to: depth).value {
         case .standard(let ansi): return ["\(ansi.foregroundCode)"]
@@ -52,6 +65,19 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for.
     /// - Returns: The parameter strings, ready to join with `;`.
     package func backgroundCodes(depth: ColorDepth = ColorDepth.current) -> [String] {
+        // A translucent colour has no SGR spelling — the terminal has no alpha
+        // channel, so the only honest answer is the one the compositor gives,
+        // which is a concrete colour blended against what is behind the cell.
+        // Reaching here with one means a path emitted a colour without stamping
+        // an `OpacityRegion` for it; the cell renders at full strength and the
+        // reader sees a solid colour where they asked for a faint one.
+        //
+        // An assertion rather than a `fatalError` (which is what `.semantic`
+        // gets) because unlike an unresolved semantic colour this degrades to
+        // exactly today's behaviour: opaque. Loud in every debug and test build,
+        // and never a crash in someone's terminal. The paths still to be
+        // migrated are listed in `Documentation/Opacity as composition.md`.
+        assert(isOpaque, "translucent colour reached \(#function): alpha \(alpha)")
         if depth == .noColor { return [] }
         switch downsampled(to: depth).value {
         case .standard(let ansi): return ["\(ansi.backgroundCode)"]

@@ -26,7 +26,7 @@ extension Color {
             return self
         case .rgb(let red, let green, let blue):
             let index = Self.nearestPalette256Index(red: red, green: green, blue: blue)
-            return .palette(index)
+            return Color.palette(index).carryingAlpha(of: self)
         case .semantic:
             return self
         }
@@ -45,9 +45,10 @@ extension Color {
         case .standard, .bright:
             return self
         case .palette256(let index):
-            return Self.palette256ToANSI16(index)
+            return Self.palette256ToANSI16(index).carryingAlpha(of: self)
         case .rgb(let red, let green, let blue):
             return Self.rgbToNearestANSI16(red: red, green: green, blue: blue)
+                .carryingAlpha(of: self)
         case .semantic:
             return self
         }
