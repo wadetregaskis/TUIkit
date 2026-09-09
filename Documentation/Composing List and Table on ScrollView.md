@@ -183,10 +183,19 @@ if let region = fullBuffer.hitTestRegions.first(where: {
 
 For this to work when List composes on ScrollView, the
 focused row's hit-test region has to carry
-``ItemListHandler.focusID``. The current ``_ListCore`` doesn't
-emit per-row regions tagged with the handler's focusID — its
-container-wide region carries `focusID = handler.focusID`,
-and individual rows have no regions at all.
+``ItemListHandler.focusID``. That much has since landed on its
+own, ahead of any composition: ``_ListCore`` inserts a region
+covering the cursor row, tagged with the handler's focusID, at
+index 0 (`0f8f202c`, 2026-07-18), so an enclosing ScrollView
+follows the selection rather than the list's top. Nor are rows
+regionless any more — each row's own regions (a row's
+`.onMouseEvent`, a `Button` inside it) are translated into the
+list's buffer (`8591d7ce`, 2026-07-09), because otherwise the
+container fallback is the only thing a click can ever reach.
+
+The sketch below is what that work followed, and the care it
+warned of is why the fallback was kept rather than split: the
+marker region went in ON TOP of it.
 
 The fix is straightforward: when rendering a row, if its
 `rowIndex == handler.focusedIndex`, emit a hit-test region
