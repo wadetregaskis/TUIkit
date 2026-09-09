@@ -77,6 +77,21 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         }
 
         let palette = context.environment.palette
+        // One background escape per ramp ENTRY, built on demand and reused by
+        // every later run that lands on the same entry. This is
+        // `PaintRenderer.band`'s `sequences` table on the background side, and
+        // for the same reason: an escape is not a lookup. `backgroundEscape()`
+        // re-quantises the colour, spells it as an array of up to five
+        // parameter strings, joins them, concatenates twice, and evaluates
+        // `ColorDepth.current` — two task-local reads — as its default
+        // argument. A block fill walks every entry once per ROW, so all of
+        // that was asked once per run.
+        //
+        // Deliberately NOT sized here: the `variesAcrossRow` fast path below
+        // never touches the table, and an array per fill to hold one entry is
+        // what `band`'s own note measured as the entire cost of
+        // `.gradientExtent(.subtree)`.
+        var escapes: [String?] = []
         let lines = buffer.lines.enumerated().map { row, line -> String in
             let padded = line.padToVisibleWidth(width)
             guard sampler.variesAcrossRow else {
@@ -93,14 +108,61 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             // column, and slicing one run at a time rebuilt this row's segment
             // list and rescanned it from the first byte for each of them.
             let runs = sampler.runs(row: row, cells: width)
+            if escapes.isEmpty {
+                escapes = [String?](repeating: nil, count: sampler.ramp.count)
+            }
             var result = ""
-            result.reserveCapacity(padded.utf8.count * 2 + 16)
+            // What THIS path emits, which is not two bytes a cell: a run per
+            // cell, each an SGR introducer (~19 bytes at truecolor) plus a
+            // reset, on top of whatever escapes the content already carried.
+            // `band` reserves 25 bytes a CELL for the same shape
+            // (PaintRenderer.swift:180); the cell count here is `width`, not
+            // `padded.utf8.count`, because `padded` already contains the
+            // content's own escapes and multiplying those by 25 would reserve
+            // tens of kilobytes for a heavily styled row.
+            result.reserveCapacity(width * 25 + padded.utf8.count + 16)
             padded.ansiAwareSlicedRuns(
                 runCount: runs.count,
                 width: { runs[$0].columns.count },
                 receive: { index, slice in
-                    result += ANSIRenderer.applyPersistentBackground(
-                        slice, color: runs[index].colour.resolve(with: palette))
+                    let entry = runs[index].entry
+                    // One background escape per ramp ENTRY, reused by every
+                    // later run — and every later ROW — that lands on the same
+                    // one. `PaintRenderer.band`'s `sequences` table on the
+                    // background side, for the same reason: an escape is not a
+                    // lookup. `backgroundEscape()` re-quantises the colour,
+                    // spells it as an array of up to five parameter strings,
+                    // joins them, concatenates twice, and evaluates
+                    // `ColorDepth.current` — two task-local reads — as its
+                    // default argument. A block fill walks every entry once per
+                    // ROW, so all of that was asked once per run.
+                    //
+                    // Bound with `if let` rather than tested for `nil` and then
+                    // read again with `??`: this runs once per run, and each
+                    // `[String?]` subscript is a retain and release of the
+                    // cached string, so the two-read spelling gives back part
+                    // of what the table saves.
+                    let escape: String
+                    if let cached = escapes[entry] {
+                        escape = cached
+                    } else {
+                        escape = ANSIRenderer.backgroundCode(
+                            for: sampler.ramp[entry].resolve(with: palette))
+                        escapes[entry] = escape
+                    }
+                    // `applyPersistentBackground` spelled out rather than
+                    // called: it IS `escape + restating(escape,
+                    // afterResetsIn:)`, and it built that sum as one more heap
+                    // string just so this could append it. Appending the two
+                    // halves is the same bytes without the throwaway.
+                    //
+                    // `""` — which is what a `.noColor` depth gives — restates
+                    // nothing and appends nothing, exactly as before: the empty
+                    // guard is inside `restating` itself, and a built-but-empty
+                    // escape stores as `.some("")`, so `if let` does not
+                    // mistake it for one that has not been built.
+                    result += escape
+                    result += ANSIRenderer.restating(escape, afterResetsIn: slice)
                 })
             return result + ANSIRenderer.reset
         }

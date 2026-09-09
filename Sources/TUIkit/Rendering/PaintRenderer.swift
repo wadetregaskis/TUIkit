@@ -496,22 +496,28 @@ struct RampSampler {
         ramp[entry(column: 0, rowTerm: rowTerm(row))]
     }
 
-    /// The `(columns, colour)` runs across one row, for a ramp that does.
-    func runs(row: Int, cells: Int) -> [(columns: Range<Int>, colour: Color)] {
+    /// The `(columns, entry)` runs across one row, for a ramp that does.
+    ///
+    /// The ramp ENTRY rather than the colour, so a caller can key a table on
+    /// it — the background twin of what
+    /// ``PaintRenderer/band(_:column:row:style:sampler:sequences:into:)`` does
+    /// with `sequences`. ``ramp`` subscripted by it is the colour, one lookup
+    /// away, and the walk already had the index in hand.
+    func runs(row: Int, cells: Int) -> [(columns: Range<Int>, entry: Int)] {
         guard cells > 0 else { return [] }
         let term = rowTerm(row)
-        var out: [(columns: Range<Int>, colour: Color)] = []
+        var out: [(columns: Range<Int>, entry: Int)] = []
         var start = 0
         var current = entry(column: 0, rowTerm: term)
         for column in 1..<cells {
             let next = entry(column: column, rowTerm: term)
             if next != current {
-                out.append((start..<column, ramp[current]))
+                out.append((start..<column, current))
                 start = column
                 current = next
             }
         }
-        out.append((start..<cells, ramp[current]))
+        out.append((start..<cells, current))
         return out
     }
 }
