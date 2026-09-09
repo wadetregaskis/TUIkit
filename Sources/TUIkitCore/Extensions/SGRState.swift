@@ -54,7 +54,15 @@ public struct SGRState: Sendable, Equatable {
     /// A colour as SGR spells it: a named code as given (`31`, `97`, `44`,
     /// `107`), a 256-colour index, or 24-bit components. Which slot it is in
     /// says whether the extended forms render as 38 or 48.
-    private enum Colour: Sendable, Equatable {
+    ///
+    /// `package`, not `private`, so a caller already holding a colour in a
+    /// richer form can reduce it to these three shapes ONCE and state the
+    /// result. `Color` lives in a sibling module this one cannot see (they are
+    /// declared as siblings with no dependency either way), so the reduction
+    /// cannot happen in here — it happens above both, and this is the shape it
+    /// hands down. The CASES are the whole of the package surface; every method
+    /// below stays internal to this module.
+    package enum Colour: Sendable, Equatable {
         case named(Int)
         case indexed(Int)
         case rgb(Int, Int, Int)
@@ -202,6 +210,36 @@ public struct SGRState: Sendable, Equatable {
         } else {
             apply("\u{1B}[" + parameters.joined(separator: ";") + "m")
         }
+    }
+
+    /// Sets the foreground to a colour already reduced to the form this state
+    /// keeps, or to the terminal's default (SGR 39) for `nil`.
+    ///
+    /// The third and last way in, and the cheapest: ``apply(_:)`` is for a
+    /// colour that arrives as SGR TEXT, ``setForeground(parameters:)`` for one
+    /// that arrives as a parameter LIST, and this for one the caller already
+    /// holds as the numbers. Reaching the same state through the list costs an
+    /// array and a `String` per code on the way out and an `Int` parse per code
+    /// on the way back in — for values that were in hand. The opacity blend
+    /// pays that once or twice per CELL of every translucent overlay, which is
+    /// what this exists for.
+    ///
+    /// There is deliberately no depth and no "draw no colour" case here: at
+    /// `ColorDepth.noColor` the answer is *change nothing*, which no colour
+    /// value can say, so the caller decides before calling. `Color
+    /// .foregroundCodes()` says the same thing by returning `[]`, which is why
+    /// ``setForeground(parameters:)`` guards emptiness rather than applying it.
+    ///
+    /// - Parameter colour: The colour, or `nil` for the terminal's default.
+    package mutating func setForeground(_ colour: Colour?) {
+        foreground = colour
+    }
+
+    /// The background twin of ``setForeground(_:)`` (SGR 49 for `nil`).
+    ///
+    /// - Parameter colour: The colour, or `nil` for the terminal's default.
+    package mutating func setBackground(_ colour: Colour?) {
+        background = colour
     }
 
     /// Folds one complete escape sequence into the state.

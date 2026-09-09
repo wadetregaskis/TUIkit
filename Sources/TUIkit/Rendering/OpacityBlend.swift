@@ -407,22 +407,121 @@ extension SGRState {
     /// This state with its foreground replaced. `nil` is the terminal's
     /// default (SGR 39) — what a cell that named no colour of its own had.
     ///
-    /// `SGRState` keeps its colours as SGR parameter lists (it lives a module
-    /// below ``Color`` and cannot hold one), so the colour's own codes are
-    /// handed over as they are. This used to build the `ESC[…m` sequence and
-    /// `apply` it — a parse per cell of every translucent overlay, 17% of
-    /// that page's frame — for a result `setForeground(parameters:)` states
-    /// outright; `SGRStateColourSetterTests` pins the two equal.
-    func settingForeground(_ color: Color?) -> Self {
+    /// The colour is handed over in the form ``SGRState`` actually keeps — a
+    /// named code, a 256-colour index, or three components — not as the
+    /// parameter list that spells it. Both routes reach the same state, and
+    /// `SGRStateColourSetterTests` pins them equal; this one skips the array
+    /// and up-to-five `String`s ``Color/foregroundCodes(depth:)`` builds and
+    /// the `Int` parse per code that read them back. Two rounds of the same
+    /// removal: the sequence build and its reparse went first (a parse per cell
+    /// of every translucent overlay, 17% of that page's frame), and this is the
+    /// parameter list that was still passing between them.
+    ///
+    /// - Parameters:
+    ///   - color: The colour, or `nil` for the terminal's default.
+    ///   - depth: The depth to quantise for. Defaults to the current one, read
+    ///     once per call exactly as the list route read it.
+    func settingForeground(_ color: Color?, depth: ColorDepth = ColorDepth.current) -> Self {
         var result = self
-        result.setForeground(parameters: color.map { $0.foregroundCodes() })
+        // NIL FIRST, THEN THE DEPTH — not the other way round. This is not a
+        // "handle the easy case early" ordering, it is the whole correctness of
+        // the function. `nil` means CLEAR the colour, and it clears at every
+        // depth, ``ColorDepth/noColor`` included. It is a NON-nil colour at
+        // `.noColor` that has to leave the state untouched, because there a
+        // colour has no SGR form at all — `foregroundCodes` returns `[]`, and
+        // ``SGRState/setForeground(parameters:)`` guards that emptiness rather
+        // than applying it. Opening with `guard depth != .noColor` instead
+        // would silently stop `nil` clearing on a monochrome terminal, which is
+        // the same shape as the fault that guard was written for: a faded bold
+        // heading coming back unemphasised.
+        guard let color else {
+            result.setForeground(nil)  // the SGRState.Colour? overload: SGR 39
+            return result
+        }
+        guard depth != .noColor else { return result }
+        result.setForeground(color.sgrForeground(depth: depth))
         return result
     }
 
     /// This state with its background replaced. `nil` is SGR 49.
-    func settingBackground(_ color: Color?) -> Self {
+    ///
+    /// The background twin of ``settingForeground(_:depth:)``, nil-before-depth
+    /// rule and all.
+    ///
+    /// - Parameters:
+    ///   - color: The colour, or `nil` for the terminal's default.
+    ///   - depth: The depth to quantise for.
+    func settingBackground(_ color: Color?, depth: ColorDepth = ColorDepth.current) -> Self {
         var result = self
-        result.setBackground(parameters: color.map { $0.backgroundCodes() })
+        // See ``settingForeground(_:depth:)``: nil clears at every depth, a
+        // colour at `.noColor` changes nothing.
+        guard let color else {
+            result.setBackground(nil)  // the SGRState.Colour? overload: SGR 49
+            return result
+        }
+        guard depth != .noColor else { return result }
+        result.setBackground(color.sgrBackground(depth: depth))
         return result
+    }
+}
+
+// MARK: - A colour in the form the state keeps
+
+// Here rather than beside ``Color/foregroundCodes(depth:)``, and not because
+// this is where it is used: `SGRState` and `Color` are declared as SIBLING
+// modules with no dependency either way, so neither can name the other's type.
+// This module is the lowest one that sees both, which makes it the only place
+// the mapping can be written.
+extension Color {
+    /// This colour as the value ``SGRState`` holds for a FOREGROUND slot, at
+    /// `depth`.
+    ///
+    /// The same answer ``foregroundCodes(depth:)`` spells — same downsample,
+    /// same codes — without the parameter list in between. The slot matters
+    /// only for the NAMED colours (30–37 and 90–97 against 40–47 and 100–107);
+    /// the 256-colour and 24-bit forms carry their 38/48 introducer at render
+    /// time, from whichever slot they were stored in, so they are the same
+    /// value either way.
+    ///
+    /// Not defined at ``ColorDepth/noColor``: the answer there is "change
+    /// nothing", which no colour value can express. The caller checks — see
+    /// ``SGRState/settingForeground(_:depth:)``.
+    ///
+    /// - Parameter depth: The colour depth to quantise for, never `.noColor`.
+    /// - Returns: The colour in `SGRState`'s own form.
+    fileprivate func sgrForeground(depth: ColorDepth) -> SGRState.Colour {
+        switch downsampled(to: depth).value {
+        case .standard(let ansi): return .named(Int(ansi.foregroundCode))
+        case .bright(let ansi): return .named(Int(ansi.brightForegroundCode))
+        case .palette256(let index): return .indexed(Int(index))
+        case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
+        case .semantic:
+            fatalError(
+                "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
+            )
+        }
+    }
+
+    /// The BACKGROUND twin of ``sgrForeground(depth:)``.
+    ///
+    /// Kept as a twin rather than folded into one function with a slot
+    /// parameter, to match ``foregroundCodes(depth:)`` /
+    /// ``backgroundCodes(depth:)`` exactly: four functions with the same shape
+    /// in two files, and the codes read off the same two ``ANSIColor``
+    /// properties, is easier to keep honest than three plus a branch.
+    ///
+    /// - Parameter depth: The colour depth to quantise for, never `.noColor`.
+    /// - Returns: The colour in `SGRState`'s own form.
+    fileprivate func sgrBackground(depth: ColorDepth) -> SGRState.Colour {
+        switch downsampled(to: depth).value {
+        case .standard(let ansi): return .named(Int(ansi.backgroundCode))
+        case .bright(let ansi): return .named(Int(ansi.brightBackgroundCode))
+        case .palette256(let index): return .indexed(Int(index))
+        case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
+        case .semantic:
+            fatalError(
+                "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
+            )
+        }
     }
 }

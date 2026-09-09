@@ -83,4 +83,42 @@ struct SGRStateColourSetterTests {
         // The premise the case rests on: there really are no parameters here.
         #expect(Color.red.foregroundCodes(depth: .noColor).isEmpty)
     }
+
+    /// The `Color` front door — which is what the blend actually calls, and
+    /// which neither test above touches: both pin `setForeground(parameters:)`,
+    /// the SINK. `settingForeground(_:depth:)` no longer builds a parameter
+    /// list at all, so the parity that has to hold now is between the two
+    /// routes, at every depth and for `nil` as well as for a colour.
+    ///
+    /// `.noColor` is in the loop deliberately, and `nil` is in `colours`
+    /// deliberately: at that depth the two answers differ IN KIND. `nil`
+    /// clears the colour (SGR 39/49) at every depth, while a colour has no SGR
+    /// form and must leave the state untouched. A front door that checks the
+    /// depth before the nil silently stops clearing, and
+    /// ``noColorLeavesTheStateAlone`` cannot see it — that test iterates
+    /// `colours.compactMap { $0 }`, so it never passes `nil`.
+    @Test("The Color setters equal the parameter-list route, every depth and nil included")
+    func colourSettersMatchTheParameterRoute() {
+        var decorated = SGRState()
+        decorated.apply("\u{1B}[1;4;7;31;44m")  // bold, underline, inverse, red on blue
+        for depth in [ColorDepth.truecolor, .palette256, .basic16, .noColor] {
+            for base in [SGRState(), decorated] {
+                for colour in Self.colours {
+                    var expectedForeground = base
+                    expectedForeground.setForeground(
+                        parameters: colour.map { $0.foregroundCodes(depth: depth) })
+                    #expect(
+                        base.settingForeground(colour, depth: depth) == expectedForeground,
+                        "fg \(String(describing: colour)) @\(depth)")
+
+                    var expectedBackground = base
+                    expectedBackground.setBackground(
+                        parameters: colour.map { $0.backgroundCodes(depth: depth) })
+                    #expect(
+                        base.settingBackground(colour, depth: depth) == expectedBackground,
+                        "bg \(String(describing: colour)) @\(depth)")
+                }
+            }
+        }
+    }
 }
