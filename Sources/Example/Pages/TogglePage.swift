@@ -25,6 +25,13 @@ struct TogglePage: View {
     // one shows every style in the same on/off state for a side-by-side compare.
     @State private var styleDemoOn: Bool = true
 
+    /// What an unstyled `Toggle` on this page actually draws — the app-wide set
+    /// from the Theme page, with `.automatic` already resolved against this
+    /// terminal this frame. Read, not re-derived, so the "(default)" tag below
+    /// agrees with the glyphs in the sections above and follows a tmux re-attach
+    /// exactly as they do.
+    @Environment(\.effectiveToggleCharacterSet) private var defaultCharacterSet
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
@@ -63,9 +70,12 @@ struct TogglePage: View {
                     Text("page.toggle.toggleCharacterSetNote")
                         .foregroundStyle(.palette.foregroundSecondary)
                     HStack(spacing: 4) {
-                        // The "(default)" tag follows the terminal-adaptive
-                        // `.automatic`: emoji under Apple's Terminal.app,
-                        // unicode everywhere else.
+                        // The "(default)" tag names the set an unstyled Toggle
+                        // here actually draws — the Theme page's app-wide choice,
+                        // or, when that is the terminal-adaptive `.automatic`,
+                        // whatever it resolves to on this terminal this frame. So
+                        // picking ASCII on the Theme page moves the tag here, and
+                        // the tag never disagrees with the toggles further up.
                         checkboxColumn(".unicode", style: .unicode)
                         checkboxColumn(".emoji", style: .emoji)
                         checkboxColumn(".ascii", style: .ascii)
@@ -103,7 +113,12 @@ struct TogglePage: View {
     /// over an on/off pair rendered in that style.
     private func checkboxColumn(_ name: String, style: ToggleCharacterSet) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(style == .automatic ? "\(name) (\(L("page.toggle.default")))" : name).dim()
+            // NOT `style == .automatic`: that value is a marker meaning "ask the
+            // terminal", deliberately unequal to every decided set (see
+            // ToggleCharacterSet.resolvesFromTerminal), so the comparison was
+            // false for all three columns and tagged nothing. The set actually in
+            // force arrives in the environment instead.
+            Text(style == defaultCharacterSet ? "\(name) (\(L("page.toggle.default")))" : name).dim()
             Toggle("page.toggle.on", isOn: .constant(true))
             Toggle("page.toggle.off", isOn: .constant(false))
             // The switch under the same glyph style — under `.ascii` a

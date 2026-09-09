@@ -195,8 +195,23 @@ extension EnvironmentValues {
         set { self[ToggleCharacterSetKey.self] = newValue }
     }
 
-    /// The concrete style ``ToggleCharacterSet/automatic`` stands for this frame.
-    var resolvedAutomaticToggleCharacterSet: ToggleCharacterSet {
+    /// The concrete style ``ToggleCharacterSet/automatic`` stands for this
+    /// frame: ``ToggleCharacterSet/emoji`` on the terminals verified to draw the
+    /// emoji-repertoire squares, ``ToggleCharacterSet/unicode`` everywhere else
+    /// — and in a bare `EnvironmentValues`, so headless renders and tests are
+    /// deterministic.
+    ///
+    /// Public so an app can NAME the answer instead of re-deriving it: the
+    /// Example's Toggle page tags the matching column of its glyph comparison
+    /// "(default)". Re-deriving it in the app would be a second copy of the host
+    /// allowlist, and wrong under tmux — there the answer depends on the
+    /// attached CLIENT and changes on re-attach, which only `RenderLoop`'s
+    /// per-frame client probe sees. Reading this follows a re-attach for free.
+    ///
+    /// Comparing with ``ToggleCharacterSet/automatic`` does NOT answer this
+    /// question: that value is a marker, unequal to every decided set by design,
+    /// so `style == .automatic` is false for all of them.
+    public var resolvedAutomaticToggleCharacterSet: ToggleCharacterSet {
         get { self[ResolvedAutomaticToggleCharacterSetKey.self] }
         set { self[ResolvedAutomaticToggleCharacterSetKey.self] = newValue }
     }
@@ -207,7 +222,18 @@ extension EnvironmentValues {
     /// Every render site must read this rather than ``toggleCharacterSet``, or an
     /// `.automatic` marker reaches the glyph code as its ``ToggleCharacterSet/unicode``
     /// fallback and the adaptation silently does nothing.
-    var effectiveToggleCharacterSet: ToggleCharacterSet {
+    ///
+    /// Public because that applies to an app's own controls too, and because it is
+    /// the only way to NAME the answer. Comparing with
+    /// ``ToggleCharacterSet/automatic`` does not ask this question: that value is a
+    /// marker meaning "ask the terminal", unequal to every decided set by design,
+    /// so `style == .automatic` is false for all of them. Re-deriving the answer
+    /// instead would be a second copy of the host allowlist, and wrong under tmux —
+    /// there it depends on the attached CLIENT and changes on re-attach, which only
+    /// `RenderLoop`'s per-frame client probe sees. Reading this follows a re-attach
+    /// for free, and a mid-run flip re-renders memoized subtrees because
+    /// `EnvironmentSnapshot` already carries the resolved answer.
+    public var effectiveToggleCharacterSet: ToggleCharacterSet {
         let style = toggleCharacterSet
         return style.resolvesFromTerminal ? resolvedAutomaticToggleCharacterSet : style
     }
