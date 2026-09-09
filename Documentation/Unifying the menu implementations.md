@@ -144,12 +144,22 @@ test harness, and it is not claimed until it does.
 
 ## Chrome parity, once the assemblies agree
 
-Measured: for identical labels and no key equivalent the two totals already
-match (label + 6). What differs inside is the label's column (Picker starts at
-popup column 4, `Menu` at 3), the highlight extent (Picker spans the whole
-interior, `Menu` only the label width, leaving two dead gutters the pointer
-cannot hit), and the divider (Picker's is flush to both borders and pulses with
-the border; `Menu`'s is inset two cells and is static `palette.border`).
+Measured *before* the renderer merge: for identical labels and no key equivalent
+the two totals already matched (label + 6). What differed inside was the label's
+column (Picker started at popup column 4, `Menu` at 3), the highlight extent
+(Picker spanned the whole interior, `Menu` only the label width, leaving two dead
+gutters the pointer could not hit), and the divider (Picker's flush to both
+borders and pulsing with the border; `Menu`'s inset two cells and static
+`palette.border`).
+
+All three closed with the merge itself (`c721f93b`, 2026-07-27) rather than by
+matching chrome piece by piece — which is the whole argument of this document. A
+pop-up `Menu` goes through `renderMenuPopup` (`MenuPopover.swift:289`) into the
+same `DropdownMenu` assembly the Picker uses, so the interior-wide highlight, the
+flush pulsing divider and the one-cell `menuRowInset` (`:301`, `:321`) are the
+Picker's own — see "Also landed" above for what that cost in width. Only the
+inline style still has a renderer of its own, `renderMenuColumn`
+(`MenuPopover.swift:36`, reached from `_InlineMenuCore.swift:63`).
 
 ---
 
