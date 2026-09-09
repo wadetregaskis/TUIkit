@@ -119,7 +119,7 @@ public struct PlatformImageLoader: ImageLoader {
             }
             return try decodeWithNSImage(image, maxPixelCount: maxPixelCount)
         #else
-            return try decodeWithSTB(path: path, maxPixelCount: maxPixelCount)
+            return try decodeWithSTB(data: Self.fileBytes(atPath: path), maxPixelCount: maxPixelCount)
         #endif
     }
 
@@ -142,7 +142,7 @@ public struct PlatformImageLoader: ImageLoader {
     }
 }
 
-// MARK: - stb_image Length Limit
+// MARK: - stb_image Inputs (platform-independent)
 
 extension PlatformImageLoader {
     /// `byteCount` as the C `int` length `stbi_load_from_memory` takes,
@@ -162,32 +162,37 @@ extension PlatformImageLoader {
         }
         return length
     }
+
+    /// The bytes of the file at `path`, as an `ImageLoadError` rather than a
+    /// Foundation error.
+    ///
+    /// Outside the `#if !canImport(AppKit)` arm below for the same reason as
+    /// ``stbLength(forByteCount:)``: a helper compiled only on non-Apple
+    /// platforms could only be tested there.
+    ///
+    /// This is NOT about avoiding C, or about streaming: it is so that
+    /// stb_image never opens a file itself. `stbi_load(path:)` opens it with
+    /// the NARROW `fopen`, which on Windows decodes the bytes Swift hands it
+    /// under the process ANSI codepage instead of UTF-8 — CP1252 by default,
+    /// where the two UTF-8 bytes of `é` spell `Ã©`, so `café.png` is looked up
+    /// as `cafÃ©.png` and a path `FileManager.fileExists(atPath:)` confirmed
+    /// two statements earlier cannot be opened (`stbi_failure_reason()` says
+    /// "can't fopen"). Codepage coverage is irrelevant; the encoding mismatch
+    /// alone is enough. Reading the bytes here leaves Foundation, which goes
+    /// through the wide Win32 API, as the single path resolver on every host.
+    static func fileBytes(atPath path: String) throws -> Data {
+        do {
+            return try Data(contentsOf: URL(fileURLWithPath: path))
+        } catch {
+            throw ImageLoadError.decodingFailed("Could not read \(path): \(error)")
+        }
+    }
 }
 
 // MARK: - stb_image Backend (non-Apple platforms)
 
 #if !canImport(AppKit)
     extension PlatformImageLoader {
-
-        /// Decodes a file with stb_image into straight-alpha, row-major RGBA.
-        private func decodeWithSTB(path: String, maxPixelCount: Int?) throws -> RGBAImage {
-            var width: Int32 = 0
-            var height: Int32 = 0
-            var channels: Int32 = 0
-
-            guard let rawPixels = stbi_load(path, &width, &height, &channels, 4) else {
-                let reason = String(cString: stbi_failure_reason())
-                throw ImageLoadError.decodingFailed("stb_image: \(reason)")
-            }
-            defer { stbi_image_free(rawPixels) }
-
-            let pixelCount = Int(width) * Int(height)
-            if let limit = maxPixelCount, pixelCount > limit {
-                throw ImageLoadError.imageTooLarge(pixelCount: pixelCount, limit: limit)
-            }
-
-            return pixelsFromRaw(rawPixels, width: Int(width), height: Int(height))
-        }
 
         /// Decodes in-memory data with stb_image into straight-alpha, row-major RGBA.
         private func decodeWithSTB(data: Data, maxPixelCount: Int?) throws -> RGBAImage {

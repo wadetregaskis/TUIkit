@@ -746,4 +746,21 @@ struct PlatformDecoderParityTests {
 
         try expectCorners(PlatformImageLoader().loadImage(from: url.path))
     }
+
+    /// stb_image's own `stbi_load(path:)` opened the file with the narrow
+    /// `fopen`, which on Windows decodes a UTF-8 path under the ANSI codepage,
+    /// so this load failed with `decodingFailed("stb_image: can't fopen")` for
+    /// a file `fileExists(atPath:)` had just confirmed. This test cannot fail
+    /// on macOS (which never enters the stb arm) or Linux (whose `fopen` is
+    /// byte-transparent); it is the cross-platform contract pin, and Windows
+    /// cannot run it until the umbrella builds there.
+    @Test("Decodes the same image from a path outside ASCII")
+    func decodesKnownCornersFromNonASCIIPath() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tuikit-café-日本-\(UUID().uuidString).png")
+        try Self.cornerPNGData().write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        try expectCorners(PlatformImageLoader().loadImage(from: url.path))
+    }
 }
