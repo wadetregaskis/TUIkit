@@ -6,6 +6,17 @@
 
 import TUIkitCore
 
+// MARK: - Mouse Feature
+
+/// A single mouse feature that view modifiers can ask for on a
+/// per-frame basis (see `MouseEventDispatcher.requestFeature(_:)`).
+public enum MouseFeature: Sendable {
+    case clicks
+    case scrolling
+    case drag
+    case motion
+}
+
 // MARK: - Mouse Event Dispatcher
 
 /// Routes terminal mouse events to the view tree using hit-test
@@ -23,15 +34,6 @@ import TUIkitCore
 /// `.dragged` and `.released` events to that same handler regardless of
 /// where the cursor ended up — exactly the way GUI toolkits treat a
 /// drag once it has captured a control.
-/// A single mouse feature that view modifiers can ask for on a
-/// per-frame basis (see `MouseEventDispatcher.requestFeature(_:)`).
-public enum MouseFeature: Sendable {
-    case clicks
-    case scrolling
-    case drag
-    case motion
-}
-
 final class MouseEventDispatcher: @unchecked Sendable {
     /// The app's drag-and-drop session, when one is wired (see
     /// ``TUIContext``). The dispatcher stamps it with every press / drag /
