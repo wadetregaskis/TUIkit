@@ -481,24 +481,34 @@ extension RenderLoop {
         // height first (a first-frame measure pass), then re-rendering once if
         // the header turned out a different height than estimated. See
         // `renderContent`.
-        let (renderedBuffer, contentHeight) = renderContent(
+        var buffer = renderContent(
             scene: scene,
             environment: environment,
             terminalWidth: terminalWidth,
             terminalHeight: terminalHeight,
             statusBarHeight: statusBarHeight)
-        var buffer = renderedBuffer
 
         focusManager.endRenderPass()
+
+        // The content area this frame was ACTUALLY laid out and drawn
+        // against. Derived from `appHeader.height` — the height the DRAWN walk
+        // produced — never from the estimate `renderContent` started with,
+        // because three things have to agree on this one figure: `writeFrame`
+        // puts the content at row `1 + appHeader.height`, the App input loop
+        // subtracts `appHeader.height` from every mouse event's y, and the
+        // status-bar regions below are shifted down by it. On a frame where the
+        // header changed height the estimate is wrong by exactly that change,
+        // which parked the bar's hit regions on the wrong row — and a static
+        // screen renders nothing further to correct them.
+        let contentHeight = contentAreaHeight(
+            terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
+            headerHeight: appHeader.height)
 
         // Composite any free-floating overlay layers (Picker drop-downs,
         // popovers, …) emitted during rendering onto the content buffer.
         if !buffer.overlays.isEmpty {
-            let overlayContentHeight = contentAreaHeight(
-                terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
-                headerHeight: appHeader.height)
             buffer = compositeOverlays(
-                buffer, maxWidth: terminalWidth, maxHeight: overlayContentHeight,
+                buffer, maxWidth: terminalWidth, maxHeight: contentHeight,
                 palette: environment.palette)
         }
 
@@ -611,24 +621,24 @@ extension RenderLoop {
         }
     }
 
-    /// Renders the scene into the content area and returns the buffer together
-    /// with the content height it was laid out against.
+    /// Renders the scene into the content area and returns the buffer.
     ///
     /// On the first frame this runs a throwaway measure pass to discover the
     /// app header's real height before producing any visible output, which
     /// prevents the content from jumping. Every frame it then renders at the
     /// resolved content height and, if the header turned out a different height
     /// than estimated, re-renders once at the corrected height so centering
-    /// stays accurate. The returned content height is the original
-    /// (pre-correction) value — the same one the caller uses to translate
-    /// status-bar hit-test regions into content-area coordinates.
+    /// stays accurate. It deliberately reports no height: the one figure the
+    /// caller needs is the content area the DRAWN walk produced, which it reads
+    /// back off `appHeader.height` — returning the height this walk started
+    /// with handed it the estimate instead.
     private func renderContent(
         scene: A.Body,
         environment: EnvironmentValues,
         terminalWidth: Int,
         terminalHeight: Int,
         statusBarHeight: Int
-    ) -> (buffer: FrameBuffer, contentHeight: Int) {
+    ) -> FrameBuffer {
         // Publish the true screen height into the environment so overlays (e.g. a
         // Picker drop-down) can size to the visible area. Unlike a context's
         // `availableHeight` — which a ScrollView inflates to a tall measure budget —
@@ -737,7 +747,7 @@ extension RenderLoop {
             buffer = renderScene(scene, context: correctedContext.withChildIdentity(type: type(of: scene)))
         }
 
-        return (buffer, contentHeight)
+        return buffer
     }
 
     /// Invalidates the diff cache, forcing a full repaint on the next render.
