@@ -911,7 +911,7 @@ struct RepaintRightEdgeColumnTests {
     /// inside 本. Pass 2 must write two cells at the repaint column — a blank
     /// for the bisected glyph and then `x` — not `x` alone one column early.
     @Test("Pass-2 suffix starts at the repaint column when a wide glyph straddles it")
-    func pass2SuffixAlignedAcrossAStraddle() {
+    func pass2SuffixAlignedAcrossAStraddle() throws {
         let writer = FrameDiffWriter(isAppleTerminal: true)
         let terminal = MockTerminal()
         let terminalWidth = 6
@@ -923,8 +923,12 @@ struct RepaintRightEdgeColumnTests {
             terminalWidth: terminalWidth, bgCode: bgCode, reset: reset)
         let allOutput = terminal.allOutput
         let repaintCursorSeq = ANSIRenderer.moveCursor(toRow: 1, column: terminalWidth - 1)
-        let range1 = try? #require(allOutput.range(of: repaintCursorSeq))
-        let range2 = range1.flatMap { allOutput[$0.upperBound...].range(of: repaintCursorSeq) }
+        // `try #require`, not `try? #require`: the `try?` made the requirement
+        // vacuous (and drew a redundant-`#require` warning). A missing FIRST
+        // repaint is a different failure from a missing second one, and this is
+        // where it should be reported.
+        let range1 = try #require(allOutput.range(of: repaintCursorSeq))
+        let range2 = allOutput[range1.upperBound...].range(of: repaintCursorSeq)
         let pass2 = range2.map { String(allOutput[$0.upperBound...]).stripped } ?? "<no pass 2>"
         #expect(pass2 == " x", "pass 2 wrote \(pass2.debugDescription)")
     }

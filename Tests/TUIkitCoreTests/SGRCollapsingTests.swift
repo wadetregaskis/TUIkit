@@ -93,15 +93,25 @@ struct SGRCollapsingTests {
     /// IS part of the contract — and it was written before the escape it
     /// followed, painted in whatever the previous fragment left in force.
     @Test("A standalone skin-tone swatch fused to the terminator keeps the styling that covers it")
-    func fusedSwatchIsStyledByTheEscapeItFollowed() {
+    func fusedSwatchIsStyledByTheEscapeItFollowed() throws {
         let line = "\(esc)[0m\(esc)[48;5;16m\(esc)[38;5;196m\u{1F3FD}x\(esc)[0m"
         check(line, expectSaving: false)
         let collapsed = line.collapsingAdjacentSGR()
-        let styling = try? #require(collapsed.range(of: "38;5;196"))
-        let swatch = try? #require(collapsed.firstIndex(of: "\u{1F3FD}"))
-        if let styling, let swatch {
-            #expect(styling.upperBound < swatch, "the swatch must come after the styling: \(collapsed.debugDescription)")
-        }
+        // Searched in the UTF-8 view, not in Characters, for the very reason this
+        // test exists: U+1F3FD is GCB=Extend, so `m` + swatch is ONE `Character`
+        // and no grapheme-level search can find the swatch on its own.
+        // `firstIndex(of: "\u{1F3FD}")` returns nil here, always.
+        //
+        // Which is what the test used to do — under a `try? #require` whose result
+        // fed an `if let`, so the nil skipped the comparison and the test passed
+        // having asserted nothing at all, from the day it was written. The
+        // compiler was saying so, as a redundant-`#require` warning.
+        let bytes = Array(collapsed.utf8)
+        let styling = try #require(bytes.firstRange(of: Array("38;5;196".utf8)))
+        let swatch = try #require(bytes.firstRange(of: Array("\u{1F3FD}".utf8)))
+        #expect(
+            styling.upperBound < swatch.lowerBound,
+            "the swatch must come after the styling: \(collapsed.debugDescription)")
     }
 
     /// `@` (0x40) is an ECMA-48 final byte but not a letter. A walker that
