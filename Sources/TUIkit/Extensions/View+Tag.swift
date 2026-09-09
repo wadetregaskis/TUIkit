@@ -8,13 +8,13 @@
 
 /// A view that carries a hashable tag value.
 ///
-/// `_TaggedView` is produced by the ``View/tag(_:)`` modifier. It renders
-/// transparently as its wrapped content; the tag is metadata consumed by
-/// container views such as ``Picker`` to associate an option view with a
-/// selection value.
+/// `_TaggedView` is produced by the ``View/tag(_:includeOptional:)`` modifier.
+/// It renders transparently as its wrapped content; the tag is metadata
+/// consumed by container views such as ``Picker`` to associate an option view
+/// with a selection value.
 ///
-/// - Important: Framework infrastructure. Created by ``View/tag(_:)``; do
-///   not instantiate directly.
+/// - Important: Framework infrastructure. Created by
+///   ``View/tag(_:includeOptional:)``; do not instantiate directly.
 public struct _TaggedView<Content: View>: View {
     /// The tag value, type-erased.
     let tagValue: AnyHashable
