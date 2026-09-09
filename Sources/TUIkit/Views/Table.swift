@@ -503,7 +503,24 @@ where Value.ID: Hashable {
         // render does. Single-line tables are answered outright; multi-line
         // ones in every shape but one (see `analyticMultiLineSize`).
         let size: (width: Int, height: Int)
-        if columns.contains(where: { $0.lineLimit > 1 }) {
+        // Both analytic paths answer "the rows, and the indicator lines an
+        // OVERFLOWING table draws". Under
+        // ``EnvironmentValues/alwaysShowsVerticalTextIndicators`` the two lines
+        // are drawn whether or not anything is hidden, so a table whose rows fit
+        // measured two lines shorter than it drew — and a container that
+        // believed the measurement then handed it a viewport two lines too
+        // short, in which the reservation ate two of the three rows it exists to
+        // protect. The render is the authority on what the render does; a mode
+        // this rare does not earn a third copy of the reservation arithmetic
+        // (which is what the first two copies disagreeing about it cost).
+        // The style question too: `.visible` with a SCROLLBAR spends a column,
+        // not a line, and both analytic paths already handle that shape.
+        if measureContext.environment.alwaysShowsVerticalTextIndicators,
+            measureContext.environment.scrollIndicatorStyle == .text
+        {
+            let buffer = renderToBuffer(context: measureContext)
+            size = (buffer.width, buffer.height)
+        } else if columns.contains(where: { $0.lineLimit > 1 }) {
             size =
                 analyticMultiLineSize(context: measureContext)
                 ?? {
@@ -939,18 +956,24 @@ where Value.ID: Hashable {
         // Also when nothing overflows but `.scrollIndicators(.visible)` asked for
         // the lines anyway: they come out of the rows' budget there too, and this
         // is what publishes that. Skipped only where no line is spent at all.
+        // `(false, false)` when the branch is not taken, which is the whole of
+        // what "this frame reserved nothing" means — and it is stated here rather
+        // than left to whatever a previous frame published.
+        var drawnIndicators = (above: false, below: false)
         if overflowing || handler.alwaysReservesIndicatorLines {
             // The landing slot is drawn among the rows and takes one of their
             // lines, so the rows are budgeted the content area minus it.
-            reserveIndicatorLines(
+            let reserved = reserveIndicatorLines(
                 handler: handler,
                 contentHeight: contentHeight - (handler.dropSlotAddsRow ? 1 : 0),
                 context: context)
+            drawnIndicators = (reserved.above, reserved.below)
         }
 
         let composed = composeRowLines(
             handler: handler,
             tableHasFocus: tableHasFocus,
+            indicators: drawnIndicators,
             columnWidths: columnWidths,
             innerWidth: innerWidth,
             context: context,
@@ -971,7 +994,7 @@ where Value.ID: Hashable {
                 // multi-line twin already spells it out. Its consumer is the
                 // ScrollView cursor-follow marker, which was aiming one line
                 // low in the same configuration.
-                scrollOffsetAbove: handler.drawnIndicators.above ? 1 : 0,
+                scrollOffsetAbove: drawnIndicators.above ? 1 : 0,
                 drawnBands: composed.bands,
                 columnWidths: columnWidths,
                 rowContentWidth: innerWidth
@@ -1896,7 +1919,7 @@ where Value.ID: Hashable {
     @discardableResult
     private func reserveIndicatorLines(
         handler: ItemListHandler<Value.ID>, contentHeight: Int, context: RenderContext
-    ) -> (viewport: Int, origin: Int) {  // publishes `handler.drawnIndicators` too
+    ) -> (viewport: Int, origin: Int, above: Bool, below: Bool) {
         // Nothing is set aside when the "N more" lines are not what this table
         // draws — hidden indicators cost nothing, and the bar path never calls
         // this at all.
@@ -1930,11 +1953,19 @@ where Value.ID: Hashable {
             // Published for the same reason the scrollbar path does — and the
             // indicators and the row window below count from it.
             handler.drawnOffset = origin
-            // …and which indicator lines that viewport gave up, so the composer
-            // draws exactly those rather than deciding again from what is hidden.
-            handler.drawnIndicators = (window.reservesAbove, window.reservesBelow)
         }
-        return (viewport, origin)
+        // Which lines the viewport gave up is RETURNED, not published: the
+        // composer needs the answer for THIS pass, and the handler is the wrong
+        // place to keep it. Latched there it had two failure modes, and both
+        // shipped. A measure pass does not publish (see above), so the composer
+        // read `(false, false)` and drew no indicator lines — a table measured
+        // two lines shorter than it drew, and a container that believed the
+        // measurement gave it a viewport two lines too short. And a frame that
+        // skips the reservation entirely — the table stopped overflowing, and
+        // `scrollOffset` did not change, so its didSet did not clear the latch —
+        // read the PREVIOUS frame's answer and drew "▼ 0 more rows below" under
+        // a table with nothing below it.
+        return (viewport, origin, window.reservesAbove, window.reservesBelow)
     }
 
     /// The interaction state of a table with no rows: a real handler (its
@@ -1982,6 +2013,9 @@ where Value.ID: Hashable {
     private func composeRowLines(
         handler: ItemListHandler<Value.ID>,
         tableHasFocus: Bool,
+        /// Which indicator lines this pass's window set aside — see
+        /// `reserveIndicatorLines`, which is the only thing that can answer it.
+        indicators: (above: Bool, below: Bool),
         columnWidths: [Int],
         innerWidth: Int,
         context: RenderContext,
@@ -2002,7 +2036,7 @@ where Value.ID: Hashable {
         // draw nothing, and the bar has its own compose path.
         let drawnAbove = handler.drawnOffset
         let drawnBelow = max(0, handler.itemCount - handler.drawnVisibleRange.upperBound)
-        let indicators = handler.drawnIndicators
+
         let indicatorCycle =
             indicators.above || indicators.below
             ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil

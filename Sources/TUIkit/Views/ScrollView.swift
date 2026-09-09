@@ -361,16 +361,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // the "N more below" hint never flashes a frame without its bar. See
         // `resolveScrollbars` for the monotonic fixpoint (which also prevents the
         // reserve-bar → content-fits → drop-bar → overflows → … oscillation).
-        let bars = resolveScrollbars(
-            viewportWidth: viewportWidth, viewportHeight: viewportHeight,
-            horizontal: wantsHorizontal, context: context)
-        let wantsScrollbar = bars.vertical
-        let wantsHorizontalBar = bars.horizontal
-        let contentWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
-        let contentViewportHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
         let textIndicators = drawsTextIndicators(context)
-        handler.viewportHeight = contentViewportHeight
-        handler.textIndicatorInset = edgeInset(drawsTextIndicators: textIndicators)
+        let (chrome, contentWidth, contentViewportHeight, settledExtents) = resolveChrome(
+            viewportWidth: viewportWidth, viewportHeight: viewportHeight,
+            wantsHorizontal: wantsHorizontal, handler: handler, context: context)
+        let wantsScrollbar = chrome.verticalBar
+        let wantsHorizontalBar = chrome.horizontalBar
+        let reservesIndicatorLines = chrome.reservesIndicatorLines
         // §1.5: how far past its edges this view may be pushed. Re-resolved every
         // frame because a `.viewport`-relative allowance moves with the terminal,
         // and an existing excursion is pulled back inside a shrunken one.
@@ -403,7 +400,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: textIndicators),
-            handler: handler, context: context, settledExtents: bars.settled)
+            handler: handler, context: context, settledExtents: settledExtents)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
         // the content height comes from the metadata (estimated suffixes and
@@ -504,7 +501,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         applyScrollChrome(
             to: &visibleBuffer, handler: handler, contentWidth: contentWidth,
-            wantsScrollbar: wantsScrollbar, wantsHorizontalBar: wantsHorizontalBar,
+            chrome: ScrollChrome(
+                verticalBar: wantsScrollbar, horizontalBar: wantsHorizontalBar,
+                reservesIndicatorLines: reservesIndicatorLines),
             isFocused: isFocused, focusID: persistedFocusID, context: context)
 
         attachViewportMouseHandler(
@@ -559,16 +558,71 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// two are mutually exclusive) — then the trailing vertical scrollbar
     /// column and the bottom horizontal bar, each made interactive (arrows /
     /// track / thumb drag).
+    /// The chrome this frame draws, and what it leaves the content.
+    ///
+    /// One place, because the three answers are one decision and every one of
+    /// them is subtracted from the space the content gets: a vertical bar takes a
+    /// column, a horizontal bar takes a row, and — under `.visible` — the two
+    /// "N more" lines take a row each.
+    private func resolveChrome(
+        viewportWidth: Int, viewportHeight: Int, wantsHorizontal: Bool,
+        handler: ScrollViewHandler, context: RenderContext
+    ) -> (
+        chrome: ScrollChrome, contentWidth: Int, contentViewportHeight: Int,
+        settled: (width: Int, height: Int)?
+    ) {
+        let bars = resolveScrollbars(
+            viewportWidth: viewportWidth, viewportHeight: viewportHeight,
+            horizontal: wantsHorizontal, context: context)
+        let textIndicators = drawsTextIndicators(context)
+        // Under `.visible` both "N more" lines are drawn at EVERY offset, so
+        // they are chrome and come out of the viewport once — the way a
+        // horizontal bar's row does, and the way `List` and `Table` take them
+        // out of their row budget. Under `.automatic` they are a hint that comes
+        // and goes, and the line an indicator covers is one the reader reaches at
+        // a neighbouring offset; that path still writes over the edge lines. See
+        // `reservingScrollIndicators(around:…)` for what went wrong when
+        // `.visible` wrote over them too.
+        let reserves = textIndicators && context.environment.alwaysShowsVerticalTextIndicators
+        let contentViewportHeight = max(
+            1, viewportHeight - (bars.horizontal ? 1 : 0) - (reserves ? 2 : 0))
+        handler.viewportHeight = contentViewportHeight
+        // …and NOT counted twice: the inset is what tells `pageDistance` and the
+        // reveal that an indicator eats into the viewport they can see. Reserved,
+        // the lines are already outside it.
+        handler.textIndicatorInset =
+            reserves ? 0 : edgeInset(drawsTextIndicators: textIndicators)
+        return (
+            ScrollChrome(
+                verticalBar: bars.vertical, horizontalBar: bars.horizontal,
+                reservesIndicatorLines: reserves),
+            max(1, viewportWidth - (bars.vertical ? 1 : 0)),
+            contentViewportHeight,
+            bars.settled)
+    }
+
+    /// What chrome a frame draws around its content: the two bars, and whether
+    /// the "N more" lines are reserved out of the viewport rather than written
+    /// over its edges. One value because they are one decision, taken together
+    /// at the top of the render and consumed together at the bottom.
+    struct ScrollChrome {
+        let verticalBar: Bool
+        let horizontalBar: Bool
+        let reservesIndicatorLines: Bool
+    }
+
     private func applyScrollChrome(
         to visibleBuffer: inout FrameBuffer, handler: ScrollViewHandler, contentWidth: Int,
-        wantsScrollbar: Bool, wantsHorizontalBar: Bool, isFocused: Bool,
-        focusID persistedFocusID: String, context: RenderContext
+        chrome: ScrollChrome, isFocused: Bool, focusID persistedFocusID: String,
+        context: RenderContext
     ) {
         // Indicators REPLACE viewport lines, so a 1-2 line viewport scrolled
         // mid-content would be 100% chrome — "▼ N more below" as the entire
         // view, with the content it advertises never visible at any offset.
         // Content always wins the last lines: indicators need 3+ rows (both
-        // may show and at least one content line survives).
+        // may show and at least one content line survives). Reserved, they are
+        // not competing with the content for lines at all, but the floor still
+        // holds: two of three lines as chrome is the same bad picture.
         if drawsTextIndicators(context),
             visibleBuffer.height >= ResolvedScrollIndicators.minimumTextHeight
         {
@@ -586,13 +640,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                     || handler.hasContentAbove || handler.hasContentBelow
                     ? scrollIndicatorCycle(isFocused: isFocused, context: context) : nil,
                 locale: context.environment.locale,
-                always: context.environment.alwaysShowsVerticalTextIndicators
+                always: context.environment.alwaysShowsVerticalTextIndicators,
+                reserving: chrome.reservesIndicatorLines
             )
             attachIndicatorMouseHandlers(
                 to: &visibleBuffer, contentWidth: contentWidth,
                 handler: handler, context: context)
         }
-        if wantsScrollbar {
+        if chrome.verticalBar {
             visibleBuffer = appendVerticalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth, handler: handler,
                 isFocused: isFocused, context: context)
@@ -600,10 +655,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler,
                 focusID: persistedFocusID, context: context)
         }
-        if wantsHorizontalBar {
+        if chrome.horizontalBar {
             visibleBuffer = appendHorizontalScrollbar(
                 to: visibleBuffer, contentWidth: contentWidth,
-                hasVerticalBar: wantsScrollbar, handler: handler,
+                hasVerticalBar: chrome.verticalBar, handler: handler,
                 isFocused: isFocused, context: context)
             attachHorizontalScrollbarMouseHandler(
                 to: &visibleBuffer, contentWidth: contentWidth, handler: handler,

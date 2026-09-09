@@ -398,23 +398,6 @@ extension ItemListHandler {
         set { drawnWindowOffset = newValue }
     }
 
-    /// Which "N more" lines the frame being drawn RESERVED — published where the
-    /// row window is resolved, beside ``drawnOffset``, and read where the chrome
-    /// is composed.
-    ///
-    /// Published rather than re-derived because reserved and drawn have to be one
-    /// answer: a composer that decided for itself, from "is anything hidden
-    /// above", drew nothing at the top while the rows had given up a line for it
-    /// (`.scrollIndicators(.visible)`, where the affordance is unconditional) —
-    /// and the blank line that left is the same defect `f55a9f92` was.
-    ///
-    /// Only the single-line `Table` path needs it: `_ListCore` and the multi-line
-    /// path carry their `ScrollRowWindow` to the composer directly.
-    var drawnIndicators: (above: Bool, below: Bool) {
-        get { drawnIndicatorLines ?? (false, false) }
-        set { drawnIndicatorLines = newValue }
-    }
-
     /// The rows on screen, and therefore DATA indices — `Table` subscripts
     /// `data` with them directly. The protocol's default bounds this by
     /// ``extent``, which while a drag hovers is one past the last row: that

@@ -344,11 +344,17 @@ extension _ScrollViewCore {
         palette: any Palette,
         cycle: SelectionEmphasisCycle?,
         locale: Locale,
-        always: Bool = false
+        always: Bool = false,
+        reserving: Bool = false
     ) -> FrameBuffer {
         guard buffer.height > 0 else { return buffer }
         guard always || handler.hasContentAbove || handler.hasContentBelow else {
             return buffer
+        }
+        if reserving {
+            return reservingScrollIndicators(
+                around: buffer, handler: handler, width: width, palette: palette,
+                cycle: cycle, locale: locale)
         }
 
         var lines = buffer.lines
@@ -405,6 +411,56 @@ extension _ScrollViewCore {
         // long as the row stayed the first one.
         result.animatedCells = result.animatedCells.filter { !replacedRows.contains($0.offsetY) }
         result.animatedCells += runs
+        return result
+    }
+
+    /// Both indicator lines, around a content window that was made two lines
+    /// shorter to hold them.
+    ///
+    /// The other path OVERWRITES the viewport's first and last line, and can:
+    /// under ``ScrollIndicatorVisibility/automatic`` an indicator is there only
+    /// when there IS content past it, so the line it covers is one the reader
+    /// reaches at a neighbouring offset. Under
+    /// ``ScrollIndicatorVisibility/visible`` both lines are drawn at every
+    /// offset, and an overwritten line is then one the reader can NEVER see: the
+    /// top line is content line `scrollOffset`, so line 0 goes at offset 0 and
+    /// nowhere else shows it, and the last content line only ever sits on the
+    /// bottom line, at `maxOffset`. The document's first and last lines were
+    /// silently and permanently gone.
+    ///
+    /// `List` and `Table` never had this because they take the two lines out of
+    /// their ROW budget — the reservation and the drawing are one answer there.
+    /// This is a `ScrollView`'s version of that: the caller shortens the content
+    /// window by two lines (so `viewportHeight`, and with it `maxOffset`, follow)
+    /// and the content is shifted down one row to sit between them. Everything
+    /// riding on those lines — hit regions, animated runs, overlays, opacity —
+    /// moves with them, which is what `overlayShiftY` is for.
+    private func reservingScrollIndicators(
+        around buffer: FrameBuffer,
+        handler: ScrollViewHandler,
+        width: Int,
+        palette: any Palette,
+        cycle: SelectionEmphasisCycle?,
+        locale: Locale
+    ) -> FrameBuffer {
+        func line(_ direction: ScrollIndicatorDirection, count: Int) -> (String, AnimatedCellRun?) {
+            let indicator = renderScrollIndicator(
+                direction: direction, count: count, unit: .lines, width: width,
+                palette: palette, approximate: handler.contentHeightIsEstimate,
+                cycle: cycle, locale: locale)
+            return (indicator.text.padToVisibleWidth(width), indicator.animation)
+        }
+        let above = line(.up, count: handler.rowsAbove)
+        let below = line(.down, count: handler.rowsBelow)
+        var result = buffer.replacingLines(
+            [above.0] + buffer.lines + [below.0], width: width, uniformWidth: true,
+            overlayShiftY: 1)
+        if let run = above.1 { result.animatedCells.append(run) }
+        // The renderer builds every run at row 0, so the bottom one moves to the
+        // row it was actually drawn on — as the overwriting path does.
+        if let run = below.1 {
+            result.animatedCells.append(run.shifted(byX: 0, y: result.height - 1))
+        }
         return result
     }
 }

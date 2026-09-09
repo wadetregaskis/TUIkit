@@ -509,11 +509,6 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// Backing storage for ``drawnOffset``; see there.
     var drawnWindowOffset: Int?
 
-    /// Backing storage for ``drawnIndicators``; see there. Cleared with
-    /// ``drawnWindowOffset`` on a scroll, for the same reason: what the last
-    /// frame reserved describes the last frame's offset.
-    var drawnIndicatorLines: (above: Bool, below: Bool)?
-
     /// One visible row's extent within the list's rendered content, in lines
     /// measured from the first content line (i.e. below the border and padding,
     /// and below the "N more above" indicator when one is drawn).
@@ -579,10 +574,7 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// a scroll UP, pinning the viewport one page from the top.
     var scrollOffset: Int = 0 {
         didSet {
-            if scrollOffset != oldValue {
-                drawnWindowOffset = nil
-                drawnIndicatorLines = nil
-            }
+            if scrollOffset != oldValue { drawnWindowOffset = nil }
         }
     }
 
