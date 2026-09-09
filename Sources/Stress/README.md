@@ -62,11 +62,17 @@ scale live · `a` toggle autopilot.
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
 | `fanout` | non-lazy container measure over **all** children (O(n) layout) |
 | `modifiers` | `ModifiedView`/environment-modifier layering, per-node measure overhead |
+| `preferences` | preference side-effect declaration, value-memo defeat, per-row re-measure |
+| `customlayout` | `Layout` protocol call pattern, repeated subview measurement, `AnyLayout` erasure |
 | `textwall` | text width measurement, word wrapping, glyph throughput |
 | `anyview` | type-erasure fallback (render-to-measure), lost concrete dispatch |
 | `dashboard` | `Panel`/`Card` container measure + flexible-width row sharing (also the showy demo) |
 | `framedcolumns` | non-infinity `.frame` measure, frames-in-stacks-in-frames cascade, uncacheable interactive rows |
 | `churn` | full re-render per frame, cache invalidation, measure with no memo hits |
+| `animating` | animation store lookups, uncacheable subtrees, colour resolution per frame |
+| `translucent` | cell decomposition of both sides, per-cell region lookup, SGR re-emission |
+| `gradients` | ramp quantisation, per-cell geometry, origin propagation, re-ink on move, SGR runs |
+| `menus` | `ButtonStyle` body measure, menu hug-width pass, shortcut hint column, per-row `@Environment` resolution |
 | `kitchensink` | split-view + list windowing + container grid simultaneously |
 
 ## Profiling

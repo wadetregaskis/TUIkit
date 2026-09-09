@@ -106,13 +106,16 @@ The lane is therefore **required** on released toolchains. Observed state:
 |---|---|
 | `TUIkitCore`, `TUIkitStyling` | pass everywhere — **binding** |
 | `TUIkitView` | passes on 6.3+; **fails on 6.2**, cause not yet diagnosed — binding except there |
-| `TUIkitImage` | failed everywhere until 2026-08-07; advisory pending confirmation |
+| `TUIkitImage` | failed everywhere until 2026-08-07; green on all five lanes since, `continue-on-error` removed 2026-09-04 — **binding** |
+| the four modules' own test targets | advisory, each with a 30-minute timeout |
 | `TUIkit`, build-tests, test, smoke | fail until the console layer is ported |
 
 Do not take the table on trust — it is a record of what CI did, and the whole
 point of binding the lane is that it stays true. `TUIkitImage`'s failure went
 unnoticed for as long as the lane was advisory, and this file previously claimed
-it passed.
+it passed. It then stayed *advisory in this table* for a month after the flag came
+off in CI, which is the same failure from the other end: the ratchet only reads
+as a ratchet if the record moves with it.
 
 That failure, for the record, was `ShapeSampling.swift` importing
 `Glibc`-or-`Darwin` and then calling `cos`/`sin` unconditionally: on Windows
@@ -153,7 +156,7 @@ support in 0.64.0.
 # Build
 swift build
 
-# Run all tests (~5,800 tests, Swift Testing framework)
+# Run all tests (~6,300 tests, Swift Testing framework)
 swift test
 
 # Run a single test suite. NOTE: --filter matches the Swift TYPE name, not the

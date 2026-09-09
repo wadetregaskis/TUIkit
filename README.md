@@ -84,7 +84,7 @@ struct ContentView: View {
 - **Feedback**:
   - **`ProgressView`** — determinate or indeterminate. Determinate look via `.progressViewStyle(_:)` (`TrackStyle`): `block` (default), `bar`, `blockFine`, `dot`, `shade`, `braille`, `shadeRamp(gradient:)`, `threeSegment(...)`, or `custom(TrackConfiguration)` — the named fill styles are presets of one configurable renderer (fill glyph, sub-cell ramp, solid-background unfilled, gradient). Indeterminate animation via `.indeterminateStyle(_:)`: `sweep` (default), `barberPole`, `pulse`, `knightRider`, `gradient`. A gradient's ramp spans the whole bar by default, so a colour always marks the same value; `.trackGradientScaling(.fill)` compresses it into the filled part instead.
   - **`Gauge`** — a labelled value read-out with min/max bounds, styled via `.gaugeStyle(_:)`: `linearCapacity` (default), `accessoryLinear` (position marker), `accessoryLinearCapacity`, `accessoryCircular` / `accessoryCircularCapacity` (ring dials), or the compact `accessoryCircularTiny` pie glyph.
-  - **`Spinner`** — animated, in eleven built-in styles (`dots` (default), `line`, `bouncing` (a Knight-Rider scanner with a fading trail), `pie`, `beachball`, `box`, `bars`, `blockWedge`, `moon`, `earth`, `clock`) plus `.custom(_:)` frame sequences, with an optional label and colour.
+  - **`Spinner`** — animated, in sixteen built-in styles (`dots` (default), `line`, `dancingLine`, `bouncing` (a Knight-Rider scanner with a fading trail), `pie`, `beachball`, `box`, `curve`, `column`, `bar`, `shade`, `blockWedge`, `spinningTriangle`, `moon`, `earth`, `clock`) plus `.custom(_:)` frame sequences, with an optional label and colour.
 - **`StatusBar`**: context-sensitive keyboard shortcuts with `.compact` and `.bordered` styles
 
 ### Scrolling & scrollbars
@@ -314,7 +314,7 @@ Sources/
 ├── Example/        Example app (executable target)
 └── Stress/         Performance stress harness, also a complex-TUI demo (executable)
 
-Tests/                    ~5,800 tests across ~815 suites in ~600 files
+Tests/                    ~6,300 tests across ~900 suites in ~680 files
 ├── TUIkitTests/          The umbrella module's suite (incl. i18n consistency,
 │                         localization & golden-snapshot tests)
 ├── TUIkitCoreTests/      One suite per library module, so a module's tests
