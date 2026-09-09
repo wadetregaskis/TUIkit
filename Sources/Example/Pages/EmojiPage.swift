@@ -48,6 +48,15 @@ struct EmojiPage: View {
     @Environment(\.terminalHeight) private var terminalHeight
     private static let sideBySideMinWidth = 64
 
+    /// The lines the page spends above the browse tables — the app header, the
+    /// bug-case rows (whose wrapping depends on the width), the filter field and
+    /// the count line. What is left is the tables' height.
+    ///
+    /// An estimate, and it was one before this too. It can leave a line or two of
+    /// slack below the tables at some sizes; what it cannot do any more is let a
+    /// filter collapse them.
+    private static let fixedContentLines = 24
+
     // The corpus is small (~1.9k entries) and immutable, so building it
     // once at page load and filtering inline is fine — no need for a
     // separate model layer.
@@ -108,19 +117,29 @@ struct EmojiPage: View {
             // Emoji on the left, SF Symbols on the right — both filtered by the
             // one field above, each scrolled independently. Side by side when
             // there is room, otherwise stacked.
+            // A held height in BOTH arms. A `Table` whose rows all fit hugs them
+            // — correct in general, and wrong here: filtering 1,212 emoji down to
+            // one collapsed both tables from twenty lines to three and jumped the
+            // whole page up under the cursor, on every keystroke of the filter.
+            // The browse tables are a fixed frame you look through, not content
+            // that resizes.
+            // Held at an explicit height in BOTH arms, rather than greedy: a
+            // `.frame(maxHeight: .infinity)` fills only a height that was actually
+            // PROPOSED (see `FlexibleFrameView.contentTargetHeight`), and inside
+            // this page's stack these are not — so greedy left them hugging, which
+            // is the very thing being fixed.
+            let available = max(5, terminalHeight - Self.fixedContentLines)
             if terminalWidth >= Self.sideBySideMinWidth {
                 HStack(alignment: .top, spacing: 2) {
-                    emojiTable
-                    symbolTable
+                    emojiTable(height: available)
+                    symbolTable(height: available)
                 }
             } else {
-                // Two greedy lists stacked would let the first take all the
-                // height, so give each an explicit half-share of the space left
-                // below the fixed content.
-                let tableHeight = max(5, (terminalHeight - 24) / 2)
+                // Stacked, each takes half: two GREEDY tables in a `VStack` would
+                // let the first take all the height, so the share is explicit.
                 VStack(alignment: .leading, spacing: 1) {
-                    emojiTable.frame(height: tableHeight)
-                    symbolTable.frame(height: tableHeight)
+                    emojiTable(height: max(4, available / 2))
+                    symbolTable(height: max(4, available / 2))
                 }
             }
         }
@@ -141,7 +160,12 @@ struct EmojiPage: View {
     /// were already a grid drawn by an `HStack` per row, and a grid that
     /// columns itself can also sort itself. The count line moves above it,
     /// `Table` having no title of its own.
-    private var emojiTable: some View {
+    ///
+    /// - Parameter height: The lines the TABLE itself takes, or `nil` to fill
+    ///   whatever it is offered. On the TABLE and not on the wrapper: the wrapper
+    ///   also holds the count line, and framing IT leaves the table hugging its
+    ///   rows inside a taller box, which is the shrink this is here to stop.
+    private func emojiTable(height: Int?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Both counts sit inside one phrase, as `%1$@`/`%2$@`, so a language
             // can order them its own way (zh and ja put the total first).
@@ -165,6 +189,7 @@ struct EmojiPage: View {
             // second mark beside it read as one mark too many. The highlight
             // says which row is selected on its own.
             .rowSelectionIndicator(.hidden)
+            .heldOpen(to: height)
         }
     }
 
@@ -177,7 +202,9 @@ struct EmojiPage: View {
     /// fails, show a placeholder explaining what's missing instead of a list of
     /// broken glyphs; the message distinguishes a non-Apple platform (no symbols
     /// resolve at all) from an Apple system that just lacks the font.
-    @ViewBuilder private var symbolTable: some View {
+    ///
+    /// - Parameter height: As ``emojiTable(height:)``'s.
+    @ViewBuilder private func symbolTable(height: Int?) -> some View {
         if SFSymbol.isFontAvailable {
             VStack(alignment: .leading, spacing: 0) {
                 Text("page.emoji.sfSymbolsCount \(filteredSymbols.count) \(Self.allSymbols.count)")
@@ -198,6 +225,7 @@ struct EmojiPage: View {
                         .width(.flexible)
                 }
                 .rowSelectionIndicator(.hidden)
+                .heldOpen(to: height)
             }
         } else {
             ContentUnavailableView(
@@ -345,5 +373,26 @@ extension String {
     fileprivate func leftPadded(to width: Int, with padding: Character) -> String {
         if self.count >= width { return self }
         return String(repeating: padding, count: width - self.count) + self
+    }
+}
+
+// MARK: - Holding a box open
+
+extension View {
+    /// Holds this view at `height` lines, or lets it fill what it is offered when
+    /// `height` is nil — one cell of the caller's height going to the count line
+    /// above it.
+    ///
+    /// A `Table` whose rows all fit hugs them, which is right for a table in a
+    /// `VStack` and wrong for a browse table you filter: narrowing 1,212 rows to
+    /// one collapsed the box from twenty lines to three and jumped the page under
+    /// the cursor, on every keystroke.
+    @ViewBuilder
+    fileprivate func heldOpen(to height: Int?) -> some View {
+        if let height {
+            frame(height: max(2, height - 1))
+        } else {
+            frame(maxHeight: .infinity)
+        }
     }
 }
