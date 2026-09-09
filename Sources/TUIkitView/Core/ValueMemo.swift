@@ -177,7 +177,7 @@ func measureValueMemoized<Key: Equatable>(
     // measured the subtree at all. From the CROSS-frame table, so it stood until
     // the memoized value itself changed.
     let sizeKey = RenderCache.SizeKey(
-        identity: context.identity,
+        identityHash: context.identity.structuralHash,
         proposalWidth: proposal.width, proposalHeight: proposal.height,
         availableWidth: context.availableWidth, availableHeight: context.availableHeight,
         hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight,
@@ -207,7 +207,7 @@ func measureValueMemoized<Key: Equatable>(
     if tracker.cacheUnsafeCount == unsafeBefore,
         !context.environment.hasUncomparableEnvironmentValue
     {
-        cache.storeSize(key: sizeKey, view: key, size: size)
+        cache.storeSize(key: sizeKey, identity: context.identity, view: key, size: size)
     }
     return size
 }

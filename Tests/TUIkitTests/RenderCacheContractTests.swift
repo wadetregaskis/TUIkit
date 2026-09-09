@@ -503,8 +503,8 @@ struct RenderCacheContractTests {
             }
         }
 
-        // A FRESH cache per arm. `SizeKey` carries the identity, the proposal
-        // and the extents — not the environment — so a size stored by the
+        // A FRESH cache per arm. `SizeKey` carries the identity's hash, the
+        // proposal and the extents — not the environment — so a size stored by the
         // control would be served straight back to the uncomparable run, and the
         // hit counted would be the control's own entry rather than a new one.
         // (The first draft shared one cache and reported exactly that.)

@@ -255,7 +255,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// their data is (sections, eager fallbacks) walk every time.
     private func widestRowWidth(source: RowSource<SelectionValue>, context: RenderContext) -> Int {
         let key = RenderCache.SizeKey(
-            identity: context.identity,
+            identityHash: context.identity.structuralHash,
             proposalWidth: context.availableWidth, proposalHeight: nil,
             // Height-independent on purpose: a row's width does not change
             // with the height the list was offered, and the measure and
@@ -314,7 +314,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if let memo, tracker.cacheUnsafeCount == unsafeBefore,
             !walkContext.environment.hasUncomparableEnvironmentValue
         {
-            memo.cache.storeSize(key: key, view: memo.signature, size: ViewSize.fixed(widest, 0))
+            memo.cache.storeSize(key: key, identity: context.identity, view: memo.signature, size: ViewSize.fixed(widest, 0))
         }
         return widest
     }

@@ -918,7 +918,8 @@ public func resolveChildViews<V: View>(from content: V, context: RenderContext) 
         return provider.childViews(context: context)
     }
     let key = RenderCache.ChildViewsKey(
-        identity: context.identity, viewType: ObjectIdentifier(V.self), valueHash: viewValueHash(content))
+        identityHash: context.identity.structuralHash, viewType: ObjectIdentifier(V.self),
+        valueHash: viewValueHash(content))
     if let remembered = cache.lookupChildViews(key: key) { return remembered }
     // Identities resolved once here, for the same reason the array is: every
     // later use of this entry is under `context.identity` (it is in the key).

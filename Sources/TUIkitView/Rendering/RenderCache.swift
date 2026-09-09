@@ -191,10 +191,31 @@ public final class RenderCache: @unchecked Sendable {
     /// Cached entries keyed by view identity.
     private var entries: [ViewIdentity: CacheEntry] = [:]
 
-    /// A memoized measurement: the view value at cache time and its size.
-    private struct SizeEntry {
+    /// A memoized measurement: the view value at cache time, its size, and the
+    /// identity ``SizeKey`` stopped carrying.
+    ///
+    /// - Note: A `final class`, not a struct, for the reason ``CacheEntry`` is one
+    ///   and now with the same two refcounted fields: ``lookupSize(key:view:)``
+    ///   pulls an entry out of the dictionary on the REJECT path as well as the
+    ///   hit, and both prunes copy one per entry they walk, so a struct copy
+    ///   would retain the snapshot existential AND the identity chain every
+    ///   time. One reference instead. Every property is `let`, so sharing the
+    ///   instance cannot alias a mutation.
+    private final class SizeEntry {
         let viewSnapshot: Any
         let size: ViewSize
+        /// Where the measured view sat — read by ``removeInactive()`` and
+        /// ``clearAffected(by:keepingSizes:)``, which is the only reason it is
+        /// kept. Overwritten by each store, so it is the most recent
+        /// structurally-equal chain rather than the first one the key ever saw;
+        /// both prunes compare identities structurally, so that is the same
+        /// answer to the same question.
+        let identity: ViewIdentity
+        init(viewSnapshot: Any, size: ViewSize, identity: ViewIdentity) {
+            self.viewSnapshot = viewSnapshot
+            self.size = size
+            self.identity = identity
+        }
     }
 
     /// Memoized value-keyed measurements (see ``lookupSize`` / ``storeSize``).
@@ -564,9 +585,9 @@ extension RenderCache {
     }
 
     /// Stores a memoized measurement — see ``lookupSize(key:view:)`` for who asks.
-    public func storeSize<V: Equatable>(key: SizeKey, view: V, size: ViewSize) {
+    public func storeSize<V: Equatable>(key: SizeKey, identity: ViewIdentity, view: V, size: ViewSize) {
         stats.stores += 1
-        sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size)
+        sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size, identity: identity)
     }
 
     /// Whether every memo hit is checked against a fresh measurement.
@@ -942,14 +963,16 @@ extension RenderCache {
         for key in staleKeys {
             entries.removeValue(forKey: key)
         }
-        var staleSizes = 0
-        for key in sizeEntries.keys where !isLive(key.identity) {
-            sizeEntries.removeValue(forKey: key)
-            staleSizes += 1
-        }
+        // Collect-then-remove, the spelling `AnimationStore.endRenderPass()`
+        // uses and for its reason: removing inside `for … in sizeEntries`
+        // COW-copies the whole table on the first removal, and this table is
+        // hundreds of entries on a live page and thousands on `fanout`.
+        var staleSizeKeys: [SizeKey] = []
+        for (key, entry) in sizeEntries where !isLive(entry.identity) { staleSizeKeys.append(key) }
+        for key in staleSizeKeys { sizeEntries.removeValue(forKey: key) }
         lastPrune = (
-            renderEntries: entries.count + staleKeys.count, sizeEntries: sizeEntries.count + staleSizes,
-            retainedChecks: retainedChecks, prunedRender: staleKeys.count, prunedSizes: staleSizes)
+            renderEntries: entries.count + staleKeys.count, sizeEntries: sizeEntries.count + staleSizeKeys.count,
+            retainedChecks: retainedChecks, prunedRender: staleKeys.count, prunedSizes: staleSizeKeys.count)
         // Environment slots are pruned by pass number, not by `activeIdentities`
         // — only memoizing views mark themselves active, and an environment
         // modifier is not one, so an identity check would drop every slot on
@@ -1023,9 +1046,9 @@ extension RenderCache {
             entries.removeValue(forKey: key)
         }
         if !keepingSizes {
-            for key in sizeEntries.keys where affects(key.identity) {
-                sizeEntries.removeValue(forKey: key)
-            }
+            var staleSizeKeys: [SizeKey] = []
+            for (key, entry) in sizeEntries where affects(entry.identity) { staleSizeKeys.append(key) }
+            for key in staleSizeKeys { sizeEntries.removeValue(forKey: key) }
         }
         logDebug("CLEAR AFFECTED by \(identity.path): \(staleKeys.count) of \(entries.count + staleKeys.count) entries")
     }

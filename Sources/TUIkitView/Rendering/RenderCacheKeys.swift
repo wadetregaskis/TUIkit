@@ -19,7 +19,34 @@ extension RenderCache {
     /// proposals per frame, so — unlike the buffer cache — this is keyed by the
     /// proposal and available extent as well as the identity).
     public struct SizeKey: Hashable {
-        public let identity: ViewIdentity
+        /// The identity's structural hash, not the identity.
+        ///
+        /// The bargain ``RenderCache/MeasureKey`` documents, struck here for the
+        /// same reason: a `ViewIdentity` is a chain of class nodes, so every copy
+        /// of the key retains and releases it, and comparing two *equal* ones
+        /// walks it step for step — the `===` shortcut inside
+        /// `IdentityNode.structurallyEqual` cannot fire, because the walk that
+        /// stored the key and the walk that probes it built their chains
+        /// separately, and here they are a whole frame apart.
+        ///
+        /// The collision argument is NOT inherited from `MeasureKey`, whose own
+        /// rests on "nothing here outlives the pass": this table is cross-frame.
+        /// Made afresh, it is that a false hit needs two distinct identity paths
+        /// to hash identically AND to carry the same proposal, the same two
+        /// extents and the same two explicit flags, AND for the snapshot
+        /// comparison in ``RenderCache/lookupSize(key:view:)`` to find the two
+        /// views' values equal. It would show as one subtree sized from a twin
+        /// until that value next changed — never as aliased state, since nothing
+        /// is keyed from here but a size.
+        ///
+        /// The measure generation is deliberately NOT folded in, unlike the one
+        /// `measureIdentityHash` folds into `MeasureKey`: this key ignores
+        /// ``RenderContext/measureGeneration`` today, and folding it would change
+        /// which menu rows re-measure — a behaviour change wearing a performance
+        /// change's clothes. Set from `structuralHash` and nothing else, the word
+        /// this hashes is bit-identical to the one the identity-carrying key
+        /// hashed, so not one probe changes bucket.
+        public let identityHash: Int
         public let proposalWidth: Int?
         public let proposalHeight: Int?
         public let availableWidth: Int
@@ -50,7 +77,7 @@ extension RenderCache {
         public let measureGeneration: UInt8
 
         public init(
-            identity: ViewIdentity,
+            identityHash: Int,
             proposalWidth: Int?,
             proposalHeight: Int?,
             availableWidth: Int,
@@ -59,7 +86,7 @@ extension RenderCache {
             hasExplicitHeight: Bool,
             measureGeneration: UInt8
         ) {
-            self.identity = identity
+            self.identityHash = identityHash
             self.proposalWidth = proposalWidth
             self.proposalHeight = proposalHeight
             self.availableWidth = availableWidth
@@ -73,8 +100,7 @@ extension RenderCache {
         /// see ``mixHashWord(_:_:)``, and ``RenderCache/MeasureKey`` for why a
         /// process-local cache key does not need SipHash per field.
         public func hash(into hasher: inout Hasher) {
-            var folded = mixHashWord(
-                hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash)))
+            var folded = mixHashWord(hashFoldSeed, UInt64(bitPattern: Int64(identityHash)))
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(proposalWidth ?? -1)))
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(proposalHeight ?? -1)))
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(availableWidth)))
@@ -207,16 +233,26 @@ extension RenderCache {
     }
 
     /// A stack's resolved children for the pass — see
-    /// `resolveChildViews(from:context:)`. Identity plus the content's type
-    /// and raw bytes, like ``MeasureKey`` without a proposal: which children a
-    /// content value has does not depend on the space it is offered.
+    /// `resolveChildViews(from:context:)`. The identity's hash plus the
+    /// content's type and raw bytes, like ``MeasureKey`` without a proposal:
+    /// which children a content value has does not depend on the space it is
+    /// offered.
     public struct ChildViewsKey: Hashable {
-        public let identity: ViewIdentity
+        /// The identity's structural hash, not the identity — the trade
+        /// ``RenderCache/MeasureKey`` documents, made here with the stronger of
+        /// the two safety arguments: this table is per-pass scratch (emptied by
+        /// every ``RenderCache/beginRenderPass()``), and nothing ever reads the
+        /// identity back out of the key, so the chain of class nodes bought
+        /// nothing but ARC on every copy and a step-for-step walk on every equal
+        /// key (`IdentityNode.structurallyEqual`'s `===` shortcut cannot fire —
+        /// the walk that stored the key and the walk that probes it built their
+        /// chains separately).
+        public let identityHash: Int
         public let viewType: ObjectIdentifier
         public let valueHash: Int
 
-        public init(identity: ViewIdentity, viewType: ObjectIdentifier, valueHash: Int) {
-            self.identity = identity
+        public init(identityHash: Int, viewType: ObjectIdentifier, valueHash: Int) {
+            self.identityHash = identityHash
             self.viewType = viewType
             self.valueHash = valueHash
         }
@@ -225,8 +261,7 @@ extension RenderCache {
         /// see ``mixHashWord(_:_:)``, and ``RenderCache/MeasureKey`` for why a
         /// process-local cache key does not need SipHash per field.
         public func hash(into hasher: inout Hasher) {
-            var folded = mixHashWord(
-                hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash)))
+            var folded = mixHashWord(hashFoldSeed, UInt64(bitPattern: Int64(identityHash)))
             folded = mixHashWord(folded, UInt64(UInt(bitPattern: viewType)))
             folded = mixHashWord(folded, UInt64(bitPattern: Int64(valueHash)))
             hasher.combine(finalizeHashWord(folded))
