@@ -215,9 +215,25 @@ public struct SGRState: Sendable, Equatable {
     ///
     /// - Parameter sequence: A full escape, `ESC [ … m`.
     public mutating func apply(_ sequence: String) {
-        var codes: [Parameter] = []
         let utf8 = sequence.utf8
         guard utf8.last == 0x6D else { return }  // 'm'
+        // NOT the `reserveCapacity` that measured SLOWER on `Table.alignText`:
+        // that one is about String's inline small-string storage, which an
+        // Array does not have, so here it is strictly fewer allocations. The
+        // list grows 1→2→4→8, so `ESC[38;2;r;g;bm` reallocates four times
+        // for five parameters and throws three buffers away.
+        //
+        // Eight is the common ceiling, not a bound. A collapsed run carrying a
+        // truecolour foreground AND background is spelled
+        // `ESC[0;38;2;r;g;b;48;2;r;g;bm` — eleven parameters — which is what
+        // `collapsingAdjacentSGR()` emits and what the cell diff re-parses; it
+        // grows past this reservation exactly as it grew before.
+        //
+        // Below the guard, not above it: the opacity blend hands this every
+        // cursor move and erase in a row as well as every colour, and those
+        // must go on allocating nothing.
+        var codes: [Parameter] = []
+        codes.reserveCapacity(8)
         // The parameters run from after '[' to before 'm'; a sequence with no
         // '[' has no parameters, which is the same as an empty list.
         var index = utf8.startIndex
