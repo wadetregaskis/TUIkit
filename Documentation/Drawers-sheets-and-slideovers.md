@@ -1,9 +1,10 @@
 # Drawers, sheets and slideover panes
 
-**Status: draft for decision.** Nothing here is implemented. It exists because
-`.presentationDetents` shipped with a hole in it, and closing that hole properly
-means deciding what a "sheet that can be resized" *is* in a terminal — which is
-a design question, not an implementation detail.
+**Status: draft for decision.** Nothing here is implemented, though the grabber
+question §3 raises was answered elsewhere in the framework, as §3 now records.
+It exists because `.presentationDetents` shipped with a hole in it, and closing
+that hole properly means deciding what a "sheet that can be resized" *is* in a
+terminal — which is a design question, not an implementation detail.
 
 ---
 
@@ -88,6 +89,19 @@ of position, and the grab region limited to one edge.
 So the work is: generalise `DialogDrag` into a "grab this edge and give me a
 delta" helper, and let both the drag-to-move and drag-to-resize cases use it.
 
+**That question was answered elsewhere, and answered differently.**
+`.userResizable(_:)` shipped on 2026-08-21 (`7aba17dd`; the design record is
+`Documentation/Resizable views.md`) with its own core rather than a generalised
+`DialogDrag`. `_UserResizableCore` marks a stretch of the bottom and right
+borders as draggable, keeps the size the user chose in `StateStorage` under the
+view's render identity, and resizes from the keyboard by one cell (Shift for
+five), Home/End to the bounds, Escape back to the size the layout wanted. That
+is §5's table for every row but the last, arrived at independently — §5 spends
+Escape on closing the drawer, and a resizable view has nothing to close.
+`DialogDrag` is untouched and still dialog-only, so "generalise it" is now a
+choice between a *third* implementation and sitting a drawer's grabber on
+`_UserResizableCore`'s. Sit on it.
+
 ### What it looks like
 
 The border already draws. A grabber marks a stretch of it as grabbable:
@@ -110,6 +124,14 @@ measuring on Apple Terminal, iTerm2, Ghostty and Warp before it ships):
 
 `▁▁▁▁` is the recommendation. It differs from the border it sits in, it is
 BMP-old, and it does not depend on Braille or emoji coverage.
+
+What `.userResizable(_:)` shipped with is not `▁▁▁▁`, and is not a fixed glyph:
+the handle is drawn in whichever Box Drawing weight stands out from the border
+cell it lands on — doubled (`═` `║` `╝`) over a single-line or heavy border,
+heavy (`━` `┃` `┛`) over a double one — because that modifier wraps a border it
+did not draw and has only the drawn result to read. The stretch is 7 cells along
+a bottom edge and 3 rows along a side, shrunk to fit a small view. A drawer's
+grabber should match it rather than reopen this table.
 
 **A grabber must not be the only affordance.** The framework's own rule (from
 the iTerm2 right-click work) is that mouse-only features need a keyboard route.
@@ -222,7 +244,7 @@ Grounded in what exists; nothing here needs new infrastructure.
 
 | Need | Existing part |
 |---|---|
-| Grab region on a border | `DialogDrag.appendGrabRegions` (generalise) |
+| Grab region on a border | `_UserResizableCore`'s grabber (shipped 2026-08-21, `7aba17dd`); `DialogDrag.appendGrabRegions` is still dialog-only |
 | Persisted drag delta | `DialogDrag`'s `StateBox` + `propertyIndex` pattern |
 | Drag reporting | `MouseEventDispatcher.requestFeature(.drag)` |
 | Screen-anchored placement | `OverlayLayer.placed(maxWidth:maxHeight:)` |
@@ -258,7 +280,9 @@ Step 1 is worth doing regardless of what happens to 2 and 3, because right now
 1. **Drawer as split-view column, or its own control?** (§2 — I recommend
    reusing the split view.)
 2. **Is a slideover worth having separately from a drawer?** (§4b)
-3. **Grabber glyph** — `▁▁▁▁`, or something else? (§3)
+3. **Grabber glyph** — `▁▁▁▁`, or something else? (§3 — largely settled by
+   `.userResizable(_:)`, which draws whichever Box Drawing weight stands out
+   from the border cell it lands on rather than any fixed glyph.)
 4. **Should a drawer's size be an app-visible binding** so it can persist?
    (§4a — I recommend yes.)
 5. **Is the grabber its own Tab stop**, matching split-view dividers? (§5)
