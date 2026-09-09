@@ -265,4 +265,71 @@ struct ScrolledClickLocalizationTests {
             box.selection == label,
             "clicked \(label) on screen row \(y) but selected \(box.selection ?? "nil")")
     }
+
+    /// The List's OWN top clip, not an enclosing scroller's. With line
+    /// granularity (the default) the wheel leaves the top row drawn from its
+    /// fourth line down, and the region `_ListCore` merges for a control
+    /// spanning that row has to say how many lines were cut — otherwise the
+    /// dispatcher localises every click inside the control that far too high.
+    @Test("A control in a List row clipped by the list's own top localises to the row")
+    func rowChildRegionCarriesTheListsOwnTopClip() {
+        final class Box { var seen: [Int] = [] }
+        let box = Box()
+
+        let view = List(selection: .constant(String?.none)) {
+            ForEach(["A", "B", "C", "D"], id: \.self) { item in
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(1...5, id: \.self) { line in
+                        Text("\(item)-\(line)")
+                    }
+                }
+                .onMouseEvent { event in
+                    guard event.button == .left, event.phase == .pressed else { return false }
+                    box.seen.append(event.y)
+                    return true
+                }
+            }
+        }
+        .frame(height: 8)
+
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        let focusManager = FocusManager()
+
+        func frame() -> FrameBuffer {
+            dispatcher.beginRenderPass()
+            var env = EnvironmentValues()
+            env.mouseEventDispatcher = dispatcher
+            env.focusManager = focusManager
+            let context = RenderContext(
+                availableWidth: 30, availableHeight: 8, environment: env, tuiContext: tui)
+            let buffer = renderToBuffer(view, context: context)
+            dispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        _ = frame()
+        // One tick is `ViewConstants.mouseWheelScrollLines` = 3 lines, and the
+        // rows are 5 lines tall: the list rests at row 0 with a 3-line top clip.
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: 5, y: 3))
+        let buffer = frame()
+
+        #expect(
+            !buffer.lines.contains { $0.stripped.contains("A-3") },
+            "the list clipped 3 lines off its top row: \(buffer.lines.map(\.stripped))")
+        guard let y = buffer.lines.firstIndex(where: { $0.stripped.contains("A-5") }) else {
+            Issue.record("row A's fifth line is not drawn: \(buffer.lines.map(\.stripped))")
+            return
+        }
+        #expect(
+            buffer.hitTestRegions.contains { $0.topClip == 3 },
+            "the merged region records the cut lines: \(buffer.hitTestRegions)")
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: y))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: y))
+        #expect(
+            box.seen == [4],
+            "'A-5' is the control's own line 4; got \(box.seen) (short by the 3 clipped lines)")
+    }
 }

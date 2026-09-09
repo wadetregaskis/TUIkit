@@ -1735,19 +1735,32 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // (line granularity), the last row clipped below: intersect
                 // each region with the row-local window of lines actually
                 // shown, [clip, clip + position.height).
-                let start = max(region.offsetY, clip)
-                let end = min(region.offsetY + region.height, clip + position.height)
-                guard end > start else { continue }
+                //
+                // Through the SHARED trim, because a clip is not merely an
+                // absence: `clipped(toColumns:rows:)` RECORDS the lines it cut
+                // away in `topClip`, and the dispatcher measures a handler's
+                // local coordinates from `localOriginY` — the region's top
+                // moved back up past the cut. Rebuilt by hand here, every
+                // merged region claimed `topClip: 0`, so a click inside a
+                // control spanning a clipped top row arrived short by the clip:
+                // on a 5-line row scrolled 3 lines up, a click on its last
+                // visible line reached the control as its line 1 instead of its
+                // line 4. `leftClip` and the reveal outsets went the same way,
+                // for the same reason — the plain initializer takes neither.
+                //
+                // Only the Y axis is trimmed: the column range spans the region
+                // and so cuts nothing. A row's HORIZONTAL clip is applied to its
+                // drawing (`fitted`), and whether the regions should follow it
+                // is a separate question this merge has never answered.
+                //
+                // Clip THEN shift: a translation records nothing, so the two
+                // orders agree on both clips — see `HitTestRegion.shifted(byX:y:)`.
+                let columns = region.offsetX..<(region.offsetX + region.width)
+                let visibleLines = clip..<(clip + position.height)
+                guard let trimmed = region.clipped(toColumns: columns, rows: visibleLines)
+                else { continue }
                 buffer.hitTestRegions.append(
-                    HitTestRegion(
-                        offsetX: rowContentX + region.offsetX,
-                        offsetY: topInset + position.yStart + (start - clip),
-                        width: region.width,
-                        height: end - start,
-                        handlerID: region.handlerID,
-                        focusID: region.focusID
-                    )
-                )
+                    trimmed.shifted(byX: rowContentX, y: topInset + position.yStart - clip))
             }
         }
     }
