@@ -133,9 +133,21 @@ Currently ``.disabled()`` on ScrollView suppresses both focus
 registration *and* the wheel mouse handler. Wheel scrolling
 still has to work inside a List (that's the whole point of
 composing), so `.disabled()` is the wrong tool. The right tool
-would be a separate `.focusable(false)` modifier that
-suppresses only the Focusable registration. The mouse handler
-stays active and wheel events still scroll the viewport.
+would be a modifier that suppresses only the Focusable
+registration. The mouse handler stays active and wheel events
+still scroll the viewport.
+
+The obvious spelling for it is spoken for, and means the
+opposite. `.focusable(_:)` shipped on 2026-07-20 (`bc10e15f`)
+with SwiftUI's meaning: it ADDS a focus stop around content
+that has none — which is what makes `.focused(_:)` work on a
+`Text` — and publishes `\.isFocused` into it, while
+`.focusable(false)` merely declines to add one. It unregisters
+nothing, and ``_ScrollViewCore`` never consults it.
+`.scrollDisabled(_:)` does drop a ScrollView out of the focus
+ring, but it governs *gestures*: it blocks the wheel too,
+which is precisely what has to keep working. So this mismatch
+still needs its own modifier, under a name nothing has claimed.
 
 Implementation cost: a new modifier, a new private flag on
 ``_ScrollViewCore``, and a small adjustment to the
@@ -208,7 +220,10 @@ public var body: some View {
 ```
 
 (Where ``SelectableListRowView`` knows how to attach the
-focused-row hit-test region — see mismatch #3.)
+focused-row hit-test region — see mismatch #3 — and where
+`.focusable(false)` stands in for mismatch #2's
+suppress-registration modifier, which does not exist: the real
+`.focusable(_:)` means the opposite.)
 
 That body is much smaller than the current
 ``renderToBuffer``, which is a good sign — but every piece of
