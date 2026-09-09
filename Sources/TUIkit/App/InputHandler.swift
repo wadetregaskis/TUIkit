@@ -6,7 +6,9 @@
 
 // MARK: - Input Handler
 
-/// Dispatches key events through a five-layer priority chain (layers 0–4).
+/// Dispatches key events through a five-layer priority chain (layers 0–4) plus
+/// three refinements wedged between them — the ESC pre-route, layer 0.5 and
+/// layer 3.5, described after the list.
 ///
 /// The dispatch order is:
 /// 0. **Text input** (conditional) — a focused `TextField`/`SecureField`
@@ -15,14 +17,30 @@
 /// 2. **View handlers** — registered via `onKeyPress` modifiers
 /// 3. **Focus system** (conditional) — Tab/Shift+Tab navigation, Enter/Space
 ///    on focused buttons
-/// 4. **Default bindings** — `q` (quit), `t` (theme), `a` (appearance)
+/// 4. **Default bindings** — `q` (quit), Ctrl-Z (re-raised as SIGTSTP, so the
+///    key and the external signal suspend by one path), `t` (theme), `a`
+///    (appearance)
 ///
 /// Layers 0 and 3 are mutually exclusive, gated on
 /// `focusManager.hasTextInputFocus`: when a text-input element is focused,
 /// layer 0 runs and layer 3 is skipped. If a layer consumes the event,
-/// subsequent layers are skipped. (An open modal that has claimed Escape is a
-/// special case routed through the focus system ahead of layer 1 — see
-/// `handle(_:)`.)
+/// subsequent layers are skipped.
+///
+/// The three refinements, all in `handle(_:)`:
+/// - An open modal that has claimed Escape is routed through the focus system
+///   ahead of layer 1, so a page-level `onKeyPress` cannot close the page out
+///   from under an open drop-down. Declined there means declined: layer 3 must
+///   not offer the same event twice.
+/// - **Layer 0.5**, also ahead of the status bar: while a drag is in flight the
+///   arrow and paging keys scroll whatever the pointer is OVER — that is how an
+///   off-screen drop destination is reached without letting go, and every layer
+///   below would spend the key on the focused control instead (`6df636cd`,
+///   2026-07-31).
+/// - **Layer 3.5**, between the focus system and the default bindings: Return
+///   fires the default button and Escape the cancel button, à la SwiftUI's
+///   `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
+///   Reached only when the focused control let the key fall through
+///   (`2a106663`, 2026-07-09).
 internal struct InputHandler {
     /// The status bar state for item-level event handling.
     let statusBar: StatusBarState
