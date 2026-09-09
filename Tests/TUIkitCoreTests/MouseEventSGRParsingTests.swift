@@ -176,6 +176,41 @@ struct MouseEventSGRParsingTests {
             "\(code) names a button TUIkit does not have — it must not read as a click")
     }
 
+    /// …and the LEGACY form declines them too, which is the form that matters
+    /// most for this: X10 reports are what Terminal.app falls back to on some
+    /// events even after TUIkit has asked for SGR with `?1006h`, so a
+    /// five-button mouse's back button is likelier to arrive here than through
+    /// the SGR parser that was fixed first.
+    ///
+    /// The bytes are the code plus 32, which is how X10 encodes them — 128
+    /// becomes 160 (U+00A0), and 160 itself becomes 192.
+    @Test(
+        "…and the legacy X10 form declines them as well",
+        arguments: [128, 129, 130, 131, 160])
+    func legacyDeclinesExtendedButtons(_ code: Int) {
+        func legacy(_ code: Int) -> [UInt8] {
+            Array("\u{1B}[M".utf8) + [UInt8(code + 32), UInt8(5 + 32), UInt8(3 + 32)]
+        }
+        // The positive control first, in the SAME byte shape: without it a
+        // typo in the encoding would make every case decline and the test
+        // would pass while asserting nothing.
+        #expect(MouseEvent.parseLegacy(legacy(0))?.button == .left)
+        #expect(
+            MouseEvent.parseLegacy(legacy(code)) == nil,
+            "\(code) names a button TUIkit does not have — it must not read as a click")
+    }
+
+    /// The legacy control, for the same reason as the SGR one below: the
+    /// horizontal wheel sets bit 7 too, and must still decode.
+    @Test(
+        "Bit 7 inside the legacy wheel group is still the horizontal wheel",
+        arguments: [(192, MouseButton.scrollLeft), (193, .scrollRight)])
+    func legacyHorizontalWheelStillDecodes(_ code: Int, _ button: MouseButton) {
+        var bytes = Array("\u{1B}[M".utf8)
+        bytes.append(contentsOf: [UInt8(code + 32), UInt8(5 + 32), UInt8(3 + 32)])
+        #expect(MouseEvent.parseLegacy(bytes)?.button == button)
+    }
+
     /// The control case: bit 7 WITH the wheel bit is a horizontal wheel and
     /// must still decode, so the guard above cannot be a blanket "reject 128".
     @Test(

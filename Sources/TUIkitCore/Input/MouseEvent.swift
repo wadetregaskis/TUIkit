@@ -371,7 +371,7 @@ extension MouseEvent {
         let isMotion = (buttonCode & 32) != 0
         let isWheel = (buttonCode & 64) != 0
         let buttonNumber = buttonCode & 3
-        let horizontalWheel = (buttonCode & 128) != 0
+        let extendedGroup = (buttonCode & 128) != 0
 
         let button: MouseButton
         let phase: MousePhase
@@ -381,7 +381,18 @@ extension MouseEvent {
             // Same axis-in-the-button-bits layout as the SGR form: see
             // `decodeSGRWheel` — buttons 2/3 within the wheel group are
             // the standard horizontal left/right.
-            button = decodeSGRWheel(buttonNumber: buttonNumber, horizontal: horizontalWheel)
+            button = decodeSGRWheel(buttonNumber: buttonNumber, horizontal: extendedGroup)
+        } else if extendedGroup {
+            // …and the same decline as `decodeSGRButton`, for the same reason:
+            // outside the wheel group bit 7 names one of xterm's extended
+            // buttons 8–11 (a five-button mouse's back/forward pair, and two
+            // more nobody agrees on), numbered in the SAME low two bits that
+            // mean left/middle/right. Decoded at face value, "back" became a
+            // real left click wherever the pointer happened to be — activating a
+            // button, selecting a row, dismissing a menu. The SGR form was fixed
+            // and this one was not, which matters because this IS the form
+            // Terminal.app falls back to on some events even after `?1006h`.
+            return nil
         } else if isMotion {
             switch buttonNumber {
             case 0: button = .left
