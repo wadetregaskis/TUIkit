@@ -149,16 +149,19 @@ overloads.
 surface is the **status bar** — "the focused view's help text appears there" —
 which is a genuine UX decision about what that bar is for, not a mechanical port.
 
-**Also needs work either way.** `FocusRegistration` is not the universal seam it
-looks like: `NavigationSplitView.swift:768` and `Button.swift` register with the
-focus manager directly. Any help-on-focus mechanism routed only through
-`FocusRegistration` would work for most focusables and silently not for those —
-the failure mode already declined twice on this list.
+**Also needs work either way.** `FocusRegistration` is not quite the universal
+seam it looks like: the split divider registers with the focus manager directly
+(`NavigationSplitView.swift:554` and `:569`). It is the only site left — this
+entry named `Button` too, wrongly: `Button` has gone through the seam since
+`e2474a54` (2026-02-13), at `Button.swift:354`. Any help-on-focus mechanism
+routed only through `FocusRegistration` would work for every other focusable
+and silently not for that one — the failure mode already declined twice on this
+list, at one site instead of a class of them.
 
 **Found 2026-08-24: most of the mechanism already exists.** The status bar
 already carries a string contributed by the focused control —
 `StatusBarState.activationLabelOverride`, written by
-`FocusRegistration.swift:190` and read by `StatusBar.swift:214`. "The focused
+`FocusRegistration.swift:180` and read by `StatusBar.swift:216`. "The focused
 view's help text appears in the status bar" is therefore not a new surface; it
 is a second writer of a slot that already has one.
 
