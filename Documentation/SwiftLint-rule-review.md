@@ -127,12 +127,12 @@ one.
 All nine verified at **0 violations** before enabling, so they are pure
 ratchets: they cost nothing today and stop the drift tomorrow.
 
-### Enable after a small, mechanical fix (5)
+### Enable after a small, mechanical fix (3 — two of them since enforced)
 
 | Rule | Sites | Verdict |
 |---|---|---|
-| `missing_docs` | 41 | **Recommended.** This is a public-API framework that documents heavily; 41 undocumented public declarations (Theme 8, UserDefaultsStorage 8, RadioButton 5, AppStorage 4) are gaps, not style. Fix, then it ratchets. |
-| `direct_return` | 2 | `let x = …; return x` → `return …`. Genuinely clearer, but two sites is thin justification for a standing rule. Your call. |
+| `missing_docs` | 41 | **Recommended.** This is a public-API framework that documents heavily; 41 undocumented public declarations (Theme 8, UserDefaultsStorage 8, RadioButton 5, AppStorage 4) are gaps, not style. Fix, then it ratchets. **Taken:** `16f07698` (2026-08-25) documented all 41 and enabled it — `.swiftlint.yml:68`. |
+| `direct_return` | 2 | `let x = …; return x` → `return …`. Genuinely clearer, but two sites is thin justification for a standing rule. Your call — **called: enabled** in `b08531db` (2026-08-25), the two sites fixed. `.swiftlint.yml:50`. |
 | `multiline_parameters_brackets` | 3 | Cosmetic, and swift-format already owns wrapping. Marginal. |
 
 ### Decline — conflicts with a project rule or another tool (7)
@@ -179,7 +179,7 @@ produce a large diff across code that currently reads fine.
 
 | Rule | Sites | Note |
 |---|---|---|
-| `private_swiftui_state` | 121 | `@State` should be private, and all 121 are in Example/Stress/Tests. Mechanical and safe; low value. Enable if you want the demo app exemplary. |
+| `private_swiftui_state` | 121 | `@State` should be private, and all 121 are in Example/Stress/Tests. Mechanical and safe; low value. Enable if you want the demo app exemplary. **Enabled** in `b08531db` (2026-08-25): 105 privatised, and the 16 the language will not let us close — a stored property read by an `extension` in another file, plus test fixtures read by sibling suites — carry a documented `disable:this`. `.swiftlint.yml:76`. |
 | `discouraged_optional_boolean` | 43 | `Bool?` is a real smell, but several here are genuine tri-state (inherited-or-overridden) values. |
 | `discouraged_optional_collection` | 68 | Same shape; some are meaningfully "absent vs empty". |
 | `redundant_self` | 14 | Small; swift-format has its own view on `self`. |
@@ -216,7 +216,9 @@ Three exceptions retired, one latent bug fixed (the bare `fatalError()`), and
 measured justifications instead of assertions. Of 109 optional rules, **9 were
 enabled** (all verified at zero violations first), both follow-ups have since been
 taken — `missing_docs` (41 public declarations documented) and `file_header`
-(configured, 21 defects fixed) — and the rest decline for reasons
+(configured, 21 defects fixed) — two more of the verdicts below were called the
+same day (`direct_return` and `private_swiftui_state`, `b08531db`), and the rest
+decline for reasons
 that are now written down rather than rediscovered.
 
 The linter now enforces 50 opt-in rules on top of the defaults, at 0
