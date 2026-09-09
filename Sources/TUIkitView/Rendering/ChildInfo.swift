@@ -57,7 +57,7 @@ public struct ChildView {
     ///   88 bytes/stride read `churn` +4.3% against a same-binary null test
     ///   of +3.7% on that scenario, with every other scenario flat. So the
     ///   number above is history, not a lever: do not re-derive it without a
-    ///   clean-built A/B on both sides (§40.2 of the performance profile).
+    ///   clean-built A/B on both sides (§41.1 of the performance profile).
     private let providerSlot: Int32
     /// The identity this child renders and measures under, when it has been
     /// resolved ahead of use — see ``resolvingIdentity(under:)``. `nil` means

@@ -27,20 +27,30 @@ import TUIkitCore
 /// ## Who conforms to Renderable?
 ///
 /// - **Leaf views**: `Text`, `EmptyView`, `Spacer`, `Divider`
-/// - **Layout containers**: `VStack`, `HStack`, `ZStack`
 /// - **ViewBuilder glue**: `TupleView`, `ConditionalView`, `ViewArray`
-/// - **Interactive views**: `Button`, `ButtonRow`, `Menu`, `StatusBar`
-/// - **Containers**: `Panel`, `ContainerView`, `Alert`, `Dialog`, `Card`
-/// - **Modifiers**: `ModifiedView`, `DimmedModifier`, etc.
+/// - **Modifier infrastructure**: `ModifiedView`, `DimmedModifier`, etc.
+/// - **Private `_*Core` views**: `_VStackCore`, `_HStackCore`, `_ZStackCore`,
+///   `_ButtonCore`, `_StatusBarCore`, `_PanelCore`, `_ContainerViewCore`,
+///   `_AlertCore`, `_DialogCore`, `_CardCore`, and friends — the procedural
+///   rendering behind the public controls
 ///
-/// All of these declare `body: Never` (which `fatalError`s) because
-/// their rendering is fully handled by `Renderable`.
+/// The public controls are deliberately **not** on that list, and this list
+/// once said otherwise: `VStack`, `HStack`, `ZStack`, `Button`, `ButtonRow`,
+/// `Menu`, `StatusBar`, `Panel`, `ContainerView`, `Alert`, `Dialog` and `Card`
+/// each moved behind a private core during the February 2026 migration
+/// (`d9010bab`, `e2474a54` and friends). Every one of them is now a `View`
+/// with a real `body: some View`, which is what makes modifiers and
+/// environment values flow through the whole hierarchy the way SwiftUI's do.
+///
+/// The types listed above do declare `body: Never` (which `fatalError`s)
+/// because their rendering is fully handled by `Renderable`.
 ///
 /// ## Composite views (body only)
 ///
 /// Views that do **not** conform to `Renderable` use `body` to compose
-/// other views. Example: `Box` returns `content.border(...)` from its
-/// `body`, delegating rendering to `ContainerView` which *is* `Renderable`.
+/// other views. Example: `Box` returns `content.bordered(...)` from its
+/// `body`, which builds a `ContainerView` — itself a composite now, whose
+/// `body` wraps the `Renderable` `_ContainerViewCore`.
 ///
 /// ## Adding a new view type
 ///

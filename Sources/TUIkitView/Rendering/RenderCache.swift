@@ -42,9 +42,18 @@ import TUIkitStyling
 /// - Because the **ancestors** go too, a state change deep inside a memoized
 ///   subtree evicts every memoized entry on the spine above it. Nesting
 ///   `.equatable()` buys less than it looks under churn.
-/// - Only ``EquatableView`` and `_MemoizedRow` consult the cache at all —
-///   `measureChild` / `renderChild` do not. A tree with neither is walked in
-///   full every frame, cache or no cache.
+/// - Only ``EquatableView`` and `_MemoizedRow` consult the **buffer** memo —
+///   `renderChild` does not, so a tree with neither is re-rendered in full
+///   every frame, cache or no cache. That exclusivity is the buffer's alone;
+///   the other three tables are not so narrow. Every measured child goes
+///   through the measure memo (`measureChild`, since `ec91cabe`, 2026-08-12)
+///   and every provider's child list through the child-views memo
+///   (`resolveChildViews`, since `90a608df`, 2026-09-05) — both per-pass
+///   scratch, emptied by ``beginRenderPass()``, so what they spare is the
+///   SECOND walk of a subtree inside one frame, never the first. The size memo
+///   is cross-frame like the buffer's, and since `32b87838` (2026-09-05) it has
+///   a caller that is not a memo wrapper at all: a hugging `List` keeps its
+///   widest row there, asked by its rows' DATA rather than by a view value.
 ///
 /// ## Garbage Collection
 ///
@@ -426,6 +435,9 @@ extension RenderCache {
     ///   - gradientFrame: Where this view sits in a spanning gradient now.
     ///     `nil` — the default, and the overwhelmingly common case — means no
     ///     `.gradientExtent(.subtree)` is in force.
+    ///   - surfaceBackground: The surface this view's translucent ink would be
+    ///     composited against now. A cached buffer holds ink already blended,
+    ///     so an entry made over a different surface has to miss.
     /// - Returns: The cached ``FrameBuffer`` if valid, or `nil` on miss.
     public func lookup<V: Equatable>(
         identity: ViewIdentity,
@@ -486,6 +498,9 @@ extension RenderCache {
     ///   - contextHeight: The available height during rendering.
     ///   - gradientFrame: Where the view sat in a spanning gradient while it
     ///     rendered, so a later lookup from a different place misses.
+    ///   - surfaceBackground: The surface its translucent ink was blended
+    ///     against while it rendered, so a later lookup over a different
+    ///     surface misses too.
     public func store<V: Equatable>(
         identity: ViewIdentity,
         view: V,

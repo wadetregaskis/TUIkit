@@ -51,8 +51,12 @@ public struct FrameBuffer: Sendable, Equatable {
     /// The width of the buffer (the length of the longest line in visible characters).
     ///
     /// This is a stored property, recomputed automatically whenever
-    /// ``lines`` is mutated. Accessing `width` is O(1) — the expensive
-    /// ANSI-stripping regex runs only once per mutation, not per access.
+    /// ``lines`` is mutated. Accessing `width` is O(1) — the per-line
+    /// `String.strippedLength` scan runs only once per mutation, not per
+    /// access. It was an ANSI-stripping regex when this cache was introduced
+    /// (`176cfc0d`, 2026-02-02); since `74fc7ea8` (2026-08-12) it is a
+    /// byte-at-a-time CSI walk with an all-ASCII fast path, and no regex
+    /// survives anywhere on the width path.
     public private(set) var width: Int
 
     /// Whether every line in ``lines`` has the same visible width (``width``).
@@ -80,7 +84,7 @@ public struct FrameBuffer: Sendable, Equatable {
     /// importantly ``Text``, which gets the widths for free while word-wrapping —
     /// it carries them here so a consumer that pads ragged lines to a target width
     /// (e.g. a `VStack` aligning a column of wrapped text) skips the per-line
-    /// `Swift.StringProtocol.strippedLength` re-measure. `nil` means "unknown":
+    /// `String.strippedLength` re-measure. `nil` means "unknown":
     /// every consumer falls back to measuring per line, exactly as before this
     /// field existed.
     ///

@@ -134,7 +134,14 @@ public struct RenderContext {
 
     /// Whether this is a measurement pass (no side-effects should occur).
     ///
-    /// Set to true during two-pass layout when measuring non-Layoutable views.
+    /// Set for every measured child, `Layoutable` or not — and the `Layoutable`
+    /// path is the rule here, not the exception: `measureResolved` copies the
+    /// context and flips this before calling `sizeThatFits`, and the fallback
+    /// that measures a `Renderable` by a single render flips it too. Containers
+    /// that render a subtree only to size it (the stacks, `Table`, the windowed
+    /// stacks, `_ContainerViewCore`, the render loop's own probe) set it by hand
+    /// for the same reason.
+    ///
     /// Views should skip side-effects like focus registration when this is true.
     public var isMeasuring: Bool = false
 
