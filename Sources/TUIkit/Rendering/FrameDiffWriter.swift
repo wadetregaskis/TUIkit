@@ -28,7 +28,9 @@ import Foundation
 ///
 /// // Each frame:
 /// let outputLines = writer.buildOutputLines(buffer: buffer, ...)
-/// writer.writeContentDiff(newLines: outputLines, terminal: terminal, startRow: 1)
+/// writer.writeContentDiff(
+///     newLines: outputLines, terminal: terminal, startRow: 1,
+///     terminalWidth: width, bgCode: bgCode, reset: reset)
 ///
 /// // On terminal resize:
 /// writer.invalidate()
