@@ -33,7 +33,7 @@ ways to build one:
 ```swift
 .imageColorMode(.palette(ASCIIPalette([.black, .palette.accent, .white])))
 .imageColorMode(.palette(.shades(5)))    // five greys
-.imageColorMode(.palette(.sampled(8)))   // eight, spread over the gamut
+.imageColorMode(.palette(.spread(8)))    // eight, spread over the gamut
 ```
 
 - **`[Color]`, not `[RGBA]`.** A `Color` can be `.palette.accent`, so a palette
@@ -57,11 +57,11 @@ ways to build one:
 
 `B` and `C1(b)` from the request — "greyscale with a configurable shade count"
 and "a palette of N by subsampling" — are not separate features. **`.shades(_:)`
-is a generated grey ramp and `.sampled(_:)` is a generated subsample**, and both
+is a generated grey ramp and `.spread(_:)` is a generated subsample**, and both
 are ordinary palettes once generated. That collapse is most of why this cost two
 files rather than the implied surface.
 
-**`.sampled(_:)` is deliberately not a palette derived from the image.** That
+**`.spread(_:)` is deliberately not a palette derived from the image.** That
 (median cut, k-means) is a different feature — "reduce this image to N colours"
 rather than "draw this image in MY colours" — and it would put an image-analysis
 pass with its own cache lifetime inside a renderer whose job is mapping. With
@@ -69,10 +69,11 @@ dithering on, a gamut-spread sample gets most of the same look.
 
 > That separate feature was later built, as `ASCIIPalette.adaptive(_:by:target:)`
 > — including the image-analysis pass, which is per conversion and cached with
-> the conversion. `.sampled(_:)` is `.spread(_:)` now, and the two sit side by
-> side in the Example's colour controls precisely because they answer different
-> questions. See "An adaptive palette has to know what the terminal can draw"
-> below.
+> the conversion. The generator this note designed as `.sampled(_:)` has been
+> `.spread(_:)` since 2026-09-04 (`b50d5114`) — "which N colours, out of what" —
+> which is the name used above; the two sit side by side in the Example's colour
+> controls precisely because they answer different questions. See "An adaptive
+> palette has to know what the terminal can draw" below.
 
 ### Two generators, and why each is spaced the way it is
 
@@ -84,7 +85,7 @@ dithering on, a gamut-spread sample gets most of the same look.
   neutrals, where OKLab's L is the cube root of the linear value, so it is a
   cube and a gamma encode — no matrix, and no general OKLab → sRGB conversion
   for this module to carry.
-- **`.sampled(_:)` is farthest-point in OKLab** over the 240 colours of the
+- **`.spread(_:)` is farthest-point in OKLab** over the 240 colours of the
   256-palette. Every entry is one any 256-colour terminal renders exactly, so a
   palette chosen this way never shifts underfoot when the image is downsampled;
   and farthest-point covers the gamut where "every k-th index" clusters wherever
@@ -150,7 +151,7 @@ So both rules ship, as `ASCIIPaletteMapping`:
 
 | | what a pixel picks | right for |
 |---|---|---|
-| `.nearestColor` (default) | the entry it is closest to in OKLab | the palette standing IN for the image's colours — `.shades`, `.sampled`, hues chosen to match a subject |
+| `.nearestColor` (default) | the entry it is closest to in OKLab | the palette standing IN for the image's colours — `.shades`, `.spread`, hues chosen to match a subject |
 | `.toneRamp` | the entry at its tonal RANK, dark to light | "draw this in my three colours", where every colour must be used |
 
 The trade runs both ways, which is what makes it a choice rather than a default:
