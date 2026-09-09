@@ -66,7 +66,10 @@ struct MeasureGenerationTests {
         let cache = RenderCache()
         environment.renderCache = cache
         environment.stateStorage = StateStorage()
-        environment.volatileReadTracker = VolatileReadTracker()
+        // Through the installer, which also mirrors it onto the cache — that
+        // mirror is what `measureChild` gates on, so a bare assignment leaves
+        // this whole suite measuring a memo that is switched off.
+        environment.installVolatileReadTracker(VolatileReadTracker())
         let context = RenderContext(
             availableWidth: width, availableHeight: 4, environment: environment,
             identity: ViewIdentity(path: "Root"))

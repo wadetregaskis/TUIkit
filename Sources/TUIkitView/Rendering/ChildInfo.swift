@@ -539,7 +539,27 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
     // Only when a `VolatileReadTracker` is already installed: the render loop
     // always installs one, and requiring it keeps this off standalone
     // measurement paths (and off the cost of minting one per call).
-    if let cache = context.renderCache, let tracker = context.environment.volatileReadTracker {
+    //
+    // Read off the CACHE, not out of the environment. It is the same object —
+    // `EnvironmentValues.installVolatileReadTracker` puts it in both places —
+    // but this gate is passed once per measured node, ~14,400 times on a
+    // `fanout` frame, and an `EnvironmentValues` read of a present key is a
+    // hash, an `[ObjectIdentifier: Any]` probe, a `swift_dynamicCast` and a
+    // retain, where the mirror is a load from a class this context already
+    // holds as a stored field. The same hoist `renderCache` and `stateStorage`
+    // got, one level further in.
+    if let cache = context.renderCache, let tracker = cache.volatileReadTracker {
+        // Debug-only, and the whole reason reading the mirror is sound: if some
+        // path installed a tracker into the environment WITHOUT mirroring it,
+        // the counters snapshotted below belong to a different object than the
+        // one this subtree's volatile reads record to, and every unsafe
+        // measurement would be stored as safe — wrong sizes, no diagnostic.
+        // Costs exactly the environment probe this change removes, in builds
+        // where nothing is being measured.
+        assert(
+            context.environment.volatileReadTracker === tracker,
+            "the pass's volatile-read tracker was installed without mirroring it onto the render "
+                + "cache — install one with EnvironmentValues.installVolatileReadTracker(_:)")
         let key = RenderCache.MeasureKey(
             identityHash: measureIdentityHash(context),
             effectiveWidth: proposal.width ?? context.availableWidth,

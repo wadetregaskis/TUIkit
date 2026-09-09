@@ -267,6 +267,37 @@ public final class RenderCache: @unchecked Sendable {
     /// engaged and did not pay (this memo shipped inert once already).
     public private(set) var measureMemoTotals: (hits: Int, misses: Int) = (0, 0)
 
+    /// This pass's ``VolatileReadTracker``, mirrored here from the environment by
+    /// ``EnvironmentValues/installVolatileReadTracker(_:)``.
+    ///
+    /// NOT the owner, and NOT one this cache mints. The environment's tracker is
+    /// the single per-frame instance every `recordVolatileRead()` /
+    /// `recordRenderSideEffect()` site writes to, and this has to be that same
+    /// object: the measure memo's store gate reads a delta off it, so a
+    /// different instance would read counters nothing moves and store every
+    /// unsafe measurement as safe. Minting one in ``beginRenderPass()`` would do
+    /// exactly that on every path that installs no tracker (`ViewRenderer`'s
+    /// snapshot render, most test fixtures) — which is the measurement the gate
+    /// exists to refuse.
+    ///
+    /// It exists because `measureChild` consulted the memo through
+    /// `context.environment.volatileReadTracker`: an `ObjectIdentifier` hash, an
+    /// `[ObjectIdentifier: Any]` probe, a `swift_dynamicCast` and a retain, paid
+    /// ~14,400 times on a `fanout` frame (`Performance-profile-2026-08.md`
+    /// §3's measures/frame table). `RenderContext` already mirrors this cache as
+    /// a stored field for the same reason, so from there this is one more load.
+    ///
+    /// Strong, not weak like ``StateStorage/renderCache``: a weak read is a
+    /// side-table check, and this is read once per measured node. The object is
+    /// two counters, and the render loop replaces it every frame.
+    ///
+    /// Deliberately NOT cleared by ``beginRenderPass()``. `RenderLoop` installs
+    /// a fresh tracker every frame, but `Stress`'s bench and the profiling
+    /// harness install one per context and then open a pass per frame — clearing
+    /// would switch the memo off there from frame two onwards, which is how this
+    /// memo shipped inert once already (§27).
+    public internal(set) var volatileReadTracker: VolatileReadTracker?
+
     /// The width-traits generation this cache's contents were measured under.
     ///
     /// The claim is part of what a measurement means, so memos taken under one

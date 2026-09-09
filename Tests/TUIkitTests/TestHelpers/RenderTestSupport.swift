@@ -144,6 +144,14 @@ extension RenderContext {
         // hot memoization paths. This mutates the env on an existing context, so
         // the field must be re-set to match or it would serve the old cache.
         copy.renderCache = cache
+        // And the other direction: a tracker installed BEFORE this was mirrored
+        // onto the cache this call just replaced, so re-install it. Otherwise
+        // the measure memo is off for the rest of the test and nothing says so
+        // — the silent-off failure the assert in `measureChild` cannot catch,
+        // because a nil mirror closes the gate before it is reached.
+        if let tracker = copy.environment.volatileReadTracker {
+            copy.environment.installVolatileReadTracker(tracker)
+        }
         return copy
     }
 }

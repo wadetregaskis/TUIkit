@@ -83,7 +83,10 @@ struct RenderHarness {
         //   full path strings — which made the end-of-pass prune 88-95% of a
         //   frame in the Stress bench and nothing at all in the app.
         environment.preferenceStorage = PreferenceStorage()
-        environment.volatileReadTracker = VolatileReadTracker()
+        // Through the installer: the gate reads the tracker off the render
+        // cache now, so a bare assignment would leave Mode A profiling a tree
+        // with no measure memo — the fidelity gap the comment above warns of.
+        environment.installVolatileReadTracker(VolatileReadTracker())
         // An app's root environment is not an empty one, and the gap is not
         // cosmetic. `RenderLoop.buildEnvironment()` STORES the palette and the
         // appearance, and every frame stamps the terminal size and the

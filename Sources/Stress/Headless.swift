@@ -89,7 +89,14 @@ enum Headless {
         // scenario trapped without this. Nothing here had published a
         // preference before, which is how it stayed missing.
         environment.preferenceStorage = PreferenceStorage()
-        environment.volatileReadTracker = VolatileReadTracker()
+        // Through the installer, so the measure memo's gate — which reads the
+        // tracker off the render cache, not out of the environment — is open
+        // here as it is in the app. Getting this wrong is §27's disaster
+        // verbatim: with the memo unreachable the bench measured a flat ~10%
+        // regression of nothing at all. `beginRenderPass()` in the frame loop
+        // does not clear the mirror, so installing once per context is enough,
+        // warm and `--cold` alike.
+        environment.installVolatileReadTracker(VolatileReadTracker())
         // Rooted at a TYPE, as `RenderLoop` roots the app, not at the
         // context's default raw path string. Every identity below a raw root
         // is raw-rooted, and for those `ViewIdentity.isAncestor(of:)` has to

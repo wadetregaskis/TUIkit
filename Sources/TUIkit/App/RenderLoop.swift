@@ -438,7 +438,12 @@ extension RenderLoop {
         // reset the cursor clock's per-frame read flag. These drive demand-driven
         // animation: the run loop keeps a clock ticking only while a frame uses
         // it, so a static screen produces no further frames.
-        environment.volatileReadTracker = VolatileReadTracker()
+        // Mirrored onto the render cache as well as installed here: the measure
+        // memo's gate reads it off the cache (`ChildInfo.measureChild`), and a
+        // tracker the cache has not been told about switches that memo off.
+        // Safe here and not earlier: `beginRenderPass()` above does not clear
+        // the mirror, and `buildEnvironment()` has already wired the cache.
+        environment.installVolatileReadTracker(VolatileReadTracker())
         cursorTimer?.beginFrameReadTracking()
 
         let scene = evaluateAppBody(environment: environment)

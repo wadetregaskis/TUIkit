@@ -46,7 +46,9 @@ struct MeasureMemoEquivalenceTests {
         context.environment.stateStorage = storage
         context.stateStorage = storage
         if memoised {
-            context.environment.volatileReadTracker = VolatileReadTracker()
+            // The installer, not a bare assignment: the gate reads the tracker
+            // off the render cache, so this is what turns the memo on now.
+            context.environment.installVolatileReadTracker(VolatileReadTracker())
         }
         return context
     }
