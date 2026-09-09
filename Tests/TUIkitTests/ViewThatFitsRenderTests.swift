@@ -211,4 +211,37 @@ struct ViewThatFitsRenderTests {
         )
         #expect(buffer.lines[0].stripped == "alone")
     }
+
+    // MARK: - Squeezed by a parent row
+
+    @Test("A squeezed candidate is chosen from the proposed width, not the context's")
+    func squeezedByAParentRow() {
+        // Space-less strings on purpose: an over-long word stays on one line
+        // (TextWrapping.wrapParagraph), so every height below is exact and a
+        // re-wrap cannot be mistaken for the candidate switch under test.
+        let fits = ViewThatFits {
+            Text("EighteenCellsWide!")  // 18 x 1
+            VStack(spacing: 0) { Text("a"); Text("b"); Text("c") }  // 1 x 3
+        }
+
+        // The measure a squeezing parent performs: the proposal says 9 cells,
+        // the context still says 30 — `_HStackCore.resolvedLayout`'s re-measure
+        // of a child narrower than its ideal.
+        let squeezed = measureChild(
+            fits, proposal: ProposedSize(width: 9, height: nil), context: ctx(width: 30, height: 8))
+        #expect(squeezed.height == 3, "9 cells cannot hold the 18-cell row, so the 3-row fallback is measured")
+        #expect(squeezed.width == 1)
+
+        // …and the row that does the squeezing draws all three of its rows.
+        // 30 - 20 (first column) - 1 (spacing) = 9 cells for the ViewThatFits.
+        let row = renderToBuffer(
+            HStack(alignment: .top, spacing: 1) {
+                Text("LeftColumnIsTwenty!!")
+                fits
+            },
+            context: ctx(width: 30, height: 8))
+        let stripped = row.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+        #expect(row.lines.count == 3, "the row height came from the candidate that renders, got \(stripped)")
+        #expect(stripped == ["LeftColumnIsTwenty!! a", "b", "c"])
+    }
 }

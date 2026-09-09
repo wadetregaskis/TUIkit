@@ -83,9 +83,12 @@ public enum Axis: Sendable, CaseIterable, Equatable {
 ///   the proposal alone — it reports (and renders) whichever candidate currently
 ///   fits. It satisfies the flexibility contract (``ViewSize``) — measured and
 ///   rendered sizes agree *at a given width* — but unlike an ordinary fixed view
-///   its size is not constant across widths. A parent that measures it at one
-///   width and then renders it at a narrower one can therefore land on different
-///   candidates and mis-size it; measure and render it at the **same** width. (A
+///   its size is not constant across widths. It answers the width the caller
+///   **proposes**, falling back to the available width when the proposal names
+///   none — so a parent that proposes the width it will render at gets the
+///   candidate it will draw. A parent that renders it at a width it never
+///   proposed can still land on a different candidate and mis-size it; measure
+///   and render it at the **same** width. (A
 ///   panel sized to its widest child then rendering a narrower child at the panel
 ///   width must clamp the rendered buffer back to the child's natural width
 ///   rather than re-render it narrower — see `TabView`'s content centring.)
@@ -135,10 +138,27 @@ private struct _ViewThatFitsCore<Content: View>: View, Renderable, Layoutable {
     }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let candidates = resolveChildViews(from: content, context: context)
+        // Ground the proposal into the context before anything below reads it —
+        // the same two lines `_ContainerViewCore.sizeThatFits` opens with, and
+        // the same two `measureFixedByRendering` (the fallback a NON-Layoutable
+        // view would get here) applies for free. Not a formality: this is the
+        // one view whose ANSWER SHAPE changes with the extent, so reading the
+        // on-screen width while the caller asked about a narrower one answered a
+        // different question from the render that follows.
+        // `_HStackCore.resolvedLayout` re-measures a column it squeezed at
+        // `ProposedSize(width: allocated, height: nil)` and leaves
+        // `availableWidth` at the whole row's, while `renderChild` DOES narrow
+        // it — so a 30-cell row allocating 9 cells here measured the WIDE
+        // candidate (18x1) and made 1 the row height, then the render picked the
+        // stacked fallback and had its 3 rows clamped to that 1. Two rows
+        // vanished with no sign anything was lost.
+        var grounded = context
+        grounded.availableWidth = proposal.width ?? context.availableWidth
+        grounded.availableHeight = proposal.height ?? context.availableHeight
+        let candidates = resolveChildViews(from: content, context: grounded)
         guard !candidates.isEmpty else { return ViewSize.fixed(0, 0) }
-        let index = chosenIndex(candidates, context: context)
-        return candidates[index].measure(proposal: proposal, context: context)
+        let index = chosenIndex(candidates, context: grounded)
+        return candidates[index].measure(proposal: proposal, context: grounded)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -155,6 +175,13 @@ private struct _ViewThatFitsCore<Content: View>: View, Renderable, Layoutable {
     /// Returns the index of the first candidate whose ideal size fits the
     /// available space along the configured axes, or the last index when
     /// none fit.
+    ///
+    /// The space fitted into is whatever `context` names, so the CALLER hands
+    /// over a context already grounded in its proposal: `sizeThatFits` grounds
+    /// one, and `renderToBuffer` is handed one by `renderChild`. Deliberately
+    /// one source of truth rather than two — reading `proposal` here as well
+    /// would give the two passes separate rules to drift apart, which is the
+    /// shape of the bug `sizeThatFits` describes.
     private func chosenIndex(_ candidates: [ChildView], context: RenderContext) -> Int {
         // Measure each candidate against effectively-unbounded space so it
         // reports its true ideal size — containers like HStack otherwise
