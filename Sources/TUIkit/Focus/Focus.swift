@@ -426,7 +426,20 @@ extension FocusManager {
     ///
     /// This is a hard reset. For per-frame clearing that preserves the active
     /// section and focused element, use `beginRenderPass()` instead.
+    ///
+    /// The focused element is told it lost the focus on its way out — the same
+    /// promise ``unregister(_:)``, `relinquishFocus()` and the end-of-pass
+    /// drops make, and the one ``Focusable/onFocusLost()`` is documented on.
+    /// `App.cleanup` clears the manager at quit, so this is where a focused
+    /// text field's uncommitted edit gets committed.
     public func clear() {
+        // Before the ring goes and before `focusedID` does — `notifyFocusLost()`
+        // needs both to find its element. Same two-part ordering as
+        // `unregister` above, for the reason spelled out there. `App.cleanup`
+        // clears the manager one step ahead of the `StorageDefaults.backend`
+        // `.synchronize()` that flushes late writes, and a focused field's
+        // commit is one of those.
+        notifyFocusLost()
         sections.removeAll()
         activeSectionID = nil
         focusedID = nil

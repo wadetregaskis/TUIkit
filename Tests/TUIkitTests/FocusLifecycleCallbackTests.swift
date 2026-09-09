@@ -282,4 +282,32 @@ struct FocusLifecycleCallbackTests {
         #expect(other.focusReceivedCount == 1)
         #expect(modalControl.focusLostCount == 1, "the modal's own control still hears its loss")
     }
+
+    /// `clear()` is the other app-facing teardown, and `App.cleanup` calls it
+    /// at quit one step ahead of the `StorageDefaults.backend.synchronize()`
+    /// that exists to flush late writes. A focused field's `onFocusLost()` IS
+    /// one of those late writes — `TextFieldHandler` fires
+    /// `onEditingChanged(false)` there, which is what commits a value the user
+    /// typed and never submitted — so a `clear()` that nils the focus in
+    /// silence drops it.
+    @Test("Clearing the manager fires the focused element's onFocusLost")
+    func clearFiresFocusLost() {
+        let manager = FocusManager()
+        let first = MockFocusable(id: "first")
+        let second = MockFocusable(id: "second")
+
+        manager.register(first)  // the first registrant auto-focuses
+        manager.register(second)
+        #expect(manager.currentFocusedID == "first", "sanity: the departing element is focused")
+
+        manager.clear()
+
+        #expect(first.focusLostCount == 1, "the hard reset ends the focused element's session")
+        #expect(second.focusLostCount == 0, "and only the focused one is told")
+        #expect(manager.currentFocusedID == nil)
+
+        // Self-guarding: a second clear has no focus left to notify.
+        manager.clear()
+        #expect(first.focusLostCount == 1, "a clear with nothing focused notifies nobody")
+    }
 }

@@ -201,7 +201,7 @@ When the main loop exits: via Ctrl+C, the quit key, or programmatic shutdown: `c
 | 2 | Show cursor | Make the cursor visible again |
 | 3 | Exit alternate screen | Restore the user's previous terminal content |
 | 4 | Clear state observers | Remove `AppState` observer callbacks |
-| 5 | Clear focus | Remove all focus registrations |
+| 5 | Clear focus | Tell the focused element it lost focus (a field's last commit point), then remove all focus registrations |
 | 6 | Reset TUIContext | Clear lifecycle, key handlers, and preferences |
 
 The `Terminal` class also has a `deinit` safety net that disables raw mode if it was not explicitly restored.
