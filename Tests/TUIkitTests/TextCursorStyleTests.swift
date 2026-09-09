@@ -152,7 +152,9 @@ struct TextCursorStyleTests {
 
     @Test("Regular speed has correct blink cycle")
     func regularSpeedBlinkCycle() {
-        #expect(TextCursorStyle.Speed.regular.blinkCycleMs == 660)
+        // 700, not 660: a 330 ms half is 6.6 of the 50 ms ticks the blink is
+        // drawn on, and the period wobbled 600↔700 ms for exactly that reason.
+        #expect(TextCursorStyle.Speed.regular.blinkCycleMs == 700)
     }
 
     @Test("Fast speed has correct blink cycle")

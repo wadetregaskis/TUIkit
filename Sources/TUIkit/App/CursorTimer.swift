@@ -27,10 +27,11 @@ import Foundation
 ///
 /// ## Animation Speeds
 ///
-/// The speed is controlled by ``TextCursorStyle/Speed``:
-/// - `.slow`: 800ms cycle (visible 400ms, hidden 400ms)
-/// - `.regular`: 530ms cycle (visible 265ms, hidden 265ms)
-/// - `.fast`: 300ms cycle (visible 150ms, hidden 150ms)
+/// The blink speed is controlled by ``TextCursorStyle/Speed``, and every half is
+/// a whole number of ticks so the period cannot wobble:
+/// - `.slow`: 1000ms cycle (visible 500ms, hidden 500ms)
+/// - `.regular`: 700ms cycle (visible 350ms, hidden 350ms)
+/// - `.fast`: 400ms cycle (visible 200ms, hidden 200ms)
 ///
 /// ## Usage
 ///
@@ -164,6 +165,29 @@ extension CursorTimer {
         return Self.blinkVisible(atTick: elapsedTicks, speed: speed)
     }
 
+    /// How many whole ticks the cursor is visible for, and then hidden for.
+    ///
+    /// **The blink is defined on the tick grid, not in milliseconds**, because
+    /// the grid is what it is actually drawn on: nothing can change between
+    /// ticks, so a half-cycle boundary that falls part-way through one is
+    /// delivered at whichever tick edge is nearer — and which edge that is
+    /// changes from cycle to cycle.
+    ///
+    /// Written in milliseconds it did. `(tick * 50) % 660 < 330` gives on/off
+    /// runs of 350, 350, 300, 350, 300, 350, 350, 300 … ms: a period wobbling
+    /// between 600 and 700 ms and a duty cycle between 46% and 54%, which is
+    /// exactly the irregular blink it looked like. `.slow` (1000 ms) and `.fast`
+    /// (400 ms) were unaffected, and so was every pulse — their cycles are whole
+    /// multiples of the 50 ms tick, which is why only this one wobbled.
+    ///
+    /// Rounded rather than truncated, so the delivered period is the nearest one
+    /// the grid can express rather than always the shorter one, and floored at a
+    /// tick so a cycle finer than the grid still blinks instead of standing still.
+    static func blinkHalfTicks(for speed: TextCursorStyle.Speed) -> Int {
+        let halfMs = Double(speed.blinkCycleMs) / 2
+        return max(1, Int((halfMs / Double(Self.tickIntervalMs)).rounded()))
+    }
+
     /// The blink state at an arbitrary tick.
     ///
     /// Static, and the instance method above defers to it, so a producer that
@@ -171,10 +195,16 @@ extension CursorTimer {
     /// what a live render would — one formula, not two that can drift apart.
     /// Reading it does NOT mark the frame as having consulted the clock, which
     /// is what lets such a producer be replayed rather than re-rendered.
+    ///
+    /// "Exactly what a live render would" is a claim the millisecond form could
+    /// not keep either: a 13-frame run (`660 / 50`) replayed a 650 ms cycle while
+    /// the live formula ran a 660 ms one, so a field that re-rendered mid-blink
+    /// stepped its caret. Whole half-ticks make the run length exactly the period.
     static func blinkVisible(atTick tick: Int, speed: TextCursorStyle.Speed) -> Bool {
-        let cycleMs = speed.blinkCycleMs
-        // Visible for the first half of the cycle.
-        return (tick * Self.tickIntervalMs) % cycleMs < (cycleMs / 2)
+        let half = blinkHalfTicks(for: speed)
+        // Visible for the first half of the cycle. Integer division rather than a
+        // modulo of milliseconds: every boundary lands on a tick by construction.
+        return (tick / half).isMultiple(of: 2)
     }
 
     /// How many ticks a full cycle of `animation` takes at `speed` — the number
@@ -182,7 +212,8 @@ extension CursorTimer {
     static func cycleTicks(for speed: TextCursorStyle.Speed, animation: TextCursorStyle.Animation) -> Int {
         switch animation {
         case .none: return 1
-        case .blink: return max(1, speed.blinkCycleMs / Self.tickIntervalMs)
+        // Both halves, so the run's length IS the period the live formula runs.
+        case .blink: return 2 * blinkHalfTicks(for: speed)
         case .pulse: return max(1, speed.pulseCycleMs / Self.tickIntervalMs)
         }
     }
@@ -306,15 +337,24 @@ extension CursorTimer {
 
 extension TextCursorStyle.Speed {
     /// The blink cycle duration in milliseconds (on + off).
+    ///
+    /// Each HALF has to be a whole number of ``AnimationClock/cursor`` ticks
+    /// (50 ms) or the blink cannot be delivered evenly — see
+    /// ``CursorTimer/blinkHalfTicks(for:)``, which rounds anything else onto the
+    /// grid. `.regular` was 660 ms, whose 330 ms half is 6.6 ticks, and it
+    /// wobbled between a 600 ms and a 700 ms period for that reason alone.
     var blinkCycleMs: Int {
         switch self {
         case .slow: 1000  // 500ms on, 500ms off
-        case .regular: 660  // 330ms on, 330ms off
+        case .regular: 700  // 350ms on, 350ms off
         case .fast: 400  // 200ms on, 200ms off
         }
     }
 
     /// The pulse cycle duration in milliseconds (dim → bright → dim).
+    ///
+    /// Whole multiples of the 50 ms tick, which is why the breath was regular
+    /// while the blink was not.
     var pulseCycleMs: Int {
         switch self {
         case .slow: 1200  // 1.2 second breathing cycle
