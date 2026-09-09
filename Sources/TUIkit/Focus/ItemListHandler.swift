@@ -275,7 +275,7 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// bottom and needs a second press to arrive. That is what
     /// ``settledMaxOffset`` and the `offset`-driven clamps exist to prevent.
     func resolvedMaxOffset(reaching offset: Int) -> Int {
-        guard let rowHeight, let contentHeight, contentHeight > 0 else {
+        guard let contentHeight, contentHeight > 0, rowHeight != nil else {
             return max(0, extent - viewportEntries)
         }
         // Every row is at least one line, so at most `contentHeight` rows fit:
@@ -285,8 +285,27 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
         // "am I at the bottom?" is answerable only by the exact bound.
         let floor = max(0, extent - contentHeight)
         guard offset >= floor else { return floor }
+        return bottomWalk()?.top ?? floor
+    }
+
+    /// The walk both bottom bounds share: the smallest top row for which
+    /// everything below it fits the content area, how many lines of the budget
+    /// that leaves UNUSED, and the height of the row that would not fit.
+    ///
+    /// The shortfall is the interesting part, and it is why this answers three
+    /// things rather than one. Nothing forces a suffix of the row heights to sum
+    /// to the budget: three-line rows in a sixteen-line budget make the last
+    /// whole-row screenful fifteen lines, and the sixteenth is blank — see
+    /// ``fillBottomShortfall()``, which is what spends it.
+    ///
+    /// `nil` when there are no row heights to walk (a single-line `Table`, the
+    /// handler's own unit tests); the bound is arithmetic there.
+    func bottomWalk() -> (top: Int, shortfall: Int, straddlingHeight: Int)? {
+        guard let rowHeight, let contentHeight, contentHeight > 0 else { return nil }
         var used = 0
         var top = extent
+        var budget = contentHeight
+        var straddling = 0
         while top > 0 {
             // Reserve the "above" indicator's line only when there IS one — a
             // scrollbar draws no such line and hidden indicators draw nothing at
@@ -294,7 +313,7 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
             // Under `always` both lines are there at every offset, including at
             // the bottom this walk is finding and at row 0 — so the budget is a
             // constant rather than a question about where the top lands.
-            let budget =
+            budget =
                 alwaysReservesIndicatorLines
                 ? max(1, contentHeight - 2)
                 : ((!reservesIndicatorLine || top - 1 == 0) ? contentHeight : contentHeight - 1)
@@ -302,11 +321,14 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
             // the last real one and has no data to measure: it is the slot,
             // one blank line. Asking `rowHeight` for it indexes past the data.
             let height = top - 1 < itemCount ? max(1, rowHeight(top - 1)) : 1
-            if used + height > budget { break }
+            if used + height > budget {
+                straddling = height
+                break
+            }
             used += height
             top -= 1
         }
-        return top
+        return (top, max(0, budget - used), straddling)
     }
 
     /// The row-activation action (``List``/``Table`` `.onRowActivate(_:)`):

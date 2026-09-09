@@ -74,6 +74,52 @@ extension ItemListHandler {
         scrollOffset = 0
     }
 
+    /// Spends the line the whole-row bottom leaves over, by showing part of the
+    /// row above it.
+    ///
+    /// Nothing forces a suffix of the row heights to sum to the budget. With
+    /// three-line rows in a sixteen-line content area — one line of which the
+    /// "▲ N more rows above" indicator took — the last whole-row screenful is
+    /// five rows and fifteen lines, and the sixteenth is BLANK. On screen that
+    /// reads as the view having scrolled one line too far: the step that arrived
+    /// there revealed nothing and opened a gap above the bottom border.
+    ///
+    /// Under ``ScrollGranularity/line`` the fix is the position the granularity
+    /// already allows: back up one row and clip its head, so its tail fills the
+    /// line. Under ``ScrollGranularity/row`` there is nothing to do — a partial
+    /// top row is exactly what that granularity forbids — and the blank line is
+    /// the cost of whole rows.
+    ///
+    /// In the settle rather than in each mover because every route into the
+    /// bottom has the same shortfall: `End` through
+    /// ``ensureFocusedItemVisible()``, a wheel or arrow through
+    /// ``scrollFine(by:)``, a drag's auto-scroll, an anchor. One implementation,
+    /// on the pass that owns where the viewport may rest.
+    ///
+    /// Skipped mid-excursion: an overscroll SLIDES the rendered lines past the
+    /// edge, so the blank at the bottom is the excursion and moving the offset
+    /// under it would count the same lines twice.
+    /// Skipped away from the bottom for COST, not correctness: a `List`'s
+    /// `rowHeight` materialises the row, which renders it, so an unconditional
+    /// walk draws the tail of the list on every frame — `ListHugMeasureTests`
+    /// caught it drawing thirteen rows where ten are on screen. The arithmetic
+    /// floor is the same one ``ItemListHandler/resolvedMaxOffset(reaching:)``
+    /// uses, and it excludes nothing the walk would have accepted: every row is
+    /// at least one line and the budget is at most `contentHeight`, so
+    /// `walk.top` is never below it either.
+    func fillBottomShortfall() {
+        guard scrollGranularity == .line, overscrollState.excursion == 0,
+            let contentHeight, scrollOffset >= max(0, extent - contentHeight),
+            let walk = bottomWalk(), walk.top > 0, walk.shortfall > 0,
+            walk.straddlingHeight > walk.shortfall,
+            // Only AT the whole-row bottom. Anywhere above it the rows already
+            // fill the budget, and the top clip is the user's or a reveal's.
+            scrollOffset >= walk.top
+        else { return }
+        scrollOffset = walk.top - 1
+        scrollTopClipLines = walk.straddlingHeight - walk.shortfall
+    }
+
     /// The whole settle, once per frame: clamp the offset and the top clip, snap
     /// off the resting duplicate, then apply the anchor — in that order.
     ///
@@ -133,6 +179,9 @@ extension ItemListHandler {
         guard !measuring else { return }
         clampScrollOffset()
         clampTopClip()
+        // After the clamps, which is what puts the offset AT the whole-row
+        // bottom, and before the resting snap, which is about the other end.
+        fillBottomShortfall()
         settleRestingOffset(
             overflowing: overflowing, drawsTextIndicators: drawsTextIndicators,
             firstRowHeight: firstRowHeight())
