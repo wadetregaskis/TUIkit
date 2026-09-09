@@ -134,36 +134,102 @@ struct SplitViewPage: View {
     @State private var widthResetToken: Int = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Switch the split style live. `.balanced` shrinks the detail to make
-            // room for the leading columns; `.prominentDetail` keeps the detail's
-            // size and overlays/hides the leading columns instead; `.automatic`
-            // resolves a sensible default for the context.
-            Picker("page.splitView.style", selection: $styleName) {
-                Text("page.splitView.styleAutomatic").tag("automatic")
-                Text("page.splitView.styleBalanced").tag("balanced")
-                Text("page.splitView.styleProminentDetail").tag("prominentDetail")
-                Text("page.splitView.styleSizeToFit").tag("sizeToFit")
-            }
-            .pickerStyle(.radioGroup)
-            .padding(.horizontal, 1)
-
-            // Divider resizing is a configurable option — including under
-            // size-to-fit, where the columns fit their content until you drag or
-            // arrow-resize one, which pins it. Reset releases every pin so the
-            // columns re-flow to the automatic widths.
-            HStack(spacing: 2) {
-                Toggle("page.splitView.resizable", isOn: $resizable)
-                Button("page.splitView.resetWidths") { widthResetToken += 1 }
-                    .disabled(!resizable)
-            }
-            .padding(.horizontal, 1)
-
+        // `.leading`, not the default centre: the control row is narrower than the
+        // split view below it, and centred it drifted right as the terminal grew —
+        // 33 columns of empty left margin at 140 cols, which reads as a bug. The
+        // split view itself fills the width either way.
+        VStack(alignment: .leading, spacing: 0) {
+            controls
             styledSplitView
         }
         .appHeader {
             DemoAppHeader("menu.item.splitView")
         }
+    }
+
+    /// The three knobs, ABOVE the split view and horizontal wherever they fit.
+    ///
+    /// Horizontal because the split view is the thing worth looking at: side by
+    /// side these cost it as many rows as the tallest one, stacked they cost nine.
+    /// Each radio group stays vertical INSIDE itself — a row of radio buttons
+    /// reads as a sentence rather than as a choice.
+    ///
+    /// `ViewThatFits(in: .horizontal)` rather than one fixed arrangement, because
+    /// one row does not fit 80 columns in most languages: measured, the divider
+    /// pair is clipped there in German, French, Italian, Spanish and Japanese,
+    /// where the style group's own widest option ("Ajustar al contenido (desde la
+    /// izquierda)") is half the terminal on its own. The fallback drops the pair
+    /// to its own row, which is four rows for the groups plus one — exactly the
+    /// height this page had before the visibility group existed, so the new
+    /// control costs nothing even at the narrow end.
+    @ViewBuilder private var controls: some View {
+        ViewThatFits(in: .horizontal) {
+            // Preferred: all three side by side. The divider pair stacks here so
+            // this candidate fits at more widths; it is one row tall either way,
+            // against the groups' four.
+            HStack(alignment: .top, spacing: 3) {
+                stylePicker
+                visibilityPicker
+                VStack(alignment: .leading, spacing: 0) { dividerControls }
+            }
+            // Fallback: the two groups side by side, the divider pair beneath.
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 3) {
+                    stylePicker
+                    visibilityPicker
+                }
+                HStack(spacing: 2) { dividerControls }
+            }
+        }
+        .padding(.horizontal, 1)
+    }
+
+    /// Switch the split style live. `.balanced` shrinks the detail to make room
+    /// for the leading columns; `.prominentDetail` keeps the detail's size and
+    /// overlays/hides the leading columns instead; `.automatic` resolves a
+    /// sensible default for the context.
+    private var stylePicker: some View {
+        Picker("page.splitView.style", selection: $styleName) {
+            Text("page.splitView.styleAutomatic").tag("automatic")
+            Text("page.splitView.styleBalanced").tag("balanced")
+            Text("page.splitView.styleProminentDetail").tag("prominentDetail")
+            Text("page.splitView.styleSizeToFit").tag("sizeToFit")
+        }
+        .pickerStyle(.radioGroup)
+    }
+
+    /// Which leading columns are showing — the `columnVisibility` binding, which
+    /// is two-way: the split view writes back to it, so this group also REPORTS
+    /// what it resolved (`.automatic` comes back as all three columns).
+    ///
+    /// Tagged with the visibility values themselves rather than with strings, as
+    /// the style picker above has to be: `NavigationSplitViewVisibility` is
+    /// `Hashable`, and `NavigationSplitViewStyle` is not.
+    private var visibilityPicker: some View {
+        Picker("page.splitView.visibility", selection: $visibility) {
+            Text("page.splitView.visibilityAll")
+                .tag(NavigationSplitViewVisibility.all)
+            Text("page.splitView.visibilityDouble")
+                .tag(NavigationSplitViewVisibility.doubleColumn)
+            Text("page.splitView.visibilityDetail")
+                .tag(NavigationSplitViewVisibility.detailOnly)
+            Text("page.splitView.visibilityAuto")
+                .tag(NavigationSplitViewVisibility.automatic)
+        }
+        .pickerStyle(.radioGroup)
+    }
+
+    /// Divider resizing is a configurable option — including under size-to-fit,
+    /// where the columns fit their content until you drag or arrow-resize one,
+    /// which pins it. Reset releases every pin so the columns re-flow to the
+    /// automatic widths.
+    ///
+    /// Two views rather than a container, so each candidate layout above can put
+    /// them in the stack that suits it.
+    @ViewBuilder private var dividerControls: some View {
+        Toggle("page.splitView.resizable", isOn: $resizable)
+        Button("page.splitView.resetWidths") { widthResetToken += 1 }
+            .disabled(!resizable)
     }
 
     /// The shared three-column split view with the currently-selected
