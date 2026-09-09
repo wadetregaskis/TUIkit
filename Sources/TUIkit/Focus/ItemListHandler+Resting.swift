@@ -252,7 +252,7 @@ enum ScrollWindowOrigin {
     /// the indicator counts and the page-sized jumps are measured from there and
     /// cannot see this call.
     ///
-    /// ``ScrollRowWindow/resolve(scrollOffset:count:contentHeight:topClip:drawsTextIndicators:height:)``
+    /// ``ScrollRowWindow/resolve(scrollOffset:count:contentHeight:topClip:drawsTextIndicators:alwaysDrawsIndicators:height:)``
     /// is the only caller, and it clamps the offset into the row range first. It
     /// used to be reached through an `ItemListHandler` convenience as well, which
     /// went when the three window rules became one and left it with no callers.
