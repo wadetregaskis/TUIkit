@@ -51,9 +51,10 @@ for the one-screen comparison.
 > The truth is that **both counters are load-bearing and compensation must end
 > each cluster with both at the claim**: the internal column (DSR) governs
 > wrapping and how far a row's writes are accepted; the paint position governs
-> where glyphs land. On iTerm2, Ghostty and Warp they agree for every corpus
-> cluster, so the distinction is invisible; on Apple Terminal they diverge on
-> 25, by up to nine cells. See [Three numbers, not one](#three-numbers-not-one).
+> where glyphs land. On iTerm2, Ghostty and Warp they agree for every row the
+> pixel probes have covered, so the distinction is invisible; on Apple Terminal
+> they diverge on 28, by up to nine cells. See
+> [Four numbers, not one](#four-numbers-not-one).
 >
 > **EXTENDED 2026-08-27, the same day, by the treatment cards:** there is a
 > THIRD per-row fact — the cluster's **stored width** in the row's text store —
@@ -86,8 +87,10 @@ that leaves the internal column past the claim wraps every full-width row that
 carries the cluster (white cells at the row's right edge — measured, and
 briefly shipped); one that leaves paint short of the claim shears the row.
 `landing` is the one no escape sequence will tell you. On iTerm2, Ghostty and
-Warp the two are equal for all 69 corpus clusters; on Apple Terminal they
-differ for 25.
+Warp the two are equal for all 78 rows the pixel probes have covered; on Apple
+Terminal they differ for 28 (69 and 25 until `72ac8283`, 2026-08-28, which
+added nine newly measured rows, three of them divergent; the 69 already in the
+record reproduced with zero drift).
 
 The displacement is **row-wide, not local**: on a row already carrying 🤙🏽, an
 absolute `CUP` to column 50 paints at column 48. Every later cell on the row

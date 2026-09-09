@@ -38,8 +38,11 @@ import Testing
 ///   `landing` from it instead; conservation then verified paint and was blind
 ///   to the wrap.)
 /// - **`landing`** — measured from pixels. Where the next character is actually
-///   painted. On iTerm2, Ghostty and Warp it equals `advance` for every corpus
-///   cluster; on Apple Terminal it diverges on 25, and the walk closes the gap
+///   painted. On iTerm2, Ghostty and Warp it equals `advance` for every row the
+///   pixel probes have covered — not the whole 145-row corpus, which outgrew
+///   them on 2026-09-04 (`934c5c67`, `2441e61d`), but the original 78 emoji,
+///   flag, selector and Plane-16 rows; on Apple Terminal it diverges on 28,
+///   and the walk closes the gap
 ///   per class with measured move sequences (`CUB`, or `CUB`+`CUF` for the
 ///   classes that paint short of the claim even after the pull-back).
 /// - **`ink`** — measured from pixels; how many cells the glyph covers.
@@ -292,10 +295,14 @@ struct TerminalLedgerConformanceTests {
 
     /// The compensation walks can only push the cursor **forward** — measured:
     /// a backward move on Apple Terminal moves the paint position by an amount
-    /// that depends on what the glyph did, so `CUB(advance − claim)` lands seven
-    /// of twenty-five clusters somewhere other than the claim. Forward moves are
-    /// exactly linear (`paint = landing + move`) on every host measured. A claim
-    /// below the landing would need a backward move, so it must never happen.
+    /// that depends on what the glyph did, so `CUB(advance − claim)` landed seven
+    /// of the record's then twenty-five divergences somewhere other than the
+    /// claim (`ea452100`, 2026-08-26 — the record grew to twenty-eight on
+    /// 2026-08-28, `72ac8283`, and the backward-move matrix has not been
+    /// re-run since, so this is a dated measurement and not a live count).
+    /// Forward moves are exactly linear (`paint = landing + move`) on every
+    /// host measured. A claim below the landing would need a backward move, so
+    /// it must never happen.
     @Test("No claim is narrower than where the terminal paints", arguments: ledgers)
     func claimIsNeverBelowLanding(ledger: Ledger) {
         TerminalWidthTraits.withTraits(TerminalClient.widthTraits(of: ledger.program)) {
