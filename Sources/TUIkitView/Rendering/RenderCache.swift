@@ -15,13 +15,13 @@ import TUIkitStyling
 /// `RenderCache` is Phase 5 of TUIkit's render pipeline optimization. It stores
 /// the output of the two wrappers that memoize a subtree by the value of
 /// something — ``EquatableView`` by the whole view value, `_MemoizedRow` by a
-/// `ForEach` row's data element — keyed by their `ViewIdentity`, allowing
+/// `ForEach` row's data element — keyed by their `ViewIdentity`'s structural hash, allowing
 /// unchanged subtrees to skip rendering entirely.
 ///
 /// ## How It Works
 ///
 /// When an `EquatableView<V>` renders, it:
-/// 1. Looks up a cached entry by the current `ViewIdentity`
+/// 1. Looks up a cached entry by the current `ViewIdentity`'s structural hash
 /// 2. Compares the new view value with the stored snapshot (`Equatable.==`)
 /// 3. Checks that the available size hasn't changed
 /// 4. On hit: returns the cached ``FrameBuffer`` — **the entire subtree is skipped**
@@ -197,11 +197,26 @@ public final class RenderCache: @unchecked Sendable {
         public let surfaceBackground: Color?
 
         /// Creates a new cache entry.
+        /// Where this view sat.
+        ///
+        /// Read by ``removeInactive()`` and ``clearAffected(by:keepingSizes:)``
+        /// and by nothing else — which is the whole reason it is kept: the table's
+        /// key is now only the identity's structural hash, and
+        /// `RetainedSubtreeIndex.retains` climbs a chain, so there is nowhere else
+        /// for those two to get one. Overwritten by each store, so it is the most
+        /// recent structurally-equal chain rather than the first the bucket ever
+        /// saw; both prunes compare identities structurally, so that is the same
+        /// answer to the same question. The arrangement ``SizeEntry`` has had
+        /// since `7db94fe9`.
+        public let identity: ViewIdentity
+
         public init(
+            identity: ViewIdentity,
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
             gradientFrame: GradientFrame? = nil,
             surfaceBackground: Color? = nil
         ) {
+            self.identity = identity
             self.viewSnapshot = viewSnapshot
             self.buffer = buffer
             self.contextWidth = contextWidth
@@ -211,8 +226,36 @@ public final class RenderCache: @unchecked Sendable {
         }
     }
 
-    /// Cached entries keyed by view identity.
-    private var entries: [ViewIdentity: CacheEntry] = [:]
+    /// Cached entries keyed by the view identity's STRUCTURAL HASH.
+    ///
+    /// The hash, not the identity — the bargain ``MeasureKey`` documents and
+    /// `SizeKey`/`ChildViewsKey` took in `7db94fe9`, made here last because here
+    /// it is both the most valuable and the most consequential. A `ViewIdentity`
+    /// is a chain of class nodes: every probe copies it (retain/release) and every
+    /// HIT compares two *equal* chains step for step, because
+    /// `IdentityNode.structurallyEqual`'s `===` shortcut cannot fire — the walk
+    /// that stored the entry built its chain on an earlier frame and the walk
+    /// probing it built a fresh one. For a `ForEach` row the step is `.keyed`, so
+    /// that per-level compare includes a `String ==`.
+    ///
+    /// The collision argument is `SizeKey`'s in shape, and NOT inherited from
+    /// `MeasureKey`'s "nothing here outlives the pass" — this table is
+    /// cross-frame. A false hit needs two distinct identity chains to collide on a
+    /// full 64-bit `Hasher.finalize()` AND the stored snapshot to accept the
+    /// probing type AND both context extents, the surface and the gradient frame
+    /// to match AND two *different* view values to compare equal.
+    ///
+    /// What differs from `SizeKey`, and it is worth saying plainly: a collision
+    /// here serves the OTHER subtree's cells — wrong pixels — where `SizeKey`'s
+    /// serves a wrong number. `TUIKIT_VERIFY_RENDER_MEMO` re-renders every serve
+    /// and compares the cells, which is the standing check on exactly that; it
+    /// cannot see a 64-bit collision, but it is the net for a fumbled guard.
+    ///
+    /// A confirmation on the hit path is deliberately NOT added: comparing
+    /// `entry.identity == identity` re-introduces the walk this removes, and
+    /// comparing only `depth` adds no bits, because `structurallyEqual` already
+    /// fast-rejects on depth. Take the bargain or don't.
+    private var entries: [Int: CacheEntry] = [:]
 
     /// A memoized measurement: the view value at cache time, its size, and the
     /// identity ``SizeKey`` stopped carrying.
@@ -461,7 +504,7 @@ extension RenderCache {
         gradientFrame: GradientFrame? = nil,
         surfaceBackground: Color? = nil
     ) -> FrameBuffer? {
-        guard let entry = entries[identity] else {
+        guard let entry = entries[identity.structuralHash] else {
             stats.misses += 1
             logDebug("MISS (no entry) \(identity.path)")
             return nil
@@ -528,7 +571,8 @@ extension RenderCache {
         surfaceBackground: Color? = nil
     ) {
         stats.stores += 1
-        entries[identity] = CacheEntry(
+        entries[identity.structuralHash] = CacheEntry(
+            identity: identity,
             viewSnapshot: view,
             buffer: buffer,
             contextWidth: contextWidth,
@@ -854,7 +898,7 @@ extension RenderCache {
     /// differs from the previous pass.
     ///
     /// This is what keeps a *scoped* style change from serving a stale buffer.
-    /// The cache key is identity + view value + size, and deliberately carries
+    /// The cache key is the identity's hash + view value + size, and deliberately carries
     /// no environment: a `.foregroundStyle` applied **above** an `.equatable()`
     /// boundary leaves the view value untouched, so without this the lookup hits
     /// and returns the buffer rendered under the old style. Detecting the change
@@ -983,10 +1027,12 @@ extension RenderCache {
             retainedChecks += 1
             return retained.retains(identity)
         }
-        let staleKeys = entries.keys.filter { !isLive($0) }
-        for key in staleKeys {
-            entries.removeValue(forKey: key)
-        }
+        // Over the PAIRS, not the keys: a key is now just a hash, and `isLive`
+        // needs the chain `retained.retains` climbs, which lives in the entry.
+        // Collect-then-remove is kept, so nothing mutates the dictionary mid-walk.
+        var staleKeys: [Int] = []
+        for (key, entry) in entries where !isLive(entry.identity) { staleKeys.append(key) }
+        for key in staleKeys { entries.removeValue(forKey: key) }
         // Collect-then-remove, the spelling `AnimationStore.endRenderPass()`
         // uses and for its reason: removing inside `for … in sizeEntries`
         // COW-copies the whole table on the first removal, and this table is
@@ -1065,10 +1111,11 @@ extension RenderCache {
             }
             return identity.isAncestor(of: cached)
         }
-        let staleKeys = entries.keys.filter(affects)
-        for key in staleKeys {
-            entries.removeValue(forKey: key)
-        }
+        // `affects` reads `depth`, `isRawRooted`, `structuralHash`, `==` and
+        // `isAncestor(of:)` — all structural, none of it available from a hash.
+        var staleKeys: [Int] = []
+        for (key, entry) in entries where affects(entry.identity) { staleKeys.append(key) }
+        for key in staleKeys { entries.removeValue(forKey: key) }
         if !keepingSizes {
             var staleSizeKeys: [SizeKey] = []
             for (key, entry) in sizeEntries where affects(entry.identity) { staleSizeKeys.append(key) }
