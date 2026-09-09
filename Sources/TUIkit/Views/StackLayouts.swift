@@ -222,6 +222,27 @@ public struct HStackLayout: Layout, Sendable, Equatable {
     }
 }
 
+// MARK: - Published Axis
+
+/// The two stack layouts publish their axis to their subviews, exactly as
+/// `_VStackCore` and `_HStackCore` do.
+///
+/// Placing subviews identically to `VStack`/`HStack` is not the whole contract:
+/// a ``Divider`` reads the axis to choose its orientation AND its flex flags, so
+/// a row layout that published none handed the rule the width-flexible
+/// horizontal spelling, which then absorbed the row's entire slack.
+///
+/// `ZStackLayout` is absent on purpose: a ZStack has no axis, and a divider in
+/// one is the horizontal rule it is outside any stack — which is what a `nil`
+/// axis already means.
+extension VStackLayout: AxisPublishingLayout {
+    var containerAxis: Axis? { .vertical }
+}
+
+extension HStackLayout: AxisPublishingLayout {
+    var containerAxis: Axis? { .horizontal }
+}
+
 // MARK: - ZStackLayout
 
 /// The overlay stack's arrangement, as a value. See ``VStackLayout``.

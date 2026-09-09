@@ -61,6 +61,14 @@ public struct AnyLayout: Layout {
     }
 }
 
+extension AnyLayout: AxisPublishingLayout {
+    /// Forwarded from whatever was erased: `AnyLayout(HStackLayout())` has to
+    /// publish `.horizontal` to its subviews, or a ``Divider`` inside it draws
+    /// the rule for whatever stack the `AnyLayout` itself happens to sit in —
+    /// or, standing alone, the width-flexible horizontal one that eats the row.
+    var containerAxis: Axis? { box.containerAxis }
+}
+
 // MARK: - Erasure
 
 /// The existential the erased layout is called through. `Cache` is `Any` here
@@ -68,6 +76,8 @@ public struct AnyLayout: Layout {
 /// thing that ever produced the value is this same box.
 @MainActor
 private protocol AnyLayoutBox {
+    /// The erased layout's axis, if it has one — see `AxisPublishingLayout`.
+    var containerAxis: Axis? { get }
     func makeCache(subviews: LayoutSubviews) -> Any
     func updateCache(_ cache: inout Any, subviews: LayoutSubviews)
     func sizeThatFits(
@@ -78,6 +88,10 @@ private protocol AnyLayoutBox {
 
 private struct ConcreteBox<L: Layout>: AnyLayoutBox {
     let layout: L
+
+    /// `nil` unless the wrapped layout opts in. A nested `AnyLayout` answers
+    /// through its own conformance below, so the forwarding recurses.
+    var containerAxis: Axis? { (layout as? any AxisPublishingLayout)?.containerAxis }
 
     func makeCache(subviews: LayoutSubviews) -> Any {
         layout.makeCache(subviews: subviews)

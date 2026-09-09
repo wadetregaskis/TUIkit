@@ -123,4 +123,35 @@ struct DividerAxisTests {
         #expect(lines[1].contains("─"), "the rule spans the columns: \(lines)")
         #expect(!lines[1].contains("│"), "and is not a vertical bar: \(lines)")
     }
+
+    // MARK: - The stacks as Layout values
+
+    /// `HStackLayout` is an `HStack`'s arrangement, so it owes its subviews the
+    /// same axis. `_LayoutCore` published none for any `Layout`, so even
+    /// standing alone the rule fell back to horizontal AND width-flexible: at
+    /// width 20 it took 14 of the row's 20 columns and drove `aa` and `bb` to
+    /// the two ends.
+    @Test("A divider in AnyLayout(HStackLayout()) is the row's vertical rule")
+    func verticalInLayoutValueRow() {
+        let lines = render(AnyLayout(HStackLayout()) { Text("aa"); Divider(); Text("bb") })
+        let trimmed = lines[0].trimmingCharacters(in: .whitespaces)
+        #expect(trimmed == "aa │ bb", "the row hugs its content: \(lines[0].debugDescription)")
+    }
+
+    /// The mirror: a column arrangement inside a real row. The rule inherited
+    /// the ROW's `.horizontal`, so it drew a `│` and reported itself
+    /// height-flexible — which made the column fill the viewport's 6 rows,
+    /// spend 4 of them on the rule, and push `bb` from row 2 to row 5.
+    @Test("A divider in AnyLayout(VStackLayout()) stays horizontal inside a row")
+    func horizontalInLayoutValueColumn() {
+        let lines = render(
+            HStack(spacing: 1) {
+                Text("x")
+                AnyLayout(VStackLayout()) { Text("aa"); Divider(); Text("bb") }
+            }, width: 30, height: 6)
+
+        #expect(lines[1].contains("─"), "the rule between the rows is horizontal: \(lines)")
+        #expect(!lines[1].contains("│"), "and not a vertical bar: \(lines)")
+        #expect(lines[2].contains("bb"), "the rule spent one row, not four: \(lines)")
+    }
 }

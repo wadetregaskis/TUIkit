@@ -63,7 +63,16 @@ import TUIkitView
 ///   spacing between cells is whatever the container decides — so the honest
 ///   answer would be a constant zero, and an API that always says zero is one
 ///   that invites a question it cannot answer.
-/// - **`LayoutProperties`.** Nothing in TUIkit consumes `stackOrientation`.
+/// - **`LayoutProperties`.** The information is consumed, the property is not.
+///   SwiftUI's `stackOrientation` tells a subview which way its container
+///   stacks — a hint for the handful of views that care (`Divider` picks its
+///   orientation from it), never a claim about placement — and TUIkit needs the
+///   same answer: `HStackLayout` and `VStackLayout` publish their axis to their
+///   subviews, exactly as `HStack`/`VStack` do. They do it through an internal
+///   hook rather than a public property, so the public surface of a `Layout`
+///   stays the arrangement itself; no conformance outside those two owns an
+///   axis, and a custom layout's subviews therefore see none — the same answer
+///   they get from a `ZStack`.
 /// - **`explicitAlignment(of:in:…)`.** A layout cannot yet publish a guide to
 ///   *its* parent. Omitting it keeps conformances source-compatible (an extra
 ///   method on your type is simply an extra method) and leaves the door open;
@@ -158,7 +167,33 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
         return cache
     }
 
+    /// The context the children resolve, measure and render in: this one with
+    /// the wrapped layout's axis published, when it has one.
+    ///
+    /// ``Divider`` picks its orientation from the enclosing container's axis,
+    /// and `HStackLayout`/`VStackLayout` are that container as surely as
+    /// `HStack`/`VStack` are — but nothing here published one, so a rule inside
+    /// `AnyLayout(HStackLayout())` fell back to the no-stack default: the
+    /// horizontal, WIDTH-FLEXIBLE spelling, which is then the row's only
+    /// flexible child and takes all of its slack. `aa │ bb` at width 20 came
+    /// out as `aa`, fourteen `─`, `bb`.
+    ///
+    /// Rebound once at the top of each entry point — the shape
+    /// `_HStackCore.renderToBuffer` and `_GridCore` already use — so `resolve`,
+    /// every `LayoutSubview` measure and every child render see the same axis,
+    /// rather than the measure and the render answering different questions.
+    ///
+    /// `nil` for a layout with no axis — `ZStackLayout`, the lazy grids,
+    /// anything an app writes — which leaves the divider its default unchanged.
+    private func publishingChildAxis(_ context: RenderContext) -> RenderContext {
+        guard let axis = (layout as? any AxisPublishingLayout)?.containerAxis else {
+            return context
+        }
+        return context.publishingContainerAxis(axis)
+    }
+
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        let context = publishingChildAxis(context)
         let (subviews, _) = resolve(context: context)
         var cache = freshCache(subviews)
         return layout.sizeThatFits(
@@ -185,6 +220,7 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
     }
 
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let context = publishingChildAxis(context)
         let (subviews, placements) = resolve(context: context)
         guard !subviews.isEmpty else { return FrameBuffer() }
 
