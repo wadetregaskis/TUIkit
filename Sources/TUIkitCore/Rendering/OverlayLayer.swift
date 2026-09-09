@@ -195,6 +195,9 @@ public struct OverlayLayer: Sendable, Equatable {
     ///     used for flip-on-overflow placement (default: `0`).
     ///   - centered: Centre in the composite area, ignoring the offset (default: `false`).
     ///   - dimsBackground: Dim everything beneath before drawing (default: `false`).
+    ///   - clampsToScreen: Whether an overhanging layer slides back on screen
+    ///     rather than being clipped where it is (default: `true`) — see
+    ///     ``clampsToScreen``.
     ///   - isOpaque: Whether the layer is a surface that hides what is behind
     ///     it (default: `true`) — see ``isOpaque``.
     public init(
@@ -221,14 +224,6 @@ public struct OverlayLayer: Sendable, Equatable {
         self.dimsBackground = dimsBackground
     }
 
-    /// Resolves this layer's on-screen placement within a `maxWidth` × `maxHeight`
-    /// content area: the (clamped) content plus the column and row to draw it at.
-    ///
-    /// The content is clamped to the screen first, so it can never exceed it — a
-    /// too-tall popover keeps its top rows, so its text still shows even when it
-    /// can't fit. If it would then overflow the bottom edge it is flipped to sit
-    /// *above* its anchor (when ``anchorHeight`` allows); otherwise it is nudged
-    /// back up. The same nudge keeps it within the right edge.
     /// Whether an overhanging layer is moved back on screen (`true`, the
     /// pop-over policy) or CLIPPED where it is (`false`).
     ///
@@ -240,6 +235,17 @@ public struct OverlayLayer: Sendable, Equatable {
     /// sooner it happens. (A full-width Table row detached after three cells.)
     public var clampsToScreen: Bool = true
 
+    /// Resolves this layer's on-screen placement within a `maxWidth` × `maxHeight`
+    /// content area: the (clamped) content plus the column and row to draw it at.
+    ///
+    /// The content is clamped to the screen first, so it can never exceed it — a
+    /// too-tall popover keeps its top rows, so its text still shows even when it
+    /// can't fit. If it would then overflow the bottom edge it is flipped to sit
+    /// *above* its anchor (when ``anchorHeight`` allows); otherwise it is nudged
+    /// back up. The same nudge keeps it within the right edge. Both are the
+    /// ``clampsToScreen`` policy: a layer that declines it stays where it was
+    /// put and loses the overhang out of its content instead (018429dd,
+    /// 2026-07-30).
     public func placed(maxWidth: Int, maxHeight: Int) -> (content: FrameBuffer, x: Int, y: Int) {
         var clamped = content.clamped(toWidth: maxWidth, height: maxHeight)
         // `clamped(toWidth:height:)` deliberately keeps ALL hit-test regions —
