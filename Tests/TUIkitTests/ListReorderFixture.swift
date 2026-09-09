@@ -24,6 +24,12 @@ import Testing
 final class ListReorderFixture {
     var items: [String]
     let reorderable: Bool
+    /// Columns of viewport when the list is to be wrapped in a horizontal
+    /// `ScrollView`, or `nil` for the plain list every other suite renders.
+    /// The list is pinned 20 columns wide inside it, so scrolling right really
+    /// cuts columns off its left edge — which is what puts a non-zero
+    /// `HitTestRegion.leftClip` on its region.
+    let horizontalViewport: Int?
     /// Rows selected before the gesture starts. Non-empty switches the list
     /// to multi-selection, which is what makes a drag pick up a block.
     var selection: Set<String> = []
@@ -38,10 +44,11 @@ final class ListReorderFixture {
 
     init(
         items: [String] = ["a", "b", "c", "d", "e"], reorderable: Bool = true,
-        feedback: RowReorderFeedback = .live
+        feedback: RowReorderFeedback = .live, horizontalViewport: Int? = nil
     ) {
         self.items = items
         self.reorderable = reorderable
+        self.horizontalViewport = horizontalViewport
         env.focusManager = FocusManager()
         env.rowReorderFeedback = feedback
         // The "▲/▼ N more" style, spelled out: what these cases read off the
@@ -54,6 +61,20 @@ final class ListReorderFixture {
     }
 
     var dispatcher: MouseEventDispatcher { tui.mouseEventDispatcher }
+
+    /// Scrolls the enclosing horizontal scroller right by `columns`, so that
+    /// many of the list's own leftmost columns are clipped away. Only
+    /// meaningful for a fixture built with a `horizontalViewport`.
+    ///
+    /// The render memo keys on the view VALUE, which a scroll does not change,
+    /// so the cache is dropped: without that the next frame serves the
+    /// unscrolled buffer and its unclipped regions.
+    func scrollHorizontally(by columns: Int) {
+        let scroller = env.focusManager?.activeSection?.focusables
+            .compactMap { $0 as? ScrollViewHandler }.first
+        scroller?.horizontal.scrollOffset = columns
+        tui.renderCache.clearAll()
+    }
 
     /// Renders the current order and arms the dispatcher.
     @discardableResult
@@ -73,7 +94,7 @@ final class ListReorderFixture {
                 self.items.move(fromOffsets: $0, toOffset: $1)
             }
             : base
-        let view: AnyView =
+        let list: AnyView =
             selection.isEmpty
             ? AnyView(List(selection: .constant(String?.none)) { forEach }.frame(height: 9))
             : AnyView(
@@ -81,8 +102,15 @@ final class ListReorderFixture {
                     selection: Binding(
                         get: { self.selection }, set: { self.selection = $0 })
                 ) { forEach }.frame(height: 9))
+        // 20 columns wide either way: on its own the list fills the context,
+        // and inside the scroller the frame pins it, leaving
+        // `20 - horizontalViewport` columns to scroll.
+        let view: AnyView =
+            horizontalViewport == nil
+            ? list : AnyView(ScrollView([.horizontal]) { list.frame(width: 20) })
         var context = RenderContext(
-            availableWidth: 20, availableHeight: 11, environment: env, tuiContext: tui)
+            availableWidth: horizontalViewport ?? 20, availableHeight: 11,
+            environment: env, tuiContext: tui)
         context.hasExplicitHeight = true
         let buffer = renderToBuffer(view, context: context)
         dispatcher.setRegions(buffer.hitTestRegions)

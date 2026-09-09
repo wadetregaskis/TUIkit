@@ -322,7 +322,15 @@ extension DragAndDropSession {
         guard let event = lastAbsoluteEvent,
             let rect = dispatcher?.regionRect(for: host.handlerID)
         else { return nil }
-        guard host.contentColumns.contains(event.x - rect.offsetX) else { return nil }
+        // `localOriginX`, not `offsetX`: `contentColumns` counts the control's
+        // OWN columns, so the cursor has to be measured from where those
+        // columns start — which, inside a horizontally scrolled `ScrollView`,
+        // is `leftClip` columns left of the clipped rectangle. The Y line
+        // below always measured from the unclipped origin and this one did not,
+        // so the leftmost visible content column read as "off the rows" here
+        // while `_ListCore`'s `dragContentY` twin (localised by the dispatcher,
+        // through `localOriginX`) said it was on them.
+        guard host.contentColumns.contains(event.x - rect.localOriginX) else { return nil }
         return host.handler.rowSpaceContentY(event.y - rect.localOriginY - host.topInset)
     }
 }

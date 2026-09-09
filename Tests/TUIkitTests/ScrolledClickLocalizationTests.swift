@@ -10,6 +10,13 @@
 //  something in the control cares about y — a Table row, a List row, a text
 //  cursor.
 //
+//  The X axis is the same seam with `leftClip` / `localOriginX` in place of
+//  `topClip` / `localOriginY`, and the two cases at the end of this file are
+//  its halves: the point a drop destination is handed, and a reorder drag's
+//  "is the cursor over the rows at all" column test inside a horizontal
+//  ScrollView, where measuring from the clipped left edge made the leftmost
+//  visible content column read as off the rows.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -331,5 +338,98 @@ struct ScrolledClickLocalizationTests {
         #expect(
             box.seen == [4],
             "'A-5' is the control's own line 4; got \(box.seen) (short by the 3 clipped lines)")
+    }
+
+    // MARK: - The other axis
+
+    /// The seam itself, on X: `leftClip` records how far left of its clipped
+    /// left edge a region really starts, so a point handed to a drop
+    /// destination has to be measured from there. `hovering` took its y from
+    /// the unclipped origin and its x from the clipped one, so the two halves
+    /// of one point disagreed.
+    @Test("A clipped region's hover point is measured from its unclipped origin")
+    func clippedRegionHoverPointLocalisesAgainstOrigin() {
+        let dispatcher = MouseEventDispatcher()
+        let session = DragAndDropSession()
+        // `DragAndDropSession.dispatcher` is weak (TUIContext owns it in
+        // production), so the local has to outlive the last direct use of it
+        // below — see the `withExtendedLifetime` at the end.
+        session.dispatcher = dispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        let id = dispatcher.register { _ in false }
+
+        // A destination scrolled 4 columns off the left and 3 rows off the top:
+        // its own cell (4, 3) is the one screen cell (0, 0) draws.
+        var region = HitTestRegion(
+            offsetX: 0, offsetY: 0, width: 10, height: 6, handlerID: id)
+        region.leftClip = 4
+        region.topClip = 3
+        dispatcher.setRegions([region])
+
+        var seen: [(x: Int, y: Int)] = []
+        session.registerTarget(
+            DragAndDropSession.Target(
+                handlerID: id, accepts: { _ in true }, perform: { _, _ in true },
+                setTargeted: { _ in }, hovering: { x, y in seen.append((x: x, y: y)) }))
+
+        session.lastAbsoluteEvent = MouseEvent(button: .left, phase: .pressed, x: 2, y: 1)
+        session.begin(payload: "x", preview: FrameBuffer(text: "x"))
+        session.lastAbsoluteEvent = MouseEvent(button: .left, phase: .dragged, x: 2, y: 1)
+        session.dragMoved()
+
+        // TWO hovers, not one: `begin(payload:preview:)` resolves targeting
+        // immediately and ends by calling `dragMoved()` itself, so the press
+        // reports a point before the explicit move does. Both are the same
+        // point here, which is what makes asserting on every entry the right
+        // shape — the count is incidental, the coordinates are the subject.
+        #expect(seen.count == 2, "begin() hovers once and dragMoved() again: \(seen)")
+        #expect(
+            seen.allSatisfy { $0.x == 6 },
+            "screen column 2 is the destination's own column 6; got \(seen)")
+        #expect(
+            seen.allSatisfy { $0.y == 4 },
+            "screen row 1 is the destination's own row 4; got \(seen)")
+        withExtendedLifetime(dispatcher) {}
+    }
+
+    /// The live half, app-shaped: a reorder drag inside a horizontally scrolled
+    /// `ScrollView`. `DragAndDropSession.contentY(in:)` decides whether the
+    /// cursor is over the rows by testing the control's own content columns, so
+    /// the column it tests must be measured from the control's true left edge.
+    /// Measured from the clipped one every column read `leftClip` too low, and
+    /// the leftmost visible column — a genuine interior cell — fell out of
+    /// `contentColumns` and reported "off the rows".
+    @Test("A reorder drag in a horizontally scrolled List still lands on the rows")
+    func reorderSurvivesHorizontalClip() {
+        let fixture = ListReorderFixture(horizontalViewport: 12)
+        // Row positions off the UNSCROLLED frame, where the labels are still
+        // drawn: a horizontal scroll moves no rows.
+        let unscrolled = fixture.render()
+        let ySource = fixture.rowY(unscrolled, "a")
+        let yTarget = fixture.rowY(unscrolled, "c")
+        #expect(ySource >= 0, "precondition: row a is drawn")
+        #expect(yTarget > ySource, "precondition: row c is drawn below it")
+
+        fixture.scrollHorizontally(by: 5)
+        let scrolled = fixture.render()
+        #expect(
+            scrolled.hitTestRegions.contains { $0.leftClip == 5 },
+            "precondition: the list's region is clipped 5 columns from the left")
+
+        // Absolute column 0 is the list's own column 5 — four columns right of
+        // its border, as interior as a cell gets.
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 0, y: ySource))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .dragged, x: 0, y: yTarget))
+        fixture.render()
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 0, y: yTarget))
+        fixture.render()
+        #expect(
+            fixture.items == ["b", "c", "a", "d", "e"],
+            "a dropped after c, exactly as it does unscrolled")
     }
 }
