@@ -106,8 +106,17 @@ extension ASCIIConverter {
 
         // An adaptive palette's colours come from the picture as it will be
         // drawn — after the curve and the lift, before anything quantises.
-        // Inert for every other mode. See `ASCIIColorMode.derived(from:)`.
-        let colorMode = colorMode.derived(from: scaled)
+        // Inert for every other mode. See `ASCIIColorMode.derived(from:depth:)`.
+        //
+        // `.truecolor` whatever the terminal is, and that is not an oversight:
+        // these pixels leave as RGB inside a graphics-protocol picture, so the
+        // colours chosen here ARE the colours drawn. A palette constrained to
+        // the terminal's SGR depth would be throwing away colour the picture is
+        // about to be given. It is also why the depth is a parameter rather than
+        // `ColorDepth.current` — on one terminal, at one moment, the glyph
+        // rendering of this picture asks for `.palette256` and this asks for
+        // `.truecolor`.
+        let colorMode = colorMode.derived(from: scaled, depth: .truecolor)
 
         // One table, built once, for the modes that would otherwise search a
         // palette per pixel — see `ASCIIPalette.quantisationTable()`. `nil`

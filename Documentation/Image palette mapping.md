@@ -67,6 +67,13 @@ rather than "draw this image in MY colours" — and it would put an image-analys
 pass with its own cache lifetime inside a renderer whose job is mapping. With
 dithering on, a gamut-spread sample gets most of the same look.
 
+> That separate feature was later built, as `ASCIIPalette.adaptive(_:by:target:)`
+> — including the image-analysis pass, which is per conversion and cached with
+> the conversion. `.sampled(_:)` is `.spread(_:)` now, and the two sit side by
+> side in the Example's colour controls precisely because they answer different
+> questions. See "An adaptive palette has to know what the terminal can draw"
+> below.
+
 ### Two generators, and why each is spaced the way it is
 
 - **`.shades(_:)` is even in PERCEIVED lightness**, not in bytes. Five
@@ -510,6 +517,103 @@ The `.ansi256` pixel path's own gain is not the index — that table trusts
 every cell and never searches — but the per-pixel loop no longer copying the
 palette out of an enum payload (`PixelQuantiser`); the day the palette gained
 its index reference, that copy measured +35% on a lookup nothing had changed.
+
+## An adaptive palette has to know what the terminal can draw
+
+**Status: shipped 2026-09-08.** Reported as three separate complaints, all one
+bug: "going from 4 to 5 colours with Least error changes nothing in the image,
+same for 8 to 9 and 9 to 10", and "Least error with 256 colours looks noticeably
+different from — worse than — plain 256-colour mode in Terminal.app".
+
+`ASCIIConverter.convert(_:width:height:)` did
+`effectiveMode.derived(from: scaled).effective(for: depth)`: **derive first,
+quantise second.** The derivation is textbook and correct — median cut plus
+Lloyd in OKLab, and it does produce `n` distinct colours for every `n` — but it
+ran in continuous colour, and the snap afterwards **collapsed entries onto each
+other**. Asking for five gave a palette bit-identical to the one four gave.
+Asking for 256 gave 51.
+
+The fix is to choose from the target's own colours in the first place:
+`ASCIIPalette.AdaptationTarget`, an associated value on the request, with
+`.automatic` (whatever the output is) and `.depth(_:)` for each of the four.
+Measured on `demo-image.jpg` (1101×1080, 5,078 populated 5-bit cells), weighted
+mean OKLab error at `.palette256`, `.leastError`:
+
+| n | 4 | 5 | 8 | 9 | 10 | 16 | 32 | 64 | 128 | 256 |
+|---|---|---|---|---|----|----|----|----|-----|-----|
+| distinct, blind | 4 | **4** | 7 | **7** | **7** | 12 | 17 | 23 | 35 | **51** |
+| distinct, aware | 4 | 5 | 8 | 9 | 10 | 16 | 32 | 64 | 128 | **240** |
+| error, blind | .04983 | .04983 | .03878 | .03878 | .03878 | .03646 | .03424 | .03083 | .02725 | .02422 |
+| error, aware | .04486 | .03814 | .03034 | .02954 | .02890 | .02582 | .02295 | .02158 | .02131 | .02125 |
+| better by | 10.0% | 23.5% | 21.8% | 23.8% | 25.5% | 29.2% | 33.0% | 30.0% | 21.8% | 12.3% |
+
+Plain `.ansi256`'s error on the same picture is **0.02125**. So the second
+complaint is answered exactly: at 256 the aware palette reaches that figure to
+five decimal places, because 240 colours chosen from a 240-colour lattice *is*
+that palette. Blind, it lost to it by 14%.
+
+### How it chooses
+
+`ASCIIPalette.representable(at:)` answers the lattice with palettes this module
+already has — `.ansi256` (240 entries), `.ansi16` (the sixteen names),
+`.shades(2)` for `.noColor`, and `nil` for `.truecolor`, which constrains
+nothing. Reusing them is the point: a constrained adaptive palette picks from the
+very entries the non-adaptive palette for that depth holds, so the two are
+comparable rather than merely near each other.
+
+- **`.leastError` is Lloyd with a projection.** Each pass takes the cluster's
+  weighted mean as before, then moves the centre to the nearest colour the output
+  has. Projected Lloyd is **not monotone** — the projection can give back a
+  little of what the mean won — so convergence is tested on the *colours* rather
+  than on the means, which drift on inside one lattice cell forever, and the
+  existing pass budget bounds the rest.
+- **Distinctness is a step, not a hope.** `snapping(_:)` assigns nearest-first:
+  a centre already sitting on its colour keeps it, and the one that collided with
+  it takes its own next best. First-come-first-served would hand the entry to
+  whichever centre happened to be earlier in the array.
+- **`.popularity` skips instead.** It walks its ranking past cells whose colour
+  the output has already spent — two popular cells a third of a cube step apart
+  *are* one colour there — rather than offering the second one a different
+  colour, which would be inventing a colour the picture does not contain. Its
+  one regression is n=4 on this picture, 4.4% worse: four distinct colours, and
+  they cost more total error than three collapsed ones did. That is not a defect
+  in the fix; popularity is a ranking, and four is what was asked for.
+
+### Two rules that are easy to get wrong
+
+**The depth is a parameter, never `ColorDepth.current`.** `recoloured` sends
+pixels as RGB inside a Kitty/iTerm2 picture, so its palette is 24-bit on the very
+terminal where the glyph rendering of the same picture is 256-colour.
+`ASCIIConverter.recoloured` passes `.truecolor` unconditionally, and
+`AdaptationTargetTests.theGraphicsPathIsUnconstrained` pins it.
+
+**The second fit stays.** `.effective(for:)` still runs after the derivation, and
+must: it exists because an adaptive palette changes its colours *after* the first
+fit, and unfitted RGB triples on a 256-colour terminal made Terminal.app read
+`38;2;r;g;b` as five SGR codes and draw "Most used" as blinking primaries
+(`AdaptivePaletteDepthTests`). What the targeting changes is that the fit is now
+a **no-op by construction**: the chosen colours are the lattice's own
+`.palette(n)` / `.standard(.red)` entries, and those downsample to themselves.
+
+### What it costs
+
+Less, which was not the expectation. `ImageHarness --path palette`, release,
+120×50 source, ms per derivation:
+
+| mode | `--depth truecolor` | `ansi256` | `ansi16` |
+|---|---|---|---|
+| `optimal8` | 0.333 | 0.227 | 0.234 |
+| `optimal64` | 1.365 | 0.659 | 0.404 |
+| `optimal256` | 4.919 | **1.448** | 0.634 |
+| `popular8` | 0.115 | 0.118 | 0.123 |
+| `popular256` | 0.122 | **0.571** | 0.149 |
+
+The projection is `count × entries` distance evaluations a pass — 61k at 256
+colours against the Lloyd pass's five million — and it pays for itself many times
+over by converging in two or three passes where the unconstrained one spends its
+whole twelve-pass budget chasing means that never settle. `popular256` is the one
+that costs: finding 256 *distinct* lattice colours walks further down the ranking,
+at a 240-entry search per cell it passes.
 
 ## Still open
 

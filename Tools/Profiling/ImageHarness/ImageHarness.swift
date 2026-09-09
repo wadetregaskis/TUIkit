@@ -43,6 +43,7 @@ struct ImageHarness {
         var rows = 50
         var iterations = 20
         var sourceScale = 3
+        var depth = "truecolor"
 
         var args = CommandLine.arguments.dropFirst().makeIterator()
         while let arg = args.next() {
@@ -54,6 +55,7 @@ struct ImageHarness {
             case "--rows": rows = args.next().flatMap(Int.init) ?? rows
             case "--iterations": iterations = args.next().flatMap(Int.init) ?? iterations
             case "--source-scale": sourceScale = args.next().flatMap(Int.init) ?? sourceScale
+            case "--depth": depth = args.next() ?? depth
             case "--help", "-h":
                 print(usage)
                 return
@@ -77,7 +79,13 @@ struct ImageHarness {
         }
 
         if path == "palette" {
-            measureDerivation(colorMode, iterations: iterations, cols: cols, rows: rows)
+            guard let target = Self.colorDepth(named: depth) else {
+                FileHandle.standardError.write(Data("unknown depth: \(depth)\n".utf8))
+                print(usage)
+                return
+            }
+            measureDerivation(
+                colorMode, iterations: iterations, cols: cols, rows: rows, depth: target)
             return
         }
 
@@ -193,8 +201,13 @@ struct ImageHarness {
     /// itself, so it measures what this loop's own scaffolding costs and
     /// nothing else, which is the baseline the adaptive numbers stand against.
     /// A mode carrying no palette at all has nothing to derive and says so.
+    /// - Parameter depth: What the output can draw, which is half of what a
+    ///   derivation costs: an adaptive palette targeting a depth chooses from
+    ///   that depth's own colours, which adds a projection of every centre onto
+    ///   them to every Lloyd pass. `truecolor` constrains nothing and is the
+    ///   figure the constrained ones stand against.
     private static func measureDerivation(
-        _ mode: ASCIIColorMode, iterations: Int, cols: Int, rows: Int
+        _ mode: ASCIIColorMode, iterations: Int, cols: Int, rows: Int, depth: ColorDepth
     ) {
         guard case .palette(let palette) = mode else {
             FileHandle.standardError.write(Data("mode has no palette to derive\n".utf8))
@@ -203,16 +216,18 @@ struct ImageHarness {
         let source = photograph(width: cols, height: rows)
         // One untimed pass, as the other paths take: it pays for the
         // process-wide tables the histogram's cell arithmetic reads.
-        var checksum = colourSum(palette.derived(from: source))
+        var checksum = colourSum(palette.derived(from: source, depth: depth))
         let clock = ContinuousClock()
         let start = clock.now
-        for _ in 0..<iterations { checksum &+= colourSum(palette.derived(from: source)) }
+        for _ in 0..<iterations {
+            checksum &+= colourSum(palette.derived(from: source, depth: depth))
+        }
         let elapsed = clock.now - start
         let seconds = Double(elapsed.components.seconds)
             + Double(elapsed.components.attoseconds) / 1e18
         let perIteration = seconds / Double(iterations)
         print("""
-            path=palette src=\(source.width)x\(source.height) iterations=\(iterations)
+            path=palette depth=\(depth) src=\(source.width)x\(source.height) iterations=\(iterations)
             \(String(format: "%.3f ms/derivation   %.2f ns/pixel   checksum=%d",
                      perIteration * 1000, perIteration / Double(cols * rows) * 1e9, checksum))
             """)
@@ -224,6 +239,16 @@ struct ImageHarness {
         palette.colors.reduce(0) { sum, colour in
             guard let rgb = colour.rgbComponents else { return sum }
             return sum &+ (Int(rgb.red) << 16 | Int(rgb.green) << 8 | Int(rgb.blue))
+        }
+    }
+
+    private static func colorDepth(named name: String) -> ColorDepth? {
+        switch name {
+        case "truecolor": .truecolor
+        case "ansi256", "palette256": .palette256
+        case "ansi16", "basic16": .basic16
+        case "mono", "nocolor": .noColor
+        default: nil
         }
     }
 
@@ -280,6 +305,6 @@ struct ImageHarness {
         ImageHarness — image-pipeline profiling harness (no PTY, xctrace --launch safe).
         Usage: ImageHarness [--path glyph|pixel|colour|palette] [--mode truecolor|ansi256|ansi16|grayscale|mono|shades8]
                             [--dither none|floyd] [--cols C] [--rows R] [--iterations N]
-                            [--source-scale S]
+                            [--source-scale S] [--depth truecolor|ansi256|ansi16|mono]
         """
 }

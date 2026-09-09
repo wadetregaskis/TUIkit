@@ -104,7 +104,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     let entries: [Entry]
 
     /// The question this palette is, when its colours are not yet decided —
-    /// see ``adaptive(_:by:)``. `nil` for every palette whose colours the app
+    /// see ``adaptive(_:by:target:)``. `nil` for every palette whose colours the app
     /// chose, which is all of them until one meets ``derived(from:)``.
     ///
     /// Part of ``Equatable``, unlike ``entries``: two palettes standing in with
@@ -117,12 +117,14 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// ``Equatable``, which is about the colours.
     let search = SearchIndexHandle()
 
-    /// An unanswered ``adaptive(_:by:)`` request.
-    public struct Adaptive: Sendable, Equatable {
+    /// An unanswered ``adaptive(_:by:target:)`` request.
+    public struct Adaptive: Sendable, Equatable, Hashable {
         /// Which `count` colours — see ``Adaptation``.
         public let method: Adaptation
         /// How many.
         public let count: Int
+        /// Which colours it may choose them from — see ``AdaptationTarget``.
+        public let target: AdaptationTarget
     }
 
     struct Entry: Sendable {
@@ -224,7 +226,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// it the wrong tool for reproducing a photograph — a picture occupies a
     /// small part of the gamut, so entries land where it has no pixels and
     /// raising `count` can change nothing at all (measured on one photograph at
-    /// 24 colours: eight entries never drawn). ``adaptive(_:by:)`` is the one
+    /// 24 colours: eight entries never drawn). ``adaptive(_:by:target:)`` is the one
     /// that asks the picture.
     ///
     /// The point of the constraint is that every entry is a colour any

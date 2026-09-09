@@ -11,7 +11,7 @@ import TUIkitStyling
 
 extension ASCIIPalette {
 
-    /// How an ``ASCIIPalette/adaptive(_:by:)`` palette picks its colours out of
+    /// How an ``ASCIIPalette/adaptive(_:by:target:)`` palette picks its colours out of
     /// the picture it is drawing.
     ///
     /// Both answer "which `n` colours", and they disagree because they are
@@ -58,7 +58,7 @@ extension ASCIIPalette {
     ///
     /// Every other palette here is a set of colours the app decided on. This one
     /// cannot be: it is a QUESTION about a picture, and the answer arrives when
-    /// ``derived(from:)`` is handed one — which the converters do, once per
+    /// ``derived(from:depth:)`` is handed one — which the converters do, once per
     /// conversion, right after the tone curve has run, so the colours are chosen
     /// from the picture as it will actually be drawn rather than as it arrived.
     ///
@@ -72,10 +72,15 @@ extension ASCIIPalette {
     /// - Parameters:
     ///   - count: How many colours. Clamped to at least one.
     ///   - method: Which `count` — see ``Adaptation``.
-    public static func adaptive(_ count: Int, by method: Adaptation) -> Self {
+    ///   - target: Which colours it may choose from — see ``AdaptationTarget``.
+    ///     ``AdaptationTarget/automatic`` follows the output, which is what a
+    ///     palette meant to spend the terminal's colours well wants.
+    public static func adaptive(
+        _ count: Int, by method: Adaptation, target: AdaptationTarget = .automatic
+    ) -> Self {
         let count = max(1, count)
         return Self(shades(count).colors, mapping: .nearestColor,
-                    adaptive: Adaptive(method: method, count: count))
+                    adaptive: Adaptive(method: method, count: count, target: target))
     }
 
     /// This palette with its colours chosen from `image`, or itself if its
@@ -85,17 +90,29 @@ extension ASCIIPalette {
     /// answer is a fixed set of colours — so everything downstream (the
     /// quantisation table, `nearestIndex(to:)`, the dither) is unchanged and
     /// unaware.
-    public func derived(from image: RGBAImage) -> Self {
+    ///
+    /// - Parameters:
+    ///   - image: The picture to take the colours from, as it will be DRAWN:
+    ///     after any tone curve and edge lift, before anything quantises.
+    ///   - depth: What the output can draw, which
+    ///     ``AdaptationTarget/automatic`` follows. Asked for rather than read
+    ///     from ``ColorDepth/current`` because the answer is per-call-site: the
+    ///     same picture drawn as terminal graphics is a field of RGB pixels
+    ///     whatever the terminal's SGR depth. See ``AdaptationTarget``.
+    public func derived(from image: RGBAImage, depth: ColorDepth) -> Self {
         guard let adaptive, !image.pixels.isEmpty else { return self }
         let histogram = Histogram(of: image)
         guard !histogram.buckets.isEmpty else { return self }
-        let chosen: [RGBA]
+        // `nil` where the target can draw whatever is chosen, which is the one
+        // case with nothing to constrain.
+        let lattice = Self.representable(at: adaptive.target.resolved(for: depth))
+        let chosen: [Color]
         switch adaptive.method {
-        case .popularity: chosen = histogram.mostPopular(adaptive.count)
-        case .leastError: chosen = histogram.leastError(adaptive.count)
+        case .popularity: chosen = histogram.mostPopular(adaptive.count, within: lattice)
+        case .leastError: chosen = histogram.leastError(adaptive.count, within: lattice)
         }
         guard !chosen.isEmpty else { return self }
-        return Self(chosen.map { .rgb($0.r, $0.g, $0.b) }, mapping: mapping)
+        return Self(chosen, mapping: mapping)
     }
 
     // MARK: - The histogram both methods read
@@ -184,18 +201,43 @@ extension ASCIIPalette {
         }
 
         /// The `count` heaviest cells' colours, heaviest first.
-        func mostPopular(_ count: Int) -> [RGBA] {
+        ///
+        /// Within `lattice` — the colours the output can draw — the ranking is
+        /// walked past the cells whose colour the output has already spent: two
+        /// popular cells a third of a cube step apart ARE one colour there, and
+        /// counting them twice is what made asking for five give four. Walking
+        /// on finds a fifth colour that is genuinely a fifth colour, which is
+        /// the whole of the fix on this method.
+        func mostPopular(_ count: Int, within lattice: ASCIIPalette?) -> [Color] {
             // Ties broken by the colour itself so a picture always answers the
             // same palette — two cells of equal weight are common in flat art,
             // and an unstable order would make the same image quantise
             // differently on different runs.
-            buckets.sorted {
+            let ranked = buckets.sorted {
                 $0.weight != $1.weight
                     ? $0.weight > $1.weight
                     : (Int($0.rgba.r) << 16 | Int($0.rgba.g) << 8 | Int($0.rgba.b))
                         < (Int($1.rgba.r) << 16 | Int($1.rgba.g) << 8 | Int($1.rgba.b))
             }
-            .prefix(count).map(\.rgba)
+            guard let lattice else {
+                return ranked.prefix(count).map { .rgb($0.rgba.r, $0.rgba.g, $0.rgba.b) }
+            }
+            var chosen: [Color] = []
+            var taken: Set<Int> = []
+            for bucket in ranked {
+                // The NEAREST entry, not the nearest unclaimed one: the cell is
+                // that colour on this terminal, and offering it a different one
+                // because something more popular got there first would be
+                // inventing a colour the picture does not contain — which is the
+                // one thing ``ASCIIPalette/adaptive(_:by:target:)`` promises not
+                // to do.
+                let entry = lattice.nearest(to: bucket.lab, excluding: []).entry
+                guard taken.insert(entry).inserted else { continue }
+                // `colors` and `entries` are one list twice over, by index.
+                chosen.append(lattice.colors[entry])
+                if chosen.count == count { break }
+            }
+            return chosen
         }
 
         /// `count` colours minimising the weighted squared OKLab distance from
@@ -206,10 +248,17 @@ extension ASCIIPalette {
         /// is a decent guess and not a minimum; Lloyd moves each entry to the
         /// weighted centre of what it actually serves, which is exactly the
         /// objective. Seeded rather than random, so the answer is deterministic.
-        func leastError(_ count: Int) -> [RGBA] {
+        func leastError(_ count: Int, within lattice: ASCIIPalette?) -> [Color] {
             let count = max(1, min(count, buckets.count))
             var centres = medianCut(into: count)
-            guard centres.count > 1 else { return centres.map(Self.srgb) }
+            // The seed is projected too, so every iterate this returns is a set
+            // of colours the output can draw — including the one-colour case
+            // below, which never enters the loop.
+            var chosen = lattice.map { $0.snapping(centres) } ?? []
+            if let lattice { centres = chosen.map { lattice.labOfEntry($0) } }
+            guard centres.count > 1 else {
+                return Self.colours(centres, chosen: chosen, within: lattice)
+            }
 
             // A budget rather than a fixed number of passes. One pass is
             // `buckets × count` distance evaluations, and both grow with what
@@ -220,8 +269,46 @@ extension ASCIIPalette {
             // bounded without shortchanging the cheap cases.
             let perPass = max(1, buckets.count * centres.count)
             let passes = max(1, min(12, 12_000_000 / perPass))
-            for _ in 0..<passes where refine(&centres) {}
-            return centres.map(Self.srgb)
+            for _ in 0..<passes {
+                let moved = refine(&centres)
+                guard let lattice else {
+                    if !moved { break }
+                    continue
+                }
+                // Lloyd, projected: the mean is where the cluster's centre of
+                // gravity is, and then the centre goes to the nearest colour the
+                // output actually has. Unquantised Lloyd is monotone and this is
+                // not — the projection can give back a little of what the mean
+                // won — so convergence is tested on the COLOURS rather than on
+                // the means, which drift on inside one lattice cell forever. The
+                // budget bounds the rest: a set that alternates between two
+                // equally good projections would otherwise never settle.
+                let previous = chosen
+                chosen = lattice.snapping(centres)
+                centres = chosen.map { lattice.labOfEntry($0) }
+                if chosen == previous { break }
+            }
+            return Self.colours(centres, chosen: chosen, within: lattice)
+        }
+
+        /// The palette entries a settled set of centres names.
+        ///
+        /// Two spellings, and the difference is not cosmetic: a constrained set
+        /// answers with the LATTICE's own colours — `.palette(n)`,
+        /// `.standard(.red)` — so the fit that runs after the derivation has
+        /// nothing left to change, where a triple carrying the same RGB would be
+        /// re-quantised by it. See ``ASCIIPalette/representable(at:)``.
+        private static func colours(
+            _ centres: [(l: Double, a: Double, b: Double)], chosen: [Int],
+            within lattice: ASCIIPalette?
+        ) -> [Color] {
+            guard let lattice else {
+                return centres.map {
+                    let rgba = srgb($0)
+                    return .rgb(rgba.r, rgba.g, rgba.b)
+                }
+            }
+            return chosen.map { lattice.colors[$0] }
         }
 
         /// One Lloyd pass. Returns whether anything moved, so a settled set

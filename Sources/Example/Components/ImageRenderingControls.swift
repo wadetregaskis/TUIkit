@@ -278,12 +278,16 @@ struct ImageRenderingControls: View {
                         "component.imageControls.colours", value: $settings.spreadColours,
                         in: 2...256)
                 }
+                // The two ADAPTIVE ones also carry a target: which colours they
+                // may choose from. Spread does not — it is already constrained
+                // to the 256-colour repertoire by construction.
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.mostUsed, "component.imageControls.mostUsed"
                 ) {
                     counted(
                         "component.imageControls.colours", value: $settings.mostUsedColours,
                         in: 2...256)
+                    targeted($settings.mostUsedTarget)
                 }
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.leastError, "component.imageControls.leastError"
@@ -291,6 +295,7 @@ struct ImageRenderingControls: View {
                     counted(
                         "component.imageControls.colours", value: $settings.leastErrorColours,
                         in: 2...256)
+                    targeted($settings.leastErrorTarget)
                 }
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.customPalette,
@@ -423,6 +428,41 @@ struct ImageRenderingControls: View {
     ///
     /// Neither indented nor disabled here — it is an option's content, and the
     /// group does both on its behalf.
+    /// Which colours an adaptive palette may choose from.
+    ///
+    /// Worth a control rather than a constant because the DIFFERENCE is the
+    /// point: on a 256-colour terminal, "Automatic" against "True colour" is
+    /// depth-aware derivation against the depth-blind one it replaced — asking
+    /// for five colours and getting four, and 256 colours collapsing to 51. The
+    /// two poorer depths preview what a poorer terminal makes of the picture,
+    /// on the terminal you actually have.
+    private func targeted(_ target: Binding<ASCIIPalette.AdaptationTarget>) -> some View {
+        HStack(spacing: 1) {
+            Text("component.imageControls.target").dim()
+            Picker("", selection: target) {
+                ForEach(ASCIIPalette.AdaptationTarget.allCases, id: \.self) { option in
+                    Text(Self.targetName(option)).tag(option)
+                }
+            }
+            .labelsHidden()
+        }
+    }
+
+    /// The picker's name for each target. The three depths borrow the colour
+    /// section's own names for the same things, which is the point — "256
+    /// colours" here and "256 colours" up there are the same 240 colours.
+    private static func targetName(
+        _ target: ASCIIPalette.AdaptationTarget
+    ) -> LocalizedStringKey {
+        switch target {
+        case .automatic: "component.imageControls.targetAuto"
+        case .depth(.truecolor): "component.imageControls.trueColour"
+        case .depth(.palette256): "component.imageControls.colours256"
+        case .depth(.basic16): "component.imageControls.colours16"
+        case .depth(.noColor): "component.imageControls.mono"
+        }
+    }
+
     private func counted(
         _ key: LocalizedStringKey, value: Binding<Int>, in range: ClosedRange<Int>
     ) -> some View {

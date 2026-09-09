@@ -91,6 +91,23 @@ struct ImageDemoSettings: Equatable {
     var mostUsedColours = 8
     var leastErrorColours = 8
 
+    /// Which colours the two ADAPTIVE palettes may choose from — see
+    /// ``ASCIIPalette/AdaptationTarget``.
+    ///
+    /// One apiece for the same reason the counts are: both are on screen
+    /// together, and a picker that moves because you touched the other one reads
+    /// as a bug.
+    ///
+    /// The interesting setting is not the default. `.automatic` is what an app
+    /// wants — the palette then spends the terminal's own colours — but the
+    /// point of exposing it here is the COMPARISON, and the comparison needs the
+    /// old behaviour available: `.depth(.truecolor)` is the depth-blind
+    /// derivation, and on a 256-colour terminal the difference between it and
+    /// `.automatic` is the whole feature. The other two show what a poorer
+    /// terminal will make of the picture, on the terminal you have.
+    var mostUsedTarget: ASCIIPalette.AdaptationTarget = .automatic
+    var leastErrorTarget: ASCIIPalette.AdaptationTarget = .automatic
+
     /// Which of ``ImageDemoHelpers/customPalettes`` ``ColourMode/customPalette``
     /// draws in.
     var customPaletteIndex = 0
@@ -224,8 +241,12 @@ struct ImageDemoSettings: Equatable {
             return .mono
         case .greys: return .palette(.shades(greyLevels))
         case .spread: return .palette(.spread(spreadColours))
-        case .mostUsed: return .palette(.adaptive(mostUsedColours, by: .popularity))
-        case .leastError: return .palette(.adaptive(leastErrorColours, by: .leastError))
+        case .mostUsed:
+            return .palette(
+                .adaptive(mostUsedColours, by: .popularity, target: mostUsedTarget))
+        case .leastError:
+            return .palette(
+                .adaptive(leastErrorColours, by: .leastError, target: leastErrorTarget))
         case .customPalette:
             return .palette(ImageDemoHelpers.customPalettes[
                 min(customPaletteIndex, ImageDemoHelpers.customPalettes.count - 1)].palette)
@@ -309,12 +330,27 @@ struct ImageDemoSettings: Equatable {
         case .mono: return "color:mono"
         case .greys: return "color:\(greyLevels) greys"
         case .spread: return "color:\(spreadColours) spread"
-        case .mostUsed: return "color:\(mostUsedColours) most-used"
-        case .leastError: return "color:\(leastErrorColours) least-error"
+        case .mostUsed:
+            return "color:\(mostUsedColours) most-used\(Self.targetLabel(mostUsedTarget))"
+        case .leastError:
+            return "color:\(leastErrorColours) least-error\(Self.targetLabel(leastErrorTarget))"
         case .customPalette:
             let index = min(customPaletteIndex, ImageDemoHelpers.customPalettes.count - 1)
             return "color:custom \(ImageDemoHelpers.customPalettes[index].name)"
         case .themed: return "color:themed"
+        }
+    }
+
+    /// The status bar's suffix for an adaptive palette's target — empty for
+    /// ``ASCIIPalette/AdaptationTarget/automatic``, which is the setting nobody
+    /// needs telling about.
+    private static func targetLabel(_ target: ASCIIPalette.AdaptationTarget) -> String {
+        switch target {
+        case .automatic: return ""
+        case .depth(.truecolor): return "@true"
+        case .depth(.palette256): return "@256"
+        case .depth(.basic16): return "@16"
+        case .depth(.noColor): return "@bw"
         }
     }
 

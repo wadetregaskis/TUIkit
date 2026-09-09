@@ -252,10 +252,17 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// from the picture as it will be drawn, not as it arrived, or a negative
     /// or a duotone would be quantised to the palette of a picture nobody sees.
     /// Everything else is unaffected, since a non-adaptive palette answers with
-    /// itself. See ``ASCIIPalette/derived(from:)``.
-    public func derived(from image: RGBAImage) -> Self {
+    /// itself. See ``ASCIIPalette/derived(from:depth:)``.
+    ///
+    /// - Parameter depth: What the output can draw, for an adaptive palette
+    ///   asked to choose colours the output HAS — see
+    ///   ``ASCIIPalette/AdaptationTarget``. The caller's own answer, not
+    ///   ``ColorDepth/current``: a picture drawn as terminal graphics is a field
+    ///   of RGB pixels whatever the terminal's SGR depth, so the two renderings
+    ///   of one picture pass different depths on the same terminal.
+    public func derived(from image: RGBAImage, depth: ColorDepth) -> Self {
         guard case .palette(let colors) = self else { return self }
-        return .palette(colors.derived(from: image))
+        return .palette(colors.derived(from: image, depth: depth))
     }
 
     /// see ``ASCIIPalette/resolved(with:)``.
@@ -588,7 +595,7 @@ extension ASCIIConverter {
         // as blinking primaries. Every other palette was fitted once and stayed
         // fitted; an adaptive one changes its colours after the fit, so it is
         // fitted after the change.
-        effectiveMode = effectiveMode.derived(from: scaled).effective(for: depth)
+        effectiveMode = effectiveMode.derived(from: scaled, depth: depth).effective(for: depth)
 
         // The split between ink and background, measured from THIS image
         // rather than assumed to be mid-grey — see ``monoInkThreshold(for:)``.

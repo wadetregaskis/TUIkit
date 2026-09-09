@@ -73,19 +73,19 @@ struct AdaptivePaletteTests {
     @Test("Deriving answers with the picture's own colours, and only once")
     func derivationIsIdempotent() {
         let image = Self.subject()
-        let derived = ASCIIPalette.adaptive(6, by: .leastError).derived(from: image)
+        let derived = ASCIIPalette.adaptive(6, by: .leastError).derived(from: image, depth: .truecolor)
         #expect(derived.colors.count == 6)
         #expect(derived.colors != ASCIIPalette.shades(6).colors, "still the stand-in")
         // The result is an ORDINARY palette: nothing downstream can tell it was
         // ever a question, and asking again changes nothing.
-        #expect(derived.derived(from: Self.subject(width: 20, height: 20)).colors == derived.colors)
+        #expect(derived.derived(from: Self.subject(width: 20, height: 20), depth: .truecolor).colors == derived.colors)
     }
 
     @Test("A palette that was never a question is untouched by deriving")
     func fixedPalettesAreInert() {
         let fixed = ASCIIPalette([.rgb(1, 2, 3), .rgb(4, 5, 6)])
-        #expect(fixed.derived(from: Self.subject()).colors == fixed.colors)
-        #expect(ASCIIPalette.spread(8).derived(from: Self.subject()).colors
+        #expect(fixed.derived(from: Self.subject(), depth: .truecolor).colors == fixed.colors)
+        #expect(ASCIIPalette.spread(8).derived(from: Self.subject(), depth: .truecolor).colors
             == ASCIIPalette.spread(8).colors)
     }
 
@@ -93,23 +93,28 @@ struct AdaptivePaletteTests {
     func derivationIsDeterministic() {
         let image = Self.subject()
         for method in ASCIIPalette.Adaptation.allCases {
-            let first = ASCIIPalette.adaptive(8, by: method).derived(from: image)
-            let second = ASCIIPalette.adaptive(8, by: method).derived(from: image)
+            let first = ASCIIPalette.adaptive(8, by: method).derived(from: image, depth: .truecolor)
+            let second = ASCIIPalette.adaptive(8, by: method).derived(from: image, depth: .truecolor)
             #expect(first.colors == second.colors, "\(method) is not deterministic")
         }
     }
 
     // MARK: - The two adaptations differ, and in the stated direction
 
+    /// At ``ColorDepth/truecolor``, which is the unconstrained derivation — these
+    /// three are compared on CONTINUOUS error, and a palette constrained to a
+    /// depth is not competing for that. See ``ASCIIPalette/AdaptationTarget`` and
+    /// `AdaptationTargetTests`, which prices the constrained ones against each
+    /// other.
     @Test("Least error beats popularity, and both beat the gamut spread")
     func leastErrorIsLeastError() {
         let image = Self.subject()
         for count in [4, 8, 16] {
             let spread = Self.error(ASCIIPalette.spread(count), on: image)
             let popular = Self.error(
-                ASCIIPalette.adaptive(count, by: .popularity).derived(from: image), on: image)
+                ASCIIPalette.adaptive(count, by: .popularity).derived(from: image, depth: .truecolor), on: image)
             let optimal = Self.error(
-                ASCIIPalette.adaptive(count, by: .leastError).derived(from: image), on: image)
+                ASCIIPalette.adaptive(count, by: .leastError).derived(from: image, depth: .truecolor), on: image)
             #expect(optimal < popular, "\(count): least error \(optimal) ≥ popularity \(popular)")
             #expect(popular < spread, "\(count): popularity \(popular) ≥ spread \(spread)")
         }
@@ -131,12 +136,12 @@ struct AdaptivePaletteTests {
         // so a RANKING cannot reach it however many entries it is given.
         for count in [8, 16, 24] {
             #expect(
-                !reachesTheRed(ASCIIPalette.adaptive(count, by: .popularity).derived(from: image)),
+                !reachesTheRed(ASCIIPalette.adaptive(count, by: .popularity).derived(from: image, depth: .truecolor)),
                 "popularity found the red at \(count), so the fixture stopped showing the split")
         }
         // The optimiser does — but not until the field is served well enough
         // that the patch is the biggest thing left wrong.
-        #expect(reachesTheRed(ASCIIPalette.adaptive(12, by: .leastError).derived(from: image)))
+        #expect(reachesTheRed(ASCIIPalette.adaptive(12, by: .leastError).derived(from: image, depth: .truecolor)))
     }
 
     /// The assertion that says `.leastError` is OPTIMISING rather than missing.
@@ -149,7 +154,7 @@ struct AdaptivePaletteTests {
     @Test("Where least error drops the red, keeping it would be worse")
     func droppingTheRedIsTheOptimum() {
         let image = Self.subject()
-        let derived = ASCIIPalette.adaptive(8, by: .leastError).derived(from: image)
+        let derived = ASCIIPalette.adaptive(8, by: .leastError).derived(from: image, depth: .truecolor)
         #expect(!reachesTheRed(derived), "it kept the red, so there is nothing to price")
         var forced = derived.colors
         forced[forced.count - 1] = .rgb(230, 30, 30)
@@ -212,9 +217,9 @@ struct AdaptivePaletteTests {
     func everyStepCounts() {
         let image = Self.subject()
         for method in ASCIIPalette.Adaptation.allCases {
-            var previous = ASCIIPalette.adaptive(2, by: method).derived(from: image).colors
+            var previous = ASCIIPalette.adaptive(2, by: method).derived(from: image, depth: .truecolor).colors
             for count in 3...24 {
-                let now = ASCIIPalette.adaptive(count, by: method).derived(from: image).colors
+                let now = ASCIIPalette.adaptive(count, by: method).derived(from: image, depth: .truecolor).colors
                 #expect(now.count == count, "\(method) at \(count) answered \(now.count)")
                 #expect(Set(now) != Set(previous), "\(method): \(count) is \(count - 1) again")
                 previous = now
@@ -237,8 +242,11 @@ struct AdaptivePaletteTests {
         // Every drawn pixel is one of the eight the INVERTED picture asked for.
         let expected = Set(
             ASCIIPalette.adaptive(8, by: .leastError)
-                .derived(from: ASCIIConverter(colorMode: .trueColor, toneCurve: .init(.inverted))
-                    .recoloured(image, width: 30, height: 30))
+                .derived(
+                    from: ASCIIConverter(colorMode: .trueColor, toneCurve: .init(.inverted))
+                        .recoloured(image, width: 30, height: 30),
+                    // The graphics path's own depth: these pixels leave as RGB.
+                    depth: .truecolor)
                 .colors.compactMap(\.rgbComponents)
                 .map { Int($0.red) << 16 | Int($0.green) << 8 | Int($0.blue) })
         let drawnColours = Set(drawn.pixels.map { Int($0.r) << 16 | Int($0.g) << 8 | Int($0.b) })

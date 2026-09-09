@@ -88,7 +88,7 @@ struct PaletteSearchIndexTests {
         "ansi256": .ansi256,
         "shades256": .shades(256),
         "spread64": .spread(64),
-        "optimal32": ASCIIPalette.adaptive(32, by: .leastError).derived(from: photograph()),
+        "optimal32": ASCIIPalette.adaptive(32, by: .leastError).derived(from: photograph(), depth: .truecolor),
     ]
 
     @Test("Every cell corner agrees with the walk, tie-break included", arguments: subjects.keys.sorted())
