@@ -36,13 +36,48 @@ struct ColorTests {
         #expect(Color.palette(42) != Color.palette(43))
     }
 
-    @Test("opacity(_:over:) over black matches the mix-toward-black opacity")
-    func opacityOverBlackEquivalence() {
-        // On a pure-black surface true alpha blending IS the historical
-        // multiply-toward-black — dark palettes render byte-identically.
+    /// `opacity(_:)` used to be the mix-toward-black shorthand, and this test
+    /// pinned it to `opacity(_:over: .black)`. That contract is gone: it carries
+    /// real alpha now and what it is drawn over is decided at the composite.
+    ///
+    /// The equivalence it recorded is still TRUE, but it belongs to the
+    /// compositor rather than to the colour, so this asserts it where it now
+    /// lives — the blend resolves the two the same way over a black destination.
+    @Test("Alpha resolved over black is the old mix-toward-black")
+    func alphaOverBlackMatchesTheOldShorthand() {
         for value in [0.0, 0.2, 0.45, 0.6, 1.0] {
-            let color = Color.rgb(64, 149, 255)
-            #expect(color.opacity(value, over: .rgb(0, 0, 0)) == color.opacity(value))
+            let colour = Color.rgb(64, 149, 255)
+            let carried = colour.opacity(value)
+            // What the compositor does with the carried alpha over black…
+            let resolved = colour.opacity(Double(carried.alpha) / 255, over: .rgb(0, 0, 0))
+            // …and what the surface-taking spelling gives directly. The quantised
+            // alpha is used on both sides, because the byte is what travels.
+            #expect(resolved == colour.opacity(Double(carried.alpha) / 255, over: .black))
+        }
+    }
+
+    /// The two spellings are now different things, and this says how: one CARRIES
+    /// the opacity for the compositor to resolve, the other CONSUMES it against a
+    /// surface the caller names.
+    @Test("opacity(_:) carries the alpha; opacity(_:over:) consumes it")
+    func theTwoSpellingsDiffer() {
+        let colour = Color.rgb(64, 149, 255)
+        let carried = colour.opacity(0.5)
+        #expect(carried.value == colour.value, "the colour is unchanged")
+        #expect(carried.alpha == 128, "and carries the opacity")
+
+        let consumed = colour.opacity(0.5, over: .black)
+        #expect(consumed.isOpaque, "a concrete answer")
+        #expect(consumed.value != colour.value, "…which is a different colour")
+    }
+
+    /// The divergence that mattered most, and the reason this was worth changing:
+    /// every semantic colour used to ignore `opacity(_:)` entirely, because
+    /// `rgbComponents` is nil for one and the old body returned `self`.
+    @Test("A semantic colour takes an opacity now")
+    func semanticColoursTakeAnOpacity() {
+        for colour in [Color.primary, .secondary, .accentColor, .warning, .error, .success] {
+            #expect(colour.opacity(0.5).alpha == 128, "\(colour) ignored its opacity")
         }
     }
 
@@ -160,16 +195,18 @@ struct ColorTests {
         #expect(rounded / samples <= 0.25, "rounding should be within half a unit")
     }
 
-    /// `opacity(_:)` is the shorthand for `opacity(_:over:)` with a black
-    /// surface, so it has to round the same way — and it has to survive a
-    /// caller handing it a number outside `0…1`, because `UInt8(_: Double)`
-    /// traps on one and a trap is not an answer to a rounding question.
+    /// `opacity(_:)` has to survive a caller handing it a number outside `0…1`,
+    /// because `UInt8(_: Double)` traps on one and a trap is not an answer to a
+    /// rounding question. A NaN folds to zero, which is the only answer available.
     @Test("opacity clamps its argument rather than trapping")
     func opacityClamps() {
         let colour = Color.rgb(100, 150, 200)
-        #expect(colour.opacity(2) == colour)
-        #expect(colour.opacity(-1) == .rgb(0, 0, 0))
-        #expect(colour.opacity(.nan) == .rgb(0, 0, 0))
-        #expect(colour.opacity(0.5) == colour.opacity(0.5, over: .rgb(0, 0, 0)))
+        #expect(colour.opacity(2) == colour, "clamped to opaque, and unchanged")
+        #expect(colour.opacity(-1).alpha == 0)
+        #expect(colour.opacity(.nan).alpha == 0)
+        #expect(colour.opacity(0.5).alpha == 128, "rounded to the nearest byte")
+        // The colour itself is never touched — that is the whole difference from
+        // the mix-toward-black spelling this replaced.
+        #expect(colour.opacity(0.25).value == colour.value)
     }
 }

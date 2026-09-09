@@ -90,6 +90,24 @@ public struct Color: Sendable, Hashable {
         case semantic(SemanticColor)
     }
 
+    /// A colour that is fully transparent — SwiftUI's `Color.clear`.
+    ///
+    /// Not `Color.default`, and the difference is not a footnote: `.default` is
+    /// SGR 39/49, *the terminal's own* colour, which is perfectly visible. The one
+    /// thing a reader reaches for `.clear` to do is hide something, and a modifier
+    /// that renders the thing legibly instead is worse than one that does not
+    /// exist.
+    ///
+    /// As a background — or as a view — it paints nothing and what is behind shows
+    /// through. As a foreground it draws no glyph, revealing whatever a sibling
+    /// drew in that cell, and blank cells where nothing did.
+    ///
+    /// > Note: the underlying colour is black, as it is in SwiftUI, so anything
+    /// > reading a colour's components and ignoring its alpha sees black. That
+    /// > matters for a gradient stop — `Gradient(colors: [.red, .clear])` fades
+    /// > toward transparent BLACK — which is also SwiftUI's behaviour.
+    public static let clear = Self(value: .rgb(red: 0, green: 0, blue: 0), alpha: 0)
+
     // MARK: - Standard ANSI Colors
 
     /// Black (ANSI 30/40)
@@ -426,33 +444,34 @@ extension Color {
         adjusted(by: -percentage)
     }
 
-    /// Returns a color with adjusted opacity (simulated via color mixing).
+    /// This colour at `opacity` — SwiftUI's `Color.opacity(_:)`, and real alpha.
     ///
-    /// Since terminals don't support true transparency, this mixes
-    /// the color with black to simulate opacity. Works with all color types
-    /// by converting to RGB first.
+    /// The result carries the opacity rather than approximating it. What it is
+    /// finally drawn over is decided at the composite, where what is behind the
+    /// cell is known: `Color.blue.opacity(0.4)` over a red pane is 40% of the way
+    /// from RED, and over a green one 40% of the way from green.
     ///
-    /// Exactly ``opacity(_:over:)`` with a black surface, and rounds the same
-    /// way ``lerp(_:_:phase:)`` does — a test pins the two together, because a
-    /// shorthand that disagrees with the thing it is short for is worse than no
-    /// shorthand.
+    /// This used to mix toward BLACK, which was right only on a black terminal
+    /// and turned every "dim" into a near-black smudge on a light palette. It
+    /// also returned `self` untouched for any `.semantic` colour — so
+    /// `Color.primary.opacity(0.5)`, `Color.accentColor.opacity(0.5)` and
+    /// everything under `Color.palette` compiled and did nothing at all. Both are
+    /// gone: the alpha is stored, and it survives ``resolve(with:)``.
+    ///
+    /// ``opacity(_:over:)`` is the other thing, and still useful: it composites
+    /// against a surface the CALLER names and answers with a concrete colour, for
+    /// the many places in this framework that derive a style from a palette and
+    /// know exactly what it sits on.
     ///
     /// - Parameter opacity: The opacity (0–1; clamped, and a NaN reads as 0).
-    /// - Returns: A color simulating the given opacity, or self if semantic.
+    /// - Returns: This colour, carrying that opacity.
     public func opacity(_ opacity: Double) -> Self {
-        guard let (red, green, blue) = rgbComponents else {
-            return self
-        }
-
+        var copy = self
         // Clamped, because a caller is allowed to hand this a number out of
         // range and `UInt8(_: Double)` traps on one. `min`/`max` in this order
         // also fold a NaN to 0, which is the only answer available.
-        let opacity = min(1, max(0, opacity))
-        func scaled(_ channel: UInt8) -> UInt8 {
-            UInt8(min(255, max(0, (Double(channel) * opacity).rounded())))
-        }
-
-        return .rgb(scaled(red), scaled(green), scaled(blue))
+        copy.alpha = UInt8(min(255, max(0, (min(1, max(0, opacity)) * 255).rounded())))
+        return copy
     }
 
     /// Returns the color composited at `opacity` over `surface` — true alpha

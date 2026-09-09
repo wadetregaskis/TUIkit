@@ -273,15 +273,22 @@ struct ShapeStyleTests {
     /// the concrete type beats a protocol extension — so `.red.opacity(0.5)`
     /// is the older, surface-blind shorthand rather than this. SwiftUI's
     /// `Color.opacity(_:)` shadows its `ShapeStyle` one the same way, so the
-    /// spelling means what SwiftUI source means; on the dark palettes this
-    /// framework ships the two answers coincide exactly, because mixing toward
-    /// black IS mixing toward a black surface.
+    /// spelling means what SwiftUI source means — and now it means the same THING
+    /// too. It used to mix toward black and coincide with the `ShapeStyle`
+    /// spelling only on a black palette; it carries real alpha, and the
+    /// compositor resolves it against whatever is behind the cell.
+    ///
+    /// The two therefore genuinely differ now: `AnyShapeStyle(…).opacity(_:)`
+    /// still flattens against `palette.background` at paint time, which is an
+    /// approximation the `ShapeStyle` docs already record — and which SwiftUI
+    /// shares.
     @Test("Color's own opacity still wins for a Color, as it does in SwiftUI")
     func colourKeepsItsOwnOpacity() {
         // `.rgb` as an implicit member is the assertion that it IS a Color:
         // a `ShapeStyle` wrapper would not compare to one.
         let faded = Color.rgb(255, 0, 0).opacity(0.5)
-        #expect(faded == .rgb(128, 0, 0))
+        #expect(faded.value == Color.ColorValue.rgb(red: 255, green: 0, blue: 0))
+        #expect(faded.alpha == 128, "the colour carries it rather than mixing it")
         var dark = environment()
         dark.palette = SystemPalette.green
         #expect(

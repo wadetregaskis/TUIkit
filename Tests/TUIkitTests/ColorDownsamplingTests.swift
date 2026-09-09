@@ -308,7 +308,14 @@ struct HuePreservingQuantisationTests {
         ] {
             var sawBlack = false
             for step in stride(from: 16, through: 0, by: -1) {
-                let quantised = base.opacity(Double(step) / 16).downsampledToPalette256()
+                // `opacity(_:over: .black)` rather than `opacity(_:)`: the fade
+                // this is about is the SEQUENCE OF COLOURS a dimming ramp walks
+                // through, and since `opacity(_:)` began carrying real alpha it
+                // returns the same colour every step with a different alpha —
+                // nothing for a downsample to quantise differently. The
+                // surface-taking spelling is the one that produces the colours.
+                let quantised = base.opacity(Double(step) / 16, over: .black)
+                    .downsampledToPalette256()
                 guard let (red, green, blue) = quantised.rgbComponents else { continue }
                 let isBlack = red == 0 && green == 0 && blue == 0
                 if isBlack { sawBlack = true }
