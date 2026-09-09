@@ -29,13 +29,33 @@ public struct RenderContext {
 
     /// The environment values for this render pass.
     ///
-    /// Assigning to this — whether wholesale or by mutating one value in place
-    /// — re-derives the mirrored service fields below, so they can never go
-    /// stale. Property observers do not run during initialization, so every
-    /// initializer must set the mirrors itself.
-    public var environment: EnvironmentValues {
-        didSet { mirrorServices() }
-    }
+    /// Mutating one value in place — `context.environment.foo = x`, which every
+    /// stack, every bordered box and every `.foregroundStyle` does once per
+    /// walk — leaves the mirrored service fields below alone, because nothing
+    /// in a pass writes those two slots. They are wired into a LOCAL
+    /// `EnvironmentValues` before the root context exists (`init` below,
+    /// `EnvironmentValues.applyRuntimeServices(from:)`) and are read-only from
+    /// then on. Replacing the environment WHOLESALE is the one write that
+    /// could change them, so that route is ``withEnvironment(_:)``, and it
+    /// re-mirrors.
+    ///
+    /// This was a `didSet` calling `mirrorServices()` — correct, and it
+    /// re-derived both services on every write: two `[ObjectIdentifier: Any]`
+    /// probes, two `swift_dynamicCast`s and four refcount operations to arrive
+    /// at the two values already in the fields. The profiled menu tree writes
+    /// the environment 46 times a frame, for 92 of its 687 environment reads,
+    /// and that tree is four views — so on an ordinary page the count is per
+    /// node per walk, not per menu.
+    ///
+    /// Assign wholesale ONLY through ``withEnvironment(_:)``. A debug build
+    /// checks it: `servicesAreMirrored` is asserted on every view rendered.
+    ///
+    /// Single backticks on those last two names, not DocC links: they are
+    /// `private` and `package`, so neither is in the public symbol graph
+    /// `Tools/BuildDocs/build-docs.sh` emits, an unresolved link is a DocC
+    /// warning, and CI runs that script with `--strict` — which fails on any
+    /// diagnostic at all.
+    public var environment: EnvironmentValues
 
     /// The subtree-memoization cache for this render pass, mirrored from
     /// ``environment``.
@@ -63,11 +83,32 @@ public struct RenderContext {
     /// Re-derives every mirrored service from ``environment``.
     ///
     /// The mirrors are a cache of the environment, so this is the one place
-    /// that defines what "in sync" means; ``environment``'s `didSet` calls it
-    /// on every assignment, and the initializers call it explicitly.
+    /// that defines what "in sync" means for code that can call it:
+    /// ``withEnvironment(_:)``, the only write that can change a service.
+    ///
+    /// The initializer below does NOT call it. The mirrors have no default
+    /// value, so they must be assigned before any method may run on `self`; it
+    /// spells the same two assignments out instead, and the two must be kept in
+    /// step. `servicesAreMirrored` is what notices if they are not.
     private mutating func mirrorServices() {
         renderCache = environment.renderCache
         stateStorage = environment.stateStorage
+    }
+
+    /// Whether the mirrored services still agree with ``environment``.
+    ///
+    /// The invariant ``withEnvironment(_:)`` maintains, in the form an `assert`
+    /// can take. It is worth asserting rather than trusting: a mirror pointing
+    /// at the previous pass's cache is a stale memoized buffer, which is a bug
+    /// that never looks like one.
+    ///
+    /// Only ever called from an `assert`, so a release build pays nothing. A
+    /// debug build pays two dictionary probes per RENDERED VIEW — hundreds to
+    /// thousands a frame, not the 46 environment writes a frame the `didSet`
+    /// used to charge release builds for. That is the trade, and it is only
+    /// affordable because `--bench` and the profiling runs are release builds.
+    package var servicesAreMirrored: Bool {
+        renderCache === environment.renderCache && stateStorage === environment.stateStorage
     }
 
     /// The current view's structural identity in the render tree.
@@ -256,11 +297,37 @@ public struct RenderContext {
     /// - Returns: A new RenderContext with the updated environment.
     public func withEnvironment(_ environment: EnvironmentValues) -> Self {
         var copy = self
-        // Assigning the whole environment re-derives the mirrored services via
-        // `didSet`; the structural copy helpers (`withChildIdentity`,
-        // `withAvailableWidth`, …) only touch identity or size, so they carry
-        // the mirrors unchanged for free.
+        // The one route that may be handed an environment carrying DIFFERENT
+        // services, so the one route that re-derives the mirrors. The
+        // structural copy helpers (`withChildIdentity`, `withAvailableWidth`,
+        // …) only touch identity or size, and an in-place environment write
+        // cannot reach a service slot, so both carry the mirrors for free.
         copy.environment = environment
+        copy.mirrorServices()
+        return copy
+    }
+
+    /// This context under `environment`, which MUST have been derived from
+    /// ``environment`` — `setting(_:to:)`, or a copy with one value written.
+    ///
+    /// The difference from ``withEnvironment(_:)`` is the work it does not do:
+    /// re-deriving ``renderCache`` and ``stateStorage`` out of a dictionary
+    /// that is carrying the same two objects. A derived environment cannot have
+    /// changed them, so there is nothing to re-derive — and this is the route
+    /// every `.environment(_:_:)`-family modifier takes, once per application
+    /// on each of the two walks.
+    ///
+    /// - Parameter environment: An environment derived from ``environment``.
+    /// - Returns: This context, under `environment`.
+    package func withDerivedEnvironment(_ environment: EnvironmentValues) -> Self {
+        var copy = self
+        copy.environment = environment
+        // The "derived" in the name, checked where checking is free (see
+        // ``servicesAreMirrored``). A caller holding an environment from
+        // anywhere else wants ``withEnvironment(_:)``.
+        assert(
+            copy.servicesAreMirrored,
+            "withDerivedEnvironment given an environment carrying different services")
         return copy
     }
 

@@ -35,7 +35,16 @@ struct MeasureMemoEquivalenceTests {
     /// volatile-read tracker whose presence is what turns the memo on.
     private func context(width: Int, height: Int, memoised: Bool) -> RenderContext {
         var context = makeRenderContext(width: width, height: height)
-        context.environment.stateStorage = StateStorage()
+        // Both halves, deliberately — this is NOT a redundant second write.
+        // `RenderContext` mirrors the environment's state storage in a stored
+        // field, and an in-place environment write no longer re-derives it (see
+        // `RenderContext.environment`). Setting only the environment would
+        // leave `@State` binding into the harness's storage while this suite
+        // believed it had an isolated one. Same shape, and the same reason, as
+        // `RenderContext.isolatingRenderCache()` in `RenderTestSupport.swift`.
+        let storage = StateStorage()
+        context.environment.stateStorage = storage
+        context.stateStorage = storage
         if memoised {
             context.environment.volatileReadTracker = VolatileReadTracker()
         }

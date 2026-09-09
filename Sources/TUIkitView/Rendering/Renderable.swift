@@ -160,6 +160,13 @@ extension Layoutable {
 /// - Returns: A ``FrameBuffer`` containing the rendered terminal output.
 @MainActor
 public func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
+    // `RenderContext` carries two services in stored mirrors, and only
+    // `withEnvironment(_:)` re-derives them. Checked here because this is the
+    // one function every rendered view passes through, and `assert` compiles
+    // out of a release build — so the check exists exactly where it is free.
+    assert(
+        context.servicesAreMirrored,
+        "RenderContext.environment was replaced without re-mirroring its services — assign through withEnvironment(_:)")
     // An `Animatable` view renders at where its picture has GOT to, not at what
     // the tree says — so substitute before anything reads it, INCLUDING the
     // `Renderable` branch below (a modifier that animates is a `Renderable`).

@@ -45,7 +45,9 @@ extension EnvironmentModifier: Renderable {
         let uncomparable = noteEnvironmentChange(context: context)
         var modifiedEnvironment = context.environment.setting(keyPath, to: value)
         if uncomparable { modifiedEnvironment.hasUncomparableEnvironmentValue = true }
-        var modifiedContext = context.withEnvironment(modifiedEnvironment)
+        // Derived from `context.environment` one line up, so the services are
+        // the same two objects and the mirrors need no re-deriving.
+        var modifiedContext = context.withDerivedEnvironment(modifiedEnvironment)
         modifiedContext.environmentApplicationDepth += 1
         return TUIkitView.renderToBuffer(content, context: modifiedContext)
     }
@@ -136,7 +138,8 @@ extension EnvironmentModifier: Layoutable {
         let uncomparable = noteEnvironmentChange(context: context)
         var modifiedEnvironment = context.environment.setting(keyPath, to: value)
         if uncomparable { modifiedEnvironment.hasUncomparableEnvironmentValue = true }
-        var modifiedContext = context.withEnvironment(modifiedEnvironment)
+        // Derived, as on the render arm — see the note there.
+        var modifiedContext = context.withDerivedEnvironment(modifiedEnvironment)
         modifiedContext.environmentApplicationDepth += 1
         return measureChild(content, proposal: proposal, context: modifiedContext)
     }
