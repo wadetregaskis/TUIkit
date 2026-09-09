@@ -128,7 +128,7 @@ struct ScrollOverscrollTests {
     func fittingContentStillOverscrolls() {
         // Owner decision: the allowance is not conditional on there being
         // anything to scroll. Note this diverges from `scroll(by:)`'s
-        // `extent > viewportHeight` guard, so it cannot ride on that path.
+        // `maxOffset > 0` guard, so it cannot ride on that path.
         let sv = handler(extent: 4, viewport: 10, top: 3, bottom: 3)
         #expect(sv.maxOffset == 0, "nothing to scroll")
         for _ in 0..<10 { _ = sv.userScrollFine(by: 1) }

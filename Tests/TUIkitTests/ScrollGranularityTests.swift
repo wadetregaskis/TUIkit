@@ -96,6 +96,31 @@ struct ScrollGranularityTests {
         #expect(handler.scrollTopClipLines == 0, "row granularity never clips")
     }
 
+    /// A window that covers every row is not the same thing as a list that fits.
+    /// `viewportHeight` counts the row STRADDLING the viewport's bottom edge as
+    /// visible — `ScrollRowWindow.resolve` admits it and `_ListCore` publishes
+    /// `max(1, visibleRows.count)` — so `extent == viewportHeight` while the
+    /// walked bound still names an offset at which that row is whole. Gating the
+    /// step on the subtraction instead of the bound left the wheel, the bar's
+    /// arrows and its page-track all dead at offset 0.
+    @Test("Row granularity: a full window still scrolls to reveal the straddling row")
+    func rowGranularityReachesStraddlingRow() {
+        // Six two-line rows in an 11-line content area: rows 0…4 take ten lines
+        // and row 5 is drawn one line deep, so all six rows are on screen.
+        let handler = makeHandler(count: 6, rowHeight: 2, contentHeight: 11, granularity: .row)
+        // What `_ListCore` writes after the window walk. `makeHandler`'s
+        // whole-rows-only estimate (5) misses the straddling row, and it is
+        // counting it that makes the two sides equal.
+        handler.viewportHeight = 6
+
+        #expect(handler.extent == handler.viewportHeight, "six rows, six 'visible'")
+        #expect(handler.maxOffset == 1, "…and offset 1 shows rows 1…5 whole")
+
+        #expect(handler.scrollFine(by: 3), "a wheel tick has somewhere to go")
+        #expect(handler.scrollOffset == 1)
+        #expect(handler.scrollTopClipLines == 0, "row granularity never clips")
+    }
+
     @Test("Single-line rows: line and row granularity are identical")
     func singleLineRowsIdentical() {
         let line = makeHandler(count: 10, rowHeight: 1, contentHeight: 5, granularity: .line)
@@ -374,6 +399,31 @@ struct ScrollGranularityTests {
         #expect(row.contains("c-1"), "the ninth line is spent on row c:\n\(row)")
         #expect(!row.contains("c-2"), "…and the rest of it clipped:\n\(row)")
         #expect(row == body(.line), "the two modes draw the same frame at rest:\n\(row)")
+    }
+
+    /// The same rule from the outside, and the reason the step has to ask the
+    /// bound: with every row inside the window there is still one offset left,
+    /// and until it did, the wheel could not take it.
+    @Test("List (row granularity): the wheel reaches the straddling row's last line")
+    func listRowGranularityWheelLeavesTheTop() {
+        // Six 2-line rows in an 11-line content area with a scrollbar — so no
+        // indicator line comes out of the area, and the resting-offset snap
+        // (text indicators only) cannot pull offset 1 back to 0. Rows a…e take
+        // ten lines and row f is drawn one line deep, which makes `extent` and
+        // `viewportHeight` both 6 while the bound is offset 1, where b…f are
+        // all whole.
+        func body(ticks: Int) -> String {
+            renderList(
+                granularity: .row, linesPerRow: 2, wheelTicks: ticks, frameHeight: 13,
+                showsScrollbar: true)
+        }
+        let atTop = body(ticks: 0)
+        #expect(atTop.contains("f-1"), "precondition — the last row straddles:\n\(atTop)")
+        #expect(!atTop.contains("f-2"), "precondition — its tail is clipped:\n\(atTop)")
+
+        let scrolled = body(ticks: 1)
+        #expect(scrolled.contains("f-2"), "one tick reveals the clipped tail:\n\(scrolled)")
+        #expect(!scrolled.contains("a-1"), "…by moving off row a:\n\(scrolled)")
     }
 
     @Test("List (row granularity): a wheel event moves three whole ROWS")

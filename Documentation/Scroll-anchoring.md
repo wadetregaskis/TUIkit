@@ -227,7 +227,7 @@ so the unit cannot drift again.
 **A view whose content already fits may still overscroll** (owner decision).
 The allowance is not gated on overflow: a short view can be pushed its full
 allowance past the edge and stops there. Note this deliberately *diverges* from
-`scroll(by:)`'s existing `extent > viewportHeight` guard, so the excursion
+`scroll(by:)`'s existing `maxOffset > 0` guard, so the excursion
 cannot simply ride on that path — the guard governs the offset, and the
 excursion is a separate quantity (below).
 

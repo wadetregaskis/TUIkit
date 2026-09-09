@@ -419,11 +419,35 @@ extension ScrollableOffsetState {
     /// Does nothing when there is nothing to scroll: a zero delta, an unmeasured
     /// viewport, or content that fits.
     ///
+    /// "Content that fits" is ``maxOffset`` being zero — NOT
+    /// `extent > viewportHeight`, which is what this asked until a row-granularity
+    /// list went dead at the top. That subtraction mixes units on
+    /// `ItemListHandler`: its ``viewportHeight`` counts the row STRADDLING the
+    /// viewport's bottom edge as visible (the window rule admits it and the
+    /// renderer clips its tail), so a list whose window covers every row reads
+    /// `extent == viewportHeight` while ``maxOffset``, walked from real row
+    /// heights, still names an offset at which that row is whole. Under
+    /// ``ScrollGranularity/row`` — whose every step comes through here — the wheel,
+    /// the scrollbar's arrows and its page-track were all dead at offset 0, and the
+    /// clipped row's tail unreachable by pointer.
+    ///
+    /// Asking the bound is also the SAME spelling as every other "can this move?"
+    /// test: ``userScrollFine(by:)``'s blocked case, `ItemListHandler.scrollFine(by:)`
+    /// and the wheel's edge hold all ask `maxOffset > 0`. It is not free, and the
+    /// tempting claim that it is would be wrong in the commonest case: for a list
+    /// whose content fits, the cheap floor is 0 and the offset is 0, so the row
+    /// walk runs on every tick that will end up chaining to the enclosing
+    /// scroller. It is not a NEW cost, which is the actual argument — the
+    /// line-granularity step already evaluates this bound unconditionally, so
+    /// under the default granularity a fitting list already walks — and the walk
+    /// is at most `contentHeight` `rowHeight` calls over rows the frame has
+    /// already materialised.
+    ///
     /// - Parameter delta: Lines to move by.
     public func scroll(by delta: Int) {
         guard delta != 0,
               viewportHeight > 0,
-              extent > viewportHeight
+              maxOffset > 0
         else { return }
         // Clamped against the bound *at the destination*, not at the departure
         // — a page-sized step reaches the tail in one go, and asking about
