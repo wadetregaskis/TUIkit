@@ -1174,10 +1174,45 @@ where Value.ID: Hashable {
         // a viewport's worth of rows — the visible window, plus the bottom suffix
         // that fixes the furthest scroll — so a tall table needn't wrap every
         // off-screen row (the optimisation a scrollbar's *absence* permits: nothing
-        // exposes the total extent). Memoised within this render since the window
-        // and the suffix overlap once scrolled near the end.
+        // exposes the total extent).
+        //
+        // TWO memos, not one, because the rows fall into two kinds and only one of
+        // them is worth remembering the CELLS of. A row that will be DRAWN is laid
+        // out once, cells and all, and `composeMultiLineRows` draws from that same
+        // answer — it used to call `cellLayout` again, so every visible cell's value
+        // String was built twice a frame and hashed into `TextWrapping`'s fit memo
+        // twice. A row that is only MEASURED — the bottom suffix `maxScrollOffset`
+        // walks, the rows `ScrollExtentEstimator` samples — keeps `rowHeight`'s
+        // height-only path, which is the whole reason that function exists: one
+        // shared memo carrying cells would retain a `[[String]]` per measured row
+        // too, and under ``ScrollExtentPrecision/exact`` (or for any table at or
+        // below its 256-row limit) the estimator measures every row — turning an
+        // O(1)-cells walk into an O(rows)-cells one.
+        //
+        // What the split gives up, since this is where the single memo's own note
+        // used to claim it: scrolled near the end the window and the suffix overlap,
+        // and an overlapping row is now measured height-only by the suffix walk AND
+        // laid out by the window walk — a height pass plus a layout per drawn row,
+        // which is exactly what it cost before, so nothing is lost there and nothing
+        // is saved either. The saving is the whole window at every offset where the
+        // two don't overlap. Routing the suffix through `layoutOf` as well would
+        // recover the end of the table and pay for it everywhere else, allocating
+        // cells for a screenful of rows nothing draws.
+        var layoutCache: [Int: (cells: [[String]], height: Int)] = [:]
         var heightCache: [Int: Int] = [:]
+        /// The wrapped cells and the height of a row that is about to be drawn.
+        func layoutOf(_ index: Int) -> (cells: [[String]], height: Int) {
+            if let cached = layoutCache[index] { return cached }
+            let layout = cellLayout(for: data[index], columnWidths: columnWidths)
+            layoutCache[index] = layout
+            return layout
+        }
+        /// The height of a row that may only be measured. The layout memo is asked
+        /// first because most callers ask about rows that are IN the window: by the
+        /// time the scrollbar's extent estimator and `onScreenRowHeights` run, every
+        /// window row is already laid out.
         func heightOf(_ index: Int) -> Int {
+            if let cached = layoutCache[index] { return cached.height }
             if let cached = heightCache[index] { return cached }
             let height = rowHeight(of: data[index], columnWidths: columnWidths)
             heightCache[index] = height
@@ -1283,7 +1318,11 @@ where Value.ID: Hashable {
             contentHeight: contentHeight, topClip: handler.scrollTopClipLines,
             drawsTextIndicators: handler.drawsScrollIndicators,
             alwaysDrawsIndicators: context.environment.alwaysShowsVerticalTextIndicators,
-            height: heightOf)
+            // `layoutOf`, not `heightOf`: every row this walk asks about is a row it
+            // then puts IN the window (the one straddling the budget included — see
+            // `ScrollRowWindow.fill`), so laying it out here with its cells is what
+            // `composeMultiLineRows` draws instead of laying it out a second time.
+            height: { layoutOf($0).height })
         // The window may have absorbed a top clip (or a whole first row) that
         // an indicator would otherwise have announced — the rows are drawn
         // from ITS position, so the mouse mapping must measure from it too.
@@ -1304,7 +1343,8 @@ where Value.ID: Hashable {
             : []
         let composed = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
-            columnWidths: columnWidths, innerWidth: innerWidth,
+            rows: MultiLineRowLayouts(columnWidths: columnWidths, layout: layoutOf),
+            innerWidth: innerWidth,
             contentHeight: contentHeight, bar: bar, context: context)
 
         // ONE answer, named once, for everything that has to agree with what
@@ -1537,7 +1577,7 @@ where Value.ID: Hashable {
         window: ScrollRowWindow,
         handler: ItemListHandler<Value.ID>,
         tableHasFocus: Bool,
-        columnWidths: [Int],
+        rows: MultiLineRowLayouts,
         innerWidth: Int,
         contentHeight: Int,
         bar: [String],
@@ -1549,7 +1589,7 @@ where Value.ID: Hashable {
         // to the *content* width (the columns), not the full interior, so a focused
         // row or a scroll indicator is never wider than the header and rows; that
         // width mismatch is what made the wrapping VStack centre the header.
-        let contentWidth = tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
+        let contentWidth = tableContentWidth(rows.columnWidths, within: innerWidth, gutter: gutter)
         let showsBar = !bar.isEmpty
         // Whether the "N more" lines are this table's indicator — false for a
         // bar AND for hidden indicators, which is why it is the handler's
@@ -1605,11 +1645,11 @@ where Value.ID: Hashable {
         let rowRamp = cellRamp(rowWidth: contentWidth, context: context)
         for rowIndex in window.range {
             let rendered = renderMultiLineRow(
-                item: data[rowIndex],
+                layout: rows.layout(rowIndex),
                 paint: RowPaint(row: rowIndex, ramp: rowRamp, width: contentWidth),
                 isFocused: handler.isFocused(at: rowIndex) && tableHasFocus,
                 isSelected: handler.isSelected(at: rowIndex),
-                columnWidths: columnWidths, context: context, palette: palette)
+                columnWidths: rows.columnWidths, context: context, palette: palette)
             var rowLines = rendered.lines
             // Clipped alongside the lines, so `pulseFrames[i]` stays the frames
             // of `rowLines[i]`.
@@ -1689,8 +1729,13 @@ where Value.ID: Hashable {
     /// Renders one (possibly multi-line) row: the selection indicator on the first
     /// line, each column's wrapped cell lines beneath it, shorter cells padded with
     /// blank lines, and the selection/focus background spanning every line.
+    ///
+    /// Takes the row's `layout` rather than the row: the caller's window walk had to
+    /// wrap the cells to learn the row's HEIGHT before it could decide the row was
+    /// visible at all, so wrapping them again here to draw them was the same work a
+    /// second time — see `buildMultiLineContent`'s layout memo.
     private func renderMultiLineRow(
-        item: Value,
+        layout: (cells: [[String]], height: Int),
         paint: RowPaint,
         isFocused: Bool,
         isSelected: Bool,
@@ -1709,7 +1754,6 @@ where Value.ID: Hashable {
         // paints cell by cell instead.
         let bandsAcrossRow = ramp?.variesAcrossRow ?? false
         let foreground = cellColour(row: row, ramp: ramp, context: context, palette: palette)
-        let layout = cellLayout(for: item, columnWidths: columnWidths)
 
         // One SGR introducer for every cell of every line — see ``renderRow``,
         // which this is the multi-line twin of. Here it matters more: the
@@ -3474,6 +3518,23 @@ where Value.ID: Hashable {
 
         /// The row's full width in cells — what the ramp was measured across.
         let width: Int
+    }
+
+    /// The laid-out cells of the rows a multi-line render is about to draw, and the
+    /// column widths they were laid into.
+    ///
+    /// One value rather than two parameters for the reason ``RowPaint`` is one: the
+    /// widths and the cells wrapped to them are a single fact — a row's cells and
+    /// the widths they were measured against must never come from different frames —
+    /// and `composeMultiLineRows` was already at the parameter count a signature
+    /// should carry.
+    struct MultiLineRowLayouts {
+        /// The resolved width of each column, in cells.
+        let columnWidths: [Int]
+
+        /// The wrapped cells and height of the row at an index, memoised for the
+        /// whole render — see `buildMultiLineContent`.
+        let layout: (Int) -> (cells: [[String]], height: Int)
     }
 
     /// The ramp the cells are painted with, or `nil` when the paint is a plain
