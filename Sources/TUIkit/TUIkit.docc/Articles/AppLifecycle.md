@@ -93,14 +93,18 @@ The rest set boolean flags and wake the loop; the actual rendering always happen
 
 ## Signal Handling
 
-`SignalManager` installs two POSIX signal handlers:
+`SignalManager` arms five libdispatch signal sources, and changes a sixth signal's disposition without watching it at all:
 
 | Signal | Trigger | Effect |
 |--------|---------|--------|
 | `SIGINT` | Ctrl+C | Sets a shutdown flag → main loop exits |
+| `SIGTERM` | `kill` | The same shutdown flag, so the terminal-restore teardown still runs |
 | `SIGWINCH` | Terminal resize | Sets a re-render flag → next iteration re-renders |
+| `SIGTSTP` | Ctrl+Z | Sets a suspend flag. The default stop action is suppressed on purpose: stopping the moment the signal lands would strand the user's shell in raw mode on the alternate screen, so the loop hands the terminal back and only then stops for real |
+| `SIGCONT` | `fg`, after an *external* `SIGSTOP` | Sets a repaint flag — nothing was torn down, but the screen may have been disturbed while the process slept. The suspend path's own `fg` is swallowed instead, so it does not repaint twice |
+| `SIGPIPE` | A clipboard helper or a pty reader that went away mid-write | No source at all: `SIG_IGN`, process-wide. Nothing wants to *observe* it, only to survive it, so the write returns `EPIPE` instead of killing the app mid-raw-mode |
 
-Signal handlers only set `nonisolated(unsafe)` boolean flags: no allocations, no locks. The main loop reads these flags each iteration and acts accordingly.
+These are not C signal handlers, and that is the point: libdispatch delivers each signal as an ordinary queued event on the main queue, so each handler is normal main-actor code that sets a plain stored property and wakes the loop. No async-signal-safe restriction, no self-pipe, and no `nonisolated(unsafe)` flags to read torn. The main loop drains the flags each iteration and acts accordingly.
 
 ## Programmatic Exit
 
