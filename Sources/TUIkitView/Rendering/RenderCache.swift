@@ -13,8 +13,10 @@ import TUIkitStyling
 /// Caches rendered ``FrameBuffer`` results for views that opt into subtree memoization.
 ///
 /// `RenderCache` is Phase 5 of TUIkit's render pipeline optimization. It stores
-/// the output of ``EquatableView`` instances keyed by their `ViewIdentity`,
-/// allowing unchanged subtrees to skip rendering entirely.
+/// the output of the two wrappers that memoize a subtree by the value of
+/// something — ``EquatableView`` by the whole view value, `_MemoizedRow` by a
+/// `ForEach` row's data element — keyed by their `ViewIdentity`, allowing
+/// unchanged subtrees to skip rendering entirely.
 ///
 /// ## How It Works
 ///
