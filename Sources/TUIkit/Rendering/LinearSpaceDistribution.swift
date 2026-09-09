@@ -123,6 +123,35 @@ func distributeLinearSpace(
     return result
 }
 
+/// The inter-child gaps a stack actually draws, given how many of its children
+/// occupy the layout axis.
+///
+/// `spacing` belongs BETWEEN two children that occupy the axis. A child that
+/// occupies none of it draws nothing, and `FrameBuffer.appendHorizontally` /
+/// `appendVertically` hand it no gap slot either — their doc comments state the
+/// rule: an `EmptyView`, an `Optional.none` branch, any zero-extent child is
+/// treated as though it were not in the children list at all. Charging one gap
+/// per CHILD instead is what made the eager stacks report a `spacing` per
+/// non-rendering child that the assembled buffer never contains:
+/// `HStack(spacing: 2) { Text("A"); EmptyView(); Text("B") }` measured 6 wide
+/// and drew `"A  B"` (4), and a `Spacer` beside that row was then sized from the
+/// inflated claim, so the trailing column stopped two cells short of flush.
+///
+/// This is the rule `distributeLinearSpace` above already applies in its
+/// overflow branch, where a gap is charged only per PLACED child. Stated once
+/// here so the extent a stack REPORTS and the extent it ASSEMBLES cannot drift.
+///
+/// `spacing` is deliberately not clamped at zero: a negative spacing legitimately
+/// subtracts, which is the case `_VStackCore`'s natural-size test guards.
+///
+/// - Parameters:
+///   - occupiedChildren: How many children occupy the layout axis.
+///   - spacing: The stack's inter-child spacing.
+/// - Returns: `max(0, occupiedChildren - 1) * spacing`.
+func totalLinearSpacing(occupiedChildren: Int, spacing: Int) -> Int {
+    max(0, occupiedChildren - 1) * spacing
+}
+
 /// Adds `amount` cells across `indices`, either evenly or proportionally to
 /// `weights`, handing out any rounding remainder one cell at a time.
 private func addLinearSpace(_ amount: Int, to indices: [Int], of result: inout [Int], weights: [Int]?) {

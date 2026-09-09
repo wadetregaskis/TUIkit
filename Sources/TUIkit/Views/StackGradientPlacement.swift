@@ -44,7 +44,11 @@ extension _VStackCore {
             let childWidth = index < sizes.count ? sizes[index].width : 0
             offsets.append(
                 (x: gradientX(childWidth: childWidth, extent: width, alignment: alignment), y: y))
-            y += heights[index] + spacing
+            // A row allocated no lines is appended through `appendVertically`'s
+            // contributes-nothing branch and earns no gap, so it must not
+            // advance the ramp by one either — otherwise every row after an
+            // `EmptyView` samples the ramp one step below where it draws.
+            y += heights[index] + (heights[index] > 0 ? spacing : 0)
         }
         return offsets
     }

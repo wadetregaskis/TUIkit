@@ -556,7 +556,21 @@ extension FrameBuffer {
         // HEIGHT below) and the wrong one here, where the question is whether
         // any columns are occupied. A styled-but-empty `Text` would otherwise
         // still earn a phantom indent.
-        let spacingApplied = priorWidth > 0 ? spacing : 0
+        // …and BETWEEN two of them: `other` declaring no columns earns no gap
+        // either, or a row's width would depend on whether any SGR bytes were
+        // emitted. That is not hypothetical: a `Text("")` allocated 0 columns
+        // renders one line of pure escape bytes (its foreground always resolves,
+        // so `ANSIRenderer.render` wraps even an empty string), and `clamped`
+        // returns it untouched because its width is ALREADY 0 — so `isEmpty` is
+        // false and it reached here as a contributor. `HStack(spacing: 2) {
+        // Text("A"); Text(""); Text("B") }` drew 6 cells in colour and 4 with
+        // `--no-color`, and no reported width can be right in both.
+        //
+        // Only the GAP is withheld. `other` still merges its rows: the
+        // `!other.isEmpty` half of the guard above exists for the footprint an
+        // `.offset`/`.position` child leaves behind, and that one declares
+        // columns (`other.width > 0`), so it is untouched here.
+        let spacingApplied = priorWidth > 0 && other.width > 0 ? spacing : 0
 
         // Pre-compute the new width
         let newWidth = myWidth + spacingApplied + other.width

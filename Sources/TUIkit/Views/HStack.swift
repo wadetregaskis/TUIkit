@@ -122,7 +122,6 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         _ children: [ChildView], availableWidth: Int, context: RenderContext
     ) -> ResolvedRowLayout {
         let count = children.count
-        let totalSpacing = max(0, count - 1) * spacing
 
         var ideal = [Int](repeating: 0, count: count)
         var idealHeight = [Int](repeating: 0, count: count)
@@ -212,7 +211,20 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 minimumExtent: height)
         }
 
-        let totalWidth = widths.reduce(0, +) + totalSpacing
+        // Gaps between the columns the row actually PLACES, not one per child.
+        // PASS 3 appends a zero-width child through
+        // `FrameBuffer.appendHorizontally`'s contributes-nothing branch, which
+        // charges no gap — so one gap per child made this report a `spacing` per
+        // `EmptyView` the row never draws: `HStack(spacing: 2) { Text("A");
+        // EmptyView(); Text("B") }` measured 6 and drew "A  B" (4). `widths` is
+        // the array PASS 3 assembles from, so this is the render's own count and
+        // not a second guess at it — a column allocated 0 cells is clipped to
+        // empty lines (`ansiAwarePrefixWithWidth` returns "" at visibleCount 0)
+        // and a 0-width spacer's `FrameBuffer(emptyWithWidth: 0, …)` is all "",
+        // so both take that same branch.
+        let totalWidth =
+            widths.reduce(0, +)
+            + totalLinearSpacing(occupiedChildren: widths.count { $0 > 0 }, spacing: spacing)
         return ResolvedRowLayout(
             widths: widths,
             totalWidth: min(totalWidth, max(0, availableWidth)),
@@ -410,16 +422,25 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // from the measured ones, which is what they are for.
         // The row's own content size, from the distribution above — the same
         // service `VStack` performs for an enclosing `.gradientExtent(.subtree)`.
+        // Read from `resolvedLayout` rather than recomputed: this WAS a second
+        // copy of the sum-and-clamp, spacing rule included, and `totalWidth` is
+        // the same expression over the same widths (`min(sum + gaps,
+        // availableWidth)`, and `resolvedLayout` was handed this very
+        // `context.availableWidth`).
         let gradientFrame = context.gradientContentFrame(
-            width: min(
-                context.availableWidth,
-                finalWidths.reduce(0, +) + spacing * max(0, finalWidths.count - 1)),
-            height: rowHeight)
+            width: layout.totalWidth, height: rowHeight)
         var gradientX = 0
         var buffers: [FrameBuffer?] = []
         buffers.reserveCapacity(children.count)
         for (index, child) in children.enumerated() {
-            if index > 0 { gradientX += spacing }
+            // The ramp advances by what the row DRAWS. A column of no cells is
+            // appended through `appendHorizontally`'s contributes-nothing branch
+            // and earns no gap, so it must not push the ramp along by one
+            // either. `gradientX > 0` rather than `index > 0` because that same
+            // branch withholds the gap while nothing has been placed yet (its
+            // `spacingApplied = priorWidth > 0 ? spacing : 0`), so a LEADING
+            // empty child must not indent the ramp.
+            if gradientX > 0, finalWidths[index] > 0 { gradientX += spacing }
             var childContext = context
             // A spacer renders nothing and takes no ramp position: its context
             // is never used, so nothing is measured or built for it.

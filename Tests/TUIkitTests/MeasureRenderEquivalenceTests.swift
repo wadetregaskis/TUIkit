@@ -122,6 +122,14 @@ struct MeasureRenderEquivalenceTests {
         check(VStack { Text("x").frame(maxWidth: .infinity) }, "VStack(flexChild)")
         check(HStack { Text("a"); Text("bb") }, "HStack(plain)")
         check(HStack { Text("a"); Spacer(); Text("z") }, "HStack(spacer)")
+        check(HStack(spacing: 2) { Text("A"); EmptyView(); Text("B") }, "HStack(emptyChild)")
+        check(VStack(spacing: 2) { Text("A"); EmptyView(); Text("B") }, "VStack(emptyChild)")
+        // A zero-width child that is not zero-LINE: `Text("")` renders one line
+        // of escape bytes, so it took `appendHorizontally`'s contributing branch
+        // and was charged a gap. Green before this commit only because the
+        // report over-counted by the same gap; it stays green only because the
+        // gap rule is now width-based on both sides.
+        check(HStack(spacing: 2) { Text("A"); Text(""); Text("B") }, "HStack(zeroWidthText)")
 
         // — Frames —
         check(Text("hi").frame(maxWidth: .infinity), "frame(maxWidth:.infinity)")

@@ -110,10 +110,20 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // the budget at all.
         var childrenAreNatural = true
         var tallestChild = 0
+        // How many children will occupy a row, which is what `spacing` is
+        // charged between — see `totalLinearSpacing(occupiedChildren:spacing:)`.
+        // A spacer counts whatever it measures, and that is the one carve-out in
+        // the codebase: this routine never distributes, so a spacer's measured
+        // height is its MINIMUM (`Spacer.sizeThatFits` reports `minLength ?? 0`)
+        // and not the rows the render will hand it. Reading a default spacer as
+        // "occupies nothing" would drop one `spacing` from the reported minimum
+        // of every column that has one.
+        var occupiedRows = 0
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
             if !size.isNaturalSize { childrenAreNatural = false }
             tallestChild = max(tallestChild, size.height)
+            if child.isSpacer || size.height > 0 { occupiedRows += 1 }
             guideSizes.append(
                 child.isSpacer ? (width: 0, height: 0) : (width: size.width, height: size.height))
             totalHeight += size.height
@@ -136,7 +146,12 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 hasFlexibleWidth = true
             }
         }
-        totalHeight += max(0, children.count - 1) * spacing
+        // One gap per occupied row, not per child: PASS 3 of `renderClip`
+        // appends a zero-height child through `FrameBuffer.appendVertically`'s
+        // contributes-nothing branch, which charges none — so the old count made
+        // `VStack(spacing: 2) { Text("A"); EmptyView(); Text("B") }` claim 6 rows
+        // for a column that draws 4.
+        totalHeight += totalLinearSpacing(occupiedChildren: occupiedRows, spacing: spacing)
 
         // Never advertise a size larger than the constraint we were given —
         // an over-report would make the parent reserve space that does not
@@ -338,9 +353,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // `.gradientExtent(.subtree)` needs and what it would otherwise have
         // paid a second measure pass to learn.
         let contentWidth = hasFlexible ? context.availableWidth : (childSizes.map(\.width).max() ?? 0)
+        // The gaps PASS 3 will actually insert: a child allocated no rows is
+        // appended through `appendVertically`'s contributes-nothing branch and
+        // gets none, so the ramp's rectangle must not reserve one for it either.
         let contentHeight = min(
             context.availableHeight,
-            finalHeights.reduce(0, +) + spacing * max(0, finalHeights.count - 1))
+            finalHeights.reduce(0, +)
+                + totalLinearSpacing(
+                    occupiedChildren: finalHeights.count { $0 > 0 }, spacing: spacing))
         let gradientFrame = context.gradientContentFrame(
             width: contentWidth, height: contentHeight)
         let gradientPlacement = gradientFrame.map { _ in
