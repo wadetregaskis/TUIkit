@@ -102,8 +102,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // Sized as the render sizes them, so a guide resolved here lands where
         // the render puts it: a spacer has no visual box, so it contributes
         // nothing (`renderClip` gives it no buffer either).
+        //
+        // Built only when a guide will ask for it. The test below already gates
+        // the READ on `anyAlignmentGuide(in: children)`; asking it up here as
+        // well means an ordinary column — which is nearly all of them — no
+        // longer allocates and fills a tuple array per pass that nothing reads.
+        let hasGuides = anyAlignmentGuide(in: children)
         var guideSizes: [(width: Int, height: Int)] = []
-        guideSizes.reserveCapacity(children.count)
+        if hasGuides { guideSizes.reserveCapacity(children.count) }
 
         // A column's size is its children's, so its claim to be natural is
         // theirs — plus the clamp below, which is the one place a column reads
@@ -124,8 +130,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             if !size.isNaturalSize { childrenAreNatural = false }
             tallestChild = max(tallestChild, size.height)
             if child.isSpacer || size.height > 0 { occupiedRows += 1 }
-            guideSizes.append(
-                child.isSpacer ? (width: 0, height: 0) : (width: size.width, height: size.height))
+            if hasGuides {
+                guideSizes.append(
+                    child.isSpacer
+                        ? (width: 0, height: 0) : (width: size.width, height: size.height))
+            }
             totalHeight += size.height
             maxWidth = max(maxWidth, size.width)
             if child.isSpacer || size.isHeightFlexible {
@@ -160,7 +169,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let heightLimit = proposal.height ?? context.availableHeight
         // A guide can make the column wider than its widest child; the report
         // has to say so or the parent reserves too little and clips it.
-        if anyAlignmentGuide(in: children),
+        if hasGuides,
             let run = horizontalGuideRun(
                 children, sizes: guideSizes, alignment: alignment,
                 fixedExtent: hasFlexibleWidth ? max(0, widthLimit) : nil,

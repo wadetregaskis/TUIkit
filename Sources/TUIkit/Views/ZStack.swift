@@ -176,14 +176,21 @@ extension _ZStackCore: Layoutable {
         var maxHeight = 0
         var hasFlexibleWidth = false
         var hasFlexibleHeight = false
+        // Built only when a guide will ask for it — the test below already gates
+        // the READ, so asking it here too spares an ordinary layered stack an
+        // allocation and a fill per pass that nothing reads.
+        let hasGuides = anyAlignmentGuide(in: children)
         var guideSizes: [(width: Int, height: Int)] = []
-        guideSizes.reserveCapacity(children.count)
+        if hasGuides { guideSizes.reserveCapacity(children.count) }
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
             // Spacers have no visual box in a ZStack — `renderToBuffer` filters
             // them — so they must not contribute a guide here either.
-            guideSizes.append(
-                child.isSpacer ? (width: 0, height: 0) : (width: size.width, height: size.height))
+            if hasGuides {
+                guideSizes.append(
+                    child.isSpacer
+                        ? (width: 0, height: 0) : (width: size.width, height: size.height))
+            }
             maxWidth = max(maxWidth, size.width)
             maxHeight = max(maxHeight, size.height)
             hasFlexibleWidth = hasFlexibleWidth || size.isWidthFlexible
@@ -191,7 +198,7 @@ extension _ZStackCore: Layoutable {
         }
         // A guide can push a layer off the alignment line and grow the frame
         // past the largest child; the render does this, so the measure must.
-        if anyAlignmentGuide(in: children) {
+        if hasGuides {
             let drawn = children.indices.filter { !children[$0].isSpacer }
             if let run = horizontalGuideRun(
                 drawn.map { children[$0] }, sizes: drawn.map { guideSizes[$0] },
