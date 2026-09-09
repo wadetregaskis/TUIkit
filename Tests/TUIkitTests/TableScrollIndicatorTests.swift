@@ -40,11 +40,12 @@ struct TableScrollIndicatorTests {
         singleLinePath: Bool = false,
         granularity: ScrollGranularity = .row,
         scrollbar: ScrollIndicatorVisibility = .hidden,
-        height: Int = Self.height
+        height: Int = Self.height,
+        count: Int = 20
     ) -> [String] {
         renderBuffer(
             tui: tui, fm: fm, twoLineRows: twoLineRows, singleLinePath: singleLinePath,
-            granularity: granularity, scrollbar: scrollbar, height: height
+            granularity: granularity, scrollbar: scrollbar, height: height, count: count
         ).lines.map { $0.stripped }
     }
 
@@ -54,9 +55,12 @@ struct TableScrollIndicatorTests {
         singleLinePath: Bool = false,
         granularity: ScrollGranularity = .row,
         scrollbar: ScrollIndicatorVisibility = .hidden,
-        height: Int = Self.height
+        height: Int = Self.height,
+        /// How many rows. The default is plenty; a `count` chosen so the
+        /// whole-row bottom IS offset 1 is what reaches the tail case.
+        count: Int = 20
     ) -> FrameBuffer {
-        let rows = (0..<20).map(Note.init(id:))
+        let rows = (0..<count).map(Note.init(id:))
         // A line limit above 1 takes the MULTI-line layout path even for
         // one-line values; `singleLinePath` leaves it off to reach the
         // uniform single-line path, which windows rows its own way.
@@ -309,27 +313,75 @@ struct TableScrollIndicatorTests {
     }
 
     /// The multi-line path shares `settleRestingOffset` with the single-line
-    /// path and _ListCore: a viewport at rest on offset 1 (row granularity,
-    /// no scrollbar) snaps to 0 — the "▲ 1 more row above" line shows the
-    /// row's first line instead of announcing it.
-    @Test("A multi-line table resting at offset 1 settles to 0")
-    func multiLineRestingOffsetSettles() {
+    /// path and `_ListCore`, and this used to assert that a two-line-row table
+    /// at offset 1 snapped to 0 — "the '▲ 1 more row above' line shows the
+    /// row's first line instead of announcing it".
+    ///
+    /// **That is not a swap when the row is two lines.** The indicator costs one
+    /// line and row 0 needs two, so going back to 0 pushes a line off the
+    /// bottom; the offset-1 window is a legitimate one-row scroll, not the pure
+    /// loss the rule exists to undo. Because the snap ran on every render pass,
+    /// what it actually pinned was a table that **could not be scrolled at all**:
+    /// traced with four successive `scroll(by: 1)` calls, every one of them asked
+    /// for offset 1 and was put back to 0, with `maxOffset` at 9. The wheel, the
+    /// scrollbar's arrows and its page-track were all dead at the top of any
+    /// multi-line table drawing "N more" indicators.
+    @Test("A multi-line table's one-row step is not undone")
+    func multiLineStepIsNotUndone() {
         let tui = TUIContext()
         let fm = FocusManager()
         _ = renderFrame(tui: tui, fm: fm, twoLineRows: true)
 
         let handler = fm.currentFocused as? ItemListHandler<Int>
         #expect(handler != nil)
-        handler?.scrollOffset = 1
+        #expect(handler?.maxOffset ?? 0 > 1, "the fixture has somewhere to scroll to")
+        handler?.scroll(by: 1)
 
         let lines = renderFrame(tui: tui, fm: fm, twoLineRows: true)
-        #expect(handler?.scrollOffset == 0, "the shared resting rule snaps off offset 1")
+        #expect(handler?.scrollOffset == 1, "the step stands, got \(handler?.scrollOffset ?? -1)")
+        // Two lines hidden, one line spent: the indicator is EARNED here, which
+        // is the whole reason the offset may rest.
         #expect(
-            lines.contains { $0.contains("row 0") },
-            "row 0 shows in place of the indicator: \(lines)")
+            lines.contains { $0.contains("1 more row above") },
+            "two hidden lines earn the indicator: \(lines)")
         #expect(
-            !lines.contains { $0.contains("1 more row above") },
-            "no indicator for the settled offset: \(lines)")
+            !lines.contains { $0.contains("row 0") },
+            "row 0 is scrolled away, not redrawn: \(lines)")
+
+        // And the next step moves again — one undone step looks like a stiff
+        // wheel, a permanently undone one is a dead wheel, and only a second
+        // step tells them apart.
+        handler?.scroll(by: 1)
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true)
+        #expect(handler?.scrollOffset == 2, "and again, got \(handler?.scrollOffset ?? -1)")
+    }
+
+    /// The other half of `663d98cc`, whose message says it was left open: with
+    /// six two-line rows the whole-row bottom is offset 1, so the snap made the
+    /// last row's second line unreachable at any offset. At 0 the window already
+    /// covers every row — row 5 is clipped to its first line and there is no
+    /// "▼ N more below" to announce anything — so offset 1 is not scrolling
+    /// PAST anything, it is the one position that draws row 5 whole.
+    @Test("A short multi-line table can reach its last row whole")
+    func multiLineTailIsReachable() {
+        let tui = TUIContext()
+        let fm = FocusManager()
+        _ = renderFrame(tui: tui, fm: fm, twoLineRows: true, height: 14, count: 6)
+
+        let handler = fm.currentFocused as? ItemListHandler<Int>
+        #expect(handler?.maxOffset == 1, "the whole-row bottom is the snap's own value")
+
+        let atTop = renderFrame(tui: tui, fm: fm, twoLineRows: true, height: 14, count: 6)
+        #expect(
+            atTop.contains { $0.contains("row 5") } && !atTop.contains { $0.contains("detail 5") },
+            "at the top the last row is clipped to one line: \(atTop)")
+
+        handler?.scroll(by: 1)
+        let atTail = renderFrame(tui: tui, fm: fm, twoLineRows: true, height: 14, count: 6)
+        #expect(handler?.scrollOffset == 1, "the tail offset stands, got \(handler?.scrollOffset ?? -1)")
+        #expect(
+            atTail.contains { $0.contains("detail 5") },
+            "…and draws the last row whole: \(atTail)")
     }
 
     /// …but never off a legitimate line-granularity rest: a fine wheel tick

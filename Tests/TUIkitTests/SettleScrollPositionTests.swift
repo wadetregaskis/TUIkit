@@ -119,4 +119,45 @@ struct SettleScrollPositionTests {
             handler.scrollOffset == handler.maxOffset,
             "glued to the tail, got \(handler.scrollOffset) of \(handler.maxOffset)")
     }
+
+    /// The granularity gate that used to be inside the snap, and the bug it made.
+    ///
+    /// A step onto offset 1 over two-line rows hides two lines and spends one on
+    /// the indicator, so it is a gain rather than the pure loss the rule undoes.
+    /// The escape that said so was `.line`-only, so under
+    /// `.scrollGranularity(.row)` the snap ran unconditionally and put every step
+    /// back on the same render pass — and where `maxOffset` is 1 that is the whole
+    /// scrollable range, so the last row could not be reached at all. This is the
+    /// half `663d98cc` left open, in its own words.
+    @Test("Offset 1 stands at either granularity when the first row is two lines")
+    func multiLineFirstRowRestsAtOne() {
+        for granularity in [ScrollGranularity.line, .row] {
+            let handler = strandedHandler(itemCount: 10, viewportHeight: 9, offset: 1)
+            handler.scrollGranularity = granularity
+            handler.settleScrollPosition(
+                measuring: false, overflowing: true, drawsTextIndicators: true,
+                firstRowHeight: 2)
+            #expect(
+                handler.scrollOffset == 1,
+                "\(granularity): two lines hidden, one spent, got \(handler.scrollOffset)")
+        }
+    }
+
+    /// …and the snap did not merely go away. Where row 0 IS one line, offset 1
+    /// hides exactly the line the indicator occupies — the pure loss the rule
+    /// exists for — at BOTH granularities, since the question was never about
+    /// granularity. Without this the fix above passes with the snap deleted.
+    @Test("A single-line first row is still snapped off, at either granularity")
+    func singleLineFirstRowStillSnaps() {
+        for granularity in [ScrollGranularity.line, .row] {
+            let handler = strandedHandler(itemCount: 10, viewportHeight: 9, offset: 1)
+            handler.scrollGranularity = granularity
+            handler.settleScrollPosition(
+                measuring: false, overflowing: true, drawsTextIndicators: true,
+                firstRowHeight: 1)
+            #expect(
+                handler.scrollOffset == 0,
+                "\(granularity): one line hidden, one spent, got \(handler.scrollOffset)")
+        }
+    }
 }

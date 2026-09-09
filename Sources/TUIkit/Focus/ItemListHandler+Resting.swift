@@ -9,9 +9,13 @@
 extension ItemListHandler {
 
     /// Snaps the viewport off a resting offset of 1, where an "▲ 1 more row
-    /// above" indicator would hide a single row using the very line that could
-    /// show it. At offset 0 the row shows and the indicator is gone, and the
+    /// above" indicator would hide a single LINE using the very line that could
+    /// show it. At offset 0 that line shows and the indicator is gone, and the
     /// freed line keeps the bottom row visible — strictly more content.
+    ///
+    /// One line, not one row: the two coincide only where row 0 is a single line
+    /// and nothing is clipped off it, and everywhere else offset 1 hides more
+    /// than it costs and is a legitimate place to rest.
     ///
     /// Called once per RENDER pass by both `List` and `Table` after the
     /// ordinary clamp. It lives here, on the handler, because it is a rule
@@ -27,10 +31,15 @@ extension ItemListHandler {
     ///   spends a column and hidden indicators spend nothing, so in neither
     ///   case is there an indicator line to save — and with a bar the snap
     ///   would undo a single up/down-arrow click on it (0↔1).
-    /// - **A line-granular step landed mid-row.** A wheel tick over multi-line
-    ///   rows legitimately rests at row 1 (one three-line tick over three-line
-    ///   rows), and snapping it back makes the list unscrollable whenever the
-    ///   ticks happen to land row-aligned.
+    /// - **Offset 1 hides more than the one line the indicator costs.** A wheel
+    ///   tick over multi-line rows legitimately rests at row 1 (one three-line
+    ///   tick over three-line rows), and so does a `.row` step over them: the
+    ///   indicator announces two hidden lines and spends one, which is a gain
+    ///   rather than the pure loss this rule exists to undo. Snapping those back
+    ///   makes the list unscrollable whenever a step lands row-aligned. The test
+    ///   is ``ScrollWindowOrigin/absorbing(offset:topClip:firstRowHeight:)``'s,
+    ///   asked rather than restated — the drawing's answer and this one have to
+    ///   be the same answer.
     /// - **A drag is auto-scrolling this viewport.** A viewport being driven a
     ///   row per tick is not resting anywhere; snapping it back turns the first
     ///   tick into a permanent 0↔1 stall, so the drag can never leave the top.
@@ -68,9 +77,22 @@ extension ItemListHandler {
         guard overflowing, drawsTextIndicators, scrollOffset == 1,
             !isAutoScrolling, !isReordering, externalDropSlot == nil
         else { return }
-        let restingMidRow =
-            scrollGranularity == .line && (scrollTopClipLines > 0 || firstRowHeight() > 1)
-        guard !restingMidRow else { return }
+        // Ask the rule that DRAWS, rather than restate it. Not a tidy-up: this
+        // was `scrollGranularity == .line && (scrollTopClipLines > 0 ||
+        // firstRowHeight() > 1)`, whose parenthesised half is already exactly
+        // `absorbing`'s "more than one line is hidden here" — behind a
+        // granularity gate that has nothing to do with the question. Under
+        // `.scrollGranularity(.row)` the gate made the snap unconditional, so a
+        // list of multi-line rows could not rest at offset 1 and its last row
+        // was unreachable: six 2-line rows in an 11-line content area draw a…e
+        // and one line of f at offset 0, `maxOffset` is 1, and every step onto
+        // it was put back on the same render pass.
+        guard
+            ScrollWindowOrigin.absorbing(
+                offset: scrollOffset, topClip: scrollTopClipLines,
+                firstRowHeight: firstRowHeight()
+            ).offset == 0
+        else { return }
         scrollOffset = 0
     }
 
