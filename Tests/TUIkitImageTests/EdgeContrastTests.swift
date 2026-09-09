@@ -134,3 +134,126 @@ struct EdgeContrastTests {
         }
     }
 }
+
+/// The sharpener against a transcription of the traversal it replaced.
+///
+/// `sharpened`'s vertical pass walked a COLUMN at a time, because the running
+/// sum it slides is a column's; it now walks rows, with one running-sum triple
+/// per column in a scratch. The claim is that this is bit-exact — every column
+/// still accumulates the same additions and subtractions in the same order,
+/// only interleaved with the other columns' — and bit-exactness is not
+/// something to assert about a floating-point sum whose `.rounded()` turns a
+/// last-bit difference into a different pixel value. So it is checked against
+/// the arithmetic it replaced, exactly as `ResamplingEquivalenceTests` checks
+/// the resampler, and on the shapes where the edge clamps decide the answer.
+@Suite("Sharpening is bit-exact")
+struct SharpeningEquivalenceTests {
+
+    /// The previous implementation, transcribed: the horizontal blur into one
+    /// full-size array, then a column at a time down it, with a tuple running
+    /// sum, plain array subscripts and `Double(value)` in the lift.
+    private func reference(_ image: RGBAImage, amount: Double, radiusX: Int, radiusY: Int)
+        -> [RGBA]
+    {
+        guard amount > 0, image.width > 0, image.height > 0 else { return image.pixels }
+        let width = image.width
+        let height = image.height
+        let spanX = max(1, radiusX)
+        let spanY = max(1, radiusY)
+        func lifted(_ value: UInt8, blurred: Double) -> UInt8 {
+            let original = Double(value)
+            return UInt8(clamping: Int((original + amount * (original - blurred)).rounded()))
+        }
+        var rowBlur = [Double](repeating: 0, count: image.pixels.count * 3)
+        for y in 0..<height {
+            let row = y * width
+            var running = (r: 0.0, g: 0.0, b: 0.0)
+            func take(_ index: Int, _ sign: Double) {
+                let p = image.pixels[index]
+                running.r += sign * Double(p.r)
+                running.g += sign * Double(p.g)
+                running.b += sign * Double(p.b)
+            }
+            for x in 0...min(width - 1, spanX) { take(row + x, 1) }
+            for x in 0..<width {
+                let count = Double(min(width - 1, x + spanX) - max(0, x - spanX) + 1)
+                let slot = (row + x) * 3
+                rowBlur[slot] = running.r / count
+                rowBlur[slot + 1] = running.g / count
+                rowBlur[slot + 2] = running.b / count
+                if x - spanX >= 0 { take(row + x - spanX, -1) }
+                if x + spanX + 1 < width { take(row + x + spanX + 1, 1) }
+            }
+        }
+        var result = image.pixels
+        for x in 0..<width {
+            var running = (r: 0.0, g: 0.0, b: 0.0)
+            for y in 0...min(height - 1, spanY) {
+                let slot = (y * width + x) * 3
+                running.r += rowBlur[slot]
+                running.g += rowBlur[slot + 1]
+                running.b += rowBlur[slot + 2]
+            }
+            for y in 0..<height {
+                let count = Double(min(height - 1, y + spanY) - max(0, y - spanY) + 1)
+                let index = y * width + x
+                let here = image.pixels[index]
+                result[index] = RGBA(
+                    r: lifted(here.r, blurred: running.r / count),
+                    g: lifted(here.g, blurred: running.g / count),
+                    b: lifted(here.b, blurred: running.b / count),
+                    a: here.a)
+                if y - spanY >= 0 {
+                    let slot = ((y - spanY) * width + x) * 3
+                    running.r -= rowBlur[slot]
+                    running.g -= rowBlur[slot + 1]
+                    running.b -= rowBlur[slot + 2]
+                }
+                if y + spanY + 1 < height {
+                    let slot = ((y + spanY + 1) * width + x) * 3
+                    running.r += rowBlur[slot]
+                    running.g += rowBlur[slot + 1]
+                    running.b += rowBlur[slot + 2]
+                }
+            }
+        }
+        return result
+    }
+
+    private func noise(_ width: Int, _ height: Int, seed: UInt64) -> RGBAImage {
+        var state = seed | 1
+        var pixels: [RGBA] = []
+        pixels.reserveCapacity(width * height)
+        for _ in 0..<(width * height) {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            pixels.append(
+                RGBA(
+                    r: UInt8(truncatingIfNeeded: state >> 16),
+                    g: UInt8(truncatingIfNeeded: state >> 24),
+                    b: UInt8(truncatingIfNeeded: state >> 32),
+                    a: UInt8(truncatingIfNeeded: state >> 40)))
+        }
+        return RGBAImage(width: width, height: height, pixels: pixels)
+    }
+
+    /// The radii the two callers really pass — 1×1 from `recoloured`, 5×10 from
+    /// the shape matcher — and, deliberately, pictures SMALLER than the window
+    /// they are asked for. `min(height - 1, spanY)` in the prime loop is the
+    /// only thing keeping those in bounds, and a shape-matched render one cell
+    /// tall reaches it: ten pixel rows against a radius of ten.
+    @Test("Every pixel matches the traversal it replaced")
+    func matchesTheReference() {
+        let cases: [(Int, Int, Double, Int, Int)] = [
+            (7, 5, 0.6, 1, 1), (13, 11, 1.5, 2, 3), (1, 9, 0.6, 1, 1),
+            (9, 1, 0.6, 1, 1), (5, 3, 0.6, 5, 10), (16, 16, 2.0, 1, 4),
+            (31, 29, 0.6, 3, 1), (1, 1, 1.0, 1, 1), (23, 17, 0.9, 10, 10),
+        ]
+        for (index, shape) in cases.enumerated() {
+            let (width, height, amount, radiusX, radiusY) = shape
+            let source = noise(width, height, seed: UInt64(index) &* 7919 &+ 3)
+            let fast = source.sharpened(amount: amount, radiusX: radiusX, radiusY: radiusY)
+            let slow = reference(source, amount: amount, radiusX: radiusX, radiusY: radiusY)
+            #expect(fast.pixels == slow, "\(shape) diverged")
+        }
+    }
+}

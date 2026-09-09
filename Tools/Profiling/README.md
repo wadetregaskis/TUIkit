@@ -455,6 +455,23 @@ Modes (`--mode`): `truecolor`, `ansi256`, `ansi16`, `grayscale`, `mono`,
 all distinct — because a picture of flat bands is answered by any memo and
 would measure the memo instead of the quantiser.
 
+`--edge-contrast <amount>` switches on the unsharp mask
+(`ASCIIConverter.edgeContrast`), and it is the only way to measure that stage
+at all. It is off everywhere by default — the environment value defaults to 0
+and the Example page's toggle starts off — so without the flag
+`RGBAImage.sharpened` never runs; and `Stress` has no image scenario, so
+`ab_bench.py` and `emit_bench.py` never reach the image pipeline in the first
+place. Measure it on `--path pixel`, where the mask runs at radii 1×1 over the
+whole pixel grid (816,000 px at 120×50); on `--path glyph` it runs over the
+box-reduced sub-cell grid instead — 120×100 for the default charset, sixty-odd
+times smaller — so a glyph-path number says almost nothing about it.
+
+One trap in reading the checksum: switching the flag on CHANGES it, because the
+mask moves the middle pixel it samples. So a checksum that is equal with and
+without `--edge-contrast` is proof the mask never ran, and a checksum that
+differs between those two runs is the cheapest positive confirmation that it
+did. Only compare checksums between two BUILDS at the same flag setting.
+
 Each run prints a checksum derived from the output, both to defeat dead-code
 elimination and so two builds that should agree can be seen to.
 

@@ -448,36 +448,75 @@ extension RGBAImage {
         // which on a megapixel image is two million of them, and which a debug
         // build does not optimise away. This is the difference between an
         // unsharp mask being a knob and being a pause.
-        for x in 0..<width {
-            var running = (r: 0.0, g: 0.0, b: 0.0)
-            for y in 0...min(height - 1, spanY) {
-                let slot = (y * width + x) * 3
-                running.r += rowBlur[slot]
-                running.g += rowBlur[slot + 1]
-                running.b += rowBlur[slot + 2]
-            }
-            for y in 0..<height {
-                let low = max(0, y - spanY)
-                let high = min(height - 1, y + spanY)
-                let count = Double(high - low + 1)
-                let index = y * width + x
-                let here = pixels[index]
-                result[index] = RGBA(
-                    r: Self.lifted(here.r, blurred: running.r / count, amount: amount),
-                    g: Self.lifted(here.g, blurred: running.g / count, amount: amount),
-                    b: Self.lifted(here.b, blurred: running.b / count, amount: amount),
-                    a: here.a)
-                if y - spanY >= 0 {
-                    let slot = ((y - spanY) * width + x) * 3
-                    running.r -= rowBlur[slot]
-                    running.g -= rowBlur[slot + 1]
-                    running.b -= rowBlur[slot + 2]
-                }
-                if y + spanY + 1 < height {
-                    let slot = ((y + spanY + 1) * width + x) * 3
-                    running.r += rowBlur[slot]
-                    running.g += rowBlur[slot + 1]
-                    running.b += rowBlur[slot + 2]
+        //
+        // ROW-major, and not because rows read better: the running sum is a
+        // COLUMN's, so the obvious nest walks one column at a time, and every
+        // step of it jumps `width` pixels through three arrays that together
+        // are 26 MB for the graphics path's grid — a cache line fetched for one
+        // triple of the two-and-two-thirds it carries, and evicted long before
+        // the next column asks for the rest. Keeping one running-sum triple per
+        // COLUMN, in a scratch as wide as the image (23 KB at 960 pixels, which
+        // stays resident), lets the walk go along the rows instead, so
+        // `rowBlur`, `pixels` and `result` are all read and written in address
+        // order.
+        //
+        // Still bit-exact, and that is why it is written this way rather than
+        // as a prefix-sum difference: each column is primed over rows
+        // `0...min(height - 1, spanY)` and then slid down one row at a time, in
+        // that order, so every column accumulates exactly the additions and
+        // subtractions it did before, in exactly the same sequence.
+        // Interleaving independent columns changes no column's arithmetic — a
+        // reassociated sum would, and `.rounded()` turns a last-bit difference
+        // into a different pixel. `SharpeningEquivalenceTests` checks it.
+        var running = [Double](repeating: 0, count: width * 3)
+        pixels.withUnsafeBufferPointer { source in
+            rowBlur.withUnsafeBufferPointer { blur in
+                running.withUnsafeMutableBufferPointer { sums in
+                    result.withUnsafeMutableBufferPointer { out in
+                        for y in 0...min(height - 1, spanY) {
+                            let row = y * width
+                            for x in 0..<width {
+                                let slot = (row + x) * 3
+                                let into = x * 3
+                                sums[into] += blur[slot]
+                                sums[into + 1] += blur[slot + 1]
+                                sums[into + 2] += blur[slot + 2]
+                            }
+                        }
+                        for y in 0..<height {
+                            let low = max(0, y - spanY)
+                            let high = min(height - 1, y + spanY)
+                            let count = Double(high - low + 1)
+                            let row = y * width
+                            // −1 for "no row to drop" / "no row to add": the
+                            // condition is the same for every pixel of the row,
+                            // so it is asked once per row rather than per pixel.
+                            let dropped = y - spanY >= 0 ? (y - spanY) * width : -1
+                            let added = y + spanY + 1 < height ? (y + spanY + 1) * width : -1
+                            for x in 0..<width {
+                                let into = x * 3
+                                let index = row + x
+                                let here = source[index]
+                                out[index] = RGBA(
+                                    r: Self.lifted(here.r, blurred: sums[into] / count, amount: amount),
+                                    g: Self.lifted(here.g, blurred: sums[into + 1] / count, amount: amount),
+                                    b: Self.lifted(here.b, blurred: sums[into + 2] / count, amount: amount),
+                                    a: here.a)
+                                if dropped >= 0 {
+                                    let gone = (dropped + x) * 3
+                                    sums[into] -= blur[gone]
+                                    sums[into + 1] -= blur[gone + 1]
+                                    sums[into + 2] -= blur[gone + 2]
+                                }
+                                if added >= 0 {
+                                    let fresh = (added + x) * 3
+                                    sums[into] += blur[fresh]
+                                    sums[into + 1] += blur[fresh + 1]
+                                    sums[into + 2] += blur[fresh + 2]
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -487,7 +526,14 @@ extension RGBAImage {
     /// One channel pushed away from its neighbourhood's average by `amount`
     /// times the difference — the unsharp mask, per channel.
     private static func lifted(_ value: UInt8, blurred: Double, amount: Double) -> UInt8 {
-        let original = Double(value)
+        // `Double(Int(value))`, not `Double(value)`, and not a typo: Swift has
+        // no `Double.init(UInt8)`, so the short spelling binds the generic
+        // `init<T: BinaryInteger>` and — unspecialised, in a debug build —
+        // calls it through a protocol witness. Going via `Int` picks a concrete
+        // initializer; the value is identical, every byte being exactly
+        // representable as an Int and as a Double. Three of these run per PIXEL
+        // of the sharpened picture.
+        let original = Double(Int(value))
         return UInt8(clamping: Int((original + amount * (original - blurred)).rounded()))
     }
 
@@ -508,9 +554,13 @@ extension RGBAImage {
             var running = (r: 0.0, g: 0.0, b: 0.0)
             func take(_ index: Int, _ sign: Double) {
                 let p = pixels[index]
-                running.r += sign * Double(p.r)
-                running.g += sign * Double(p.g)
-                running.b += sign * Double(p.b)
+                // `Double(Int(byte))`, not `Double(byte)`, and not a typo — the
+                // reason is at `lifted(_:blurred:amount:)`. Three per pixel
+                // here too, and the window calls it twice over: once for the
+                // column it takes in, once for the one it lets go.
+                running.r += sign * Double(Int(p.r))
+                running.g += sign * Double(Int(p.g))
+                running.b += sign * Double(Int(p.b))
             }
             // Prime the window on the first column, then slide it across.
             for x in 0...min(width - 1, span) { take(row + x, 1) }

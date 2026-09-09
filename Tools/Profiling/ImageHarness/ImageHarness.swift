@@ -44,6 +44,7 @@ struct ImageHarness {
         var iterations = 20
         var sourceScale = 3
         var depth = "truecolor"
+        var edgeContrast = 0.0
 
         var args = CommandLine.arguments.dropFirst().makeIterator()
         while let arg = args.next() {
@@ -56,6 +57,7 @@ struct ImageHarness {
             case "--iterations": iterations = args.next().flatMap(Int.init) ?? iterations
             case "--source-scale": sourceScale = args.next().flatMap(Int.init) ?? sourceScale
             case "--depth": depth = args.next() ?? depth
+            case "--edge-contrast": edgeContrast = args.next().flatMap { Double($0) } ?? edgeContrast
             case "--help", "-h":
                 print(usage)
                 return
@@ -96,7 +98,8 @@ struct ImageHarness {
         let (width, height) = path == "pixel" ? (cols * 8, rows * 17) : (cols, rows)
         let units = width * height
         let source = photograph(width: width * sourceScale / 2, height: height * sourceScale / 2)
-        let converter = ASCIIConverter(colorMode: colorMode, dithering: dithering)
+        let converter = ASCIIConverter(
+            colorMode: colorMode, dithering: dithering, edgeContrast: edgeContrast)
 
         // One untimed pass: it pays for every lazily-built table and warms the
         // allocator, neither of which is what a steady-state figure is about.
@@ -113,8 +116,9 @@ struct ImageHarness {
         let perIteration = seconds / Double(iterations)
         let perUnit = perIteration / Double(units) * 1e9
         print("""
-            path=\(path) mode=\(mode) dither=\(dither) out=\(width)x\(height) \
-            src=\(source.width)x\(source.height) iterations=\(iterations)
+            path=\(path) mode=\(mode) dither=\(dither) edge=\(edgeContrast) \
+            out=\(width)x\(height) src=\(source.width)x\(source.height) \
+            iterations=\(iterations)
             \(String(format: "%.3f ms/iteration   %.2f ns/%@   checksum=%d",
                      perIteration * 1000, perUnit, path == "pixel" ? "pixel" : "cell", checksum))
             """)
@@ -306,5 +310,6 @@ struct ImageHarness {
         Usage: ImageHarness [--path glyph|pixel|colour|palette] [--mode truecolor|ansi256|ansi16|grayscale|mono|shades8]
                             [--dither none|floyd] [--cols C] [--rows R] [--iterations N]
                             [--source-scale S] [--depth truecolor|ansi256|ansi16|mono]
+                            [--edge-contrast AMOUNT]
         """
 }
