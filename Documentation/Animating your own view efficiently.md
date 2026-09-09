@@ -71,15 +71,17 @@ practice**, for three reasons.
 
 ## 3. The three gaps
 
-### 3.1 A composed view has nowhere to put a run
+### 3.1 A composed view has nowhere to put a run — **modifier published; still blocked by 3.2**
 
 The example above works because it is a `Renderable` — it owns a buffer. A view
 whose body is other views does not, and that is the ordinary way to write one.
 The framework hit this itself with the colour swatch and added
 `View.animatedCells(_:)`, which attaches runs to whatever the body rendered to.
-That modifier is **internal**.
+That modifier was **internal** when this was written; §5.1 published it on
+2026-08-19 (`9d5f3e67`).
 
-Making it public is a one-line change. It is not sufficient, because of 3.2.
+Publishing it was the one-line change it looked like. It is still not
+sufficient, because of 3.2.
 
 ### 3.2 The view that knows the cycle does not know where its cells are
 
@@ -105,7 +107,7 @@ endpoints) travels in the environment, and `ContainerViewCore` — which knows
 exactly which cell the ● landed in — emits the run. That works, and it is
 per-feature plumbing, not a general mechanism.
 
-### 3.3 A hand-written `Renderable` cannot style a string
+### 3.3 A hand-written `Renderable` cannot style a string — **answered for strings; borders still internal**
 
 `ANSIRenderer` and `BorderRenderer` are internal. An app writing its own
 `Renderable` can render child views (`TUIkitView.renderToBuffer(_:context:)` is
@@ -114,6 +116,13 @@ same name shadows it) but cannot ask the framework for "this glyph, in this
 colour" or "a top border of this width" without hand-writing escape sequences —
 and getting the self-contained-cell discipline right, which is exactly the trap
 that produced the replay-accumulation bug (see `AnimatedCellRun`'s notes).
+
+§5.1 answered the first half of that on 2026-08-19 (`9d5f3e67`):
+`String.styled(foreground:background:bold:underline:)` is a narrow public face on
+`ANSIRenderer.colorize`, and its own note explains why self-contained cells are
+the point rather than a detail. The border half is untouched — `BorderRenderer`
+is still internal, and "a top border of this width" is still escape sequences
+written by hand.
 
 ## 4. How SwiftUI does it
 
