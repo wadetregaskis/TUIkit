@@ -72,11 +72,38 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 cellAspect: context.environment.imageCellAspect)
         else {
             let resolved = paint.representative.resolve(with: context.environment.palette)
-            return buffer.replacingLines(
-                buffer.lines.map { filled($0.padToVisibleWidth(width), with: resolved) })
+            // Fully transparent: paint nothing, which is what `.background` with
+            // no background means. Returned whole rather than filled with an
+            // invisible colour, and no region either — there is no claim to make
+            // about cells this modifier did not touch.
+            if resolved.alpha == 0 { return buffer }
+            var filledBuffer = buffer.replacingLines(
+                buffer.lines.map {
+                    filled($0.padToVisibleWidth(width), with: resolved.opaqueSpelling)
+                })
+            if !resolved.isOpaque {
+                // The rectangle is exactly what was painted: every row was padded
+                // to `width` just above, so the claim and the paint agree by
+                // construction. A FIELD claim only — the content's own ink is
+                // already in these lines and a background says nothing about it,
+                // which is what lets `Text("x").background(.red.opacity(0.5))`
+                // fade the field and leave the letter alone.
+                filledBuffer.opacityRegions.append(
+                    OpacityRegion(
+                        offsetX: 0, offsetY: 0, width: width, height: buffer.lines.count,
+                        opacity: 1, fieldOpacity: Double(resolved.alpha) / 255))
+            }
+            return filledBuffer
         }
 
         let palette = context.environment.palette
+        // A translucent RAMP is not honoured, and this is where it would go. A
+        // region carries one alpha for a rectangle while a ramp states a colour
+        // per cell, so a per-stop alpha needs either one region per run or a
+        // per-column payload — the one case in this design where a rectangle is
+        // genuinely the wrong shape. `Color+ANSICodes.swift`'s assertion fires on
+        // a translucent stop in every debug build, so the gap is loud rather than
+        // silent, and it renders at full strength meanwhile.
         // One background escape per ramp ENTRY, built on demand and reused by
         // every later run that lands on the same entry. This is
         // `PaintRenderer.band`'s `sequences` table on the background side, and

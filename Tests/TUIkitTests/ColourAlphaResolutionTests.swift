@@ -291,3 +291,119 @@ struct TranslucentColourViewTests {
         #expect(buffer.lines[0].contains(codes(.blue)))
     }
 }
+
+// MARK: - The two places a colour is written
+
+/// `.background(_:)` and `Text`'s own foreground — the other two sites that know
+/// the rectangle they painted, and so can send an alpha up as a region.
+@MainActor
+@Suite("A translucent background and a translucent ink")
+struct TranslucentPaintTests {
+
+    private func screen<V: View>(_ view: V, width: Int = 14, height: Int = 3) -> [String] {
+        let context = RenderContext(
+            availableWidth: width, availableHeight: height, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        return renderToBuffer(view, context: context).lines
+    }
+
+    private func faded(_ base: Color, _ alpha: UInt8) -> (colour: Color, exact: Double) {
+        var colour = base
+        colour.alpha = alpha
+        return (colour, Double(alpha) / 255)
+    }
+
+    private func bgCodes(_ color: Color) -> String {
+        color.backgroundCodes().joined(separator: ";")
+    }
+
+    private func fgCodes(_ color: Color) -> String {
+        color.foregroundCodes().joined(separator: ";")
+    }
+
+    /// A translucent BACKGROUND fades the field and leaves the letters alone —
+    /// which is exactly what the two channels are for.
+    @Test("A translucent background fades the field and not the text")
+    func translucentBackground() {
+        let veil = faded(.blue, 128)
+        // One row, so the ZStack cannot centre the text onto a line the pane
+        // occupies alone — the first version of this test read row 0 and found
+        // only the red fill.
+        let lines = screen(
+            ZStack {
+                Color.red
+                Text("hi").background(veil.colour)
+            }, height: 1)
+        #expect(lines[0].stripped.contains("hi"), "the letters survive: \(lines[0].stripped)")
+        #expect(
+            lines[0].contains(bgCodes(Color.blue.opacity(veil.exact, over: .red))),
+            "the field is half blue over red: \(lines[0].debugDescription)")
+    }
+
+    /// `.background(<transparent>)` paints nothing, and stamps nothing — there is
+    /// no claim to make about cells the modifier did not touch.
+    @Test("A fully transparent background is a no-op")
+    func transparentBackgroundIsANoOp() {
+        let context = RenderContext(
+            availableWidth: 8, availableHeight: 1, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        let plain = renderToBuffer(Text("hi"), context: context)
+        let backed = renderToBuffer(
+            Text("hi").background(faded(.blue, 0).colour), context: context)
+        #expect(backed.opacityRegions.isEmpty, "nothing claimed")
+        #expect(
+            backed.lines[0].stripped == plain.lines[0].stripped,
+            "and nothing painted: \(backed.lines[0].debugDescription)")
+    }
+
+    /// **Translucent INK.** The glyph draws — it is not in a contest with
+    /// anything — and its colour blends toward what is behind the cell.
+    @Test("Translucent ink draws its glyph faintly over what is behind it")
+    func translucentInk() {
+        let ink = faded(.green, 51)  // 20%
+        let lines = screen(
+            ZStack {
+                Text("world").foregroundStyle(.red)
+                Text("hello").foregroundStyle(ink.colour)
+            })
+        #expect(
+            lines[0].stripped.contains("hello"),
+            "the faint glyph still draws: \(lines[0].stripped)")
+        #expect(
+            lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: .red))),
+            "…in 20% green over red: \(lines[0].debugDescription)")
+    }
+
+    /// A wrapped text stamps one region PER LINE, sized to that line — not one
+    /// rectangle over the block. A rectangle would claim the blank cells past the
+    /// end of every short line and fade whatever a sibling drew there.
+    @Test("A ragged text claims each line's own width")
+    func raggedTextClaimsPerLine() {
+        let context = RenderContext(
+            availableWidth: 7, availableHeight: 3, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        let buffer = renderToBuffer(
+            Text("hi there").foregroundStyle(faded(.green, 128).colour), context: context)
+        #expect(buffer.lines.count == 2, "it wrapped: \(buffer.lines.map { $0.stripped })")
+        #expect(buffer.opacityRegions.count == 2, "one region per line")
+        let widths = buffer.opacityRegions.map(\.width)
+        #expect(
+            Set(widths).count == 2,
+            "and each is its own line's width, not the block's: \(widths)")
+    }
+
+    /// An opaque colour changes nothing anywhere: no region, and the same bytes as
+    /// before this feature existed.
+    @Test("Opaque paint stamps no region")
+    func opaquePaintStampsNothing() {
+        let context = RenderContext(
+            availableWidth: 8, availableHeight: 1, tuiContext: TUIContext()
+        ).isolatingRenderCache()
+        #expect(
+            renderToBuffer(Text("hi").background(Color.blue), context: context)
+                .opacityRegions.isEmpty)
+        #expect(
+            renderToBuffer(Text("hi").foregroundStyle(Color.green), context: context)
+                .opacityRegions.isEmpty)
+    }
+}

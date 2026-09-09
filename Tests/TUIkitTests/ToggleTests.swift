@@ -133,9 +133,17 @@ struct ToggleTests {
 
         let palette = context.environment.palette
         let foregroundBracket = ANSIRenderer.colorize("[", foreground: palette.foreground)
+        // `over: palette.background` because that is what `_ToggleCore` writes.
+        // Without the surface this built its expectation from the mix-toward-black
+        // shorthand, which coincided with the real colour only on a black palette
+        // — so the "must not reuse the dim colour" assertion was comparing against
+        // a string the renderer never emits. (Since `Color.opacity(_:)` began
+        // carrying real alpha it does not even have an SGR spelling, and the
+        // emitter's assertion says so.)
         let disabledBracket = ANSIRenderer.colorize(
             "[",
-            foreground: palette.foregroundTertiary.opacity(ViewConstants.disabledForeground)
+            foreground: palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
         )
 
         #expect(

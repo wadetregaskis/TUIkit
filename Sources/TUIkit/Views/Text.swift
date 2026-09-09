@@ -413,6 +413,18 @@ extension Text {
 /// Do not widen this back to `public` to expose an attribute; add the attribute
 /// to ``StyleAttributes`` and let it cascade.
 struct TextStyle: Sendable, Equatable {
+    /// This style with both colours at full strength — what goes into the SGR
+    /// bytes when a colour's alpha travels separately as an `OpacityRegion`.
+    ///
+    /// See `Color.opaqueSpelling`. The two halves are one claim, and the byte half
+    /// is deliberately opaque so the compositor has a real colour to blend from.
+    var opaqueColours: Self {
+        var copy = self
+        copy.foregroundColor = foregroundColor?.opaqueSpelling
+        copy.backgroundColor = backgroundColor?.opaqueSpelling
+        return copy
+    }
+
     /// The foreground color of the text.
     var foregroundColor: Color?
 
@@ -800,7 +812,13 @@ extension Text: Renderable, Layoutable {
                 paint: ramp, style: resolvedStyle, depth: ColorDepth.current,
                 cellAspect: context.environment.imageCellAspect)
         } else {
-            styledLines = plainLines.map { ANSIRenderer.render($0, with: resolvedStyle) }
+            // The OPAQUE spelling into the bytes; the alpha travels as a region
+            // below. A translucent colour has no SGR spelling at all — the
+            // terminal has no alpha channel — so the only honest answer is the
+            // compositor's, blended against what is actually behind these cells.
+            styledLines = plainLines.map {
+                ANSIRenderer.render($0, with: resolvedStyle.opaqueColours)
+            }
         }
 
         // A reservation pads the block out to its full height with blank lines
@@ -823,12 +841,52 @@ extension Text: Renderable, Layoutable {
         // text, so it needs no ANSI run, and inserting it earlier would have the
         // run-attribution walk step over rows that are not part of the content.
         guard spacing > 0, paddedLines.count > 1 else {
-            return FrameBuffer(lines: paddedLines, width: knownWidth, lineWidths: paddedWidths)
+            var buffer = FrameBuffer(
+                lines: paddedLines, width: knownWidth, lineWidths: paddedWidths)
+            buffer.opacityRegions += Self.colourAlphaRegions(
+                style: resolvedStyle, lineWidths: paddedWidths, runs: runs, ramp: ramp)
+            return buffer
         }
-        return FrameBuffer(
+        let spacedWidths = LineSpacingRows.interleaved(paddedWidths, spacing: spacing, blank: 0)
+        var buffer = FrameBuffer(
             lines: LineSpacingRows.interleaved(paddedLines, spacing: spacing, blank: ""),
             width: knownWidth,
-            lineWidths: LineSpacingRows.interleaved(paddedWidths, spacing: spacing, blank: 0))
+            lineWidths: spacedWidths)
+        // Built from the SPACED widths, so a region names the row its line ended
+        // up on. Built here rather than beside the styling for exactly that
+        // reason: the spacing is interleaved last and shifts every row after the
+        // first.
+        buffer.opacityRegions += Self.colourAlphaRegions(
+            style: resolvedStyle, lineWidths: spacedWidths, runs: runs, ramp: ramp)
+        return buffer
+    }
+
+    /// One region per drawn line, when this text's own colours carry alpha.
+    ///
+    /// Per LINE rather than one rectangle over the block, because a wrapped text
+    /// is ragged: a single rectangle would claim the blank cells past the end of
+    /// every short line and fade whatever a sibling drew there. `Text` already
+    /// computes exact per-line widths for the buffer, so the ragged shape costs
+    /// nothing to describe.
+    ///
+    /// `nil` — no regions at all — for the two arms that do not honour a colour's
+    /// alpha yet: a CONCATENATION carries a style per fragment and a RAMP a colour
+    /// per cell, and both need a claim finer than a rectangle. Those render at
+    /// full strength, and `Color+ANSICodes.swift`'s assertion makes it loud in a
+    /// debug build rather than silent.
+    private static func colourAlphaRegions(
+        style: TextStyle, lineWidths: [Int], runs: [Run]?, ramp: Paint?
+    ) -> [OpacityRegion] {
+        guard runs == nil, ramp == nil else { return [] }
+        let ink = style.foregroundColor?.alpha ?? .max
+        let field = style.backgroundColor?.alpha ?? .max
+        guard ink != .max || field != .max else { return [] }
+        return lineWidths.enumerated().compactMap { row, width in
+            guard width > 0 else { return nil }
+            return OpacityRegion(
+                offsetX: 0, offsetY: row, width: width, height: 1, opacity: 1,
+                inkOpacity: Double(ink) / 255, fieldOpacity: Double(field) / 255)
+        }
     }
 
     /// The styled lines of a CONCATENATION: each fragment in its own run's
