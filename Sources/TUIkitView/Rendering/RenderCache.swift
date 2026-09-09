@@ -206,7 +206,7 @@ public final class RenderCache: @unchecked Sendable {
         /// for those two to get one. Overwritten by each store, so it is the most
         /// recent structurally-equal chain rather than the first the bucket ever
         /// saw; both prunes compare identities structurally, so that is the same
-        /// answer to the same question. The arrangement ``SizeEntry`` has had
+        /// answer to the same question. The arrangement `SizeEntry` has had
         /// since `7db94fe9`.
         public let identity: ViewIdentity
 
