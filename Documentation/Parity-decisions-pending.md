@@ -8,7 +8,12 @@ than shipped.
 
 Everything *not* on this list is ordinary work and is being done.
 
-**Answered so far:** §9 (`Text.bold(_:)` and its siblings) — resolved by taking
+**Answered so far:** §1 (`opacity:` initialisers) and §2 (`Color.clear`) were
+both **answered by building them**, on 2026-09-10: `Color` carries a real alpha,
+resolved at the composite against what is actually behind the cell. The entries
+are gone rather than ticked, as this file's last section requires; the design and
+what it does NOT yet cover are in
+[`Opacity as composition.md`](Opacity%20as%20composition.md). Also: §9 (`Text.bold(_:)` and its siblings) — resolved by taking
 its option (a): `TextStyle`'s five cascaded flags became tri-state, the merge
 became nearest-wins, and the parameters followed. §6 (`labelsHidden()`) and §7
 (`deleteDisabled`/`moveDisabled`) were both implemented after the last review —
@@ -27,120 +32,19 @@ cannot be honoured by some controls and forgotten by others. The
 reasoning is in those commits; the entries are gone from here rather than
 marked done, as this file's last section requires.
 
-Last reviewed: 2026-08-24 — every remaining entry re-checked against the code
-that day, and the counts re-measured rather than carried forward. Three left,
-and two of them (§1, §2) are now a live question rather than a blocked one:
-task #511 has been answered and implemented, which changes what they are
-waiting for.
+Last reviewed: 2026-09-10. **One entry left**, and it is a genuine decision
+rather than a blocked one: `View.help(_:)` now SHIPS (tooltips, both
+presentations, the `?` key), so what remains here is the question the design
+could not settle for itself. The two opacity entries went by being built.
 
-**Each entry now ends in a recommendation.** They are recommendations, not
-decisions: the point of this file is that the call is not mine to make. But an
-option list with no opinion attached is a worse thing to be handed than one
-with an opinion you can disagree with.
-
----
-
-## 1. Anything taking `opacity:` — blocked on where alpha lives
-
-**The gap.** `Color.init(_:red:green:blue:opacity:)`,
-`init(hue:saturation:brightness:opacity:)`, `init(_:white:opacity:)`.
-
-**Why it needed a decision.** `Color.ColorValue` has no alpha channel, and
-`Color.opacity(_:)` blends toward BLACK. Shipping a construction-time
-`opacity:` would either lie about the result or pre-commit the design that
-**task #511 ("Opacity: resolve at composite time, not render time")** existed
-to settle.
-
-**#511 is answered, as of 2026-08-24, and the answer is the second of the two
-that were on the table**: alpha lives on BUFFERS, as `OpacityRegion` — a
-rectangle of cells carried up the tree and resolved at the composite, where
-what is behind it is finally known. `View.opacity(_:)` ships on it. The whole
-design and its measurements are in
-[`Opacity as composition.md`](Opacity%20as%20composition.md).
-
-**So this entry is no longer blocked; it is a smaller question with a new
-shape.** A region says a whole CELL is translucent — both its colours and, past
-the glyph threshold, its character. A colour carrying alpha is narrower than
-that: `Color.red.opacity(0.5)` as a foreground makes the INK translucent and
-says nothing about the cell's background, and `.clear` as a background means
-"paint nothing" while `.clear` as a foreground means "draw no glyph". Two
-things stand between the machinery that exists and that:
-
-1. **The region would need per-channel alpha.** A foreground α and a background
-   α rather than one number. The blend already treats the two channels
-   separately, so this part is a field and a branch — genuinely small.
-2. **There is no choke point that knows WHICH CELLS a colour painted.** A
-   region is emitted by a view about its own buffer; a colour is resolved deep
-   inside `ANSIRenderer.foregroundCodes(for:)`, which returns SGR parameters and
-   has no buffer to mark. Every view that draws text would have to emit the
-   region itself, or the renderer would have to emit a sentinel for a later pass
-   to find. That is the actual cost, and it is not small.
-
-**Options now.**
-
-(a) **Do it** — per-channel alpha on the region, plus whatever mechanism gets a
-    colour's alpha out to the buffer. Closes §1 and §2 properly.
-(b) **Record `notImplemented`** in the parity map, with the `why` above: alpha
-    is a property of a layer here, not of a colour, and a colour has no cells to
-    name.
-(c) **A narrow special case for `.clear` alone** — a `.clear` foreground is "emit
-    a space", which is a glyph substitution at the point the glyph is chosen and
-    needs no alpha anywhere. It closes §2 and leaves §1 open.
-
-**Recommendation: (b) for now, and revisit if `.clear` is asked for.** The
-initialisers are the least valuable half — `Color(red:green:blue:opacity:)` with
-a real alpha is a colour you cannot see the point of until you put it over
-something, which is what `.opacity(_:)` on the view already does better. (c) is
-cheap and self-contained if `.clear` turns out to matter.
-
-**Note that §1 and §2 are still one decision wearing two hats** and should be
-taken off this list together.
+**The entry ends in a recommendation.** It is a recommendation, not a decision:
+the point of this file is that the call is not mine to make. But an option list
+with no opinion attached is a worse thing to be handed than one with an opinion
+you can disagree with.
 
 ---
 
-## 2. `Color.clear` — no alpha channel to be clear with
-
-**The gap.** SwiftUI's fully-transparent colour.
-
-**Why it needs a decision.** The tempting mapping is `Color.default` ("the
-terminal's own colour"), and for a *background* the two coincide — nothing is
-painted. For a *foreground* they do not: `.clear` text is invisible, `.default`
-text is perfectly readable. One mapping cannot be right for both.
-
-**Options.** (a) Map to `.default` and document the foreground caveat. (b) Record
-as not-implementable pending #511. (c) Add a real alpha channel (see §1).
-
-**Why (a) is worse than it looks.** The caveat is not a footnote: `.clear` on
-text is the one thing a reader would reach for to HIDE text, and mapping it to
-`.default` makes that line perfectly legible. A modifier that silently does the
-opposite of what it says is worse than one that does not exist — and it cannot
-be diagnosed at compile time, because both are just a `Color`.
-
-There is a narrow shape that does work, and it is worth recording as it changes
-what "not implementable" means here: a `.clear` FOREGROUND is expressible as
-"emit no glyph" — draw a space. That is not a colour, it is a substitution, and
-it would have to happen where the glyph is chosen rather than where the colour
-is resolved. Whether that is worth a special case in `ANSIRenderer` for one
-constant is itself a decision, but it means (b)'s `why` should say "no alpha
-channel, and the foreground case would need a glyph substitution rather than a
-colour" rather than the flat "not implementable".
-
-**DECIDED 2026-08-24 — (a) is ruled out rather than merely outranked.**
-Mapping `.clear` to something that is not clear is not an option at any price:
-the one thing a reader reaches for `.clear` to do is hide something, and
-`.default` renders it perfectly legibly.
-
-**And the fact it depended on has arrived.** #511 chose buffer-level alpha (see
-§1), so `.clear` does not fall out for free — a colour still has no alpha, and
-still has no cells to name. What is left is the choice in §1: record it
-`notImplemented`, or take §1's option (c), the narrow one — a `.clear`
-foreground is "emit a space", a glyph substitution at the point the glyph is
-chosen, which needs no alpha channel anywhere and is the only part of this
-anyone is likely to reach for.
-
----
-
-## 3. `View.help(_:)` — what a tooltip means with no pointer
+## 1. `View.help(_:)` — what a tooltip means with no pointer
 
 **The gap.** `help(_:)` in its `LocalizedStringKey`, `Text` and `StringProtocol`
 overloads.

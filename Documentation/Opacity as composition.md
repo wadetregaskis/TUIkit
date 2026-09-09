@@ -3,8 +3,43 @@
 **Status: implemented in full as of 2026-08-24 — §9.5's staging, and then the
 §10 refinements (continuous colours, the contested-only threshold, parallel
 matched cells, linear-light arithmetic, displayed-colour reads, ink coverage,
-wide-character footprints). Outstanding: `Color`-level alpha (`.clear` and the
-`opacity:` initialisers), recorded in `Parity-decisions-pending.md`.**
+wide-character footprints).**
+
+**`Color`-level alpha followed on 2026-09-10** (branch `colour-alpha`), which
+closes what this document listed as outstanding and retires
+`Parity-decisions-pending.md` §1 and §2. Five commits, and the shape of it is
+worth recording here because it is not what §1 predicted:
+
+- **A layer's alpha and a colour's are different claims wearing one number.** A
+  layer at 0.3 is 30% *present*, so its glyph competes with what is behind it and
+  §10's ½ rule decides; ink at 0.3 is faint text that is definitely drawn. So
+  `OpacityRegion` carries three channels — `opacity`, `inkOpacity`,
+  `fieldOpacity` — which compose by multiplication, and the ½ threshold reads the
+  LAYER's alone. Folding them would make a translucent foreground vanish rather
+  than fade.
+- **`Color` stores a `UInt8` alpha**, not a `Double`: `viewValueHash` hashes the
+  raw bytes of every view struct and a `Double` would introduce undefined padding,
+  making the render memo's key non-deterministic. Every `Color` → `Color`
+  derivation carries it, checked by a table test rather than one test per
+  function.
+- **Three sites write it**, and they are the three that know the rectangle they
+  painted: a `Color` used as a view, `.background(_:)`, and `Text`'s own
+  foreground and background. Each writes the colour's OPAQUE spelling into the
+  bytes and sends the alpha up as a region, because a translucent colour has no
+  SGR spelling — the terminal has no alpha channel, so the only honest answer is
+  this document's: resolved at the composite against what is actually behind the
+  cell. `Text` stamps one region per LINE, since a wrapped text is ragged.
+- **§1's cost estimate was for the wrong mechanism.** It counted 169 colour→SGR
+  emit sites and concluded that per-colour alpha needed column knowledge at each.
+  It does not: the three sites above are where translucency is actually written,
+  and they know their rectangles already. What the other 166 get is an
+  `assert(isOpaque)` at the four emitters, so an unmigrated path is loud in a
+  debug build and renders exactly as it does today otherwise.
+- **Not honoured yet**, each said at its own line: a translucent gradient (a ramp
+  states a colour per cell, and a region carries one alpha for a rectangle — the
+  one place a rectangle is genuinely the wrong shape), `Text`'s attributed-run
+  path, `Table`/`PaintRenderer`/`DimmedModifier`, and `TUIkitImage`, which cannot
+  see `OpacityRegion` at all.
 Commissioned
 to answer two questions before any of it is built — does it add complexity or
 caveats, and does it cost performance — and to settle the two parity entries
