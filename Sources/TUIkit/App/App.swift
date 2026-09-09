@@ -190,7 +190,8 @@ extension AppRunner {
         defer { stdinArrival.stop() }
 
         // Setup: install the dispatch signal sources (SIGWINCH resize, SIGINT /
-        // SIGTERM graceful shutdown). Each source's handler sets a flag the loop
+        // SIGTERM graceful shutdown, SIGTSTP / SIGCONT job control) and set
+        // SIGPIPE to SIG_IGN. Each source's handler sets a flag the loop
         // drains and wakes the notifier. `await`s until every source is armed.
         await signals.install(wake: { [weak stdinArrival] in stdinArrival?.wake() })
         terminal.enterAlternateScreen()

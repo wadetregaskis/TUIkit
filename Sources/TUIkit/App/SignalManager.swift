@@ -60,10 +60,18 @@ private final class SignalRegistrationBarrier: Sendable {
 /// Manages POSIX signal handling for the application lifecycle via libdispatch
 /// signal sources.
 ///
-/// SIGWINCH (terminal resize) and SIGINT / SIGTERM (graceful shutdown) are
-/// monitored with `DispatchSource.makeSignalSource` on the main queue. Each
-/// source's handler runs on the main actor, sets an instance flag, and wakes the
-/// demand-driven run loop directly. There is no async-signal-safe C handler, no
+/// SIGWINCH (terminal resize), SIGINT / SIGTERM (graceful shutdown) and
+/// SIGTSTP / SIGCONT (job control: Ctrl-Z has to hand the terminal back BEFORE
+/// the process stops, or it strands the user's shell in raw mode on the
+/// alternate screen — `d05786d3`, 2026-08-02) are monitored with
+/// `DispatchSource.makeSignalSource` on the main queue. SIGPIPE is the one
+/// signal here with no source: nothing wants to *observe* it, only to survive
+/// a clipboard helper or a pty reader that went away mid-write, so
+/// ``install(wake:)`` sets it to `SIG_IGN` process-wide and watches it no
+/// further (`7152761f`, 2026-07-31).
+///
+/// Each source's handler runs on the main actor, sets an instance flag, and
+/// wakes the demand-driven run loop directly. There is no async-signal-safe C handler, no
 /// self-pipe, and no flag-poll layer: the loop still drains the flags each
 /// iteration exactly as before (``shouldShutdown``, ``consumeResizeFlag()``),
 /// but the flags are ordinary main-actor state pushed by the sources.
@@ -174,7 +182,9 @@ final class SignalManager {
         swallowNextContinue = true
     }
 
-    /// Installs signal sources for SIGWINCH, SIGINT, and SIGTERM.
+    /// Installs signal sources for SIGINT, SIGTERM, SIGWINCH, SIGTSTP and
+    /// SIGCONT — registration order, which is the order they are armed in —
+    /// and, before any of them, ignores SIGPIPE process-wide.
     ///
     /// `wake` is invoked from each source's main-actor handler so a signal that
     /// arrives while the loop is idle-blocked wakes it. This awaits each source's
