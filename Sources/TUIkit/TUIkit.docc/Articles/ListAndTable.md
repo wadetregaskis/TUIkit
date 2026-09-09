@@ -419,6 +419,21 @@ all.
 
 Every chord here is rebindable — see ``RowShortcuts``.
 
+## Sorting from the Keyboard
+
+A ``Table`` with a `sortOrder` binding sorts from the keyboard as well as from a
+header click: <kbd>Ctrl</kbd>+<kbd>S</kbd> sorts by the next sortable column,
+wrapping round to the first, and <kbd>Ctrl</kbd>+<kbd>D</kbd> reverses the
+current direction. Both run the same rule a click runs — the same
+`KeyPathComparator` promotion, with the sort it displaced kept behind it as the
+tie-break — so the two routes cannot drift apart.
+
+Control letters rather than one chord with Shift on it, because
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> is the same byte as
+<kbd>Ctrl</kbd>+<kbd>S</kbd> in any terminal without `modifyOtherKeys`: a shifted
+variant is not merely unbound there, it is undeliverable. Both are rebindable —
+see ``RowAction/sortNextColumn`` and ``RowAction/reverseSortOrder``.
+
 ## Reordering Several Rows
 
 Grab any row of a multi-selection and the whole selection comes — macOS's rule,

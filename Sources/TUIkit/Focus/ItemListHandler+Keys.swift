@@ -25,6 +25,13 @@ extension ItemListHandler {
             return handled
         }
 
+        // The Table sort chords, ahead of the selection branch below — which a
+        // single-selection table never enters — and ahead of the plain movement
+        // keys, which have no use for them.
+        if let handled = handleSortKey(event) {
+            return handled
+        }
+
         // Multi-selection lists understand the macOS selection keys (range
         // extension, select-all, clear). Consulted first so an extending
         // movement key doesn't fall into the plain-movement cases below;
@@ -33,6 +40,42 @@ extension ItemListHandler {
             return handled
         }
 
+        // The plain cursor keys, in their own function: not a tidying split but
+        // the one this file can afford, since the six of them are half this
+        // switch's branches and none of them consults anything the branches
+        // below do.
+        if let handled = handleCursorMovementKey(event) {
+            return handled
+        }
+
+        switch event.key {
+        case .enter, .space:
+            handleSelectionKey(event.key)
+            return true
+
+        // A tree's own keys, and the reason the row does not have to spend
+        // Space or Return on disclosure: Right opens the focused branch. It
+        // falls through on a leaf, on a node already open, and on a list that
+        // is not a tree at all — the list has no other use for the key, so
+        // nothing is taken away.
+        //
+        // Held with Option it carries that state down the WHOLE subtree, which
+        // is the outline-view gesture people already know from the Finder: ⌥→
+        // opens everything under the branch, ⌥← folds it all away again.
+        case .right, .left:
+            return handleDisclosureKey(event)
+
+        case .delete, .backspace:
+            return deleteFocusedRow()
+
+        default:
+            return false
+        }
+    }
+
+    /// Up / Down / Home / End / PageUp / PageDown, the keys that move the cursor
+    /// and nothing else. `nil` for anything they do not claim.
+    private func handleCursorMovementKey(_ event: KeyEvent) -> Bool? {
         switch event.key {
         case .up:
             // A plain Up moves one row and wraps; Shift jumps by the multiplier
@@ -77,28 +120,25 @@ extension ItemListHandler {
             moveFocus(by: viewportHeight, wrap: false)
             return true
 
-        case .enter, .space:
-            handleSelectionKey(event.key)
-            return true
-
-        // A tree's own keys, and the reason the row does not have to spend
-        // Space or Return on disclosure: Right opens the focused branch. It
-        // falls through on a leaf, on a node already open, and on a list that
-        // is not a tree at all — the list has no other use for the key, so
-        // nothing is taken away.
-        //
-        // Held with Option it carries that state down the WHOLE subtree, which
-        // is the outline-view gesture people already know from the Finder: ⌥→
-        // opens everything under the branch, ⌥← folds it all away again.
-        case .right, .left:
-            return handleDisclosureKey(event)
-
-        case .delete, .backspace:
-            return deleteFocusedRow()
-
         default:
-            return false
+            return nil
         }
+    }
+
+    /// The ``Table`` sort chords. `nil` unless the view handed this handler an
+    /// `onSort` — so a `List`, and a `Table` with no `sortOrder` binding, leave
+    /// Ctrl-S and Ctrl-D to the app.
+    ///
+    /// Refused while a row is in hand, mouse or keyboard: a reorder holds
+    /// ABSOLUTE indices, so re-sorting under it would land the row somewhere
+    /// nobody pointed at.
+    private func handleSortKey(_ event: KeyEvent) -> Bool? {
+        guard let onSort, !isReordering,
+            let action = shortcuts.action(for: event)?.action,
+            action == .sortNextColumn || action == .reverseSortOrder
+        else { return nil }
+        onSort(action)
+        return true
     }
 
     /// The multi-selection keyboard model (macOS semantics, adapted to what
@@ -129,7 +169,8 @@ extension ItemListHandler {
             return true
 
         case .pickUpRow, .placeRow, .cancelMove, .moveRowUp, .moveRowDown,
-            .moveRowToTop, .moveRowToBottom, .moveRowPageUp, .moveRowPageDown, nil:
+            .moveRowToTop, .moveRowToBottom, .moveRowPageUp, .moveRowPageDown,
+            .sortNextColumn, .reverseSortOrder, nil:
             // Not selection business — handled above, or not a chord at all.
             break
         }

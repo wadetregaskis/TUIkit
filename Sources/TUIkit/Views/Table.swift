@@ -75,6 +75,12 @@ import Foundation
 /// carries a `▲` / `▼`, and every sortable column reserves that glyph's width
 /// so the table does not change shape as you sort it.
 ///
+/// From the keyboard, on the focused table: `Ctrl-S` sorts by the next sortable
+/// column — the same gesture as clicking its header, wrapping round to the
+/// first — and `Ctrl-D` reverses the current direction. Both are rebindable,
+/// like every other row chord: see ``RowAction/sortNextColumn``,
+/// ``RowAction/reverseSortOrder`` and ``RowShortcuts``.
+///
 /// ## Column Spacing
 ///
 /// Columns are separated by spaces (no vertical lines) for a clean look.
@@ -244,8 +250,9 @@ extension Table {
     ///   - data: The data items to display.
     ///   - selection: A binding to the selected item's ID (nil = no selection).
     ///   - sortOrder: A binding to the sort the column headers drive. Supplying
-    ///     one makes the sortable columns' headers clickable; omitting it
-    ///     leaves them inert, as a SwiftUI `Table` without one has them.
+    ///     one makes the sortable columns' headers clickable, and Ctrl-S /
+    ///     Ctrl-D sort from the keyboard; omitting it leaves them inert, as a
+    ///     SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
 
     ///   - columnSpacing: Spacing between columns (default: 2).
@@ -319,8 +326,9 @@ extension Table {
     /// - Parameters:
     ///   - data: The data items to display.
     ///   - sortOrder: A binding to the sort the column headers drive. Supplying
-    ///     one makes the sortable columns' headers clickable; omitting it
-    ///     leaves them inert, as a SwiftUI `Table` without one has them.
+    ///     one makes the sortable columns' headers clickable, and Ctrl-S /
+    ///     Ctrl-D sort from the keyboard; omitting it leaves them inert, as a
+    ///     SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
     ///   - columnSpacing: Spacing between columns (default: 2).
     ///   - emptyPlaceholder: Placeholder text when empty (default: the localized "No items").
@@ -354,8 +362,9 @@ extension Table {
     ///   - data: The data items to display.
     ///   - selection: A binding to the set of selected item IDs.
     ///   - sortOrder: A binding to the sort the column headers drive. Supplying
-    ///     one makes the sortable columns' headers clickable; omitting it
-    ///     leaves them inert, as a SwiftUI `Table` without one has them.
+    ///     one makes the sortable columns' headers clickable, and Ctrl-S /
+    ///     Ctrl-D sort from the keyboard; omitting it leaves them inert, as a
+    ///     SwiftUI `Table` without one has them.
     ///   - focusID: The unique focus identifier (default: auto-generated).
 
     ///   - columnSpacing: Spacing between columns (default: 2).
@@ -1207,6 +1216,7 @@ where Value.ID: Hashable {
         handler.canBeFocused = !isDisabled(in: context)
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
+        handler.onSort = sortKeyAction
         // BEFORE the rows are composed — see the List's twin call site.
         handler.carryReorderTargetThroughAutoScroll()
         // As on the single-line path, in one shared call — see
@@ -1855,6 +1865,7 @@ where Value.ID: Hashable {
         handler.canBeFocused = !isDisabled(in: context)
         handler.primaryAction = primaryAction
         handler.onMove = moveAction
+        handler.onSort = sortKeyAction
         // BEFORE the rows are composed — see the List's twin call site.
         handler.carryReorderTargetThroughAutoScroll()
         // Everything the handler's EVENTS will read out of the environment, in
@@ -3140,6 +3151,62 @@ where Value.ID: Hashable {
             x += width + columnSpacing
         }
         return ranges
+    }
+
+    /// Which column the rows are currently ordered by, or `nil` when the sort
+    /// order is empty or names a key path no column carries.
+    ///
+    /// The same predicate `sortIndicator(for:)` draws the arrow from, so the
+    /// arrow and the chords cannot disagree about which column is primary.
+    private var primarySortColumnIndex: Int? {
+        guard let primary = sortOrder?.wrappedValue.first else { return nil }
+        return columns.firstIndex { $0.sortComparator?.keyPath == primary.keyPath }
+    }
+
+    /// The keyboard half of the header click, handed to the handler each frame
+    /// (see `ItemListHandler.onSort`).
+    ///
+    /// `.sortNextColumn` runs `toggleSort(column:)` on the next sortable column,
+    /// wrapping — with exactly ONE sortable column that is the primary itself,
+    /// so the chord flips its direction, precisely as clicking the one clickable
+    /// header twice does. `.reverseSortOrder` runs it on the primary, which
+    /// reverses it, and does nothing while the sort order is empty: there is no
+    /// direction to reverse yet, and Ctrl-S establishes one.
+    ///
+    /// `nil` — leaving both chords to the app — for a table with no `sortOrder`
+    /// binding or no sortable column, which is exactly when no header takes a
+    /// click either.
+    private var sortKeyAction: ((RowAction) -> Void)? {
+        // NOT a convenience ordering: the binding is tested first, and with
+        // `contains(where:)` rather than a `filter`, because this property runs
+        // on every pass of every table — measure passes included, which is why
+        // `viewportHeight` above is gated on `isMeasuring`. Building the index
+        // list here charged an array allocation per pass to tables that have no
+        // `sortOrder` binding at all, which is most of them.
+        guard sortOrder != nil, columns.contains(where: { $0.sortComparator != nil })
+        else { return nil }
+        return { action in
+            // Walked when a key actually arrives rather than once per pass: a
+            // keystroke is rare and this allocates. Non-empty, per the guard.
+            let sortable = columns.indices.filter { columns[$0].sortComparator != nil }
+            let index: Int?
+            switch action {
+            case .sortNextColumn:
+                let current = primarySortColumnIndex
+                index = current.flatMap { c in sortable.first { $0 > c } } ?? sortable.first
+            case .reverseSortOrder:
+                index = primarySortColumnIndex
+            // The handler passes only the two sort actions; every other row verb
+            // is the handler's own business. Written out rather than defaulted so
+            // the next `RowAction` has to be answered here too.
+            case .selectAll, .extendSelection, .pickUpRow, .placeRow, .cancelMove,
+                .moveRowUp, .moveRowDown, .moveRowToTop, .moveRowToBottom,
+                .moveRowPageUp, .moveRowPageDown:
+                index = nil
+            }
+            guard let index else { return }
+            toggleSort(column: columns[index])
+        }
     }
 
     /// Applies a click on `column`'s header to the bound sort order.

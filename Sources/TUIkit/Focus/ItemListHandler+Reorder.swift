@@ -336,7 +336,11 @@ extension ItemListHandler {
         case .moveRowPageDown: return nudgeFocusedRow(by: pageStep) ? true : nil
         case .moveRowToTop: return moveFocusedRow(to: 0) ? true : nil
         case .moveRowToBottom: return moveFocusedRow(to: itemCount - 1) ? true : nil
-        case .selectAll, .extendSelection, .placeRow, .cancelMove: return nil
+        // Sorting is not a reorder — and must not happen during one, which is
+        // `handleSortKey`'s `!isReordering` guard.
+        case .selectAll, .extendSelection, .placeRow, .cancelMove,
+            .sortNextColumn, .reverseSortOrder:
+            return nil
         }
     }
 
@@ -358,7 +362,7 @@ extension ItemListHandler {
         case .moveRowPageDown: moveHeldRow(by: pageStep)
         case .moveRowToTop: moveHeldRow(to: 0)
         case .moveRowToBottom: moveHeldRow(to: itemCount - 1)
-        case .selectAll, .extendSelection: return false
+        case .selectAll, .extendSelection, .sortNextColumn, .reverseSortOrder: return false
         }
         return true
     }

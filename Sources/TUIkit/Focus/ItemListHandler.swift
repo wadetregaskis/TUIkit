@@ -65,6 +65,10 @@ public enum SelectionMode: Sendable {
 /// | Ctrl+V | Toggle extend mode: plain movement keys extend the selection, in ANY terminal |
 /// | Ctrl+A | Select all |
 ///
+/// A `Table` with a `sortOrder` binding adds Ctrl+S (sort by the next sortable
+/// column, wrapping) and Ctrl+D (reverse the direction) — the keyboard route to
+/// a header click.
+///
 /// Every chord above is rebindable — see ``RowShortcuts`` — and a reorderable
 /// list adds Ctrl+R to pick the focused row up, after which the movement keys
 /// move its landing slot and Return/Escape place it or put it back.
@@ -495,6 +499,17 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// `(source offset, destination offset)`. `nil` makes rows non-draggable.
     /// See ``RowReorder`` and `_ListCore`'s mouse handler.
     var onMove: ((IndexSet, Int) -> Void)?
+
+    /// A `Table`'s keyboard sort gestures, if it has a `sortOrder` binding:
+    /// invoked with ``RowAction/sortNextColumn`` or
+    /// ``RowAction/reverseSortOrder``, and it applies the same `toggleSort` a
+    /// header CLICK applies. `nil` for a `List`, and for a `Table` with nothing
+    /// to sort, which is what leaves those chords to the app.
+    ///
+    /// Set every frame beside ``onMove``, at BOTH `_TableCore` viewports: it
+    /// closes over that frame's binding, while the handler persists at one
+    /// identity across frames and across a switch between the two paths.
+    var onSort: ((RowAction) -> Void)?
 
     /// The state of an in-flight mouse reorder drag, or `nil`. See
     /// ``ItemListHandler/dragReorder(toContentY:)`` for the state machine.

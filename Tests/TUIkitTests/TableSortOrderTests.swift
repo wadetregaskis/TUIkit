@@ -107,6 +107,18 @@ struct TableSortOrderTests {
                 MouseEvent(button: .left, phase: .released, x: x, y: 1))
             return pressed && released
         }
+
+        /// Renders inside a focus pass — so the table's handler registers and
+        /// `endRenderPass` auto-focuses it — then presses `event` the way a real
+        /// key press arrives. Both the chord table and `onSort` are captured
+        /// during the render, so the order matters.
+        @discardableResult
+        func press(_ event: KeyEvent, multiLine: Bool = false) -> Bool {
+            focusManager.beginRenderPass()
+            render(fitFirstColumn: multiLine)
+            focusManager.endRenderPass()
+            return focusManager.dispatchKeyEvent(event)
+        }
     }
 
     // MARK: - What the header draws
@@ -244,6 +256,44 @@ struct TableSortOrderTests {
         harness.render()
         #expect(harness.clickHeader("Name"))
         #expect(harness.sortOrder?.first?.order == .forward)
+    }
+
+    /// The same four sort states a click reaches, reached without a mouse. A
+    /// table that draws a `▲`/`▼` and reserves the cells for it, but can only be
+    /// sorted by pointer, breaks the framework's own rule that a mouse-only
+    /// gesture needs a keyboard route.
+    @Test("Ctrl-D reverses the sort and Ctrl-S moves it to the next column")
+    func chordsSortTheTable() {
+        let harness = Harness(sortOrder: [KeyPathComparator(\Row.name, order: .forward)])
+        let ctrlS = KeyEvent(key: .character("s"), ctrl: true)
+        let ctrlD = KeyEvent(key: .character("d"), ctrl: true)
+
+        #expect(harness.press(ctrlD))
+        #expect(harness.sortOrder?.count == 1)
+        #expect(harness.sortOrder?.first?.keyPath == \Row.name)
+        #expect(harness.sortOrder?.first?.order == .reverse)
+
+        #expect(harness.press(ctrlS))
+        #expect(harness.sortOrder?.first?.keyPath == \Row.size)
+        #expect(harness.sortOrder?.first?.order == .forward, "promoted ascending")
+        #expect(harness.sortOrder?.count == 2, "the displaced sort stays as the tie-break")
+        #expect(harness.sortOrder?.last?.keyPath == \Row.name)
+
+        // …and the next one wraps back to the first sortable column.
+        #expect(harness.press(ctrlS))
+        #expect(harness.sortOrder?.first?.keyPath == \Row.name)
+        harness.render()
+        #expect(harness.headerLine.contains("Name ▲"), "header: \(harness.headerLine)")
+    }
+
+    /// The multi-line viewport is a second call site, and it assigns `onSort`
+    /// separately — so it gets its own press rather than riding on the
+    /// single-line path's coverage.
+    @Test("The chords work on a table whose rows wrap too")
+    func chordsSortAWrappingTable() {
+        let harness = Harness(sortOrder: [KeyPathComparator(\Row.name, order: .forward)])
+        #expect(harness.press(KeyEvent(key: .character("d"), ctrl: true), multiLine: true))
+        #expect(harness.sortOrder?.first?.order == .reverse)
     }
 
     /// A second column becomes the primary sort, ascending — and the one it

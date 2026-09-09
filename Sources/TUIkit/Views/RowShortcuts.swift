@@ -56,6 +56,16 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
     /// Move the focused row down by a screenful.
     case moveRowPageDown
 
+    /// Sort by the next sortable column, wrapping — the keyboard route to a
+    /// ``Table`` header click. Inert in a ``List``, and in a ``Table`` with no
+    /// `sortOrder` binding, which is exactly when no header takes a click
+    /// either.
+    case sortNextColumn
+
+    /// Reverse the direction of a ``Table``'s primary sort — the keyboard route
+    /// to clicking the header it is already sorted by.
+    case reverseSortOrder
+
     /// What TUIkit binds this action to out of the box.
     ///
     /// Control chords throughout, and deliberately: `Ctrl`+letter is not a
@@ -104,6 +114,15 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
         case .moveRowToBottom: return [KeyboardShortcut(.end, modifiers: .option)]
         case .moveRowPageUp: return [KeyboardShortcut(.pageUp, modifiers: .option)]
         case .moveRowPageDown: return [KeyboardShortcut(.pageDown, modifiers: .option)]
+        // Two Control LETTERS, not one chord with Shift on it: Ctrl+Shift+S is
+        // the same byte (0x13) as Ctrl-S in every terminal without
+        // modifyOtherKeys, so a shifted variant is not deliverable anywhere it
+        // matters. Ctrl-S is safe to claim because raw mode clears IXON
+        // (`Terminal.swift`), so it never reaches the driver as XOFF — and
+        // Ctrl-D is not EOF for the same reason (ICANON is cleared beside it).
+        // S for "sort", D for "direction".
+        case .sortNextColumn: return [KeyboardShortcut("s", modifiers: .control)]
+        case .reverseSortOrder: return [KeyboardShortcut("d", modifiers: .control)]
         }
     }
 }
