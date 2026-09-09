@@ -89,7 +89,15 @@ public struct TableColumn<Value>: Sendable {
     /// tallest cell); content beyond the limit is folded into the last line and
     /// truncated with an ellipsis. Mirrors SwiftUI's `lineLimit`. Defaults to `1`
     /// (single-line cells, the classic table look).
-    public var lineLimit: Int = 1
+    ///
+    /// Clamped to at least 1 on assignment, as ``lineLimit(_:)`` already does:
+    /// the wrapper folds and truncates only for `maxLines >= 1`, so a column
+    /// written to directly with 0 or a negative computed value did not become a
+    /// single-line column — it became an UNLIMITED one, growing the row to
+    /// however many lines the value wrapped to.
+    public var lineLimit: Int = 1 {
+        didSet { lineLimit = max(1, lineLimit) }
+    }
 
     /// Extracts the display value from a data item.
     let valueExtractor: @Sendable (Value) -> String
@@ -263,7 +271,7 @@ extension TableColumn {
     /// - Returns: A modified column with the specified line limit.
     public func lineLimit(_ limit: Int) -> TableColumn {
         var copy = self
-        copy.lineLimit = max(1, limit)
+        copy.lineLimit = limit  // clamped by the property's own didSet
         return copy
     }
 
