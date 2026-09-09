@@ -90,6 +90,36 @@ struct HelpTooltipTests {
         #expect(h.tooltips.focused == nil, "nothing focused carries help")
     }
 
+    /// **The one focusable that does not go through the shared seam.**
+    ///
+    /// A `NavigationSplitView` divider registers with the focus manager directly,
+    /// so `FocusRegistration.register`'s help hook never runs for it and `.help`
+    /// on one would work on hover and do nothing on the keyboard. That is the
+    /// failure `Documentation/Parity-decisions-pending.md` predicted for this
+    /// exact site — "would work for every other focusable and silently not for
+    /// that one" — and it takes a test rather than a comment, because the next
+    /// thing hung off that seam will miss it the same way.
+    @Test("A split divider claims its help text too")
+    func splitDividerClaimsHelp() {
+        let h = harness()
+        let view = NavigationSplitView {
+            Text("sidebar")
+        } detail: {
+            Text("detail")
+        }
+        .help("Drag to resize the sidebar")
+        // One frame to register the divider's section, then focus it — a split
+        // view opens with the sidebar focused, not the divider.
+        _ = frame(view, h)
+        let section = dividerSectionID(in: h.focus)
+        #expect(section != nil, "the fixture really has a divider")
+        h.focus.activateSection(id: section ?? "")
+        _ = frame(view, h)
+        #expect(
+            h.tooltips.focused?.text == "Drag to resize the sidebar",
+            "got \(String(describing: h.tooltips.focused?.text))")
+    }
+
     /// A hidden subtree publishes nothing at all — checked on the FOCUS half as
     /// well as the hover half, because the two are gated in different files and
     /// only one of them is obvious.

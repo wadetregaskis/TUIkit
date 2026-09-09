@@ -158,7 +158,12 @@ enum FocusRegistration {
     ///
     /// Publishing does not SHOW anything: a focus candidate is revealed by the
     /// help key. See `TooltipState.keyboardRevealed`.
-    private static func publishHelpText(context: RenderContext, focusID: String) {
+    /// Internal, not private, for one caller: the `NavigationSplitView` divider
+    /// registers with the focus manager directly rather than through
+    /// ``register(context:handler:focusID:)``, so it has to ask for this itself.
+    /// It is the only such site; anything else hung off `register` reaches every
+    /// focusable in the framework.
+    static func publishHelpText(context: RenderContext, focusID: String) {
         guard let text = context.environment.helpText,
             context.environment.tooltipVisibility == .automatic,
             let tooltips = context.environment.tooltipState,

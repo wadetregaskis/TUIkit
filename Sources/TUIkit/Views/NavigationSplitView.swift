@@ -567,6 +567,15 @@ extension _NavigationSplitViewCore {
         handler.canBeFocused = true
         handler.currentWidth = currentWidth
         focusManager.register(handler, inSection: sectionID)
+        // The one focusable in the framework that does NOT go through
+        // `FocusRegistration.register` — it registers into a section this view
+        // owns, with a handler it persists itself — so anything hung off that
+        // seam has to be repeated here or silently misses this control alone.
+        // `help(_:)` is the first such thing: without this, `.help` on a split
+        // divider works on hover and does nothing on the keyboard, which is the
+        // failure mode `Documentation/Parity-decisions-pending.md` predicted for
+        // exactly this site.
+        FocusRegistration.publishHelpText(context: context, focusID: sectionID)
 
         let isActive = focusManager.isActiveSection(sectionID)
 
