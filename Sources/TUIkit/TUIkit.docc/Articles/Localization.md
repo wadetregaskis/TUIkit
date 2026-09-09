@@ -73,9 +73,9 @@ List("list.inbox", selection: $id) { … }
 Table(files, selection: $id) { TableColumn("column.size", value: \.size) }
 ```
 
-…and on the modifiers that carry text: ``TUIkit/View/navigationTitle(_:)``,
-``TUIkit/View/alert(_:isPresented:actions:)``,
-``TUIkit/View/confirmationDialog(_:isPresented:titleVisibility:actions:)``,
+…and on the modifiers that carry text: ``TUIkit/View/navigationTitle(_:)-(LocalizedStringKey)``,
+``TUIkit/View/alert(_:isPresented:actions:borderStyle:borderColor:titleColor:)-(LocalizedStringKey,_,_,_,_,_)``,
+``TUIkit/View/confirmationDialog(_:isPresented:titleVisibility:actions:)-(LocalizedStringKey,_,_,_)``,
 `searchable(prompt:)`, `badge(_:)` and `listEmptyPlaceholder(_:)`.
 
 The TUI-specific chrome follows the same rule — a terminal app's dialogs, cards

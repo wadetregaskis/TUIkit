@@ -54,8 +54,8 @@ import Foundation
 ///
 /// Give the table a `sortOrder` binding and the sortable columns' headers
 /// become clickable, exactly as in SwiftUI. A column is sortable when it was
-/// built from a key path (``TableColumn/init(_:value:)`` /
-/// ``TableColumn/init(_:value:content:)``); one built from a closure is not,
+/// built from a key path (``TableColumn/init(_:value:)-(LocalizedStringKey,(Value)->String)`` /
+/// ``TableColumn/init(_:value:content:)-(LocalizedStringKey,_,_)``); one built from a closure is not,
 /// because nothing there says how to order the rows.
 ///
 /// ```swift

@@ -17,7 +17,7 @@ import TUIkitCore
 /// cannot reasonably be `Equatable` — one holding a closure (every `Button`
 /// action), an `AnyView`, or anything else whose equality is not decidable.
 ///
-/// - Important: Framework infrastructure. Use ``TUIkitView/View/memoized(id:)``.
+/// - Important: Framework infrastructure. Use ``View/memoized(id:)``.
 public struct _MemoizedView<Content: View, ID: Hashable>: View {
     /// What the caller says the appearance is a function of.
     let id: ID
@@ -77,7 +77,7 @@ extension View {
     /// Reuses this view's previous rendering for as long as `id` is unchanged.
     ///
     /// For a subtree that is expensive to draw and rarely changes. Where the
-    /// view can be `Equatable`, prefer ``equatable()``: it *proves* the subtree
+    /// view can be `Equatable`, prefer ``View/equatable()``: it *proves* the subtree
     /// is unchanged, where this *believes* you.
     ///
     /// ```swift

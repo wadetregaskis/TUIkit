@@ -71,7 +71,7 @@ public struct TerminalWidthTraits: Sendable, Equatable {
         /// Merged for an SMP base (👍🏽), detached for a BMP one (✊🏻 ☝🏽).
         /// iTerm2. (tmux was ONCE believed to fit here too; its split turned
         /// out to be per base codepoint, not per plane — see
-        /// ``Swift/Character/tmuxMergedToneBases`` — so tmux keeps
+        /// `Character.tmuxMergedToneBases` — so tmux keeps
         /// ``merged``-shaped traits and strips the detaching bases instead.)
         case detachedOnBMPBases
         /// The output walk rewrites every Fitzpatrick cluster as base + ZWNJ +

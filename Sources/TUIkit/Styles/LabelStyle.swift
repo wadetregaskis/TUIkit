@@ -24,7 +24,7 @@ public struct LabelStyleConfiguration {
 
     /// Whether the icon can actually be drawn.
     ///
-    /// `false` when ``Label/init(_:systemImage:)`` could not resolve the SF
+    /// `false` when ``Label/init(_:systemImage:)-(LocalizedStringKey,_)`` could not resolve the SF
     /// Symbol — no glyph, or no font that carries it. A style that would show
     /// only the icon shows the title instead rather than rendering an empty
     /// label; see ``IconOnlyLabelStyle``.

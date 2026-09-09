@@ -794,7 +794,7 @@ extension FrameDiffWriter {
 extension FrameDiffWriter {
     /// Writes only the lines that differ between two frames — and within each of
     /// those, only the cell runs that differ. See
-    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)`` for what
+    /// ``String/ansiCellDiff(replacing:width:mergingGapsUpTo:)`` for what
     /// makes a run, and when it declines to answer.
     ///
     /// - Returns: The row indices that were actually written (needed by

@@ -218,7 +218,7 @@ public struct ChildView {
     /// with a stable `identityKey` (`ForEach` rows) keep it — identity must
     /// follow the element across reorders — but take the provider's slot as a
     /// namespace, because two sibling `ForEach` loops with overlapping ids
-    /// are the same collision in keyed form (see ``providerSlot``). A child
+    /// are the same collision in keyed form (see ``providesAlignmentGuide``). A child
     /// with no identity type adopts its view's dynamic type, matching what it
     /// would get as a direct tuple child.
     func reindexed(to index: Int, providerSlot slot: Int) -> Self {
@@ -234,7 +234,7 @@ public struct ChildView {
     /// for nothing. Passing `nil` is the plain reindex.
     func reindexed(to index: Int, providerSlot slot: Int, under parent: ViewIdentity?) -> Self {
         if let identityKey {
-            // The slot prefix is the namespace; see ``providerSlot``.
+            // The slot prefix is the namespace; see ``providesAlignmentGuide``.
             let resolved = parent.map {
                 $0.child(
                     erasedType: identityType ?? type(of: view),
@@ -463,7 +463,7 @@ public protocol ChildViewProvider {
     /// A label on the provider rather than a field on `ChildView`, because
     /// `ChildView` is built and copied per child per pass and its size is
     /// load-bearing — the last field added to it cost `churn` ~16% (see
-    /// ``ChildView/providerSlot``). This costs a word on a protocol nothing
+    /// `ChildView.providerSlot`). This costs a word on a protocol nothing
     /// else implements.
     var identityBranchLabel: String? { get }
 }

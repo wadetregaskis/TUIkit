@@ -227,7 +227,7 @@ extension String {
     /// The index just past the escape sequence starting at `start`, or `nil`
     /// when it is neither a complete CSI nor a string-terminated sequence.
     ///
-    /// Not ``Swift/String/escapeSequenceEnd(from:)``, which is otherwise the
+    /// Not `String.escapeSequenceEnd(from:)`, which is otherwise the
     /// walker for exactly this: that one classifies a final byte by the whole
     /// `Character`'s single scalar and so refuses to consume a terminator that
     /// has FUSED with a following combining mark, while this one must consume

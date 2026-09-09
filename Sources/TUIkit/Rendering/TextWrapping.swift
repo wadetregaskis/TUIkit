@@ -143,7 +143,7 @@ enum TextWrapping {
     /// Like ``fit(_:width:maxLines:mode:atWordBoundary:)`` but also returns each
     /// final line's visible width.
     ///
-    /// The maxLines fold and the per-line ``Swift/StringProtocol/truncatedToWidth(_:mode:atWordBoundary:forceEllipsis:)``
+    /// The maxLines fold and the per-line `StringProtocol.truncatedToWidth(_:mode:atWordBoundary:forceEllipsis:)`
     /// pass rewrite line content, so the widths are recomputed from the *final*
     /// lines — a truncated or folded line's width is its post-truncation visible
     /// width (always `<= width`). When neither transform fires (the common case:

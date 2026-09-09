@@ -171,7 +171,7 @@ extension Character {
     /// — ZWJ (U+200D) or ZWNJ (U+200C): the sum of its segments' advances plus
     /// one column per joiner, or `nil` for a cluster with neither.
     ///
-    /// The same arithmetic as ``Swift/String/summedZWJAdvance(_:segmentAdvance:)``
+    /// The same arithmetic as `String.summedZWJAdvance(_:segmentAdvance:)`
     /// but NOT gated on ``TerminalWidthTraits``: that gate exists for hosts
     /// whose *claim* is widened to the decomposed width (Warp), and Apple
     /// Terminal's internal column decomposes regardless of the claim in force.

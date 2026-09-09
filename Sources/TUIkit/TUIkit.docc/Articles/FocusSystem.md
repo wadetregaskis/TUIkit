@@ -137,7 +137,7 @@ and `\.selectionEmphasis` carries the current point on the pulse.
 
 ### Turning it off
 
-``SwiftUICore/View/focusEffectDisabled(_:)`` suppresses the indication without
+``View/focusEffectDisabled(_:)`` suppresses the indication without
 taking the view out of the focus ring — SwiftUI's modifier and SwiftUI's
 contract. Tab still reaches the control, it still takes the keys, it simply
 stops advertising that it has arrived. Everything goes: the pulse, a `Button`'s

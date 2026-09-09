@@ -12,7 +12,7 @@ import TUIkitCore
 /// `DismissSearchAction`.
 ///
 /// Read it with `@Environment(\.dismissSearch)` from anywhere inside a
-/// ``View/searchable(text:placement:prompt:)`` subtree, and call it like a
+/// ``View/searchable(text:placement:prompt:)-(_,_,LocalizedStringKey)`` subtree, and call it like a
 /// function. It clears the query and hands the keyboard back to the content —
 /// the two halves of "stop searching".
 ///
@@ -53,7 +53,7 @@ public struct DismissSearchAction: Sendable {
     }
 
     /// Creates an action that runs `action`, for
-    /// ``View/searchable(text:placement:prompt:)`` to publish to its content.
+    /// ``View/searchable(text:placement:prompt:)-(_,_,LocalizedStringKey)`` to publish to its content.
     init(_ action: @escaping @MainActor @Sendable () -> Void) {
         self.action = action
     }
@@ -81,7 +81,7 @@ extension EnvironmentValues {
     /// Whether the user is currently searching — SwiftUI's `\.isSearching`.
     ///
     /// True while the search field of an enclosing
-    /// ``View/searchable(text:placement:prompt:)`` holds keyboard focus. As in
+    /// ``View/searchable(text:placement:prompt:)-(_,_,LocalizedStringKey)`` holds keyboard focus. As in
     /// SwiftUI it is readable only from that modifier's *content*: it answers
     /// "is the person typing at me right now", which is what lets results
     /// distinguish an empty query from a search nobody has started.

@@ -644,8 +644,13 @@ jobs:
         with:
           xcode-version: '26'
 
+      # `--strict` and not just a build: DocC's warnings never fail it, and they
+      # are almost all broken doc LINKS — which render as plain text, so nothing
+      # on the page says a reference was lost. Uncounted, they accumulate: 659 by
+      # 2026-08-04, and 435 again by 2026-09-08 (82 source lines) because this
+      # job built the archive and never read what DocC said about it.
       - name: Build DocC documentation
-        run: ./Tools/BuildDocs/build-docs.sh --output docc-output --static-hosting
+        run: ./Tools/BuildDocs/build-docs.sh --output docc-output --static-hosting --strict
 
   # ── Versioned consumer ─────────────────────────────────────────────────────
   # Tags only. Everything else in this file builds the package as ITSELF; this

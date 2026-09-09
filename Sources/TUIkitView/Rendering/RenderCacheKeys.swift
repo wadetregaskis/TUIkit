@@ -70,13 +70,13 @@ extension RenderCache {
     /// size for another (the abandoned cross-frame cache — it got Panel/Card/
     /// Dialog wrong, and the equivalence harness caught it).
     ///
-    /// The two widths are both here and both matter. ``effectiveWidth`` is
+    /// The two widths are both here and both matter. `effectiveWidth` is
     /// `proposal.width ?? availableWidth`, the number a measure actually lays out
-    /// against; ``availableWidth`` stays beside it because a container measures
+    /// against; `availableWidth` stays beside it because a container measures
     /// its children against the *available* extent while sizing itself against
     /// the proposal, so two calls that share one and not the other are two
     /// different questions. What is NOT here is the vertical budget or whether
-    /// the width arrived as a proposal — those live in ``MeasureEntry``, which is
+    /// the width arrived as a proposal — those live in `RenderCache.MeasureEntry`, which is
     /// where a ``ViewSize/isNaturalSize`` answer gets to ignore them.
     public struct MeasureKey: Hashable {
         /// The identity's structural hash, not the identity.

@@ -77,7 +77,7 @@ public final class LocalizationService: @unchecked Sendable {
     /// Creates and initializes the localization service.
     ///
     /// Loads the stored language preference, falling back to the language the
-    /// environment asks for — see ``systemPreferredLanguage(environment:preferredLanguages:)``
+    /// environment asks for — see `systemPreferredLanguage(environment:preferredLanguages:)`
     /// — and then to English.
     public init() {
         self.configDirectoryOverride = nil

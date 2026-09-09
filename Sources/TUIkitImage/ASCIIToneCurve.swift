@@ -34,7 +34,7 @@ import TUIkitStyling
 /// before any palette mapping. It has to: an inversion moves where the
 /// ink/background split falls, so a threshold measured on the original image
 /// would be measured on tones that no longer exist. See
-/// ``ASCIIConverter/monoInkThreshold(for:)``.
+/// `ASCIIConverter.monoInkThreshold(for:)`.
 public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
     /// The pairs, as the caller wrote them. Empty when this is a per-channel
@@ -70,7 +70,7 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
         /// Where this stop sits on the tone axis: `0` is black, `1` is white.
         ///
-        /// A curve is a function of LUMINANCE alone — see ``negatesChannels``
+        /// A curve is a function of LUMINANCE alone — see ``channels``
         /// — so this is the whole of what `from` contributes. It answers `nil`
         /// for a `from` that is still `.semantic`, which has no tone
         /// until a palette resolves it; see ``ASCIIToneCurve/resolved(with:)``.
@@ -179,7 +179,7 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
 
         /// Whether this would change anything. Fewer than two points cannot
         /// define a function and are skipped rather than applied as a
-        /// flattening constant — the same rule ``ASCIIToneCurve/isIdentity``
+        /// flattening constant — the same rule ``ASCIIToneCurve/identity``
         /// applies to knots.
         public var isIdentity: Bool {
             guard points.count >= 2 else { return true }
@@ -296,7 +296,7 @@ public struct ASCIIToneCurve: Sendable, Equatable, ExpressibleByArrayLiteral {
     ///
     /// Using this module's luminance rather than a perceptual lightness has a
     /// second payoff: the curve's positions agree with where
-    /// ``ASCIIConverter/monoInkThreshold(for:)`` will fall, and the curve runs
+    /// `ASCIIConverter.monoInkThreshold(for:)` will fall, and the curve runs
     /// immediately before it.
     ///
     /// Alpha is carried through untouched: a curve recolours, it does not

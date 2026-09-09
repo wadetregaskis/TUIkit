@@ -7,9 +7,20 @@ every public symbol under `/documentation/tuikit/`.
 Tools/BuildDocs/build-docs.sh --preview             # read them: serves on :8080
 Tools/BuildDocs/build-docs.sh                       # → .build/docs/TUIkit.doccarchive
 Tools/BuildDocs/build-docs.sh --analyze             # every diagnostic, for a docs audit
+Tools/BuildDocs/build-docs.sh --strict              # --analyze, and fail on any of them
 Tools/BuildDocs/build-docs.sh --static-hosting \
     --output docc-output                            # for publishing
 ```
+
+**`--strict` is what CI runs, and it is not pedantry.** DocC warnings never fail
+a build, and nearly all of them are broken doc *links* — a `` ``Symbol`` `` that
+cannot resolve renders as plain text, so the page looks fine and nothing says a
+reference was lost. Uncounted they pile up: 659 warnings by 2026-08-04, then 435
+again by 2026-09-08 from 82 source lines, in both cases because the docs job
+built the archive and never read what DocC said about it. `--strict` counts, and
+reports SOURCE LINES as well as warnings, because one bad link in a `View`
+extension is repeated onto every conforming type — 93 warnings came from one
+line of `View+AlertPresenting.swift`.
 
 ## Reading the docs
 

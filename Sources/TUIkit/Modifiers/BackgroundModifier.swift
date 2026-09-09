@@ -17,7 +17,7 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
 
     /// Fills at this modifier's own type, which is the right owner only when
     /// nothing encloses it — a direct call, never the render path. `ModifiedView`
-    /// calls ``_modify(buffer:context:owner:)`` instead and names itself.
+    /// calls `_modify(buffer:context:owner:)` instead and names itself.
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         _modify(buffer: buffer, context: context, owner: Self.self)
     }

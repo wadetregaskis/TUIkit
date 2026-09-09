@@ -173,7 +173,7 @@ public struct TableColumn<Value>: Sendable {
     /// Creates a sortable column whose header is displayed as written.
     ///
     /// Generic over `StringProtocol` for the same reason as
-    /// ``init(_:value:)``: it is what keeps a *literal* binding to the key
+    /// ``init(_:value:)-(LocalizedStringKey,(Value)->String)``: it is what keeps a *literal* binding to the key
     /// overload above — see ``LocalizedStringKey``. Neither `value` nor
     /// `content` is display text a translator ever sees; `content` builds the
     /// cell from the row.
@@ -198,7 +198,7 @@ public struct TableColumn<Value>: Sendable {
     /// Creates a table column with a custom value extractor.
     ///
     /// A closure column cannot be sorted — nothing here says how to order the
-    /// rows, only how to render them. Use ``init(_:value:content:)`` for a
+    /// rows, only how to render them. Use ``init(_:value:content:)-(S,_,_)`` for a
     /// column that is both.
     ///
     /// - Parameters:
@@ -211,7 +211,7 @@ public struct TableColumn<Value>: Sendable {
     /// Creates a closure column whose header is displayed as written.
     ///
     /// Generic over `StringProtocol` for the same reason as
-    /// ``init(_:value:)`` — see ``LocalizedStringKey``.
+    /// ``init(_:value:)-(LocalizedStringKey,(Value)->String)`` — see ``LocalizedStringKey``.
     ///
     /// - Parameters:
     ///   - title: The column header title.

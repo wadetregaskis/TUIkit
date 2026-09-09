@@ -44,14 +44,14 @@ extension String {
     /// text views break lines on it — so removing it here would corrupt ordinary
     /// input. Every C0 control that would move the cursor off its row is
     /// neutralised instead at the write boundary, by
-    /// ``Swift/String/sanitizedForTerminalRow()``, which no view can bypass.
+    /// ``String/sanitizedForTerminalRow()``, which no view can bypass.
     ///
-    /// ## Why this is not ``Swift/String/stripped``
+    /// ## Why this is not ``String/stripped``
     ///
-    /// ``Swift/String/stripped`` answers a different question — "what does this
+    /// ``String/stripped`` answers a different question — "what does this
     /// paint?" — for width arithmetic, on output *this framework generated*.
     /// The two now share one rule for where a 7-bit sequence ends
-    /// (``Swift/String/escapeBodyScan(_:on:)``), because they must: OSC 8
+    /// (`String.escapeBodyScan(_:on:)`), because they must: OSC 8
     /// hyperlinks put a string-terminated sequence into that output, and a
     /// measure that took the URI for text would budget columns nothing paints.
     ///
@@ -160,7 +160,7 @@ extension String {
                 // An introducer opened inside an unterminated string is still
                 // inside it as far as the terminal is concerned, so there is
                 // nothing to dispatch on here — the shared body rule
-                // (``Swift/String/escapeBodyScan(_:on:)``) says when the
+                // (`String.escapeBodyScan(_:on:)`) says when the
                 // sequence ends, and it is the same rule the width scanners
                 // use. That is the point of sharing it: a sanitizer that
                 // stopped in a different place from the measurer would leave

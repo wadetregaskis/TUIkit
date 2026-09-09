@@ -86,7 +86,7 @@ extension ColorDepth {
     /// `nonisolated(unsafe)` for the same reason ``processCurrent`` is.
     nonisolated(unsafe) private static var processCap: ColorDepth = .truecolor
 
-    /// A task-scoped ceiling, bound by ``withCap(_:operation:)-9tqqz``.
+    /// A task-scoped ceiling, bound by ``withCap(_:operation:)-35lhk``.
     @TaskLocal private static var taskCap: ColorDepth?
 
     /// The color depth to use for rendering.
@@ -133,7 +133,7 @@ extension ColorDepth {
         try $taskCap.withValue(depth, operation: operation)
     }
 
-    /// Async variant of ``withCap(_:operation:)-9tqqz``.
+    /// Async variant of ``withCap(_:operation:)-35lhk``.
     @discardableResult
     public static func withCap<T>(
         _ depth: ColorDepth, operation: () async throws -> T

@@ -205,7 +205,7 @@ public enum ASCIIColorMode: Sendable, Equatable {
     /// picture and the page beside it draw from the same 240 colours. Mapped by
     /// nearest in OKLab, like every other palette here — the same COLOURS as
     /// the UI, deliberately not the same RULE, and
-    /// ``ASCIIPalette/nearestIndex(to:)`` says why. It used to divide each
+    /// `ASCIIPalette.nearestIndex(to:)` says why. It used to divide each
     /// channel by 51 onto the cube instead, which rotates hue in the pale range
     /// — a cream came out pink — and short-circuited near-greys on a test that
     /// never compared red against blue. See `ASCIIPalette.ansi256`.

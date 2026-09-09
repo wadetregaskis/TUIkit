@@ -283,7 +283,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
 
     /// The part of this run inside `columns`, or `nil` if that is none of it.
     ///
-    /// Every frame is cut to the same window by ``Swift/String/ansiAwareSlice(visibleStart:visibleCount:)``,
+    /// Every frame is cut to the same window by ``String/ansiAwareSlice(visibleStart:visibleCount:)``,
     /// which carries the styling that was active at the cut and blanks a wide
     /// glyph straddling either edge — so a slice claims exactly the columns it
     /// was asked for and can be spliced like any other frame.

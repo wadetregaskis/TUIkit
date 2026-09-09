@@ -493,7 +493,7 @@ extension List {
     }
 
     /// Creates a list without selection, with a footer, without
-    /// a title. See ``init(_:content:footer:)`` for details.
+    /// a title. See ``init(_:content:footer:)-(LocalizedStringKey,_,_)`` for details.
     ///
     /// - Parameters:
     ///   - content: A ViewBuilder that defines the list content.
@@ -518,7 +518,7 @@ extension List {
 
 extension List where Footer == EmptyView {
     /// Creates a list without selection, with a title. See
-    /// ``init(_:content:footer:)`` for details on selectionless
+    /// ``init(_:content:footer:)-(LocalizedStringKey,_,_)`` for details on selectionless
     /// behaviour.
     ///
     /// - Parameters:
@@ -550,7 +550,7 @@ extension List where Footer == EmptyView {
     }
 
     /// Creates a list without selection or title. See
-    /// ``init(_:content:footer:)`` for details on selectionless
+    /// ``init(_:content:footer:)-(LocalizedStringKey,_,_)`` for details on selectionless
     /// behaviour.
     ///
     /// - Parameter content: A ViewBuilder that defines the list
@@ -580,7 +580,7 @@ extension List where Footer == EmptyView {
 
 extension List where SelectionValue == Int, Footer == EmptyView {
     /// Creates a selectionless list with a localized title and a default
-    /// SelectionValue of `Int`. See ``init(_:content:footer:)``
+    /// SelectionValue of `Int`. See ``init(_:content:footer:)-(LocalizedStringKey,_,_)``
     /// for the selectionless semantics.
     public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.init(titleKey.localized, content: content)
@@ -604,7 +604,7 @@ extension List where SelectionValue == Int, Footer == EmptyView {
     }
 
     /// Creates a selectionless list with a default SelectionValue
-    /// of `Int`. See ``init(_:content:footer:)`` for the
+    /// of `Int`. See ``init(_:content:footer:)-(LocalizedStringKey,_,_)`` for the
     /// selectionless semantics.
     public init(@ViewBuilder content: () -> Content) {
         self.title = nil

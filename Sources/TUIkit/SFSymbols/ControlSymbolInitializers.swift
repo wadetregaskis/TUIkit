@@ -153,7 +153,7 @@ extension Picker where Label == TUIkit.Label<Text, _SymbolIcon> {
     ///   - titleKey: The key for the picker's label.
     ///   - systemImage: The SF Symbol name, e.g. `"paintpalette"`.
     ///   - selection: A binding to the selected value.
-    ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    ///   - content: A view builder of options, each carrying a ``View/tag(_:includeOptional:)``.
     public init(
         _ titleKey: LocalizedStringKey,
         systemImage: String,
@@ -171,7 +171,7 @@ extension Picker where Label == TUIkit.Label<Text, _SymbolIcon> {
     ///   - title: The picker's label text.
     ///   - systemImage: The SF Symbol name, e.g. `"paintpalette"`.
     ///   - selection: A binding to the selected value.
-    ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    ///   - content: A view builder of options, each carrying a ``View/tag(_:includeOptional:)``.
     @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,

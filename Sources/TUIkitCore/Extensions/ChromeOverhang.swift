@@ -147,8 +147,8 @@ extension TerminalWidthTraits.ChromeOverhang {
 /// status bar draws (U+2190…U+2423) through the geometric shapes its radio
 /// buttons, disclosure triangles and steppers are drawn from (U+25A0…U+25EF).
 ///
-/// The two hot callers — ``Swift/Unicode/Scalar/loneTerminalWidth`` and
-/// ``Swift/Character/isOverhangingChromeGlyph`` — spell these bounds as
+/// The two hot callers — `Unicode.Scalar.loneTerminalWidth` and
+/// `Character.isOverhangingChromeGlyph` — spell these bounds as
 /// literals rather than reading these globals, because a width path pays a
 /// one-time-initialization check for every global it touches and this one runs
 /// per scalar. `ChromeOverhangTests` pins every host's table inside the
@@ -163,7 +163,7 @@ let chromeOverhangCeiling: UInt32 = 0x25EF
 /// this question is about. It is not a lookup keyed by the host doing the
 /// painting: the shortfall a widened claim opens is owed by whichever advance
 /// model emits the row, so all five models ask this same question and get the
-/// same answer (see ``Swift/Character/isOverhangingChromeGlyph``).
+/// same answer (see `Character.isOverhangingChromeGlyph`).
 ///
 /// Out of line deliberately: the callers gate it behind the two-comparison
 /// window above, so the common answer costs those two comparisons and this
@@ -189,7 +189,7 @@ func isChromeOverhangCodepoint(_ value: UInt32) -> Bool {
 let chromeOverhangUnion: [UInt32] = TerminalWidthTraits.ChromeOverhang.allCases
     .flatMap(\.codepoints)
 
-/// The UTF-8 continuation bytes ``Swift/String/utf8MayNeedCompensation`` must
+/// The UTF-8 continuation bytes `String.utf8MayNeedCompensation` must
 /// admit for the tables' codepoints: bit *n* is set when a lead `0xE2`
 /// followed by `0x80 + n` can carry an overhanging glyph on ANY host.
 ///
@@ -229,7 +229,7 @@ extension Character {
     /// it is the price of a claim TUIkit widened, so whoever emits a row under
     /// that claim owes the `CUF` that closes it. That is why the models share
     /// one question, why an unidentified host is compensated too (see
-    /// ``Swift/String/withChromeOverhangCompensation()``), and why a
+    /// ``String/withChromeOverhangCompensation()``), and why a
     /// diagnostic rendering as another client stays self-consistent.
     ///
     /// In a real app the two coincide: startup publishes the identified host's
@@ -263,7 +263,7 @@ extension Character {
     /// where the widened claim must still be squared.
     ///
     /// Spelled once and shared by the walk that compensates such a host
-    /// (``Swift/String/withChromeOverhangCompensation()``) and by the oracle
+    /// (``String/withChromeOverhangCompensation()``) and by the oracle
     /// that checks the walk conserves — two spellings of one model is how a
     /// conservation test comes to certify a walk against itself.
     public var unidentifiedHostCursorAdvance: Int {

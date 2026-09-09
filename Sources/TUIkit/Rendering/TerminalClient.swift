@@ -382,7 +382,7 @@ public struct TerminalClient: Sendable, Equatable {
     // MARK: - The models
 
     /// How many cells `cluster` actually moves the cursor on `program`, which
-    /// is not always the ``Swift/Character/terminalWidth`` it is
+    /// is not always the ``Character/terminalWidth`` it is
     /// laid out as.
     ///
     /// The gap between the two is the whole subject of
@@ -390,7 +390,7 @@ public struct TerminalClient: Sendable, Equatable {
     /// wide that advances the cursor one drags everything after it on the row a
     /// cell to the left.
     ///
-    /// ``Program/unidentified`` answers ``Swift/Character/terminalWidth``,
+    /// ``Program/unidentified`` answers ``Character/terminalWidth``,
     /// because a terminal we have no measurements for is assumed to advance the
     /// way it paints.
     public static func cursorAdvance(of cluster: Character, on program: Program) -> Int {
@@ -439,7 +439,7 @@ public struct TerminalClient: Sendable, Equatable {
     ///   - tmuxSkinTones: which skin-tone bases to strip under tmux. tmux
     ///     merges 70 of the 134 modifier bases into exactly the two cells we
     ///     claim and detaches the rest (a per-codepoint fact — see
-    ///     ``Swift/Character/tmuxMergedToneBases``), so whether the
+    ///     `Character.tmuxMergedToneBases`), so whether the
     ///     merged ones can be KEPT depends on which clients are attached.
     public static func compensating(
         _ text: String,

@@ -84,7 +84,7 @@ public struct StyleAttributes: Sendable, Hashable {
     /// than declining to speak. A single Optional cannot tell those apart, and
     /// collapsing them made `.textCase(nil)` a silent no-op — an inherited
     /// `.uppercase` could not be escaped from anywhere in the subtree. Same
-    /// shape as `Font??` on ``TextStyle`` and `UnitPoint??` on the scroll
+    /// shape as `Font??` on `TextStyle` and `UnitPoint??` on the scroll
     /// anchor, and for the same reason.
     public var textCase: TextCase??
 

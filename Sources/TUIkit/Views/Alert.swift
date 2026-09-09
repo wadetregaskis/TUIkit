@@ -7,7 +7,7 @@
 /// A modal alert view that displays a title, message, and optional action buttons.
 ///
 /// `Alert` draws the panel. **Presenting it is a separate job**, and the way to
-/// do it is ``View/alert(_:isPresented:actions:message:)`` or
+/// do it is ``View/alert(_:isPresented:actions:message:borderStyle:borderColor:titleColor:)-(LocalizedStringKey,_,_,_,_,_,_)`` or
 /// ``View/modal(isPresented:onDismiss:content:)``.
 ///
 /// ## Structure

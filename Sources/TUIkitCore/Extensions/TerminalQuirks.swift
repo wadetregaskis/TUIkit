@@ -53,7 +53,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
         case stripAll
         /// Strip only clusters whose base tmux was measured to DETACH,
         /// keeping the 70 bases it merges into the claim
-        /// (``Swift/Character/tmuxMergedToneBases``). This is tmux — and the
+        /// (`Character.tmuxMergedToneBases`). This is tmux — and the
         /// split is per codepoint, not per plane: 🤙 (SMP) detaches while 🧑
         /// (also SMP) merges, which is what sank the by-plane rule this case
         /// used to encode (`stripBMPBases`, retired 2026-08-28).
@@ -292,7 +292,7 @@ public struct TerminalQuirks: Sendable, Equatable, Codable {
 
     /// How far a terminal with these quirks moves the cursor over `cluster`.
     ///
-    /// The same question ``Swift/Character/terminalAppCursorAdvance`` and its
+    /// The same question ``Character/terminalAppCursorAdvance`` and its
     /// siblings answer for the measured hosts, asked of a set of switches
     /// instead of a measurement — which is what lets an unmeasured terminal be
     /// explored before anybody writes its model down.

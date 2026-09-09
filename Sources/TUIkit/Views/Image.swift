@@ -61,7 +61,7 @@ enum ImageLoadingPhase: Sendable {
 /// ## Placeholder
 ///
 /// While loading, a centered placeholder is displayed. By default this is
-/// a ``Spinner``. Use ``View/imagePlaceholder(_:)`` to customize.
+/// a ``Spinner``. Use ``View/imagePlaceholder(_:)-(LocalizedStringKey)`` to customize.
 ///
 /// ## SF Symbols
 ///
@@ -77,7 +77,7 @@ enum ImageLoadingPhase: Sendable {
 ///
 /// The rendering modifiers above apply to raster images only; there is nothing
 /// for them to do to a character. See ``SFSymbol`` for where symbols draw at
-/// all, and ``Label/init(_:systemImage:)`` for the icon-with-title shape, which
+/// all, and ``Label/init(_:systemImage:)-(LocalizedStringKey,_)`` for the icon-with-title shape, which
 /// is usually the better one because it can drop its gap as well as its glyph.
 public struct Image: View {
     /// What this image *is* — the two unrelated things SwiftUI's `Image` also
@@ -112,7 +112,7 @@ public struct Image: View {
     /// terminal without the SF Symbols font, an unknown name — this renders
     /// **nothing**, because there is nothing else it could honestly show (see
     /// ``SFSymbol/canRender(named:)``). That is the one place
-    /// ``Label/init(_:systemImage:)`` does better: it can close the gap it was
+    /// ``Label/init(_:systemImage:)-(LocalizedStringKey,_)`` does better: it can close the gap it was
     /// going to leave, and a bare `Image` in an `HStack` cannot, the spacing
     /// being the stack's.
     ///

@@ -1119,7 +1119,7 @@ extension FrameBuffer {
     /// ``composited(with:at:)`` resets before an overlay, so an overlay stating
     /// no background of its own lands on the terminal's default. During assembly
     /// that is harmless, because a container paints its background across the
-    /// whole finished row afterwards (``ANSIRenderer.applyPersistentBackground``
+    /// whole finished row afterwards (`ANSIRenderer.applyPersistentBackground`
     /// re-injects it after every reset). Nothing does that here — the row is
     /// already on screen — so a foreground-only frame, which is what colouring a
     /// glyph produces and therefore what most focus indicators leave behind,
@@ -1146,7 +1146,7 @@ extension FrameBuffer {
         // The cells about to be replaced may carry a host's cursor-advance
         // compensation, put there by `buildLine` when the row was rendered. The
         // frame brings its own, so the old pair has to go — see
-        // ``Swift/String/removingCursorCompensation(coveringColumns:)``, which
+        // `String.removingCursorCompensation(coveringColumns:)`, which
         // is where the story of the extra `CUF` is written down.
         let base = line.removingCursorCompensation(
             coveringColumns: column..<(column + width))

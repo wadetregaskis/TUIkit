@@ -55,7 +55,7 @@
 /// after it is text the terminal draws. A URL is exactly the kind of value an
 /// application builds out of data it did not author, so ``opening`` percent-
 /// encodes every byte outside printable ASCII rather than assuming the caller
-/// did. That is the same reasoning as ``Swift/String/sanitizedForTerminal``:
+/// did. That is the same reasoning as ``String/sanitizedForTerminal``:
 /// the gate belongs where the escape is written, not in each caller.
 public struct TerminalHyperlink: Sendable, Equatable {
 

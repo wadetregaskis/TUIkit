@@ -85,7 +85,7 @@ public final class RenderCache: @unchecked Sendable {
         /// Number of times ``clearAll()`` was called.
         public var clears: Int = 0
 
-        /// Number of times ``clearAffected(by:)`` was called.
+        /// Number of times ``clearAffected(by:keepingSizes:)`` was called.
         public var subtreeClears: Int = 0
 
         /// Creates a new Stats instance with default values.
@@ -124,7 +124,7 @@ public final class RenderCache: @unchecked Sendable {
     }
 
     /// A cached rendering result for a single view identity.
-    /// - Note: A `final class`, not a struct. Every ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``
+    /// - Note: A `final class`, not a struct. Every ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``
     ///   pulls an entry out of the dictionary — including the **reject** paths,
     ///   which discard it immediately — and a struct copy retains every
     ///   refcounted field: the snapshot existential plus the five arrays inside
@@ -460,7 +460,7 @@ extension RenderCache {
     /// One caller: `measureValueMemoized`, which both ``EquatableView`` and
     /// `_MemoizedRow` reach — they were the same code written twice.
     ///
-    /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``:
+    /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``:
     /// returns the cached ``ViewSize`` only when the view value compares equal
     /// and the proposal/available extent match. Value comparison is what makes
     /// this safe where an identity-only key is not — a hit means identical
@@ -507,7 +507,7 @@ extension RenderCache {
     /// The memoized measurement for `key`, or `nil` when there is none or the
     /// view value has changed.
     ///
-    /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:)``.
+    /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``.
     /// Both the key and the value are checked: `key` covers the identity and
     /// the proposal, and `view` — compared with `==` against the snapshot
     /// taken when the size was stored — covers the content, so a row whose
@@ -516,7 +516,7 @@ extension RenderCache {
     ///
     /// Unlike the buffer cache this is safe to populate from a measure pass:
     /// entries are keyed by proposal, so a measure cannot overwrite what a
-    /// render stored (see ``store(identity:view:buffer:contextWidth:contextHeight:gradientFrame:)``,
+    /// render stored (see ``store(identity:view:buffer:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``,
     /// which must not be called while measuring).
     ///
     /// - Parameters:
@@ -580,7 +580,7 @@ extension RenderCache {
     /// that a subtree whose view value compares equal, at the same size, draws
     /// the same cells — and that claim quietly depends on everything ELSE the
     /// subtree read while drawing. An environment value applied through a
-    /// modifier is compared (``noteAppliedEnvironment``), but one **assigned
+    /// modifier is compared (``noteAppliedEnvironment(_:identity:keyPath:depth:)``), but one **assigned
     /// directly** — `context.environment.foo = x`, which several containers do
     /// — is not, and the entry it invalidates is nobody's.
     ///
@@ -933,7 +933,7 @@ extension RenderCache {
     /// Called by `RenderLoop` when global environment values change
     /// (theme, appearance) that affect all views simultaneously.
     /// For state changes that only affect a subtree, prefer
-    /// ``clearAffected(by:)``.
+    /// ``clearAffected(by:keepingSizes:)``.
     public func clearAll() {
         stats.clears += 1
         logDebug("CLEAR ALL (\(entries.count) entries)")

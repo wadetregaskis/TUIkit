@@ -82,8 +82,8 @@ enum TerminalIdentityQuery {
     /// Sorts a raw reply buffer into ``TerminalIdentity``.
     ///
     /// Walks escape sequences with the repo's canonical CSI rule
-    /// (``Swift/String/isCSIBodyByte(_:)`` /
-    /// ``Swift/String/isCSIFinalByte(_:)``) rather than "digits and `;` then a
+    /// (``String/isCSIBodyByte(_:)`` /
+    /// ``String/isCSIFinalByte(_:)``) rather than "digits and `;` then a
     /// letter", which stops at the `?` of a DA1 reply and would strand the rest
     /// as text.
     ///

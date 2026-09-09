@@ -150,7 +150,7 @@ enum _PickerEntry<SelectionValue: Hashable> {
 /// options.
 ///
 /// Each option is a view tagged with the value it represents, using the
-/// ``View/tag(_:)`` modifier. The tag type must match the picker's
+/// ``View/tag(_:includeOptional:)`` modifier. The tag type must match the picker's
 /// `selection` binding.
 ///
 /// ```swift
@@ -203,7 +203,7 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
     ///
     /// - Parameters:
     ///   - selection: A binding to the selected value.
-    ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    ///   - content: A view builder of options, each carrying a ``View/tag(_:includeOptional:)``.
     ///   - label: A view builder for the picker's label.
     public init(
         selection: Binding<SelectionValue>,
@@ -326,7 +326,7 @@ extension Picker where Label == Text {
     /// - Parameters:
     ///   - titleKey: The key for the picker's label.
     ///   - selection: A binding to the selected value.
-    ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    ///   - content: A view builder of options, each carrying a ``View/tag(_:includeOptional:)``.
     public init(
         _ titleKey: LocalizedStringKey,
         selection: Binding<SelectionValue>,
@@ -344,7 +344,7 @@ extension Picker where Label == Text {
     /// - Parameters:
     ///   - title: The picker's label text.
     ///   - selection: A binding to the selected value.
-    ///   - content: A view builder of options, each carrying a ``View/tag(_:)``.
+    ///   - content: A view builder of options, each carrying a ``View/tag(_:includeOptional:)``.
     @_disfavoredOverload
     public init<S: StringProtocol>(
         _ title: S,

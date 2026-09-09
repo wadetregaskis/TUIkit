@@ -60,7 +60,7 @@ extension View {
 
 extension View {
     /// Offers a menu of suggestions under the search field of an enclosing
-    /// ``View/searchable(text:placement:prompt:)``.
+    /// ``View/searchable(text:placement:prompt:)-(_,_,LocalizedStringKey)``.
     ///
     /// Mirrors SwiftUI's `searchSuggestions(_:)`, and is written where SwiftUI
     /// writes it — outside the `searchable`, which is what scopes it to the

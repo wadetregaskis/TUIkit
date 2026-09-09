@@ -23,7 +23,7 @@
 ///
 /// The swatch shows focus and hover in its centre cell — a bullet, pulsing
 /// while focused — rather than by re-colouring itself, because its colour is
-/// its content (``_ColorSwatchButtonStyle``).
+/// its content (`_ColorSwatchButtonStyle`).
 ///
 /// ```swift
 /// @State var tint: Color = .rgb(80, 160, 255)

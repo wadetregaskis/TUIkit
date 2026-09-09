@@ -168,7 +168,7 @@ extension Palette {
 
     /// The default well: the palette's stated chrome tone when it is a *well's*
     /// worth of separation from the page, and otherwise the page stepped by
-    /// ``wellSeparation``.
+    /// `wellSeparation`.
     ///
     /// Deliberately not ``liftedBackground``, which is a plane. The two are the
     /// same material and different depths: a tab body or a header strip is a
@@ -213,7 +213,7 @@ extension Palette {
     /// none.
     ///
     /// **How far** is measured in ``Color/perceivedLightness`` (see
-    /// ``planeSeparation``), not in contrast ratios and not in cube entries.
+    /// `planeSeparation`), not in contrast ratios and not in cube entries.
     /// A cube-entry difference is a yes/no that says nothing about size — Man
     /// Page's stated tone and Novel's derived one both cleared it while sitting
     /// ΔL\* 0.5 and 3.4 from their pages, which is to say invisibly. And a
@@ -589,7 +589,7 @@ extension Palette {
     /// demands it, so a hover looks the same everywhere (the rule
     /// ``liftedBackground`` already follows, for the same reason).
     ///
-    /// It walks ``hoverSeparationSteps`` distinguishable entries rather than
+    /// It walks `hoverSeparationSteps` distinguishable entries rather than
     /// stopping at the first. The first is what the *terminal* can show; it was
     /// not what a *person* notices, which is what "the highlight effect for
     /// mouse hover is a bit too subtle" was about. Counting cube entries rather
@@ -643,7 +643,7 @@ extension Palette {
         let page = background.resolve(with: self)
         let resting = resolved.downsampledToPalette256()
 
-        /// The step toward `target` that is ``hoverSeparationSteps``
+        /// The step toward `target` that is `hoverSeparationSteps`
         /// distinguishable cube entries away from `resolved`, or the furthest
         /// one this direction reaches, or nil when the whole direction
         /// quantises back onto it.

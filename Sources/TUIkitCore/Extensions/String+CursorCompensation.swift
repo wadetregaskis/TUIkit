@@ -184,7 +184,7 @@ extension String {
     /// an assertion.
     ///
     /// - Parameter advance: the host's cursor advance for one character —
-    ///   ``Swift/Character/terminalAppCursorAdvance`` and its siblings, or
+    ///   ``Character/terminalAppCursorAdvance`` and its siblings, or
     ///   ``TerminalQuirks/cursorAdvance(of:)`` for a terminal being explored.
     public func cursorAdvance(perCharacter advance: (Character) -> Int) -> Int {
         var total = 0
@@ -263,7 +263,7 @@ extension String {
     /// Apple Terminal keeps THREE facts per row and compensation must square
     /// all of them with the claim:
     ///
-    /// - the **internal** column (``Swift/Character/terminalAppCursorAdvance``,
+    /// - the **internal** column (``Character/terminalAppCursorAdvance``,
     ///   what DSR reports) decides when the row WRAPS. A cluster that leaves it
     ///   past the claim makes a full-width row wrap before its tail is written,
     ///   and the abandoned cells keep the terminal's default background — blank
@@ -288,7 +288,7 @@ extension String {
     /// - **Skin tones on an emoji-presentation base** (🤙🏽 ✊🏿 👍🏽), when
     ///   ``TerminalWidthTraits`` claims the separated width:
     ///   rewritten as base + ZWNJ + modifier
-    ///   (``Swift/Character/separatedSkinToneEmission``) and emitted with no
+    ///   (`Character.separatedSkinToneEmission`) and emitted with no
     ///   moves at all — the host renders base, one blank column (the ZWNJ's
     ///   own), then the swatch, and internal, paint and store all land on the
     ///   claim of base + 3. The tone survives on screen, which the composed
@@ -306,7 +306,7 @@ extension String {
     ///   swatch.
     /// - **Emoji ZWJ sequences** (👨‍👩‍👧‍👦 ❤️‍🔥 👩🏽‍🚀), when the traits
     ///   claim the decomposed width: decomposed into their segments
-    ///   (``Swift/Character/emojiZWJSegments``), each segment then compensated
+    ///   (`Character.emojiZWJSegments`), each segment then compensated
     ///   by its own class — so ❤️‍🔥 becomes an `ECH`'d ❤️ plus a bare 🔥, and
     ///   👩🏽‍🚀 a separated 👩+ZWNJ+🏽 plus a bare 🚀. Every cursor-move
     ///   repair that kept the composed glyph left later absolute positioning
@@ -315,7 +315,7 @@ extension String {
     ///   nothing wrong with it, at the cost the user accepted: component
     ///   glyphs instead of the composed one.
     /// - **Flag pairs and keycaps**
-    ///   (``Swift/Character/terminalAppStoresWiderThanPainted``): internal
+    ///   (`Character.terminalAppStoresWiderThanPainted`): internal
     ///   already equals the claim, the glyph paints into it — and the store
     ///   keeps one extra column that shifts every follower a cell left. Store
     ///   surgery: the cluster, `CUB(1)` into it, `DCH(1)` to delete the
@@ -456,7 +456,7 @@ extension String {
     ///   one whenever any attached client mis-renders a kept tone.
     /// - ``keepingTmuxMerged``: strip only the clusters tmux DETACHES,
     ///   keeping the 70 bases it was measured to merge into the 2-cell claim
-    ///   (``Swift/Character/tmuxMergedToneBases``). This replaced a by-plane
+    ///   (`Character.tmuxMergedToneBases`). This replaced a by-plane
     ///   rule (`bmpOnly`) on 2026-08-28, when the full modifier-base sweep
     ///   showed the split is per-codepoint: 🤙 (SMP) detaches while 🧑 (also
     ///   SMP) merges, so a plane test kept clusters tmux shears and the
@@ -843,7 +843,7 @@ extension String {
     ///
     /// Columns are the LAYOUT's, which is the space the caller's `column` and
     /// `width` are in: a visible character advances by its
-    /// ``Swift/Character/terminalWidth`` and the compensation escapes advance by
+    /// ``Character/terminalWidth`` and the compensation escapes advance by
     /// nothing, since reconciling the host's advance with that width is the
     /// whole of what they are for.
     func removingCursorCompensation(coveringColumns columns: Range<Int>) -> String {

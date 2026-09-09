@@ -9,11 +9,13 @@
 #
 # Usage:
 #   Tools/BuildDocs/build-docs.sh [--output <dir>] [--static-hosting] [--analyze]
+#                                  [--strict]
 #   Tools/BuildDocs/build-docs.sh --preview [--port <n>]
 #
 #   --output <dir>     where to write TUIkit.doccarchive (default: .build/docs)
 #   --static-hosting   emit a tree servable from a plain web server (GitHub Pages)
 #   --analyze          report every diagnostic DocC can produce, not just errors
+#   --strict           --analyze, and FAIL if it reports anything at all
 #   --preview          serve the docs locally instead of writing an archive,
 #                      and print the URL to open (default port 8080)
 #
@@ -27,7 +29,13 @@
 # need the 404.html fallback that the CI publish step sets up; locally, use
 # --preview.
 #
-# Exit status is DocC's: non-zero on error. Warnings do not fail the build.
+# Exit status is DocC's: non-zero on error. Warnings do not fail the build —
+# which is why `--strict` exists and why CI uses it. DocC's warnings are almost
+# all broken doc LINKS, and a broken link is invisible to everyone: it renders as
+# plain text, so nothing on the page says a reference was lost. Left uncounted
+# they accumulate — 659 by 2026-08-04, then 435 again by 2026-09-08 from 82
+# source sites, because the docs job built the archive and never read what DocC
+# said about it.
 
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -35,6 +43,7 @@ cd "$(dirname "$0")/../.."
 OUTPUT=".build/docs"
 STATIC_HOSTING=()
 ANALYZE=()
+STRICT=0
 PREVIEW=0
 PORT=8080
 
@@ -43,9 +52,10 @@ while [ $# -gt 0 ]; do
         --output) OUTPUT="$2"; shift 2 ;;
         --static-hosting) STATIC_HOSTING=(--transform-for-static-hosting); shift ;;
         --analyze) ANALYZE=(--analyze); shift ;;
+        --strict) ANALYZE=(--analyze); STRICT=1; shift ;;
         --preview) PREVIEW=1; shift ;;
         --port) PORT="$2"; shift 2 ;;
-        -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -109,13 +119,24 @@ echo "==> Converting the catalog"
 mkdir -p "$OUTPUT"
 ARCHIVE="$OUTPUT/TUIkit.doccarchive"
 rm -rf "$ARCHIVE"
+DIAGNOSTICS="$(mktemp -t docc-diagnostics)"
+trap 'rm -f "$DIAGNOSTICS"' EXIT
+# `tee` rather than a plain redirect: the diagnostics still go to the console,
+# where anyone running this by hand reads them. `PIPESTATUS[0]` is docc's own
+# status, which the pipe would otherwise swallow — and `set -o pipefail` cannot
+# be relied on to say WHICH side failed.
+set +e
 "$DOCC" convert Sources/TUIkit/TUIkit.docc \
     --fallback-display-name TUIkit \
     --fallback-bundle-identifier dev.tuikit.TUIkit \
     --additional-symbol-graph-dir "$STAGED" \
     --output-path "$ARCHIVE" \
     --emit-lmdb-index \
-    ${STATIC_HOSTING[@]+"${STATIC_HOSTING[@]}"} ${ANALYZE[@]+"${ANALYZE[@]}"}
+    ${STATIC_HOSTING[@]+"${STATIC_HOSTING[@]}"} ${ANALYZE[@]+"${ANALYZE[@]}"} \
+    2>&1 | tee "$DIAGNOSTICS"
+DOCC_STATUS=${PIPESTATUS[0]}
+set -e
+[ "$DOCC_STATUS" -eq 0 ] || exit "$DOCC_STATUS"
     # `--emit-lmdb-index` writes index/navigator.index + data.mdb. Xcode's
     # documentation window reads THAT, not index.json: without it Xcode opens
     # the archive and shows an empty navigator, which looks exactly like the
@@ -138,4 +159,22 @@ done
 if [ ${#MISSING[@]} -gt 0 ]; then
     echo "error: no page for ${MISSING[*]} — the modules did not get unified" >&2
     exit 1
+fi
+
+# The other regression guard: DocC said nothing. Counted per SOURCE LINE, not per
+# warning, because one bad link in a `View` extension is reported once per
+# conforming type — 93 warnings from a single line of View+AlertPresenting.swift.
+# The count is the honest measure of the work; the warning total is not.
+if [ "$STRICT" -eq 1 ]; then
+    COUNT=$(grep -cE '^(warning|error): ' "$DIAGNOSTICS" || true)
+    if [ "$COUNT" -gt 0 ]; then
+        SITES=$(grep -A 1 -E '^(warning|error): ' "$DIAGNOSTICS" \
+            | grep -oE '^ *--> [^:]+:[0-9]+' | sort -u | wc -l | tr -d ' ')
+        echo "error: DocC reported $COUNT diagnostics from $SITES source lines" >&2
+        echo "       (the archive still built — DocC warnings never fail it, so" >&2
+        echo "        they are invisible without this check; a broken doc link" >&2
+        echo "        renders as plain text and nothing on the page says so)" >&2
+        exit 1
+    fi
+    echo "==> DocC reported nothing"
 fi

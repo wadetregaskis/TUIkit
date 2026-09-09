@@ -59,7 +59,7 @@ import TUIkitView
 /// you opened is still open when you reopen its parent, and a field you typed
 /// in still has your text. This is a deliberate divergence from SwiftUI, where
 /// collapsing takes the content out of the hierarchy and its `@State` with it —
-/// see ``_DisclosedStateRetainer``. It lasts only while the group itself is on
+/// see `_DisclosedStateRetainer`. It lasts only while the group itself is on
 /// screen: a group that leaves the tree takes everything below it along.
 ///
 /// - Note: SwiftUI's `DisclosureGroupStyle` is not implemented; a terminal

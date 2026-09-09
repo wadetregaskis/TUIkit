@@ -9,7 +9,7 @@
 /// A standard label for user-interface items: an icon paired with a title.
 ///
 /// Mirrors SwiftUI's `Label`. The general form takes a title and an icon view;
-/// the convenience ``init(_:systemImage:)`` pairs a string title with an SF
+/// the convenience ``init(_:systemImage:)-(LocalizedStringKey,_)`` pairs a string title with an SF
 /// Symbol.
 ///
 /// ```swift
@@ -26,7 +26,7 @@
 ///
 /// ## SF Symbols render only in very limited circumstances
 ///
-/// ``init(_:systemImage:)`` resolves the symbol through ``SFSymbol``, which only
+/// ``init(_:systemImage:)-(LocalizedStringKey,_)`` resolves the symbol through ``SFSymbol``, which only
 /// produces a glyph on **Apple platforms** in a **terminal whose font carries
 /// the SF Symbol glyphs** (Terminal.app with SF Mono and the SF Symbols font
 /// installed). When the symbol can't be resolved — a non-Apple platform, or an
@@ -40,7 +40,7 @@ public struct Label<Title: View, Icon: View>: View {
     let title: Title
     let icon: Icon
     /// When `false`, only the title is rendered (no icon, no leading gap). Set
-    /// by ``init(_:systemImage:)`` when the symbol can't be resolved.
+    /// by ``init(_:systemImage:)-(LocalizedStringKey,_)`` when the symbol can't be resolved.
     let iconIsVisible: Bool
 
     /// Creates a label with a custom title and icon.
@@ -54,7 +54,7 @@ public struct Label<Title: View, Icon: View>: View {
         self.iconIsVisible = true
     }
 
-    /// Internal designated initializer; lets ``init(_:systemImage:)`` suppress
+    /// Internal designated initializer; lets ``init(_:systemImage:)-(LocalizedStringKey,_)`` suppress
     /// the icon when the symbol can't be resolved.
     init(title: Title, icon: Icon, iconIsVisible: Bool) {
         self.title = title
@@ -87,7 +87,7 @@ extension Label where Title == Text, Icon == _SymbolIcon {
     ///
     /// The symbol's *name* is stored and resolved to a glyph while rendering, so
     /// ``View/symbolVariant(_:)`` set anywhere above the label chooses the cut —
-    /// see ``_SymbolIcon``.
+    /// see `_SymbolIcon`.
     ///
     /// - Parameters:
     ///   - titleKey: The key for the title shown beside the icon — a literal is

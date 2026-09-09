@@ -399,7 +399,7 @@ extension FocusManager {
     /// Unregisters a focusable element from all sections.
     ///
     /// A focused element is told it lost the focus on its way out — the same
-    /// promise ``relinquishFocus()`` and the end-of-pass drops make, and the
+    /// promise `relinquishFocus()` and the end-of-pass drops make, and the
     /// one ``Focusable/onFocusLost()`` is documented on: whatever the focus
     /// began (an edit to commit, a dropdown to close, a caret to stop) has to
     /// end with it.
@@ -484,7 +484,7 @@ extension FocusManager {
     /// path-derived IDs), renders it so it registers, and focuses it. An ID
     /// that matches nothing expires after a couple of passes — unless a
     /// standing declaration keeps re-stating it, which a `.userInitiated`
-    /// ``defaultFocus(_:_:priority:)`` does on every pass.
+    /// ``View/defaultFocus(_:_:priority:)`` does on every pass.
     ///
     /// - Parameter id: The focus ID of the element to focus.
     public func focus(id: String) {

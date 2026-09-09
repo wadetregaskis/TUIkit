@@ -8,7 +8,7 @@
 
 /// One contiguous run of a row that has to be rewritten, ready to write.
 ///
-/// See ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
+/// See ``String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
 public struct ANSICellSpan: Equatable, Sendable {
     /// The 0-based visible column the run starts at. Move the cursor there
     /// (`column + 1` in the terminal's 1-based coordinates) before writing.
@@ -23,7 +23,7 @@ public struct ANSICellSpan: Equatable, Sendable {
     /// anything else in between, breaks that chain.
     ///
     /// Who ends the chain with a reset depends on which entry point built these.
-    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)`` plans one
+    /// ``String/ansiCellDiff(replacing:width:mergingGapsUpTo:)`` plans one
     /// row in isolation and closes it; ``ANSIRowCells/diff(replacing:mergingGapsUpTo:continuing:)``
     /// hands the running state back so a caller writing many rows can keep it,
     /// and that caller owes the terminal the closing reset.
@@ -42,7 +42,7 @@ public enum ANSICellDiff: Equatable, Sendable {
 
     /// Column accounting is not reliable for one of these rows, so only a
     /// whole-line rewrite is safe. See the bail-outs in
-    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
+    /// ``String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
     case wholeLine
 
     /// This plan with a reset added to its last span, when `emitted` says the
@@ -186,7 +186,7 @@ public struct ANSIRowCells: Sendable {
 
     /// Takes a built row apart, or returns `nil` when its columns cannot be
     /// trusted. See the bail-outs documented on
-    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
+    /// ``String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``.
     public init?(decomposing line: String, width: Int) {
         guard width > 0 else { return nil }
         cells.reserveCapacity(width)
@@ -273,7 +273,7 @@ public struct ANSIRowCells: Sendable {
 
     /// What has to be written to turn `previous` into this row, **given the
     /// styling the terminal is already in**. See
-    /// ``Swift/String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``, whose
+    /// ``String/ansiCellDiff(replacing:width:mergingGapsUpTo:)``, whose
     /// documentation this shares.
     ///
     /// `emitted` is the state this pass has left the terminal in — `nil` when

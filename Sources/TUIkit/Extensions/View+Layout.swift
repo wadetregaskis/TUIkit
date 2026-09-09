@@ -156,7 +156,7 @@ extension View {
     /// > own, publish ESC to dismiss, or stop a sibling elsewhere in the tree
     /// > from being reached. Present a ``Dialog`` or an ``Alert`` through
     /// > ``View/modal(isPresented:onDismiss:content:)`` or
-    /// > ``View/alert(_:isPresented:actions:message:)``, which do
+    /// > ``View/alert(_:isPresented:actions:message:borderStyle:borderColor:titleColor:)-(LocalizedStringKey,_,_,_,_,_,_)``, which do
     /// > all of that; `.dimmed()` is for content you want recessive in place.
     ///
     /// It also **drops** anything the content floated: a presentation, a

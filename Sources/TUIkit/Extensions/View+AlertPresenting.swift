@@ -188,7 +188,7 @@ extension View {
     /// Presents a confirmation dialog built from `data`.
     ///
     /// The `alert` reasoning applies unchanged — see
-    /// ``alert(_:isPresented:presenting:actions:message:)`` for why the value
+    /// ``alert(_:isPresented:presenting:actions:message:)-(LocalizedStringKey,_,_,_,_)`` for why the value
     /// is a parameter rather than something the builders close over.
     ///
     /// - Parameters:

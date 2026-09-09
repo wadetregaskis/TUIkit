@@ -190,7 +190,7 @@ controls to exactly these:
    which requires two distinct frames.
 2. **Unfocused or disabled leaves none.**
 3. **Replaying the current step changes nothing.** Splice
-   ``AnimatedCellRun/frame(at:)`` back over the buffer at the run's own offset
+   ``AnimatedCellRun/frame(atIndex:)`` back over the buffer at the run's own offset
    and compare the visible cells. That is precisely what the loop does on a
    tick, so at the step you rendered at it must be a no-op — which is what
    proves the offset, the width and the frames describe the cells you drew.

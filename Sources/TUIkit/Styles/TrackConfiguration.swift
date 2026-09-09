@@ -131,7 +131,7 @@ public struct TrackConfiguration: Sendable, Equatable {
     }
 
     /// Creates a track configuration with a single-character fill — sugar
-    /// for ``init(fill:partialRamp:emptyStyle:fillGradient:)``.
+    /// for ``init(fill:partialRamp:emptyStyle:fillGradient:emptyColor:emptyGradient:)``.
     public init(
         fullGlyph: Character,
         partialRamp: [Character]? = nil,

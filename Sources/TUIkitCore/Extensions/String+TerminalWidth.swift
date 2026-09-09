@@ -22,9 +22,9 @@ public enum ANSISegment {
 /// Where a streaming escape scan sits.
 ///
 /// Shared by the three scanners that stream rather than index —
-/// ``Swift/String/asciiStrippedLength()`` over bytes,
-/// ``Swift/String/forEachVisibleANSIRun(_:)`` over scalars, and
-/// ``Swift/String/sanitizedForTerminal`` — so the one thing they must agree
+/// `String.asciiStrippedLength()` over bytes,
+/// `String.forEachVisibleANSIRun(_:)` over scalars, and
+/// ``String/sanitizedForTerminal`` — so the one thing they must agree
 /// about, where a sequence ends, has one vocabulary. They do not all reach
 /// every state: only the sanitizer enters ``escIntermediate``, because only it
 /// has to account for escape families this framework never emits. What matters
@@ -427,7 +427,7 @@ extension Character {
     /// measurement shows: 👍🏽 and ✊🏻 at 4 (2-cell bases), ☝🏽 at 3 (a 1-cell
     /// text-presentation base). A redundant VS-16 on the base (☝️🏽) does not
     /// widen the detached claim: the walks strip it before emission
-    /// (``Swift/Character/withoutRedundantToneVS16`` — the modifier alone
+    /// (`Character.withoutRedundantToneVS16` — the modifier alone
     /// forces emoji presentation, and the normalized pair is the measured-
     /// aligned one on iTerm2 and Warp at exactly this bare-base + 2), so the
     /// claim prices what actually goes out. Only the SEPARATED claim keeps
@@ -505,7 +505,7 @@ extension Unicode.Scalar {
     /// This is the single source of truth for per-codepoint width;
     /// ``Character/terminalWidth`` is this plus the multi-scalar cluster rules.
     /// Splitting it out is what lets the width scanner
-    /// (``Swift/Unicode/Scalar/terminalRunWidth``) measure a run of
+    /// (`Unicode.Scalar.terminalRunWidth`) measure a run of
     /// non-combining scalars without paying for grapheme-cluster segmentation —
     /// see ``Character/isStandaloneClusterScalar(_:)``.
     var loneTerminalWidth: Int {

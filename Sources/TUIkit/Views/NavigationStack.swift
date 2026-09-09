@@ -27,7 +27,7 @@ import TUIkitView
 ///
 /// The stack shows its root until something is pushed; from then on it shows
 /// the top of the path, under a navigation bar carrying the trail of
-/// ``navigationTitle(_:)``s that got you there:
+/// ``navigationTitle(_:)-(LocalizedStringKey)``s that got you there:
 ///
 /// ```
 ///   Planets  ›  Mars  ›  Deimos  ›  Copernicus Rim
@@ -42,7 +42,7 @@ import TUIkitView
 /// (`Planets  ›  …  ›  Copernicus Rim`), keeping the two ends that orient you;
 /// then, when even that will not fit, the bar falls back to a single **‹ Back**
 /// button and the truncated title. The bar's height never changes through any of
-/// this — see ``barHeight``.
+/// this — see `ChromeStyle.barHeight(contentRows:)`.
 ///
 /// ## Where the path lives
 ///
@@ -351,7 +351,7 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         return buffer
     }
 
-    /// The navigation bar, pinned to ``barHeight`` rows.
+    /// The navigation bar, pinned to `ChromeStyle.barHeight(contentRows:)` rows.
     private func renderBar(
         title: String, hidesBack: Bool, width: Int, context: RenderContext
     ) -> FrameBuffer {
