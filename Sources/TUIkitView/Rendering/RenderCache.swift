@@ -33,9 +33,21 @@ import TUIkitStyling
 /// `clearAffected(by:)`, dropping that identity, everything **below** it, and
 /// everything **above** it on the ancestor spine. Siblings survive.
 ///
-/// The whole cache is dropped only by: an `@Observable` mutation (which arrives
-/// with no identity, via `setNeedsRenderWithCacheClear`), a palette / appearance
-/// / locale / toggle-glyph change, or an explicit `nil` invalidation.
+/// An `@Observable` mutation is scoped the same way, and has been since
+/// commit 96c12acb (2026-09-05): every composite body is evaluated under
+/// `withObservationTracking` at its own identity, so the `onChange` calls
+/// ``invalidateRender(for:)`` with that identity — the same sink and the same
+/// scope as a `@State` write. It used to arrive with no identity, via
+/// `setNeedsRenderWithCacheClear`, and a model that changed every frame — a
+/// clock, a progress counter, a download's byte count — therefore made every
+/// frame a cold render of the whole tree, and nothing the memo held was ever
+/// served while it did.
+///
+/// The whole cache is dropped only by: a palette / appearance / locale /
+/// toggle-glyph change, a change to the width claim the memoized sizes were
+/// measured under (checked once per ``beginRenderPass()``), an explicit `nil`
+/// invalidation, or the `setNeedsRenderWithCacheClear` fallback that a render
+/// with no `RenderCache` in its context still takes.
 ///
 /// Two consequences worth knowing before relying on this:
 ///
@@ -464,13 +476,15 @@ extension RenderCache {
             logDebug("MISS (size changed) \(identity.path)")
             return nil
         }
-        // The ramp's colours are baked into the buffer, so a view that has
-        // MOVED within one must re-render even though nothing about it changed.
+        // Translucent ink is composited at render time, so a buffer holds a
+        // blend that is only right over the surface it was painted on.
         guard entry.surfaceBackground == surfaceBackground else {
             stats.misses += 1
             logDebug("MISS (surface changed) \(identity.path)")
             return nil
         }
+        // The ramp's colours are baked into the buffer, so a view that has
+        // MOVED within one must re-render even though nothing about it changed.
         guard entry.gradientFrame == gradientFrame else {
             stats.misses += 1
             logDebug("MISS (gradient moved) \(identity.path)")
@@ -498,9 +512,10 @@ extension RenderCache {
     ///   - contextHeight: The available height during rendering.
     ///   - gradientFrame: Where the view sat in a spanning gradient while it
     ///     rendered, so a later lookup from a different place misses.
-    ///   - surfaceBackground: The surface its translucent ink was blended
-    ///     against while it rendered, so a later lookup over a different
-    ///     surface misses too.
+    ///   - surfaceBackground: The surface the view was painted OVER while it
+    ///     rendered, for the same reason: its translucent ink is already
+    ///     blended against this colour, so a later lookup over another one
+    ///     misses (commit 54977d08, 2026-09-06).
     public func store<V: Equatable>(
         identity: ViewIdentity,
         view: V,
@@ -522,17 +537,6 @@ extension RenderCache {
         logDebug("STORE \(identity.path)")
     }
 
-    /// Looks up a memoized *measurement* keyed by a view value or a row element.
-    ///
-    /// One caller: `measureValueMemoized`, which both ``EquatableView`` and
-    /// `_MemoizedRow` reach — they were the same code written twice.
-    ///
-    /// The size twin of ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``:
-    /// returns the cached ``ViewSize`` only when the view value compares equal
-    /// and the proposal/available extent match. Value comparison is what makes
-    /// this safe where an identity-only key is not — a hit means identical
-    /// content, hence (between invalidations, which also bound environment
-    /// changes) an identical size.
     /// Whether a rendered buffer may be stored — the conditions every memo has
     /// to satisfy before a frame it produced can be served again.
     ///
@@ -573,6 +577,9 @@ extension RenderCache {
 
     /// The memoized measurement for `key`, or `nil` when there is none or the
     /// view value has changed.
+    ///
+    /// One caller: `measureValueMemoized`, which both ``EquatableView`` and
+    /// `_MemoizedRow` reach — they were the same code written twice.
     ///
     /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``.
     /// Both the key and the value are checked: `key` covers the identity and
