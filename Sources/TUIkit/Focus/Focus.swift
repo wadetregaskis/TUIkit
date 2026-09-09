@@ -62,6 +62,11 @@ public final class FocusManager: @unchecked Sendable {
     /// focus again — its editing session, its reveal — so ``endRenderPass()``
     /// fires `onFocusReceived` once registration has completed and the element
     /// is real.
+    ///
+    /// While this is set, `focusedID` names an element that has not been told it
+    /// holds focus — the one interval in which that is true. ``notifyFocusLost()``
+    /// reads it for exactly that reason: a loss must not be announced for an
+    /// arrival that never was.
     private var pendingRestoreNotificationID: String?
 
     /// The ID of the currently active section.
@@ -462,6 +467,15 @@ extension FocusManager {
 
         focusedID = element.focusID
         element.onFocusReceived()
+        // The deferred arrival, if this IS it: announced here, so it must not be
+        // announced again by ``endRenderPass()`` — and, more to the point, the
+        // element now has a live session, so the suppression in
+        // ``notifyFocusLost()`` must stop applying to it. Keying that suppression
+        // on the id alone is only sound while nothing announces the id behind the
+        // flag's back; this is the line that keeps it sound rather than arguing it.
+        if pendingRestoreNotificationID == element.focusID {
+            pendingRestoreNotificationID = nil
+        }
         onFocusChange?()
     }
 
@@ -1167,6 +1181,10 @@ extension FocusManager {
         // events while showing no focus indicator anywhere. Either way the
         // element is told (`onFocusLost` — through last frame's ring when it
         // left the tree), so its editing session or latch ends with its focus.
+        // Except when the focus being dropped is the one THIS pass handed it and
+        // has not announced yet (a modal dismissal's restore): there is no
+        // session to end, and `notifyFocusLost` stays silent — see
+        // ``pendingRestoreNotificationID``.
         if let focusID = focusedID, let section = activeSection {
             let focused = section.focusables.first { $0.focusID == focusID }
             if focused == nil || focused?.canBeFocused == false {
@@ -1440,8 +1458,24 @@ extension FocusManager {
     }
 
     /// Notifies the currently focused element that it lost focus.
+    ///
+    /// Silent for a focus tenure whose ARRIVAL was never announced. This is NOT
+    /// the "element has left the tree" case — that one is the `previousSections`
+    /// fallback below, and it does get told. It is the window opened by
+    /// ``deactivateSection(id:)``, which assigns `focusedID` straight from
+    /// section memory at a moment its element cannot possibly be registered yet
+    /// and defers the `onFocusReceived` to ``endRenderPass()``. If that restore
+    /// is invalidated before the deferred arrival is delivered — the remembered
+    /// control came back `.disabled(true)`, so end-of-pass validation drops it —
+    /// the element is right here in the ring and would be told it lost a focus
+    /// it was never told it had: a second `onEditingChanged(false)` on a text
+    /// field, which is where a combo box records its recents.
     fileprivate func notifyFocusLost() {
         guard let currentID = focusedID else { return }
+        if currentID == pendingRestoreNotificationID {
+            pendingRestoreNotificationID = nil
+            return
+        }
         for section in sections {
             if let current = section.focusables.first(where: { $0.focusID == currentID }) {
                 current.onFocusLost()

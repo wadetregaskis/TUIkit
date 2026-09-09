@@ -231,4 +231,55 @@ struct FocusLifecycleCallbackTests {
         #expect(manager.currentFocusedID == nil)
         #expect(repaints == 1, "or the indicator that just went away stays on screen")
     }
+
+    /// The restore target that came back DISABLED. `deactivateSection` assigns
+    /// focus straight from section memory — the page has not re-registered yet,
+    /// so it cannot check `canBeFocused` — and defers the arrival to
+    /// `endRenderPass`. When the remembered control re-registers unfocusable
+    /// (some state independent of `isPresented` disabled it while the modal was
+    /// up), end-of-pass validation drops it and the deferred arrival is rightly
+    /// never delivered. Announcing the LOSS as well leaves a text field with two
+    /// `onEditingChanged(false)` for one `true`.
+    @Test("A restore invalidated before its deferred arrival fires no onFocusLost")
+    func invalidatedRestoreFiresNoFocusLost() {
+        let manager = FocusManager()
+        let field = MockFocusable(id: "field")
+        let other = MockFocusable(id: "other")
+
+        // Frame 1: the page. The field takes focus and is told so.
+        manager.beginRenderPass()
+        manager.register(field)
+        manager.register(other)
+        manager.endRenderPass()
+        #expect(manager.currentFocusedID == "field")
+        #expect(field.focusReceivedCount == 1)
+
+        // Frame 2: a modal presents. The page renders isolated behind it
+        // (`isolatedForBackground`), so only the modal's control is in the ring.
+        let modalControl = MockFocusable(id: "modal-control")
+        manager.beginRenderPass()
+        manager.registerSection(id: "modal")
+        manager.register(modalControl, inSection: "modal")
+        manager.activateSection(id: "modal")
+        manager.endRenderPass()
+        #expect(field.focusLostCount == 1, "entering the modal ended the field's session")
+        #expect(manager.currentFocusedID == "modal-control")
+
+        // Frame 3: dismissed — and the field is disabled now. It registers,
+        // unfocusable, so the restore assigned mid-pass is invalidated.
+        field.canBeFocused = false
+        manager.beginRenderPass()
+        manager.deactivateSection(id: "modal")
+        manager.register(field)
+        manager.register(other)
+        manager.endRenderPass()
+
+        #expect(field.focusReceivedCount == 1, "the deferred arrival was never delivered")
+        #expect(
+            field.focusLostCount == 1,
+            "so no loss may be announced for it either")
+        #expect(manager.currentFocusedID == "other", "focus lands on what can take it")
+        #expect(other.focusReceivedCount == 1)
+        #expect(modalControl.focusLostCount == 1, "the modal's own control still hears its loss")
+    }
 }
