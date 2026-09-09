@@ -489,7 +489,7 @@ value finally changes. The hit therefore declares `retainSubtree`, to both
 |----------------|-----|
 | Static display views (labels, headers, feature boxes) | Properties rarely change, body is rebuilt identically each frame |
 | Complex container hierarchies | Many nested views that produce the same output |
-| Views next to animated siblings | Spinner/Pulse re-renders the whole tree; static siblings benefit from caching |
+| Views next to animated siblings | A `.custom(_:)` spinner whose frames differ in width, or a pulse, re-renders the whole tree; static siblings benefit from caching. Every other spinner leaves an animated cell run and re-renders nothing, so its siblings have nothing to be spared |
 
 | Bad candidates | Why |
 |---------------|-----|

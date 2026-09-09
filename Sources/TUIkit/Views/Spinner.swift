@@ -300,9 +300,14 @@ extension SpinnerStyle {
 /// that a task is in progress. It supports multiple visual styles and
 /// an optional label.
 ///
-/// The animation runs automatically via a background task that triggers
-/// re-renders at a fixed interval. The task is started when the spinner
-/// first appears and cancelled when it disappears.
+/// The animation is not a task, and nothing starts or stops with the spinner
+/// appearing: the frame comes from the shared content clock, so every spinner of
+/// a style is in phase, and the spinner leaves one ``AnimatedCellRun`` over its
+/// own cells for the run loop to splice at the style's interval — no re-render,
+/// no re-measure, nothing asked of this view (`99b91c0f`). Only a
+/// ``SpinnerStyle/custom(_:)`` sequence whose frames are not all one width
+/// escapes that, since a run must claim exactly the cells every frame fills; it
+/// falls back to asking the loop to re-render at the style's rate.
 ///
 /// # Example
 ///
@@ -324,6 +329,10 @@ extension SpinnerStyle {
 /// | `.dots` | `⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏` | 110ms |
 /// | `.line` | `\| / - \\` | 140ms |
 /// | `.bouncing` | `■■▇▇▇▇■■■` (with fade trail) | 100ms |
+///
+/// Three of many, not the set: ``SpinnerStyle`` carries the rest, each with its
+/// own frames and interval, and ``SpinnerStyle/custom(_:)`` takes a sequence of
+/// your own.
 public struct Spinner: View {
     /// The optional label displayed after the spinner.
     let label: String?
