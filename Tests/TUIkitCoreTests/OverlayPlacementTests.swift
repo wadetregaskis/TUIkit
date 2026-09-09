@@ -97,4 +97,39 @@ struct OverlayPlacementTests {
         #expect(pinned.x == 0)
         #expect(pinned.y == 0)
     }
+
+    /// The cut at the screen edge moves the CELLS, and everything riding on the
+    /// buffer has to move with them. A dragged card's spinner left three
+    /// columns behind replays over the cells beside the preview while the
+    /// visible spinner freezes, and the fade lands on the wrong band or is
+    /// dropped for naming a row the cut removed.
+    @Test("A pointer-anchored overlay's payload moves with the cells it cut")
+    func pointerAnchoredCutMovesThePayload() {
+        var card = FrameBuffer(lines: ["ABCDEFGH", "abcdefgh"])
+        // 'g' of row 1.
+        card.animatedCells = [
+            AnimatedCellRun(offsetX: 6, offsetY: 1, width: 1, frames: ["|", "/"], clock: .content)
+        ]
+        // "fg" of row 1.
+        card.opacityRegions = [
+            OpacityRegion(offsetX: 5, offsetY: 1, width: 2, height: 1, opacity: 0.5)
+        ]
+        // "efgh" of row 1.
+        card.hitTestRegions = [
+            HitTestRegion(
+                offsetX: 4, offsetY: 1, width: 4, height: 1,
+                handlerID: HitTestRegion.HandlerID(7))
+        ]
+        let pinned = OverlayLayer(offsetX: -3, offsetY: -1, content: card, clampsToScreen: false)
+        let placed = pinned.placed(maxWidth: 20, maxHeight: 5)
+
+        // Three columns and one row cut: "abcdefgh" becomes "defgh".
+        #expect(placed.content.lines.map(\.stripped) == ["defgh"])
+        #expect(placed.content.animatedCells.first?.offsetX == 3, "the run followed 'g'")
+        #expect(placed.content.animatedCells.first?.offsetY == 0)
+        #expect(placed.content.opacityRegions.first?.offsetX == 2, "the fade followed \"fg\"")
+        #expect(placed.content.opacityRegions.first?.offsetY == 0)
+        #expect(placed.content.hitTestRegions.first?.offsetX == 1)
+        #expect(placed.content.hitTestRegions.first?.offsetY == 0)
+    }
 }

@@ -292,10 +292,12 @@ public struct OverlayLayer: Sendable, Equatable {
             let y = max(0, offsetY)
             let dropX = x - offsetX  // columns cut off the left edge
             let dropY = y - offsetY
-            var visible = clamped
-            if dropY > 0 { visible.lines = Array(visible.lines.dropFirst(dropY)) }
-            if dropX > 0 { visible.lines = Self.cutting(visible.lines, leadingColumns: dropX) }
-            visible = visible.clamped(toWidth: max(0, maxWidth - x), height: max(0, maxHeight - y))
+            // Through `cutting`, not `visible.lines =`: the assignment moves the
+            // CELLS and leaves every payload riding on the buffer — hit regions,
+            // animated runs, opacity regions, nested layers — naming the cells
+            // they used to sit on.
+            let cut = Self.cutting(clamped, leadingColumns: dropX, rows: dropY)
+            let visible = cut.clamped(toWidth: max(0, maxWidth - x), height: max(0, maxHeight - y))
             return (visible, x, y)
         }
 
@@ -316,12 +318,42 @@ public struct OverlayLayer: Sendable, Equatable {
         return (clamped, x, y)
     }
 
+    /// `buffer` with its leading `dropColumns` columns and `dropRows` rows cut
+    /// away, and everything riding on it moved by the same amount.
+    ///
+    /// The one place a layer loses its leading cells: the screen edge, in
+    /// ``placed(maxWidth:maxHeight:)``'s pointer-anchored branch, and a
+    /// clipping container, in ``clipped(toWidth:height:)``. It is a function
+    /// because of its last statement rather than its first — `replacingLines`
+    /// moves the hit regions, animated runs, opacity regions and nested layers
+    /// with the cells they name, and assigning `lines` moves only the cells.
+    /// The preview of a dragged card whose spinner stayed behind replays that
+    /// spinner `dropColumns` cells right of the glyphs it draws, repainting the
+    /// cells beside it while the visible spinner freezes at the frame the
+    /// render drew, and the root fades a band `dropColumns` off the one asked
+    /// for.
+    ///
+    /// No pre-clip against the surviving box is needed on the way: unlike
+    /// `HitTestRegion`, a run and an opacity region record no clip counters, so
+    /// translation and clipping commute, and payload left at a negative offset
+    /// names cells that were cut away — dropped by
+    /// `AnimatedCellRun.clipped(toCanvasColumns:rows:)` at the screen, and
+    /// already read as `max(0, …)` by the opacity resolution.
+    private static func cutting(
+        _ buffer: FrameBuffer, leadingColumns dropColumns: Int, rows dropRows: Int
+    ) -> FrameBuffer {
+        guard dropColumns > 0 || dropRows > 0 else { return buffer }
+        var lines = dropRows > 0 ? Array(buffer.lines.dropFirst(dropRows)) : buffer.lines
+        if dropColumns > 0 { lines = cutting(lines, leadingColumns: dropColumns) }
+        return buffer.replacingLines(
+            lines, overlayShiftX: -dropColumns, overlayShiftY: -dropRows)
+    }
+
     /// `lines` with `columns` cells cut from the left of each.
     ///
-    /// Shared by the two places a layer loses its leading columns — the screen
-    /// edge, and a clipping container (see ``clipped(toWidth:height:)``) —
-    /// because each of the three things it does is a bug someone shipped by
-    /// doing the obvious thing instead.
+    /// The line half of `cutting(_:leadingColumns:rows:)`, which is now its
+    /// only caller, because each of the three things it does is a bug someone
+    /// shipped by doing the obvious thing instead.
     private static func cutting(_ lines: [String], leadingColumns columns: Int) -> [String] {
         lines.map { line in
             // `ansiAwareSlice`, not `ansiAwareSuffix`: the suffix throws away
@@ -410,12 +442,7 @@ public struct OverlayLayer: Sendable, Equatable {
                 $0.clipped(
                     toColumns: dropX..<(dropX + boxWidth), rows: dropY..<(dropY + boxHeight))
             }
-            var lines = dropY > 0 ? Array(cut.lines.dropFirst(dropY)) : cut.lines
-            if dropX > 0 { lines = Self.cutting(lines, leadingColumns: dropX) }
-            // `replacingLines` moves the layers, regions, runs and opacity
-            // regions with the cells they describe — the whole point of using
-            // it rather than assigning `lines`.
-            cut = cut.replacingLines(lines, overlayShiftX: -dropX, overlayShiftY: -dropY)
+            cut = Self.cutting(cut, leadingColumns: dropX, rows: dropY)
         }
         let clipped = cut.clamped(toWidth: boxWidth, height: boxHeight)
         // A layer whose own drawing is gone may still carry a presentation
