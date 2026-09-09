@@ -1113,9 +1113,14 @@ happens for the workloads that need 50M rows.
   has rendered, so it is a property of the fill, not of any one child
   (`VStack.swift:235-240`).
 - **No general measure cache.** `lookupSize`/`storeSize` are called from
-  exactly ONE place in the whole codebase — `measureValueMemoized` in
+  exactly TWO places in the whole codebase — `measureValueMemoized` in
   `ValueMemo.swift`, reached only by `EquatableView` and `_MemoizedRow` (it used
-  to be the same code written twice, in those two types). A plain
+  to be the same code written twice, in those two types), and, since
+  `32b87838` (2026-09-05), `_ListCore.widestRowWidth`
+  (`_ListCore.swift:276`, `:312`), which keeps a hugging list's widest row
+  keyed on its rows' data. Both are a value memo asked by something that
+  already knows what its content IS; neither is a cache `measureChild` can
+  consult. A plain
   `VStack { ForEach { … } }` of non-`Equatable` content is fully re-measured
   every frame. Any claim that
   locate "rides the existing measure cache" is false — §5e's cache has to be
