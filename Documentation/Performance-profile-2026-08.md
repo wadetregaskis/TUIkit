@@ -4016,3 +4016,70 @@ plain `let x: Int` STABLE; one `@Environment` UNSTABLE; one `@State` UNSTABLE;
 Verification: 6,166 tests in 869 suites pass with 21 known issues, unchanged; all
 nine Mode A checksums identical; `Stress --selfcheck` renders all 20 scenarios;
 `swiftlint --strict` clean.
+
+---
+
+## 57. A lock taken twelve thousand times to be handed the same object (2026-09-09)
+
+§42 made the per-cell search exact and cheap, and left two things in the
+per-cell loop that do not belong there. `cellColor(for:mode:)` switched on
+`ASCIIColorMode` per cell, so `case .palette(let palette)` copied the palette
+out of the enum payload — `colors`, `byTone`, `entries` and `search`, each
+retained and released — and then `ASCIIPalette.nearestIndex(to:)` read
+`searchIndex`, a computed property that takes the handle's `NSLock` on every
+read. The default charset (`.blocks(.fine)`) calls `cellColor` **twice a cell**,
+so a 120×50 half-block conversion took 12,000 payload copies and 12,000
+uncontended locks to be handed the same index 12,000 times.
+
+`CellColours` is the per-cell twin of §42's `PixelQuantiser`: a colour mode
+resolved once per conversion into what the loop asks of it — a payload-free
+kind, the palette as a plain stored property, and its search index resolved
+once through the new `ASCIIPalette.consultedSearchIndex`. Each of the six
+renderers builds one and asks it per cell.
+
+`ImageHarness`, release, 120×50, six alternating pairs per mode with a
+discarded warm-up, medians (base and new alternate order pair by pair — the
+first ordering measured base always-first and gave it the cold cache, reading
+−18.0% for the same change):
+
+| glyph, ns/cell | base | new | |
+|---|---|---|---|
+| **ansi256** | **87.6** [86.6–89.3] | **71.6** [70.6–72.1] | **−18.3%** |
+| ansi16 | 60.7 [60.0–61.5] | 59.6 [58.8–60.3] | −2.0% |
+| shades8 | 52.1 [50.9–53.2] | 51.7 [51.0–52.5] | −0.9% |
+| truecolor | 79.0 [78.0–79.9] | 77.4 [76.8–78.2] | −2.0% |
+| grayscale | 33.1 [32.9–33.9] | 32.4 [32.3–32.7] | −2.3% |
+
+Every checksum identical, mode for mode.
+
+**The decomposition is in the table**, which is why those modes were run.
+`ansi16` has sixteen entries, so it short-circuits before `searchIndex` and
+never took the lock: its −2.0% is the payload copy alone. `truecolor` and
+`grayscale` bind no palette at all, and still move about −2% — because even
+they switched on the payload-carrying enum per cell, and now switch on a
+payload-free `Kind`. So of `ansi256`'s 16 ns a cell, roughly 2 is the enum,
+another 2 or so the payload, and the remaining ~12 the lock. `shades8` is the
+canary rather than a subject: `consultedSearchIndex` gates on the entry count
+*before* touching `searchIndex`, so an eight-entry palette still builds no
+index, and its −0.9% says the gate held. Had that gate been missing it would
+have built 32,768 cells of candidate lists and gone sharply the other way.
+
+**The base is not §42's base.** That table reads ansi256 112, ansi16 65,
+truecolor 93, grayscale 38; this one starts at 87.6, 60.7, 79.0, 33.1, because
+`9348de75` and `5d9e7006` moved the resample and unsharp geometry underneath on
+2026-09-08. Measured in this session rather than carried forward, per the rule
+§31 was written for.
+
+**What this does not touch**, stated so the ceiling is not mistaken for the
+floor: the remaining ~72 ns of an `ansi256` cell is `Color.oklab` (three table
+loads and three `cbrt` per call) and the candidate walk inside
+`SearchIndex.nearestIndex`. Neither is addressed here.
+
+This was **P13** of the 2026-09-09 batch, declined that day rather than
+measured: its staged patch had drifted under the greyscale fix (`5631fde3`
+replaced an inline luminance expression with `greyRampStep(for:)`, and the
+patch would have silently put the old expression back), and its measurement
+plan named two harness modes — `shades256` and `optimal64` — that
+`ImageHarness` does not accept. Both were the reason to re-derive rather than
+apply, and both were real.
+

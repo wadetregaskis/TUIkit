@@ -91,6 +91,10 @@ extension ASCIIConverter {
     ) -> [String] {
         let lowerHalfBlock: Character = "▄"
         let bold = mode.foregroundSurvivesBold
+        // The mode resolved ONCE for the whole picture: this renderer asks it
+        // twice a cell, and asking the enum copies the palette out of its
+        // payload and re-takes the search index's lock every time.
+        let colours = CellColours(mode: mode)
 
         var lines = [String]()
         lines.reserveCapacity(height)
@@ -105,8 +109,8 @@ extension ASCIIConverter {
                 let bottom = top + stride
 
                 for cellX in 0..<width {
-                    let background = cellColor(for: pixels[top + cellX], mode: mode)
-                    let below = cellColor(for: pixels[bottom + cellX], mode: mode)
+                    let background = colours.color(for: pixels[top + cellX])
+                    let below = colours.color(for: pixels[bottom + cellX])
                     let uniform = background == below
                     // A uniform cell is a space on the background; a split one is
                     // a lower half-block in the bottom pixel's colour over the

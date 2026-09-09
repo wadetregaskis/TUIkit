@@ -174,6 +174,22 @@ extension ASCIIPalette {
         return search.index(for: self)
     }
 
+    /// The index ``nearestIndex(to:)`` will actually consult, or `nil` where it
+    /// consults none — what a loop asking per cell or per pixel resolves ONCE
+    /// and hands to `nearestIndex(to:using:)`.
+    ///
+    /// Not ``searchIndex``, which is the lazy BUILDER: that one builds an index
+    /// for any palette a byte can index, so reading it for a three-entry
+    /// palette would build 32,768 cells of candidate lists the search will
+    /// never look at. The two gates — a ramp searches nothing, and a palette at
+    /// or below ``indexedEntryThreshold`` walks faster than it can look a
+    /// bucket up — live here so that no loop has to restate them, and so that
+    /// resolving costs the handle's lock once instead of once a cell.
+    var consultedSearchIndex: SearchIndex? {
+        guard mapping == .nearestColor, entries.count > Self.indexedEntryThreshold else { return nil }
+        return searchIndex
+    }
+
     /// The per-instance memo, and the process-wide cache behind it.
     ///
     /// A reference held by every copy of the palette, so the first search

@@ -118,6 +118,9 @@ extension ASCIIConverter {
         let table5 = columns.t5
         let characters = columns.characters
 
+        // The mode resolved once for the whole picture — see `CellColours`.
+        let colours = CellColours(mode: mode)
+
         var lines = [String]()
         lines.reserveCapacity(height)
 
@@ -187,7 +190,7 @@ extension ASCIIConverter {
                         r: UInt8(clamping: Int((Double(sumR) * inverseAllSamples).rounded())),
                         g: UInt8(clamping: Int((Double(sumG) * inverseAllSamples).rounded())),
                         b: UInt8(clamping: Int((Double(sumB) * inverseAllSamples).rounded())))
-                    row.setColors(foreground: cellColor(for: averageColor, mode: mode), background: nil)
+                    row.setColors(foreground: colours.color(for: averageColor), background: nil)
                     row.append(character)
                 }
                 lines.append(row.finish())

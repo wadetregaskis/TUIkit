@@ -760,6 +760,8 @@ extension ASCIIConverter {
         mode: ASCIIColorMode
     ) -> [String] {
         let ramp = characterRamp
+        // The mode resolved once for the whole picture — see `CellColours`.
+        let colours = CellColours(mode: mode)
         // Edge tracing is independent of shape matching: it asks where the
         // PICTURE has a strong gradient, which the luminance renderer can
         // answer as well as the shape one — from the cells around each cell
@@ -803,7 +805,7 @@ extension ASCIIConverter {
                                 edge: edge, threshold: edgeThreshold)
                         } ?? ramp[clampedIndex]
 
-                    row.setColors(foreground: cellColor(for: pixel, mode: mode), background: nil)
+                    row.setColors(foreground: colours.color(for: pixel), background: nil)
                     row.append(char)
                 }
                 lines.append(row.finish())
@@ -830,6 +832,8 @@ extension ASCIIConverter {
         mode: ASCIIColorMode,
         monoThreshold: Double
     ) -> [String] {
+        // The mode resolved once for the whole picture — see `CellColours`.
+        let colours = CellColours(mode: mode)
         var lines = [String]()
         lines.reserveCapacity(height)
         image.pixels.withUnsafeBufferPointer { pixels in
@@ -842,7 +846,7 @@ extension ASCIIConverter {
                         row.append(Self.isMonoInk(pixel, threshold: monoThreshold) ? "█" : " ")
                         continue
                     }
-                    row.setColors(foreground: nil, background: cellColor(for: pixel, mode: mode))
+                    row.setColors(foreground: nil, background: colours.color(for: pixel))
                     row.append(ascii: 0x20)
                 }
                 lines.append(row.finish())

@@ -9,30 +9,15 @@ import TUIkitStyling
 // MARK: - Which colour a cell takes
 
 extension ASCIIConverter {
-    /// The colour a pixel is drawn in under `mode` — the palette entry it
-    /// quantises to, the grey ramp step, or the pixel itself at truecolor —
-    /// and `nil` for a mode that draws no colour at all.
+    /// The colour a pixel is drawn in under `mode`, for a caller that has ONE
+    /// pixel rather than a loop — the escape-string helpers and the tests.
     ///
-    /// The one place the question is answered. The escape strings
-    /// (``foregroundColorCode(for:mode:)``) and the byte writer
-    /// (``ANSIRowBuilder``) both spell out what this returns, so the two can
-    /// never disagree about which colour a cell got — only about how it is
-    /// written down.
+    /// A renderer builds a `CellColours` once for the whole picture instead,
+    /// exactly as `quantizePixel(_:mode:monoThreshold:table:)` is the
+    /// one-at-a-time form of `PixelQuantiser`. Same answer either way: this is
+    /// that type with the resolution paid per call.
     func cellColor(for pixel: RGBA, mode: ASCIIColorMode) -> Color? {
-        switch mode {
-        case .trueColor:
-            return .rgb(pixel.r, pixel.g, pixel.b)
-        case .ansi256:
-            return ASCIIPalette.ansi256.color(nearestTo: pixel)
-        case .ansi16:
-            return ASCIIPalette.ansi16.color(nearestTo: pixel)
-        case .grayscale:
-            return .palette(UInt8(232 + Self.greyRampStep(for: pixel)))
-        case .mono:
-            return nil
-        case .palette(let palette):
-            return palette.color(nearestTo: pixel)
-        }
+        CellColours(mode: mode).color(for: pixel)
     }
 
     /// Which of the terminal's 24 grey-ramp steps a pixel takes: 0 for palette
@@ -79,6 +64,82 @@ extension ASCIIConverter {
     }
 }
 
+/// A colour mode resolved once per conversion into what a per-cell loop asks of
+/// it: the per-CELL twin of `PixelQuantiser`, and it exists for the same two
+/// reasons that one does.
+///
+/// `cellColor(for:mode:)` switched on the mode per cell, and
+/// `case .palette(let palette)` copies the palette out of the enum's payload —
+/// four references retained and released for every cell, TWICE a cell in the
+/// default half-block renderer, before a distance is computed. §42 of
+/// `Documentation/Performance-profile-2026-08.md` priced that copy at 14.0 →
+/// 18.8 ns on a per-pixel lookup nothing else had changed.
+///
+/// And the palette re-resolved its search index per cell: `searchIndex` is a
+/// computed property that takes the handle's `NSLock` on every read, so a
+/// 120×50 half-block conversion took 12,000 uncontended locks to be handed the
+/// same object 12,000 times.
+///
+/// The palette is stored NON-optional, with an unread `.ansi16` stand-in for
+/// the modes that have none, because a `guard let` per cell is the very copy
+/// this removes — the hoist `PixelQuantiser.dither` documents, moved inside the
+/// type because here the loop belongs to the caller. `kind` says whether it is
+/// read. The pieces are plain stored properties and the kind carries no
+/// payload, for the reason `PixelQuantiser` records: the first attempt there
+/// put the resolved pieces in an enum and matched THAT per pixel, and measured
+/// 2.7× slower than the copy it was removing.
+struct CellColours {
+    private enum Kind {
+        case trueColor
+        case grayscale
+        case mono
+        case palette
+    }
+
+    private let kind: Kind
+    /// The palette the `.palette` kind searches — an unread `.ansi16` otherwise.
+    private let palette: ASCIIPalette
+    /// Its search index, resolved once — see `ASCIIPalette.consultedSearchIndex`.
+    private let index: ASCIIPalette.SearchIndex?
+
+    init(mode: ASCIIColorMode) {
+        switch mode {
+        case .trueColor: kind = .trueColor
+        case .grayscale: kind = .grayscale
+        case .mono: kind = .mono
+        case .ansi256, .ansi16, .palette: kind = .palette
+        }
+        // `searchedPalette` is non-nil for exactly the three palette modes —
+        // the same question `PixelQuantiser` asks of the same enum.
+        let searched = kind == .palette ? mode.searchedPalette : nil
+        palette = searched ?? .ansi16
+        index = searched?.consultedSearchIndex
+    }
+
+    /// The colour a pixel is drawn in — the palette entry it quantises to, the
+    /// grey ramp step, or the pixel itself at truecolor — and `nil` for a mode
+    /// that draws no colour at all.
+    ///
+    /// The one place the question is answered. The escape strings
+    /// (`ASCIIConverter.foregroundColorCode(for:mode:)`) and the byte writer
+    /// (``ANSIRowBuilder``) both spell out what this returns, so the two can
+    /// never disagree about which colour a cell got — only about how it is
+    /// written down.
+    @inline(__always)
+    func color(for pixel: RGBA) -> Color? {
+        switch kind {
+        case .trueColor:
+            return .rgb(pixel.r, pixel.g, pixel.b)
+        case .grayscale:
+            return .palette(UInt8(232 + ASCIIConverter.greyRampStep(for: pixel)))
+        case .mono:
+            return nil
+        case .palette:
+            return palette.color(nearestTo: pixel, using: index)
+        }
+    }
+}
+
 extension ASCIIPalette {
     /// The entry nearest `pixel`, as the colour that will be emitted for it.
     ///
@@ -86,13 +147,19 @@ extension ASCIIPalette {
     /// does the entry's mid-grey stand-in is what is drawn — the same answer
     /// ``sgrParameters(at:background:)`` gives.
     func color(nearestTo pixel: RGBA) -> Color {
-        let index = nearestIndex(to: pixel)
-        guard colors.indices.contains(index) else { return .rgb(0, 0, 0) }
-        if case .semantic = colors[index].value {
-            let grey = entries[index].rgba
+        color(nearestTo: pixel, using: consultedSearchIndex)
+    }
+
+    /// ``color(nearestTo:)`` with the search index resolved by the caller — see
+    /// `nearestIndex(to:using:)`, which is where the parameter earns itself.
+    func color(nearestTo pixel: RGBA, using index: ASCIIPalette.SearchIndex?) -> Color {
+        let entry = nearestIndex(to: pixel, using: index)
+        guard colors.indices.contains(entry) else { return .rgb(0, 0, 0) }
+        if case .semantic = colors[entry].value {
+            let grey = entries[entry].rgba
             return .rgb(grey.r, grey.g, grey.b)
         }
-        return colors[index]
+        return colors[entry]
     }
 }
 

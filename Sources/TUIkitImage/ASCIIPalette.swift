@@ -320,12 +320,25 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// two entries is what makes a boundary read as a gradient instead of a
     /// step. See ``DitheringMode``.
     func nearestIndex(to pixel: RGBA) -> Int {
+        nearestIndex(to: pixel, using: consultedSearchIndex)
+    }
+
+    /// ``nearestIndex(to:)`` with the index resolved by the CALLER — once for a
+    /// whole loop instead of once a cell.
+    ///
+    /// The answers are the same answers, and `nil` means "walk", which is what
+    /// a ramp and a small palette get: `index` is meant to be this palette's
+    /// `consultedSearchIndex`. Worth a parameter because ``searchIndex`` is a
+    /// computed property that takes the handle's lock on EVERY read, and the
+    /// per-cell renderers were paying that lock twice a cell to be handed the
+    /// same object 12,000 times a conversion. See `CellColours`.
+    func nearestIndex(to pixel: RGBA, using index: SearchIndex?) -> Int {
         guard mapping == .nearestColor else { return toneRampIndex(for: pixel) }
         // A large palette searches its index — the same answer, over the few
         // entries that can be nearest anywhere in the pixel's cell rather than
         // over every entry. See ``SearchIndex`` for why that is exact.
-        if entries.count > Self.indexedEntryThreshold, let searchIndex {
-            return searchIndex.nearestIndex(to: pixel)
+        if let index {
+            return index.nearestIndex(to: pixel)
         }
         let target = Color.oklab(red: pixel.r, green: pixel.g, blue: pixel.b)
         var best = 0

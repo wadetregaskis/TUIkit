@@ -63,6 +63,9 @@ extension ASCIIConverter {
         // value, was 128 * 1000 = 128_000.)
         let scaledThreshold = Int(monoThreshold * 1000)
 
+        // The mode resolved once for the whole picture — see `CellColours`.
+        let colours = CellColours(mode: mode)
+
         return image.pixels.withUnsafeBufferPointer { buffer -> [String] in
             var lines = [String]()
             lines.reserveCapacity(height)
@@ -124,7 +127,7 @@ extension ASCIIConverter {
                         avgPixel = RGBA(r: 0, g: 0, b: 0)
                     }
 
-                    row.setColors(foreground: cellColor(for: avgPixel, mode: mode), background: nil)
+                    row.setColors(foreground: colours.color(for: avgPixel), background: nil)
                     row.append(brailleChar)
                 }
                 lines.append(row.finish())
