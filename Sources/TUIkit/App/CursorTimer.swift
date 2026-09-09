@@ -6,8 +6,9 @@
 
 import Foundation
 
-/// The app's one animation clock: the cursor's blink, and every focus
-/// indicator's breath.
+/// The app's one animation TIMER, and the two clocks it ticks: the
+/// focus-relative one the cursor's blink and every focus indicator's breath
+/// read, and the monotonic one a spinner or an indeterminate bar reads.
 ///
 /// `CursorTimer` maintains two phase values for different animation styles:
 /// - `blinkVisible`: Boolean for sharp on/off blinking

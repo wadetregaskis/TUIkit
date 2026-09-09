@@ -8,13 +8,18 @@
 
 /// Which of the run loop's animation clocks advances a run.
 ///
-/// One, now. There were two — a breathing clock for focus indicators and a
-/// blink clock for text cursors — and having two was a bug rather than a
-/// feature: they ran at different rates from different formulas, so the same
-/// focus pulse breathed at 2 s on a section's border and 0.8 s on the controls
-/// inside it, depending only on which route the view happened to take. Both
-/// cadences now come from one clock and one formula (`CursorTimer`), selected
-/// per element by ``SelectionIndicatorStyle`` rather than by the plumbing.
+/// Two — but not the two there used to be. The old pair was a breathing clock
+/// for focus indicators and a blink clock for text cursors, and having those
+/// two was a bug rather than a feature: they ran at different rates from
+/// different formulas, so the same focus pulse breathed at 2 s on a section's
+/// border and 0.8 s on the controls inside it, depending only on which route
+/// the view happened to take. Both cadences became one clock and one formula
+/// (`CursorTimer`), selected per element by ``SelectionIndicatorStyle`` rather
+/// than by the plumbing — and commit 7c5514aa (2026-09-01) then split that one
+/// clock along a different seam. These two still tick together off the one
+/// timer and share the one formula; they differ only in where their zero sits,
+/// because moving the focus should restart a text cursor's blink and must not
+/// restart a spinner.
 public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable {
     /// The FOCUS-relative clock: the text cursor's blink, and the breath a
     /// focused control draws itself with.
