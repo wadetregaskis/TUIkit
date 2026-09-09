@@ -541,9 +541,12 @@ extension ItemListHandler {
         }
         guard contentHeight > 0 else { return }
 
-        // Centring a multi-line-row list: hold a specific LINE of the focused
-        // row at the viewport centre with sub-row precision, rather than the
-        // whole-row margin below (which drifts as neighbouring row heights vary).
+        // Centring a list whose row heights are known — which is every `List`,
+        // single-line rows included, plus a `Table` whose columns wrap: hold a
+        // specific LINE of the focused row at the viewport centre with sub-row
+        // precision, rather than the whole-row margin below (which drifts as
+        // neighbouring row heights vary). A uniform `Table` passes no
+        // `rowHeight` and takes the margin instead.
         if let anchor = followMargin.centeredAnchor, rowHeight != nil {
             anchorFocusedRow(anchor: anchor)
             return

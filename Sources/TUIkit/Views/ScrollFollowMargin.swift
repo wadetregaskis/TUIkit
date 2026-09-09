@@ -15,19 +15,25 @@
 ///
 /// - ``none``: scrolling starts only when the selection reaches the edge —
 ///   the classic terminal behaviour, and the default everywhere.
-/// - `lines(_:)` / `rows(_:)`: scrolling starts once fewer than that many
-///   lines (terminal rows) / rows (logical items — a multi-line row counts
-///   once) remain visible beyond the selection. For single-line items the two
-///   are identical.
+/// - ``steps(_:)``: scrolling starts once fewer than that many scroll STEPS
+///   remain visible beyond the selection, a step being whatever this scrollable
+///   moves by — a terminal line under ``ScrollGranularity/line``, a whole row
+///   (a multi-line row counting once) under ``ScrollGranularity/row``. With
+///   single-line rows the two are identical.
 /// - ``fraction(_:)``: the margin is that fraction of the viewport height,
 ///   so it scales with the window.
-/// - ``centered``: keep the selection centred while scrolling — exactly
-///   ``fraction(_:)`` of `0.5`.
+/// - ``centered``: keep the selection centred while scrolling. Half a viewport
+///   in line space, so wherever a step IS a line — a ``Menu``, a drop-down, a
+///   ``ScrollView`` reveal — it is exactly ``fraction(_:)`` of `0.5`. Where the
+///   view knows its rows' heights (every ``List``, and a ``Table`` whose columns
+///   wrap) it is not: the value carries a ``RowAnchor``, and one LINE of the
+///   focused row is held at the centre with sub-row precision, because a centre
+///   counted in whole rows wanders as the neighbouring heights change.
 ///
 /// Whatever the value, a selection near the very start or end of the content
 /// still rests against the edge — the margin only affects when the window
 /// starts moving in between. Margins larger than the viewport allows are
-/// clamped (a half-viewport margin behaves like ``centered``).
+/// clamped (a half-viewport margin pins a single-line selection to the centre).
 ///
 /// Set it for a subtree with ``View/scrollFollowMargin(_:)``.
 public struct ScrollFollowMargin: Sendable, Hashable {
@@ -115,10 +121,12 @@ public struct ScrollFollowMargin: Sendable, Hashable {
         case .fraction(let fraction):
             raw = Int((Double(viewportLines) * fraction).rounded())
         case .centered:
-            // Half the viewport, so line-space consumers (single-line lists,
-            // menus, drop-downs, ScrollView reveal) still centre the selection.
-            // Row-space consumers with multi-line rows instead use the anchor
-            // (see ``centeredAnchor``) for sub-row-precise centring.
+            // Half the viewport, so line-space consumers (menus, drop-downs,
+            // ScrollView reveal, a single-line `Table`) still centre the
+            // selection. Anything that knows its row heights instead uses the
+            // anchor (see ``centeredAnchor``) for sub-row-precise centring —
+            // which is every `List`, single-line rows included, since
+            // `_ListCore` always wires `rowHeight`.
             raw = Int((Double(viewportLines) * 0.5).rounded())
         }
         return min(max(0, raw), max(0, (viewportLines - 1) / 2))
