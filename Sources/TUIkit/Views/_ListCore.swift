@@ -2115,6 +2115,58 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     handler.hoverExternalDrop(atContentY: y - topInset)
                 }))
     }
+    /// What a click on a row DOES: activate it, disclose it, or select it.
+    ///
+    /// Extracted from the mouse closure because the closure had grown past what
+    /// the lint budget allows — and because the three-way choice reads better with
+    /// a name than as the tail of a gesture state machine.
+    ///
+    /// - Parameters:
+    ///   - handler: The list's handler.
+    ///   - rowIndex: The row the click landed on.
+    ///   - id: That row's selection id.
+    ///   - event: The release event, for its click count and modifiers.
+    ///   - dispatcher: The mouse dispatcher, to spend a completed multi-click.
+    ///   - primaryAction: The app's `.onRowActivate`, if it has one.
+    ///   - clickDiscloses: Whether this list has no selection binding, so a plain
+    ///     click has nothing to select and an outline row can disclose instead.
+    private static func resolveRowClick(
+        handler: ItemListHandler<SelectionValue>,
+        rowIndex: Int,
+        id: SelectionValue,
+        event: MouseEvent,
+        dispatcher: MouseEventDispatcher,
+        primaryAction: ((SelectionValue) -> Void)?,
+        clickDiscloses: Bool
+    ) {
+        // A double-click fires the row's activation ("open"); a single click
+        // selects with macOS semantics (plain = sole selection, shift = range,
+        // ctrl/option = toggle).
+        if handler.completesMultiClick(on: rowIndex, clickCount: event.clickCount),
+            let primaryAction
+        {
+            handler.focusedIndex = rowIndex
+            // This gesture is spent: the next press begins a new count, so a
+            // second double-click opens once more rather than once per click.
+            dispatcher.endMultiClickSequence()
+            primaryAction(id)
+            return
+        }
+        // No selection to make, so a single click on an outline row does what the
+        // row's only other verb is: open or close it. A leaf answers `false` and
+        // the click is spent on focus alone, which is what it did before.
+        //
+        // A child view with a click handler of its own still wins — its hit region
+        // is registered inside the row and is found first — so a row carrying a
+        // Button behaves as it always did. That is why this is on the LIST's
+        // fall-through handler rather than on the row.
+        if clickDiscloses, let outline = handler.outlineActivation {
+            handler.focusedIndex = rowIndex
+            _ = outline.setRowExpanded(AnyHashable(id), to: nil, includingDescendants: false)
+            return
+        }
+        handler.handleClickSelection(at: rowIndex, event: event)
+    }
 
     /// Builds the closure that the container-wide hit-test
     /// region invokes. Routes wheel to the handler's scroll
@@ -2133,6 +2185,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let captureFocusID = state.focusID
         let rowRanges = state.visibleRowYRanges
         let capturedPrimaryAction = primaryAction
+        // A list with no selection binding has nothing for a row click to do, and
+        // an outline row is the one case where there IS something: disclose it.
+        // Captured rather than asked of the handler inside the closure, because
+        // "does this list select" is a property of the VIEW and does not change
+        // between the press and the release.
+        let clickDiscloses = singleSelection == nil && multiSelection == nil
         let capturedRows = state.visibleRows
         // Where inside the grabbed row the press landed — the cell a `.cursor`
         // drag keeps under the pointer. Held in the closure because the closure
@@ -2305,22 +2363,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // empty area — just focus (the border shares a y with some
                     // row, but nobody clicking a frame means "select that row").
                     if let hit = rowAt(y: event.y), case .content(let id) = hit.type {
-                        // A double-click fires the row's activation ("open"); a
-                        // single click selects with macOS semantics (plain =
-                        // sole selection, shift = range, ctrl/option = toggle).
-                        if captureHandler.completesMultiClick(
-                            on: hit.rowIndex, clickCount: event.clickCount),
-                            let action = capturedPrimaryAction
-                        {
-                            captureHandler.focusedIndex = hit.rowIndex
-                            // This gesture is spent: the next press begins a
-                            // new count, so a second double-click opens once
-                            // more rather than once per click.
-                            dispatcher.endMultiClickSequence()
-                            action(id)
-                        } else {
-                            captureHandler.handleClickSelection(at: hit.rowIndex, event: event)
-                        }
+                        Self.resolveRowClick(
+                            handler: captureHandler, rowIndex: hit.rowIndex, id: id,
+                            event: event, dispatcher: dispatcher,
+                            primaryAction: capturedPrimaryAction,
+                            clickDiscloses: clickDiscloses)
                     }
                     focusManager?.focus(id: captureFocusID)
                     return true
