@@ -33,6 +33,17 @@
 /// them, and a snapshot must not mutate shared state as a side effect.
 /// The render cache is private to this renderer, so a snapshot never
 /// disturbs the shared cache a live app may be using.
+///
+/// What a snapshot does NOT skip is the root composite. `.offset`,
+/// `.position`, `.popover`, `.sheet` and `.alert` leave their drawing in
+/// `overlays` rather than in the lines, and `.opacity` leaves a blend still
+/// to perform in `opacityRegions`; `flush` walks only `lines`, so both are
+/// resolved first, by the same
+/// ``FrameBuffer/compositingOverlays(maxWidth:maxHeight:palette:)`` the live
+/// pipeline runs at the screen root. Without it a displaced view drew nothing
+/// at all and a faded one drew at full strength. The palette that resolves
+/// the fade is this renderer's own default: a snapshot has no scene, so there
+/// is no `.palette(_:)` scene override to hoist.
 @MainActor
 final class ViewRenderer {
     /// The terminal to render to.
@@ -124,7 +135,25 @@ extension ViewRenderer {
         // a release on.
         let graphics = context.terminalImageStore.takePending()
         if !graphics.isEmpty { terminal.write(graphics) }
-        flush(buffer, atRow: row, column: column)
+        // The root composite, before the write. `.offset`/`.position`/
+        // `.popover`/`.alert` put their drawing in `buffer.overlays` and
+        // `.opacity` leaves a blend still to perform in `buffer.opacityRegions`,
+        // and `flush` walks neither: a snapshot of `Text("A").offset(x: 2)`
+        // wrote one empty row and no "A" at all, and one of
+        // `Text("x").opacity(0.3)` wrote the unfaded cells. This is the call
+        // `RenderLoop` makes at the screen root (`compositeOverlays`), and its
+        // first act is that root's opacity resolve — so ONE call covers both
+        // halves and leaves a second nothing to do: resolution CLEARS the
+        // regions, so a separate `resolvingOpacity` would not double-fade, it
+        // would simply be dead. (The live loop calls it twice for that reason.)
+        //
+        // Unconditional, unlike the live loop's `!overlays.isEmpty` guard,
+        // because the opacity half has to run when there are no layers at all.
+        // Free when there is neither payload: the opacity pass returns `self`
+        // on an empty region list and the layer queue never iterates, so the
+        // buffer comes back byte-identical.
+        let composited = buffer.compositingOverlays(maxWidth: size.width, maxHeight: size.height, palette: environment.palette)
+        flush(composited, atRow: row, column: column)
     }
 }
 

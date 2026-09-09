@@ -155,4 +155,57 @@ struct ViewRendererTests {
         // …but the view still renders.
         #expect(visibleWrites(mock).contains { $0.contains("hi") })
     }
+
+    /// A snapshot is a second screen root, and the root is where a displaced
+    /// drawing lands: `.offset` paints NOTHING at its natural position and puts
+    /// the glyphs in an `OverlayLayer`, so a flush that walked only
+    /// `buffer.lines` wrote one empty row and the "A" reached the terminal
+    /// never. Same mechanism for `.position`, `.popover`, `.sheet`, `.alert`.
+    @Test("A snapshot composites a displaced drawing")
+    func snapshotCompositesOverlayLayers() {
+        let mock = MockTerminal()
+        mock.size = (20, 4)
+
+        ViewRenderer(terminal: mock).render(Text("A").offset(x: 2))
+
+        // Column 2, which is the whole point of the offset: the composite pads
+        // the one-cell placeholder out to three and inserts the layer at x = 2.
+        // `stripped` removes ANSI and not whitespace, so this pins the COLUMN —
+        // a composite at x = 0 still fails.
+        #expect(visibleWrites(mock) == ["  A"])
+    }
+
+    /// …and the other half of the same root: `.opacity` records a region for a
+    /// compositor to blend and leaves its cells at full strength, so a snapshot
+    /// that resolved no region printed the faded row byte-for-byte identically
+    /// to the unfaded one.
+    ///
+    /// Under a PINNED depth, because the assertion is that the row's colour
+    /// changed and at ``ColorDepth/noColor`` a blend emits no colour at all —
+    /// `Color.foregroundCodes()` returns `[]` there and `SGRState` deliberately
+    /// does nothing with an empty list. Unpinned, this would pass in a
+    /// developer's terminal and fail wherever `TERM=dumb`, which is what
+    /// `ColorDepth.detect()` reads as `.noColor`.
+    @Test("A snapshot resolves an opacity region")
+    func snapshotResolvesOpacityRegions() throws {
+        try withColorDepth(.truecolor) {
+            let plain = MockTerminal()
+            plain.size = (20, 4)
+            let faded = MockTerminal()
+            faded.size = (20, 4)
+
+            ViewRenderer(terminal: plain).render(Text("faint"))
+            ViewRenderer(terminal: faded).render(Text("faint").opacity(0.3))
+
+            // The same glyphs — a fade is a colour, not a substitution …
+            #expect(visibleWrites(faded) == visibleWrites(plain))
+            // … and different bytes, because the blend names a colour 30% of the
+            // way from the palette's foreground toward its background. The span
+            // is uniform, so the escape lands once at column 0 and "faint" stays
+            // contiguous.
+            let fadedRow = try #require(faded.writtenOutput.first { $0.contains("faint") })
+            let plainRow = try #require(plain.writtenOutput.first { $0.contains("faint") })
+            #expect(fadedRow != plainRow, "the region was never resolved: \(fadedRow.debugDescription)")
+        }
+    }
 }
