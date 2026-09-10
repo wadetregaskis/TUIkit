@@ -106,6 +106,60 @@ struct RGBAImageScalingTests {
         #expect(reduced.pixel(at: 0, 0).a == 0, "box reduction")
     }
 
+    /// **`boxReduced` averaged straight colour and alpha independently.**
+    ///
+    /// `scaledBilinear` premultiplies and says at its own loop exactly why: a
+    /// transparent pixel's colour is meaningless, the decoder writes it BLACK, and
+    /// giving it full weight pulls its opaque neighbours toward black. The box
+    /// reduction is the third resampler and had the same hole — benign only because
+    /// `ASCIIConverter` flattened over black *before* calling it, so every alpha it
+    /// ever saw was 255. §41.
+    ///
+    /// Half a block of white at full coverage and half at none: the answer is WHITE at
+    /// half coverage. Averaged independently it is GREY at half coverage, which is a
+    /// dark halo around every soft edge.
+    @Test("A box reduction averages colour by coverage, not beside it")
+    func boxReductionIsAlphaWeighted() {
+        let opaque = RGBA(r: 255, g: 255, b: 255, a: 255)
+        let clear = RGBA(r: 0, g: 0, b: 0, a: 0)
+        let reduced = RGBAImage(
+            width: 2, height: 2, pixels: [opaque, clear, opaque, clear]
+        ).boxReduced(by: 2)
+        let pixel = reduced.pixel(at: 0, 0)
+        #expect(pixel.a == 127, "half coverage: \(pixel)")
+        #expect(
+            (pixel.r, pixel.g, pixel.b) == (255, 255, 255),
+            "the white survives its transparent neighbours: \(pixel)")
+    }
+
+    /// And an OPAQUE block must come out byte-identical to what the unweighted average
+    /// gave, because that is what every image in the pipeline is today: with every
+    /// coverage equal the weights cancel, integer division included, so the fix cannot
+    /// have moved a single existing pixel.
+    @Test("An opaque box reduction is byte-identical to the plain average")
+    func opaqueBoxReductionIsUnchanged() {
+        let values: [UInt8] = [10, 20, 33, 44, 200, 201, 202, 203, 7, 8, 9, 250, 1, 2, 3, 4]
+        let source = RGBAImage(
+            width: 4, height: 4, pixels: values.map { RGBA(r: $0, g: $0 / 2, b: $0 / 3) })
+        let reduced = source.boxReduced(by: 2)
+        for y in 0..<2 {
+            for x in 0..<2 {
+                var sum = (r: 0, g: 0, b: 0)
+                for dy in 0..<2 {
+                    for dx in 0..<2 {
+                        let p = source.pixel(at: x * 2 + dx, y * 2 + dy)
+                        sum = (sum.r + Int(p.r), sum.g + Int(p.g), sum.b + Int(p.b))
+                    }
+                }
+                let got = reduced.pixel(at: x, y)
+                #expect(Int(got.r) == sum.r / 4, "\(x),\(y) red: \(got)")
+                #expect(Int(got.g) == sum.g / 4, "\(x),\(y) green: \(got)")
+                #expect(Int(got.b) == sum.b / 4, "\(x),\(y) blue: \(got)")
+                #expect(got.a == 255, "\(x),\(y) alpha: \(got)")
+            }
+        }
+    }
+
     /// Colour is unchanged by the fix — the interpolation that was already
     /// there still is.
     @Test("Colour interpolation is unchanged")

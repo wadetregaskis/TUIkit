@@ -2734,3 +2734,31 @@ reaches every chrome-painting view in the framework, and the ones not on that pa
 untested rather than known-good. What the suite now has is a **place to add the next
 one**, and a failure mode that is a stack trace rather than a wrong colour on somebody's
 screen.
+
+
+## 41. The image glyph path, part one: the two bugs the flatten was hiding (2026-09-10)
+
+§17 named four things the glyph path drags with it, and said two of them are
+**pre-existing bugs that the unconditional `flattenedOverBlack()` currently hides**.
+Each has to be fixed before the flatten can go, and each is its own commit, because
+each is wrong on its own terms and testable on its own.
+
+### 41.1 `boxReduced(by:)` averaged straight colour and alpha independently
+
+`scaledBilinear(to:_:)` premultiplies, and its own loop says exactly why: a transparent
+pixel's colour is meaningless, the decoder writes every fully transparent pixel BLACK,
+and giving it full weight pulls its opaque neighbours toward black — a dark fringe one
+pixel wide around every PNG with a transparent surround.
+
+`boxReduced` is the third resampler and had the same hole. Half a block of white at
+coverage 255 and half at coverage 0 came out **grey at coverage 127**, where the answer
+is **white at coverage 127**. The colour is now averaged premultiplied and divided back
+out by the total coverage, which is the alpha-weighted mean `Σ(cᵢ·aᵢ) / Σaᵢ`; a block
+with no coverage at all has no colour to recover and stays fully transparent.
+
+**Byte-identical on the opaque path, and written to be.** With every coverage equal the
+weights cancel — `255·Σrᵢ / (255·count)` floors to exactly what `Σrᵢ / count` did — so
+no rounding term was added, deliberately, and `opaqueBoxReductionIsUnchanged` pins it.
+That matters because every image reaching this function today has been flattened first:
+the fix cannot move a single pixel of anything currently on screen, which is what makes
+it safe to land ahead of the change that will actually exercise it.

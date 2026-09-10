@@ -381,6 +381,25 @@ extension RGBAImage {
     /// box-reducing gives every output pixel a proper area average — this
     /// is what backs the image renderers' supersampling. A `factor` of 1
     /// (or an image too small to reduce) returns `self`.
+    ///
+    /// ## The average is alpha-weighted
+    ///
+    /// A transparent pixel has no colour to contribute, and its stored colour is
+    /// whatever the encoder happened to leave there — usually `(0, 0, 0)`. Averaging
+    /// straight colour and alpha *independently* mixes that nothing in as if it were
+    /// black, so a soft edge over transparency comes out with a dark halo: half a
+    /// block of white at alpha 255 and half at alpha 0 averaged to grey at alpha 128,
+    /// where the answer is WHITE at alpha 128.
+    ///
+    /// So the colour is averaged premultiplied and divided back out by the mean alpha,
+    /// which is the alpha-weighted mean: `Σ(cᵢ·aᵢ) / Σaᵢ`. A block with no coverage at
+    /// all has no colour to recover and stays fully transparent.
+    ///
+    /// This was benign until `flattenedOverBlack()` stopped running ahead of it — the
+    /// flatten made every alpha 255, and with every alpha equal the two averages agree
+    /// exactly, integer division included. That is deliberate: nothing about an opaque
+    /// image's output moves, byte for byte, and the arithmetic is written to keep it
+    /// that way rather than rounded "better" (see §41).
     public func boxReduced(by factor: Int) -> RGBAImage {
         guard factor > 1, width >= factor, height >= factor else { return self }
         let targetWidth = width / factor
@@ -394,16 +413,26 @@ extension RGBAImage {
                 for dy in 0..<factor {
                     for dx in 0..<factor {
                         let p = pixel(at: x * factor + dx, y * factor + dy)
-                        r += Int(p.r)
-                        g += Int(p.g)
-                        b += Int(p.b)
-                        a += Int(p.a)
+                        let coverage = Int(p.a)
+                        r += Int(p.r) * coverage
+                        g += Int(p.g) * coverage
+                        b += Int(p.b) * coverage
+                        a += coverage
                     }
                 }
+                guard a > 0 else {
+                    result.append(RGBA(r: 0, g: 0, b: 0, a: 0))
+                    continue
+                }
+                // `r / a` IS the weighted mean: `Σ(rᵢ·aᵢ)` over `Σaᵢ`. Divided by the
+                // total coverage rather than by `count`, which is what un-premultiplies
+                // it. No rounding term, so an all-opaque block divides
+                // `255·Σrᵢ / (255·count)` and lands on exactly the byte the unweighted
+                // average did.
                 result.append(
                     RGBA(
-                        r: UInt8(r / count), g: UInt8(g / count),
-                        b: UInt8(b / count), a: UInt8(a / count)))
+                        r: UInt8(min(255, r / a)), g: UInt8(min(255, g / a)),
+                        b: UInt8(min(255, b / a)), a: UInt8(a / count)))
             }
         }
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: result)
