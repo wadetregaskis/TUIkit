@@ -90,10 +90,27 @@ extension FrameBuffer {
     /// characters (borders, indicators) and re-rendered as a dimmed `foreground`
     /// on a uniform `background`, padded to the full width so no gaps show.
     ///
-    /// Hit-test regions and nested overlay layers are intentionally dropped — the
-    /// backdrop MUST be fully inert while the modal is up: clicks on dimmed
-    /// controls must not fire (the modal intercepts input), and a popover/picker
-    /// that was open behind the modal must not keep drawing half-bright on top.
+    /// Hit-test regions are intentionally dropped — the backdrop MUST be fully
+    /// inert while the modal is up, and clicks on dimmed controls must not fire
+    /// (the modal intercepts input anyway, but the regions would still be there to
+    /// be hit if the modal ever failed to).
+    ///
+    /// ``FrameBuffer/overlays`` are **kept**, and this comment used to say they
+    /// were dropped. They ride through because a backdrop is dimmed *under* a
+    /// modal and anything still waiting to be drawn above it must not vanish; the
+    /// modal's own panel is one of them. (The concern the old wording named — a
+    /// popover left open behind the modal drawing half-bright on top — is handled
+    /// where the layers are composited, not by discarding them here.)
+    ///
+    /// ``FrameBuffer/opacityRegions`` are dropped, and unlike the hit regions that
+    /// is because they have been CONSUMED rather than suppressed. The flatten
+    /// rewrites every cell to one foreground on one background, so a region saying
+    /// "these cells are 40% translucent" no longer describes anything that is
+    /// there: honouring it would fade the DIM toward whatever is behind the page,
+    /// and the dim is deliberately flat and opaque. Stated because a bare
+    /// `FrameBuffer(lines:)` that re-attaches some payloads and not others is the
+    /// shape a dropped payload hides in, and the next reader should not have to
+    /// work out which of these three drops was an oversight.
     ///
     /// ``FrameBuffer/animatedCells`` are **kept**, each frame flattened by the
     /// same rule as the lines. Inert is a statement about INPUT: a backdrop the
