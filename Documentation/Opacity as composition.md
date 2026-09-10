@@ -1610,18 +1610,11 @@ renders it faithfully. That is the composition working as intended — but it is
 features deep, so `ColorPickerAlphaTests.swatchFades` asserts it rather than leaving
 it to be assumed and quietly broken later.
 
-**`supportsOpacity` is a real parity gap now.** It was omitted deliberately, with a
+**`supportsOpacity` was a real parity gap.** It was omitted deliberately, with a
 stated reason: *"There is no opacity channel — terminal colours have no alpha — so
-`supportsOpacity` is omitted."* `Color` gained one on 2026-09-08, so the reason is
-simply gone, and what is left is worse than a plain omission: the control **displays**
-an alpha it gives no way to **edit**.
-
-Implementing it is a feature rather than a migration — a fourth channel slider, the
-same in `ColorPickerPanel`, and a decision about what the swatch shows a
-half-transparent colour *against* — so it is left for the project owner rather than
-folded into this pass. `noAlphaChannel` pins the current state so that a fourth
-channel landing makes a test fail and be rewritten, instead of arriving
-undocumented.
+`supportsOpacity` is omitted."* `Color` gained one on 2026-09-08, so the reason was
+simply gone, and what was left is worse than a plain omission: the control
+**displayed** an alpha it gave no way to **edit**. Built in §32.
 
 `Documentation/SwiftUI-semantic-audit-2026-08.md` listed this among "the refusals that
 pass the test". It has been moved out. The audit's own tally is worth updating with
@@ -1971,3 +1964,68 @@ whole job is to recede against the page it sits on.
   and `renderCircularDial` paint their own cells and bypass `TrackRenderer` entirely.
   A translucent `.tint` reaches all four of their emit sites. Added to §16.1 as its
   own line so finishing the track is not mistaken for finishing the `Gauge`.
+
+
+## 32. `ColorPicker.supportsOpacity`, and what a terminal swatch shows (2026-09-10)
+
+The last row of §16.1, and the only one that was a feature rather than a migration.
+`supportsOpacity` now exists on both inits with SwiftUI's own default of `true`, adds
+a fourth `A` channel to the inline row, and an **Opacity** row to `ColorPickerPanel`.
+
+### 32.1 The hard question turns out to be already answered
+
+*What does a half-transparent swatch show against?* SwiftUI draws a checkerboard,
+because it has to invent a backdrop. A terminal does not: the swatch states its
+colour's opaque spelling and claims an `OpacityRegion` over its own cells, so the
+alpha resolves against **whatever is actually behind the swatch on the page** — the
+dialog, the row, the list, whatever the composite finds. That is this branch's whole
+thesis arriving where it is most visible, and it needed no code: §26 verified the
+swatch was already right, and `swatchFades` had already pinned it.
+
+So: no checkerboard, and no assumed backdrop. The alpha's *value* is legible from the
+read-outs, which is what a terminal has instead of a texture.
+
+### 32.2 The opacity row is outside the tabs, because alpha is in no colour model
+
+RGB, HSL, HSB and CMYK each describe a colour; none of them describes how much of it
+there is. A fifth entry in `Mode.channels` would have put a *different* opacity slider
+on four tabs, each with its own `@State`, and made the value appear to change when you
+switched tab.
+
+It needs no held state either, unlike the model channels: alpha is the one channel
+here that is not over-determined, so reading it back out of the colour is exact and
+there is nothing to re-canonicalise. `_ChannelRow` was extracted so the opacity row is
+the *same control* as an R/G/B row rather than a second one that looks like it.
+
+### 32.3 The bug the fourth channel exposed, which was there all along
+
+Every write path in the picker rewrote the colour as an opaque spelling — `.rgb(…)`,
+`.hsl(…)`, a swatch grid's entry, a parsed hex, a semantic role's snapshot. So a
+picker bound to a translucent colour **deleted its alpha on the first arrow press**: a
+control that could not edit opacity destroyed it instead.
+
+Fixed once, at the top, with a `colorOnly` binding that carries the existing alpha
+onto every write — one transform rather than a repair at each of six sites, which is
+also the only shape in which a seventh cannot be forgotten. It states the division of
+labour the panel now has: **the model tabs edit the colour, the opacity row edits the
+opacity.** That is why the semantic tab snapshots a palette role's RGB and leaves your
+alpha alone even when the role itself is translucent — picking a hue is not a
+statement about transparency.
+
+Two consequences worth naming:
+
+- `_ChannelEditor` re-seeds on an external change, and an alpha edit is external to
+  it. Compared by `opaqueSpelling` now, so dragging the opacity slider does not
+  re-canonicalise an over-determined model — CMYK's C/M/Y snapping away under a raised
+  K, a desaturated colour losing its hue — which is precisely what the held channels
+  exist to prevent.
+- It records `lastProduced` by reading the binding **back** rather than by remembering
+  what it sent, because what lands is no longer what was written.
+
+### 32.4 `supportsOpacity: false` withholds the editor, never the value
+
+The channel goes, and the swatch draws opaque — a control that offers no opacity
+should not display one, or the single state you cannot reach is the one you can see.
+But the **binding keeps its alpha**: editing R, G or B carries it through on every
+path whatever the flag says. The flag governs what the control *offers*, not what the
+app's value *is*.

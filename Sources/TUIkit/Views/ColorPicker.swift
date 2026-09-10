@@ -16,12 +16,19 @@
 /// between the swatch and the channel sliders; the arrow keys adjust the
 /// focused channel; Return, Space or a click on the swatch opens the panel.
 ///
-/// > Important: `supportsOpacity` is **not** implemented, and the reason it was
-/// > originally omitted for — "terminal colours have no alpha" — is no longer true.
-/// > ``Color`` carries one, the swatch already renders a translucent binding
-/// > faithfully, and a picker bound to such a colour can therefore *display* an
-/// > alpha it gives you no way to *edit*. That is a real SwiftUI parity gap rather
-/// > than a justified refusal; see `Documentation/Opacity as composition.md` §26.
+/// `supportsOpacity` adds a fourth channel, `A`, exactly as SwiftUI's does — and
+/// like SwiftUI's it defaults to `true`. What a terminal makes of a
+/// half-transparent colour is the interesting part: the swatch states the colour's
+/// opaque spelling and claims an ``OpacityRegion`` over its own cells, so the
+/// alpha is resolved against **whatever is actually behind the swatch on the
+/// page**. There is no checkerboard and no assumed backdrop, because the
+/// composite knows the real one; see `Documentation/Opacity as composition.md` §27.
+///
+/// `supportsOpacity: false` withholds the channel *and* draws the swatch opaque —
+/// a picker that does not deal in opacity should not display one — but it never
+/// rewrites the bound colour's alpha. Editing R, G or B carries the existing alpha
+/// through on every path, whatever `supportsOpacity` says: the flag governs what
+/// this control *offers*, not what the app's value *is*.
 ///
 /// ``TUIkit/View/colorPickerChannels(_:)`` drops the inline sliders, leaving
 /// label and swatch — SwiftUI's own shape, and what a narrow row has space for.
@@ -41,6 +48,7 @@
 public struct ColorPicker: View {
     private let title: String
     private let selection: Binding<Color>
+    private let supportsOpacity: Bool
     private let step: Double
 
     /// True while the full ``ColorPickerPanel`` is up for this picker.
@@ -63,10 +71,17 @@ public struct ColorPicker: View {
     ///
     /// - Parameters:
     ///   - titleKey: The key for the label shown beside the editor.
-    ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change.
+    ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change,
+    ///     keeping whatever alpha it already carried.
+    ///   - supportsOpacity: Whether the fourth (`A`) channel is offered. SwiftUI's
+    ///     default, `true`.
     ///   - step: How much each arrow press moves a channel (default 5 of 255).
-    public init(_ titleKey: LocalizedStringKey, selection: Binding<Color>, step: Double = 5) {
-        self.init(titleKey.localized, selection: selection, step: step)
+    public init(
+        _ titleKey: LocalizedStringKey, selection: Binding<Color>,
+        supportsOpacity: Bool = true, step: Double = 5
+    ) {
+        self.init(
+            titleKey.localized, selection: selection, supportsOpacity: supportsOpacity, step: step)
     }
 
     /// Creates a colour picker whose label is displayed as written.
@@ -79,12 +94,18 @@ public struct ColorPicker: View {
     ///
     /// - Parameters:
     ///   - title: The label shown beside the editor.
-    ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change.
+    ///   - selection: The colour to edit. Rewritten as `.rgb(...)` on each change,
+    ///     keeping whatever alpha it already carried.
+    ///   - supportsOpacity: Whether the fourth (`A`) channel is offered. SwiftUI's
+    ///     default, `true`.
     ///   - step: How much each arrow press moves a channel (default 5 of 255).
     @_disfavoredOverload
-    public init<S: StringProtocol>(_ title: S, selection: Binding<Color>, step: Double = 5) {
+    public init<S: StringProtocol>(
+        _ title: S, selection: Binding<Color>, supportsOpacity: Bool = true, step: Double = 5
+    ) {
         self.title = String(title)
         self.selection = selection
+        self.supportsOpacity = supportsOpacity
         self.step = step
     }
 
@@ -103,9 +124,7 @@ public struct ColorPicker: View {
             }
             swatch
             if !channelsHidden {
-                channel("R", 0)
-                channel("G", 1)
-                channel("B", 2)
+                ForEach(channels, id: \.self) { channel($0) }
             }
         }
     }
@@ -116,20 +135,55 @@ public struct ColorPicker: View {
     /// so the two editors are two views of one value, not two values.
     private var swatch: some View {
         Button("") { isEditing = true }
-            .buttonStyle(_ColorSwatchButtonStyle(color: selection.wrappedValue))
+            // Opaque when there is no alpha channel on offer: a control that
+            // withholds the editor should not show the value either, or the one
+            // state you cannot reach is the one you can see. The BINDING keeps its
+            // alpha — this is about what the swatch draws, not what the app holds.
+            .buttonStyle(
+                _ColorSwatchButtonStyle(
+                    color: supportsOpacity
+                        ? selection.wrappedValue : selection.wrappedValue.opaqueSpelling))
             .modal(isPresented: $isEditing) {
                 // `title` is already localized (the key overload resolves it in
                 // init), so the as-written overload takes it — a `String` is
                 // not a literal, so it cannot reach the key one, and a second
                 // lookup would search for the resolved text as a key.
-                ColorPickerPanel(title, selection: selection, isPresented: $isEditing)
+                ColorPickerPanel(
+                    title, selection: selection, supportsOpacity: supportsOpacity,
+                    isPresented: $isEditing)
             }
     }
 
-    /// A labelled slider bound to one RGB channel (0 = red, 1 = green, 2 = blue).
+    /// The channels this picker offers, in order.
+    private var channels: [Channel] {
+        supportsOpacity ? Channel.allCases : [.red, .green, .blue]
+    }
+
+    /// One editable channel of the bound colour, each 0–255.
+    ///
+    /// An enum rather than the bare indices the three RGB channels used, because
+    /// alpha is the case a `default:` arm would have swallowed: the read wrote
+    /// `default: components.blue`, so a fourth index would have edited blue.
+    private enum Channel: Int, CaseIterable, Hashable {
+        case red, green, blue, alpha
+
+        /// The one-letter caption, which is also all the reader has to tell the
+        /// channels apart by.
+        var label: String {
+            switch self {
+            case .red: "R"
+            case .green: "G"
+            case .blue: "B"
+            case .alpha: "A"
+            }
+        }
+    }
+
+    /// A labelled slider bound to one channel.
     @ViewBuilder
-    private func channel(_ label: String, _ index: Int) -> some View {
-        let binding = channelBinding(index)
+    private func channel(_ channel: Channel) -> some View {
+        let label = channel.label
+        let binding = channelBinding(channel)
         // The gaps come from the stack's `spacing`, NOT leading spaces in the
         // texts — Text trims leading whitespace, which is exactly how the old
         // layout ended up reading "102 G" with the G hugging the previous
@@ -153,27 +207,59 @@ public struct ColorPicker: View {
         }
     }
 
-    /// A `Double` binding (0...255) onto one RGB channel of ``selection``,
-    /// reading the current components and rewriting the colour as `.rgb`.
-    private func channelBinding(_ index: Int) -> Binding<Double> {
+    /// The channel binding, for the test that drives an edit without a key event.
+    func channelBindingForTests(_ channel: ChannelForTests) -> Binding<Double> {
+        let resolved: Channel =
+            switch channel {
+            case .red: .red
+            case .green: .green
+            case .blue: .blue
+            case .alpha: .alpha
+            }
+        return channelBinding(resolved)
+    }
+
+    /// ``Channel`` is private, so a test names its cases through this.
+    enum ChannelForTests { case red, green, blue, alpha }
+
+    /// A `Double` binding (0...255) onto one channel of ``selection``, reading the
+    /// current components and rewriting the colour as `.rgb`.
+    ///
+    /// The rewrite CARRIES the existing alpha. `.rgb(r, g, b)` is opaque, so the
+    /// three colour channels used to destroy a translucent binding's alpha on the
+    /// first arrow press — a picker that could not edit opacity silently deleted
+    /// it instead. That is independent of ``supportsOpacity``: withholding the
+    /// editor is not licence to overwrite the value.
+    private func channelBinding(_ channel: Channel) -> Binding<Double> {
         Binding(
             get: {
-                let components = selection.wrappedValue.rgbComponents ?? (0, 0, 0)
-                switch index {
-                case 0: return Double(components.red)
-                case 1: return Double(components.green)
+                let color = selection.wrappedValue
+                guard channel != .alpha else { return Double(color.alpha) }
+                let components = color.rgbComponents ?? (0, 0, 0)
+                switch channel {
+                case .red: return Double(components.red)
+                case .green: return Double(components.green)
                 default: return Double(components.blue)
                 }
             },
             set: { newValue in
-                var components = selection.wrappedValue.rgbComponents ?? (0, 0, 0)
+                let color = selection.wrappedValue
                 let clamped = UInt8(max(0, min(255, newValue.rounded())))
-                switch index {
-                case 0: components.red = clamped
-                case 1: components.green = clamped
+                guard channel != .alpha else {
+                    var faded = color
+                    faded.alpha = clamped
+                    selection.wrappedValue = faded
+                    return
+                }
+                var components = color.rgbComponents ?? (0, 0, 0)
+                switch channel {
+                case .red: components.red = clamped
+                case .green: components.green = clamped
                 default: components.blue = clamped
                 }
-                selection.wrappedValue = .rgb(components.red, components.green, components.blue)
+                var rewritten = Color.rgb(components.red, components.green, components.blue)
+                rewritten.alpha = color.alpha
+                selection.wrappedValue = rewritten
             }
         )
     }

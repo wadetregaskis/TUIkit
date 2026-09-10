@@ -43,6 +43,7 @@ import TUIkitStyling
 public struct ColorPickerPanel: View {
     private let title: String
     private let selection: Binding<Color>
+    private let supportsOpacity: Bool
     private let isPresented: Binding<Bool>
 
     /// Which tab is currently showing.
@@ -88,14 +89,19 @@ public struct ColorPickerPanel: View {
     ///   - titleKey: The key for the dialog title.
     ///   - selection: The colour to edit. Rewritten live on every change;
     ///     restored to the opening value on Cancel / `Esc`.
+    ///   - supportsOpacity: Whether the panel offers an opacity row. SwiftUI's
+    ///     default, `true`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     public init(
         _ titleKey: LocalizedStringKey,
         selection: Binding<Color>,
+        supportsOpacity: Bool = true,
         isPresented: Binding<Bool>
     ) {
-        self.init(titleKey.localized, selection: selection, isPresented: isPresented)
+        self.init(
+            titleKey.localized, selection: selection, supportsOpacity: supportsOpacity,
+            isPresented: isPresented)
     }
 
     /// Creates a colour-picker panel titled as written.
@@ -116,10 +122,12 @@ public struct ColorPickerPanel: View {
     public init<S: StringProtocol>(
         _ title: S,
         selection: Binding<Color>,
+        supportsOpacity: Bool = true,
         isPresented: Binding<Bool>
     ) {
         self.title = String(title)
         self.selection = selection
+        self.supportsOpacity = supportsOpacity
         self.isPresented = isPresented
     }
 
@@ -140,14 +148,17 @@ public struct ColorPickerPanel: View {
     ///     it false.
     public init(
         selection: Binding<Color>,
+        supportsOpacity: Bool = true,
         isPresented: Binding<Bool>
     ) {
-        self.init("Colour" as String, selection: selection, isPresented: isPresented)
+        self.init(
+            "Colour" as String, selection: selection, supportsOpacity: supportsOpacity,
+            isPresented: isPresented)
     }
 
     public var body: some View {
         _EditorPanelChrome(title: title, edited: selection, isPresented: isPresented) {
-            _ColorPickerBody(selection: selection)
+            _ColorPickerBody(selection: selection, supportsOpacity: supportsOpacity)
         }
     }
 }
@@ -161,7 +172,55 @@ public struct ColorPickerPanel: View {
 struct _ColorPickerBody: View {
     let selection: Binding<Color>
 
+    /// Whether the opacity row is offered. Defaulted so the two editors that
+    /// embed this body — the gradient stop editor and the tone-curve one — read
+    /// unchanged; a gradient stop is exactly the place a translucent colour is
+    /// worth editing (see `Documentation/Opacity as composition.md` §15).
+    var supportsOpacity: Bool = true
+
     private typealias Mode = ColorPickerPanel.Mode
+
+    /// ``selection``, with every write keeping the alpha the colour already had.
+    ///
+    /// Each model tab rewrites the colour outright — `.rgb(…)`, `.hsl(…)`, a
+    /// swatch's entry, a parsed hex — and every one of those spellings is opaque,
+    /// so before this the first nudge of any channel silently deleted a
+    /// translucent binding's alpha. One transform at the top rather than a repair
+    /// at each of the six write sites, which is also the only shape in which a
+    /// seventh cannot be forgotten.
+    ///
+    /// The division of labour it states: **the model tabs edit the colour, the
+    /// opacity row edits the opacity.** That is why the semantic tab snapshots a
+    /// palette role's RGB and leaves your alpha alone even when the role itself is
+    /// translucent — picking a hue is not a statement about transparency.
+    /// The two bindings, for the test that asserts they are orthogonal.
+    var colorOnlyForTests: Binding<Color> { colorOnly }
+    var alphaBindingForTests: Binding<Double> { alphaBinding }
+
+    private var colorOnly: Binding<Color> {
+        Binding(
+            get: { selection.wrappedValue },
+            set: { new in
+                var carried = new
+                carried.alpha = selection.wrappedValue.alpha
+                selection.wrappedValue = carried
+            })
+    }
+
+    /// A 0–255 binding onto ``selection``'s alpha alone.
+    ///
+    /// No held state, unlike ``_ChannelEditor``'s channels: alpha is the one
+    /// channel here that is not over-determined, so reading it back out of the
+    /// colour is exact and there is nothing to re-canonicalise.
+    private var alphaBinding: Binding<Double> {
+        Binding(
+            get: { Double(selection.wrappedValue.alpha) },
+            set: { new in
+                var faded = selection.wrappedValue
+                faded.alpha = UInt8(max(0, min(255, new.isFinite ? new.rounded() : 255)))
+                selection.wrappedValue = faded
+            })
+    }
 
     /// Which tab is currently showing.
     @State private var mode: ColorPickerPanel.Mode = .rgb
@@ -184,28 +243,28 @@ struct _ColorPickerBody: View {
                 // a too-short terminal keeps the tall tabs (256-grid, Named, …)
                 // reachable by scrolling rather than clipping them.
                 TabView(selection: $mode) {
-                    Tab("RGB", value: Mode.rgb) { tabBody { _ChannelEditor(mode: .rgb, selection: selection) } }
-                    Tab("HSL", value: Mode.hsl) { tabBody { _ChannelEditor(mode: .hsl, selection: selection) } }
-                    Tab("HSB", value: Mode.hsb) { tabBody { _ChannelEditor(mode: .hsb, selection: selection) } }
-                    Tab("CMYK", value: Mode.cmyk) { tabBody { _ChannelEditor(mode: .cmyk, selection: selection) } }
+                    Tab("RGB", value: Mode.rgb) { tabBody { _ChannelEditor(mode: .rgb, selection: colorOnly) } }
+                    Tab("HSL", value: Mode.hsl) { tabBody { _ChannelEditor(mode: .hsl, selection: colorOnly) } }
+                    Tab("HSB", value: Mode.hsb) { tabBody { _ChannelEditor(mode: .hsb, selection: colorOnly) } }
+                    Tab("CMYK", value: Mode.cmyk) { tabBody { _ChannelEditor(mode: .cmyk, selection: colorOnly) } }
                     Tab("Semantic", value: Mode.semantic) { tabBody { semanticEditor } }
-                    Tab("256 (Xterm)", value: Mode.palette256) { tabBody { _Palette256Editor(selection: selection) } }
+                    Tab("256 (Xterm)", value: Mode.palette256) { tabBody { _Palette256Editor(selection: colorOnly) } }
                     Tab("Greyscale", value: Mode.greyscale) {
                         // Only 8 columns, so there's room for larger 4×2 swatches.
                         tabBody {
                             _SwatchGridCore(
                                 entries: SwatchPalettes.greyscale, columns: 8,
-                                selection: selection, cellWidth: 4, cellHeight: 2)
+                                selection: colorOnly, cellWidth: 4, cellHeight: 2)
                         }
                     }
                     Tab("Named", value: Mode.named) {
-                        tabBody { _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: selection) }
+                        tabBody { _NamedSwatchGrid(entries: SwatchPalettes.cssNamed, columns: 18, selection: colorOnly) }
                     }
                     Tab("Web Safe", value: Mode.webSafe) {
                         tabBody {
                             _SwatchGridCore(
                                 entries: SwatchPalettes.webSafe, columns: 18,
-                                selection: selection, exactMatchOnly: true)
+                                selection: colorOnly, exactMatchOnly: true)
                         }
                     }
                     Tab("Crayons", value: Mode.crayons) {
@@ -213,7 +272,7 @@ struct _ColorPickerBody: View {
                         tabBody {
                             _NamedSwatchGrid(
                                 entries: SwatchPalettes.crayons, columns: 8,
-                                selection: selection, exactMatchOnly: true,
+                                selection: colorOnly, exactMatchOnly: true,
                                 cellWidth: 4, cellHeight: 2)
                         }
                     }
@@ -228,7 +287,29 @@ struct _ColorPickerBody: View {
                 // size the panel to the ACTIVE tab — the tallest-tab default
                 // would pad the slim slider tabs out to the 256-grid's height.
                 .tabViewContentSizing(.activeTab)
+                if supportsOpacity { opacityRow }
             }
+    }
+
+    /// The opacity row — one channel, below the tabs rather than inside any of
+    /// them.
+    ///
+    /// Outside the `TabView` because alpha belongs to no colour model: RGB, HSL,
+    /// HSB and CMYK each describe a colour and none of them describes how much of
+    /// it there is. A fifth entry in ``ColorPickerPanel/Mode/channels`` would have
+    /// put a different opacity slider on four tabs, each with its own `@State`,
+    /// and made the value appear to change when you switched tab.
+    ///
+    /// What it edits is genuinely visible, which is the part a terminal might not
+    /// have earned: the preview block above states its colour's opaque spelling
+    /// and claims an ``OpacityRegion`` over its own cells, so dragging this fades
+    /// the block toward the panel actually behind it. No checkerboard, no assumed
+    /// backdrop — see `Documentation/Opacity as composition.md` §27.
+    private var opacityRow: some View {
+        HStack(spacing: 1) {
+            Text("Opacity").foregroundStyle(.palette.foregroundTertiary)
+            _ChannelRow(label: "A", idBase: "alpha", binding: alphaBinding, range: 0...255)
+        }
     }
 
     /// A tab's content, unwrapped.
@@ -282,7 +363,10 @@ struct _ColorPickerBody: View {
                         ColorPickerPanel.hexString(
                             selection.wrappedValue.resolve(with: palette).rgbComponents)
                     },
-                    commit: { if let color = Color.hex($0) { selection.wrappedValue = color } })
+                    // Through `colorOnly`: `#RRGGBB` names a colour and says
+                    // nothing about opacity, so typing one must not silently
+                    // make a half-transparent colour solid.
+                    commit: { if let color = Color.hex($0) { colorOnly.wrappedValue = color } })
                 Text(ColorPickerPanel.rgbString(components))
                     .foregroundStyle(.palette.foregroundTertiary)
             }
@@ -347,9 +431,9 @@ struct _ColorPickerBody: View {
         HStack(spacing: 1) {
             Text("██").foregroundStyle(color)
             if isSelected {
-                Button("● " + name) { selection.wrappedValue = concrete }.buttonStyle(.primary)
+                Button("● " + name) { colorOnly.wrappedValue = concrete }.buttonStyle(.primary)
             } else {
-                Button("  " + name) { selection.wrappedValue = concrete }.buttonStyle(.plain)
+                Button("  " + name) { colorOnly.wrappedValue = concrete }.buttonStyle(.plain)
             }
         }
     }
@@ -511,13 +595,28 @@ private struct _ChannelEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(mode.channels.enumerated()), id: \.offset) { index, spec in
-                channelRow(spec.label, index, channelBinding(index), 0...spec.upperBound)
+                // Structural focus IDs (model + channel index + representation):
+                // stable, unique within the panel, never derived from user data.
+                _ChannelRow(
+                    label: spec.label, idBase: "\(mode.rawValue)-\(index)",
+                    binding: channelBinding(index), range: 0...spec.upperBound)
             }
         }
         .onChange(of: selection.wrappedValue) { _, new in
             // Re-seed only on an external change — never on our own write-back,
             // which would re-canonicalise the channels and undo the whole point.
-            guard new != lastProduced else { return }
+            //
+            // Compared by OPAQUE SPELLING, so a change that moved only the alpha
+            // is not one: opacity is edited in its own row, none of these channels
+            // describes it, and re-seeding for it would re-canonicalise an
+            // over-determined model on every drag of the opacity slider — CMYK's
+            // C/M/Y snapping away under a raised K, a desaturated colour losing
+            // its hue. Exactly the class of bug the held channels exist to
+            // prevent, arriving through a control that has nothing to do with them.
+            guard new.opaqueSpelling != lastProduced.opaqueSpelling else {
+                lastProduced = new
+                return
+            }
             channels = mode.channels.indices.map {
                 ColorPickerPanel.channelValue(of: new, mode: mode, index: $0)
             }
@@ -533,110 +632,13 @@ private struct _ChannelEditor: View {
             set: { newValue in
                 guard channels.indices.contains(index) else { return }
                 channels[index] = newValue
-                let color = ColorPickerPanel.color(from: channels, mode: mode)
-                lastProduced = color
-                selection.wrappedValue = color
+                selection.wrappedValue = ColorPickerPanel.color(from: channels, mode: mode)
+                // Read BACK, rather than recording what was sent: `selection` is
+                // the alpha-preserving transform, so what lands is not what was
+                // written, and a `lastProduced` holding the pre-transform value
+                // would read every one of our own edits as external.
+                lastProduced = selection.wrappedValue
             })
-    }
-
-    /// One labelled channel row: name, slider, then editable read-outs for the
-    /// representations that apply to this channel — percentage always (it's the
-    /// value the slider used to print, now editable), the raw integer when it
-    /// differs from the percentage (i.e. not a 0–100 channel), and hex for the
-    /// 0–255 channels. All drive the same binding, so they stay in sync.
-    private func channelRow(
-        _ label: String,
-        _ index: Int,
-        _ binding: Binding<Double>,
-        _ range: ClosedRange<Double>
-    ) -> some View {
-        let upper = range.upperBound
-        // Structural focus IDs (model + channel index + representation): stable,
-        // unique within the panel, and never derived from user data.
-        let idBase = "\(mode.rawValue)-\(index)"
-        // Adapt to the available width: the preferred one-row layout, falling back
-        // to the slider on its own (flexing) row with the value fields stacked
-        // beneath — so a constrained editor still works down to ~12 cells. Only
-        // the chosen candidate renders, so the shared focus IDs never collide.
-        return ViewThatFits(in: .horizontal) {
-            HStack(spacing: 1) {
-                channelLabel(label)
-                Slider(value: binding, in: range, step: 1).frame(width: 16).sliderShowsValue(false)
-                pctField(idBase, binding, upper)
-                if upper != 100 { intField(idBase, binding, range, upper) }
-                if upper == 255 { hexField(idBase, binding) }
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 1) {
-                    channelLabel(label)
-                    Slider(value: binding, in: range, step: 1).sliderShowsValue(false)
-                }
-                pctField(idBase, binding, upper)
-                if upper != 100 { intField(idBase, binding, range, upper) }
-                if upper == 255 { hexField(idBase, binding) }
-            }
-        }
-    }
-
-    /// The channel's one-letter label, right-aligned in a fixed gutter.
-    private func channelLabel(_ label: String) -> some View {
-        Text(label)
-            .frame(width: 2, alignment: .trailing)
-            .foregroundStyle(.palette.foregroundTertiary)
-    }
-
-    /// Percentage field — always shown (it's the value the slider used to print).
-    private func pctField(_ idBase: String, _ binding: Binding<Double>, _ upper: Double) -> some View {
-        _EditableValueField(
-            focusID: "\(idBase)-pct", width: 7,
-            format: { Self.percentString(binding.wrappedValue, upperBound: upper) },
-            commit: { raw in
-                guard raw.contains(where: \.isNumber) else { return }
-                binding.wrappedValue = ColorPickerPanel.channelValue(parsingPercent: raw, upperBound: upper)
-            })
-    }
-
-    /// Raw integer field — only when it differs from the percentage (a 0–100
-    /// channel would just duplicate it). Hue (0–360) gets a ° suffix.
-    private func intField(
-        _ idBase: String, _ binding: Binding<Double>, _ range: ClosedRange<Double>, _ upper: Double
-    ) -> some View {
-        _EditableValueField(
-            focusID: "\(idBase)-int", width: 7,
-            format: { Self.integerString(binding.wrappedValue, degrees: upper == 360) },
-            commit: { raw in
-                guard raw.contains(where: \.isNumber) else { return }
-                binding.wrappedValue = ColorPickerPanel.channelValue(parsing: raw, into: range)
-            })
-    }
-
-    /// Hex field — only for the 0–255 (RGB) channels.
-    private func hexField(_ idBase: String, _ binding: Binding<Double>) -> some View {
-        _EditableValueField(
-            focusID: "\(idBase)-hex", width: 7,
-            format: { Self.channelHexString(binding.wrappedValue) },
-            commit: { raw in
-                guard raw.contains(where: \.isHexDigit) else { return }
-                binding.wrappedValue = ColorPickerPanel.channelValue(parsingHex: raw)
-            })
-    }
-
-    /// `"NN%"` of the channel's range.
-    private static func percentString(_ value: Double, upperBound: Double) -> String {
-        let pct = upperBound > 0 ? (value.isFinite ? value : 0) / upperBound * 100 : 0
-        return "\(Int(pct.rounded()))%"
-    }
-
-    /// The raw integer value, with a `°` suffix for a degrees (hue) channel.
-    private static func integerString(_ value: Double, degrees: Bool) -> String {
-        "\(Int((value.isFinite ? value : 0).rounded()))" + (degrees ? "°" : "")
-    }
-
-    /// The value as `"0xNN"` (two upper-case hex digits).
-    private static func channelHexString(_ value: Double) -> String {
-        let v = Int((value.isFinite ? value : 0).rounded())
-        let digits = String(max(0, min(255, v)), radix: 16, uppercase: true)
-        return "0x" + (digits.count < 2 ? "0" + digits : digits)
     }
 }
 
@@ -654,7 +656,11 @@ private struct _ChannelEditor: View {
 /// binding-based fields re-derived the formatted text every render, so a
 /// backspace or a digit was immediately reformatted/clamped, fighting the edit
 /// (typing `9` into `5%` produced `90%`; backspacing `0xFF` gave `0x0F`).
-private struct _EditableValueField: View {
+/// Internal rather than file-private since ``_ChannelRow`` moved out: the row and
+/// the field it is built from are one control split across two files, and the
+/// only alternative was to keep a 100-line duplicate of the row so that a
+/// `private` could stand.
+struct _EditableValueField: View {
     let focusID: String
     let width: Int
     let format: () -> String
