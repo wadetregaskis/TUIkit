@@ -69,9 +69,22 @@ struct TextFieldContentRenderer {
         let line: String
         let caret: AnimatedCellRun?
 
-        init(line: String, caret: AnimatedCellRun? = nil) {
+        /// The cells owing a blend, in the CONTENT's own coordinates — the same
+        /// frame ``caret`` is in, so the two callers shift both by the one
+        /// `chrome.leadingCells` they already shift the caret by.
+        ///
+        /// A field's ink is the style cascade's, which an app may have faded
+        /// (`.textFieldTextStyle { $0.foreground = .red.opacity(0.5) }`), and its
+        /// field surface comes from a palette slot a theme may have faded. Neither
+        /// could travel out of here before: `FieldContent` carried a finished line
+        /// and a caret, so the alpha had nowhere to ride and was spent on the
+        /// escape instead.
+        let claims: [OpacityRegion]
+
+        init(line: String, caret: AnimatedCellRun? = nil, claims: [OpacityRegion] = []) {
             self.line = line
             self.caret = caret
+            self.claims = claims
         }
     }
 
@@ -103,9 +116,8 @@ struct TextFieldContentRenderer {
             // read. So the focused-and-empty case renders the prompt too, just
             // with the caret sitting on it; only typing displaces it.
             guard isFocused else {
-                return FieldContent(
-                    line: buildPromptContent(
-                        palette: palette, background: backgroundColor, width: contentWidth))
+                return buildPromptContent(
+                    palette: palette, background: backgroundColor, width: contentWidth)
             }
             return buildTextWithCursor(
                 text: promptString(),
@@ -133,13 +145,79 @@ struct TextFieldContentRenderer {
                 width: contentWidth
             )
         } else {
-            return FieldContent(
-                line: buildTextContent(
-                    text: text,
-                    palette: palette,
-                    background: backgroundColor,
-                    width: contentWidth
-                ))
+            return buildTextContent(
+                text: text,
+                palette: palette,
+                background: backgroundColor,
+                width: contentWidth
+            )
+        }
+    }
+
+    /// The coalescing accumulator a focused field's cells are written into:
+    /// consecutive same-coloured cells become ONE escape run, and each run leaves
+    /// behind the claim its colours owe.
+    ///
+    /// A type rather than six locals and two closures, because it is one thing —
+    /// and because the two halves have to agree: the bytes state the OPAQUE
+    /// spelling and the claim carries the real alpha, which is the pairing §26.1
+    /// describes, and keeping them in one `flush` is what stops them drifting.
+    ///
+    /// Claims are per RUN rather than one rectangle for the field, because a
+    /// focused field's cells genuinely differ: the selection's two colours are
+    /// opaque by construction (`selectionColors` goes through `opacity(_:over:)`)
+    /// and the entered text's are the style cascade's. One rectangle would fade the
+    /// highlight along with the text. The run boundaries are already the colour
+    /// boundaries — that is what the coalescing is for — so this costs nothing
+    /// beyond remembering the column each run opened at.
+    private struct RunAccumulator {
+        /// The finished line so far.
+        private(set) var line = ""
+
+        /// The claims of every run flushed so far, in content coordinates.
+        private(set) var claims: [OpacityRegion] = []
+
+        private var text = ""
+        private var ink: Color
+        private var field: Color?
+        private var start = 0
+        private var isOpen = false
+
+        init(ink: Color, field: Color?) {
+            self.ink = ink
+            self.field = field
+        }
+
+        /// Closes the open run.
+        ///
+        /// - Parameter column: The column of the next cell to be written, which is
+        ///   what `outputCells` holds at every point a run opens or flushes — the
+        ///   same invariant `emitCaret` builds its own run's `offsetX` from.
+        mutating func flush(atColumn column: Int) {
+            guard isOpen else { return }
+            line += ANSIRenderer.colorize(
+                text, foreground: ink.opaqueSpelling, background: field?.opaqueSpelling)
+            claims +=
+                OpacityRegion.claim(
+                    offsetX: start, width: column - start, height: 1, ink: ink, field: field)
+                .map { [$0] } ?? []
+            text = ""
+            isOpen = false
+        }
+
+        /// Adds one cell, opening a new run where the colours change.
+        mutating func append(_ piece: Character, ink: Color, field: Color?, atColumn column: Int) {
+            if isOpen, ink != self.ink || field != self.field { flush(atColumn: column) }
+            if !isOpen {
+                (self.ink, self.field, start, isOpen) = (ink, field, column, true)
+            }
+            text.append(piece)
+        }
+
+        /// Bytes that are not a run: the caret's own self-contained chunk, which is
+        /// styled by the frame builder and claims nothing (see ``caretSetup``).
+        mutating func appendVerbatim(_ chunk: String) {
+            line += chunk
         }
     }
 
@@ -183,15 +261,26 @@ struct TextFieldContentRenderer {
     /// Builds the prompt content for an UNFOCUSED empty field. The focused
     /// case goes through ``buildTextWithCursor`` instead, so the caret draws
     /// over the prompt using the ordinary cursor machinery.
-    private func buildPromptContent(palette: any Palette, background: Color?, width: Int) -> String {
+    private func buildPromptContent(
+        palette: any Palette, background: Color?, width: Int
+    ) -> FieldContent {
         let promptText = promptString()
         // Truncate and pad by CELLS, not characters — a wide glyph in the
         // prompt must not push the field wider than its neighbours.
         let (truncated, cells) = promptText.ansiAwarePrefixWithWidth(visibleCount: width)
         let paddedPrompt = truncated + String(repeating: " ", count: width - cells)
-        return ANSIRenderer.colorize(
-            paddedPrompt, foreground: Self.promptColor(palette: palette, on: background),
-            background: background)
+        let foreground = Self.promptColor(palette: palette, on: background)
+        // Not a cascade colour — `promptColor` floors `foregroundTertiary` — so
+        // this arm is the second tier: a theme that faded that slot. It claims
+        // anyway, and for the same reason the two unfocused arms share their
+        // padding rule: they are one field in two states, and a claim on one only
+        // would fade a field's text and not its placeholder.
+        return FieldContent(
+            line: ANSIRenderer.colorize(
+                paddedPrompt, foreground: foreground.opaqueSpelling,
+                background: background?.opaqueSpelling),
+            claims: OpacityRegion.claim(
+                width: width, height: 1, ink: foreground, field: background).map { [$0] } ?? [])
     }
 
     /// The placeholder's colour, floored against the surface it is drawn on.
@@ -216,7 +305,7 @@ struct TextFieldContentRenderer {
     /// cells: characters from the front while they fit whole, then padding.
     private func buildTextContent(
         text: String, palette: any Palette, background: Color?, width: Int
-    ) -> String {
+    ) -> FieldContent {
         var displayText = ""
         var cells = 0
         for source in text {
@@ -229,7 +318,14 @@ struct TextFieldContentRenderer {
         let paddedText = displayText + String(repeating: " ", count: width - cells)
         let foreground =
             isDisabled ? palette.foregroundTertiary : resolvedContentForeground(palette)
-        return ANSIRenderer.colorize(paddedText, foreground: foreground, background: background)
+        // One rectangle, exactly `width` cells, because that is what the padding
+        // above guarantees — the whole content field, ink and surface together.
+        return FieldContent(
+            line: ANSIRenderer.colorize(
+                paddedText, foreground: foreground.opaqueSpelling,
+                background: background?.opaqueSpelling),
+            claims: OpacityRegion.claim(
+                width: width, height: 1, ink: foreground, field: background).map { [$0] } ?? [])
     }
 
     // MARK: - Focused Text with Cursor
@@ -291,20 +387,6 @@ struct TextFieldContentRenderer {
         let (widths, scrollStart, windowEnd) = scrollWindow(
             text: text, clampedPosition: clampedPosition, width: width)
 
-        // The whole cycle, not just this tick's frame: the caret's cells are the
-        // only thing that changes while a focused field sits still, and
-        // re-rendering the screen 20 times a second to blink one cell is what
-        // made an idle form cost 41% of a core. See ``CursorCycle``.
-        let cycle = Self.computeCursorCycle(
-            baseColor: palette.cursorColor,
-            // What the caret is drawn ON. `.plain` emits no background, so the
-            // caret is over whatever holds the field: the page.
-            over: background ?? palette.background,
-            animation: cursorStyle.animation,
-            speed: cursorStyle.speed,
-            cursorTimer: cursorTimer
-        )
-
         // Build output, coalescing consecutive characters that share a colour
         // into ONE ANSI run rather than wrapping each character in its own
         // escape sequence. The per-character form was O(width) `colorize` calls
@@ -319,27 +401,10 @@ struct TextFieldContentRenderer {
         let textForeground = foregroundOverride ?? resolvedContentForeground(palette)
         let (selectionBackground, selectionForeground) = Self.selectionColors(
             palette: palette, background: background)
-        var result = ""
-        var runText = ""
-        var runForeground = textForeground
-        var (runBackground, hasRun): (Color?, Bool) = (background, false)
-
-        func flushRun() {
-            guard hasRun else { return }
-            result += ANSIRenderer.colorize(runText, foreground: runForeground, background: runBackground)
-            runText = ""
-            hasRun = false
-        }
+        var runs = RunAccumulator(ink: textForeground, field: background)
+        func flushRun() { runs.flush(atColumn: outputCells) }
         func emit(_ piece: Character, foreground: Color, background: Color?) {
-            if hasRun && (foreground != runForeground || background != runBackground) {
-                flushRun()
-            }
-            if !hasRun {
-                runForeground = foreground
-                runBackground = background
-                hasRun = true
-            }
-            runText.append(piece)
+            runs.append(piece, ink: foreground, field: background, atColumn: outputCells)
         }
 
         // Walks the text in cell space, clipping each element (character or
@@ -371,10 +436,10 @@ struct TextFieldContentRenderer {
         // would take its colour from whatever the line happened to look like
         // when it was spliced in. Costs one escape pair; buys the whole cheap
         // animation path. See ``AnimatedCellRun``.
-        let colors = CaretColors(
-            background: background, blockText: background ?? palette.background,
-            text: textForeground, selectionText: selectionForeground,
-            selectionBackground: selectionBackground)
+        let (cycle, colors) = caretSetup(
+            palette: palette, background: background, textForeground: textForeground,
+            selection: (selectionForeground, selectionBackground),
+            cursorStyle: cursorStyle, cursorTimer: cursorTimer)
         var caret: AnimatedCellRun?
 
         func emitCaret(cells: Int, underlying: Character, isSelected: Bool) {
@@ -394,7 +459,7 @@ struct TextFieldContentRenderer {
                 cycle, shape: cursorStyle.shape, cells: cells,
                 underlying: underlying, isSelected: isSelected, colors: colors)
             flushRun()
-            result += frames[cycle.step % frames.count]
+            runs.appendVerbatim(frames[cycle.step % frames.count])
             if cycle.isAnimating {
                 caret = AnimatedCellRun(
                     offsetX: outputCells, offsetY: 0, width: cells,
@@ -426,7 +491,58 @@ struct TextFieldContentRenderer {
         }
         flushRun()
 
-        return FieldContent(line: result, caret: caret)
+        return FieldContent(line: runs.line, caret: caret, claims: runs.claims)
+    }
+
+    /// The caret's blink cycle and the five colours its frames pick between —
+    /// everything the frames need that does not depend on where the caret landed.
+    ///
+    /// Its own function because ``buildTextWithCursor`` is at the body-length limit
+    /// and this is the one self-contained block in it: nothing here reads the walk's
+    /// state, and nothing in the walk changes it.
+    ///
+    /// **The caret's cells SPEND the ink's alpha instead of claiming it**, and this
+    /// is the one place in the field that has to. A caret's frames disagree about
+    /// alpha by construction: the blink-OFF frame draws the underlying character in
+    /// the text colour, which the cascade may have faded, while the blink-ON frame
+    /// draws the caret's own colour, which is opaque. One static region over those
+    /// cells would fade the caret glyph along with the character — the §29.2 case
+    /// that genuinely wants per-phase alpha, reached by the one control that has a
+    /// per-cell animation over app-coloured text.
+    ///
+    /// Spending is not a *guess* here, unlike the breathing label §29 settles the
+    /// same way: a styled field PAINTS its own surface, so `background` is literally
+    /// what is behind this ink and compositing over it gives the same answer the
+    /// resolver would have given a claim. Only a `.plain` field — which emits no
+    /// background at all — falls back to the page, and then only on the cells the
+    /// caret occupies while it is visible.
+    private func caretSetup(
+        palette: any Palette, background: Color?, textForeground: Color,
+        selection: (foreground: Color, background: Color),
+        cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?
+    ) -> (cycle: CursorCycle, colors: CaretColors) {
+        // The whole cycle, not just this tick's frame: the caret's cells are the
+        // only thing that changes while a focused field sits still, and
+        // re-rendering the screen 20 times a second to blink one cell is what
+        // made an idle form cost 41% of a core. See ``CursorCycle``.
+        //
+        // `background ?? palette.background` is what the caret is drawn ON: a
+        // `.plain` field emits no background, so the caret is over whatever holds
+        // the field.
+        let ground = background ?? palette.background
+        let cycle = Self.computeCursorCycle(
+            baseColor: palette.cursorColor, over: ground,
+            animation: cursorStyle.animation, speed: cursorStyle.speed,
+            cursorTimer: cursorTimer)
+        return (
+            cycle,
+            CaretColors(
+                background: background?.opaqueSpelling,
+                blockText: ground.opaqueSpelling,
+                text: textForeground.spendingAlpha(over: ground),
+                selectionText: selection.foreground,
+                selectionBackground: selection.background)
+        )
     }
 
     // MARK: - The caret's cells

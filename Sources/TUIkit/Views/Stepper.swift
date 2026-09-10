@@ -528,7 +528,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
             isFocused && !isDisabled && !context.isMeasuring)
 
         // Build the stepper content
-        let content = buildContent(
+        let (content, valueClaim) = buildContent(
             isFocused: isFocused,
             isHovered: isHovered,
             palette: palette,
@@ -539,6 +539,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         )
 
         var buffer = FrameBuffer(text: content)
+        buffer.opacityRegions += valueClaim.map { [$0] } ?? []
         if !context.isMeasuring {
             buffer.animatedCells = arrowRuns(
                 cycle: cycle, palette: palette, totalWidth: buffer.width)
@@ -802,7 +803,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         emphasis: SelectionEmphasisCycle,
         valueStyle: StyleAttributes,
         isDisabled: Bool
-    ) -> String {
+    ) -> (content: String, valueClaim: OpacityRegion?) {
         // Arrow and value colors:
         //   - Focused: pulsing accent
         //   - Hovered: static accent at the hoverBackground tint. Focus wins
@@ -842,17 +843,29 @@ private struct _StepperCore: View, Renderable, Layoutable {
         // something, and two dead cells there are a click target that does
         // nothing and a gap that looks like a missing value.
         let shown = display()
-        guard !shown.isEmpty else { return "\(leftArrow)\(rightArrow)" }
+        guard !shown.isEmpty else { return ("\(leftArrow)\(rightArrow)", nil) }
         let effectiveValueColor =
             isDisabled ? valueColor : (valueStyle.foreground?.resolve(with: palette) ?? valueColor)
         let valueText = ANSIRenderer.colorize(
             " \(shown) ",
-            foreground: effectiveValueColor,
+            foreground: effectiveValueColor.opaqueSpelling,
             bold: !isDisabled && (valueStyle.bold ?? false),
             underline: !isDisabled && (valueStyle.underline ?? false))
 
         // Pulsing arrows indicate focus - no extra markers needed
-        return "\(leftArrow)\(valueText)\(rightArrow)"
+        //
+        // The read-out's rectangle starts past the left arrow, MEASURED rather
+        // than assumed to be one cell: `◀` is U+25C0, East Asian Ambiguous (see
+        // `TerminalWidthCorpus`), which is exactly why `_ToggleCore.claims`
+        // measures its own runs. Its two pad spaces are INSIDE the styled run —
+        // unlike a Slider's, which are appended bare — so `.stepperTextStyle
+        // { $0.underline = true }` puts ink on them and they are part of the claim.
+        // The arrows themselves are opaque on every arm and animate besides.
+        return (
+            "\(leftArrow)\(valueText)\(rightArrow)",
+            OpacityRegion.claim(
+                offsetX: TerminalSymbols.leftArrow.strippedLength,
+                width: shown.strippedLength + 2, height: 1, ink: effectiveValueColor))
     }
 }
 

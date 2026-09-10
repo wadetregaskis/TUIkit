@@ -539,72 +539,12 @@ private struct _ButtonStyleBody: View, Renderable {
 
         // Plain: focus indicator prefix + label, no brackets, no background.
         if appearance.isPlain {
-            // The plain variant has no caps; chrome is the focus-indicator
-            // prefix (which always reserves 2 cells — `BorderRenderer` pads
-            // with spaces when unfocused so things stay aligned) plus the
-            // horizontal padding either side of the label.
-            let chromeWidth = Self.chromeWidth(for: appearance)
-            let labelText = Self.fitLabel(
-                configuration.label, into: context.availableWidth, chrome: chromeWidth)
-            let paddedLabel = padding + labelText + padding
-
-            let restingColor: Color =
-                isDisabled
-                ? palette.foregroundTertiary.opacity(
-                    ViewConstants.disabledForeground, over: palette.background)
-                : (cascadeForeground?.resolve(with: palette)
-                    ?? baseForeground?.resolve(with: palette) ?? palette.accent)
-            // A plain button has no face to light up — no caps, no fill, it
-            // draws straight onto the page — so the pointer lifts the colour it
-            // already has (``Palette/hoveredForeground(_:)``), which is also
-            // what gives `Link` its hover: a link IS a plain button. The lift
-            // keeps whatever hue is in force, so a cascade colour or a
-            // destructive role still reads as itself.
-            let foregroundColor =
-                isHovered ? palette.hoveredForeground(restingColor) : restingColor
-
-            var textStyle = TextStyle()
-            textStyle.foregroundColor = foregroundColor
-            textStyle.isBold = isBold && !isDisabled
-
-            // The focus indicator is handed to the run loop as a finished cycle
-            // rather than re-derived every tick: the two prefix cells are the
-            // ONLY thing that changes while a focused button sits still, and
-            // re-rendering the screen 20 times a second to move them is what
-            // made an idle page cost a third of a core. See ``AnimatedCellRun``.
-            let indicating = isFocused && !isDisabled
-            let cycle = context.environment.selectionEmphasis.cycle(indicating)
-
-            // The label breathes, and nothing sits in front of it. Same clock
-            // and same frames as the bullet — only the cells it lands on
-            // differ, which is the whole of the difference between the two
-            // affordances.
-            if appearance.indicatesFocusInLabel {
-                return Self.breathingLabel(
-                    paddedLabel, style: textStyle,
-                    ends: BorderRenderer.breathEnds(from: foregroundColor, on: surface),
-                    cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring)
-            }
-
-            // One ramp for the cycle, not one per frame: `focusIndicatorPrefix`
-            // used to resolve its own colour from a `SelectionEmphasis`, so
-            // drawing sixteen frames rebuilt the identical ramp sixteen times.
-            let ends = BorderRenderer.focusIndicatorEnds(palette: palette, on: surface)
-            let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
-                BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
-            }
-            let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle)
-            var buffer = FrameBuffer(
-                lines: [prefixes[cycle.step % prefixes.count] + styledLabel])
-            if cycle.isAnimating, !context.isMeasuring {
-                buffer.animatedCells = [
-                    AnimatedCellRun(
-                        offsetX: 0, offsetY: 0,
-                        width: BorderRenderer.focusIndicatorWidth,
-                        frames: prefixes, clock: .cursor)
-                ]
-            }
-            return buffer
+            return renderPlainStringLabel(
+                context: context,
+                StringLabelState(
+                    palette: palette, surface: surface, cascadeForeground: cascadeForeground,
+                    baseForeground: baseForeground, isDisabled: isDisabled, isFocused: isFocused,
+                    isHovered: isHovered, isBold: isBold, padding: padding))
         }
 
         // The standard variant wraps the label in `▐ … ▌` end caps plus
@@ -663,6 +603,10 @@ private struct _ButtonStyleBody: View, Renderable {
             isFocused: isFocused && !isDisabled,
             background: buttonBg, accent: palette.accent, context: context)
 
+        // The caps are opaque by construction — `ButtonCapCycle` spends a
+        // translucent tint's alpha against the button's own face, so every phase
+        // of the breath states a concrete colour (§29). They therefore need no
+        // spelling and earn no claim.
         let openCap = ANSIRenderer.colorize(
             String(TerminalSymbols.openCap),
             foreground: caps.colorNow
@@ -671,17 +615,155 @@ private struct _ButtonStyleBody: View, Renderable {
             String(TerminalSymbols.closeCap),
             foreground: caps.colorNow
         )
+        // The label's two colours are not: `labelFg` is the app author's cascade
+        // colour where there is one, left unfloored on purpose, and `buttonBg`
+        // comes from a palette slot a theme may have faded.
         let styledLabel = ANSIRenderer.colorize(
             paddedLabel,
-            foreground: labelFg,
-            background: buttonBg,
+            foreground: labelFg.opaqueSpelling,
+            background: buttonBg.opaqueSpelling,
             bold: isBold && !isDisabled
         )
 
         var buffer = FrameBuffer(lines: [openCap + styledLabel + closeCap])
+        // Between the caps: one cell in, and exactly the label's own width. The
+        // caps are their own colour and, while the button holds the focus, their
+        // own runs — so they are never part of this rectangle.
+        if let claim = OpacityRegion.claim(
+            offsetX: 1, width: paddedLabel.strippedLength, height: 1,
+            ink: labelFg, field: buttonBg)
+        {
+            buffer.opacityRegions.append(claim)
+        }
         if !context.isMeasuring {
             buffer.animatedCells = caps.runs(width: 2 + paddedLabel.strippedLength)
         }
+        return buffer
+    }
+    /// What the string-label path resolved before it chose a variant: the state and
+    /// the colours the plain arm draws from.
+    ///
+    /// A struct rather than nine parameters, because nine parameters is not a
+    /// signature — and because these are one thing (what this button looks like
+    /// right now) rather than nine unrelated ones.
+    private struct StringLabelState {
+        let palette: any Palette
+        /// What the ink lands on, which is not the page wherever a container
+        /// painted one.
+        let surface: Color
+        let cascadeForeground: Color?
+        let baseForeground: Color?
+        let isDisabled: Bool
+        let isFocused: Bool
+        let isHovered: Bool
+        let isBold: Bool
+        let padding: String
+    }
+
+    /// The PLAIN variant of the string-label path: a focus-indicator prefix and
+    /// the label, with no caps and no fill.
+    ///
+    /// Its own function because the two variants together outgrew the body-length
+    /// limit once each gained its opacity claim — and they were already two
+    /// independent halves of one `if`, sharing only the palette and the cascade
+    /// colour this passes in.
+    @MainActor
+    private func renderPlainStringLabel(
+        context: RenderContext, _ resolved: StringLabelState
+    ) -> FrameBuffer {
+        let (palette, surface) = (resolved.palette, resolved.surface)
+        let (cascadeForeground, baseForeground) = (resolved.cascadeForeground, resolved.baseForeground)
+        let (isDisabled, isFocused, isHovered) = (
+            resolved.isDisabled, resolved.isFocused, resolved.isHovered)
+        let (isBold, padding) = (resolved.isBold, resolved.padding)
+        // The plain variant has no caps; chrome is the focus-indicator
+        // prefix (which always reserves 2 cells — `BorderRenderer` pads
+        // with spaces when unfocused so things stay aligned) plus the
+        // horizontal padding either side of the label.
+        let chromeWidth = Self.chromeWidth(for: appearance)
+        let labelText = Self.fitLabel(
+            configuration.label, into: context.availableWidth, chrome: chromeWidth)
+        let paddedLabel = padding + labelText + padding
+
+        let restingColor: Color =
+            isDisabled
+            ? palette.foregroundTertiary.opacity(
+                ViewConstants.disabledForeground, over: palette.background)
+            : (cascadeForeground?.resolve(with: palette)
+                ?? baseForeground?.resolve(with: palette) ?? palette.accent)
+        // A plain button has no face to light up — no caps, no fill, it
+        // draws straight onto the page — so the pointer lifts the colour it
+        // already has (``Palette/hoveredForeground(_:)``), which is also
+        // what gives `Link` its hover: a link IS a plain button. The lift
+        // keeps whatever hue is in force, so a cascade colour or a
+        // destructive role still reads as itself.
+        let foregroundColor =
+            isHovered ? palette.hoveredForeground(restingColor) : restingColor
+
+        var textStyle = TextStyle()
+        textStyle.foregroundColor = foregroundColor
+        textStyle.isBold = isBold && !isDisabled
+
+        // The focus indicator is handed to the run loop as a finished cycle
+        // rather than re-derived every tick: the two prefix cells are the
+        // ONLY thing that changes while a focused button sits still, and
+        // re-rendering the screen 20 times a second to move them is what
+        // made an idle page cost a third of a core. See ``AnimatedCellRun``.
+        let indicating = isFocused && !isDisabled
+        let cycle = context.environment.selectionEmphasis.cycle(indicating)
+
+        // The label breathes, and nothing sits in front of it. Same clock
+        // and same frames as the bullet — only the cells it lands on
+        // differ, which is the whole of the difference between the two
+        // affordances.
+        if appearance.indicatesFocusInLabel {
+            return Self.breathingLabel(
+                paddedLabel, style: textStyle,
+                ends: BorderRenderer.breathEnds(from: foregroundColor, on: surface),
+                cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring)
+        }
+
+        // One ramp for the cycle, not one per frame: `focusIndicatorPrefix`
+        // used to resolve its own colour from a `SelectionEmphasis`, so
+        // drawing sixteen frames rebuilt the identical ramp sixteen times.
+        let ends = BorderRenderer.focusIndicatorEnds(palette: palette, on: surface)
+        let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
+            BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
+        }
+        // Opaque bytes plus a region, the pairing §26.1 states: an SGR
+        // emitter has no backdrop, so a translucent cascade colour —
+        // `.buttonTextStyle { $0.foreground = .red.opacity(0.5) }`, or a
+        // faded `.tint` reaching `palette.accent` through `restingColor` —
+        // goes into the claim below and never into the escape.
+        let styledLabel = ANSIRenderer.render(paddedLabel, with: textStyle.opaqueColours)
+        var buffer = FrameBuffer(
+            lines: [prefixes[cycle.step % prefixes.count] + styledLabel])
+        // The label's own cells begin past the two the focus prefix always
+        // reserves — it pads with spaces when unfocused, which is what keeps
+        // a row of buttons aligned. Nothing animates over the label here;
+        // the prefix is the only thing that moves.
+        if let claim = OpacityRegion.claim(
+            offsetX: BorderRenderer.focusIndicatorWidth,
+            width: paddedLabel.strippedLength, height: 1, ink: foregroundColor)
+        {
+            buffer.opacityRegions.append(claim)
+        }
+        if cycle.isAnimating, !context.isMeasuring {
+            buffer.animatedCells = [
+                AnimatedCellRun(
+                    offsetX: 0, offsetY: 0,
+                    width: BorderRenderer.focusIndicatorWidth,
+                    frames: prefixes, clock: .cursor)
+            ]
+        }
+        // §18.4 lists the focus ● as an open question, and it is now ANSWERED
+        // rather than claimed: `focusIndicatorEnds` goes through
+        // `Color.breathEnds`, so both ends of the bullet's breath are opaque
+        // (§29) — a still ● under `.selectionIndicatorStyle(.none)` included.
+        // There is no alpha left at these two cells to put in a region, and a
+        // claim over them would be worse than useless while the button is
+        // unfocused: the prefix is then two bare spaces, and an ink claim on a
+        // cell with no ink of its own lets what is behind it through.
         return buffer
     }
 

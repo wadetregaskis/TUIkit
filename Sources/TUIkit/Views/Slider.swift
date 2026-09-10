@@ -499,7 +499,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // arrows from `buffer.width`. Taking the requested width put the run one
         // column past the arrow, on the blank before the read-out, where the
         // loop replayed a SECOND ▶ breathing out of step with the real one.
-        let (content, drawnTrackWidth) = buildContent(
+        let (content, drawnTrackWidth, valueClaim) = buildContent(
             fraction: fraction,
             isFocused: isFocused,
             isHovered: isHovered,
@@ -516,6 +516,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         )
 
         var buffer = FrameBuffer(text: content)
+        buffer.opacityRegions += valueClaim.map { [$0] } ?? []
         if !context.isMeasuring {
             buffer.animatedCells = arrowRuns(
                 cycle: cycle, palette: palette, drawnTrackWidth: drawnTrackWidth)
@@ -892,7 +893,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         fillScaling: TrackGradientScaling,
         emptyScaling: TrackGradientScaling,
         graphics: GradientGraphicsContext?
-    ) -> (content: String, drawnTrackWidth: Int) {
+    ) -> (content: String, drawnTrackWidth: Int, valueClaim: OpacityRegion?) {
         // Arrow colors:
         //   - Focused: pulsing accent
         //   - Hovered: static accent at the hoverBackground tint, so the
@@ -958,7 +959,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         let padding = String(repeating: " ", count: max(0, valueFieldWidth - valueDisplay.count))
         let valueLabel = ANSIRenderer.colorize(
             valueDisplay,
-            foreground: valueLabelColor,
+            foreground: valueLabelColor.opaqueSpelling,
             bold: !isDisabled && (valueStyle.bold ?? false),
             underline: !isDisabled && (valueStyle.underline ?? false)) + padding
 
@@ -976,8 +977,21 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // read-out is omitted when `.sliderShowsValue(false)` (some surrounding
         // control shows the value instead).
         guard showsValue else {
-            return ("\(leftArrow) \(track) \(rightArrow)", drawnTrackWidth)
+            return ("\(leftArrow) \(track) \(rightArrow)", drawnTrackWidth, nil)
         }
-        return ("\(leftArrow) \(track) \(rightArrow) \(valueLabel)", drawnTrackWidth)
+        // Where the read-out's digits start: `"◀ "` + the track as DRAWN + `" ▶ "`.
+        // `drawnTrackWidth` and not `trackWidth`, for the reason `arrowRuns` takes
+        // the same number — a coarse track renders narrower than it was asked for,
+        // and everything to its right moves with it.
+        //
+        // The digits only. The field padding is appended unstyled on purpose (see
+        // above), so it owes nothing, and the TRACK is deliberately not claimed:
+        // its colours are §16.1 row 8, still open, and a rectangle over them here
+        // would multiply with the claim that migration adds.
+        return (
+            "\(leftArrow) \(track) \(rightArrow) \(valueLabel)", drawnTrackWidth,
+            OpacityRegion.claim(
+                offsetX: 5 + drawnTrackWidth, width: valueDisplay.strippedLength, height: 1,
+                ink: valueLabelColor))
     }
 }

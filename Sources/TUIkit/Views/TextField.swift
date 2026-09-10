@@ -494,6 +494,15 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             buffer.animatedCells = [caret.shifted(byX: chrome.leadingCells, y: 0)]
         }
 
+        // The content's translucent colours, shifted by exactly what the caret is
+        // shifted by — both are in the content's own frame, and the opening cap is
+        // the only chrome before it. A faded `.textFieldTextStyle` foreground, or a
+        // theme that faded the field surface, arrives here rather than being spent
+        // on the escape. §30.
+        buffer.opacityRegions += fieldContent.claims.map {
+            $0.shifted(byX: chrome.leadingCells, y: 0)
+        }
+
         // Mouse: click focuses the field and drops the caret at the clicked
         // column; dragging selects. Hover rides on the same region. Shared with
         // SecureField. No-op while measuring or disabled.

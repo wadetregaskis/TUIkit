@@ -1798,3 +1798,81 @@ What actually blocks a claim is narrower, and there are only two cases:
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
 different problem with a different answer — §15.
+
+
+## 30. The six controls that read the style cascade (2026-09-10)
+
+Row 10 of §16.1: `.style(.text) { $0.foreground = … }` and its six per-control
+spellings — `.buttonTextStyle`, `.textFieldTextStyle`, `.secureFieldTextStyle`,
+`.sliderTextStyle`, `.stepperTextStyle`. `Text` honoured a faded cascade colour from
+§14. The controls that read the *same* cascade entry spent it on the escape.
+
+Every one of them knew its rectangle already, which is why this is a migration and
+not a design:
+
+| site | the rectangle |
+|---|---|
+| standard `Button`, string label | one cell in, the label's width — the caps are their own colour and their own runs |
+| plain `Button`, string label | past `BorderRenderer.focusIndicatorWidth`, which the prefix always reserves |
+| `TextField` / `SecureField`, unfocused | the whole content field, which the padding guarantees is exactly `width` |
+| `TextField` / `SecureField`, focused | one claim per coalesced run |
+| `Slider` read-out | `5 + drawnTrackWidth`, the digits only |
+| `Stepper` read-out | past the left arrow, *measured* — `◀` is East Asian Ambiguous |
+
+The `@ViewBuilder` label path needed nothing: its colour leaves as
+`labelView.foregroundStyle(labelFg)` and the `Text` inside claims it. Asserted rather
+than assumed, because "already correct by composition" is exactly the kind of thing
+that stops being true.
+
+### 30.1 A focused field claims per run, not per field
+
+One rectangle for the content would have been simpler and wrong. A focused field's
+cells genuinely differ: the selection's two colours are opaque by construction
+(`selectionColors` goes through `opacity(_:over:)`), the entered text's are the
+cascade's. One rectangle fades the highlight along with the text.
+
+The run boundaries *are* the colour boundaries — that is what the coalescing exists
+for — so a claim per flushed run costs only remembering the column each run opened
+at. `RunAccumulator` now owns the bytes and the claim together, which is what keeps
+the opaque spelling and the real alpha from drifting apart.
+
+### 30.2 The caret is the one place that must spend rather than claim
+
+A caret's frames disagree about alpha *by construction*: the blink-OFF frame draws
+the underlying character in the text colour, which the cascade may have faded, and
+the blink-ON frame draws the caret's own colour, which is opaque. One static region
+over those cells would fade the caret glyph along with the character. This is §29.2's
+remaining case — a per-cell animation over app-coloured text — and the field is the
+one control that reaches it.
+
+So the caret's cells **spend** the ink's alpha, `Color.spendingAlpha(over:)`, the way
+§29 settles a breathing label. Unlike that case it is not a guess: a styled field
+*paints its own surface*, so `background` is literally what is behind this ink and
+compositing over it gives the same answer the resolver would have given a claim. Only
+`.plain` — which emits no background at all — falls back to the page, on the caret's
+cells, while the caret is visible.
+
+### 30.3 Two arms answered by §29 rather than migrated
+
+- **A breathing label.** A `Link`, and anything `indicatesFocusInLabel`, breathes the
+  label itself. Both ends now spend their alpha against the enclosing surface, so
+  there is nothing left to claim — `breathingLabelSpends` records that as the
+  expected answer rather than leaving a future reader to find a missing claim.
+- **The focus ●.** §18.4 left this open. `focusIndicatorEnds` goes through
+  `Color.breathEnds`, so the bullet is opaque at every phase including the still one
+  under `.selectionIndicatorStyle(.none)`. A claim there would in fact be *harmful*
+  when the button is unfocused: the prefix is then two bare spaces, and an ink claim
+  on a cell with no ink of its own lets what is behind it through.
+
+### 30.4 Two things these controls still drop, and neither is about alpha
+
+Found while reading, recorded because a test could otherwise pass for the wrong
+reason:
+
+- **None of the six reads `cascaded.background`.** Only `Text` does. `.style(.text)
+  { $0.background = … }` is silently dropped by all six, translucent or not.
+- **`Button` never publishes `\.controlKind`**, unlike `Picker`, `Slider`, `Stepper`,
+  `Toggle` and `RadioButton`. So a `@ViewBuilder` label's `Text` never resolves
+  `.control(.button)`; `_ButtonStyleBody` compensates for the foreground alone, and
+  `cascaded.bold` / `.italic` / `.underline` / `.strikethrough` / `.textCase` are
+  read and then never applied to a view label at all.
