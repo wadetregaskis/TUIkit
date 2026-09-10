@@ -80,13 +80,19 @@ enum PaintRenderer {
         let shape: RampSampler.AlphaShape =
             paint.isOpaqueThroughout ? .opaque : sampler.alphaShape
         let carriesAlpha = shape != .perCell
+        // Whether ANY claim is possible, asked once of the shape rather than
+        // rediscovered per line. `[]` rather than a list of empties — the contract
+        // `Text.uniformAlphaClaims` already states and `rowed` already relies on — so
+        // an opaque ramp grows no outer array at all. This runs per painted block per
+        // frame, and `gradients` paints a great many of them.
+        let wantsClaims = shape != .opaque || fieldAlpha != .max
         var bandStyle = style
         bandStyle.backgroundColor = style.backgroundColor?.opaqueSpelling
         var sequences: [String?] = []
         var result: [String] = []
         var claims: [[OpacityRegion]] = []
         result.reserveCapacity(lines.count)
-        claims.reserveCapacity(lines.count)
+        if wantsClaims { claims.reserveCapacity(lines.count) }
         for (row, line) in lines.enumerated() {
             // Deliberately NOT reserved here: the vertical case emits ONE run
             // for the whole row and reserving the varying case's worst case
@@ -98,8 +104,11 @@ enum PaintRenderer {
                 line, column: &column, row: row, style: bandStyle, sampler: sampler,
                 sequences: &sequences, into: &painted, carriesAlpha: carriesAlpha)
             result.append(painted)
-            claims.append(Self.claims(for: shape, row: row, cells: width(of: row),
-                sampler: sampler, fieldAlpha: fieldAlpha))
+            guard wantsClaims else { continue }
+            claims.append(
+                Self.claims(
+                    for: shape, row: row, cells: width(of: row), sampler: sampler,
+                    fieldAlpha: fieldAlpha))
         }
         return (result, claims)
     }

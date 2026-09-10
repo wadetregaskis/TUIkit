@@ -1214,7 +1214,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
             }
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
-            rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
+            if !rowRegions.isEmpty {
+                rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
+            }
             rowLinesEmitted += styledLines.count
             ranges.append((
                 rowIndex: rowIndex,
@@ -1304,7 +1306,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         _ claims: [OpacityRegion], handler: ItemListHandler<SelectionValue>,
         lineCount: Int, topOffset: Int
     ) -> [OpacityRegion] {
-        claims.compactMap { claim in
+        guard !claims.isEmpty else { return [] }
+        return claims.compactMap { claim in
             var y = claim.offsetY
             if handler.overscrollState.excursion != 0 {
                 guard let moved = handler.overscrollState.slidRange(
@@ -1508,7 +1511,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // rejected in `renderRow` if they reached past the content column,
             // which is the same boundary the hard clip above enforces.
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
-            rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
+            if !rowRegions.isEmpty {
+                rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
+            }
             ranges.append((
                 rowIndex: rowIndex,
                 yStart: yStart,
@@ -1569,8 +1574,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             childRuns = childRuns.compactMap {
                 $0.y >= clipped ? $0.moved(to: $0.y - clipped) : nil
             }
-            claims = claims.compactMap {
-                $0.offsetY >= clipped ? $0.shifted(byX: 0, y: -clipped) : nil
+            if !claims.isEmpty {
+                claims = claims.compactMap {
+                    $0.offsetY >= clipped ? $0.shifted(byX: 0, y: -clipped) : nil
+                }
             }
         }
         if let budget, lines.count > budget {
@@ -1578,9 +1585,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             lines.removeLast(dropped)
             pulseFrames?.removeLast(dropped)
         }
+        // `filter` on the claims only when there are any: this runs per row per
+        // frame, and the overwhelming majority of rows have none.
         return (
             lines, pulseFrames, childRuns.filter { $0.y < lines.count },
-            claims.filter { $0.offsetY < lines.count })
+            claims.isEmpty ? claims : claims.filter { $0.offsetY < lines.count })
     }
 
     /// Clips a reorder frame's overrun — away from the SLOT, never through it.
@@ -2741,7 +2750,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// `Table` also calls. `cells` is empty: a list row's content is a child
         /// buffer that claims for itself, and `attachRowOpacity` carries those up.
         func claims(over backgroundColor: Color?) -> [OpacityRegion] {
-            (0..<row.buffer.lines.count).flatMap { line in
+            // Asked before the walk, so a row with nothing translucent — every row of
+            // nearly every list — allocates nothing at all. The `flatMap` below built
+            // an empty array per row per frame without this, which `megalist` is
+            // precisely the shape to notice.
+            guard (!indicator.isBlank && !indicator.color.isOpaque)
+                || backgroundColor?.isOpaque == false
+            else { return [] }
+            return (0..<row.buffer.lines.count).flatMap { line in
                 SelectableRowClaims.claims(
                     line: line, width: rowWidth, cells: 0..<0, ink: nil,
                     mark: line == 0 && !indicator.isBlank ? indicator.color : nil,

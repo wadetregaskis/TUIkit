@@ -1803,6 +1803,9 @@ where Value.ID: Hashable {
         // Only a breathing row needs its lines kept bare: everything else would
         // be an array built per row per frame and thrown away.
         let pulseColors = visual.background.pulseColors
+        // Hoisted out of the per-line loop: `claimableFill` is a switch, and both the
+        // claim and the fill below want the same answer for every line of the row.
+        let claimableFill = pulseColors == nil ? visual.background.claimableFill : nil
         /// The same lines WITHOUT their background, kept so a pulse can be
         /// applied to each of them per step (see the single-line path).
         var bareLines: [String] = []
@@ -1854,14 +1857,13 @@ where Value.ID: Hashable {
                 line: lineIndex, width: rowWidth, cells: gutter..<cellColumn,
                 ink: bandsAcrossRow ? nil : foreground,
                 mark: gutter > 0 && lineIndex == 0 ? visual.indicatorColor : nil,
-                fill: pulseColors == nil ? visual.background.claimableFill : nil)
+                fill: claimableFill)
             guard case .none = visual.background else {
                 content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
                 if pulseColors != nil { bareLines.append(content) }
                 lines.append(
                     content.withPersistentBackground(
-                        visual.background.claimableFill?.opaqueSpelling
-                            ?? visual.background.colorNow))
+                        claimableFill?.opaqueSpelling ?? visual.background.colorNow))
                 continue
             }
             lines.append(content)
