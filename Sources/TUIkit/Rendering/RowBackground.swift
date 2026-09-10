@@ -77,6 +77,81 @@ enum RowBackground {
         guard case .pulsing(let cycle, _, _) = self, !cycle.frames.isEmpty else { return 0 }
         return cycle.step % cycle.frames.count
     }
+
+    /// The fill a claim would be about, or `nil` where there is nothing to claim.
+    ///
+    /// A PULSING background earns none and needs none: `accentFillPulse` returns both
+    /// ends through ``Color/opacity(_:over:)``, which consumes a translucent tint's
+    /// alpha and stamps the result opaque (§21, §29). Every frame of the breath
+    /// therefore states a concrete colour and no alpha is left over — which is also
+    /// why the pulse can be a run at all, since a run's frames must all answer to one
+    /// static region.
+    @MainActor
+    var claimableFill: Color? {
+        guard case .fixed(let color) = self else { return nil }
+        return color
+    }
+}
+
+// MARK: - What a selectable row's line owes
+
+/// The claims one line of a selectable row owes for the translucent colours it
+/// painted.
+///
+/// Here beside ``RowBackground`` and ``RowSelectionIndicator`` for exactly the reason
+/// those are: a `List` and a `Table` run the same rules about focus, selection and
+/// visibility, they have drifted apart before, and "which cells of a row owe a blend"
+/// is one more rule that must not be written out twice.
+enum SelectableRowClaims {
+    /// - Parameters:
+    ///   - line: Which of the row's lines this is, in the row's own coordinates.
+    ///   - width: The row's full width — what a background fill covers.
+    ///   - cells: The columns the row's TEXT occupies, which start past the mark and
+    ///     its gap. Empty where the caller draws no text of its own (a `List` row's
+    ///     content is a child buffer that claims for itself).
+    ///   - ink: The colour every cell of that text was drawn in.
+    ///   - mark: The colour the selection ● was drawn in, or `nil` on a continuation
+    ///     line and wherever no mark is drawn.
+    ///   - fill: The row's background, or `nil` for a row that paints none and for a
+    ///     PULSING one (see ``RowBackground/claimableFill``).
+    /// - Returns: Between zero and three regions, in the row's own coordinates.
+    ///
+    /// Three rectangles rather than one, and they must not be merged. The mark and the
+    /// text are different colours: a merged INK rectangle would resolve the ● at the
+    /// text's alpha, which is §23.2's mistake in a different shape. The fill is a
+    /// different CHANNEL, so its rectangle overlaps both and that is correct — an
+    /// ink-only region carries `fieldOpacity: 1` and a field-only one carries
+    /// `inkOpacity: 1`, and the resolver multiplies across every region covering a
+    /// cell (§27). This is `.foregroundStyle(…).background(…)` in row form.
+    ///
+    /// The gap cell between the mark and the text is deliberately covered by the FILL
+    /// claim only. It is a bare space with no ink of its own, and an ink claim on such
+    /// a cell lets what is behind it through where the row drew a pad.
+    static func claims(
+        line: Int, width: Int, cells: Range<Int>, ink: Color?, mark: Color?, fill: Color?
+    ) -> [OpacityRegion] {
+        // Asked first, so an opaque row — every row of nearly every table — pays three
+        // alpha compares and allocates nothing.
+        guard ink?.isOpaque == false || mark?.isOpaque == false || fill?.isOpaque == false
+        else { return [] }
+        var claims: [OpacityRegion] = []
+        if let mark, let claim = OpacityRegion.claim(
+            offsetX: 0, offsetY: line, width: 1, height: 1, ink: mark)
+        {
+            claims.append(claim)
+        }
+        if let claim = OpacityRegion.claim(
+            offsetX: cells.lowerBound, offsetY: line, width: cells.count, height: 1, ink: ink)
+        {
+            claims.append(claim)
+        }
+        if let claim = OpacityRegion.claim(
+            offsetX: 0, offsetY: line, width: width, height: 1, field: fill)
+        {
+            claims.append(claim)
+        }
+        return claims
+    }
 }
 
 // MARK: - Selection Indicator

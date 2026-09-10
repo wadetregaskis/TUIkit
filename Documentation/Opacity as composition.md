@@ -2029,3 +2029,71 @@ should not display one, or the single state you cannot reach is the one you can 
 But the **binding keeps its alpha**: editing R, G or B carries it through on every
 path whatever the flag says. The flag governs what the control *offers*, not what the
 app's value *is*.
+
+## 33. `Table` and `List`: three paints per row, and a decline that was stale (2026-09-10)
+
+Row 2 of §16.1 for `Table`, and its `_ListCore` twin in the same commit — because
+`RowSelectionIndicator` and `RowBackground` live in one file for exactly the reason
+the two have drifted apart before, and "which cells of a row owe a blend" is one more
+rule that must not be written twice. `SelectableRowClaims.claims` is now there with
+them.
+
+A selectable row paints three things of its own, and they claim **three rectangles**
+that must not be merged:
+
+- the **cells' ink** — `.foregroundStyle(.red.opacity(0.5))` on a `Table`, or a theme
+  whose `foreground` slot is faded;
+- the **selection mark**, in `palette.accent` and so one `.tint` away;
+- the **still background**, `palette.focusBackground`, which a theme may fade.
+
+The mark and the cells are different colours, so a merged ink rectangle would resolve
+the ● at the text's alpha — §23.2's mistake in another shape. The fill is a different
+*channel*, so its rectangle overlaps both, and that is correct: the resolver
+multiplies ink and field across every region covering a cell (§27). The gap cell
+between mark and text carries the **fill** claim only — it is a bare space with no ink
+of its own, and an ink claim there lets what is behind it through where the row drew a
+pad.
+
+### 33.1 §19.1's reason for declining was stale
+
+§19.1 declined `Table` because *the cursor row pulses, so no static claim can describe
+it*, and said the fix wanted phase-indexed alpha. Both halves turn out to be wrong:
+
+1. **The pulse repaints the FIELD, not the ink.** `renderRow` builds the line once
+   with its ink SGR already in it and then applies the background to the finished line
+   per step. So every frame states the *same* ink at the *same* alpha.
+2. **The fill's own alpha is already spent.** `accentFillPulse` returns both ends
+   through `Color.opacity(_:over:)`, which stamps them opaque (§21, §29). There is
+   nothing left for a fill claim to carry, which is also what lets the pulse be a run
+   at all.
+
+So a static INK claim is true of every phase, and `resolvingOpacity` re-blends a
+covered run's frames through it (§29.2). The migration is honest on all twenty rows
+*including* the selected one, which is exactly the thing §19.1 doubted.
+
+### 33.2 A banded table claims all its rows or none
+
+A `Table` under a horizontal, radial or angular gradient paints cell by cell through
+`PaintRenderer.band` — §15's `perCell` decline. That arm stays loud, with its bytes
+*unspelled* so the emitter's assertion still fires: spelling them opaque would turn a
+loud gap into a silently discarded alpha, which is the one failure mode §18.3 names.
+
+It is not a partial-migration hazard, and the reason is worth stating: `bandsAcrossRow`
+comes from ONE sampler built per frame, so every row of a given table takes the same
+arm. Never right on nineteen rows and wrong on the twentieth.
+
+### 33.3 A gap this leaves in the tests, said plainly
+
+Every translucent thing a **`List`** can paint requires the list to hold the focus:
+the unfocused mark and the unfocused selected background both spend their alpha
+through `opacity(_:over:)`. Focusing a `List` from a headless `renderToBuffer` did not
+work — two full render passes with `beginRenderPass`/`endRenderPass` around each, then
+`focusNext()`, then `focus(id:)` against an explicit `.focusID`, all left the rows
+unfocused.
+
+So `_ListCore`'s arm is tested at the **seam** — the shape the shared derivation
+produces for a list row, which paints no cells of its own — and its focused end-to-end
+path has no assertion. `Table`'s equivalent needs no focus (its ink comes from
+`.foregroundStyle`) and is tested end to end. This is a real hole, recorded rather
+than papered over with an unfocused render that would have passed for the wrong
+reason.

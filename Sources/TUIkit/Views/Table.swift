@@ -826,6 +826,7 @@ where Value.ID: Hashable {
 
         let contentLines: [String]
         var contentRuns: [AnimatedCellRun] = []
+        var contentClaims: [OpacityRegion] = []
         let renderState: PopulatedRenderState?
         if data.isEmpty {
             contentLines = [emptyPlaceholder]
@@ -843,6 +844,7 @@ where Value.ID: Hashable {
                 columnWidths: columnWidths, contentInnerWidth: contentInnerWidth)
             contentLines = result.lines
             contentRuns = result.runs
+            contentClaims = result.claims
             renderState = result.state
         } else {
             let result = buildPopulatedContent(
@@ -855,6 +857,7 @@ where Value.ID: Hashable {
             )
             contentLines = result.lines
             contentRuns = result.runs
+            contentClaims = result.claims
             renderState = result.state
         }
 
@@ -897,7 +900,8 @@ where Value.ID: Hashable {
             // full interior, keeping every line the same width.
             VStack(alignment: .leading, spacing: 0) {
                 _TableHeaderView(line: headerLine)
-                _TableContentView(lines: filledContentLines, runs: contentRuns)
+                _TableContentView(
+                    lines: filledContentLines, runs: contentRuns, claims: contentClaims)
             }
         }
         var buffer = TUIkit.renderToBuffer(container, context: context)
@@ -919,7 +923,10 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         showsScrollbar: Bool = false,
         innerWidth: Int
-    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
+    ) -> (
+        lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion],
+        state: PopulatedRenderState
+    ) {
         // Multi-line cells (any column with a line limit above 1) take a separate,
         // height-aware layout path. Single-line tables keep the original
         // row-per-line path below completely untouched.
@@ -988,6 +995,7 @@ where Value.ID: Hashable {
         return (
             lines: composed.lines,
             runs: composed.runs,
+            claims: composed.claims,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -1020,7 +1028,10 @@ where Value.ID: Hashable {
         palette: any Palette,
         columnWidths: [Int],
         contentInnerWidth: Int
-    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
+    ) -> (
+        lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion],
+        state: PopulatedRenderState
+    ) {
         let contentHeight = max(1, context.availableHeight - 3)
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: focusID, defaultPrefix: "table",
@@ -1083,6 +1094,9 @@ where Value.ID: Hashable {
         /// among `rowLines` — turned into runs once the clip and the slide have
         /// settled where those lines actually ended up.
         var pulseRuns: [(y: Int, frames: [String])] = []
+        /// The rows' claims, at their position among `rowLines` — moved by the same
+        /// slide the runs are, once the clip has settled where the lines landed.
+        var rowOpacity: [OpacityRegion] = []
         rowLines.reserveCapacity(contentHeight)
         // One sampler for the frame, not one per row: building it quantises the
         // ramp, which is an array a row must not allocate.
@@ -1099,14 +1113,16 @@ where Value.ID: Hashable {
                     isReturningHome: handler.returningRows.contains(rowIndex),
                     context: context, palette: palette)
                 collect(
-                    line: row.line, frames: row.pulseFrames, into: &rowLines,
-                    runs: &pulseRuns, transform: padded)
+                    line: row.line, frames: row.pulseFrames, claims: row.claims,
+                    into: &rowLines, runs: &pulseRuns, claims: &rowOpacity, transform: padded)
                 drawnHeights.append((entry, 1))
             case .slot:
                 let slot = reorderSlotLines(
                     handler: handler, columnWidths: columnWidths, rowWidth: contentInnerWidth,
                     context: context, palette: palette)
-                collect(slot, into: &rowLines, runs: &pulseRuns, transform: padded)
+                collect(
+                    slot, into: &rowLines, runs: &pulseRuns, claims: &rowOpacity,
+                    transform: padded)
                 drawnHeights.append((entry, slot.lines.count))
             }
         }
@@ -1136,6 +1152,7 @@ where Value.ID: Hashable {
             // indicator line on this path — so a run and the band it belongs to
             // can never end up on different rows.
             rowRuns(pulseRuns, slide: slide, topOffset: 0, lineCount: lines.count),
+            rowClaims(rowOpacity, slide: slide, topOffset: 0, lineCount: lines.count),
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
                 scrollOffsetAbove: 0, drawnBands: bands, hasScrollbar: true,
@@ -1161,7 +1178,10 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         showsScrollbar: Bool,
         innerWidth: Int
-    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
+    ) -> (
+        lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion],
+        state: PopulatedRenderState
+    ) {
         let gutter = selectionGutter(context.environment)
         // 3 = top border + column header + bottom border.
         let contentHeight = max(1, context.availableHeight - 3)
@@ -1365,6 +1385,7 @@ where Value.ID: Hashable {
         return (
             lines: composed.lines,
             runs: composed.runs,
+            claims: composed.claims,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -1578,7 +1599,7 @@ where Value.ID: Hashable {
         contentHeight: Int,
         bar: [String],
         context: RenderContext
-    ) -> (lines: [String], runs: [AnimatedCellRun]) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion]) {
         let palette = context.environment.palette
         let gutter = selectionGutter(context.environment)
         // Every line — focused-row backgrounds and indicators included — is padded
@@ -1638,6 +1659,7 @@ where Value.ID: Hashable {
         /// The breathing row's lines and every frame of each, at their position
         /// among `slidableRows` — see `collect`.
         var pulseRuns: [(y: Int, frames: [String])] = []
+        var rowOpacity: [OpacityRegion] = []
         let rowRamp = cellRamp(rowWidth: contentWidth, context: context)
         for rowIndex in window.range {
             let rendered = renderMultiLineRow(
@@ -1656,10 +1678,17 @@ where Value.ID: Hashable {
             // absorbed a one-line clip (drawing the line instead of a "▲ 1
             // more" indicator), and clipping it here anyway made that line
             // silently vanish while every row sat one line above its hit band.
+            // Clipped alongside them too: a claim names a line by index, so lines
+            // taken off the FRONT move every survivor's index down by as many.
+            var rowRegions = rendered.claims
             if rowIndex == window.range.lowerBound, window.topClip > 0 {
                 let clipped = min(window.topClip, rowLines.count - 1)
                 rowLines.removeFirst(clipped)
                 pulseFrames?.removeFirst(clipped)
+                rowRegions = rowRegions.compactMap { claim in
+                    guard claim.offsetY >= clipped else { return nil }
+                    return claim.shifted(byX: 0, y: -clipped)
+                }
             }
             // …and the bottom row leaves partially, clipped at the budget.
             let remaining = rowLineBudget - rowLinesEmitted
@@ -1668,10 +1697,11 @@ where Value.ID: Hashable {
                 let dropped = rowLines.count - remaining
                 rowLines.removeLast(dropped)
                 pulseFrames?.removeLast(dropped)
+                rowRegions = rowRegions.filter { $0.offsetY < rowLines.count }
             }
             collect(
-                RenderedRow(lines: rowLines, pulseFrames: pulseFrames),
-                into: &slidableRows, runs: &pulseRuns)
+                RenderedRow(lines: rowLines, pulseFrames: pulseFrames, claims: rowRegions),
+                into: &slidableRows, runs: &pulseRuns, claims: &rowOpacity)
             rowLinesEmitted += rowLines.count
         }
         // The rows' own coordinates start below whatever indicator lines are
@@ -1682,6 +1712,9 @@ where Value.ID: Hashable {
             slidableRows, blank: String(repeating: " ", count: max(0, contentWidth))))
         let runs = rowRuns(
             pulseRuns, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
+            lineCount: rowsTop + slidableRows.count)
+        let claims = rowClaims(
+            rowOpacity, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
             lineCount: rowsTop + slidableRows.count)
         if window.reservesBelow {
             let indicator = renderScrollIndicator(
@@ -1707,7 +1740,7 @@ where Value.ID: Hashable {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
         }
-        guard showsBar else { return (lines, runs + chromeRuns) }
+        guard showsBar else { return (lines, runs + chromeRuns, claims) }
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
         // is (§1.5) — the same composition the single-line path uses.
@@ -1719,7 +1752,7 @@ where Value.ID: Hashable {
             lines.enumerated().map { index, line in
                 line + (index < bar.count ? bar[index] : emptyCell)
             },
-            runs + chromeRuns)
+            runs + chromeRuns, claims)
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first
@@ -1744,7 +1777,8 @@ where Value.ID: Hashable {
         let spacing = asciiSpaces(columnSpacing)
         let visual = rowVisualState(
             isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
-        let styledIndicator = ANSIRenderer.colorize(visual.indicator, foreground: visual.indicatorColor)
+        let styledIndicator = ANSIRenderer.colorize(
+            visual.indicator, foreground: visual.indicatorColor.opaqueSpelling)
         // See `renderRow`: one step of the ramp per ROW, so every line of a
         // wrapped row shares its colour, and a ramp that varies along the row
         // paints cell by cell instead.
@@ -1757,10 +1791,12 @@ where Value.ID: Hashable {
         // per row, so `table-multiline` was the one table shape that did not
         // move when `renderRow` was rewritten.
         var cellStyle = TextStyle()
-        cellStyle.foregroundColor = foreground
+        // Spelled opaque only on the arm that claims — see the single-line twin.
+        cellStyle.foregroundColor = bandsAcrossRow ? foreground : foreground.opaqueSpelling
         let cellSequence = bandsAcrossRow ? nil : ANSIRenderer.styleSequence(for: cellStyle)
         var rampSequences: [String?] = []
         let cellCount = min(columns.count, columnWidths.count)
+        var claims: [OpacityRegion] = []
 
         var lines: [String] = []
         lines.reserveCapacity(layout.height)
@@ -1811,22 +1847,34 @@ where Value.ID: Hashable {
                 cellColumn += cellWidth
             }
 
+            // Row-local, and per LINE: the mark is on the first line only, as the
+            // badge is — a tall row is one entry in the list, and one entry earns one
+            // mark.
+            claims += SelectableRowClaims.claims(
+                line: lineIndex, width: rowWidth, cells: gutter..<cellColumn,
+                ink: bandsAcrossRow ? nil : foreground,
+                mark: gutter > 0 && lineIndex == 0 ? visual.indicatorColor : nil,
+                fill: pulseColors == nil ? visual.background.claimableFill : nil)
             guard case .none = visual.background else {
                 content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
                 if pulseColors != nil { bareLines.append(content) }
-                lines.append(content.withPersistentBackground(visual.background.colorNow))
+                lines.append(
+                    content.withPersistentBackground(
+                        visual.background.claimableFill?.opaqueSpelling
+                            ?? visual.background.colorNow))
                 continue
             }
             lines.append(content)
         }
         // Same recolour-the-finished-line trick the single-line path uses: one
         // recolouring per step, not one render of the row per step.
-        guard let pulseColors else { return RenderedRow(lines: lines) }
+        guard let pulseColors else { return RenderedRow(lines: lines, claims: claims) }
         return RenderedRow(
             lines: lines,
             pulseFrames: bareLines.map { bare in
                 pulseColors.map { bare.withPersistentBackground($0) }
-            })
+            },
+            claims: claims)
     }
 
     /// Fetches (or creates) the persistent ``ItemListHandler``
@@ -2081,6 +2129,7 @@ where Value.ID: Hashable {
         palette: any Palette
     ) -> (
         lines: [String], rowLines: [String], runs: [AnimatedCellRun],
+        claims: [OpacityRegion],
         bands: [ItemListHandler<Value.ID>.DrawnBand]
     ) {
         let gutter = selectionGutter(context.environment)
@@ -2133,6 +2182,7 @@ where Value.ID: Hashable {
         /// The breathing rows' lines and every frame of each, at their position
         /// among `rowLines` — see `collect`.
         var pulseRuns: [(y: Int, frames: [String])] = []
+        var rowOpacity: [OpacityRegion] = []
         // One sampler for the frame — see the twin in the single-line path.
         let rowRamp = cellRamp(rowWidth: contentWidth, context: context)
         for entry in drawn {
@@ -2149,13 +2199,14 @@ where Value.ID: Hashable {
                     palette: palette
                 )
                 collect(
-                    line: row.line, frames: row.pulseFrames, into: &rowLines, runs: &pulseRuns)
+                    line: row.line, frames: row.pulseFrames, claims: row.claims,
+                    into: &rowLines, runs: &pulseRuns, claims: &rowOpacity)
                 drawnHeights.append((entry, 1))
             case .slot:
                 let slot = reorderSlotLines(
                     handler: handler, columnWidths: columnWidths, rowWidth: contentWidth,
                     context: context, palette: palette)
-                collect(slot, into: &rowLines, runs: &pulseRuns)
+                collect(slot, into: &rowLines, runs: &pulseRuns, claims: &rowOpacity)
                 drawnHeights.append((entry, slot.lines.count))
             }
         }
@@ -2205,6 +2256,8 @@ where Value.ID: Hashable {
             rowLines, blank: String(repeating: " ", count: max(0, contentWidth))))
         let runs = rowRuns(
             pulseRuns, slide: slide, topOffset: rowsTop, lineCount: rowsTop + rowLines.count)
+        let claims = rowClaims(
+            rowOpacity, slide: slide, topOffset: rowsTop, lineCount: rowsTop + rowLines.count)
         if indicators.below {
             let indicator = renderScrollIndicator(
                 direction: .down,
@@ -2223,7 +2276,7 @@ where Value.ID: Hashable {
         // The row lines are handed back separately for a `.cursor` drag's
         // floating preview; the press frame is drawn in plain data order, so
         // indexing them by `visibleRange` offset is exact.
-        return (lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns, bands)
+        return (lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns, claims, bands)
     }
 
     // MARK: - Reorder drag
@@ -2346,20 +2399,28 @@ where Value.ID: Hashable {
     /// frames too, or the run would claim a different span than its line
     /// occupies.
     private func collect(
-        line: String, frames: [String]?, into lines: inout [String],
-        runs: inout [(y: Int, frames: [String])], transform: (String) -> String = { $0 }
+        line: String, frames: [String]?, claims rowClaims: [OpacityRegion] = [],
+        into lines: inout [String], runs: inout [(y: Int, frames: [String])],
+        claims: inout [OpacityRegion], transform: (String) -> String = { $0 }
     ) {
         if let frames { runs.append((y: lines.count, frames: frames.map(transform))) }
+        // Shifted the way the run's `y` is recorded, and by the same number: a claim
+        // at the wrong index fades the row above or below, every frame, exactly as a
+        // misrecorded run repaints one. `transform` is not applied — the paths that
+        // use it pad on the RIGHT, which adds bare cells a claim does not want.
+        claims += rowClaims.map { $0.shifted(byX: 0, y: lines.count) }
         lines.append(transform(line))
     }
 
     /// The multi-line form: see the single-line overload above.
     private func collect(
         _ rendered: RenderedRow, into lines: inout [String],
-        runs: inout [(y: Int, frames: [String])], transform: (String) -> String = { $0 }
+        runs: inout [(y: Int, frames: [String])], claims: inout [OpacityRegion],
+        transform: (String) -> String = { $0 }
     ) {
         let base = lines.count
         lines.append(contentsOf: rendered.lines.map(transform))
+        claims += rendered.claims.map { $0.shifted(byX: 0, y: base) }
         guard let pulseFrames = rendered.pulseFrames else { return }
         for (offset, frames) in pulseFrames.enumerated() where !frames.isEmpty {
             runs.append((y: base + offset, frames: frames.map(transform)))
@@ -2371,6 +2432,24 @@ where Value.ID: Hashable {
     ///
     /// A run whose line was slid off the top, or clipped off the bottom, is
     /// dropped rather than left claiming cells that are no longer its own.
+    /// The collected claims, moved exactly as ``rowRuns(_:slide:topOffset:lineCount:)``
+    /// moves the runs — the same slide, the same indicator offset, the same drop for a
+    /// line that ended up off the top or past the bottom.
+    ///
+    /// One function beside that one rather than a second spelling of the arithmetic: a
+    /// claim and the run on its own row disagreeing about where they are is the same
+    /// class of bug as a run and its hit band disagreeing, and that is what `collect`
+    /// exists to prevent one level down.
+    private func rowClaims(
+        _ collected: [OpacityRegion], slide: Int, topOffset: Int, lineCount: Int
+    ) -> [OpacityRegion] {
+        collected.compactMap { claim in
+            let y = claim.offsetY + slide + topOffset
+            guard y >= topOffset, y < lineCount else { return nil }
+            return claim.shifted(byX: 0, y: y - claim.offsetY)
+        }
+    }
+
     @MainActor
     private func rowRuns(
         _ pulseRuns: [(y: Int, frames: [String])], slide: Int, topOffset: Int, lineCount: Int
@@ -3287,14 +3366,14 @@ where Value.ID: Hashable {
         isReturningHome: Bool = false,
         context: RenderContext,
         palette: any Palette,
-    ) -> (line: String, pulseFrames: [String]?) {
+    ) -> (line: String, pulseFrames: [String]?, claims: [OpacityRegion]) {
         let (row, ramp, rowWidth) = (paint.row, paint.ramp, paint.width)
         // A row whose picture is still walking back to it keeps its space and
         // draws nothing in it — see ``ItemListHandler/returningRows``, and
         // `_ListCore.renderRow`, which does the same for the same reason.
         // Nothing animates: a run would paint over the blank on its next tick.
         guard !isReturningHome else {
-            return (String(repeating: " ", count: max(0, rowWidth)), nil)
+            return (String(repeating: " ", count: max(0, rowWidth)), nil, [])
         }
         let visualState = rowVisualState(
             isFocused: isFocused,
@@ -3305,7 +3384,7 @@ where Value.ID: Hashable {
 
         let styledIndicator = ANSIRenderer.colorize(
             visualState.indicator,
-            foreground: visualState.indicatorColor
+            foreground: visualState.indicatorColor.opaqueSpelling
         )
         let gutter = selectionGutter(context.environment)
 
@@ -3320,9 +3399,13 @@ where Value.ID: Hashable {
         // colour changes. Every other case, ramp or not, keeps the single
         // introducer this comment is about.
         let bandsAcrossRow = ramp?.variesAcrossRow ?? false
+        let cellInk = cellColour(row: row, ramp: ramp, context: context, palette: palette)
         var cellStyle = TextStyle()
-        cellStyle.foregroundColor = cellColour(
-            row: row, ramp: ramp, context: context, palette: palette)
+        // The opaque spelling ONLY on the arm that also claims. A banded row paints
+        // cell by cell through `PaintRenderer.band`, which is §15's `perCell` decline
+        // and is not honoured — spelling that one opaque would turn a loud gap into a
+        // silently discarded alpha, which is the one failure mode §18.3 names.
+        cellStyle.foregroundColor = bandsAcrossRow ? cellInk : cellInk.opaqueSpelling
         let cellSequence = bandsAcrossRow ? nil : ANSIRenderer.styleSequence(for: cellStyle)
         var rampSequences: [String?] = []
 
@@ -3379,19 +3462,40 @@ where Value.ID: Hashable {
         // — the same trick the menu row's bar uses. It works only because the
         // row itself paints no background of its own: an inner one would beat
         // the outer paint for the cells it covers.
+        /// What this row's line owes, from the one derivation `_ListCore` also calls.
+        ///
+        /// The cells' rectangle stops at `cellColumn`, which the loop above has walked
+        /// to the end of the last column — not at `rowWidth`, because the padding past
+        /// it is bare and an ink claim on a cell with no ink of its own lets what is
+        /// behind it through.
+        func claims(fill: Color?) -> [OpacityRegion] {
+            SelectableRowClaims.claims(
+                line: 0, width: rowWidth, cells: gutter..<cellColumn,
+                ink: bandsAcrossRow ? nil : cellInk,
+                mark: gutter > 0 ? visualState.indicatorColor : nil, fill: fill)
+        }
         guard case .none = visualState.background else {
             content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
+            let fill = visualState.background.claimableFill
             guard let colors = visualState.background.pulseColors else {
-                return (content.withPersistentBackground(visualState.background.colorNow), nil)
+                return (
+                    content.withPersistentBackground(fill?.opaqueSpelling
+                        ?? visualState.background.colorNow),
+                    nil, claims(fill: fill))
             }
             let frames = colors.map { content.withPersistentBackground($0) }
-            return (frames[visualState.background.stepNow], frames)
+            // The pulse's own frames need no spelling and earn no fill claim: both
+            // ends of `accentFillPulse` spend a translucent tint's alpha against the
+            // page, so every frame states a concrete colour (§29). The INK claim
+            // still applies — the run repaints the field, not the glyphs, and
+            // `resolvingOpacity` re-blends every frame through it.
+            return (frames[visualState.background.stepNow], frames, claims(fill: nil))
         }
         // A bare line, not a one-element array: a table renders every visible
         // row every frame, and the allocator is where its time goes (see the
         // one-SGR-introducer notes above). The multi-line and slot paths do
         // produce several lines, and say so with `RenderedRow`.
-        return (content, nil)
+        return (content, nil, claims(fill: nil))
     }
 
     /// A row's rendered lines, plus — when its background breathes — every frame
@@ -3404,6 +3508,11 @@ where Value.ID: Hashable {
     private struct RenderedRow {
         let lines: [String]
         var pulseFrames: [[String]]?
+
+        /// The cells this row's lines owe a blend, with `offsetY` an index into
+        /// ``lines`` — the same frame `pulseFrames` is indexed in, so whatever
+        /// clipping the caller applies to one it applies to all three.
+        var claims: [OpacityRegion] = []
     }
 
     /// How many frames a row's travel is cut into.
@@ -3686,6 +3795,11 @@ private struct _TableContentView: View, Renderable {
     /// above and the container around shift them along with the lines.
     var runs: [AnimatedCellRun] = []
 
+    /// The rows' opacity claims, positioned the same way and travelling the same
+    /// route: a `Table` paints its rows' ink, its selection marks and its still
+    /// backgrounds itself, and a translucent one of any of those owes a blend.
+    var claims: [OpacityRegion] = []
+
     var body: Never {
         fatalError("_TableContentView renders via Renderable")
     }
@@ -3694,8 +3808,11 @@ private struct _TableContentView: View, Renderable {
         var buffer = FrameBuffer(lines: lines)
         // A measure pass draws nothing, so a run left on it would describe
         // cells that were never on screen — and keep the clock alive from a
-        // pass that produced no frame.
-        if !context.isMeasuring { buffer.animatedCells = runs }
+        // pass that produced no frame. A claim on a measure buffer is harmless
+        // by comparison, but it is the same statement about cells nobody drew.
+        guard !context.isMeasuring else { return buffer }
+        buffer.animatedCells = runs
+        buffer.opacityRegions = claims
         return buffer
     }
 }

@@ -431,6 +431,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         let contentLines: [String]
         var contentRuns: [AnimatedCellRun] = []
+        var contentClaims: [OpacityRegion] = []
         let renderState: PopulatedRenderState?
         if source.isEmpty {
             contentLines = buildEmptyStateLines(context: context)
@@ -455,6 +456,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
             contentLines = result.lines
             contentRuns = result.runs
+            contentClaims = result.claims
             renderState = result.state
         }
 
@@ -476,7 +478,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 showFooterSeparator: showFooterSeparator,
                 hasBorder: style.showsBorder
             ),
-            content: _ListContentView(lines: paddedContentLines, runs: contentRuns),
+            content: _ListContentView(
+                lines: paddedContentLines, runs: contentRuns, claims: contentClaims),
             footer: footer,
             context: context
         )
@@ -569,7 +572,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         palette: any Palette,
         style: any ListStyle,
         targetContentHeight: Int
-    ) -> (lines: [String], runs: [AnimatedCellRun], state: PopulatedRenderState) {
+    ) -> (
+        lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion],
+        state: PopulatedRenderState
+    ) {
         let persistedFocusID = FocusRegistration.persistFocusID(
             context: context,
             explicitFocusID: focusID,
@@ -658,6 +664,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let lines: [String]
         let visibleRowYRanges: [VisibleRowRange]
         let animatedRuns: [AnimatedCellRun]
+        /// The rows' own claims — the selection marks and the still backgrounds the
+        /// LIST paints, as distinct from the rows' content, which `attachRowOpacity`
+        /// carries up from each child buffer.
+        let listRowClaims: [OpacityRegion]
         var scrollbarColumn: Int?
         var scrollbarHeight = 0
         var rowContentWidth = 0
@@ -672,7 +682,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette
             )
             let contentRowWidth = max(1, rowWidth - 1)
-            (lines, visibleRowYRanges, animatedRuns) = composeScrollbarRowLines(
+            (lines, visibleRowYRanges, animatedRuns, listRowClaims) = composeScrollbarRowLines(
                 visibleRows: visibleRows,
                 handler: handler,
                 origin: origin,
@@ -692,7 +702,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             scrollbarHeight = bar.count
             rowContentWidth = max(0, contentRowWidth - 1)
         } else {
-            (lines, visibleRowYRanges, animatedRuns) = composeRowLines(
+            (lines, visibleRowYRanges, animatedRuns, listRowClaims) = composeRowLines(
                 handler: handler,
                 origin: origin,
                 visibleRows: visibleRows,
@@ -708,6 +718,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return (
             lines: lines,
             runs: animatedRuns,
+            claims: listRowClaims,
             state: PopulatedRenderState(
                 handler: handler,
                 focusID: persistedFocusID,
@@ -1087,7 +1098,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         contentHeight: Int,
         style: any ListStyle,
         context: RenderContext
-    ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
+    ) -> (
+        lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
+        claims: [OpacityRegion]
+    ) {
         let palette = context.environment.palette
         // The indicator lines are chrome — they describe where the content sits —
         // so the rows are collected separately and an overscroll slide moves only
@@ -1100,6 +1114,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// overscroll slide have had their say about where those lines actually
         /// ended up.
         var pulseRuns: [RowRun] = []
+        /// What the list itself painted on the rows and owes a blend for — the
+        /// selection marks and the still backgrounds — travelling beside the runs
+        /// because both are positioned by LINE and both take the same slide.
+        var rowClaims: [OpacityRegion] = []
         var topIndicator: (text: String, animation: AnimatedCellRun?)?
         var bottomIndicator: (text: String, animation: AnimatedCellRun?)?
 
@@ -1182,7 +1200,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 if remaining <= 0 { break }
                 budget = remaining
             }
-            let (styledLines, pulseFrames, childRuns) = clipRow(
+            let (styledLines, pulseFrames, childRuns, rowRegions) = clipRow(
                 rendered,
                 topClip: rowIndex == origin.offset ? origin.topClip : 0,
                 budget: budget)
@@ -1196,6 +1214,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
             }
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
+            rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
             rowLinesEmitted += styledLines.count
             ranges.append((
                 rowIndex: rowIndex,
@@ -1230,7 +1249,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
 
         return slideAndWrap(
-            rowLines: rowLines, ranges: ranges, pulseRuns: pulseRuns,
+            rowLines: rowLines, ranges: ranges, pulseRuns: pulseRuns, rowClaims: rowClaims,
             topIndicator: topIndicator, bottomIndicator: bottomIndicator,
             handler: handler, rowWidth: rowWidth)
     }
@@ -1244,11 +1263,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// that are no longer its own.
     private func slideAndWrap(
         rowLines: [String], ranges: [VisibleRowRange],
-        pulseRuns: [RowRun],
+        pulseRuns: [RowRun], rowClaims: [OpacityRegion],
         topIndicator: (text: String, animation: AnimatedCellRun?)?,
         bottomIndicator: (text: String, animation: AnimatedCellRun?)?,
         handler: ItemListHandler<SelectionValue>, rowWidth: Int
-    ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
+    ) -> (
+        lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
+        claims: [OpacityRegion]
+    ) {
         let blank = String(repeating: " ", count: max(0, rowWidth))
         let slidRows = handler.overscrollState.slid(rowLines, blank: blank)
         let topOffset = topIndicator == nil ? 0 : 1
@@ -1268,7 +1290,30 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if let bottom = bottomIndicator?.animation {
             runs.append(bottom.shifted(byX: 0, y: assembled.count - 1))
         }
-        return (assembled, moved, runs)
+        return (
+            assembled, moved, runs,
+            slidClaims(rowClaims, handler: handler, lineCount: slidRows.count, topOffset: topOffset))
+    }
+
+    /// The rows' own claims, moved exactly as ``slidRuns(_:handler:lineCount:topOffset:)``
+    /// moves the runs — same slide, same indicator offset, same drop for a line that
+    /// slid off screen. Beside that function rather than a second spelling of the
+    /// arithmetic: a claim and the run on its own row disagreeing about where they are
+    /// fades the wrong line, every frame.
+    private func slidClaims(
+        _ claims: [OpacityRegion], handler: ItemListHandler<SelectionValue>,
+        lineCount: Int, topOffset: Int
+    ) -> [OpacityRegion] {
+        claims.compactMap { claim in
+            var y = claim.offsetY
+            if handler.overscrollState.excursion != 0 {
+                guard let moved = handler.overscrollState.slidRange(
+                    yStart: y, height: 1, lineCount: lineCount)
+                else { return nil }
+                y = moved.yStart
+            }
+            return claim.shifted(byX: 0, y: y + topOffset - claim.offsetY)
+        }
     }
 
     /// One run per breathing line, moved by the overscroll slide the way
@@ -1379,7 +1424,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         bar: [String],
         style: any ListStyle,
         context: RenderContext
-    ) -> (lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun]) {
+    ) -> (
+        lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
+        claims: [OpacityRegion]
+    ) {
         let palette = context.environment.palette
         let contentHeight = bar.count
         let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
@@ -1394,6 +1442,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// among `lines` — turned into runs at the end, after the reorder clip
         /// and the overscroll slide (see composeRowLines).
         var pulseRuns: [RowRun] = []
+        /// What the list itself painted on the rows and owes a blend for — the
+        /// selection marks and the still backgrounds — travelling beside the runs
+        /// because both are positioned by LINE and both take the same slide.
+        var rowClaims: [OpacityRegion] = []
         var sectionContentIndex = 0
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
@@ -1422,7 +1474,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 if remaining <= 0 { break }
                 budget = remaining
             }
-            let (styledLines, pulseFrames, childRuns) = clipRow(
+            let (styledLines, pulseFrames, childRuns, rowRegions) = clipRow(
                 rendered,
                 topClip: rowIndex == origin.offset ? origin.topClip : 0,
                 budget: budget)
@@ -1456,6 +1508,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // rejected in `renderRow` if they reached past the content column,
             // which is the same boundary the hard clip above enforces.
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
+            rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
             ranges.append((
                 rowIndex: rowIndex,
                 yStart: yStart,
@@ -1480,7 +1533,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return (
             slid.enumerated().map { $0.element + barCell(at: $0.offset) },
             slidRanges(ranges, handler: handler, lineCount: slid.count),
-            slidRuns(pulseRuns, handler: handler, lineCount: slid.count, topOffset: 0))
+            slidRuns(pulseRuns, handler: handler, lineCount: slid.count, topOffset: 0),
+            slidClaims(rowClaims, handler: handler, lineCount: slid.count, topOffset: 0))
     }
 
     /// A row's lines, its pulse frames and its own runs, clipped TOGETHER.
@@ -1499,10 +1553,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     ///     not to clip through the slot).
     private func clipRow(
         _ rendered: RenderedRow, topClip: Int, budget: Int?
-    ) -> (lines: [String], pulseFrames: [[String]]?, childRuns: [RowRun]) {
+    ) -> (
+        lines: [String], pulseFrames: [[String]]?, childRuns: [RowRun], claims: [OpacityRegion]
+    ) {
         var lines = rendered.lines
         var pulseFrames = rendered.pulseFrames
         var childRuns = rendered.childRuns
+        // Clipped with the lines, by the same arithmetic: a claim names a line by
+        // index, so lines taken off the FRONT move every survivor down by as many.
+        var claims = rendered.claims
         if topClip > 0 {
             let clipped = min(topClip, lines.count - 1)
             lines.removeFirst(clipped)
@@ -1510,13 +1569,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             childRuns = childRuns.compactMap {
                 $0.y >= clipped ? $0.moved(to: $0.y - clipped) : nil
             }
+            claims = claims.compactMap {
+                $0.offsetY >= clipped ? $0.shifted(byX: 0, y: -clipped) : nil
+            }
         }
         if let budget, lines.count > budget {
             let dropped = lines.count - budget
             lines.removeLast(dropped)
             pulseFrames?.removeLast(dropped)
         }
-        return (lines, pulseFrames, childRuns.filter { $0.y < lines.count })
+        return (
+            lines, pulseFrames, childRuns.filter { $0.y < lines.count },
+            claims.filter { $0.offsetY < lines.count })
     }
 
     /// Clips a reorder frame's overrun — away from the SLOT, never through it.
@@ -2671,7 +2735,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             : RowSelectionIndicator(glyph: " ", color: palette.foregroundTertiary)
         let gutter =
             indicator.isBlank
-            ? " " : ANSIRenderer.colorize(indicator.glyph, foreground: indicator.color)
+            ? " " : ANSIRenderer.colorize(indicator.glyph, foreground: indicator.color.opaqueSpelling)
+
+        /// The mark and the fill this row owes, per line, from the one derivation
+        /// `Table` also calls. `cells` is empty: a list row's content is a child
+        /// buffer that claims for itself, and `attachRowOpacity` carries those up.
+        func claims(over backgroundColor: Color?) -> [OpacityRegion] {
+            (0..<row.buffer.lines.count).flatMap { line in
+                SelectableRowClaims.claims(
+                    line: line, width: rowWidth, cells: 0..<0, ink: nil,
+                    mark: line == 0 && !indicator.isBlank ? indicator.color : nil,
+                    fill: backgroundColor)
+            }
+        }
 
         // Check for badge on the row (only for content rows, on first line only)
         let badge = row.badge
@@ -2739,8 +2815,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 pulseFrames: nil, childRuns: [])
         }
         guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
+            let fill = background.claimableFill
             return RenderedRow(
-                lines: lines(over: background.colorNow), pulseFrames: nil, childRuns: childRuns)
+                lines: lines(over: fill?.opaqueSpelling ?? background.colorNow),
+                pulseFrames: nil, childRuns: childRuns, claims: claims(over: fill))
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
         // on the same line would be overwritten by it — two animations claiming
@@ -2762,9 +2840,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // one run per LINE, carrying that line at every point of the cycle.
         let perStep = cycle.colors(dim: dim, bright: bright).map { lines(over: $0) }
         let step = cycle.step % max(1, perStep.count)
+        // A breathing fill claims nothing and needs to: `accentFillPulse` spends a
+        // translucent tint's alpha against the page at both ends (§29), so every
+        // frame states a concrete colour. The MARK still claims — it is drawn into
+        // the line the run replaces, and `resolvingOpacity` re-blends a covered run's
+        // frames through the claim.
         return RenderedRow(
             lines: perStep[step],
-            pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } })
+            pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } },
+            claims: claims(over: nil))
     }
 
     /// A row's rendered lines, plus — when its background breathes — every frame
@@ -2779,6 +2863,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// already past the row's leading pad. Empty for the overwhelming
         /// majority of rows.
         var childRuns: [RowRun] = []
+
+        /// What the LIST itself painted on these lines and owes a blend for: the
+        /// selection mark, and a still background. `offsetY` indexes ``lines``.
+        ///
+        /// Not the row's content — that is a child buffer with its own regions, which
+        /// `attachRowOpacity` already carries up. These are the two things the list
+        /// draws around it, from the same derivation `Table` calls.
+        var claims: [OpacityRegion] = []
     }
 
     /// One animated run positioned within the lines being assembled: `y` is the
@@ -2952,6 +3044,11 @@ struct _ListContentView: View, Renderable {
     /// container shifts them past its border along with the lines themselves.
     var runs: [AnimatedCellRun] = []
 
+    /// The rows' own claims — the selection marks and the still backgrounds the
+    /// list paints, positioned and travelling the same way. The rows' CONTENT
+    /// claims for itself and arrives separately, through `attachRowOpacity`.
+    var claims: [OpacityRegion] = []
+
     var body: Never {
         fatalError("_ListContentView renders via Renderable")
     }
@@ -2961,7 +3058,9 @@ struct _ListContentView: View, Renderable {
         // A measure pass draws nothing, so a run left on it would describe
         // cells that were never on screen — and keep the clock alive from a
         // pass that produced no frame.
-        if !context.isMeasuring { buffer.animatedCells = runs }
+        guard !context.isMeasuring else { return buffer }
+        buffer.animatedCells = runs
+        buffer.opacityRegions = claims
         return buffer
     }
 }
