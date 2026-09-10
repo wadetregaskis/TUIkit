@@ -1026,8 +1026,9 @@ extension RenderLoop {
         // reason: a faded item in the status bar fades toward the STATUS BAR's
         // background, not the page's, and resolving all three against
         // `palette.background` would be right only where the theme happens to
-        // paint them alike. Nothing here does anything until `.opacity` starts
-        // emitting regions; it is the sink being put in place first.
+        // paint them alike. That case is live now rather than hypothetical:
+        // `StatusBarState.highlightColor` and `.labelColor` are public, and their
+        // runs claim, so a faded shortcut key resolves here — against the bar.
         let palette = environment.palette
         let buffer = buffer.resolvingOpacity(surface: palette.background, palette: palette)
         let appHeaderBuffer = appHeaderBuffer?.resolvingOpacity(

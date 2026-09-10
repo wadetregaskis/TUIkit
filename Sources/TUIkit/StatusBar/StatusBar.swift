@@ -257,7 +257,7 @@ private struct _StatusBarCore: View, Renderable {
             itemRowOffset = tips.count
             // The placed columns on `result.placedColumns` are
             // already absolute on a single-row compact bar.
-            return applyHitTestRegions(
+            return finished(
                 buffer: buffer,
                 layouts: layouts,
                 columns: result.placedColumns,
@@ -285,7 +285,7 @@ private struct _StatusBarCore: View, Renderable {
             }
             itemColumnOffset = 0
             itemRowOffset = 1 + tips.count
-            return applyHitTestRegions(
+            return finished(
                 buffer: buffer,
                 layouts: layouts,
                 columns: result.placedColumns,
@@ -310,7 +310,7 @@ private struct _StatusBarCore: View, Renderable {
             // single-space content padding it added on the left.
             itemColumnOffset = 1 + 1
             itemRowOffset = 1 + tips.count
-            return applyHitTestRegions(
+            return finished(
                 buffer: buffer,
                 layouts: layouts,
                 columns: result.placedColumns,
@@ -379,7 +379,7 @@ private struct _StatusBarCore: View, Renderable {
             item.shortcut,
             with: {
                 var textStyle = TextStyle()
-                textStyle.foregroundColor = highlightColor
+                textStyle.foregroundColor = highlightColor.opaqueSpelling
                 textStyle.isBold = true
                 textStyle.isUnderlined = isHovered
                 return textStyle
@@ -404,7 +404,7 @@ private struct _StatusBarCore: View, Renderable {
                 " " + effectiveLabel,
                 with: {
                     var textStyle = TextStyle()
-                    textStyle.foregroundColor = color
+                    textStyle.foregroundColor = color.opaqueSpelling
                     textStyle.isUnderlined = isHovered
                     return textStyle
                 }()
@@ -433,6 +433,82 @@ private struct _StatusBarCore: View, Renderable {
     /// the surrounding chrome. Returns `buffer` unchanged when
     /// the mouse dispatcher isn't available (measure pass etc.)
     /// or when none of the items are clickable.
+    /// Everything a laid-out bar owes its items, in one call: the claims for their
+    /// two configurable colours, then the hit regions that make them clickable.
+    ///
+    /// One function because all three styles want both, with the same arguments —
+    /// they differ only in the offsets — and because a style added later must not be
+    /// able to remember one and forget the other. That is what happened to the
+    /// header's side payloads twice (see `AppHeader`).
+    private func finished(
+        buffer: FrameBuffer,
+        layouts: [ItemLayout],
+        columns: [Int],
+        columnOffset: Int,
+        rowOffset: Int,
+        context: RenderContext
+    ) -> FrameBuffer {
+        applyHitTestRegions(
+            buffer: applyOpacityClaims(
+                buffer: buffer, layouts: layouts, columns: columns,
+                columnOffset: columnOffset, rowOffset: rowOffset),
+            layouts: layouts, columns: columns, columnOffset: columnOffset,
+            rowOffset: rowOffset, context: context)
+    }
+
+    /// The claims a bar's items owe when either configurable colour is faded.
+    ///
+    /// ``StatusBarState/highlightColor`` and ``StatusBarState/labelColor`` are
+    /// public `var`s an app sets, and each paints a DIFFERENT run of every item:
+    /// the shortcut and the label. So one claim over the row would fade one of them
+    /// at the other's alpha, and the two runs are claimed separately — per item,
+    /// because the items are spread across the row by the alignment.
+    ///
+    /// `columns` is the same per-item placement ``applyHitTestRegions`` uses, for
+    /// the same reason: only the alignment knows where an item ended up, and a claim
+    /// computed from the item widths alone would be wrong under `.justified`.
+    ///
+    /// - Parameters:
+    ///   - buffer: The bar's buffer.
+    ///   - layouts: The items, in the order they were placed.
+    ///   - columns: Where each item's display string starts, in the LINE.
+    ///   - columnOffset: What the line itself is inset by (a wall, for a bordered
+    ///     bar).
+    ///   - rowOffset: Which row of the buffer the items are on.
+    /// - Returns: The buffer, with the claims appended.
+    private func applyOpacityClaims(
+        buffer: FrameBuffer,
+        layouts: [ItemLayout],
+        columns: [Int],
+        columnOffset: Int,
+        rowOffset: Int
+    ) -> FrameBuffer {
+        // Asked of the two colours before anything is walked: an app that has not
+        // faded either — which is every app until one does — pays one comparison.
+        guard !highlightColor.isOpaque || labelColor?.isOpaque == false else { return buffer }
+        var result = buffer
+        for (layout, columnInLine) in zip(layouts, columns) {
+            let start = columnOffset + columnInLine
+            // The shortcut, then the label — which carries the separating space, so
+            // the two runs together are exactly `visibleWidth` and neither the gap
+            // nor the last cell belongs to nobody.
+            let shortcutWidth = layout.item.shortcut.strippedLength
+            if let claim = OpacityRegion.claim(
+                offsetX: start, offsetY: rowOffset, width: shortcutWidth, height: 1,
+                ink: highlightColor)
+            {
+                result.opacityRegions.append(claim)
+            }
+            if let claim = OpacityRegion.claim(
+                offsetX: start + shortcutWidth, offsetY: rowOffset,
+                width: layout.visibleWidth - shortcutWidth, height: 1, ink: labelColor)
+            {
+                result.opacityRegions.append(claim)
+            }
+        }
+        return result
+    }
+
     private func applyHitTestRegions(
         buffer: FrameBuffer,
         layouts: [ItemLayout],

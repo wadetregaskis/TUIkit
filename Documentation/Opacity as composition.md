@@ -1085,7 +1085,7 @@ them among the three:
 | `Text` concatenation | **fixed, §14** |
 | translucent gradient stops | **background fixed, §15**; `Text`'s ramped ink open |
 | `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer`, 3+ sites |
-| `StatusBarState.highlightColor` / `.labelColor` | 2 sites |
+| `StatusBarState.highlightColor` / `.labelColor` | 2 sites — **fixed, §24** |
 | `.style(.text) { $0.foreground = … }` | the cascade's non-`Text` readers |
 | `.colorMultiply(…)` | a silent drop, not a trap |
 | `ColorPicker` with a translucent binding | the swatch — and `supportsOpacity` is now a real parity gap |
@@ -1124,7 +1124,8 @@ whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
 `Text`'s attributed-run arm; `.opacity(_:)` on a view (all three channels);
 `ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree; `.border` and
 every box the framework draws through `BorderRenderer` (§18); `Divider` and
-`Spinner` (§19); a `Toggle`'s and `RadioButton`'s own indicator glyphs (§23).
+`Spinner` (§19); a `Toggle`'s and `RadioButton`'s own indicator glyphs (§23);
+`.listRowBackground` (§22); the status bar's two configurable colours (§24).
 
 Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
 `Text`'s ramped ink, and per-cell ramps.
@@ -1526,3 +1527,36 @@ would put the closing bracket's claim one cell to the left.
 As everywhere else in this design, a pulsing indicator claims nothing: the run
 repaints those cells from its own frames, and a region carrying the phase drawn now
 would resolve every later phase at the wrong alpha.
+
+
+## 24. The status bar's two colours, and the sink that was already right (2026-09-09)
+
+`StatusBarState.highlightColor` and `.labelColor` are public `var`s an app sets, and
+each paints a *different run of every item*: the shortcut key and the label. So one
+claim over the bar's row would fade one of them at the other's alpha. Two runs per
+item, claimed separately.
+
+Per **item**, not per bar, because the alignment spreads them: `.justified` puts the
+system items at the far end. The columns come from the same `placedColumns` the hit
+regions use, and for the same reason — only the alignment knows where an item ended
+up, and a claim derived from the item widths alone is wrong the moment the bar is not
+left-packed.
+
+The two runs are adjacent and disjoint by construction: the shortcut is
+`shortcut.strippedLength` cells and the label takes the rest of `visibleWidth`,
+*including the separating space*. Splitting it any other way leaves a cell belonging
+to nobody, or — worse — to both, which would resolve it at the product of the two
+alphas.
+
+All three bar styles now go through one `finished(buffer:…)` rather than each calling
+`applyHitTestRegions` directly. Not tidiness: a style added later must not be able to
+remember the hit regions and forget the claims. That exact omission happened twice to
+the app header's side payloads.
+
+### 24.1 The sink was built before there was anything to put in it
+
+`RenderLoop` already resolved the status bar buffer against
+`palette.statusBarBackground` rather than `palette.background`, with a comment saying
+a faded item in the bar must fade toward *the bar*. It was written before anything
+emitted a region there — "it is the sink being put in place first". It was right, and
+this is the first thing to use it. The comment now says so.
