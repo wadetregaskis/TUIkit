@@ -1128,7 +1128,8 @@ so they answer in two ways rather than one:
 ### 16.3 Honoured as of this branch
 
 `Color` as a view; `.background` with a flat colour; `.background` with a ramp
-whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
+whose alpha is uniform or varies only down the page — **or, from §34.2, only along
+one**; `Text`'s single-style arm;
 `Text`'s attributed-run arm; `.opacity(_:)` on a view (all three channels);
 `ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree; `.border` and
 every box the framework draws through `BorderRenderer` (§18); `Divider` and
