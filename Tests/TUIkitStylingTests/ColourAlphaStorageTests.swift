@@ -84,6 +84,42 @@ struct ColourAlphaStorageTests {
         }
     }
 
+    /// **The derivation the table above cannot hold**, because it returns
+    /// `[Color]` rather than `Color` — and the one that was actually broken.
+    ///
+    /// `quantisedRamp` repairs a ramp whose 256-colour downsample is not monotonic
+    /// by retiring a palette entry and re-deriving every sample that had chosen it.
+    /// That re-derivation built a bare `.palette(...)`, so the entries the repair
+    /// touched came back OPAQUE while their untouched neighbours kept their alpha.
+    /// One translucent gradient therefore rendered differently per entry at
+    /// 256-colour depth and correctly at truecolor, with no diagnostic — an opaque
+    /// colour never trips the emitter's assertion.
+    ///
+    /// The fixture is not arbitrary and must not be tidied. It was found by
+    /// brute-forcing ramps until one actually reached the repair: a near-black
+    /// ramp of 16 entries, where the 240-entry palette is sparse enough to
+    /// quantise non-monotonically. The obvious-looking fixture (a mid-tone ramp
+    /// across the cube) never reaches the repair at all, so the test passed with
+    /// the fix removed — verified, which is the only reason this comment exists.
+    ///
+    /// It loses TWO of sixteen entries rather than all of them, which is the
+    /// diagnostic shape: a whole-ramp loss could be any bug, while a partial one
+    /// is specifically the repair.
+    @Test("A quantised ramp carries alpha through the monotonicity repair")
+    func quantisedRampCarriesAlpha() {
+        var from = Color.rgb(0, 0, 0)
+        var to = Color.rgb(24, 12, 24)
+        from.alpha = 128
+        to.alpha = 128
+        let ramp = Color.quantisedRamp(
+            Gradient(colors: [from, to]), count: 16, depth: .palette256)
+        #expect(ramp.count == 16, "the fixture produced a ramp: \(ramp.count)")
+        let opaque = ramp.enumerated().filter { $0.element.alpha != 128 }
+        #expect(
+            opaque.isEmpty,
+            "entries \(opaque.map(\.offset)) came back at \(opaque.map(\.element.alpha))")
+    }
+
     /// The one that would otherwise be silent AND fatal: a semantic colour
     /// resolves through the palette, and the alpha belongs to the value the
     /// caller wrote, not to the palette's answer.

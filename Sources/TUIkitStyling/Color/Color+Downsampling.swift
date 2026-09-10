@@ -177,9 +177,16 @@ extension Color {
             // answer at the cost of a full sweep per pass.
             for index in entries.indices where paletteIndex(of: entries[index]) == retired {
                 guard let rgb = sampled[index].rgbComponents else { continue }
-                entries[index] = .palette(
+                // `.carryingAlpha` for the reason every other derivation in this
+                // file has one: a ramp entry the repair remaps came back OPAQUE
+                // while its untouched neighbours kept their alpha, so one
+                // translucent gradient rendered differently per entry at 256-colour
+                // depth and identically at truecolor — silently, since an opaque
+                // colour never trips the emitter's assertion.
+                entries[index] = Color.palette(
                     nearestPalette256Index(
-                        red: rgb.red, green: rgb.green, blue: rgb.blue, among: survivors))
+                        red: rgb.red, green: rgb.green, blue: rgb.blue, among: survivors)
+                ).carryingAlpha(of: sampled[index])
             }
         }
 
