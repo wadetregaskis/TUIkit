@@ -1650,3 +1650,36 @@ State the opaque spelling in the bytes, because an emitter has no backdrop; put 
 alpha in a region, because only a composite knows what is behind. Skipping the second
 half leaves the colour at full strength and trips the emitter's assertion in a debug
 build, which is the intended way to find out.
+
+
+## 27. Two claims on one cell, and the path that only took the first (2026-09-10)
+
+§13 records a bug and its fix: `.foregroundStyle(.green.opacity(0.4))
+.background(.red.opacity(0.4))` stamps two independent regions over the same cells —
+one carrying ink 0.4, one carrying field 0.4 — and a resolver that took the *first*
+match dropped one of them. The fix was to multiply ink and field across every
+covering region while still taking the layer from the first, because a layer's alpha
+has already been nested by `OpacityFade.fading` and a colour's has not.
+
+**That fix reached the line walk and not the run walk.** `resolvingOpacity` blends an
+`AnimatedCellRun`'s frames as well as the lines — it has to, or a run built inside a
+fade would replay unfaded over the faded picture — and its per-column closure still
+read `covering.first`.
+
+So the same cell resolved two ways depending on *when* you looked at it. The frame
+the render drew came out faded on both channels; the frame the replay spliced a tick
+later had the background back at full strength, and every tick after that repainted
+it. A `Spinner` inside those two modifiers is the whole repro. It could not be found
+by looking at a rendered buffer, because the bug is not in the buffer — it is in the
+frames travelling beside it.
+
+Both walks now call one `foldedAlpha(of:atColumn:row:substituting:)`, which is where
+the asymmetry between the layer channel and the other two is explained. The
+`substituting:` closure is what lets the cycling-run path substitute a phase for the
+layer while the ink and field ride along, so the three callers share the fold without
+sharing the phase.
+
+`runFramesFoldEveryClaim` asserts the frames against the line rather than against a
+constant: whatever the line did with two claims, the frame spliced at the tick just
+drawn has to do too. That is the property, and stating it that way is what makes the
+test outlive the arithmetic.

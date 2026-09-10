@@ -286,6 +286,49 @@ struct ColourAlphaResolutionTests {
             resolved.lines[0].contains(codes(Color.green.opacity(0.5, over: .black))),
             "blended toward the surface: \(resolved.lines[0].debugDescription)")
     }
+
+    /// **The run-path twin of the ink-and-field fold.**
+    ///
+    /// Two independent claims on one cell — an ink one and a field one, which is
+    /// what `.foregroundStyle(…opacity).background(…opacity)` stamps — must
+    /// multiply, and the run's frames took `covering.first` where the line
+    /// multiplied. That is not a small difference: the drawn line came out faded
+    /// on both channels and the very next replay tick painted the background back
+    /// at full strength, so the bug appeared only once the animation moved.
+    @Test("A run's frames fold both claims, exactly as the line does")
+    func runFramesFoldEveryClaim() {
+        let ink = Color.rgb(40, 220, 40)
+        let field = Color.rgb(220, 40, 40)
+        let frame = { (glyph: String) in
+            ANSIRenderer.colorize(glyph, foreground: ink, background: field)
+        }
+        var source = FrameBuffer(lines: [frame("AA")], width: 2, lineWidths: [2])
+        source.animatedCells = [
+            AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 2, frames: [frame("AA"), frame("BB")],
+                clock: .content)
+        ]
+        source.opacityRegions = [
+            OpacityRegion(
+                offsetX: 0, offsetY: 0, width: 2, height: 1, opacity: 1,
+                inkOpacity: 0.5, fieldOpacity: 1),
+            OpacityRegion(
+                offsetX: 0, offsetY: 0, width: 2, height: 1, opacity: 1,
+                inkOpacity: 1, fieldOpacity: 0.5),
+        ]
+        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
+        let fadedField = backgroundCodes(field.opacity(0.5, over: .black))
+        #expect(resolved.animatedCells.count == 1)
+        for (index, drawn) in (resolved.animatedCells.first?.frames ?? []).enumerated() {
+            #expect(
+                drawn.contains(fadedField),
+                "frame \(index) kept the field at full strength: \(drawn.debugDescription)")
+        }
+        // The line is the oracle: whatever it did with two claims, the frame the
+        // loop splices at the tick just drawn must do too.
+        #expect(
+            resolved.lines[0].contains(fadedField), "\(resolved.lines[0].debugDescription)")
+    }
 }
 
 // MARK: - A translucent colour used as a view

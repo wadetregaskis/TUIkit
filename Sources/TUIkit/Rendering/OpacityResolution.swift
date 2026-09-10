@@ -154,44 +154,8 @@ extension FrameBuffer {
                 columns: start..<last,
                 destinationShift: position.x,
                 alpha: { column in
-                    // The LAYER comes from the first match, and the INK and
-                    // FIELD are multiplied across every match. The asymmetry is
-                    // not a compromise; the two kinds of claim arrive differently.
-                    //
-                    // A layer's alpha nests, and `OpacityFade.fading` has already
-                    // done that arithmetic: it scales the factor into every
-                    // region it carries up before appending its own rectangle, so
-                    // the innermost region covering a cell already holds the
-                    // product of every `.opacity` outside it. Multiplying those
-                    // again here would count each one twice. It also could not be
-                    // moved to this loop even if that were free, because a
-                    // CYCLING region carries a list of phases and two cycles of
-                    // different lengths have no common phase index to multiply
-                    // at — pre-multiplying a scalar into the inner cycle is what
-                    // makes a breathing badge inside a fading panel expressible.
-                    //
-                    // A colour's alpha does not nest and `fading` never touches
-                    // it, so first-match-wins silently DROPPED one of two
-                    // independent claims on the same cell. Reachable in one line:
-                    // `Text("hi").foregroundStyle(.green.opacity(0.4))
-                    // .background(.red.opacity(0.4))` stamps (ink 0.4) for the
-                    // text and (field 0.4) for the background over the same
-                    // cells, and the text's region won — so the background
-                    // rendered at FULL strength under the letters and correctly
-                    // past the end of the line, which on ragged wrapped text is a
-                    // visible two-tone block.
-                    var result: FrameBuffer.CellAlpha?
-                    for region in covering where region.contains(column: column, row: row) {
-                        guard let cell = substituting(region) else { continue }
-                        guard var accumulated = result else {
-                            result = cell
-                            continue
-                        }
-                        accumulated.ink *= cell.ink
-                        accumulated.field *= cell.field
-                        result = accumulated
-                    }
-                    return result
+                    Self.foldedAlpha(
+                        of: covering, atColumn: column, row: row, substituting: substituting)
                 },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground)
@@ -266,9 +230,19 @@ extension FrameBuffer {
                     columns: run.offsetX..<(run.offsetX + run.width),
                     destinationShift: position.x,
                     fieldsFrom: ownLine,
+                    // The SAME fold the line took, not `covering.first`. A run
+                    // is spliced over cells the lines already answered for, so
+                    // taking one region here and multiplying there made the very
+                    // same cell resolve two ways: a `Spinner` inside
+                    // `.foregroundStyle(.green.opacity(0.4)).background(.red
+                    // .opacity(0.4))` drew faded on both channels and then
+                    // replayed with the background back at full strength, once
+                    // per tick, forever. §13's bug, which the line path was fixed
+                    // for and this one was not — so the two now ask one function.
                     alpha: { column in
-                        covering.first { $0.contains(column: column, row: run.offsetY) }?
-                            .cellAlpha
+                        Self.foldedAlpha(
+                            of: covering, atColumn: column, row: run.offsetY,
+                            substituting: { $0.cellAlpha })
                     },
                     surface: resolvedSurface,
                     defaultForeground: resolvedForeground)
@@ -279,6 +253,60 @@ extension FrameBuffer {
         }
         result.animatedCells += Self.cyclingRuns(
             of: translucent, over: lines, rebuilding: rebuild)
+        return result
+    }
+
+    /// The alpha one cell owes, folded across every region that covers it.
+    ///
+    /// The LAYER comes from the first match, and the INK and FIELD are multiplied
+    /// across every match. The asymmetry is not a compromise; the two kinds of
+    /// claim arrive differently.
+    ///
+    /// A layer's alpha nests, and `OpacityFade.fading` has already done that
+    /// arithmetic: it scales the factor into every region it carries up before
+    /// appending its own rectangle, so the innermost region covering a cell
+    /// already holds the product of every `.opacity` outside it. Multiplying those
+    /// again here would count each one twice. It also could not be moved to this
+    /// loop even if that were free, because a CYCLING region carries a list of
+    /// phases and two cycles of different lengths have no common phase index to
+    /// multiply at — pre-multiplying a scalar into the inner cycle is what makes a
+    /// breathing badge inside a fading panel expressible.
+    ///
+    /// A colour's alpha does not nest and `fading` never touches it, so
+    /// first-match-wins silently DROPPED one of two independent claims on the same
+    /// cell. Reachable in one line:
+    /// `Text("hi").foregroundStyle(.green.opacity(0.4)).background(.red.opacity(0.4))`
+    /// stamps (ink 0.4) for the text and (field 0.4) for the background over the
+    /// same cells, and the text's region won — so the background rendered at FULL
+    /// strength under the letters and correctly past the end of the line, which on
+    /// ragged wrapped text is a visible two-tone block.
+    ///
+    /// One function, called from both the line walk and the run-frame walk,
+    /// because those are the two places the answer is needed and they had already
+    /// drifted: the line multiplied and the run took the first match.
+    ///
+    /// - Parameters:
+    ///   - regions: The regions already narrowed to this row.
+    ///   - column: The cell's column, in the source buffer's own coordinates.
+    ///   - row: The cell's row, for the containment test.
+    ///   - substituting: What a region's alpha is *right now* — its own
+    ///     ``OpacityRegion/cellAlpha``, or a cycling region's phase at one tick.
+    ///     `nil` drops that region from the fold.
+    private static func foldedAlpha(
+        of regions: [OpacityRegion], atColumn column: Int, row: Int,
+        substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
+    ) -> FrameBuffer.CellAlpha? {
+        var result: FrameBuffer.CellAlpha?
+        for region in regions where region.contains(column: column, row: row) {
+            guard let cell = substituting(region) else { continue }
+            guard var accumulated = result else {
+                result = cell
+                continue
+            }
+            accumulated.ink *= cell.ink
+            accumulated.field *= cell.field
+            result = accumulated
+        }
         return result
     }
 
