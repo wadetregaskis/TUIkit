@@ -33,12 +33,19 @@ import TUIkitStyling
 /// ``AnimatedColor``, which hands the run loop the whole cycle and costs no
 /// render passes at all. See <doc:AnimatingYourOwnView>.
 package enum ColorAnimation {
-    /// A colour's animatable data: its resolved red, green and blue.
+    /// A colour's animatable data: its resolved red, green, blue and alpha.
     ///
     /// Nested pairs because ``VectorArithmetic`` is a two-method protocol; the
     /// components are `Double` so the interpolation happens at full precision
     /// and only the drawn colour is rounded back to bytes.
-    package typealias Data = AnimatablePair<Double, AnimatablePair<Double, Double>>
+    ///
+    /// Alpha is a channel here rather than something carried around the
+    /// animation, because it is a thing that MOVES: fading a translucent
+    /// highlight in is a change of alpha and nothing else, and snapping it while
+    /// interpolating the other three would animate the wrong half of the colour.
+    package typealias Data = AnimatablePair<
+        Double, AnimatablePair<Double, AnimatablePair<Double, Double>>
+    >
 
     /// The colour to draw for `target` this frame.
     ///
@@ -65,7 +72,7 @@ package enum ColorAnimation {
 
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(owner), slot: slot)
-        let wanted = data(components)
+        let wanted = data(components, alpha: resolved.alpha)
         let drawn = storage.animations.value(
             for: key,
             target: wanted,
@@ -81,14 +88,21 @@ package enum ColorAnimation {
         return color(drawn)
     }
 
-    private static func data(_ rgb: (red: UInt8, green: UInt8, blue: UInt8)) -> Data {
-        AnimatablePair(Double(rgb.red), AnimatablePair(Double(rgb.green), Double(rgb.blue)))
+    private static func data(
+        _ rgb: (red: UInt8, green: UInt8, blue: UInt8), alpha: UInt8
+    ) -> Data {
+        AnimatablePair(
+            Double(rgb.red),
+            AnimatablePair(Double(rgb.green), AnimatablePair(Double(rgb.blue), Double(alpha))))
     }
 
     /// A colour back from its components, clamped — a spring overshoots, and
     /// 300 is not a channel.
     private static func color(_ data: Data) -> Color {
-        Color.rgb(channel(data.first), channel(data.second.first), channel(data.second.second))
+        var result = Color.rgb(
+            channel(data.first), channel(data.second.first), channel(data.second.second.first))
+        result.alpha = channel(data.second.second.second)
+        return result
     }
 
     private static func channel(_ value: Double) -> UInt8 {

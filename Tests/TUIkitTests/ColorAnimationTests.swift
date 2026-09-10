@@ -23,11 +23,15 @@ struct ColorAnimationTests {
         }
 
         func draw<V: View>(_ view: V, atMillis millis: Int) -> [String] {
+            buffer(view, atMillis: millis).lines
+        }
+
+        func buffer<V: View>(_ view: V, atMillis millis: Int) -> FrameBuffer {
             context.environment.frameNowNanos = Int64(millis) * 1_000_000
             let storage = context.environment.stateStorage!
             storage.beginRenderPass()
             defer { storage.endRenderPass() }
-            return renderToBuffer(view, context: context).lines
+            return renderToBuffer(view, context: context)
         }
     }
 
@@ -150,5 +154,42 @@ struct ColorAnimationTests {
         #expect(half.dropFirst().first?.contains("0;100;0") == true, "got \(half)")
         // The outer never changed, so it must not have moved either.
         #expect(half.first?.contains("0;0;200") == true, "got \(half)")
+    }
+
+    /// **Alpha is a channel of the animation, not a property carried around it.**
+    ///
+    /// `ColorAnimation.Data` was red, green and blue, and the reassembly was
+    /// `Color.rgb(...)` — whose alpha defaults to opaque. So any colour animating
+    /// anywhere came out FULLY OPAQUE for the whole of the animation, and the
+    /// alpha reappeared only when the animation finished and `resolving` returned
+    /// `target` unchanged. Nothing painted a translucent colour before this
+    /// branch, so nothing noticed.
+    ///
+    /// Fading a translucent highlight in is a change of alpha and nothing else, so
+    /// interpolating the other three while snapping this one would animate the
+    /// wrong half of the colour.
+    @Test("A colour's alpha animates with the rest of it")
+    func alphaFades() {
+        func veil(_ alpha: UInt8) -> Color {
+            var colour = Color.red
+            colour.alpha = alpha
+            return colour
+        }
+        func fieldAlpha(_ buffer: FrameBuffer) -> Double? {
+            buffer.opacityRegions.first?.fieldOpacity
+        }
+
+        let screen = Screen(.linear(duration: 1))
+        _ = screen.buffer(veil(0), atMillis: 0)
+        // The frame the change lands on still shows the old value.
+        #expect(fieldAlpha(screen.buffer(veil(255), atMillis: 0)) == 0)
+
+        let midway = fieldAlpha(screen.buffer(veil(255), atMillis: 500))
+        #expect(
+            (midway ?? 0) > 0.1 && (midway ?? 1) < 0.9,
+            "partway between transparent and opaque, got \(String(describing: midway))")
+
+        let done = fieldAlpha(screen.buffer(veil(255), atMillis: 1_200))
+        #expect(done == nil, "and opaque at the end claims no region at all: \(String(describing: done))")
     }
 }
