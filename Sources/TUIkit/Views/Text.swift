@@ -841,7 +841,10 @@ extension Text: Renderable, Layoutable {
             while paddedLines.count < target {
                 paddedLines.append("")
                 paddedWidths.append(0)
-                perLineClaims.append([])
+                // Only when there is something to stay parallel WITH: an empty
+                // `perLineClaims` means no claims at all, and padding it would
+                // make it a ragged array of nothings instead.
+                if !perLineClaims.isEmpty { perLineClaims.append([]) }
             }
         }
 
@@ -870,6 +873,14 @@ extension Text: Renderable, Layoutable {
     /// three parallel arrays that must agree about which row is which, and the one
     /// derived a different way is the one that drifts.
     private static func rowed(_ perLine: [[OpacityRegion]], spacing: Int) -> [OpacityRegion] {
+        // EMPTY means "no claims anywhere", not "one empty list per line". The
+        // distinction is the whole cost of this feature on a page with no
+        // translucency: spelling the nothing case as `Array(repeating: [], count:)`
+        // allocated an array per `Text` per frame and then interleaved and
+        // flat-mapped it to arrive back at nothing, which measured as `fanout`
+        // +4.3%, `textwall` +2.1% and four more scenarios slower with intervals
+        // clear of zero. Every producer below returns `[]` for it.
+        guard !perLine.isEmpty else { return [] }
         let spaced = LineSpacingRows.interleaved(perLine, spacing: spacing, blank: [])
         return spaced.enumerated().flatMap { row, claims in
             claims.map { claim in
@@ -892,9 +903,8 @@ extension Text: Renderable, Layoutable {
     ) -> [[OpacityRegion]] {
         let ink = style.foregroundColor?.alpha ?? .max
         let field = style.backgroundColor?.alpha ?? .max
-        guard ink != .max || field != .max else {
-            return Array(repeating: [], count: lineWidths.count)
-        }
+        // `[]` rather than a list of empties — see `rowed`.
+        guard ink != .max || field != .max else { return [] }
         return lineWidths.map { width in
             guard width > 0 else { return [] }
             return [
@@ -926,7 +936,18 @@ extension Text: Renderable, Layoutable {
     private static func fragmentAlphaClaims(
         _ fragments: [[(text: String, run: Int)]], styles: [TextStyle]
     ) -> [[OpacityRegion]] {
-        fragments.map { line in
+        // Nothing translucent anywhere: answered from the STYLES, which are a
+        // handful, before touching the fragments. The walk below is a
+        // `strippedLength` per fragment per line — a grapheme scan in the general
+        // case — and every concatenated `Text` in an app would pay it every frame
+        // to discover that all its colours are opaque, which is the answer for
+        // essentially all of them.
+        guard
+            styles.contains(where: {
+                $0.foregroundColor?.isOpaque == false || $0.backgroundColor?.isOpaque == false
+            })
+        else { return [] }  // `[]` rather than a list of empties — see `rowed`.
+        return fragments.map { line in
             var claims: [OpacityRegion] = []
             var column = 0
             for fragment in line {
