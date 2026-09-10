@@ -2117,12 +2117,14 @@ work — two full render passes with `beginRenderPass`/`endRenderPass` around ea
 `focusNext()`, then `focus(id:)` against an explicit `.focusID`, all left the rows
 unfocused.
 
-So `_ListCore`'s arm is tested at the **seam** — the shape the shared derivation
+So `_ListCore`'s arm was tested at the **seam** — the shape the shared derivation
 produces for a list row, which paints no cells of its own — and its focused end-to-end
-path has no assertion. `Table`'s equivalent needs no focus (its ink comes from
-`.foregroundStyle`) and is tested end to end. This is a real hole, recorded rather
+path had no assertion. `Table`'s equivalent needs no focus (its ink comes from
+`.foregroundStyle`) and is tested end to end. That was recorded as a real hole rather
 than papered over with an unfocused render that would have passed for the wrong
 reason.
+
+**Closed in §36.8, and it was two mistakes rather than a limitation.**
 
 
 ## 34. The ramp cases: one was two, and the other is a cost (2026-09-10)
@@ -2453,3 +2455,32 @@ Two things fall out of routing the frames through `ClaimingRow`:
 - The claim is a run per equal alpha, which is the shape a moving ramp actually has:
   `.sweep`'s trail ramps from the control's opaque empty colour to a faded accent, so
   the alphas descend across the row and the tint's own alpha is the floor.
+
+### 36.8 §33.3's hole was two mistakes, not a limitation
+
+`_ListCore`'s focused path is testable headlessly. Both reasons the earlier attempt
+failed are ordinary:
+
+1. **The focus manager was never in the environment.** The context came from
+   `RenderContext(availableWidth:availableHeight:tuiContext:)`, which leaves
+   `environment.focusManager` nil — so the rows registered with nothing and no number
+   of render passes or `focus(id:)` calls could focus one. It has to be put there the
+   way the render loop does, which `WindowedFocusReachTests.renderFrame` had already
+   shown three files away. Two passes are still needed: the first is what registers,
+   and a row cannot be focused before it has said it exists.
+2. **The selected row was not the cursor row.** `_ListCore` computes a row's
+   `isFocused` as `handler.isCursorRow(rowIndex) && listHasFocus`, so the raw-accent
+   branch of `RowSelectionIndicator.forRow` needs the selection to be ON the keyboard
+   cursor. Selecting row 1 while the cursor sat on row 0 rendered the *unfocused* mark
+   — which is a composite through `opacity(_:over:)`, therefore opaque and correctly
+   unclaimed.
+
+The second is the one worth remembering. The first is a wiring mistake that a failing
+test reports honestly; the second produces a *passing-looking* render whose every
+visible feature — a `●`, a highlighted row — says "focused". §33.3 was right to refuse
+it as an assertion and wrong about why it could not get one.
+
+Three assertions, and the third is what makes the pair mean anything: the claim, the
+mark's bytes at their opaque spelling, and the same focused render with an OPAQUE tint
+claiming nothing. Without the third a broken claim derivation would still pass; without
+the first two a broken focus would.
