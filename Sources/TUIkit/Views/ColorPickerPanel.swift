@@ -110,12 +110,14 @@ public struct ColorPickerPanel: View {
     /// what keeps a *literal* binding to the key overload above — see
     /// ``LocalizedStringKey`` for why the concrete-`String` spelling does not.
     /// A generic parameter cannot carry a default, so the defaulted title lives
-    /// in ``init(selection:isPresented:)`` instead of here.
+    /// in ``init(selection:supportsOpacity:isPresented:)`` instead of here.
     ///
     /// - Parameters:
     ///   - title: The dialog title.
     ///   - selection: The colour to edit. Rewritten live on every change;
     ///     restored to the opening value on Cancel / `Esc`.
+    ///   - supportsOpacity: Whether the panel offers an opacity row. SwiftUI's
+    ///     default, `true`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     @_disfavoredOverload
@@ -144,6 +146,8 @@ public struct ColorPickerPanel: View {
     /// - Parameters:
     ///   - selection: The colour to edit. Rewritten live on every change;
     ///     restored to the opening value on Cancel / `Esc`.
+    ///   - supportsOpacity: Whether the panel offers an opacity row. SwiftUI's
+    ///     default, `true`.
     ///   - isPresented: Bound to the presenting `.modal`; Done and Cancel set
     ///     it false.
     public init(
