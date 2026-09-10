@@ -1078,23 +1078,31 @@ them among the three:
 | entry point | reaches |
 |---|---|
 | `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites — **fixed, §18** |
-| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `RadioButton` and `_ToggleCore`'s indicators — **fixed, §23**; `Table` and `PaintRenderer`'s flat arm open |
+| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `RadioButton` and `_ToggleCore`'s indicators — **fixed, §23**; `Table` and `_ListCore` — **fixed, §33**; `PaintRenderer`'s flat arm — **fixed, §34.1** |
 | `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **fixed, §21**; it was inconsistent, `restingControlFace` consuming the alpha while `accentPulse` carried it |
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` — **answered, §26.1** |
 | `.listRowBackground(…)` | one site — **fixed, §22** |
 | `Text` concatenation | **fixed, §14** |
-| translucent gradient stops | **background fixed, §15**; `Text`'s ramped ink open |
-| `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer`, 3+ sites |
+| translucent gradient stops | **background fixed, §15**, and its horizontal case, misclassified as per-cell — **fixed, §34.2**; `Text`'s ramped ink — **fixed, §34.1** |
+| `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer` — nineteen sites, not three — plus `Slider`, `Gauge` and `ProgressView`: **fixed, §31** |
 | `StatusBarState.highlightColor` / `.labelColor` | 2 sites — **fixed, §24** |
-| `.style(.text) { $0.foreground = … }` | the cascade's non-`Text` readers |
+| `.style(.text) { $0.foreground = … }` | the cascade's six non-`Text` readers — **fixed, §30** |
 | `.colorMultiply(…)` | a silent drop, not a trap — **fixed, §25** |
-| `ColorPicker` with a translucent binding | the swatch was **already right, §26**; `supportsOpacity` is a real parity gap and stays open |
+| `ColorPicker` with a translucent binding | the swatch was **already right, §26**; `supportsOpacity` — **built, §32** |
 
 Plus a whole second tier: `Palette` is a public protocol of plain
 `var …: Color { get }` members, and nothing normalises what a custom palette
 returns. One `.clear` in a palette reaches everything. (§18 closes the `border`
 role of it — every box the framework draws. §20 fixed the reason it reached
-*nothing*: `resolve(with:)` was discarding a slot's alpha outright.)
+*nothing*: `resolve(with:)` was discarding a slot's alpha outright. §28 then sorted
+every derived palette colour into the three things they were doing with a faded slot,
+and fixed the one that was doing none of them.)
+
+And one more entry point, found while finishing the track and added here so that
+finishing `TrackRenderer` is not mistaken for finishing the control: the **circular
+`Gauge`** paints its own cells and bypasses the track renderer entirely
+(`renderCircularTiny`, `renderCircularDial`), so a translucent `.tint` reaches four
+further emit sites. Open.
 
 So §1's instinct about the *magnitude* was better than the summary's dismissal of
 it. What the summary got right is the *shape*: none of this needs per-column alpha
@@ -1128,8 +1136,17 @@ every box the framework draws through `BorderRenderer` (§18); `Divider` and
 `.listRowBackground` (§22); the status bar's two configurable colours (§24);
 `.colorMultiply` (§25).
 
-Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
-`Text`'s ramped ink, and per-cell ramps.
+Plus, from 2026-09-10: the style cascade's six control readers (§30); `Table`'s and
+`List`'s rows (§33); the whole determinate track family — `TrackConfiguration`,
+`SegmentColoring`, `Slider`, `Gauge`, `ProgressView` (§31); `ColorPicker`'s fourth
+channel (§32); `Text`'s ramped ink at every rectangular alpha shape, and a horizontal
+ramp's `.background`, which had been misclassified as per-cell (§34).
+
+Not honoured, each loud at its own line: a ramp whose alpha varies in BOTH directions
+at once — radial, angular, elliptical, diagonal (§34.3, a cost decline with a named
+prerequisite); a `Table` under such a ramp (§33.2); the indeterminate `ProgressView`
+sweep (§31.4); the circular `Gauge`'s own cells; `Text`'s concatenated-run arm under a
+ramp; and the image glyph path (§17).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -2097,3 +2114,73 @@ path has no assertion. `Table`'s equivalent needs no focus (its ink comes from
 `.foregroundStyle`) and is tested end to end. This is a real hole, recorded rather
 than papered over with an unfocused render that would have passed for the wrong
 reason.
+
+
+## 34. The ramp cases: one was two, and the other is a cost (2026-09-10)
+
+§16.3's last two unhonoured entries were "`Text`'s ramped ink" and "per-cell ramps".
+Both descriptions turn out to be wrong, in opposite directions.
+
+### 34.1 `Text`'s ramped ink was unhonoured for all four shapes, not one
+
+§15 taught `.background` to read a ramp's `AlphaShape` and claim `uniform` and
+`perRow`. Nothing taught `Text`. `PaintRenderer.styled` returned `[String]` and had no
+channel for a claim, so an ink ramp was unhonoured **whatever** its alpha shape — an
+evenly-faded ramp on text, a vertical scrim on text, and a one-stop translucent
+gradient (which `RampSampler.init?` refuses, so it fell through the flat arm and
+rendered at full strength) were all silently solid.
+
+`styled` now returns `(lines:claims:)` and takes `lineWidths`, because a text block is
+**ragged** and a claim must not outrun the line it is about. Nothing else at the call
+site changed: `Text` already pads and rows `perLineClaims` through
+`LineSpacingRows.interleaved`, so line spacing was handled before this arrived.
+
+`band` gained a `carriesAlpha` flag rather than an unconditional `opaqueSpelling`. That
+distinction is the whole discipline: the shape that is *not* claimed keeps its raw
+colours in the bytes, so the emitter's assertion still names it. Spelling it opaque
+without the claim turns a loud gap into a discarded alpha, which §18.3 records as the
+one failure worse than the gap.
+
+### 34.2 A horizontal ramp is `perColumn`, and was declined for a cost it does not have
+
+The classifier asked one question — does the colour vary *across* a row? — and treated
+"yes" as per-cell. For a **horizontal** linear ramp the answer is yes and the
+conclusion is wrong: the colour is identical all the way *down* each column, so its
+alpha is one full-height rectangle per column. The mirror of `perRow`, and every bit as
+cheap.
+
+That is the commonest ramp anyone writes — a fade along a header, a bar, a title — and
+it was being refused. `variesDownColumn` is the fact that was missing, derived beside
+its twin from `axisY != 0`, which is exactly what makes `rowTerm(row)` zero for every
+row.
+
+`alphaRuns(row:cells:)` is the coalescer these claims need. `runs(row:cells:)` breaks at
+every change of ramp **entry**, which is right for emitting colour and wrong for a
+claim: adjacent entries usually share an alpha, so one claim per colour run
+over-splits — a `uniform` ramp comes back as eighty width-1 rectangles instead of one.
+
+### 34.3 Genuine `perCell` stays declined, and the reason is arithmetic
+
+What is left is radial, angular, elliptical, and *diagonal* linear — a ramp whose alpha
+varies in both directions. It is **expressible**: `blendedSpan` already takes a
+per-column alpha closure. It is not affordable, and two costs say so:
+
+1. **The resolver's fold is linear per column.** `foldedAlpha` walks every region
+   covering the row, once per column. An 80-column row with 80 width-1 claims is 6,400
+   containment tests; over a 24-row block, ~154,000 per resolve per frame.
+2. **`opacityRegionsPunched` fragments.** It runs at every `composited(with:at:)`
+   between the leaf and the root, and `subtracting` returns up to four pieces — so
+   1,920 claims do not stay 1,920, they multiply with composite depth.
+
+And nothing coalesces them: a full-range alpha fade over 80 steps moves 3.2 per step,
+so every value is distinct and there is genuinely nothing to merge.
+
+The prerequisite is known and is not part of this pass: build the row's answer **once**
+per row into a `[CellAlpha?]` indexed by column, rather than once per column across the
+regions — O(Σ widths + width) instead of O(width × regions). That is a change to the
+resolver's hot path and wants its own commit and its own A/B.
+
+So the decline stands, and it is now narrow: not "ramps on ink", not "ramps whose alpha
+varies along a row", but *ramps whose alpha varies in both directions at once*. The
+field of such a ramp is still claimed — a rectangle is a rectangle, and refusing it for
+being adjacent to something unhonourable would be a second gap for no reason.

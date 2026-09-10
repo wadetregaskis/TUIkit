@@ -813,10 +813,14 @@ extension Text: Renderable, Layoutable {
             // short first line partway along the ramp rather than at the far
             // end. A concatenation bands the same way, one fragment at a time
             // (above).
-            styledLines = PaintRenderer.styled(
-                plainLines, blockWidth: lineWidths.max() ?? 0, frame: context.gradientFrame,
-                paint: ramp, style: resolvedStyle, depth: ColorDepth.current,
-                cellAspect: context.environment.imageCellAspect)
+            let painted = PaintRenderer.styled(
+                plainLines, blockWidth: lineWidths.max() ?? 0, lineWidths: lineWidths,
+                frame: context.gradientFrame, paint: ramp, style: resolvedStyle,
+                depth: ColorDepth.current, cellAspect: context.environment.imageCellAspect)
+            styledLines = painted.lines
+            // A ramped ink used to claim NOTHING — for all four alpha shapes, not just
+            // the per-cell one — because `styled` returned only bytes. §34.
+            perLineClaims = painted.claims
         } else {
             // The OPAQUE spelling into the bytes; the alpha travels as a region
             // below. A translucent colour has no SGR spelling at all — the

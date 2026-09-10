@@ -53,11 +53,50 @@ extension OpacityRegion {
         offsetX: Int = 0, offsetY: Int = 0, width: Int, height: Int,
         ink: Color? = nil, field: Color? = nil
     ) -> OpacityRegion? {
+        claim(
+            offsetX: offsetX, offsetY: offsetY, width: width, height: height,
+            inkAlpha: ink?.alpha ?? .max, fieldAlpha: field?.alpha ?? .max)
+    }
+
+    /// One alpha as an opacity factor.
+    ///
+    /// `Double(alpha) / 255`, in the one place that division belongs. Three sites
+    /// were spelling it out, which is the drift this file's own note says it exists
+    /// to prevent — and unlike ``claim(offsetX:offsetY:width:height:inkAlpha:fieldAlpha:)``
+    /// this makes no judgement about whether an opaque value is worth a region, which
+    /// is what the background ramp path needs: it states a rectangle per row whatever
+    /// the alpha, so the claims stay index-aligned with the rows they were painted for.
+    public static func opacity(of alpha: UInt8) -> Double {
+        Double(alpha) / 255
+    }
+
+    /// The same claim, from the alphas themselves.
+    ///
+    /// For a caller that has a `UInt8` and no `Color` to put it in — a ramp, whose
+    /// `AlphaShape` is already stated in alphas. Three sites were dividing by 255 by
+    /// hand instead, which is exactly the drift this file's own note says it exists
+    /// to prevent.
+    ///
+    /// - Parameters:
+    ///   - offsetX: The rectangle's left edge, in the buffer's own coordinates.
+    ///   - offsetY: The rectangle's top edge.
+    ///   - width: How many cells wide. A non-positive width claims nothing.
+    ///   - height: How many rows tall. A non-positive height claims nothing.
+    ///   - inkAlpha: The glyphs' alpha; `.max` for a claim about the field alone.
+    ///   - fieldAlpha: The cells' background alpha; `.max` for an ink-only claim.
+    /// - Returns: The region, or `nil` when there is nothing to resolve.
+    ///
+    /// Neither alpha is defaulted, unlike the colours above. With defaults on both,
+    /// `claim(width:height:)` matched this overload as readily as that one and the
+    /// call was ambiguous — and stating both channels is the right shape here anyway,
+    /// since a caller reaching for this one has already decided what each is.
+    public static func claim(
+        offsetX: Int = 0, offsetY: Int = 0, width: Int, height: Int,
+        inkAlpha: UInt8, fieldAlpha: UInt8
+    ) -> OpacityRegion? {
         // Asked of the ALPHAS before the geometry: a fully opaque paint is the
         // overwhelming common case and answering it is two loads and a compare,
         // where the geometry check is only worth doing for the few that got past.
-        let inkAlpha = ink?.alpha ?? .max
-        let fieldAlpha = field?.alpha ?? .max
         guard inkAlpha != .max || fieldAlpha != .max else { return nil }
         guard width > 0, height > 0 else { return nil }
         return OpacityRegion(

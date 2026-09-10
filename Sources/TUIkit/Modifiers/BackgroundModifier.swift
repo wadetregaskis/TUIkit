@@ -132,7 +132,10 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // everywhere would silence the assertion for the case that is not
         // honoured, turning a loud gap into a discarded alpha.
         let carriesAlpha = alphaShape != .perCell
-        var rowFieldAlphas: [Double] = []
+        /// The alphas themselves, not `Double(alpha) / 255`: the division belongs in
+        /// `OpacityRegion.claim`, which is the one place a claim is derived, and this
+        /// was one of three sites doing it by hand.
+        var rowFieldAlphas: [UInt8] = []
         // One background escape per ramp ENTRY, built on demand and reused by
         // every later run that lands on the same entry. This is
         // `PaintRenderer.band`'s `sequences` table on the background side, and
@@ -154,7 +157,7 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 // One colour for the whole row: the same single persistent-fill
                 // this modifier has always emitted, and no per-cell work at all.
                 let colour = sampler.colour(row: row).resolve(with: palette)
-                if carriesAlpha { rowFieldAlphas.append(Double(colour.alpha) / 255) }
+                if carriesAlpha { rowFieldAlphas.append(colour.alpha) }
                 return filled(
                     padded, with: carriesAlpha ? colour.opaqueSpelling : colour)
             }
@@ -236,22 +239,61 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         var painted = buffer.replacingLines(lines)
         // FIELD claims only, as the flat arm makes: the content's own ink is
         // already in these lines and a background says nothing about it.
+        painted.opacityRegions += Self.fieldClaims(
+            for: alphaShape, width: width, rows: buffer.lines.count, rowAlphas: rowFieldAlphas,
+            sampler: sampler)
+        return painted
+    }
+
+    /// The FIELD claims a ramp of this shape owes over a `width` × `rows` block.
+    ///
+    /// Field claims only, as the flat arm makes: the content's own ink is already in
+    /// these lines and a background says nothing about it.
+    ///
+    /// Its own function because ``paintedBackground`` reached the body-length limit
+    /// with the third shape — and because it is the half of that function with no
+    /// bytes in it, which makes the split a real seam rather than a place to hide four
+    /// lines.
+    private static func fieldClaims(
+        for alphaShape: RampSampler.AlphaShape, width: Int, rows: Int,
+        rowAlphas: [UInt8], sampler: RampSampler
+    ) -> [OpacityRegion] {
+        var painted: [OpacityRegion] = []
         switch alphaShape {
         case .opaque, .perCell:
             break
         case .uniform(let alpha):
-            painted.opacityRegions.append(
+            painted.append(
                 OpacityRegion(
-                    offsetX: 0, offsetY: 0, width: width, height: buffer.lines.count,
-                    opacity: 1, fieldOpacity: Double(alpha) / 255))
+                    offsetX: 0, offsetY: 0, width: width, height: rows,
+                    opacity: 1, fieldOpacity: OpacityRegion.opacity(of: alpha)))
         case .perRow:
             // One rectangle per row, in the order the rows were painted, so the
             // claim and the paint cannot disagree about which alpha is where.
-            painted.opacityRegions += rowFieldAlphas.enumerated().map { row, alpha in
+            //
+            // Built directly rather than through `OpacityRegion.claim`, which answers
+            // `nil` for a fully opaque paint: a scrim's top rows ARE opaque, and
+            // dropping them would leave the claims no longer index-aligned with the
+            // rows they were painted for. The `nil` contract is right where a claim
+            // is optional and wrong where the set of them is a sequence.
+            painted += rowAlphas.enumerated().map { row, alpha in
                 OpacityRegion(
                     offsetX: 0, offsetY: row, width: width, height: 1,
-                    opacity: 1, fieldOpacity: alpha)
+                    opacity: 1, fieldOpacity: OpacityRegion.opacity(of: alpha))
             }
+        case .perColumn:
+            // One FULL-HEIGHT strip per run of equal alpha. Row 0 answers for every
+            // row by construction — that is what `perColumn` means — so the runs are
+            // walked once rather than per row, and `alphaRuns` coalesces on the alpha
+            // rather than on the ramp entry, so a smooth eighty-column fade between
+            // two equally-faded stops is ONE rectangle and not eighty.
+            painted += sampler.alphaRuns(row: 0, cells: width)
+                .map { run in
+                    OpacityRegion(
+                        offsetX: run.columns.lowerBound, offsetY: 0, width: run.columns.count,
+                        height: rows, opacity: 1,
+                        fieldOpacity: OpacityRegion.opacity(of: run.alpha))
+                }
         }
         return painted
     }
