@@ -1083,8 +1083,8 @@ them among the three:
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` — **answered, §26.1** |
 | `.listRowBackground(…)` | one site — **fixed, §22** |
 | `Text` concatenation | **fixed, §14** |
-| translucent gradient stops | **background fixed, §15**, and its horizontal case, misclassified as per-cell — **fixed, §34.2**; `Text`'s ramped ink — **fixed, §34.1** |
-| `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer` — nineteen sites, not three — plus `Slider`, `Gauge` and `ProgressView`: **fixed, §31** |
+| translucent gradient stops | **background fixed, §15**, and its horizontal case, misclassified as per-cell — **fixed, §34.2**; `Text`'s ramped ink — **fixed, §34.1**; the shape that varies in both directions, and `Text`'s concatenated arm under a ramp — **fixed, §36.2 and §36.5** |
+| `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer` — nineteen sites, not three — plus `Slider`, `Gauge` and `ProgressView`: **fixed, §31**; the indeterminate sweep — **fixed, §36.7** |
 | `StatusBarState.highlightColor` / `.labelColor` | 2 sites — **fixed, §24** |
 | `.style(.text) { $0.foreground = … }` | the cascade's six non-`Text` readers — **fixed, §30** |
 | `.colorMultiply(…)` | a silent drop, not a trap — **fixed, §25** |
@@ -1102,7 +1102,11 @@ And one more entry point, found while finishing the track and added here so that
 finishing `TrackRenderer` is not mistaken for finishing the control: the **circular
 `Gauge`** paints its own cells and bypasses the track renderer entirely
 (`renderCircularTiny`, `renderCircularDial`), so a translucent `.tint` reaches four
-further emit sites. Open.
+further emit sites. **Fixed, §36.6.**
+
+**All thirteen are closed.** What remains unhonoured anywhere is the image glyph path
+(§17), which is not one of these entry points but a module of its own, and the four
+`Palette` surface derivations of §28.2 — a question rather than a gap (§37).
 
 So §1's instinct about the *magnitude* was better than the summary's dismissal of
 it. What the summary got right is the *shape*: none of this needs per-column alpha
