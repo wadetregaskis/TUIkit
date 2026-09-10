@@ -966,3 +966,43 @@ The field's own output takes the second blend from the same value rather than
 recomputing the product, which lands on precisely the number one multiplied blend
 gave — the identity in §11 — while keeping one definition of "the surface this
 layer's glyphs sit on". Two definitions of that is how the two channels drift.
+
+
+## 14. An attributed run was rectangular all along (2026-09-09)
+
+`Text.colourAlphaRegions` opened with `guard runs == nil, ramp == nil`, and the
+comment gave one reason for both: "a CONCATENATION carries a style per fragment
+and a RAMP a colour per cell, and both need a claim finer than a rectangle."
+
+That is true of the ramp and false of the fragments. A fragment occupies a
+**contiguous column range of one line**, so a height-1 rectangle per fragment
+says exactly what is true. The two arms were declined together because they are
+adjacent in the code, not because they share a difficulty.
+
+The visible cost of the conflation: a concatenation whose fragments all take one
+translucent colour is the uniform case the plain arm already handled, and was
+refused anyway. So adding `+ Text("")` to a working translucent `Text` silently
+made it opaque — pinned now by `uniformConcatenationIsNotRefused`.
+
+Three things the implementation needed that the shape did not suggest:
+
+- **Cells, not characters.** A fragment's start column accumulates
+  `strippedLength`, not `count`. `Text("日本") + Text("ab").foregroundStyle(faint)`
+  puts the claim at column 4; counting characters puts it at 2, which fades the
+  wrong two cells and leaves the last one bright.
+- **Rows come from the same interleave the lines do.** Line spacing is
+  interleaved last, so claims are built in LINE indices and rowed through
+  `LineSpacingRows.interleaved(_:spacing:blank: [])` — the same call the lines and
+  the widths take. Three parallel arrays have to agree about which row is which,
+  and the one derived a different way is the one that drifts.
+- **Adjacent equal claims coalesce.** A concatenation is usually a handful of
+  fragments differing in weight rather than in translucency, so the common case
+  collapses back to one region per line. The resolver walks every region covering
+  a row, per cell, so this is the difference between one region and one per
+  fragment on ordinary text.
+
+The ramp arm is still declined, and deliberately still **loud**: its run styles go
+to `PaintRenderer` as they are rather than in their opaque spelling, so a
+translucent colour there still trips the emitter's assertion. Spelling it opaque
+would have quietly discarded the alpha, which is the failure mode the assertion
+exists to prevent.

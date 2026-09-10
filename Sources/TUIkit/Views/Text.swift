@@ -796,11 +796,17 @@ extension Text: Renderable, Layoutable {
         // max width) into the buffer so neither this construction nor a parent
         // aligning the column re-`strippedLength`s the (now ANSI-laden) lines.
         let styledLines: [String]
+        // One list of alpha claims per LINE, in that line's own columns. Rowed
+        // only once the line spacing has been interleaved, below — the two arms
+        // that produce claims both work in line indices, and spacing shifts rows.
+        var perLineClaims: [[OpacityRegion]] = []
         if let runs {
-            styledLines = concatenatedLines(
+            let concatenated = concatenatedLines(
                 plainLines, runs: runs, blockWidth: lineWidths.max() ?? 0,
                 effectiveStyle: effectiveStyle, effectiveCase: effectiveCase,
                 font: font, ramp: ramp, context: context)
+            styledLines = concatenated.lines
+            perLineClaims = concatenated.claims
         } else if let ramp, !context.isMeasuring {
             // The extent is this text's own BLOCK — measured against SwiftUI,
             // where a two-line `Text` under a horizontal gradient ends its
@@ -819,6 +825,7 @@ extension Text: Renderable, Layoutable {
             styledLines = plainLines.map {
                 ANSIRenderer.render($0, with: resolvedStyle.opaqueColours)
             }
+            perLineClaims = Self.uniformAlphaClaims(style: resolvedStyle, lineWidths: lineWidths)
         }
 
         // A reservation pads the block out to its full height with blank lines
@@ -834,6 +841,7 @@ extension Text: Renderable, Layoutable {
             while paddedLines.count < target {
                 paddedLines.append("")
                 paddedWidths.append(0)
+                perLineClaims.append([])
             }
         }
 
@@ -843,8 +851,7 @@ extension Text: Renderable, Layoutable {
         guard spacing > 0, paddedLines.count > 1 else {
             var buffer = FrameBuffer(
                 lines: paddedLines, width: knownWidth, lineWidths: paddedWidths)
-            buffer.opacityRegions += Self.colourAlphaRegions(
-                style: resolvedStyle, lineWidths: paddedWidths, runs: runs, ramp: ramp)
+            buffer.opacityRegions += Self.rowed(perLineClaims, spacing: 0)
             return buffer
         }
         let spacedWidths = LineSpacingRows.interleaved(paddedWidths, spacing: spacing, blank: 0)
@@ -852,40 +859,98 @@ extension Text: Renderable, Layoutable {
             lines: LineSpacingRows.interleaved(paddedLines, spacing: spacing, blank: ""),
             width: knownWidth,
             lineWidths: spacedWidths)
-        // Built from the SPACED widths, so a region names the row its line ended
-        // up on. Built here rather than beside the styling for exactly that
-        // reason: the spacing is interleaved last and shifts every row after the
-        // first.
-        buffer.opacityRegions += Self.colourAlphaRegions(
-            style: resolvedStyle, lineWidths: spacedWidths, runs: runs, ramp: ramp)
+        buffer.opacityRegions += Self.rowed(perLineClaims, spacing: spacing)
         return buffer
     }
 
-    /// One region per drawn line, when this text's own colours carry alpha.
+    /// Puts `perLine` claims on the rows their lines ended up on.
+    ///
+    /// Through the same ``LineSpacingRows/interleaved(_:spacing:blank:)`` the
+    /// lines and the widths go through, rather than by arithmetic on `spacing`:
+    /// three parallel arrays that must agree about which row is which, and the one
+    /// derived a different way is the one that drifts.
+    private static func rowed(_ perLine: [[OpacityRegion]], spacing: Int) -> [OpacityRegion] {
+        let spaced = LineSpacingRows.interleaved(perLine, spacing: spacing, blank: [])
+        return spaced.enumerated().flatMap { row, claims in
+            claims.map { claim in
+                var region = claim
+                region.offsetY = row
+                return region
+            }
+        }
+    }
+
+    /// One claim per drawn line, for a text whose whole block shares one style.
     ///
     /// Per LINE rather than one rectangle over the block, because a wrapped text
     /// is ragged: a single rectangle would claim the blank cells past the end of
     /// every short line and fade whatever a sibling drew there. `Text` already
     /// computes exact per-line widths for the buffer, so the ragged shape costs
     /// nothing to describe.
-    ///
-    /// `nil` — no regions at all — for the two arms that do not honour a colour's
-    /// alpha yet: a CONCATENATION carries a style per fragment and a RAMP a colour
-    /// per cell, and both need a claim finer than a rectangle. Those render at
-    /// full strength, and `Color+ANSICodes.swift`'s assertion makes it loud in a
-    /// debug build rather than silent.
-    private static func colourAlphaRegions(
-        style: TextStyle, lineWidths: [Int], runs: [Run]?, ramp: Paint?
-    ) -> [OpacityRegion] {
-        guard runs == nil, ramp == nil else { return [] }
+    private static func uniformAlphaClaims(
+        style: TextStyle, lineWidths: [Int]
+    ) -> [[OpacityRegion]] {
         let ink = style.foregroundColor?.alpha ?? .max
         let field = style.backgroundColor?.alpha ?? .max
-        guard ink != .max || field != .max else { return [] }
-        return lineWidths.enumerated().compactMap { row, width in
-            guard width > 0 else { return nil }
-            return OpacityRegion(
-                offsetX: 0, offsetY: row, width: width, height: 1, opacity: 1,
-                inkOpacity: Double(ink) / 255, fieldOpacity: Double(field) / 255)
+        guard ink != .max || field != .max else {
+            return Array(repeating: [], count: lineWidths.count)
+        }
+        return lineWidths.map { width in
+            guard width > 0 else { return [] }
+            return [
+                OpacityRegion(
+                    offsetX: 0, offsetY: 0, width: width, height: 1, opacity: 1,
+                    inkOpacity: Double(ink) / 255, fieldOpacity: Double(field) / 255)
+            ]
+        }
+    }
+
+    /// One claim per FRAGMENT of a concatenation, in that line's own columns.
+    ///
+    /// A concatenation carries a style per fragment, which reads like the case
+    /// that needs a claim finer than a rectangle — and does not. A fragment
+    /// occupies a contiguous column range of one line, so a height-1 rectangle
+    /// per fragment says exactly what is true. What genuinely cannot be a
+    /// rectangle is a RAMP, where the colour and therefore the alpha change per
+    /// cell along the row; that arm is still declined, above.
+    ///
+    /// Adjacent fragments claiming the same alphas are coalesced. A concatenation
+    /// is usually a handful of fragments differing in WEIGHT rather than in
+    /// translucency, so the common case collapses to the one region per line the
+    /// uniform arm would have produced — and the resolver's per-cell lookup walks
+    /// every region covering a row.
+    ///
+    /// Widths in `strippedLength`, not `count`: a fragment holding an emoji or
+    /// CJK is wider in cells than in characters, and a start column off by one
+    /// puts every later fragment's claim on the wrong cells.
+    private static func fragmentAlphaClaims(
+        _ fragments: [[(text: String, run: Int)]], styles: [TextStyle]
+    ) -> [[OpacityRegion]] {
+        fragments.map { line in
+            var claims: [OpacityRegion] = []
+            var column = 0
+            for fragment in line {
+                let width = fragment.text.strippedLength
+                defer { column += width }
+                guard width > 0, styles.indices.contains(fragment.run) else { continue }
+                let style = styles[fragment.run]
+                let ink = style.foregroundColor?.alpha ?? .max
+                let field = style.backgroundColor?.alpha ?? .max
+                guard ink != .max || field != .max else { continue }
+                if var last = claims.last, last.offsetX + last.width == column,
+                    last.inkOpacity == Double(ink) / 255,
+                    last.fieldOpacity == Double(field) / 255
+                {
+                    last.width += width
+                    claims[claims.count - 1] = last
+                    continue
+                }
+                claims.append(
+                    OpacityRegion(
+                        offsetX: column, offsetY: 0, width: width, height: 1, opacity: 1,
+                        inkOpacity: Double(ink) / 255, fieldOpacity: Double(field) / 255))
+            }
+            return claims
         }
     }
 
@@ -912,7 +977,7 @@ extension Text: Renderable, Layoutable {
         _ plainLines: [String], runs: [Text.Run], blockWidth: Int,
         effectiveStyle: TextStyle, effectiveCase: Text.Case?, font: Font?, ramp: Paint?,
         context: RenderContext
-    ) -> [String] {
+    ) -> (lines: [String], claims: [[OpacityRegion]]) {
         let runTexts = runs.map {
             Self.displayString($0.text, textCase: effectiveCase, context: context)
         }
@@ -960,24 +1025,39 @@ extension Text: Renderable, Layoutable {
             TextRunAttribution.fragments(of: line, runTexts: runTexts, cursor: &cursor)
         }
         guard let ramp, !context.isMeasuring else {
-            return fragments.map { line in
-                line.map { ANSIRenderer.render($0.text, with: resolvedRunStyles[$0.run]) }
-                    .joined()
-            }
+            // The OPAQUE spelling into the bytes and the alpha into a claim, as
+            // the single-style arm does — a translucent colour has no SGR spelling
+            // at all, so the compositor is the only place it can be answered.
+            let opaque = resolvedRunStyles.map(\.opaqueColours)
+            return (
+                lines: fragments.map { line in
+                    line.map { ANSIRenderer.render($0.text, with: opaque[$0.run]) }.joined()
+                },
+                claims: Self.fragmentAlphaClaims(fragments, styles: resolvedRunStyles)
+            )
         }
         // The ramp bands ACROSS the fragments — the cell decides the colour, the
         // fragment decides everything else about it. A fragment that stated its
         // own colour keeps it.
-        return PaintRenderer.styled(
-            pieces: fragments.map { line in
-                line.map {
-                    StyledPiece(
-                        text: $0.text, style: resolvedRunStyles[$0.run],
-                        takesRamp: runTakesRamp[$0.run])
-                }
-            },
-            blockWidth: blockWidth, frame: context.gradientFrame, paint: ramp,
-            depth: ColorDepth.current, cellAspect: context.environment.imageCellAspect)
+        //
+        // No claims: a ramp states a colour, and therefore an alpha, per CELL
+        // along the row, which a rectangle cannot say. The styles go in as they
+        // are rather than in their opaque spelling, so a translucent colour here
+        // still trips `Color+ANSICodes.swift`'s assertion — an unhonoured path has
+        // to stay loud, and spelling it opaque would quietly discard the alpha.
+        return (
+            lines: PaintRenderer.styled(
+                pieces: fragments.map { line in
+                    line.map {
+                        StyledPiece(
+                            text: $0.text, style: resolvedRunStyles[$0.run],
+                            takesRamp: runTakesRamp[$0.run])
+                    }
+                },
+                blockWidth: blockWidth, frame: context.gradientFrame, paint: ramp,
+                depth: ColorDepth.current, cellAspect: context.environment.imageCellAspect),
+            claims: []
+        )
     }
 
     /// Fills in `style`'s foreground, and reports a gradient if that is what

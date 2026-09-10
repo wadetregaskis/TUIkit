@@ -535,6 +535,76 @@ struct TranslucentPaintTests {
             "the ink blends over the faded field: \(lines[0].debugDescription)")
     }
 
+    /// **A concatenation's fragments are rectangular after all.**
+    ///
+    /// The design listed an attributed run alongside a ramp as needing "a claim
+    /// finer than a rectangle". That is true of the ramp and false of the
+    /// fragments: a fragment occupies a contiguous column range of ONE line, so a
+    /// height-1 rectangle per fragment says exactly what is true. The runs arm was
+    /// declining alpha for a reason that only applied to its neighbour.
+    ///
+    /// Here the middle fragment is translucent and the outer two are not, so the
+    /// claim has to start at column 5 and be 5 wide — not cover the line.
+    @Test("A concatenation claims each translucent fragment's own columns")
+    func fragmentsClaimTheirOwnColumns() {
+        var faint = Color.green
+        faint.alpha = 102
+        let context = makeRenderContext(width: 30, height: 3)
+        let text =
+            Text("HELLO").foregroundStyle(.red)
+            + Text("world").foregroundStyle(faint)
+            + Text("AGAIN").foregroundStyle(.blue)
+        let buffer = renderToBuffer(text, context: context)
+
+        #expect(buffer.opacityRegions.count == 1, "one claim: \(buffer.opacityRegions)")
+        let claim = buffer.opacityRegions.first
+        #expect(claim?.offsetX == 5, "starts after HELLO: \(String(describing: claim?.offsetX))")
+        #expect(claim?.width == 5, "and is world's width: \(String(describing: claim?.width))")
+        #expect(claim?.offsetY == 0, "on its own line")
+        #expect(
+            (claim?.inkOpacity ?? 0) > 0.39 && (claim?.inkOpacity ?? 1) < 0.41,
+            "at 40%: \(String(describing: claim?.inkOpacity))")
+    }
+
+    /// **The regression the runs arm actually had.** A concatenation whose
+    /// fragments all take ONE translucent colour is the uniform case the plain arm
+    /// already handled — and `guard runs == nil` refused it anyway. So adding
+    /// `+ Text("")` to a working translucent `Text` silently made it opaque.
+    @Test("A uniformly translucent concatenation claims its whole line")
+    func uniformConcatenationIsNotRefused() {
+        var faint = Color.green
+        faint.alpha = 102
+        let context = makeRenderContext(width: 30, height: 3)
+        let plain = renderToBuffer(Text("abcdef").foregroundStyle(faint), context: context)
+        let joined = renderToBuffer(
+            (Text("abc").bold() + Text("def")).foregroundStyle(faint), context: context)
+
+        #expect(!plain.opacityRegions.isEmpty, "the plain text claims: \(plain.opacityRegions)")
+        #expect(
+            joined.opacityRegions.count == 1,
+            "and the concatenation coalesces to one: \(joined.opacityRegions)")
+        #expect(
+            joined.opacityRegions.first?.width == plain.opacityRegions.first?.width,
+            "over the same columns: \(joined.opacityRegions)")
+    }
+
+    /// Cells, not characters. A fragment holding a 2-cell glyph pushes every later
+    /// fragment's claim two columns along, and counting characters would put the
+    /// claim one column short — fading the wrong cell and leaving the last one
+    /// unfaded.
+    @Test("A wide glyph before a translucent fragment shifts its claim by cells")
+    func wideGlyphShiftsTheClaim() {
+        var faint = Color.green
+        faint.alpha = 102
+        let context = makeRenderContext(width: 30, height: 3)
+        // "日本" is two characters and four cells.
+        let text = Text("日本").foregroundStyle(.red) + Text("ab").foregroundStyle(faint)
+        let buffer = renderToBuffer(text, context: context)
+        #expect(
+            buffer.opacityRegions.first?.offsetX == 4,
+            "four cells in, not two: \(buffer.opacityRegions)")
+    }
+
     /// **Copy and paste, end to end through the real view stack.**
     ///
     /// `.foregroundStyle(.clear)` has to leave its own characters in the cells —
