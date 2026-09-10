@@ -14,9 +14,15 @@ worth recording here because it is not what §1 predicted:
   layer at 0.3 is 30% *present*, so its glyph competes with what is behind it and
   §10's ½ rule decides; ink at 0.3 is faint text that is definitely drawn. So
   `OpacityRegion` carries three channels — `opacity`, `inkOpacity`,
-  `fieldOpacity` — which compose by multiplication, and the ½ threshold reads the
-  LAYER's alone. Folding them would make a translucent foreground vanish rather
-  than fade.
+  `fieldOpacity` — and the ½ threshold reads the LAYER's alone. Folding them
+  would make a translucent foreground vanish rather than fade.
+- **They compose by sequence, not by multiplication** (corrected 2026-09-09; see
+  §11). A colour's alpha resolves *within* its layer, against the field the glyph
+  sits on; the layer's alpha then composites that result against the backdrop.
+  The field channel is unaffected, because both of its backdrops are the
+  destination's field and sequential blends against one backdrop multiply
+  exactly. The ink channel's two backdrops differ, and multiplying them into one
+  blend is what put a `Table` row's translucent text on the wrong colour.
 - **`Color` stores a `UInt8` alpha**, not a `Double`: `viewValueHash` hashes the
   raw bytes of every view struct and a `Double` would introduce undefined padding,
   making the render memo's key non-deterministic. Every `Color` → `Color`
@@ -823,3 +829,52 @@ resolved. There the walk would arrive back at the same picture, and the layer is
 better left byte-for-byte identical — re-emitting a row to reach the same cells
 is repaint volume for nothing. Over a real destination — a `ZStack` sibling, an
 `.overlay`, a list row's fill — the region is kept and the walk runs.
+
+
+## 11. The ink channel's backdrop was the destination's ink (2026-09-09)
+
+`blend` computed both channels as one multiplied blend against the destination:
+
+```swift
+let foreground = sourceInk.map { $0.opacity(alpha.layer * alpha.ink, over: destinationInk) }
+let background = source.background.map { $0.opacity(alpha.layer * alpha.field, over: destinationField) }
+```
+
+The field line is right. The ink line is wrong twice over, and §10.2's reasoning
+shows where it went: that section establishes — correctly — that a *layer's* ink
+composites over the destination's ink, because a fade over text should read as a
+dissolve between two glyphs. It then applied the same backdrop to the *colour's*
+alpha, which is a different claim about a different thing.
+
+**A translucent ink is paint on a surface, and the surface is the field.** The
+glyph's own layer states one, or it inherits the one it will be drawn on. The
+destination's ink is not a candidate: the source glyph won the cell, so the glyph
+it displaced is not behind it — nothing is, except the field.
+
+Two consequences, both reachable without any new API:
+
+1. **A layer that paints its own background put its text on the wrong colour.** A
+   `Table` row, a `.background()`, any filled panel: the field is right there in
+   the same cell, and translucent ink over it faded toward whatever the page
+   behind the panel was. Pinned by `inkFadesTowardItsOwnField`.
+2. **The bottom of the range was visibly wrong**, which is what makes this a
+   correctness fix rather than a preference. "Blend fully toward the destination's
+   ink" at `inkOpacity: 0` means *draw an invisible glyph in the colour of the
+   letters it hid* — a row of dots wearing the text they replaced. Blending toward
+   the field instead lands exactly on the field, which is a terminal's spelling of
+   an invisible glyph.
+
+So the ink is resolved in two steps, in compositing's own order — resolve the
+layer's pixels, then composite the layer:
+
+```swift
+let ownField = source.background ?? destinationField
+let inkWithinLayer = sourceInk.map { $0.opacity(alpha.ink, over: ownField) }
+let foreground = inkWithinLayer.map { $0.opacity(alpha.layer, over: destinationInk) }
+```
+
+Nothing moves where `inkOpacity == 1`, which is every cell in the framework that
+does not carry a translucent foreground — so the change is narrow by
+construction. Three tests on this branch had pinned the old answer and were
+rewritten rather than adapted: they asserted the ink blending toward `.red`, the
+displaced glyph, in the two places that most looked like the model working.

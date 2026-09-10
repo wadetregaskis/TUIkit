@@ -49,7 +49,14 @@ struct ColourAlphaResolutionTests {
     ///
     /// The same 0.2 that hands the glyph to the destination when it is a LAYER's
     /// must keep the source's glyph when it is an INK's — and blend its colour
-    /// 20% of the way from the destination's ink.
+    /// 20% of the way from **the field behind the cell**, which here is the
+    /// destination's blue background.
+    ///
+    /// Not from the destination's INK, which is what this test used to assert.
+    /// The source's glyph won the cell, so the red "world" it replaced is not
+    /// behind it — nothing is, except the field. Blending toward a displaced
+    /// glyph's colour is visibly wrong at the bottom of the range, where an
+    /// invisible glyph comes out painted in the colour of the letters it hid.
     @Test("Translucent ink keeps its own glyph and fades its colour")
     func translucentInkDrawsFaintly() {
         let destination = FrameBuffer(lines: [
@@ -64,8 +71,8 @@ struct ColourAlphaResolutionTests {
             resolved.lines[0].stripped == "hello",
             "the source's glyph stands — there is no contest: \(resolved.lines)")
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(0.2, over: .red))),
-            "…in 20% green over red: \(resolved.lines[0].debugDescription)")
+            resolved.lines[0].contains(codes(Color.green.opacity(0.2, over: .blue))),
+            "…in 20% green over the blue field: \(resolved.lines[0].debugDescription)")
         #expect(!resolved.lines[0].contains(codes(.green)), "not at full strength")
         #expect(
             resolved.lines[0].contains(backgroundCodes(.blue)),
@@ -130,10 +137,17 @@ struct ColourAlphaResolutionTests {
             "nothing drawn: \(resolved.lines[0].debugDescription)")
     }
 
-    /// The channels multiply, which is what lets a translucent colour inside a
-    /// fading pane be faint twice over without either number knowing about the
-    /// other.
-    @Test("A layer's alpha and an ink's compose by multiplication")
+    /// A translucent colour inside a fading pane is faint twice over, and neither
+    /// number knows about the other — but they compose by SEQUENCE, not by
+    /// multiplication, because they resolve against different backdrops.
+    ///
+    /// The ink's alpha resolves within its own layer, against the field the glyph
+    /// sits on (here the inherited blue). The layer's alpha then composites that
+    /// result over the backdrop, against the destination's ink (red). Multiplying
+    /// the two into one blend — which this test used to assert — is only
+    /// equivalent when both backdrops are the same colour, which is exactly the
+    /// case the FIELD channel enjoys and the ink channel does not.
+    @Test("A layer's alpha and an ink's compose in sequence, not by multiplication")
     func channelsCompose() {
         let destination = FrameBuffer(lines: [
             ANSIRenderer.colorize("world", foreground: .red, background: .blue)
@@ -145,9 +159,51 @@ struct ColourAlphaResolutionTests {
         ]
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
+        // Within the layer first, then across it.
+        let expected = Color.green.opacity(0.5, over: .blue).opacity(0.5, over: .red)
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(0.25, over: .red))),
-            "0.5 × 0.5: \(resolved.lines[0].debugDescription)")
+            resolved.lines[0].contains(codes(expected)),
+            "ink over its own field, then the layer: \(resolved.lines[0].debugDescription)")
+        #expect(
+            !resolved.lines[0].contains(codes(Color.green.opacity(0.25, over: .red))),
+            "and NOT the single multiplied blend")
+    }
+
+    /// **The bug the sequence fixes, in the shape it was reachable in.**
+    ///
+    /// A layer that paints its OWN background — a `Table` row, a `.background()`,
+    /// any filled panel — is the field its glyphs sit on. Translucent ink there
+    /// has to fade toward that field, not toward whatever the page behind the
+    /// panel happens to be, or the fade reveals a colour that is nowhere near
+    /// the cell.
+    ///
+    /// Here the source paints a green field with red ink at 25%; the page behind
+    /// is blue. The letters must land 25% of the way from GREEN, and the blue
+    /// must not appear in the row at all.
+    @Test("Translucent ink fades toward its own layer's background")
+    func inkFadesTowardItsOwnField() {
+        let destination = FrameBuffer(lines: [
+            ANSIRenderer.colorize("world", foreground: .white, background: .blue)
+        ])
+        let source = tinted(
+            ANSIRenderer.colorize("hello", foreground: .red, background: .green),
+            ink: 0.25, width: 5)
+        let resolved = source.resolvingOpacity(
+            over: destination, surface: .black, palette: palette())
+
+        #expect(
+            resolved.lines[0].contains(codes(Color.red.opacity(0.25, over: .green))),
+            "25% red over its own green field: \(resolved.lines[0].debugDescription)")
+        // Spelled as a blend at alpha 1 rather than as `backgroundCodes(.green)`:
+        // the resolver re-emits every colour it touched as truecolor, so the
+        // standard-palette spelling `42` would be comparing notations, not
+        // colours.
+        #expect(
+            resolved.lines[0].contains(backgroundCodes(Color.green.opacity(1, over: .blue))),
+            "the field itself is opaque and unmoved: \(resolved.lines[0].debugDescription)")
+        #expect(
+            !resolved.lines[0].contains(codes(Color.red.opacity(0.25, over: .blue))),
+            "and nothing blended toward the page behind the panel")
     }
 
     /// A region that is opaque in every channel is still the identity — the fast
@@ -357,10 +413,15 @@ struct TranslucentPaintTests {
     }
 
     /// **Translucent INK.** The glyph draws — it is not in a contest with
-    /// anything — and its colour blends toward what is behind the cell.
-    @Test("Translucent ink draws its glyph faintly over what is behind it")
+    /// anything — and its colour blends toward the FIELD behind the cell.
+    ///
+    /// The red "world" underneath is not the backdrop: "hello" won the cell, so
+    /// what remains behind its glyph is the field, which neither `Text` states
+    /// and which is therefore the page's own surface.
+    @Test("Translucent ink draws its glyph faintly over the field behind it")
     func translucentInk() {
         let ink = faded(.green, 51)  // 20%
+        let surface = makeRenderContext(width: 14, height: 3).environment.palette.background
         let lines = screen(
             ZStack {
                 Text("world").foregroundStyle(.red)
@@ -370,8 +431,11 @@ struct TranslucentPaintTests {
             lines[0].stripped.contains("hello"),
             "the faint glyph still draws: \(lines[0].stripped)")
         #expect(
-            lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: .red))),
-            "…in 20% green over red: \(lines[0].debugDescription)")
+            lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: surface))),
+            "…in 20% green over the surface: \(lines[0].debugDescription)")
+        #expect(
+            !lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: .red))),
+            "and not toward the glyph it displaced")
     }
 
     /// A wrapped text stamps one region PER LINE, sized to that line — not one

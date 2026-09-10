@@ -322,12 +322,40 @@ extension FrameBuffer {
         // ``Color/opacity(_:over:)``, the ENCODED-sRGB mix, not
         // ``Color/compositing(_:over:)``'s linear-light one — see
         // `OpacityFade.fading` and `Documentation/Opacity as composition.md`.
-        // The PRODUCT of the layer's alpha and the channel's own, which is what
-        // makes them compose: a translucent ink inside a fading pane is faint
-        // twice over, and neither number has to know about the other.
+        //
+        // TWO blends for the ink, in this order, because a colour's alpha and a
+        // layer's resolve against different things — which is what compositing
+        // IS: resolve a layer's own pixels first, then composite the layer over
+        // the backdrop.
+        //
+        // A translucent INK is paint on a surface, and the surface is the field
+        // the glyph is drawn on — this layer's own background where it has one,
+        // and otherwise the field it will inherit. Never the destination's INK:
+        // the source glyph displaced that glyph by winning the cell, so it is
+        // not behind anything.
+        //
+        // This was one multiplied blend against `destinationInk`, and the bug
+        // was visible by default in `Table`: a row paints its own background,
+        // and translucent ink over it faded toward the PAGE behind the row
+        // rather than toward the row. It also put the range's discontinuity at
+        // ink 0, where "blend fully toward the destination's ink" means "draw an
+        // invisible glyph in the displaced glyph's colour" — dots in the colour
+        // of the letters they replaced.
+        //
+        // The LAYER's blend still resolves against `destinationInk`, unchanged:
+        // that one is a contest between two layers' glyphs, and blending toward
+        // the loser's colour is what makes a fade over text read as a dissolve.
+        let ownField = source.background ?? destinationField
+        let inkWithinLayer = sourceInk.map { $0.opacity(alpha.ink, over: ownField) }
         let foreground =
-            sourceInk.map { $0.opacity(alpha.layer * alpha.ink, over: destinationInk) }
+            inkWithinLayer.map { $0.opacity(alpha.layer, over: destinationInk) }
             ?? destination?.foreground
+        // The FIELD needs only one blend, and not as a special case: a field is
+        // the bottom of its own layer, so its within-layer backdrop and its
+        // across-layer backdrop are the same `destinationField` — and sequential
+        // blends against one backdrop multiply exactly
+        // (`c.opacity(a, over: d).opacity(b, over: d) == c.opacity(a * b, over: d)`).
+        // That algebra is why a single number sufficed until ink arrived.
         let background =
             source.background.map { $0.opacity(alpha.layer * alpha.field, over: destinationField) }
             ?? destination?.background
