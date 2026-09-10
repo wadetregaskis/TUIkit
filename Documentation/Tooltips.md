@@ -1,8 +1,8 @@
 # Tooltips — `help(_:)` in a terminal
 
-**Status: shipped, 2026-09-10.** `help(_:)`, `TooltipState`, `TooltipStyle`,
-`TooltipVisibility`, the three subtree modifiers, the `?` help key and **both
-presentations** are on `main`. What is not built is §5's rules 4 and 5 — prefer a
+**Status: shipped, 2026-09-09.** `help(_:)`, `TooltipState`, `TooltipStyle`,
+`TooltipTrigger` (`.never` / `.automatic` / `.onFocus`), the three subtree
+modifiers, the `?` help key and **both presentations** are on `main`. What is not built is §5's rules 4 and 5 — prefer a
 placement not under the pointer, and re-wrap to a narrower box before rejecting a
 placement. Both are new constraints on
 `OverlayLayer.placed(maxWidth:maxHeight:)` rather than uses of it, and the design
@@ -90,27 +90,35 @@ That is one scheduled wake per hover, not a poll, and it stops as soon as the
 tooltip is shown or the pointer leaves. A tooltip that is already showing costs
 nothing.
 
-## 3. "Not when focus arrives from a click" needs the focus manager to say why
+## 3. "Not when focus arrives from a click" — answered by the delay, not by a reason
 
-`FocusManager.focus(id:)` takes no reason, and five call sites drive it from a
-mouse handler (`FocusableModifier`, `TextFieldMouseHandler`, `Color256Grid`,
-`_PickerMenuCore`, and `FocusReference` for the programmatic case). A tooltip
-that cannot tell those from a Tab will pop up on every click, which is exactly
-what the spec rules out.
+**Resolved 2026-09-09.** This section argued that auto-showing on focus needs
+`FocusManager.focus(id:reason:)` — `.keyboard` / `.pointer` / `.programmatic` —
+because five call sites drive focus from a mouse handler (`FocusableModifier`,
+`TextFieldMouseHandler`, `Color256Grid`, `_PickerMenuCore`, and
+`FocusReference`), and a tooltip that cannot tell those from a Tab pops up on
+every click.
 
-**This wants `focus(id:reason:)`** — `.keyboard` / `.pointer` / `.programmatic`
-— with the default keeping today's behaviour and the five sites naming theirs.
+The argument was sound against the design it was written for: auto-show as the
+*default* behaviour of `help(_:)`, revealed immediately. Two things changed and
+the requirement went with them.
 
-**There is no difficulty here**, and this entry is a note rather than a
-concern: it is a defaulted parameter and five one-word call-site changes. It is
-recorded because it modifies a shared API that nothing else has asked to
-change, which is a decision worth making deliberately rather than in passing —
-not because it is hard.
+**The reveal became opt-in.** `TooltipTrigger.automatic` reveals a focus
+candidate only on the help key, and `.onFocus` is a mode an app asks for. In
+that mode, a clicked control explaining itself is the promise being kept, not a
+defect.
 
-The reason not to take the cheap route: inferring "the mouse did it" from a
-mouse event having arrived this frame is a heuristic that fails whenever a
-click focuses one view while the pointer rests over another, which is exactly
-what clicking a scrollbar does.
+**The delay applies to the focus slot too.** So a click resolves like this:
+the pointer is by definition over the control it clicked, so `.entered` has
+already published a *hover* candidate — with the same delay — and hover wins.
+The tooltip that appears after a click is the one that would have appeared
+without it. `focus(id:reason:)` would buy exactly one case: click, move the
+pointer off within the delay, and rest on nothing. There, `.onFocus` shows the
+clicked control's help, which is what `.onFocus` says it does.
+
+So the shared API did not have to change. The residue worth naming is that a
+terminal with no motion reporting has no hover at all, and there `.onFocus` is
+the only route a tooltip has — which makes it a feature rather than a leak.
 
 ## 4. Presentation 1 — a status-bar row
 
@@ -184,7 +192,7 @@ extension View {
     public func help(_ text: Text) -> some View
     public func help<S: StringProtocol>(_ text: S) -> some View     // SwiftUI's three
 
-    public func tooltips(_ visibility: TooltipVisibility) -> some View   // .automatic/.hidden
+    public func tooltips(_ trigger: TooltipTrigger) -> some View        // see below
     public func tooltipStyle(_ style: TooltipStyle) -> some View          // .statusBar/.popover
     public func tooltipDelay(_ seconds: Double) -> some View
 }
@@ -193,6 +201,15 @@ extension View {
 Three overloads because SwiftUI has three; the rest are TUI-specific and go
 through the environment like every other subtree setting, so an app can turn
 tooltips off for one panel.
+
+`TooltipTrigger` is one axis ordered by eagerness rather than two flags, because
+no combination of "whether" and "when" is meaningful:
+
+| case | shows |
+|------|-------|
+| `.never` | nothing. `help(_:)` still compiles and still publishes. |
+| `.automatic` | on hover after the delay; on the help key for the focused view. |
+| `.onFocus` | …and whenever a control takes the focus, after the same delay. A beginner mode. |
 
 ## 7. Open questions for the owner
 

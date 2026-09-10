@@ -58,6 +58,13 @@ public final class TooltipState: @unchecked Sendable {
         /// carries the help can read it. Resolving against a delay fetched
         /// somewhere else is how the two halves of one number drift apart.
         var showAtNanos: Int64
+        /// Whether this candidate shows on its own, without the help key.
+        ///
+        /// Set from ``TooltipTrigger/revealsOnFocus`` — a subtree setting, so it
+        /// rides on the candidate for the same reason ``style`` does. A hover
+        /// candidate always shows on its own and leaves this `false`; only the
+        /// focus slot consults it.
+        var revealsItself = false
         /// How to present it — read from the environment of the view that
         /// carries the help, not from the root's. `tooltipStyle` is a subtree
         /// setting, so a panel asking for a popover inside an app that uses the
@@ -88,6 +95,17 @@ public final class TooltipState: @unchecked Sendable {
 
     /// The focus identity `keyboardRevealed` was granted for.
     private var revealedFocusID: String?
+
+    /// The focus candidate's text and deadline as of the previous frame.
+    ///
+    /// The focus slot is cleared and refilled every frame, so a candidate that
+    /// computed a fresh deadline each time would never reach one — it would sit
+    /// permanently `tooltipDelay` in the future and ``TooltipTrigger/onFocus``
+    /// would show nothing at all. Only these two fields outlive the frame;
+    /// keeping the whole `Candidate` would invite reading last frame's handler
+    /// id, which belongs to a dispatcher generation that is gone.
+    private var previousFocusText: String?
+    private var previousFocusDeadline: Int64 = 0
 
     /// The key that reveals the focused view's tooltip. `?` by default, `nil` to
     /// claim no key at all.
@@ -153,18 +171,34 @@ public final class TooltipState: @unchecked Sendable {
     }
 
     /// Records the focused view's help text for this frame.
+    ///
+    /// - Parameters:
+    ///   - revealsItself: Whether the subtree asked for
+    ///     ``TooltipTrigger/onFocus``, so this shows without the help key.
     func focusing(
         _ text: String, handlerID: HitTestRegion.HandlerID?, nowNanos: Int64,
-        style: TooltipStyle = .statusBar, delaySeconds: Double = 0
+        style: TooltipStyle = .statusBar, delaySeconds: Double = 0,
+        revealsItself: Bool = false
     ) {
+        // Continuing to hold the focus keeps the ORIGINAL deadline; taking it
+        // starts a new one. Compared on the text rather than on a focus id for
+        // the same reason `hovering` is — and because the same control can be
+        // re-registered under a rebuilt id while plainly still being the thing
+        // the reader is looking at.
+        let deadline =
+            previousFocusText == text
+            ? previousFocusDeadline
+            : nowNanos &+ Int64(max(0, delaySeconds) * 1_000_000_000)
         focused = Candidate(
             text: text, handlerID: handlerID, sinceNanos: nowNanos,
-            showAtNanos: nowNanos, style: style)
+            showAtNanos: deadline, revealsItself: revealsItself, style: style)
     }
 
     /// Clears the per-frame focus slot. Called by the run loop before the frame,
     /// beside the status bar's own per-frame overrides.
     func beginRenderPass() {
+        previousFocusText = focused?.text
+        previousFocusDeadline = focused?.showAtNanos ?? 0
         focused = nil
     }
 
@@ -213,7 +247,10 @@ public final class TooltipState: @unchecked Sendable {
                 text: hovered.text, source: .hover, handlerID: hovered.handlerID,
                 style: hovered.style)
         }
-        guard keyboardRevealed, let focused else { return nil }
+        guard let focused, keyboardRevealed || focused.revealsItself else { return nil }
+        // The help key IS the wait — a press has already taken longer than any
+        // delay — so only a trigger-granted reveal serves the deadline out.
+        guard keyboardRevealed || nowNanos >= focused.showAtNanos else { return nil }
         return Resolved(
             text: focused.text, source: .focus, handlerID: focused.handlerID,
             style: focused.style)
@@ -227,13 +264,26 @@ public final class TooltipState: @unchecked Sendable {
         var style: TooltipStyle
     }
 
-    /// When the hover delay expires, as a monotonic deadline — `nil` when
-    /// nothing is waiting on it.
+    /// When a tooltip that is not yet showing would appear, as a monotonic
+    /// deadline — `nil` when nothing is waiting on one.
     ///
     /// The run loop is demand-driven, so a tooltip whose delay expires between
     /// frames appears only if something else happens to redraw. This is what
     /// `HelpModifier` schedules a one-shot wake against.
-    func hoverDeadlineNanos() -> Int64? { hovered?.showAtNanos }
+    ///
+    /// Both slots, because ``TooltipTrigger/onFocus`` waits out the same delay
+    /// and nothing redraws for a focus that is merely still held. Hover first,
+    /// matching ``resolved(nowNanos:)`` — the slot that would not be shown even
+    /// once its own deadline passed is not worth waking for.
+    func pendingDeadlineNanos(nowNanos: Int64) -> Int64? {
+        if let hovered {
+            return hovered.showAtNanos > nowNanos ? hovered.showAtNanos : nil
+        }
+        guard let focused, focused.revealsItself, !keyboardRevealed,
+            focused.showAtNanos > nowNanos
+        else { return nil }
+        return focused.showAtNanos
+    }
 }
 
 // MARK: - Environment

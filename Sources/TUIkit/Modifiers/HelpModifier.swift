@@ -78,7 +78,7 @@ extension HelpModifier: Renderable {
         // still cannot reach one, because a disabled control does not register
         // with the focus system and so has nothing to reveal.
         guard !context.isMeasuring,
-            context.environment.tooltipVisibility == .automatic,
+            context.environment.tooltipTrigger != .never,
             let tooltips = context.environment.tooltipState,
             let dispatcher = context.environment.mouseEventDispatcher
         else {
@@ -142,12 +142,12 @@ extension HelpModifier: Renderable {
             TooltipPopover.attach(text: text, to: &buffer, context: context)
         }
 
-        // The delay expires between frames, and nothing else will redraw for it.
-        // Declared every frame while a hover is pending, and it stops as soon as
-        // the tooltip is showing or the pointer leaves — one wake per hover, not
-        // a poll.
-        if let deadline = tooltips.hoverDeadlineNanos(),
-            deadline > context.environment.frameNowNanos
+        // The delay expires between frames, and nothing else will redraw for it
+        // — a still-held focus least of all. Declared every frame while either
+        // slot is pending, and it stops as soon as the tooltip is showing or the
+        // candidate goes away: one wake per hover or focus, not a poll.
+        if let deadline = tooltips.pendingDeadlineNanos(
+            nowNanos: context.environment.frameNowNanos)
         {
             let seconds = Double(deadline - context.environment.frameNowNanos) / 1_000_000_000
             context.requestWake(token: "tooltip-\(context.identity.path)", afterSeconds: seconds)
@@ -184,6 +184,9 @@ extension View {
     /// the reader presses the help key (`?` by default). It is presented either
     /// as a row in the status bar or as a popover attached to the control — the
     /// app's choice, through `View.tooltipStyle(_:)`.
+    ///
+    /// `View.tooltips(_:)` chooses when: ``TooltipTrigger/onFocus`` drops the
+    /// help key requirement, so moving the focus through a page explains it.
     ///
     /// ```swift
     /// Button("Rebuild") { rebuild() }

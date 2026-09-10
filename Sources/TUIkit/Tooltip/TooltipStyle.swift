@@ -32,16 +32,39 @@ public enum TooltipStyle: Sendable, Equatable, CaseIterable {
     case popover
 }
 
-// MARK: - TooltipVisibility
+// MARK: - TooltipTrigger
 
-/// Whether tooltips are shown at all.
-public enum TooltipVisibility: Sendable, Equatable, CaseIterable {
-    /// Shown — on hover after the delay, or on the help key.
-    case automatic
-
+/// When a subtree's tooltips appear.
+///
+/// One axis rather than two — a "shown at all" flag beside a "when" would
+/// spell some states twice and others not at all — and the cases are ordered by
+/// eagerness, each showing strictly more than the one above it.
+///
+/// TUI-specific. SwiftUI has no equivalent because it needs none: a pointer is
+/// always present there, so hover is the whole of the answer.
+public enum TooltipTrigger: Sendable, Equatable, CaseIterable {
     /// Never shown. `help(_:)` still compiles and still publishes; nothing
     /// draws it.
-    case hidden
+    case never
+
+    /// On hover after ``EnvironmentValues/tooltipDelay``, or on the help key
+    /// for whatever holds the focus.
+    case automatic
+
+    /// Everything ``TooltipTrigger/automatic`` shows, and additionally whenever
+    /// a control takes the focus — a "beginner mode", where moving through a
+    /// page explains it, with no help key to know about.
+    ///
+    /// The delay applies here too, and a control that keeps the focus across
+    /// frames keeps its original deadline rather than restarting it, so tabbing
+    /// briskly through a row of controls shows nothing and resting on one shows
+    /// its help.
+    case onFocus
+}
+
+extension TooltipTrigger {
+    /// Whether a focus candidate shows without being asked for by the help key.
+    var revealsOnFocus: Bool { self == .onFocus }
 }
 
 // MARK: - Environment
@@ -50,8 +73,8 @@ private struct TooltipStyleKey: EnvironmentKey {
     static let defaultValue: TooltipStyle = .statusBar
 }
 
-private struct TooltipVisibilityKey: EnvironmentKey {
-    static let defaultValue: TooltipVisibility = .automatic
+private struct TooltipTriggerKey: EnvironmentKey {
+    static let defaultValue: TooltipTrigger = .automatic
 }
 
 private struct TooltipDelayKey: EnvironmentKey {
@@ -68,10 +91,10 @@ extension EnvironmentValues {
         set { self[TooltipStyleKey.self] = newValue }
     }
 
-    /// Whether tooltips in this subtree are shown. Default ``TooltipVisibility/automatic``.
-    public var tooltipVisibility: TooltipVisibility {
-        get { self[TooltipVisibilityKey.self] }
-        set { self[TooltipVisibilityKey.self] = newValue }
+    /// When tooltips in this subtree appear. Default ``TooltipTrigger/automatic``.
+    public var tooltipTrigger: TooltipTrigger {
+        get { self[TooltipTriggerKey.self] }
+        set { self[TooltipTriggerKey.self] = newValue }
     }
 
     /// How long the pointer must rest before a hover tooltip appears, in
@@ -94,14 +117,14 @@ extension View {
         environment(\.tooltipStyle, style)
     }
 
-    /// Sets whether tooltips in this subtree are shown.
+    /// Sets when tooltips in this subtree appear.
     ///
     /// `help(_:)` still compiles and still publishes under
-    /// `TooltipVisibility.hidden`; nothing draws it. That is deliberate — the
+    /// ``TooltipTrigger/never``; nothing draws it. That is deliberate — the
     /// alternative is a modifier whose effect depends on where in the tree the
     /// reader happens to look.
-    public func tooltips(_ visibility: TooltipVisibility) -> some View {
-        environment(\.tooltipVisibility, visibility)
+    public func tooltips(_ trigger: TooltipTrigger) -> some View {
+        environment(\.tooltipTrigger, trigger)
     }
 
     /// Sets how long the pointer must rest on a view before its tooltip

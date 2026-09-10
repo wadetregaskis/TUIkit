@@ -23,7 +23,7 @@ struct HelpTooltipTests {
     /// A context wired the way a live frame is: a focus manager, a mouse
     /// dispatcher (hover needs one) and a tooltip state.
     private func harness(
-        visibility: TooltipVisibility = .automatic, delay: Double = 0.6, now: Int64 = 0
+        trigger: TooltipTrigger = .automatic, delay: Double = 0.6, now: Int64 = 0
     ) -> (context: RenderContext, tooltips: TooltipState, focus: FocusManager,
         dispatcher: MouseEventDispatcher)
     {
@@ -32,7 +32,7 @@ struct HelpTooltipTests {
         var env = EnvironmentValues()
         env.applyRuntimeServices(from: tui)
         env.focusManager = focus
-        env.tooltipVisibility = visibility
+        env.tooltipTrigger = trigger
         env.tooltipDelay = delay
         env.frameNowNanos = now
         // Motion reporting is unioned in by `AppRunner` each frame from the
@@ -120,12 +120,12 @@ struct HelpTooltipTests {
             "got \(String(describing: h.tooltips.focused?.text))")
     }
 
-    /// A hidden subtree publishes nothing at all — checked on the FOCUS half as
-    /// well as the hover half, because the two are gated in different files and
-    /// only one of them is obvious.
-    @Test("tooltips(.hidden) publishes no candidate")
-    func hiddenPublishesNothing() {
-        let h = harness(visibility: .hidden)
+    /// A silenced subtree publishes nothing at all — checked on the FOCUS half
+    /// as well as the hover half, because the two are gated in different files
+    /// and only one of them is obvious.
+    @Test("tooltips(.never) publishes no candidate")
+    func neverPublishesNothing() {
+        let h = harness(trigger: .never)
         let view = Button("Rebuild") {}.help("Rebuild the index")
         _ = frame(view, h)
         #expect(h.tooltips.focused == nil, "focus half is gated")
@@ -548,5 +548,176 @@ struct TooltipPopoverTests {
         #expect(
             panel.width <= TooltipPopover.maxTextWidth + 4,
             "capped at \(TooltipPopover.maxTextWidth) plus chrome, got \(panel.width)")
+    }
+}
+
+// MARK: - Auto-reveal on focus
+
+/// `tooltips(.onFocus)` — the "beginner mode": a focus candidate shows without
+/// the help key. The delay is the whole of the difficulty. The focus slot is
+/// cleared and refilled every frame, so a deadline computed at publication would
+/// sit permanently in the future and nothing would ever show; and a deadline
+/// that survived across a CHANGE of focus would make the second control inherit
+/// the first one's wait.
+@MainActor
+@Suite("Tooltips revealed by focus")
+struct TooltipOnFocusTests {
+
+    private static let second: Int64 = 1_000_000_000
+
+    private func harness(trigger: TooltipTrigger = .onFocus, delay: Double = 0.6)
+        -> (tui: TUIContext, focus: FocusManager, env: EnvironmentValues)
+    {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        var env = EnvironmentValues()
+        env.applyRuntimeServices(from: tui)
+        env.focusManager = focus
+        env.tooltipTrigger = trigger
+        env.tooltipDelay = delay
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        return (tui, focus, env)
+    }
+
+    /// One frame at `now`, driving the same per-frame clears the run loop does.
+    @discardableResult
+    private func frame<V: View>(
+        _ view: V, _ h: (tui: TUIContext, focus: FocusManager, env: EnvironmentValues),
+        at now: Int64
+    ) -> FrameBuffer {
+        var env = h.env
+        env.frameNowNanos = now
+        h.tui.tooltipState.beginRenderPass()
+        h.tui.tooltipState.syncReveal(focusID: h.focus.currentFocusedID)
+        h.focus.beginRenderPass()
+        let buffer = renderToBuffer(
+            view,
+            context: RenderContext(
+                availableWidth: 40, availableHeight: 10, environment: env, tuiContext: h.tui))
+        h.focus.endRenderPass()
+        return buffer
+    }
+
+    @Test("Under .automatic a focused control shows nothing until the key")
+    func automaticStaysQuiet() {
+        let h = harness(trigger: .automatic)
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        frame(view, h, at: 0)
+        frame(view, h, at: 5 * Self.second)
+        #expect(h.tui.tooltipState.focused != nil, "the candidate is published")
+        #expect(
+            h.tui.tooltipState.resolved(nowNanos: 5 * Self.second) == nil,
+            "…and stays unrevealed without the help key")
+    }
+
+    /// The headline behaviour: no key press, and after the delay it shows.
+    @Test("Under .onFocus a focused control reveals itself once the delay passes")
+    func revealsAfterTheDelay() {
+        let h = harness()
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        frame(view, h, at: 0)
+        #expect(
+            h.tui.tooltipState.resolved(nowNanos: 0) == nil,
+            "not immediately — a focus that just arrived has not been rested on")
+        // A later frame, still the same control focused.
+        frame(view, h, at: Self.second)
+        let shown = h.tui.tooltipState.resolved(nowNanos: Self.second)
+        #expect(shown?.text == "Rebuild the index", "got \(String(describing: shown?.text))")
+        #expect(shown?.source == .focus, "and it is the focus slot, not a hover")
+    }
+
+    /// **The bug this design is most likely to have.** The deadline has to
+    /// survive `beginRenderPass`'s clear. If it does not, every frame republishes
+    /// a deadline `tooltipDelay` into ITS OWN future and the tooltip never
+    /// arrives however long the reader waits.
+    @Test("The deadline survives the per-frame republication")
+    func deadlineSurvivesRepublication() {
+        let h = harness()
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        // Many frames — a page that is simply redrawing while nothing moves.
+        var last: Int64 = 0
+        for step in 0..<50 {
+            last = Int64(step) * (Self.second / 10)
+            frame(view, h, at: last)
+        }
+        let deadline = h.tui.tooltipState.focused?.showAtNanos
+        #expect(
+            deadline == Int64(0.6 * Double(Self.second)),
+            "still the deadline set on the FIRST frame, got \(String(describing: deadline))")
+        #expect(h.tui.tooltipState.resolved(nowNanos: last) != nil, "so it is showing by now")
+    }
+
+    /// …and moving the focus does NOT inherit the old deadline, or the second
+    /// control would show its help the instant it was reached.
+    @Test("Taking the focus starts a fresh delay")
+    func focusChangeRestartsTheDelay() {
+        let h = harness()
+        let view = VStack {
+            Button("First") {}.help("the first one")
+            Button("Second") {}.help("the second one")
+        }
+        // Let the first one's delay expire.
+        frame(view, h, at: 0)
+        frame(view, h, at: Self.second)
+        #expect(
+            h.tui.tooltipState.resolved(nowNanos: Self.second)?.text == "the first one",
+            "the first control's help is up")
+        // Tab to the second. Its deadline is measured from HERE.
+        h.focus.focusNext()
+        frame(view, h, at: Self.second)
+        #expect(
+            h.tui.tooltipState.resolved(nowNanos: Self.second) == nil,
+            "the second control does not inherit the first one's expired wait")
+        frame(view, h, at: 2 * Self.second)
+        #expect(
+            h.tui.tooltipState.resolved(nowNanos: 2 * Self.second)?.text == "the second one",
+            "…and shows its own help a delay later")
+    }
+
+    /// The help key is not subject to the delay: a press has already waited.
+    @Test("The help key ignores the delay")
+    func theKeyIgnoresTheDelay() {
+        let h = harness(trigger: .automatic, delay: 30)
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        frame(view, h, at: 0)
+        #expect(
+            h.tui.tooltipState.toggleKeyboardReveal(focusID: h.focus.currentFocusedID),
+            "there was something to reveal")
+        #expect(
+            h.tui.tooltipState.resolved(nowNanos: 0)?.text == "Rebuild the index",
+            "shown at once, 30s delay notwithstanding")
+    }
+
+    /// The demand-driven run loop renders nothing for a focus that is merely
+    /// still held, so the reveal needs a wake scheduled against its deadline the
+    /// way a hover does. Without this the tooltip appears only if something else
+    /// happens to redraw.
+    @Test("A pending focus reveal declares a wake deadline")
+    func pendingFocusRevealWakes() {
+        let h = harness()
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        frame(view, h, at: 0)
+        #expect(
+            h.tui.tooltipState.pendingDeadlineNanos(nowNanos: 0)
+                == Int64(0.6 * Double(Self.second)),
+            "got \(String(describing: h.tui.tooltipState.pendingDeadlineNanos(nowNanos: 0)))")
+        // Once it is showing there is nothing left to wake for.
+        frame(view, h, at: Self.second)
+        #expect(
+            h.tui.tooltipState.pendingDeadlineNanos(nowNanos: Self.second) == nil,
+            "no wake once the deadline has passed")
+    }
+
+    /// …and under `.automatic` there is nothing to wake for at all, or every
+    /// focused control with help would keep the loop turning.
+    @Test("Under .automatic a focus candidate declares no wake")
+    func automaticDeclaresNoWake() {
+        let h = harness(trigger: .automatic)
+        let view = Button("Rebuild") {}.help("Rebuild the index")
+        frame(view, h, at: 0)
+        #expect(h.tui.tooltipState.focused != nil, "the candidate exists")
+        #expect(
+            h.tui.tooltipState.pendingDeadlineNanos(nowNanos: 0) == nil,
+            "but nothing is waiting to show")
     }
 }

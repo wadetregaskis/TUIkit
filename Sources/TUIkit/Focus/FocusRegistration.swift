@@ -156,22 +156,30 @@ enum FocusRegistration {
     /// `help(_:)` silently does nothing on the keyboard, with no way to tell
     /// from the call site that it was meant to.
     ///
-    /// Publishing does not SHOW anything: a focus candidate is revealed by the
-    /// help key. See `TooltipState.keyboardRevealed`.
+    /// Publishing does not usually SHOW anything: a focus candidate is revealed
+    /// by the help key, unless the subtree asked for ``TooltipTrigger/onFocus``.
+    /// See `TooltipState.keyboardRevealed`.
     /// Internal, not private, for one caller: the `NavigationSplitView` divider
     /// registers with the focus manager directly rather than through
     /// ``register(context:handler:focusID:)``, so it has to ask for this itself.
     /// It is the only such site; anything else hung off `register` reaches every
     /// focusable in the framework.
     static func publishHelpText(context: RenderContext, focusID: String) {
+        let trigger = context.environment.tooltipTrigger
         guard let text = context.environment.helpText,
-            context.environment.tooltipVisibility == .automatic,
+            trigger != .never,
             let tooltips = context.environment.tooltipState,
             context.environment.focusManager?.isFocused(id: focusID) == true
         else { return }
+        // The delay and the trigger are read HERE, from the focused control's
+        // own environment, for the reason the style is: all three are subtree
+        // settings, and the run loop that resolves the tooltip has only the
+        // root's.
         tooltips.focusing(
             text, handlerID: nil, nowNanos: context.environment.frameNowNanos,
-            style: context.environment.tooltipStyle)
+            style: context.environment.tooltipStyle,
+            delaySeconds: context.environment.tooltipDelay,
+            revealsItself: trigger.revealsOnFocus)
     }
 
     /// Determines whether the given focusID currently has focus.
