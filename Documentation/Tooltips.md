@@ -1,8 +1,8 @@
 # Tooltips — `help(_:)` in a terminal
 
 **Status: shipped, 2026-09-09.** `help(_:)`, `TooltipState`, `TooltipStyle`,
-`TooltipTrigger` (`.never` / `.automatic` / `.onFocus`), the three subtree
-modifiers, the `?` help key and **both presentations** are on `main`. What is not built is §5's rules 4 and 5 — prefer a
+`TooltipTrigger` (`.never` / `.automatic` / `.onFocus` / `.always`), the three
+subtree modifiers, the `?` help key and **both presentations** are on `main`. What is not built is §5's rules 4 and 5 — prefer a
 placement not under the pointer, and re-wrap to a narrower box before rejecting a
 placement. Both are new constraints on
 `OverlayLayer.placed(maxWidth:maxHeight:)` rather than uses of it, and the design
@@ -210,6 +210,19 @@ no combination of "whether" and "when" is meaningful:
 | `.never` | nothing. `help(_:)` still compiles and still publishes. |
 | `.automatic` | on hover after the delay; on the help key for the focused view. |
 | `.onFocus` | …and whenever a control takes the focus, after the same delay. A beginner mode. |
+| `.always` | every tooltip in the subtree, all at once, as popovers. A first-launch tour. |
+
+`.always` forces the popover presentation whatever `tooltipStyle` says, because
+the status bar has one row and this mode has many tooltips. The override travels on
+the *candidate* rather than being applied by the run loop, for the reason
+`Candidate.style` exists at all: `tooltipStyle` is a subtree setting and the run
+loop has only the root environment to read. Without it the bar would show the
+hovered tooltip as a second, redundant presentation of a panel already on screen.
+
+> **Caveat.** Panels under `.always` are placed independently and do **not** avoid
+> one another — §5's rules 4 and 5 are unbuilt, and mutual avoidance is a further
+> rule nobody has designed. On a page with several nearby controls they overlap.
+> It suits a sparse page, or one subtree at a time.
 
 ## 7. Open questions for the owner
 

@@ -60,11 +60,42 @@ public enum TooltipTrigger: Sendable, Equatable, CaseIterable {
     /// briskly through a row of controls shows nothing and resting on one shows
     /// its help.
     case onFocus
+
+    /// Every tooltip in the subtree, all at once, for as long as the subtree is on
+    /// screen — a first-launch tour, or a "show me what all this is" key.
+    ///
+    /// Always as popovers, whatever ``EnvironmentValues/tooltipStyle`` says,
+    /// because the status bar has one row and this mode has many tooltips.
+    ///
+    /// - Important: Panels are placed independently and do **not** avoid one
+    ///   another. On a page with several nearby controls they will overlap. See
+    ///   `Documentation/Tooltips.md` §5 — rules 4 and 5 are unbuilt, and mutual
+    ///   avoidance is a further rule nobody has designed. Reach for this on a
+    ///   sparse page, or one panel at a time.
+    case always
 }
 
 extension TooltipTrigger {
     /// Whether a focus candidate shows without being asked for by the help key.
+    ///
+    /// Not `.always`: that mode does not route through the candidate slots at all
+    /// — every `help(_:)` draws its own panel where it stands — so a focus
+    /// candidate would be a second, redundant presentation of one of them.
     var revealsOnFocus: Bool { self == .onFocus }
+
+    /// Whether every `help(_:)` in the subtree draws its own panel unprompted.
+    var showsEverything: Bool { self == .always }
+
+    /// How a candidate published under this trigger must be presented.
+    ///
+    /// ``always`` forces ``TooltipStyle/popover``, which is what keeps the status
+    /// bar from ALSO showing the hovered one: the run loop decides the bar's
+    /// content from the candidate's own style, having only the root environment to
+    /// read, so the override has to travel on the candidate. That is the same
+    /// reason `Candidate.style` exists at all.
+    func presentation(_ style: TooltipStyle) -> TooltipStyle {
+        showsEverything ? .popover : style
+    }
 }
 
 // MARK: - Environment

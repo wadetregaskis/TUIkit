@@ -90,7 +90,8 @@ extension HelpModifier: Renderable {
         dispatcher.requestFeature(.motion)
 
         let captured = text
-        let capturedStyle = context.environment.tooltipStyle
+        let trigger = context.environment.tooltipTrigger
+        let capturedStyle = trigger.presentation(context.environment.tooltipStyle)
         let capturedDelay = context.environment.tooltipDelay
         // The handler wants its own id, to hand a popover something to anchor
         // to — and cannot have it at the point the closure is formed. A box is
@@ -136,7 +137,13 @@ extension HelpModifier: Renderable {
         // identical help text would both draw a panel; they would also be
         // indistinguishable to a reader, and the cost is a duplicate rather than
         // a wrong answer.
-        if let showing = tooltips.resolved(nowNanos: context.environment.frameNowNanos),
+        if trigger.showsEverything {
+            // Every panel, unprompted and for as long as the subtree is on screen.
+            // No candidate is consulted: this mode is not "which tooltip is
+            // showing" but "all of them", so there is nothing to resolve and
+            // nothing to wait for.
+            TooltipPopover.attach(text: text, to: &buffer, context: context)
+        } else if let showing = tooltips.resolved(nowNanos: context.environment.frameNowNanos),
             showing.style == .popover, showing.text == text
         {
             TooltipPopover.attach(text: text, to: &buffer, context: context)

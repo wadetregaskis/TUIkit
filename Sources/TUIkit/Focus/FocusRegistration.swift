@@ -177,7 +177,7 @@ enum FocusRegistration {
         // root's.
         tooltips.focusing(
             text, handlerID: nil, nowNanos: context.environment.frameNowNanos,
-            style: context.environment.tooltipStyle,
+            style: trigger.presentation(context.environment.tooltipStyle),
             delaySeconds: context.environment.tooltipDelay,
             revealsItself: trigger.revealsOnFocus)
     }
