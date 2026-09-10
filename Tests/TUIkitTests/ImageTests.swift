@@ -218,7 +218,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .mono, dithering: .none)
-        let lines = converter.convert(image, width: 10, height: 5)
+        let lines = converter.convert(image, width: 10, height: 5).lines
 
         #expect(lines.count == 5)
         #expect(!lines[0].isEmpty)
@@ -230,7 +230,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
         let converter = ASCIIConverter(characterSet: .blocks(.coarse), colorMode: .trueColor, dithering: .none)
-        let lines = converter.convert(image, width: 10, height: 5)
+        let lines = converter.convert(image, width: 10, height: 5).lines
 
         #expect(lines.count == 5)
     }
@@ -254,7 +254,7 @@ struct ASCIIConverterTests {
             characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
 
         withColorDepth(.truecolor) {
-            let lines = converter.convert(image, width: 8, height: 4)
+            let lines = converter.convert(image, width: 8, height: 4).lines
             #expect(lines.count == 4, "Output height matches the requested cell count")
             #expect(lines[0].contains("\u{2584}"), "Each cell uses the lower-half-block glyph")
             // True-colour mode emits both 38;2; (fg) and 48;2; (bg) codes — bg is
@@ -276,7 +276,7 @@ struct ASCIIConverterTests {
             characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
 
         withColorDepth(.truecolor) {
-            let lines = converter.convert(image, width: 8, height: 4)
+            let lines = converter.convert(image, width: 8, height: 4).lines
             #expect(lines.count == 4)
             #expect(!lines[0].contains("\u{2584}"), "nothing to draw, so no glyph")
             #expect(!lines[0].contains("38;2;"), "and no foreground to draw it in")
@@ -299,7 +299,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
         let converter = ASCIIConverter(
             characterSet: .ascii, shapeAware: true, colorMode: .mono, dithering: .none)
-        let stripped = converter.convert(image, width: 1, height: 1).first?.stripped ?? ""
+        let stripped = converter.convert(image, width: 1, height: 1).lines.first?.stripped ?? ""
         #expect(stripped.first == "-", "a half/half split is a horizontal edge: '\(stripped)'")
     }
 
@@ -315,7 +315,7 @@ struct ASCIIConverterTests {
 
         let converter = ASCIIConverter(
             characterSet: .blocks(.fine), colorMode: .mono, dithering: .none)
-        let lines = converter.convert(image, width: 4, height: 2)
+        let lines = converter.convert(image, width: 4, height: 2).lines
 
         #expect(lines.count == 2)
         // 4×4 → 4 cells wide × 2 cells tall is 1:1, so cell row 0 sees source
@@ -344,7 +344,7 @@ struct ASCIIConverterTests {
         for charset in [ASCIICharacterSet.blocks(.fine), .blocks(.solid), .ascii] {
             let converter = ASCIIConverter(
                 characterSet: charset, colorMode: .mono, dithering: .none)
-            let lines = converter.convert(image, width: side, height: side / 2)
+            let lines = converter.convert(image, width: side, height: side / 2).lines
             let cells = lines.joined()
             let blank = cells.filter { $0 == " " }.count
             #expect(
@@ -360,7 +360,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 20, height: 20, pixels: pixels)
 
         let converter = ASCIIConverter(characterSet: .blocks(.braille), colorMode: .trueColor, dithering: .none)
-        let lines = converter.convert(image, width: 10, height: 5)
+        let lines = converter.convert(image, width: 10, height: 5).lines
 
         #expect(lines.count == 5)
     }
@@ -394,7 +394,7 @@ struct ASCIIConverterTests {
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: mode, dithering: .none)
 
         withColorDepth(depth) {
-            let lines = converter.convert(image, width: 1, height: 1)
+            let lines = converter.convert(image, width: 1, height: 1).lines
             #expect(lines.count == 1)
             for needle in mustContain {
                 #expect(lines[0].contains(needle), "expected \(needle) in '\(lines[0])'")
@@ -411,7 +411,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 1, height: 1, pixels: pixels)
 
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .mono, dithering: .none)
-        let lines = converter.convert(image, width: 1, height: 1)
+        let lines = converter.convert(image, width: 1, height: 1).lines
 
         #expect(lines.count == 1)
         // Mono should not contain color escape sequences
@@ -431,7 +431,7 @@ struct ASCIIConverterTests {
         let image = RGBAImage(width: 10, height: 10, pixels: pixels)
 
         let converter = ASCIIConverter(characterSet: .blocks(.coarse), colorMode: .ansi256, dithering: .floydSteinberg)
-        let lines = converter.convert(image, width: 10, height: 5)
+        let lines = converter.convert(image, width: 10, height: 5).lines
 
         #expect(lines.count == 5)
     }
@@ -440,7 +440,7 @@ struct ASCIIConverterTests {
     func emptyImageConversion() {
         let image = RGBAImage(width: 0, height: 0, pixels: [])
         let converter = ASCIIConverter()
-        let lines = converter.convert(image, width: 10, height: 5)
+        let lines = converter.convert(image, width: 10, height: 5).lines
         #expect(lines.isEmpty)
     }
 
@@ -452,7 +452,7 @@ struct ASCIIConverterTests {
         withColorDepth(.noColor) {
             for mode in [ASCIIColorMode.trueColor, .ansi256, .ansi16, .grayscale, .mono] {
                 let converter = ASCIIConverter(characterSet: .ascii, colorMode: mode, dithering: .none)
-                let lines = converter.convert(image, width: 1, height: 1)
+                let lines = converter.convert(image, width: 1, height: 1).lines
 
                 #expect(lines.count == 1)
                 #expect(!lines[0].contains("38;2;"))

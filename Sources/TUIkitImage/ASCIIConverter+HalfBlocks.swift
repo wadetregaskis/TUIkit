@@ -32,7 +32,7 @@ extension ASCIIConverter {
         height: Int,
         mode: ASCIIColorMode,
         monoThreshold: Double
-    ) -> [String] {
+    ) -> ASCIIArt {
         if mode == .mono {
             return convertHalfBlocksMono(
                 image, width: width, height: height, monoThreshold: monoThreshold)
@@ -88,8 +88,9 @@ extension ASCIIConverter {
         width: Int,
         height: Int,
         mode: ASCIIColorMode
-    ) -> [String] {
+    ) -> ASCIIArt {
         let lowerHalfBlock: Character = "▄"
+        let upperHalfBlock: Character = "▀"
         let bold = mode.foregroundSurvivesBold
         // The mode resolved ONCE for the whole picture: this renderer asks it
         // twice a cell, and asking the enum copies the palette out of its
@@ -97,6 +98,7 @@ extension ASCIIConverter {
         let colours = CellColours(mode: mode)
 
         var lines = [String]()
+        var coverage = CoverageMap()
         lines.reserveCapacity(height)
 
         // Straight off the pixel buffer: `pixel(at:)` is three retains and
@@ -109,24 +111,66 @@ extension ASCIIConverter {
                 let bottom = top + stride
 
                 for cellX in 0..<width {
-                    let background = colours.color(for: pixels[top + cellX])
-                    let below = colours.color(for: pixels[bottom + cellX])
-                    let uniform = background == below
-                    // A uniform cell is a space on the background; a split one is
-                    // a lower half-block in the bottom pixel's colour over the
-                    // top pixel's. The reset the builder writes before a change
-                    // clears bold too, so bold is re-asserted with each colour
-                    // run — where the mode can afford it, and only for a cell
-                    // that draws a glyph for it to weigh.
-                    row.setColors(
-                        foreground: uniform ? nil : below, background: background,
-                        bold: bold && !uniform, resetFirst: true)
-                    if uniform { row.append(ascii: 0x20) } else { row.append(lowerHalfBlock) }
+                    let upper = pixels[top + cellX]
+                    let lower = pixels[bottom + cellX]
+                    // WHICH HALVES ARE THERE AT ALL decides the glyph, before any
+                    // question about colour — and it is asked of the pixels' COVERAGE
+                    // rather than of whether `colours` gave a colour, because that
+                    // answers `nil` for a colourless MODE too.
+                    let background = upper.a > 0 ? colours.color(for: upper) : nil
+                    let below = lower.a > 0 ? colours.color(for: lower) : nil
+                    switch (upper.a > 0, lower.a > 0) {
+                    case (false, false):
+                        // Neither half is there: a space stating no colour, which leaves
+                        // the cell behind it exactly as it was. This is the cell that
+                        // used to be an explicit black rectangle — §17's logo surround.
+                        row.setColors(foreground: nil, background: nil, resetFirst: true)
+                        row.append(ascii: 0x20)
+                    case (false, true):
+                        // Only the lower half. `▄` in its colour with NO background, so
+                        // the upper half of the cell shows what is behind it.
+                        row.setColors(
+                            foreground: below, background: nil, bold: bold, resetFirst: true)
+                        row.append(lowerHalfBlock)
+                        coverage.note(line: cellY, column: cellX, ink: lower.a, field: .max)
+                    case (true, false):
+                        // Only the upper half, so the glyph FLIPS: `▀` in the top pixel's
+                        // colour rather than `▄` over it. The mono variant has always
+                        // had all four glyphs; the colour one only ever needed two
+                        // because the flatten meant every cell had both halves.
+                        row.setColors(
+                            foreground: background, background: nil, bold: bold, resetFirst: true)
+                        row.append(upperHalfBlock)
+                        coverage.note(line: cellY, column: cellX, ink: upper.a, field: .max)
+                    case (true, true):
+                        // A uniform cell is a space on the background; a split one is
+                        // a lower half-block in the bottom pixel's colour over the
+                        // top pixel's. The reset the builder writes before a change
+                        // clears bold too, so bold is re-asserted with each colour
+                        // run — where the mode can afford it, and only for a cell
+                        // that draws a glyph for it to weigh.
+                        //
+                        // The COVERAGES have to agree as well as the colours. Two pixels
+                        // of one colour at different alphas are not one field: collapsed
+                        // to a space with a single background, the cell would resolve at
+                        // one of the two and the other half would be wrong. That
+                        // optimisation is load-bearing for the Warp contrast-lift banding
+                        // (see this function's own note), so it stays — with the alpha in
+                        // its test.
+                        let uniform = background == below && upper.a == lower.a
+                        row.setColors(
+                            foreground: uniform ? nil : below, background: background,
+                            bold: bold && !uniform, resetFirst: true)
+                        if uniform { row.append(ascii: 0x20) } else { row.append(lowerHalfBlock) }
+                        coverage.note(
+                            line: cellY, column: cellX,
+                            ink: uniform ? .max : lower.a, field: upper.a)
+                    }
                 }
                 lines.append(row.finish())
             }
         }
-        return lines
+        return ASCIIArt(lines: lines, coverage: coverage.runs)
     }
 
     /// Monochrome variant: threshold both pixels and pick the block glyph that
@@ -136,7 +180,7 @@ extension ASCIIConverter {
         width: Int,
         height: Int,
         monoThreshold: Double
-    ) -> [String] {
+    ) -> ASCIIArt {
         var lines = [String]()
         lines.reserveCapacity(height)
 
@@ -161,7 +205,10 @@ extension ASCIIConverter {
             }
             lines.append(line)
         }
-        return lines
+        // No coverage runs: mono paints no colours at all — the four glyphs carry the
+        // whole picture — so there is no alpha to state. What coverage decides here is
+        // whether a half is LIT, which `isMonoInk` answers.
+        return ASCIIArt(lines: lines)
     }
 }
 
@@ -189,6 +236,12 @@ extension ASCIIConverter {
     ///   mid-luminance split misses a dark photograph's tones entirely — which
     ///   is the other half of why mono "drew nothing".
     static func isMonoInk(_ pixel: RGBA, threshold: Double) -> Bool {
-        pixel.luminance >= threshold
+        // Covered before bright. A pixel that is not there cannot be ink, whatever
+        // colour the encoder left in it, and "there" is the ½ rule §6a states for every
+        // glyph decision — at or above half coverage the source's mark is drawn, below
+        // it the destination keeps its cell. Mono paints no colours at all, so this is
+        // the ONLY way coverage reaches it: there is no claim to make, only a glyph to
+        // withhold.
+        pixel.a >= 128 && pixel.luminance >= threshold
     }
 }

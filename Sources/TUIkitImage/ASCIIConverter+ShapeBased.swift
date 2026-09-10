@@ -84,8 +84,8 @@ extension ASCIIConverter {
         mode: ASCIIColorMode,
         columns: ShapeTableColumns,
         edge: (horizontal: Character, vertical: Character, backslash: Character, slash: Character)?
-    ) -> [String] {
-        guard !columns.characters.isEmpty else { return [] }
+    ) -> ASCIIArt {
+        guard !columns.characters.isEmpty else { return ASCIIArt(lines: []) }
 
         // Each cell of the output covers `cellPixelWidth × cellPixelHeight`
         // pixels of the (pre-scaled) source image.
@@ -121,16 +121,14 @@ extension ASCIIConverter {
         // The mode resolved once for the whole picture — see `CellColours`.
         let colours = CellColours(mode: mode)
 
-        var lines = [String]()
-        lines.reserveCapacity(height)
-
         // Render through an unsafe pointer to the pixel array — the hot
         // path makes 96 reads per cell, and we know all the indices are
         // in-bounds because the sample offsets were clamped during their
         // precomputation. Skipping bounds checks here lifts the renderer
         // a long way out of "noticeably slow" territory.
-        lines = image.pixels.withUnsafeBufferPointer { pixelBuffer -> [String] in
+        return image.pixels.withUnsafeBufferPointer { pixelBuffer -> ASCIIArt in
             var lines = [String]()
+            var coverage = CoverageMap()
             lines.reserveCapacity(height)
 
             // Scratch storage reused per cell.
@@ -150,6 +148,7 @@ extension ASCIIConverter {
                     var sumR = 0
                     var sumG = 0
                     var sumB = 0
+                    var sumA = 0
                     for centreIndex in 0..<centreCount {
                         var totalDarkness: Double = 0
                         let centreBase = centreIndex * sampleCount
@@ -157,10 +156,18 @@ extension ASCIIConverter {
                             let pixel = pixelBuffer[
                                 baseLinearIndex + offsets[centreBase + sampleIndex]
                             ]
-                            totalDarkness += 1.0 - (pixel.luminance / 255.0)
-                            sumR += Int(pixel.r)
-                            sumG += Int(pixel.g)
-                            sumB += Int(pixel.b)
+                            // Weighted by coverage, like every other average in the
+                            // module (§41.1): a transparent sample has no colour to
+                            // contribute, and DARKNESS is what picks the glyph — an
+                            // uncovered sample is not dark, it is absent, so it
+                            // contributes none of either.
+                            let coverage = Int(pixel.a)
+                            totalDarkness +=
+                                (1.0 - (pixel.luminance / 255.0)) * (Double(coverage) / 255)
+                            sumR += Int(pixel.r) * coverage
+                            sumG += Int(pixel.g) * coverage
+                            sumB += Int(pixel.b) * coverage
+                            sumA += coverage
                         }
                         sampling[centreIndex] = totalDarkness * inverseSampleCount
                     }
@@ -186,18 +193,24 @@ extension ASCIIConverter {
                     // 255 multiplied by the inexact `1.0 / 96.0` can come
                     // back as 255.000…001). Crashed the Image (File) demo
                     // in the wild.
-                    let averageColor = RGBA(
-                        r: UInt8(clamping: Int((Double(sumR) * inverseAllSamples).rounded())),
-                        g: UInt8(clamping: Int((Double(sumG) * inverseAllSamples).rounded())),
-                        b: UInt8(clamping: Int((Double(sumB) * inverseAllSamples).rounded())))
+                    // Divided by the total COVERAGE rather than the sample count, which
+                    // is what un-premultiplies the sum above; the cell's own coverage is
+                    // the mean of the samples'.
+                    let averageColor =
+                        sumA > 0
+                        ? RGBA(
+                            r: UInt8(clamping: sumR / sumA), g: UInt8(clamping: sumG / sumA),
+                            b: UInt8(clamping: sumB / sumA),
+                            a: UInt8(clamping: Int((Double(sumA) * inverseAllSamples).rounded())))
+                        : RGBA(r: 0, g: 0, b: 0, a: 0)
+                    coverage.note(line: cellY, column: cellX, ink: averageColor.a, field: .max)
                     row.setColors(foreground: colours.color(for: averageColor), background: nil)
                     row.append(character)
                 }
                 lines.append(row.finish())
             }
-            return lines
+            return ASCIIArt(lines: lines, coverage: coverage.runs)
         }
-        return lines
     }
 
     /// Finds the character in the shape table whose shape vector is closest

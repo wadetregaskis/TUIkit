@@ -90,7 +90,7 @@ struct AdaptationTargetTests {
 
     /// The property that makes the second fit a no-op: a constrained palette is
     /// spelt in the target's OWN colours, so `downsampled(to:)` — which
-    /// `ASCIIConverter.convert(_:width:height:)` runs after the derivation, and
+    /// `ASCIIConverter.convert(_:width:height:).lines` runs after the derivation, and
     /// must keep running — has nothing left to change. A palette of triples
     /// carrying the same RGB would be re-quantised by it, and could land
     /// somewhere else.

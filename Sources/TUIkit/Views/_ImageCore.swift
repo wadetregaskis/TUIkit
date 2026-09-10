@@ -59,10 +59,10 @@ private struct ImageRenderCache: Equatable {
     var contentMode: ContentMode
     var aspectRatioOverride: Double?
     var cellAspect: Double
-    var lines: [String]
+    var art: ASCIIArt
 
     /// Returns whether `self` was built from the same inputs as the
-    /// pending render. Compares everything except the cached `lines`.
+    /// pending render. Compares everything except the cached `art`.
     func matches(  // swiftlint:disable:this function_parameter_count
         source: ImageSource,
         rawImageWidth: Int, rawImageHeight: Int,
@@ -500,7 +500,7 @@ extension _ImageCore {
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect
         ) {
-            return FrameBuffer(lines: inked(cache.lines, mode: colorMode, palette: palette))
+            return Self.buffer(for: cache.art, mode: colorMode, palette: palette)
         }
 
         let converter = ASCIIConverter(
@@ -513,7 +513,7 @@ extension _ImageCore {
             toneCurve: toneCurve,
             edgeContrast: edgeContrast
         )
-        let lines = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
+        let art = converter.convert(rawImage, width: targetSize.width, height: targetSize.height)
 
         cacheBox.value = ImageRenderCache(
             source: source,
@@ -532,10 +532,29 @@ extension _ImageCore {
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect,
-            lines: lines
+            art: art
         )
 
-        return FrameBuffer(lines: inked(lines, mode: colorMode, palette: palette))
+        return Self.buffer(for: art, mode: colorMode, palette: palette)
+    }
+
+    /// The buffer a converted picture becomes: its lines, inked if the mode needs it,
+    /// and its coverage as claims.
+    ///
+    /// **The claims are the glyph path's half of the claim/bytes pairing.** Every cell
+    /// the converter drew at less than full coverage states its colour at full strength
+    /// — an emitter has no backdrop to composite against — and says here which cells owe
+    /// a blend, so the compositor resolves them against what is actually behind the
+    /// image rather than against the black the flatten used to assume (§42).
+    ///
+    /// A fully opaque picture's `coverage` is empty, so this is one `isEmpty` for the
+    /// overwhelming majority of images and no allocation at all.
+    private static func buffer(
+        for art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
+    ) -> FrameBuffer {
+        var buffer = FrameBuffer(lines: inked(art.lines, mode: mode, palette: palette))
+        buffer.opacityRegions += art.claims
+        return buffer
     }
 
     /// Mono output, given the theme's ink and paper.
@@ -551,7 +570,7 @@ extension _ImageCore {
     /// because the cache is not keyed on the palette: baking the colours into
     /// the cached lines would serve the old theme's ink forever. Same reason
     /// ``ASCIIColorMode/resolved(with:)`` is applied before it.
-    private func inked(
+    private static func inked(
         _ lines: [String], mode: ASCIIColorMode, palette: any Palette
     ) -> [String] {
         guard mode == .mono else { return lines }
@@ -862,5 +881,33 @@ extension _ImageCore {
             initialized = index
         }
         return (bytes, format)
+    }
+}
+
+// MARK: - Coverage as claims
+
+extension ASCIIArt {
+    /// What this picture's cells owe the compositor, in the buffer's own coordinates.
+    ///
+    /// The glyph path's half of the claim/bytes pairing: every cell the converter drew
+    /// at less than full coverage states its colour at full strength — an emitter has no
+    /// backdrop to composite against — and this says which cells owe a blend, so the
+    /// compositor resolves them against what is actually behind the image rather than
+    /// against the black the flatten used to assume (§42).
+    ///
+    /// A run per rectangle, one row tall, which is what `CoverageRun` already coalesced
+    /// to. `[]` for a fully opaque picture, which is nearly every picture: one `isEmpty`
+    /// and no allocation.
+    ///
+    /// Its own named property rather than four lines inside `_ImageCore` because
+    /// `_ImageCore` is private and this is the only part of it worth asserting directly
+    /// — the raster view has no in-memory source, so the end-to-end path cannot be
+    /// rendered from pixels in a test.
+    var claims: [OpacityRegion] {
+        coverage.compactMap { run in
+            OpacityRegion.claim(
+                offsetX: run.columns.lowerBound, offsetY: run.line,
+                width: run.columns.count, height: 1, inkAlpha: run.ink, fieldAlpha: run.field)
+        }
     }
 }

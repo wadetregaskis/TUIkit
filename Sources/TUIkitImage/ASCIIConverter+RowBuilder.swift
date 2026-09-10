@@ -118,7 +118,18 @@ struct CellColours {
 
     /// The colour a pixel is drawn in — the palette entry it quantises to, the
     /// grey ramp step, or the pixel itself at truecolor — and `nil` for a mode
-    /// that draws no colour at all.
+    /// that draws no colour at all, or a pixel with no coverage.
+    ///
+    /// **A fully transparent pixel has no colour**, and `nil` here is what makes every
+    /// renderer say so: a cell that states no colour leaves the one behind it alone,
+    /// which is exactly what "nothing is here" means in a cell grid. The alternative —
+    /// and what the glyph path did until §42 — is to composite over an assumed
+    /// backdrop, which for a logo's transparent surround drew a black rectangle.
+    ///
+    /// PARTIAL coverage keeps its colour, at full strength: the colour is what the
+    /// pixel is, and how much of it is present travels beside the bytes as a
+    /// ``ASCIIArt/CoverageRun``. That is the same claim/bytes pairing the rest of the
+    /// framework uses, one module down.
     ///
     /// The one place the question is answered. The escape strings
     /// (`ASCIIConverter.foregroundColorCode(for:mode:)`) and the byte writer
@@ -127,6 +138,7 @@ struct CellColours {
     /// written down.
     @inline(__always)
     func color(for pixel: RGBA) -> Color? {
+        guard pixel.a > 0 else { return nil }
         switch kind {
         case .trueColor:
             return .rgb(pixel.r, pixel.g, pixel.b)

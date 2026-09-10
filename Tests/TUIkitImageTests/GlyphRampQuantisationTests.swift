@@ -45,7 +45,7 @@ struct GlyphRampQuantisationTests {
     func smallRampUsesEveryLevel(count: Int) {
         let converter = ASCIIConverter(
             characterSet: .ascii(glyphs: count), colorMode: .mono, supersampling: 1)
-        let out = converter.convert(gradient(width: 60, height: 4), width: 30, height: 2)
+        let out = converter.convert(gradient(width: 60, height: 4), width: 30, height: 2).lines
         let used = distinctGlyphs(out)
         #expect(
             used.count == count,
@@ -63,7 +63,7 @@ struct GlyphRampQuantisationTests {
         let ramp = GlyphRepertoire.densityRamp(from: GlyphRepertoire.ascii, count: 4)
         let converter = ASCIIConverter(
             characterSet: .ascii(glyphs: 4), colorMode: .mono, supersampling: 1)
-        let out = converter.convert(bright, width: 4, height: 2)
+        let out = converter.convert(bright, width: 4, height: 2).lines
         #expect(
             distinctGlyphs(out) == [ramp[3]],
             "luminance 240 lands in the top band of 4: |\(out)| vs ramp \(ramp)")
@@ -73,7 +73,7 @@ struct GlyphRampQuantisationTests {
     func equalBands() {
         let converter = ASCIIConverter(
             characterSet: .ascii(glyphs: 2), colorMode: .mono, supersampling: 1)
-        let out = converter.convert(gradient(width: 64, height: 2), width: 32, height: 1)
+        let out = converter.convert(gradient(width: 64, height: 2), width: 32, height: 1).lines
         let line = plain(out[0])
         let darkCells = line.prefix(while: { $0 == " " }).count
         #expect((14...18).contains(darkCells), "≈half the gradient is the dark level: |\(line)|")
@@ -91,7 +91,7 @@ struct GlyphRampQuantisationTests {
     func blockRampIsStylised() {
         let converter = ASCIIConverter(
             characterSet: .blocks(.ramp), colorMode: .mono, supersampling: 1)
-        let line = plain(converter.convert(gradient(width: 120, height: 2), width: 60, height: 1)[0])
+        let line = plain(converter.convert(gradient(width: 120, height: 2), width: 60, height: 1).lines[0])
         let coverage = line.compactMap { Self.eighths[$0] }
         #expect(coverage.count == line.count, "every glyph is a block eighth: |\(line)|")
 
@@ -120,7 +120,7 @@ struct GlyphRampQuantisationTests {
         func levels(_ set: ASCIICharacterSet) -> Int {
             let converter = ASCIIConverter(characterSet: set, colorMode: .mono, supersampling: 1)
             return distinctGlyphs(converter.convert(gradient(width: 120, height: 2),
-                                                    width: 60, height: 1)).count
+                                                    width: 60, height: 1).lines).count
         }
         #expect(levels(.blocks(.ramp)) > levels(.blocks(.coarse)))
     }
@@ -153,7 +153,7 @@ struct LuminanceEdgeTracingTests {
         let converter = ASCIIConverter(
             characterSet: .unicode(glyphs: 8), shapeAware: shapeAware, colorMode: .mono,
             supersampling: 1, edgeThreshold: edgeThreshold)
-        return converter.convert(box(width: 60, height: 60), width: 24, height: 12)
+        return converter.convert(box(width: 60, height: 60), width: 24, height: 12).lines
             .joined(separator: "\n")
             .replacing(/\u{1B}\[[0-9;]*[A-Za-z]/, with: "")
     }

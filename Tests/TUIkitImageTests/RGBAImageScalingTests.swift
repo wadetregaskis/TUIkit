@@ -81,19 +81,6 @@ struct RGBAImageScalingTests {
         #expect(mid.r == 128 && mid.b == 128 && mid.a == 255, "\(mid)")
     }
 
-    /// The glyph renderers read colour and never alpha. They composited over
-    /// black by accident while the filter darkened soft edges; now they do it
-    /// on purpose, in one place.
-    @Test("Flattening over black multiplies colour by coverage")
-    func flattenedOverBlack() {
-        let image = RGBAImage(
-            width: 2, height: 1,
-            pixels: [RGBA(r: 255, g: 0, b: 0, a: 128), RGBA(r: 10, g: 20, b: 30)])
-        let flat = image.flattenedOverBlack()
-        #expect(flat.pixel(at: 0, 0) == RGBA(r: 128, g: 0, b: 0, a: 255), "\(flat.pixel(at: 0, 0))")
-        #expect(flat.pixel(at: 1, 0) == RGBA(r: 10, g: 20, b: 30, a: 255))
-    }
-
     /// The other two resamplers already did this; the test is here so a future
     /// edit to any of the three fails in the same place.
     @Test("The other resamplers carry it too")

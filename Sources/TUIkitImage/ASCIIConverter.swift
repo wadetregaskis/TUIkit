@@ -507,9 +507,9 @@ extension ASCIIConverter {
     ///   - width: Target width in characters.
     ///   - height: Target height in characters.
     /// - Returns: An array of ANSI-formatted strings representing the ASCII art.
-    public func convert(_ image: RGBAImage, width: Int, height: Int) -> [String] {
+    public func convert(_ image: RGBAImage, width: Int, height: Int) -> ASCIIArt {
         guard image.width > 0, image.height > 0, width > 0, height > 0 else {
-            return []
+            return ASCIIArt(lines: [])
         }
 
         // Downsample the requested color mode to one the terminal can
@@ -562,10 +562,13 @@ extension ASCIIConverter {
         // the render grid BEFORE dithering — error diffusion belongs at the
         // resolution the glyphs actually quantise (dither-then-average would
         // just smooth the pattern back out).
-        // Over black, explicitly: the glyph renderers below read colour and
-        // never alpha, and the resampler no longer darkens a soft edge for
-        // them by accident. See `flattenedOverBlack`.
-        var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight).flattenedOverBlack()
+        // NOT flattened. It used to be, "over black, explicitly", because the glyph
+        // renderers read colour and never alpha — which made every transparent pixel
+        // black and a logo's surround a black rectangle. The renderers read coverage
+        // now (§42): a cell with none states no colour at all, and a partly covered one
+        // states its colour and reports what it was drawn at. `flattenedOverBlack()`
+        // survives for the callers that genuinely want a flatten.
+        var scaled = image.scaledBilinear(to: pixelWidth, pixelHeight)
         if factor > 1 {
             scaled = scaled.boxReduced(by: factor)
         }
@@ -622,7 +625,7 @@ extension ASCIIConverter {
                 scaled, mode: effectiveMode, monoThreshold: monoThreshold)
         }
 
-        // Convert to lines.
+        // Convert to lines and the coverage each cell was drawn at.
         if isShapeMatched {
             let (columns, edge) = shapeConfiguration
             return convertShapeBased(
@@ -758,7 +761,7 @@ extension ASCIIConverter {
         width: Int,
         height: Int,
         mode: ASCIIColorMode
-    ) -> [String] {
+    ) -> ASCIIArt {
         let ramp = characterRamp
         // The mode resolved once for the whole picture — see `CellColours`.
         let colours = CellColours(mode: mode)
@@ -775,6 +778,7 @@ extension ASCIIConverter {
             } : nil
 
         var lines = [String]()
+        var coverage = CoverageMap()
         lines.reserveCapacity(height)
 
         image.pixels.withUnsafeBufferPointer { pixels in
@@ -805,14 +809,29 @@ extension ASCIIConverter {
                                 edge: edge, threshold: edgeThreshold)
                         } ?? ramp[clampedIndex]
 
+                    // A ramp paints INK and no field, so a transparent pixel is a
+                    // space in no colour rather than the densest glyph its straight
+                    // colour happens to name. Without this the flatten's removal would
+                    // have made a transparent surround draw whatever the encoder left in
+                    // those pixels — brighter than black, and therefore a visible glyph.
+                    //
+                    // Asked of the pixel's COVERAGE, not of whether `colours` gave a
+                    // colour: that answers `nil` for a colourless MODE as well, and
+                    // testing it here blanked every mono and no-colour render.
+                    guard pixel.a > 0 else {
+                        row.setColors(foreground: nil, background: nil)
+                        row.append(ascii: 0x20)
+                        continue
+                    }
                     row.setColors(foreground: colours.color(for: pixel), background: nil)
                     row.append(char)
+                    coverage.note(line: y, column: x, ink: pixel.a, field: .max)
                 }
                 lines.append(row.finish())
             }
         }
 
-        return lines
+        return ASCIIArt(lines: lines, coverage: coverage.runs)
     }
 
     /// Converts each pixel to a full-cell background fill: a space whose cell
@@ -831,10 +850,11 @@ extension ASCIIConverter {
         height: Int,
         mode: ASCIIColorMode,
         monoThreshold: Double
-    ) -> [String] {
+    ) -> ASCIIArt {
         // The mode resolved once for the whole picture — see `CellColours`.
         let colours = CellColours(mode: mode)
         var lines = [String]()
+        var coverage = CoverageMap()
         lines.reserveCapacity(height)
         image.pixels.withUnsafeBufferPointer { pixels in
             for y in 0..<height {
@@ -846,13 +866,17 @@ extension ASCIIConverter {
                         row.append(Self.isMonoInk(pixel, threshold: monoThreshold) ? "█" : " ")
                         continue
                     }
+                    // A solid block paints the FIELD and nothing else — a space on a
+                    // background — so a transparent pixel is a space with no colour,
+                    // which leaves the cell behind it alone.
                     row.setColors(foreground: nil, background: colours.color(for: pixel))
                     row.append(ascii: 0x20)
+                    coverage.note(line: y, column: x, ink: .max, field: pixel.a)
                 }
                 lines.append(row.finish())
             }
         }
-        return lines
+        return ASCIIArt(lines: lines, coverage: coverage.runs)
     }
 
     /// The luminance ramp for the current charset, ordered dark pixel →

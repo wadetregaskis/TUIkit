@@ -36,7 +36,7 @@ struct BlocksRenderTests {
     func backgroundFilledNoGlyphs() {
         let converter = ASCIIConverter(characterSet: .blocks(.solid), colorMode: .trueColor, dithering: .none)
         withColorDepth(.palette256) {
-            let lines = converter.convert(gradient(20, 12), width: 20, height: 12)
+            let lines = converter.convert(gradient(20, 12), width: 20, height: 12).lines
             #expect(lines.count == 12)
             for (row, line) in lines.enumerated() {
                 let visible = line.stripped
@@ -58,7 +58,7 @@ struct BlocksRenderTests {
     func monoFallback() {
         let converter = ASCIIConverter(characterSet: .blocks(.solid), colorMode: .mono, dithering: .none)
         withColorDepth(.noColor) {
-            let joined = converter.convert(gradient(10, 4), width: 10, height: 4).joined(separator: "\n")
+            let joined = converter.convert(gradient(10, 4), width: 10, height: 4).lines.joined(separator: "\n")
             #expect(!joined.contains("\u{1B}["), "mono emits no colour escape codes")
             #expect(joined.contains("█") || joined.contains(" "))
         }

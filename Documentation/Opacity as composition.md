@@ -1157,9 +1157,12 @@ Plus the circular `Gauge`'s four emit sites (§36.6).
 Plus the indeterminate `ProgressView` sweep (§36.7), by declining the RUN rather
 than the alpha.
 
-Not honoured: **the image glyph path** (§17), which is the only entry point of §16.1
-still open, and four `Palette` surface derivations that drop a faded slot's alpha
-(§28.2, detailed in §37 — the project owner's call).
+Plus the image glyph path (§42), which was the last of them, and the four `Palette`
+surface derivations, which now carry (§39).
+
+Not honoured: **the scrollbars' track and thumb** (§40.2 — a bar is `[String]` across
+nine call sites, and making it claim-bearing is its own commit), and `.opacity(_:)` on
+an `Image`'s PIXEL path, which is declined deliberately (§17).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -2797,3 +2800,105 @@ Worth knowing about the symptom too: `.ansi16` absorbs the whole carry into one 
 so a test written against it passes whatever the arithmetic does. The finer the
 palette, the more of this leaks — which is the opposite of the intuition that a coarse
 palette is where dithering artefacts live.
+
+
+## 42. The image glyph path carries alpha (2026-09-10)
+
+§17's last open item, and the only entry point of §16.1 that was still unhonoured.
+`ASCIIConverter` called `flattenedOverBlack()` on every image before converting it, so
+every renderer saw an opaque picture and a logo with a transparent surround came out as
+an explicit black rectangle: invisible on a dark theme, glaring on a light one. The
+flatten is gone.
+
+### 42.1 `convert` returns a picture, not lines
+
+`convert(_:width:height:) -> [String]` was the structural blocker, the third time in
+this document that a `String`-returning function has been one (`BorderRenderer` §18.3,
+`TrackRenderer` §31, `PaintRenderer.styled(pieces:)` §36.5). A cell's colours are chosen
+from pixels that may be partly or wholly transparent, and a string has nowhere to say so.
+
+`ASCIIArt` carries the lines and the coverage: **runs**, not cells, because an image's
+alpha is mostly large uniform areas — a logo's transparent surround is one run per line,
+and a photograph is none at all. `[]` for a fully opaque picture, the same contract
+`Text.uniformAlphaClaims` states and for the same reason. `CoverageMap` coalesces as the
+cells are emitted, and drops fully opaque ones rather than recording them, which is what
+keeps an opaque picture's list empty without any caller testing for it.
+
+`_ImageCore` turns those into `OpacityRegion`s through `ASCIIArt.claims`.
+
+### 42.2 The two things §17 said this would drag, and a third
+
+**The half-block coalescing gained an alpha term**, as predicted. Two pixels of one
+colour are emitted as a SPACE with only a background — 86.5% of a photograph's cells at
+sixteen colours, and load-bearing for the Warp contrast-lift banding — but two pixels of
+one colour at DIFFERENT coverages are not one field: collapsed to a single background the
+cell would resolve at one of the two and the other half would be wrong. So the test is
+`background == below && upper.a == lower.a`, and the optimisation stays.
+
+**The two pre-existing resampler bugs** were fixed first, in their own commits (§41).
+
+The third was not predicted: **a half-block cell paints its two halves from different
+pixels, so one can be there and the other not.** The renderer only ever had
+`▄`-over-a-background because the flatten meant every cell had both halves. It now has
+four cases:
+
+| upper | lower | cell |
+|---|---|---|
+| absent | absent | a space stating NO colour — the surround that was a black rectangle |
+| absent | there | `▄` in the lower colour, no background |
+| there | absent | **`▀`** in the upper colour, no background — the glyph flips |
+| there | there | as before: a space on a background when they agree, `▄` over it when they do not |
+
+The mono variant has had all four glyphs since it was written. The colour one needed only
+two, and that was the flatten's doing.
+
+### 42.3 Coverage is not colourlessness, and conflating them blanked everything
+
+`CellColours.color(for:)` is documented as "the one place the question is answered", so
+it was the obvious place to return `nil` for a transparent pixel — and that is right. What
+was wrong was then testing `color(for:) == nil` to decide whether to draw a GLYPH:
+`nil` also means "this MODE paints no colour", which is `.mono` and every no-colour
+terminal. Every mono and colourless render came out blank, across eleven test files.
+
+The glyph decision asks the pixel's coverage directly; the colour question stays with
+`colours`. Two questions, two tests, and the failure was loud and immediate — which is
+the argument for having had those eleven files' worth of assertions in the first place.
+
+### 42.4 Where coverage decides a glyph rather than a colour
+
+§6a's rule is that alpha is honoured exactly for COLOURS and becomes a decision for
+glyphs, at the ½ threshold. Four renderers make glyph decisions and all four now ask it:
+
+- **braille** lights a dot only at coverage ≥ ½ (a transparent dot used to light itself
+  from whatever colour the encoder left in it);
+- **mono** — `isMonoInk` — the same, and it is the *only* way coverage reaches mono, which
+  paints no colours at all and therefore has no claim to make;
+- **the ramp charsets** draw a space in no colour where there is no coverage, rather than
+  whichever glyph the straight colour's luminance names;
+- **the shape matcher** weights its darkness samples by coverage: an uncovered sample is
+  not dark, it is absent.
+
+Braille and the shape matcher also average their cells' colours **premultiplied**, for
+the reason §41.1 gives — eight dots is a small enough neighbourhood that one transparent
+corner visibly darkened a whole cell.
+
+### 42.5 `flattenedOverBlack()` is deleted
+
+Its documentation named exactly one purpose — "for the glyph renderers, which read a
+pixel's colour and never its alpha… this is that accident made deliberate" — and that
+purpose is gone. A public function whose only stated rationale no longer holds is worse
+than no function: the next reader would assume it is load-bearing. Pre-1.0, per
+`CONTRIBUTING`, the old spelling goes rather than lingering as a shim.
+
+### 42.6 What this does NOT do
+
+`.opacity(_:)` on an `Image` still behaves differently per path — the glyph path fades,
+the pixel path declines, because fading a real picture means re-transmitting up to
+megabytes per phase. `OpacityResolution` declines it deliberately and should keep
+declining it.
+
+And the **pixel** path was already correct (§17): alpha survives the tone curve,
+sharpening, dithering, quantisation and the mono recolouring, and is transmitted as
+`f=32`. Nothing there changed.
+
+With this, **§16.1's ledger has no open entry points at all.**

@@ -349,29 +349,6 @@ extension RGBAImage {
         return RGBAImage(width: targetWidth, height: targetHeight, pixels: scaled)
     }
 
-    /// The picture composited over black: every colour multiplied by its own
-    /// coverage, and every pixel made opaque.
-    ///
-    /// For the glyph renderers, which read a pixel's colour and never its
-    /// alpha. They composited over black by ACCIDENT for as long as the
-    /// resampler filtered straight alpha — the decoder writes a transparent
-    /// pixel as black, so a soft edge came out of the filter already
-    /// darkened — and `scaledBilinear` now filters premultiplied, which hands
-    /// them the true colour with the coverage beside it. This is that
-    /// accident made deliberate, in one place.
-    public func flattenedOverBlack() -> RGBAImage {
-        guard pixels.contains(where: { $0.a != 255 }) else { return self }
-        var flattened = self
-        flattened.mapPixels { pixel in
-            let coverage = Int(pixel.a)
-            return RGBA(
-                r: UInt8(Int(pixel.r) * coverage / 255),
-                g: UInt8(Int(pixel.g) * coverage / 255),
-                b: UInt8(Int(pixel.b) * coverage / 255))
-        }
-        return flattened
-    }
-
     /// Returns a copy with each `factor × factor` block averaged into one
     /// pixel — true area sampling.
     ///

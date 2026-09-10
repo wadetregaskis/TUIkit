@@ -36,7 +36,7 @@ struct BoldSafetyTests {
 
     private func converted(_ mode: ASCIIColorMode) -> String {
         let converter = ASCIIConverter(characterSet: .blocks(.fine), colorMode: mode)
-        return converter.convert(ramp(width: 8, height: 8), width: 8, height: 4)
+        return converter.convert(ramp(width: 8, height: 8), width: 8, height: 4).lines
             .joined(separator: "\n")
     }
 

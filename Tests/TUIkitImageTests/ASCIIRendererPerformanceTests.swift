@@ -94,7 +94,7 @@ struct ASCIIRendererPerformanceTests {
 
         var frame: [String] = []
         let perCall = measure(10) {
-            frame = converter.convert(image, width: 80, height: 40)
+            frame = converter.convert(image, width: 80, height: 40).lines
         }
         #expect(frame.count == 40, "every requested row")
         let widths = Set(frame.map { cells($0).count })
@@ -121,7 +121,8 @@ struct ASCIIRendererPerformanceTests {
         let perCall = measure(10) {
             frame = converter.convertBraille(
                 image, width: 80, height: 40, mode: .grayscale,
-                monoThreshold: ASCIIConverter.midLuminance)
+                monoThreshold: ASCIIConverter.midLuminance
+            ).lines
         }
         #expect(frame.count == 40, "every requested row")
         let widths = Set(frame.map { cells($0).count })

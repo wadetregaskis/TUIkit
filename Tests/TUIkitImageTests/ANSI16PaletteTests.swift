@@ -83,7 +83,7 @@ struct ASCIIPaletteANSI16Tests {
         let converter = ASCIIConverter(
             characterSet: .blocks(.solid), colorMode: .trueColor, dithering: .none)
         ColorDepth.withCurrent(.basic16) {
-            let lines = converter.convert(image, width: 2, height: 2)
+            let lines = converter.convert(image, width: 2, height: 2).lines
             let all = lines.joined()
             // `.solid` fills the cell, so the colour lands in the BACKGROUND
             // family — 40–47 and 100–107.

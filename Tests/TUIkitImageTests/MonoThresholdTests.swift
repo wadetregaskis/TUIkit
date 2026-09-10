@@ -118,7 +118,7 @@ struct MonoThresholdTests {
     func darkImageRendersSomething(characterSet: ASCIICharacterSet) {
         let source = darkSubjectImage(width: 240, height: 120)
         let converter = ASCIIConverter(characterSet: characterSet, colorMode: .mono)
-        let lines = converter.convert(source, width: 60, height: 24)
+        let lines = converter.convert(source, width: 60, height: 24).lines
         let inked = inkFraction(lines)
         // The subject is a ninth of the frame. Anything near zero means the
         // threshold sat outside the image's tones — which is what a fixed

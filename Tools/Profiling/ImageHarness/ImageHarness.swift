@@ -133,8 +133,8 @@ struct ImageHarness {
             let image = converter.recoloured(source, width: width, height: height)
             return image.pixels.count &+ Int(image.pixels[image.pixels.count / 2].r)
         }
-        let lines = converter.convert(source, width: width, height: height)
-        return lines.count &+ (lines.first?.utf8.count ?? 0)
+        let art = converter.convert(source, width: width, height: height)
+        return art.lines.count &+ (art.lines.first?.utf8.count ?? 0) &+ art.coverage.count
     }
 
     /// The palette quantiser on its own, over DISTINCT colours.

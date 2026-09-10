@@ -38,7 +38,7 @@ extension ASCIIConverter {
     ///   render as blank as a mono one. See ``monoInkThreshold(for:)``.
     func convertBraille(
         _ image: RGBAImage, width: Int, height: Int, mode: ASCIIColorMode, monoThreshold: Double
-    ) -> [String] {
+    ) -> ASCIIArt {
         // Braille bit index for each (dy, dx) of the 2x4 cell.
         // Indexed by `dy * 2 + dx`.
         //   (0,0)=0  (0,1)=3
@@ -66,8 +66,9 @@ extension ASCIIConverter {
         // The mode resolved once for the whole picture — see `CellColours`.
         let colours = CellColours(mode: mode)
 
-        return image.pixels.withUnsafeBufferPointer { buffer -> [String] in
+        return image.pixels.withUnsafeBufferPointer { buffer -> ASCIIArt in
             var lines = [String]()
+            var coverage = CoverageMap()
             lines.reserveCapacity(height)
 
             for charY in 0..<height {
@@ -90,6 +91,7 @@ extension ASCIIConverter {
                     var totalR = 0
                     var totalG = 0
                     var totalB = 0
+                    var totalA = 0
                     var count = 0
 
                     for index in 0..<8 {
@@ -97,18 +99,32 @@ extension ASCIIConverter {
                         let dx = index % 2
                         if dy >= cellHeight || dx >= cellWidth { continue }
                         let pixel = buffer[baseIndex + cellOffsets[index]]
+                        let coverage = Int(pixel.a)
                         let r = Int(pixel.r)
                         let g = Int(pixel.g)
                         let b = Int(pixel.b)
-                        totalR += r
-                        totalG += g
-                        totalB += b
+                        // PREMULTIPLIED, for the reason `boxReduced(by:)` and
+                        // `scaledBilinear(to:_:)` are (§41.1): a transparent dot's colour
+                        // is meaningless and the decoders write it black, so averaging it
+                        // straight pulls the cell's ink toward black. Eight dots is a
+                        // small enough neighbourhood that one transparent corner visibly
+                        // darkened a whole cell.
+                        totalR += r * coverage
+                        totalG += g * coverage
+                        totalB += b * coverage
+                        totalA += coverage
                         count += 1
 
                         // Integer-scaled BT.601 luminance against the
                         // matching scaled threshold; matches the Double
                         // form to within rounding.
-                        if r * 299 + g * 587 + b * 114 >= scaledThreshold {
+                        //
+                        // A dot must be THERE before it can be lit, and "there" is the
+                        // ½ rule §6a states for every glyph decision: at or above half
+                        // coverage the source's mark is drawn, below it the destination
+                        // keeps its cell. Without this a transparent dot lit itself from
+                        // whatever colour the encoder left in it.
+                        if coverage >= 128, r * 299 + g * 587 + b * 114 >= scaledThreshold {
                             pattern |= 1 << dotBitsFlat[index]
                         }
                     }
@@ -117,23 +133,25 @@ extension ASCIIConverter {
                     let brailleChar = Character(Unicode.Scalar(0x2800 + UInt32(pattern))!)
 
                     let avgPixel: RGBA
-                    if count > 0 {
+                    if totalA > 0 {
                         avgPixel = RGBA(
-                            r: UInt8(clamping: totalR / count),
-                            g: UInt8(clamping: totalG / count),
-                            b: UInt8(clamping: totalB / count)
+                            r: UInt8(clamping: totalR / totalA),
+                            g: UInt8(clamping: totalG / totalA),
+                            b: UInt8(clamping: totalB / totalA),
+                            a: UInt8(clamping: totalA / max(1, count))
                         )
                     } else {
-                        avgPixel = RGBA(r: 0, g: 0, b: 0)
+                        avgPixel = RGBA(r: 0, g: 0, b: 0, a: 0)
                     }
 
+                    coverage.note(line: charY, column: charX, ink: avgPixel.a, field: .max)
                     row.setColors(foreground: colours.color(for: avgPixel), background: nil)
                     row.append(brailleChar)
                 }
                 lines.append(row.finish())
             }
 
-            return lines
+            return ASCIIArt(lines: lines, coverage: coverage.runs)
         }
     }
 }

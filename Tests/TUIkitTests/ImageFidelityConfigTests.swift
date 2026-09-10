@@ -41,7 +41,7 @@ struct ImageFidelityConfigTests {
             characterSet: set, shapeAware: shapeAware, colorMode: .mono, dithering: .none,
             supersampling: supersampling, edgeThreshold: edgeThreshold
         )
-        .convert(img, width: w, height: h).joined()
+        .convert(img, width: w, height: h).lines.joined()
     }
 
     /// Like `render` but in true colour (pinned to a truecolor terminal), for
@@ -55,7 +55,7 @@ struct ImageFidelityConfigTests {
                 characterSet: set, colorMode: .trueColor, dithering: .none,
                 supersampling: supersampling
             )
-            .convert(img, width: w, height: h).joined()
+            .convert(img, width: w, height: h).lines.joined()
         }
     }
 
@@ -76,7 +76,7 @@ struct ImageFidelityConfigTests {
             print("== \(set) shape-aware ==")
             for line in ASCIIConverter(
                 characterSet: set, shapeAware: true, colorMode: .mono, dithering: .none
-            ).convert(img, width: 60, height: 15) {
+            ).convert(img, width: 60, height: 15).lines {
                 print(line.stripped)
             }
         }
@@ -158,7 +158,7 @@ struct ImageFidelityConfigTests {
         let img = image(20, 4) { x, _ in x < 10 ? 0 : 255 }
         let lines = ASCIIConverter(
             characterSet: .customRamp(".X"), colorMode: .mono, dithering: .none
-        ).convert(img, width: 20, height: 4)
+        ).convert(img, width: 20, height: 4).lines
         let out = lines.joined()
         #expect(lines.allSatisfy { $0.hasPrefix(".") }, "black maps to the FIRST ramp glyph: \(out)")
         #expect(lines.allSatisfy { $0.hasSuffix("X") }, "white maps to the LAST ramp glyph: \(out)")

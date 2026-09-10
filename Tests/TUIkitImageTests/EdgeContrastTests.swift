@@ -105,7 +105,7 @@ struct EdgeContrastTests {
                 colorMode: .mono,
                 edgeThreshold: nil,
                 edgeContrast: amount
-            ).convert(image, width: 20, height: 10).map(plain)
+            ).convert(image, width: 20, height: 10).lines.map(plain)
         }
         let flat = render(0)
         let lifted = render(1.5)
@@ -126,7 +126,7 @@ struct EdgeContrastTests {
                     colorMode: .mono,
                     edgeThreshold: threshold,
                     edgeContrast: amount
-                ).convert(image, width: 20, height: 10).map(plain)
+                ).convert(image, width: 20, height: 10).lines.map(plain)
             }
             #expect(
                 render(1.5) != render(0),

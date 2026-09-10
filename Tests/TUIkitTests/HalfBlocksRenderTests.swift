@@ -97,7 +97,7 @@ struct HalfBlocksRenderTests {
         let converter = ASCIIConverter(
             characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
         withColorDepth(.truecolor) {
-            let lines = converter.convert(gradientImage(40, 40), width: 20, height: 10)
+            let lines = converter.convert(gradientImage(40, 40), width: 20, height: 10).lines
             for (row, line) in lines.enumerated() {
                 let emptyColumns = backgroundsAtBlocks(in: line)
                     .enumerated().filter { $0.element.isEmpty }.map(\.offset)
@@ -112,7 +112,7 @@ struct HalfBlocksRenderTests {
         let converter = ASCIIConverter(
             characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
         withColorDepth(.truecolor) {
-            let raw = converter.convert(gradientImage(40, 40), width: 20, height: 10)
+            let raw = converter.convert(gradientImage(40, 40), width: 20, height: 10).lines
             let buffer = FrameBuffer(lines: raw)
             // A realistic dark app background, exactly as `RenderLoop` supplies it;
             // its only effect on a fine-block line is to re-assert the app bg after
@@ -143,7 +143,7 @@ struct HalfBlocksRenderTests {
         let converter = ASCIIConverter(
             characterSet: .blocks(.fine), colorMode: .trueColor, dithering: .none)
         withColorDepth(.truecolor) {
-            let lines = converter.convert(gradientImage(40, 40), width: 20, height: 10)
+            let lines = converter.convert(gradientImage(40, 40), width: 20, height: 10).lines
             for offset in [1, 3, 7, 13] {
                 for (row, line) in lines.enumerated() {
                     let sliced = line.ansiAwareSlice(visibleStart: offset, visibleCount: 6)

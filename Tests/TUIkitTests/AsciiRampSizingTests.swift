@@ -32,7 +32,7 @@ struct AsciiRampSizingTests {
 
     private func distinctGlyphs(_ charSet: ASCIICharacterSet, width: Int) -> Set<Character> {
         let converter = ASCIIConverter(characterSet: charSet, colorMode: .mono, dithering: .none)
-        let line = converter.convert(horizontalGradient(width, 2), width: width, height: 2)
+        let line = converter.convert(horizontalGradient(width, 2), width: width, height: 2).lines
             .first?.stripped ?? ""
         return Set(line)
     }
@@ -59,7 +59,7 @@ struct AsciiRampSizingTests {
     @Test("the full ramp renders the requested cell grid (supersampling is internal)")
     func cellGridUnchanged() {
         let converter = ASCIIConverter(characterSet: .ascii, colorMode: .mono, dithering: .none)
-        let lines = converter.convert(horizontalGradient(24, 6), width: 24, height: 6)
+        let lines = converter.convert(horizontalGradient(24, 6), width: 24, height: 6).lines
         #expect(lines.count == 6, "one line per requested cell row")
         #expect(lines.allSatisfy { $0.stripped.count == 24 }, "one glyph per requested cell column")
     }

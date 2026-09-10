@@ -210,7 +210,7 @@ struct GlyphRepertoireTests {
         let out = ASCIIConverter(
             characterSet: .ascii(glyphs: 8), shapeAware: true,
             colorMode: .mono, dithering: .none, edgeThreshold: nil
-        ).convert(img, width: 20, height: 3).joined().stripped
+        ).convert(img, width: 20, height: 3).lines.joined().stripped
         #expect(out.contains(" "), "light cells render blank: '\(out)'")
         #expect(out.contains(where: { $0 != " " }), "dark cells render ink: '\(out)'")
     }

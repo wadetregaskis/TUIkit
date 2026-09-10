@@ -32,7 +32,7 @@ struct ShapeEdgeOrientationTests {
 
     private func render(_ img: RGBAImage, w: Int, h: Int, _ set: ASCIICharacterSet) -> String {
         ASCIIConverter(characterSet: set, shapeAware: true, colorMode: .mono, dithering: .none)
-            .convert(img, width: w, height: h).joined()
+            .convert(img, width: w, height: h).lines.joined()
     }
 
     @Test("A vertical light/dark boundary renders vertical line glyphs")

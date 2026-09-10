@@ -49,7 +49,7 @@ struct AdaptivePaletteDepthTests {
     func derivedPaletteIsFittedToPalette256(method: ASCIIPalette.Adaptation) {
         let lines = ColorDepth.withCurrent(.palette256) {
             ASCIIConverter(colorMode: .palette(.adaptive(64, by: method)))
-                .convert(Self.subject(), width: 40, height: 12)
+                .convert(Self.subject(), width: 40, height: 12).lines
         }
         #expect(Self.sequences(in: lines, "[38;2;") == 0, "truecolor foregrounds on a 256-colour terminal")
         #expect(Self.sequences(in: lines, "[48;2;") == 0, "truecolor backgrounds on a 256-colour terminal")
@@ -60,7 +60,7 @@ struct AdaptivePaletteDepthTests {
     func derivedPaletteIsFittedToBasic16() {
         let lines = ColorDepth.withCurrent(.basic16) {
             ASCIIConverter(colorMode: .palette(.adaptive(64, by: .popularity)))
-                .convert(Self.subject(), width: 40, height: 12)
+                .convert(Self.subject(), width: 40, height: 12).lines
         }
         #expect(Self.sequences(in: lines, "[38;2;") == 0)
         #expect(Self.sequences(in: lines, ";5;") == 0, "no 256-colour indexes on a 16-colour terminal")
@@ -70,7 +70,7 @@ struct AdaptivePaletteDepthTests {
     func truecolorKeepsTriples() {
         let lines = ColorDepth.withCurrent(.truecolor) {
             ASCIIConverter(colorMode: .palette(.adaptive(64, by: .popularity)))
-                .convert(Self.subject(), width: 40, height: 12)
+                .convert(Self.subject(), width: 40, height: 12).lines
         }
         #expect(Self.sequences(in: lines, "[38;2;") + Self.sequences(in: lines, "[48;2;") > 0)
     }

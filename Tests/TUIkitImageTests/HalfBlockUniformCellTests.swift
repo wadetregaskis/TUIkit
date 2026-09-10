@@ -34,7 +34,7 @@ struct HalfBlockUniformCellTests {
 
     private func lines(_ image: RGBAImage, _ mode: ASCIIColorMode, cells: Int) -> [String] {
         ASCIIConverter(characterSet: .blocks(.fine), colorMode: mode)
-            .convert(image, width: cells, height: image.height / 2)
+            .convert(image, width: cells, height: image.height / 2).lines
     }
 
     private func glyphs(_ line: String) -> String {

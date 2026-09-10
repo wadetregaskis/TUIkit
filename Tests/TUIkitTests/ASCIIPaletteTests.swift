@@ -279,7 +279,7 @@ struct ASCIIPaletteTests {
         let converter = ASCIIConverter(
             characterSet: .blocks(.solid), colorMode: .palette(palette))
         let lines = ColorDepth.withCurrent(.truecolor) {
-            converter.convert(gradient(), width: 12, height: 6)
+            converter.convert(gradient(), width: 12, height: 6).lines
         }
         #expect(!lines.isEmpty)
         let emitted = Set(
@@ -302,7 +302,7 @@ struct ASCIIPaletteTests {
         let converter = ASCIIConverter(
             characterSet: .blocks(.solid), colorMode: .palette(ASCIIPalette([.rgb(200, 30, 30), .rgb(30, 30, 200)])))
         let lines = ColorDepth.withCurrent(.palette256) {
-            converter.convert(gradient(), width: 8, height: 4)
+            converter.convert(gradient(), width: 8, height: 4).lines
         }
         // `.blocks(.solid)` paints whole cells, so it says its colours as
         // BACKGROUNDS — the form is what matters here, not which channel.
@@ -319,7 +319,7 @@ struct ASCIIPaletteTests {
             let converter = ASCIIConverter(
                 characterSet: .blocks(.solid), colorMode: .mono, toneCurve: curve)
             let lines = ColorDepth.withCurrent(.noColor) {
-                converter.convert(gradient(width: 40, height: 20), width: 20, height: 10)
+                converter.convert(gradient(width: 40, height: 20), width: 20, height: 10).lines
             }
             return lines.joined().filter { $0 != " " && !$0.isNewline }.count
         }
