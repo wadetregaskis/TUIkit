@@ -2569,3 +2569,42 @@ rows into `respellingsCarry`.
 Worth noting that §32's `supportsOpacity` makes the question more reachable than it
 was: a palette editor bound to `background` can now author a translucent page with two
 keystrokes.
+
+
+## 38. What the second pass cost, end to end (2026-09-10)
+
+`ab_bench.py`, `172599ec` → `1158a96d`, the full sweep plus `translucent`, 20 reps,
+load 1.29 on an otherwise quiet box:
+
+| | scenarios |
+|---|---|
+| **faster** | `deep` −0.7%, `fanout` −0.8%, `anyview` −0.7%, `modifiers` −0.4% |
+| **slower** | `customlayout` +1.9% [+1.2, +2.4], `churn` +0.2% [+0.0, +0.5] |
+| indistinguishable | the other fourteen |
+
+RAM flat everywhere (±0.1 MB). The four faster ones are `foldedAlphas` calling
+`substituting` once per region instead of once per region per column, which is what
+`.opacity` on a subtree pays for.
+
+Re-measured at 60 reps, per §35.2's own rule about believing a flagged width:
+
+| scenario | 20 reps | 60 reps |
+|---|---|---|
+| `customlayout` | +1.9% [+1.2, +2.4] | **+0.7% [+0.3, +1.3]** |
+| `churn` | +0.2% [+0.0, +0.5] | indistinguishable |
+
+So `churn` was measurement and `customlayout` is two-thirds measurement with a
+residual. **The residual has no path in it.** `customlayout` renders two `Text`s and
+a custom layout: no gradient, no table, no indeterminate bar, no dial, no palette
+surface, and no `opacityRegions` at all — so every function this pass changed is
+either not called or returns at its first guard. That is the signature of codegen
+layout rather than of work, which this project has seen before and mistaken for a
+regression once already (see `Documentation/Performance-profile-2026-08.md` on the
+"3% regression" that was `_MemoizedRow`'s stored-property order).
+
+Left as measured rather than chased: +0.7% on one scenario with no changed path in
+it, against −0.4% to −0.8% on four with one, is not a cost to optimise — it is a
+number to write down so the next person who sees it does not go looking twice.
+
+The `alpharamp` figure (§36.2, **+14.9%**) is the one real price, and it is charged
+only to pages that ask for translucent ramps.
