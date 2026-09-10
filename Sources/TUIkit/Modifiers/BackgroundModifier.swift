@@ -95,17 +95,16 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 buffer.lines.map {
                     filled($0.padToVisibleWidth(width), with: resolved.opaqueSpelling)
                 })
-            if !resolved.isOpaque {
-                // The rectangle is exactly what was painted: every row was padded
-                // to `width` just above, so the claim and the paint agree by
-                // construction. A FIELD claim only — the content's own ink is
-                // already in these lines and a background says nothing about it,
-                // which is what lets `Text("x").background(.red.opacity(0.5))`
-                // fade the field and leave the letter alone.
-                filledBuffer.opacityRegions.append(
-                    OpacityRegion(
-                        offsetX: 0, offsetY: 0, width: width, height: buffer.lines.count,
-                        opacity: 1, fieldOpacity: Double(resolved.alpha) / 255))
+            // The rectangle is exactly what was painted: every row was padded to
+            // `width` just above, so the claim and the paint agree by
+            // construction. A FIELD claim only — the content's own ink is already
+            // in these lines and a background says nothing about it, which is what
+            // lets `Text("x").background(.red.opacity(0.5))` fade the field and
+            // leave the letter alone.
+            if let claim = OpacityRegion.claim(
+                width: width, height: buffer.lines.count, field: resolved)
+            {
+                filledBuffer.opacityRegions.append(claim)
             }
             return filledBuffer
         }

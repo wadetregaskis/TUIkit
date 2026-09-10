@@ -901,17 +901,14 @@ extension Text: Renderable, Layoutable {
     private static func uniformAlphaClaims(
         style: TextStyle, lineWidths: [Int]
     ) -> [[OpacityRegion]] {
-        let ink = style.foregroundColor?.alpha ?? .max
-        let field = style.backgroundColor?.alpha ?? .max
-        // `[]` rather than a list of empties — see `rowed`.
-        guard ink != .max || field != .max else { return [] }
+        let ink = style.foregroundColor
+        let field = style.backgroundColor
+        // Asked once, of the STYLE, before the per-line walk — and `[]` rather
+        // than a list of empties, see `rowed`.
+        guard ink?.isOpaque == false || field?.isOpaque == false else { return [] }
         return lineWidths.map { width in
-            guard width > 0 else { return [] }
-            return [
-                OpacityRegion(
-                    offsetX: 0, offsetY: 0, width: width, height: 1, opacity: 1,
-                    inkOpacity: Double(ink) / 255, fieldOpacity: Double(field) / 255)
-            ]
+            OpacityRegion.claim(width: width, height: 1, ink: ink, field: field)
+                .map { [$0] } ?? []
         }
     }
 
@@ -955,21 +952,20 @@ extension Text: Renderable, Layoutable {
                 defer { column += width }
                 guard width > 0, styles.indices.contains(fragment.run) else { continue }
                 let style = styles[fragment.run]
-                let ink = style.foregroundColor?.alpha ?? .max
-                let field = style.backgroundColor?.alpha ?? .max
-                guard ink != .max || field != .max else { continue }
+                guard
+                    let region = OpacityRegion.claim(
+                        offsetX: column, width: width, height: 1,
+                        ink: style.foregroundColor, field: style.backgroundColor)
+                else { continue }
                 if var last = claims.last, last.offsetX + last.width == column,
-                    last.inkOpacity == Double(ink) / 255,
-                    last.fieldOpacity == Double(field) / 255
+                    last.inkOpacity == region.inkOpacity,
+                    last.fieldOpacity == region.fieldOpacity
                 {
                     last.width += width
                     claims[claims.count - 1] = last
                     continue
                 }
-                claims.append(
-                    OpacityRegion(
-                        offsetX: column, offsetY: 0, width: width, height: 1, opacity: 1,
-                        inkOpacity: Double(ink) / 255, fieldOpacity: Double(field) / 255))
+                claims.append(region)
             }
             return claims
         }
