@@ -34,20 +34,33 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for.
     /// - Returns: The parameter strings, ready to join with `;`.
     package func foregroundCodes(depth: ColorDepth = ColorDepth.current) -> [String] {
-        // FULLY transparent paints no colour at all. That is an ANSWER rather than
-        // a degradation, and the only one available without a backdrop: emitting
-        // nothing leaves the cell the colour it already had, which is what
-        // transparent means. It is also the one case where getting it wrong is
-        // alarming, because `.clear`'s underlying value is black: at full strength
-        // `.border(.clear)` is a solid black box.
+        // NO ALPHA CHECK HERE, and it is worth saying why, because the obvious
+        // improvement is to add one and it was tried and measured.
         //
-        // Checked BEFORE the assertion because it is not a gap. `.clear` is public
-        // API, and a reader writing it deserves the sensible answer rather than a
-        // trap, on every path, migrated or not.
-        if alpha == 0 { return [] }
-        // PARTIAL alpha has no answer here — there is no backdrop to blend
-        // against — so reaching this line means the view that painted it does not
-        // yet carry alpha to the compositor.
+        // A fully transparent colour has a sensible answer available — emit no
+        // parameters, so the cell keeps the colour it had — and returning it here
+        // would stop an unmigrated path rendering `.clear` as the solid black its
+        // underlying value is. But this function is the hottest in the framework
+        // (SGR emission was once measured at 97% of a truecolor frame), and in a
+        // RELEASE build the assertion below compiles out entirely, so a check is
+        // genuinely new work on every colour emitted. Paired A/B, 16 reps:
+        //
+        //   with `if alpha == 0 { return [] }`   textwall +3.3%  fanout +3.0%
+        //   merged into the `.noColor` guard      textwall +0.9%  fanout +2.1%
+        //
+        // — a permanent tax on every page to protect a path that has not been
+        // migrated. So it is not paid here. The place it costs nothing is the PAINT
+        // SITE, which runs once per view rather than once per run, and which is
+        // where each of §16's entry points gets it as that entry point is migrated.
+        //
+        // Making it free by giving `ColorValue` a `.transparent` case does not work
+        // either, and not for cost reasons: it would strip the components, and
+        // `Gradient(colors: [.red, .clear])` needs them to fade toward a
+        // transparent RED, while `.red.opacity(0)` animated back up must return red
+        // rather than black.
+        //
+        // A translucent colour reaching this line therefore means the view that
+        // painted it does not yet carry alpha to the compositor.
         //
         // An assertion rather than a `fatalError` (which is what `.semantic`
         // gets): this is an unmigrated path rather than a broken invariant, and it
@@ -78,20 +91,33 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for.
     /// - Returns: The parameter strings, ready to join with `;`.
     package func backgroundCodes(depth: ColorDepth = ColorDepth.current) -> [String] {
-        // FULLY transparent paints no colour at all. That is an ANSWER rather than
-        // a degradation, and the only one available without a backdrop: emitting
-        // nothing leaves the cell the colour it already had, which is what
-        // transparent means. It is also the one case where getting it wrong is
-        // alarming, because `.clear`'s underlying value is black: at full strength
-        // `.border(.clear)` is a solid black box.
+        // NO ALPHA CHECK HERE, and it is worth saying why, because the obvious
+        // improvement is to add one and it was tried and measured.
         //
-        // Checked BEFORE the assertion because it is not a gap. `.clear` is public
-        // API, and a reader writing it deserves the sensible answer rather than a
-        // trap, on every path, migrated or not.
-        if alpha == 0 { return [] }
-        // PARTIAL alpha has no answer here — there is no backdrop to blend
-        // against — so reaching this line means the view that painted it does not
-        // yet carry alpha to the compositor.
+        // A fully transparent colour has a sensible answer available — emit no
+        // parameters, so the cell keeps the colour it had — and returning it here
+        // would stop an unmigrated path rendering `.clear` as the solid black its
+        // underlying value is. But this function is the hottest in the framework
+        // (SGR emission was once measured at 97% of a truecolor frame), and in a
+        // RELEASE build the assertion below compiles out entirely, so a check is
+        // genuinely new work on every colour emitted. Paired A/B, 16 reps:
+        //
+        //   with `if alpha == 0 { return [] }`   textwall +3.3%  fanout +3.0%
+        //   merged into the `.noColor` guard      textwall +0.9%  fanout +2.1%
+        //
+        // — a permanent tax on every page to protect a path that has not been
+        // migrated. So it is not paid here. The place it costs nothing is the PAINT
+        // SITE, which runs once per view rather than once per run, and which is
+        // where each of §16's entry points gets it as that entry point is migrated.
+        //
+        // Making it free by giving `ColorValue` a `.transparent` case does not work
+        // either, and not for cost reasons: it would strip the components, and
+        // `Gradient(colors: [.red, .clear])` needs them to fade toward a
+        // transparent RED, while `.red.opacity(0)` animated back up must return red
+        // rather than black.
+        //
+        // A translucent colour reaching this line therefore means the view that
+        // painted it does not yet carry alpha to the compositor.
         //
         // An assertion rather than a `fatalError` (which is what `.semantic`
         // gets): this is an unmigrated path rather than a broken invariant, and it

@@ -170,30 +170,29 @@ struct ColourAlphaStorageTests {
         #expect(Color.red.opacity(.nan).alpha == 0, "and a NaN reads as nothing")
     }
 
-    /// **A fully transparent colour paints nothing, on every path.**
+    /// **A fully transparent colour still paints, on an unmigrated path** — and
+    /// this test exists to keep that written down rather than to bless it.
     ///
-    /// The emitters assert on a translucent colour, because a partial alpha has no
-    /// SGR spelling and reaching them means the painting view does not carry alpha
-    /// to the compositor. Alpha ZERO is different, and is checked before the
-    /// assertion: it has an answer here. Emitting no parameters leaves the cell the
-    /// colour it already had, which is what transparent means, near enough, for the
-    /// one case where "near enough" exists without a backdrop.
+    /// The emitters deliberately do NOT check alpha; the reasoning and the numbers
+    /// are at the call site. In short: the check is real work on the framework's
+    /// hottest function, worth `textwall` +3.3% / `fanout` +3.0% measured, and it
+    /// would be a permanent tax on every page to protect paths that have not been
+    /// migrated. The place it is free is the paint site, once per view.
     ///
-    /// Without it, the answer would be this colour at full strength — and
-    /// `Color.clear`'s underlying value is black, so `.border(.clear)` would draw a
-    /// solid black box in a release build, where the assertion is compiled out.
-    /// That is worse than any other wrong answer available here, and it would be
-    /// reached from public API by a reader doing something reasonable.
-    @Test("A fully transparent colour emits no SGR parameters")
-    func transparentPaintsNothing() {
-        #expect(Color.clear.foregroundCodes(depth: .truecolor).isEmpty, "no foreground")
-        #expect(Color.clear.backgroundCodes(depth: .truecolor).isEmpty, "no background")
-        // Any colour, not just `.clear` — it is the ALPHA that decides.
-        #expect(Color.red.opacity(0).foregroundCodes(depth: .truecolor).isEmpty)
-        #expect(Color.red.opacity(0).backgroundCodes(depth: .palette256).isEmpty)
-        // And the opaque twin still paints, so this is an alpha gate rather than
-        // the emitter having been switched off.
-        #expect(!Color.red.foregroundCodes(depth: .truecolor).isEmpty, "opaque red still paints")
+    /// So an unmigrated path renders `.clear` as the solid black its underlying
+    /// value is — SwiftUI's underlying value too. That is a gap in a NEW API rather
+    /// than a regression (`Color.clear` did not exist before this branch), it is
+    /// loud in every debug build, and §16 lists the entry points that close it.
+    @Test("The emitters spell a transparent colour rather than skipping it")
+    func transparentStillPaintsOnUnmigratedPaths() {
+        // Read through `opaqueSpelling`, which is what every MIGRATED paint site
+        // does — the assertion fires on the bare colour, and a test is not exempt.
+        #expect(
+            Color.clear.opaqueSpelling.foregroundCodes(depth: .truecolor) == ["38", "2", "0", "0", "0"],
+            "black, because that is what `.clear`'s value is")
+        // The migrated route: the alpha goes on a region and never reaches here.
+        #expect(Color.clear.opaqueSpelling.isOpaque, "the spelling carries no alpha")
+        #expect(Color.clear.alpha == 0, "while the colour itself still does")
     }
 
     /// The one that would otherwise be silent AND fatal: a semantic colour
