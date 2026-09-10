@@ -2762,3 +2762,38 @@ no rounding term was added, deliberately, and `opaqueBoxReductionIsUnchanged` pi
 That matters because every image reaching this function today has been flattened first:
 the fix cannot move a single pixel of anything currently on screen, which is what makes
 it safe to land ahead of the change that will actually exercise it.
+
+### 41.2 The dither carried a transparent pixel's error at full strength
+
+Floyd–Steinberg ignored coverage entirely: a pixel at alpha 0 pushed its neighbours
+exactly as hard as one at alpha 255. The carry is now scaled by `a / 255` — full
+coverage carries all of its error as it always did, and no coverage carries none.
+The OKLab carry takes the same factor, as a `Double`, at the one line that computes it.
+
+Measured on one mis-quantised pixel and its neighbour, a flat grey whose own
+quantisation is exact so that everything it moves by came from the carry:
+
+| coverage | neighbour before | after |
+|---|---|---|
+| 255 | 148 | 148 |
+| 192 | 148 | 138 |
+| 128 | 148 | 135 |
+| 0 | 148 | **128** — its own colour, untouched |
+
+Byte-identical at full coverage by construction (the weight is returned unchanged
+rather than multiplied and divided), which is what lets this land ahead of the flatten's
+removal without moving any image on screen today.
+
+**§17's "dark fringe" is smaller than it claims, and the correction belongs here.** The
+stated mechanism was a transparent pixel diffusing its own error outward. A test for
+that could not be made to fail on the unfixed code at either palette, and the reason is
+worth keeping: a transparent pixel's colour is BLACK, black is in every palette, so its
+own quantisation error is ~0. What it re-emits is the carry it just RECEIVED from a
+visible neighbour, attenuated by 7/16 and then 3/16 — about 13% of an error that error
+diffusion is already dissipating. The visible artefact came from the resamplers
+(§41.1); this one is real, principled, and small.
+
+Worth knowing about the symptom too: `.ansi16` absorbs the whole carry into one entry,
+so a test written against it passes whatever the arithmetic does. The finer the
+palette, the more of this leaks — which is the opposite of the intuition that a coarse
+palette is where dithering artefacts live.

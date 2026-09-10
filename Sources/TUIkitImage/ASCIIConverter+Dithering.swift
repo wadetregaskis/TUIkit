@@ -384,9 +384,17 @@ struct PixelQuantiser {
                                         answers: answers, trusted: trusted)
                                     buffer[row + x] = Self.entry(colours, entry, alpha: pixel.a)
                                     guard entry >= 0, entry < lightness.count else { continue }
-                                    let errL = wantedL - lightness[entry]
-                                    let errA = wantedA - greenRed[entry]
-                                    let errB = wantedB - blueYellow[entry]
+                                    // Weighted by the pixel's own coverage, for the
+                                    // reason `carriedError(from:to:neutral:)` gives: a
+                                    // transparent pixel has no colour to quantise, so
+                                    // the error it appears to make is an artefact and
+                                    // diffusing it smears the visible neighbours of
+                                    // every hard alpha edge. Exactly 1 at full
+                                    // coverage, so nothing opaque moves. §41.2.
+                                    let coverage = Double(Int(pixel.a)) / 255
+                                    let errL = (wantedL - lightness[entry]) * coverage
+                                    let errA = (wantedA - greenRed[entry]) * coverage
+                                    let errB = (wantedB - blueYellow[entry]) * coverage
                                     carry[slot + 3] += errL * 7 / 16
                                     carry[slot + 4] += errA * 7 / 16
                                     carry[slot + 5] += errB * 7 / 16
@@ -469,10 +477,25 @@ struct PixelQuantiser {
     /// `neutral` is for the modes that decide on luminance alone: their
     /// neighbours can only be made lighter or darker, so what they are handed
     /// is one delta on all three channels rather than three independent ones.
+    ///
+    /// ## Weighted by coverage
+    ///
+    /// A fully transparent pixel has no colour to quantise. Its stored colour is
+    /// whatever the encoder left there — the decoders write BLACK — so the "error" it
+    /// makes is an artefact of a pixel nobody can see, and diffusing it puts a dark
+    /// smear into the visible neighbours of every hard alpha edge. Half-transparent
+    /// pixels are the same argument at half strength.
+    ///
+    /// So the delta is scaled by `old.a / 255`: full coverage carries all of its error,
+    /// as it always did, and no coverage carries none. Benign until now only because
+    /// `ASCIIConverter` flattens over black before it ever gets here, which makes every
+    /// coverage 255 and the scale the identity — and that is also why this cannot move
+    /// an existing pixel. §41.2.
     @inline(__always)
     private static func carriedError(
         from old: RGBA, to new: RGBA, neutral: Bool
     ) -> (r: Int16, g: Int16, b: Int16) {
+        let raw: (r: Int16, g: Int16, b: Int16)
         if neutral {
             // Every mode that asks for this quantises to a grey, so `new`'s
             // luminance IS `new.r` — there is no second luminance to compute.
@@ -483,9 +506,32 @@ struct PixelQuantiser {
             // there, and every grey image dithers byte-for-byte as it did.
             // Truncating would shift some of them by a level.
             let delta = Int16(clamping: Int(old.luminance.rounded())) - Int16(new.r)
-            return (delta, delta, delta)
+            raw = (delta, delta, delta)
+        } else {
+            raw = (
+                Int16(old.r) - Int16(new.r), Int16(old.g) - Int16(new.g),
+                Int16(old.b) - Int16(new.b)
+            )
         }
-        return (Int16(old.r) - Int16(new.r), Int16(old.g) - Int16(new.g), Int16(old.b) - Int16(new.b))
+        return weighted(raw, byCoverage: old.a)
+    }
+
+    /// `error` scaled by `coverage / 255` — see ``carriedError(from:to:neutral:)``.
+    ///
+    /// Returned unchanged at full coverage rather than multiplied and divided, so the
+    /// overwhelmingly common case is a compare and the byte-identical claim needs no
+    /// argument about rounding.
+    @inline(__always)
+    private static func weighted(
+        _ error: (r: Int16, g: Int16, b: Int16), byCoverage coverage: UInt8
+    ) -> (r: Int16, g: Int16, b: Int16) {
+        guard coverage != 255 else { return error }
+        guard coverage != 0 else { return (0, 0, 0) }
+        let scale = Int32(coverage)
+        func scaled(_ value: Int16) -> Int16 {
+            Int16(clamping: Int32(value) * scale / 255)
+        }
+        return (scaled(error.r), scaled(error.g), scaled(error.b))
     }
 
     @inline(__always)
