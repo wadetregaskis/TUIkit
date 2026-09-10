@@ -67,11 +67,21 @@ enum PaintRenderer {
         }
 
         // The same two lines `BackgroundModifier` derives, for the same reason and in
-        // the same order: what shape the alpha is, and therefore whether the bytes
-        // may state the opaque spelling.
+        // the same order: what shape the INK's alpha is, and therefore whether its
+        // bytes may state the opaque spelling.
+        //
+        // The FIELD is not part of that question. It is one rectangle per line on
+        // every shape — `style.backgroundColor` is a flat colour, whatever the ramp
+        // over it does — so it is always claimed and its bytes always state the
+        // opaque spelling. Folding it into `shape` (an earlier version asked
+        // `isOpaqueThroughout && fieldAlpha == .max`) got both ends wrong: an opaque
+        // ramp over a faded background reported `.opaque` and claimed nothing, and a
+        // per-cell one left the background's own bytes translucent while claiming it.
         let shape: RampSampler.AlphaShape =
-            paint.isOpaqueThroughout && fieldAlpha == .max ? .opaque : sampler.alphaShape
+            paint.isOpaqueThroughout ? .opaque : sampler.alphaShape
         let carriesAlpha = shape != .perCell
+        var bandStyle = style
+        bandStyle.backgroundColor = style.backgroundColor?.opaqueSpelling
         var sequences: [String?] = []
         var result: [String] = []
         var claims: [[OpacityRegion]] = []
@@ -85,7 +95,7 @@ enum PaintRenderer {
             var painted = ""
             var column = 0
             band(
-                line, column: &column, row: row, style: style, sampler: sampler,
+                line, column: &column, row: row, style: bandStyle, sampler: sampler,
                 sequences: &sequences, into: &painted, carriesAlpha: carriesAlpha)
             result.append(painted)
             claims.append(Self.claims(for: shape, row: row, cells: width(of: row),
@@ -105,12 +115,11 @@ enum PaintRenderer {
         sampler: RampSampler, fieldAlpha: UInt8
     ) -> [OpacityRegion] {
         switch shape {
-        case .opaque:
-            return []
-        case .perCell:
-            // The FIELD is still a rectangle even where the ink is not, and refusing
-            // it for being adjacent to something unhonourable would be a second gap
-            // for no reason.
+        case .opaque, .perCell:
+            // The FIELD alone. A rectangle is a rectangle whether or not the ink over
+            // it is one, and refusing it for being adjacent to something unhonourable
+            // would be a second gap for no reason. `claim` answers nil when the field
+            // is opaque too, so an ordinary opaque ramp still costs nothing.
             return OpacityRegion.claim(
                 offsetY: row, width: cells, height: 1, inkAlpha: .max, fieldAlpha: fieldAlpha)
                 .map { [$0] } ?? []
@@ -220,12 +229,15 @@ enum PaintRenderer {
     ///   - painted: The row being assembled; appended to in place, never
     ///     `a + b + c`, which would build two throwaway strings per run — and a
     ///     horizontal ramp at truecolor is one run per CELL.
-    ///   - carriesAlpha: Whether the caller is going to state this ramp's alpha as
-    ///     an `OpacityRegion`. When it is, the ramp's colours go into the bytes at
-    ///     their OPAQUE spelling — an emitter has no backdrop to composite against.
-    ///     When it is not (a genuinely per-cell alpha, §34), they go in raw, so the
-    ///     emitter's assertion still fires: spelling them opaque without the claim
-    ///     would turn a loud gap into a silently discarded alpha.
+    ///   - carriesAlpha: Whether the caller is going to state this RAMP's alpha as an
+    ///     `OpacityRegion`. When it is, the ramp's colours go into the bytes at their
+    ///     OPAQUE spelling — an emitter has no backdrop to composite against. When it
+    ///     is not (a genuinely per-cell alpha, §34), they go in raw, so the emitter's
+    ///     assertion still fires: spelling them opaque without the claim would turn a
+    ///     loud gap into a silently discarded alpha.
+    ///
+    ///     It governs the ramp's colours ONLY. `style`'s own colours are the caller's
+    ///     to spell, because the caller is the one that knows whether it claimed them.
     static func band(
         _ text: String, column: inout Int, row: Int, style: TextStyle,
         sampler: RampSampler, sequences: inout [String?], into painted: inout String,
@@ -240,7 +252,7 @@ enum PaintRenderer {
             // produced. Allocating the table here cost an array per leaf to
             // hold a single entry, which was the whole difference between
             // `.gradientExtent(.subtree)` and doing it by hand.
-            var run = carriesAlpha ? style.opaqueColours : style
+            var run = style
             let colour = sampler.colour(row: row)
             run.foregroundColor = carriesAlpha ? colour.opaqueSpelling : colour
             let opening = ANSIRenderer.styleSequence(for: run) ?? ""
@@ -288,7 +300,7 @@ enum PaintRenderer {
                 runEntry = next
                 runStart = cursor
                 if sequences[next] == nil {
-                    var run = carriesAlpha ? style.opaqueColours : style
+                    var run = style
                     run.foregroundColor =
                         carriesAlpha ? sampler.ramp[next].opaqueSpelling : sampler.ramp[next]
                     sequences[next] = ANSIRenderer.styleSequence(for: run) ?? ""

@@ -2181,6 +2181,21 @@ regions — O(Σ widths + width) instead of O(width × regions). That is a chang
 resolver's hot path and wants its own commit and its own A/B.
 
 So the decline stands, and it is now narrow: not "ramps on ink", not "ramps whose alpha
-varies along a row", but *ramps whose alpha varies in both directions at once*. The
-field of such a ramp is still claimed — a rectangle is a rectangle, and refusing it for
-being adjacent to something unhonourable would be a second gap for no reason.
+varies along a row", but *ramps whose alpha varies in both directions at once*.
+
+### 34.4 The field is not part of that question, and folding it in broke both ends
+
+A ramped `Text` can also carry a flat background from the style cascade
+(`.style(.text) { $0.background = … }`), and that is one rectangle per line whatever
+the ramp over it does. The first version of this asked
+`paint.isOpaqueThroughout && fieldAlpha == .max ? .opaque : sampler.alphaShape` — one
+question for two independent things — and got both ends wrong:
+
+- an **opaque** ramp over a faded background reported `.opaque` and claimed nothing;
+- a **per-cell** ramp left the background's own bytes translucent while claiming it —
+  a double fade in release and an assertion in debug, on a path that *is* honoured.
+
+The field is now always claimed and always spelled opaque; `carriesAlpha` governs the
+ramp's colours alone, and `band`'s parameter documentation says so, because it is the
+kind of flag a later reader would reasonably assume covers everything in the style.
+`opaqueRampStillClaimsItsField` pins both halves.

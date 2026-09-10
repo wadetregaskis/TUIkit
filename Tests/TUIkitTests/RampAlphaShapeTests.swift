@@ -160,6 +160,31 @@ struct RampAlphaShapeTests {
         #expect(sorted.last?.width == 6, "\"longer\": \(sorted)")
     }
 
+    /// **The field is a rectangle whether or not the ink over it is one.**
+    ///
+    /// An earlier version of this folded the field's alpha into the ramp's `AlphaShape`
+    /// and got both ends wrong: an OPAQUE ramp over a faded background reported
+    /// `.opaque` and claimed nothing at all, and a per-cell one left the background's
+    /// own bytes translucent while claiming it — a double fade in release and an
+    /// assertion in debug, on a path that IS honoured. The field is now always claimed
+    /// and always spelled opaque, and `carriesAlpha` governs the ramp alone.
+    @Test("An opaque ramp over a faded cascade background still claims the field")
+    func opaqueRampStillClaimsItsField() throws {
+        let drawn = buffer(
+            Text("hello")
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.rgb(200, 40, 40), .rgb(40, 40, 200)],
+                        startPoint: .leading, endPoint: .trailing))
+                .style(.text) { $0.background = Color.rgb(10, 10, 10).opacity(0.5) })
+        let claim = try #require(drawn.opacityRegions.first, "\(drawn.opacityRegions)")
+        #expect(claim.fieldOpacity == half, "\(claim)")
+        #expect(claim.inkOpacity == 1, "the ramp itself is opaque: \(claim)")
+        #expect(
+            drawn.lines.joined().contains("48;2;10;10;10"),
+            "the field's bytes must be its opaque spelling: \(drawn.lines)")
+    }
+
     /// A ONE-STOP gradient is not a ramp — `RampSampler.init?` refuses it — and
     /// `Paint.solid` does not divert it either, so it came through the flat fallback
     /// and rendered at full strength.
