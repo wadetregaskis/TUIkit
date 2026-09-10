@@ -1078,7 +1078,7 @@ them among the three:
 | entry point | reaches |
 |---|---|
 | `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites — **fixed, §18** |
-| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider`, `Spinner`, `Table`, `RadioButton`, `_ToggleCore`, `PaintRenderer`'s flat arm |
+| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `Table` and `PaintRenderer`'s flat arm open; `RadioButton` and `_ToggleCore` reach it only through a label, which is a `Text` |
 | `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **inconsistently**: `restingControlFace` consumes the alpha while `accentPulse` carries it |
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
 | `.listRowBackground(…)` | one site |
@@ -1122,7 +1122,8 @@ so they answer in two ways rather than one:
 whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
 `Text`'s attributed-run arm; `.opacity(_:)` on a view (all three channels);
 `ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree; `.border` and
-every box the framework draws through `BorderRenderer` (§18).
+every box the framework draws through `BorderRenderer` (§18); `Divider` and
+`Spinner` (§19).
 
 Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
 `Text`'s ramped ink, and per-cell ramps.
@@ -1274,3 +1275,48 @@ thing the title is really read against is the blend, which is not known at emit
 time — structurally the same gap the emitters have, and it resolves the same way or
 not at all. Noted rather than fixed: the floor's answer is at worst conservative,
 and a wrong floor is a legibility question rather than a wrong colour.
+
+
+## 19. The leaves that paint their own glyph (2026-09-09)
+
+`.foregroundStyle(_:)` is honoured on a `Text` (§14) and was honoured nowhere
+else. The views that read `EnvironmentValues.foregroundStyle` directly and paint
+with it — rather than handing it to a `Text` — are `Divider`, `Spinner` and
+`Table`. The first two are here; `Table` is not, for the reason below.
+
+Both are the simplest shape this design has: **one run of one colour**, so the
+claim is one rectangle over exactly the cells just drawn. What is worth writing
+down is the two places even that is not quite trivial.
+
+**A spinner's label is a second claim.** It is drawn in `palette.foreground`, not
+in the spinner's colour, so one region over the whole row would fade it at the
+wrong alpha. Two paints, two rectangles.
+
+**A spinner's claim has to hold for frames that are not on screen yet.** The glyph
+is an `AnimatedCellRun`: the run loop splices later frames over these cells without
+asking the view anything, so a region describing only the frame drawn *now* would
+be wrong from the first tick. It is valid here because every frame of a cycle is
+the *same colour* and only the glyph changes — which is exactly why `.bouncing` is
+excluded. Its trail lerps a different colour into every cell of every frame, so no
+rectangle can say what is true; it stays unhonoured and stays loud.
+`ForegroundStyleAlphaTests.bouncingSpinnerDeclined` puts that on the record so it
+reads as a decision rather than an omission.
+
+### 19.1 Why `Table` is not here
+
+Not for want of a rectangle — a table row's cells are one colour per row, which is
+the same shape `Divider` has. It is the plumbing:
+
+1. `RenderedRow` carries `lines` and `pulseFrames` and no side payload at all, so
+   the claim needs a new field threaded through three row renderers plus the
+   header and footer.
+2. **A pulsing cursor row replaces its own lines per step**, exactly like the
+   animating border of §18.4 and the bouncing spinner above — so the row that is
+   most likely to be looked at is the one arm a rectangle cannot describe.
+3. `PaintRenderer.band`'s per-cell arm is the `perCell` ramp case that is still
+   declined framework-wide, and a table with a horizontal ramp goes through it.
+
+(1) is mechanical, (2) wants the phase-indexed alpha `OpacityCycle` already
+provides for layer fades, and (3) is the open item from §15. They are one commit
+each, and the honest order is (2) first: without it, a translucent
+`.foregroundStyle` on a table would be right on every row except the selected one.

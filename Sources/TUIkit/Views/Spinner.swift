@@ -469,18 +469,40 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
 
         let output: String
+        /// Where the label landed, for its own claim — it is drawn in a different
+        /// colour from the glyph, so it is a different rectangle.
+        var labelColumns: (x: Int, width: Int)?
         if let label, !label.isEmpty {
             // A whitespace-only label is honoured, not dropped: it is an explicit
             // request for trailing space (e.g. the no-break-space padding labels
             // some apps use for alignment — U+00A0 satisfies `isWhitespace`).
-            let styledLabel = ANSIRenderer.colorize(label, foreground: palette.foreground)
+            let styledLabel = ANSIRenderer.colorize(
+                label, foreground: palette.foreground.opaqueSpelling)
             output = coloredSpinner + " " + styledLabel
+            labelColumns = (coloredSpinner.strippedLength + 1, styledLabel.strippedLength)
         } else {
             // No label (or an empty one) — render just the spinner glyph, with no
             // trailing separator space.
             output = coloredSpinner
         }
         var buffer = FrameBuffer(text: output)
+        // Two claims, because a spinner draws two things in two colours: its glyph
+        // in the accent (or whatever `.foregroundStyle` said) and its label in the
+        // palette's foreground. `.bouncing` is excluded — see `spinnerFrames`.
+        var isBouncing: Bool { if case .bouncing = style { true } else { false } }
+        if !isBouncing, let glyphWidth = cycle.first?.strippedLength,
+            let claim = OpacityRegion.claim(
+                width: glyphWidth, height: 1, ink: resolvedColor)
+        {
+            buffer.opacityRegions.append(claim)
+        }
+        if let labelColumns,
+            let claim = OpacityRegion.claim(
+                offsetX: labelColumns.x, width: labelColumns.width, height: 1,
+                ink: palette.foreground)
+        {
+            buffer.opacityRegions.append(claim)
+        }
 
         // A measure pass draws nothing, so a run left on it would describe cells
         // that were never on screen — and would keep the clock alive from a pass
@@ -526,7 +548,13 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
                     frameIndex: $0, color: color, trackColor: trackColor)
             }
         default:
-            return style.frames.map { ANSIRenderer.colorize($0, foreground: color) }
+            // The opaque spelling, with the alpha claimed in `renderToBuffer`. Safe
+            // across the whole cycle precisely because every frame is this one
+            // colour — only the glyph changes — so one region describes them all.
+            // `.bouncing` above is the exception and stays unhonoured: its trail
+            // lerps a different colour into every cell of every frame, which is
+            // the per-cell case §16.3 still declines.
+            return style.frames.map { ANSIRenderer.colorize($0, foreground: color.opaqueSpelling) }
         }
     }
 }

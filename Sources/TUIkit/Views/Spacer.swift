@@ -176,15 +176,27 @@ extension Divider: Renderable, Layoutable {
         let palette = context.environment.palette
         let color = (context.environment.foregroundStyle?.representative ?? palette.border)
             .resolve(with: palette)
+        // The bytes state the opaque spelling and the alpha travels as a claim:
+        // `foregroundStyle(.gray.opacity(0.5))` on a rule, or a theme whose
+        // `border` role is faded. The rule is a single run of one colour, so its
+        // claim is one rectangle over exactly the cells just drawn.
         if vertical {
-            let cell = ANSIRenderer.colorize(String(glyph), foreground: color)
-            return FrameBuffer(lines: Array(repeating: cell, count: max(1, context.availableHeight)))
+            let height = max(1, context.availableHeight)
+            let cell = ANSIRenderer.colorize(String(glyph), foreground: color.opaqueSpelling)
+            var buffer = FrameBuffer(lines: Array(repeating: cell, count: height))
+            buffer.opacityRegions = OpacityRegion.claim(
+                width: 1, height: height, ink: color).map { [$0] } ?? []
+            return buffer
         }
         // Clamped like the vertical branch above: `String(repeating:count:)`
         // requires a non-negative count, and the offered width can be negative
         // — a caller's `.frame(width: available - labelWidth)` on a terminal
         // too narrow for the label. A rule with no cells to draw draws none.
-        let line = String(repeating: glyph, count: max(0, context.availableWidth))
-        return FrameBuffer(text: ANSIRenderer.colorize(line, foreground: color))
+        let width = max(0, context.availableWidth)
+        let line = String(repeating: glyph, count: width)
+        var buffer = FrameBuffer(text: ANSIRenderer.colorize(line, foreground: color.opaqueSpelling))
+        buffer.opacityRegions = OpacityRegion.claim(
+            width: width, height: 1, ink: color).map { [$0] } ?? []
+        return buffer
     }
 }
