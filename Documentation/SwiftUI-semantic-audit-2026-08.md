@@ -1209,7 +1209,7 @@ verifier corrected the analyst, both are shown.
 
 - *SwiftUI:* swiftui-docs/ColorPicker.md: `init(selection: Binding<Color>, supportsOpacity: Bool = true, @ViewBuilder label: () -> Label)` — "Creates an instance that selects a color with the given label." ColorPicker is generic as ColorPicker<Label>.
 - *TUIkit:* Sources/TUIkit/Views/ColorPicker.swift:36 `public struct ColorPicker: View { private let title: String` — non-generic, with only the two String/LocalizedStringKey initializers (ColorPicker.swift:63, :74), and the label hand-rendered as `Text(title).frame(width: labelWidth, alignment: .leading)` (ColorPicker.swift:89) rather than through the shared _CollapsingLabel. — `Sources/TUIkit/Views/ColorPicker.swift:36`
-- *Divergence:* Typechecked: `ColorPicker(selection: c) { Text("Tint") }` gives "error: trailing closure passed to parameter of type 'LocalizedStringKey' that does not accept a closure". Any picker whose label is a Label(_:systemImage:), an HStack, or styled Text does not port. Every sibling control in this family (Toggle, Slider, Stepper, Picker, DatePicker, Gauge, LabeledContent) is generic over Label and routes it through _CollapsingLabel; ColorPicker is the sole exception. Note the omission of supportsOpacity: is separately correct and is NOT part of this finding.
+- *Divergence:* Typechecked: `ColorPicker(selection: c) { Text("Tint") }` gives "error: trailing closure passed to parameter of type 'LocalizedStringKey' that does not accept a closure". Any picker whose label is a Label(_:systemImage:), an HStack, or styled Text does not port. Every sibling control in this family (Toggle, Slider, Stepper, Picker, DatePicker, Gauge, LabeledContent) is generic over Label and routes it through _CollapsingLabel; ColorPicker is the sole exception. Note the omission of supportsOpacity: was recorded here as "separately correct" and was not — see the closing note; it shipped 2026-09-10.
 - *Recommendation:* Make it ColorPicker<Label: View> with the ViewBuilder initializer, and render the label through _CollapsingLabel like the others, keeping colorPickerLabelWidth as the pillar override.
 
 **132. `GaugeStyle`**
@@ -1431,15 +1431,29 @@ have to DO and why a cell grid cannot: `.onReceive` and the whole
 turned out to be wrong; this time most of them held, and the ones that did not
 are in the list above.
 
-**One of the refusals above has since expired.** `ColorPicker`'s `supportsOpacity:`
-was refused on the grounds that terminal colours have no alpha. ``Color`` gained one
-on 2026-09-08, so the reason is gone and the gap is real: the swatch renders a
-translucent binding faithfully while the control offers no way to edit the alpha it
-is showing. Recorded in `Documentation/Opacity as composition.md` §26. It is a
-standing lesson about refusals in this file — five out of five examined across
+**One of the refusals above expired, and has now been closed.** `ColorPicker`'s
+`supportsOpacity:` was refused on the grounds that terminal colours have no alpha.
+``Color`` gained one on 2026-09-08, so the reason went, and what was left was worse
+than an omission: the swatch rendered a translucent binding faithfully while the
+control offered no way to edit the alpha it was showing.
+
+**Built 2026-09-10** — a fourth `A` channel inline and an Opacity row in the panel,
+`Documentation/Opacity as composition.md` §32. The interesting part is that the
+question the refusal actually rested on — *what does a half-transparent swatch show
+against?* — had no answer in SwiftUI's terms and a better one in a terminal's: the
+swatch states its colour's opaque spelling and claims an `OpacityRegion`, so the alpha
+resolves against whatever is really behind it on the page. No checkerboard, no assumed
+backdrop, and no code, because the swatch was already composed of migrated pieces.
+
+It also exposed a bug the refusal had been hiding: every write path in the picker
+rewrote the colour as an opaque spelling, so a picker bound to a translucent colour
+*deleted* its alpha on the first arrow press.
+
+It is a standing lesson about refusals in this file — five out of five examined across
 audits have now turned out to be wrong or to expire.
 
-**132. `ColorPicker.init(selection:supportsOpacity:label:)`** — reopened, see above.
+**132. `ColorPicker.init(selection:supportsOpacity:label:)`** — the `supportsOpacity:`
+half is closed (see above); the generic-`Label` half stands.
 
 ## Method notes, for whoever runs this next
 
