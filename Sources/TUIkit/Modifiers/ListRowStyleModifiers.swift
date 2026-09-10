@@ -132,10 +132,36 @@ extension _ListRowColorView: Renderable {
         let width = max(foreground.width, context.availableWidth)
         var filled = FrameBuffer(
             lines: (0..<foreground.height).map { _ in
-                ANSIRenderer.colorize(String(repeating: " ", count: width), background: color)
+                ANSIRenderer.colorize(
+                    String(repeating: " ", count: width), background: color.opaqueSpelling)
             })
-        filled = filled.compositedResolvingOpacity(
-            with: foreground, at: (x: 0, y: 0), palette: context.environment.palette)
+        let fill = OpacityRegion.claim(width: width, height: foreground.height, field: color)
+        if let fill {
+            // A TRANSLUCENT fill is not a backdrop yet, so the content must not be
+            // resolved against it here. Resolving now would blend the row's text
+            // toward the fill's OPAQUE spelling — the colour the fill is written in,
+            // not the colour it will end up being once it has itself resolved
+            // against whatever is behind the row. Both claims travel up instead and
+            // resolve together: the blend takes a cell's field first, within its own
+            // layer, and then its ink against that field, which is exactly this
+            // stack of two.
+            //
+            // The claim is appended AFTER the composite, not before, because
+            // `composited(with:at:)` PUNCHES the destination's regions by the
+            // overlay's footprint — right for a claim over cells the overlay
+            // replaced, and wrong here: the text sits ON the fill and those cells
+            // still show it. Punched, a faded row would render opaque under its own
+            // words and faded either side of them.
+            filled = filled.composited(with: foreground, at: (x: 0, y: 0))
+            filled.opacityRegions.append(fill)
+        } else {
+            // An opaque fill IS a backdrop, so the content's own translucency
+            // resolves against it here and nowhere else — that is what makes
+            // `Text("x").opacity(0.5)` in a red row fade toward the red rather than
+            // toward the page.
+            filled = filled.compositedResolvingOpacity(
+                with: foreground, at: (x: 0, y: 0), palette: context.environment.palette)
+        }
         filled.hitTestRegions = foreground.hitTestRegions
         filled.overlays = foreground.overlays
         return filled

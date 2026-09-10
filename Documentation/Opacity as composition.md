@@ -1081,7 +1081,7 @@ them among the three:
 | `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `Table` and `PaintRenderer`'s flat arm open; `RadioButton` and `_ToggleCore` reach it only through a label, which is a `Text` |
 | `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **fixed, §21**; it was inconsistent, `restingControlFace` consuming the alpha while `accentPulse` carried it |
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
-| `.listRowBackground(…)` | one site |
+| `.listRowBackground(…)` | one site — **fixed, §22** |
 | `Text` concatenation | **fixed, §14** |
 | translucent gradient stops | **background fixed, §15**; `Text`'s ramped ink open |
 | `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer`, 3+ sites |
@@ -1428,3 +1428,43 @@ palette that ships, so compositing it unconditionally would have changed what
 sixteen themes actually look like in order to fix a case none of them have.
 
 `opaqueTintUnchanged` asserts the *spelling*, not the colour, for that reason.
+
+
+## 22. `.listRowBackground`: a fill that is not a backdrop yet (2026-09-09)
+
+One site, and the only entry point so far whose fix changed *when* something
+resolves rather than merely adding a claim.
+
+`_ListRowColorView` painted the row and then called `compositedResolvingOpacity`,
+which resolves the content's own opacity regions **against the fill**. For an
+opaque fill that is exactly right, and it is the point: `Text("x").opacity(0.5)` in
+a red row must fade toward the red, not toward the page. A fill is a backdrop, so
+the fade is spent there and nothing travels further.
+
+A **translucent** fill is not a backdrop. Resolving the content against it would
+blend the text toward the fill's `opaqueSpelling` — the colour the fill is written
+in, not the colour it is going to *be* once it has itself resolved against whatever
+is behind the row. So the two branches now differ:
+
+| fill | content's fade |
+|---|---|
+| opaque | spent against the fill, here |
+| translucent | carried up, to resolve alongside the fill's own claim |
+
+Carrying both is not a compromise; it is the arithmetic the blend already
+implements. `OpacityBlend` takes a cell's FIELD first, within its own layer, and
+then its INK against that field — which is precisely a field claim and an ink claim
+stacked on one cell. Two channels, folded separately, in the right order.
+
+### 22.1 The claim goes on *after* the composite
+
+`composited(with:at:)` punches the destination's regions by the overlay's
+footprint, and it must: a claim over cells the overlay *replaced* would fade content
+that was never under the fade. But a row's text is not a replacement — it sits ON
+the fill, and those cells still show it, because a cell that states no background of
+its own inherits the one beneath.
+
+So a claim added before the composite comes back with a hole in it exactly the width
+of the words: the row would render **opaque under its own text and faded either side
+of it**. Appending after the composite is what avoids that, and
+`claimSurvivesTheComposite` is the test that would catch it being moved.
