@@ -15,8 +15,13 @@
 /// place: one ``Slider`` per channel (R, G, B, each 0–255). Tab moves focus
 /// between the swatch and the channel sliders; the arrow keys adjust the
 /// focused channel; Return, Space or a click on the swatch opens the panel.
-/// (There is no opacity channel — terminal colours have no alpha — so
-/// `supportsOpacity` is omitted.)
+///
+/// > Important: `supportsOpacity` is **not** implemented, and the reason it was
+/// > originally omitted for — "terminal colours have no alpha" — is no longer true.
+/// > ``Color`` carries one, the swatch already renders a translucent binding
+/// > faithfully, and a picker bound to such a colour can therefore *display* an
+/// > alpha it gives you no way to *edit*. That is a real SwiftUI parity gap rather
+/// > than a justified refusal; see `Documentation/Opacity as composition.md` §26.
 ///
 /// ``TUIkit/View/colorPickerChannels(_:)`` drops the inline sliders, leaving
 /// label and swatch — SwiftUI's own shape, and what a narrow row has space for.

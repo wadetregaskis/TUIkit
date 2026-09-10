@@ -1080,7 +1080,7 @@ them among the three:
 | `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites — **fixed, §18** |
 | `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `RadioButton` and `_ToggleCore`'s indicators — **fixed, §23**; `Table` and `PaintRenderer`'s flat arm open |
 | `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **fixed, §21**; it was inconsistent, `restingControlFace` consuming the alpha while `accentPulse` carried it |
-| `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
+| `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` — **answered, §26.1** |
 | `.listRowBackground(…)` | one site — **fixed, §22** |
 | `Text` concatenation | **fixed, §14** |
 | translucent gradient stops | **background fixed, §15**; `Text`'s ramped ink open |
@@ -1088,7 +1088,7 @@ them among the three:
 | `StatusBarState.highlightColor` / `.labelColor` | 2 sites — **fixed, §24** |
 | `.style(.text) { $0.foreground = … }` | the cascade's non-`Text` readers |
 | `.colorMultiply(…)` | a silent drop, not a trap — **fixed, §25** |
-| `ColorPicker` with a translucent binding | the swatch — and `supportsOpacity` is now a real parity gap |
+| `ColorPicker` with a translucent binding | the swatch was **already right, §26**; `supportsOpacity` is a real parity gap and stays open |
 
 Plus a whole second tier: `Palette` is a public protocol of plain
 `var …: Color { get }` members, and nothing normalises what a custom palette
@@ -1597,3 +1597,56 @@ independently, and either can happen without the other.
 
 That is also why the test asserts the *bytes* are byte-identical to an unmultiplied
 render. It is how the bug was found rather than a restatement of the fix.
+
+
+## 26. `ColorPicker`: the swatch was already right, and a refusal expired (2026-09-09)
+
+Row 12 turned out to be two unrelated things.
+
+**The swatch needed nothing.** `_ColorSwatchButtonStyle` draws
+`Text("█").foregroundStyle(fill).background(fill)`, and both of those were migrated
+in §14 and the flat `.background` arm. A picker bound to a translucent colour
+renders it faithfully. That is the composition working as intended — but it is two
+features deep, so `ColorPickerAlphaTests.swatchFades` asserts it rather than leaving
+it to be assumed and quietly broken later.
+
+**`supportsOpacity` is a real parity gap now.** It was omitted deliberately, with a
+stated reason: *"There is no opacity channel — terminal colours have no alpha — so
+`supportsOpacity` is omitted."* `Color` gained one on 2026-09-08, so the reason is
+simply gone, and what is left is worse than a plain omission: the control **displays**
+an alpha it gives no way to **edit**.
+
+Implementing it is a feature rather than a migration — a fourth channel slider, the
+same in `ColorPickerPanel`, and a decision about what the swatch shows a
+half-transparent colour *against* — so it is left for the project owner rather than
+folded into this pass. `noAlphaChannel` pins the current state so that a fourth
+channel landing makes a test fail and be rewritten, instead of arriving
+undocumented.
+
+`Documentation/SwiftUI-semantic-audit-2026-08.md` listed this among "the refusals that
+pass the test". It has been moved out. The audit's own tally is worth updating with
+it: five out of five refusals examined across audits have now turned out to be wrong
+or to expire.
+
+### 26.1 `String.styled`, and why the claim helper is public
+
+Row 4 is the documented escape hatch for a reader writing their own `Renderable`, and
+it is answered rather than migrated: there is nothing inside `String.styled` to fix,
+because the caller owns both halves. What was missing was any way for that caller to
+make the claim the framework's own paint sites make.
+
+`OpacityRegion.claim(offsetX:offsetY:width:height:ink:field:)` is public for exactly
+that. The pattern a reader needs is the one every migrated site in §18–§25 follows:
+
+```swift
+let line = ANSIRenderer.colorize(
+    glyphs, foreground: ink.opaqueSpelling, background: field?.opaqueSpelling)
+var buffer = FrameBuffer(lines: [line], width: width, lineWidths: [width])
+buffer.opacityRegions += OpacityRegion.claim(
+    width: width, height: 1, ink: ink, field: field).map { [$0] } ?? []
+```
+
+State the opaque spelling in the bytes, because an emitter has no backdrop; put the
+alpha in a region, because only a composite knows what is behind. Skipping the second
+half leaves the colour at full strength and trips the emitter's assertion in a debug
+build, which is the intended way to find out.

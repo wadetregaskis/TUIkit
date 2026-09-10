@@ -1427,10 +1427,19 @@ expansion state · `withAnimation`'s synchronous body and return value ·
 And the refusals that pass the test — a stated reason naming what the API would
 have to DO and why a cell grid cannot: `.onReceive` and the whole
 `ObservableObject` family (§2.3), `ControlSize` (a control smaller than one row),
-`ColorPicker`'s `supportsOpacity:`, `Menu`'s `primaryAction:` partly, and the
-`formatter:` spellings. Four out of four refusals examined in *previous* audits
+`Menu`'s `primaryAction:` partly, and the `formatter:` spellings. Four out of four refusals examined in *previous* audits
 turned out to be wrong; this time most of them held, and the ones that did not
 are in the list above.
+
+**One of the refusals above has since expired.** `ColorPicker`'s `supportsOpacity:`
+was refused on the grounds that terminal colours have no alpha. ``Color`` gained one
+on 2026-09-08, so the reason is gone and the gap is real: the swatch renders a
+translucent binding faithfully while the control offers no way to edit the alpha it
+is showing. Recorded in `Documentation/Opacity as composition.md` §26. It is a
+standing lesson about refusals in this file — five out of five examined across
+audits have now turned out to be wrong or to expire.
+
+**132. `ColorPicker.init(selection:supportsOpacity:label:)`** — reopened, see above.
 
 ## Method notes, for whoever runs this next
 
