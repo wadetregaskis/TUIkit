@@ -133,8 +133,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         )
         var buffer = FrameBuffer(lines: [collapsed.text])
         // The collapsed control IS the buffer's only row, so the caps' runs
-        // need no shifting.
+        // and the label's claims need no shifting.
         if !context.isMeasuring { buffer.animatedCells = collapsed.animations }
+        buffer.opacityRegions += collapsed.claims
 
         attachCollapsedMouseHandlers(
             to: &buffer,
@@ -364,7 +365,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         isHovered: Bool,
         context: RenderContext,
         palette: any Palette
-    ) -> (text: String, animations: [AnimatedCellRun]) {
+    ) -> (text: String, animations: [AnimatedCellRun], claims: [OpacityRegion]) {
         // Combine own + cascaded disabled (renderToBuffer's shadowing local does
         // not reach this helper).
         let isDisabled = self.isDisabled || !context.environment.isEnabled
@@ -415,21 +416,17 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             isFocused: isFocused && !isDisabled,
             background: buttonBg, accent: palette.accent, context: context)
 
-        let openCap = ANSIRenderer.colorize(
-            String(TerminalSymbols.openCap),
-            foreground: caps.colorNow
-        )
-        let closeCap = ANSIRenderer.colorize(
-            String(TerminalSymbols.closeCap),
-            foreground: caps.colorNow
-        )
-        let styledContent = ANSIRenderer.colorize(
-            content,
-            foreground: labelFg,
-            background: buttonBg,
-            bold: isFocused && !isDisabled
-        )
-        let line = openCap + styledContent + closeCap
-        return (line, caps.runs(width: line.strippedLength))
+        // Through `ClaimingRow`, which gets the label's claim onto the columns the
+        // label actually occupies — past the opening cap — without a second piece of
+        // arithmetic. `labelFg` is the one colour here that can be translucent: it ends
+        // in `ensuringRenderedContrast`, which is a re-SPELLING and carries the slot's
+        // alpha, where `buttonBg` and the caps are composites that spend theirs (§29).
+        var row = ClaimingRow()
+        row.append(String(TerminalSymbols.openCap), cells: 1, ink: caps.colorNow)
+        row.append(
+            content, cells: content.strippedLength, ink: labelFg, field: buttonBg,
+            bold: isFocused && !isDisabled)
+        row.append(String(TerminalSymbols.closeCap), cells: 1, ink: caps.colorNow)
+        return (row.text, caps.runs(width: row.cells), row.claims)
     }
 }

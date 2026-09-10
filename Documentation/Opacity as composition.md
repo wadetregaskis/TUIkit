@@ -2664,3 +2664,73 @@ it, and two sites paint a derived surface without claiming:
 The chips went through `ClaimingRow` for the reason §36.6 introduced it: a chip is
 three runs (an ink-only cap, an ink-on-field body, an ink-only cap), so it owes three
 claims, and the row that emits them is the thing that knows where each begins.
+
+
+## 40. The second tier, asserted rather than inspected (2026-09-10)
+
+§16.1 named a whole second tier beside its thirteen entry points: `Palette` is a public
+protocol of plain `var …: Color { get }` members, nothing normalises what a custom one
+returns, and one faded slot reaches every derived colour in the theme. §18 closed the
+`border` role of it and §20 fixed the reason it reached nothing at all. The rest of it
+had never been *rendered*: `FadedEverythingPalette` exercises the derivations
+arithmetically, in the styling module, where there are no cells.
+
+`FadedPaletteRenderTests` renders pages under a palette whose every slot is at alpha
+128. It asserts by **not trapping** — a translucent colour reaching `ANSIRenderer` trips
+a debug assertion, which is a trap and not a throw, so an unmigrated paint site takes
+the suite down with a message naming the alpha. There is nothing to `#expect` and no
+need for one: the run either completes or it does not.
+
+It found six sites on its first run. Two were §39's own doing (`FieldChrome`'s caps and
+a compact `TabView`'s panel fill — both consumers of a derived surface, which had just
+started carrying). Four were **already there**, and had been since the second tier was
+named:
+
+| site | colour | why it carried |
+|---|---|---|
+| `_TableCore.renderHeader` | `foregroundSecondary` | a re-spelling of `foreground` |
+| `_PickerMenuCore.collapsedLine` | the label, through `ensuringRenderedContrast` | a re-spelling, floored against the face |
+| `ScrollbarRenderer.styledCell` | `ScrollbarColors.track(in:)` | derived from `foregroundQuaternary` |
+| `_ListCore`'s empty bar cell | the same track colour | the same |
+
+### 40.1 Two of the four, and what shape they took
+
+`renderHeader` returned a `String` — the same structural blocker as `TrackRenderer` and
+`PaintRenderer.styled(pieces:)` — and now returns a `ClaimingRow`, which is also what
+gets the gutter and the inter-column spacing right without a second piece of
+arithmetic: `skip(cells:)` for what the header does not paint, `append` for what it
+does, and adjacent cells owing one alpha coalesce to a single rectangle across the
+titles. `_TableHeaderView` gains a `claims` parameter, the twin of the one
+`_TableContentView` got in §33.
+
+The analytic MEASURE path passes `claims: []` deliberately: it reports a size and draws
+nothing, and a claim describes cells that were never on screen.
+
+`_PickerMenuCore.collapsedLine` goes through `ClaimingRow` too, which puts the label's
+claim past the opening cap without arithmetic. Only the label can be translucent there —
+`buttonBg` and the caps are composites that spend their alpha (§29), and the label ends
+in `ensuringRenderedContrast`, which is a re-spelling that carries it.
+
+### 40.2 The scrollbars are open, and this is the shape of the work
+
+A bar is `[String]` — one styled single-cell string per line — built by
+`ScrollbarRenderer.verticalScrollbar` / `horizontalScrollbar` and handed to **nine call
+sites** that each place it at a column of their own. `styledCell` is the one place a
+bar cell becomes bytes, so it is the one place the claim belongs; but a claim in
+bar-local coordinates has to be shifted by each caller, which means the bar becoming a
+claim-bearing type rather than an array of strings — exactly the conversion
+`TrackRenderer.render` made in §31 when it stopped returning a bare `String`.
+
+That is its own commit, with its own nine call sites and their tests, and it is not
+folded in here. The test hides the scrollbars with `.scrollIndicators(.hidden)` and says
+so at the line, which is the difference between a gap that is recorded and one that is
+papered over.
+
+### 40.3 What the test does and does not prove
+
+It renders a spread — fields, a tab view, a toggle, a slider, a list, a table, a box, two
+progress bars, two gauges and a picker — and a spread is not a proof. A faded palette
+reaches every chrome-painting view in the framework, and the ones not on that page are
+untested rather than known-good. What the suite now has is a **place to add the next
+one**, and a failure mode that is a stack trace rather than a wrong colour on somebody's
+screen.

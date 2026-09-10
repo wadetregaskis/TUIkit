@@ -571,7 +571,9 @@ where Value.ID: Hashable {
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
             availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
-        var headerLine = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
+        var headerLine = renderHeader(
+            columnWidths: columnWidths, gutter: gutter, palette: palette
+        ).text
         if wantsScrollbar {
             headerLine += String(
                 repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
@@ -710,7 +712,9 @@ where Value.ID: Hashable {
         // The chrome is then *measured* for real, exactly as the single-line
         // analytic does, so border/padding semantics stay the render path's
         // rather than being duplicated as arithmetic here.
-        var headerLine = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
+        var headerLine = renderHeader(
+            columnWidths: columnWidths, gutter: gutter, palette: palette
+        ).text
         if wantsScrollbar {
             headerLine += String(
                 repeating: " ", count: max(0, innerWidth - headerLine.strippedLength))
@@ -731,7 +735,9 @@ where Value.ID: Hashable {
             padding: Self.containerPadding
         ) {
             VStack(alignment: .leading, spacing: 0) {
-                _TableHeaderView(line: headerLine)
+                // No claims on the analytic MEASURE path: it reports a size and draws
+                // nothing, and a claim describes cells that were never on screen.
+                _TableHeaderView(line: headerLine, claims: [])
                 _TableSizeStub(width: content.width, height: content.height)
             }
         }
@@ -817,7 +823,8 @@ where Value.ID: Hashable {
 
         let columnWidths = calculateColumnWidths(
             availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
-        var headerLine = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
+        let header = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
+        var headerLine = header.text
         if wantsScrollbar {
             // Pad the header to the full inner width so it aligns with the rows
             // (whose last column is the scrollbar); the cell above the bar is blank.
@@ -899,7 +906,7 @@ where Value.ID: Hashable {
             // padded to the same content width (see `contentWidth` below), not to the
             // full interior, keeping every line the same width.
             VStack(alignment: .leading, spacing: 0) {
-                _TableHeaderView(line: headerLine)
+                _TableHeaderView(line: headerLine, claims: header.claims)
                 _TableContentView(
                     lines: filledContentLines, runs: contentRuns, claims: contentClaims)
             }
@@ -3198,21 +3205,31 @@ where Value.ID: Hashable {
 
     // MARK: - Header Rendering
 
-    private func renderHeader(columnWidths: [Int], gutter: Int, palette: any Palette) -> String {
-        let spacing = String(repeating: " ", count: columnSpacing)
-
-        let cells = zip(columns.indices, columnWidths).map { index, width -> String in
+    private func renderHeader(
+        columnWidths: [Int], gutter: Int, palette: any Palette
+    ) -> ClaimingRow {
+        // Through `ClaimingRow` so the header's own colour states its opaque spelling
+        // and sends its alpha up as a region. `foregroundSecondary` is a re-spelling of
+        // the palette's foreground and carries its alpha, so a faded theme reaches here
+        // — and the row is what knows which columns each cell occupies, gutter and
+        // spacing included. Adjacent cells owe one alpha, so it coalesces to a single
+        // rectangle across the titles.
+        var row = ClaimingRow()
+        row.skip(cells: gutter)
+        for (offset, index) in columns.indices.enumerated() where offset < columnWidths.count {
+            if offset > 0 { row.skip(cells: columnSpacing) }
             let column = columns[index]
+            let width = columnWidths[offset]
             let aligned = alignText(
                 headerTitle(for: column, fittingWidth: width),
                 width: width,
                 alignment: column.alignment,
                 truncationMode: column.truncationMode
             )
-            return ANSIRenderer.colorize(aligned, foreground: palette.foregroundSecondary, bold: true)
+            row.append(
+                aligned, cells: width, ink: palette.foregroundSecondary, bold: true)
         }
-
-        return String(repeating: " ", count: gutter) + cells.joined(separator: spacing)
+        return row
     }
 
     /// A column's header text, with the sort indicator when the table sorts.
@@ -3847,12 +3864,23 @@ private struct _TableContentView: View, Renderable {
 private struct _TableHeaderView: View, Renderable {
     let line: String
 
+    /// What the header's own colours owe, in the line's columns.
+    ///
+    /// The header is painted in `foregroundSecondary`, which is a re-SPELLING of the
+    /// palette's foreground and carries its alpha — so a theme that fades its text
+    /// fades the header, and the claim has to travel with the line rather than being
+    /// derived from it later. `_TableContentView`'s twin, added for the same reason
+    /// (§33) one commit apart.
+    let claims: [OpacityRegion]
+
     var body: Never {
         fatalError("_TableHeaderView renders via Renderable")
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        FrameBuffer(lines: [line])
+        var buffer = FrameBuffer(lines: [line])
+        buffer.opacityRegions += claims
+        return buffer
     }
 }
 
