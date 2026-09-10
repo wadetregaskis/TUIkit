@@ -878,3 +878,40 @@ does not carry a translucent foreground — so the change is narrow by
 construction. Three tests on this branch had pinned the old answer and were
 rewritten rather than adapted: they asserted the ink blending toward `.red`, the
 displaced glyph, in the two places that most looked like the model working.
+
+
+## 12. A transparent ink keeps its glyph (2026-09-09)
+
+`sourcePaintsInk` was gated on `alpha.ink > 0`, so `inkOpacity: 0` removed the
+source's glyph from the cell contest and the destination's character survived.
+The project owner's argument overturns it, and it turns on what a cell is:
+
+> painting with a 0% opacity foreground colour should still emit the actual
+> character (if any) in the cell. That way copy-paste still works. If the goal
+> were to *remove* the text from rendering, then its visibility should be
+> disabled outright in any of numerous other ways — painting in a transparent
+> colour is not the same thing.
+
+A cell's character is the SELECTABLE text. Drop the glyph and the cell holds
+whatever a sibling drew, so a transparent label is copied out of the terminal as
+the text it covers — the one outcome nobody asked for. Three things make the new
+rule the right one rather than merely the requested one:
+
+1. **It is the same colour.** In a cell grid, ink at alpha 0 over a field is
+   indistinguishable from ink painted in the field's exact colour, and nobody
+   expects `.foregroundColor(.black)` on a black field to reveal text behind it.
+   `clearInkIsTheFieldsColour` pins that: four different named inks at alpha 0
+   all emit the field's own codes.
+2. **It is continuous.** §11's blend lands exactly on the field as `inkOpacity`
+   reaches 0, so nothing snaps at the end of the range. The old gate was a
+   discontinuity — a glyph at 0.01 and no glyph at 0.
+3. **The alternatives already exist and say what they mean.** `.hidden()`,
+   `.opacity(0)` and not drawing the view remove it from the picture. A colour is
+   a colour.
+
+`.opacity(0)` on a VIEW is deliberately NOT the same, and the difference is the
+½ rule rather than a special case: below ½ a layer already loses the glyph
+contest, so a layer at 0 handing the cell to the destination is the continuous
+answer *there*. The ink channel has no contest at all — it is one cell's own
+glyph on its own field — so keeping the glyph is the continuous answer for it.
+Two channels, two limits, one rule each.

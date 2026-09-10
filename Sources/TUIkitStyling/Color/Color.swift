@@ -99,8 +99,16 @@ public struct Color: Sendable, Hashable {
     /// exist.
     ///
     /// As a background — or as a view — it paints nothing and what is behind shows
-    /// through. As a foreground it draws no glyph, revealing whatever a sibling
-    /// drew in that cell, and blank cells where nothing did.
+    /// through.
+    ///
+    /// As a foreground it still draws its glyph, in the colour of the field the
+    /// glyph sits on, so the text is present and selectable and invisible. That is
+    /// deliberate and it is where a terminal differs from a canvas: a cell's
+    /// character is the text a reader copies out, so dropping the glyph would hand
+    /// them whatever was underneath instead. `.clear` ink is the field's colour
+    /// wearing another name, exactly as `.foregroundColor(.black)` on a black
+    /// field is — and neither reveals what is behind. To take a view out of the
+    /// picture, use `View.hidden()` or `View.opacity(_:)` at zero, which say so.
     ///
     /// > Note: the underlying colour is black, as it is in SwiftUI, so anything
     /// > reading a colour's components and ignoring its alpha sees black. That

@@ -365,10 +365,25 @@ extension FrameBuffer {
         // one, and where both do, ½ decides. A side painting no glyph is not a
         // candidate — it has nothing to draw, and "drawing" it would mean
         // erasing the side that does.
-        // `alpha.ink > 0` removes a `.clear` ink from the contest: it has no
-        // glyph to draw, and "drawing" it would erase the side that does.
+        // A TRANSPARENT ink is still in the contest, and this is the one place
+        // where a terminal's answer differs from a raster's on purpose.
+        //
+        // `alpha.ink == 0` does not mean "no glyph". It means the glyph's colour
+        // is nothing — which in a cell grid is indistinguishable from painting it
+        // in the exact colour of the field, and that is what the blend above
+        // produces. Nobody expects `.foregroundColor(.black)` on a black field to
+        // let text behind show through, and `.clear` is that colour with the
+        // field's name instead of black's.
+        //
+        // The reason it matters more here than it would on a canvas: a cell's
+        // character is the SELECTABLE text. Dropping the glyph makes the cell
+        // hold whatever a sibling drew, so a transparent label would be copied out
+        // of the terminal as the text underneath it. Emitting it keeps copy and
+        // paste honest. Removing something from the picture is what `.hidden()`,
+        // `.opacity(0)` and simply not drawing it are for; a transparent colour is
+        // a colour.
         let sourcePaintsInk =
-            (source.character != " " || source.style.paintsInkOnBlankCell) && alpha.ink > 0
+            source.character != " " || source.style.paintsInkOnBlankCell
         let destinationPaintsInk =
             destination.map { $0.character != " " || $0.style.paintsInkOnBlankCell } ?? false
         // The LAYER's alpha decides the contest, never the ink's. The contest is

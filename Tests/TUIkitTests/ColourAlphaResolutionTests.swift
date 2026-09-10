@@ -105,11 +105,26 @@ struct ColourAlphaResolutionTests {
             "…and the field is a quarter of the way from blue: \(resolved.lines[0].debugDescription)")
     }
 
-    /// Ink at zero paints no glyph at all — which is what `Color.clear` as a
-    /// foreground has to mean — and must NOT erase what is behind it. Getting the
-    /// zero exit wrong makes `.clear` text blank the row it sits on.
-    @Test("Ink at zero reveals the destination's glyph rather than erasing it")
-    func zeroInkDrawsNothing() {
+    /// **Ink at zero keeps its glyph and paints it in the field's own colour.**
+    ///
+    /// The reasoning is the project owner's and it turns on what a cell is. A
+    /// cell's character is the SELECTABLE text: drop the glyph and the cell holds
+    /// whatever a sibling drew, so a transparent label is copied out of the
+    /// terminal as the text underneath it. Emitting it keeps copy and paste
+    /// honest, and removing something from the picture is what `.hidden()`,
+    /// `.opacity(0)` and not drawing it are for.
+    ///
+    /// It is also the only answer continuous with the rest of the range —
+    /// `inkFadesTowardItsOwnField`'s blend lands exactly on the field at zero —
+    /// and it makes `.clear` ink behave as `.foregroundColor(<the field>)`, which
+    /// is the equivalence `clearInkIsTheFieldsColour` pins.
+    ///
+    /// This test previously asserted the opposite: that the destination's "world"
+    /// showed through. That reading treats a transparent colour as an absent view,
+    /// and nobody expects `.foregroundColor(.black)` on a black field to reveal
+    /// text behind it.
+    @Test("Ink at zero keeps its own glyph, invisibly")
+    func zeroInkKeepsItsGlyph() {
         let destination = FrameBuffer(lines: [
             ANSIRenderer.colorize("world", foreground: .red, background: .blue)
         ])
@@ -118,23 +133,62 @@ struct ColourAlphaResolutionTests {
         let resolved = source.resolvingOpacity(
             over: destination, surface: .black, palette: palette())
         #expect(
-            resolved.lines[0].stripped == "world",
-            "what is behind shows: \(resolved.lines)")
+            resolved.lines[0].stripped == "hello",
+            "the source's own text is what is in the cells: \(resolved.lines)")
+        // Invisible: the ink lands on the field it is drawn on, which the source
+        // does not state and therefore inherits — the destination's blue.
+        #expect(
+            resolved.lines[0].contains(codes(Color.green.opacity(0, over: .blue))),
+            "painted in the field's colour: \(resolved.lines[0].debugDescription)")
         #expect(
             !resolved.lines[0].contains(codes(Color.green.opacity(1, over: .red))),
             "and no green was stated")
     }
 
-    /// …and over NOTHING it is blank cells rather than a hole: they still occupy
-    /// their space, which is what SwiftUI does too.
-    @Test("Ink at zero over an empty destination draws blanks")
+    /// **The equivalence that justifies the rule.** A transparent ink is not a
+    /// missing view, it is a colour — and in a cell grid it is the same colour as
+    /// the field, so at zero the ink NAMED must stop mattering entirely.
+    ///
+    /// Two very different inks, both fully transparent on a blue field, have to
+    /// come out as the same bytes, and those bytes have to be blue. If they ever
+    /// diverge one of them is wrong, and being invisible is what would keep
+    /// anyone from noticing which.
+    ///
+    /// The source line states each ink in its OPAQUE spelling, as every real
+    /// paint site does — `Color+ANSICodes.swift`'s assertion fires on a
+    /// translucent colour reaching an emitter, and a test harness is not exempt.
+    /// The alpha lives on the region, which is the whole design.
+    @Test("At ink zero the colour named stops mattering — the field shows")
+    func clearInkIsTheFieldsColour() {
+        func foreground(of ink: Color, alpha: Double) -> String {
+            let source = tinted(
+                ANSIRenderer.colorize(
+                    "hello", foreground: ink.opaqueSpelling, background: .blue),
+                ink: alpha, width: 5)
+            return source.resolvingOpacity(surface: .black, palette: palette()).lines[0]
+        }
+        let fieldCodes = codes(Color.blue.opacity(1, over: .blue))
+        for ink in [Color.green, .red, .clear, .white] {
+            let line = foreground(of: ink, alpha: 0)
+            #expect(
+                line.contains(fieldCodes),
+                "\(ink) at ink 0 paints the blue field: \(line.debugDescription)")
+        }
+    }
+
+    /// …and over NOTHING the glyphs stand too, in the surface's colour, so a
+    /// transparent label still occupies and still copies.
+    @Test("Ink at zero over an empty destination keeps its glyphs")
     func zeroInkOverNothing() {
         let source = tinted(
             ANSIRenderer.colorize("hello", foreground: .green), ink: 0, width: 5)
         let resolved = source.resolvingOpacity(surface: .black, palette: palette())
         #expect(
-            resolved.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty,
-            "nothing drawn: \(resolved.lines[0].debugDescription)")
+            resolved.lines[0].stripped == "hello",
+            "still selectable: \(resolved.lines[0].debugDescription)")
+        #expect(
+            resolved.lines[0].contains(codes(Color.green.opacity(0, over: .black))),
+            "and invisible against the surface: \(resolved.lines[0].debugDescription)")
     }
 
     /// A translucent colour inside a fading pane is faint twice over, and neither
@@ -436,6 +490,32 @@ struct TranslucentPaintTests {
         #expect(
             !lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: .red))),
             "and not toward the glyph it displaced")
+    }
+
+    /// **Copy and paste, end to end through the real view stack.**
+    ///
+    /// `.foregroundStyle(.clear)` has to leave its own characters in the cells —
+    /// that is the point of it being a colour rather than a way of removing a
+    /// view — so a reader selecting the row gets the transparent label's text and
+    /// not the text it covers.
+    @Test("Transparent text is still in the cells to be copied")
+    func transparentTextIsStillSelectable() {
+        let lines = screen(
+            ZStack {
+                Text("world").foregroundStyle(.red)
+                Text("hello").foregroundStyle(.clear)
+            })
+        #expect(
+            lines[0].stripped.contains("hello"),
+            "the transparent label's own text: \(lines[0].stripped.debugDescription)")
+        #expect(
+            !lines[0].stripped.contains("world"),
+            "and not the text underneath it")
+        // Invisible: its ink is the surface it sits on.
+        let surface = makeRenderContext(width: 14, height: 3).environment.palette.background
+        #expect(
+            lines[0].contains(fgCodes(Color.clear.opaqueSpelling.opacity(0, over: surface))),
+            "…painted in the surface's colour: \(lines[0].debugDescription)")
     }
 
     /// A wrapped text stamps one region PER LINE, sized to that line — not one
