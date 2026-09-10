@@ -1078,7 +1078,7 @@ them among the three:
 | entry point | reaches |
 |---|---|
 | `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites — **fixed, §18** |
-| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `Table` and `PaintRenderer`'s flat arm open; `RadioButton` and `_ToggleCore` reach it only through a label, which is a `Text` |
+| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `RadioButton` and `_ToggleCore`'s indicators — **fixed, §23**; `Table` and `PaintRenderer`'s flat arm open |
 | `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **fixed, §21**; it was inconsistent, `restingControlFace` consuming the alpha while `accentPulse` carried it |
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
 | `.listRowBackground(…)` | one site — **fixed, §22** |
@@ -1124,7 +1124,7 @@ whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
 `Text`'s attributed-run arm; `.opacity(_:)` on a view (all three channels);
 `ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree; `.border` and
 every box the framework draws through `BorderRenderer` (§18); `Divider` and
-`Spinner` (§19).
+`Spinner` (§19); a `Toggle`'s and `RadioButton`'s own indicator glyphs (§23).
 
 Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
 `Text`'s ramped ink, and per-cell ramps.
@@ -1468,3 +1468,61 @@ So a claim added before the composite comes back with a hole in it exactly the w
 of the words: the row would render **opaque under its own text and faded either side
 of it**. Appending after the composite is what avoids that, and
 `claimSurvivesTheComposite` is the test that would catch it being moved.
+
+
+## 23. A control's own indicator, and four sites that took half an answer (2026-09-09)
+
+A checkbox's mark, a switch's knob, a radio button's dot: glyphs a control paints
+for itself, from the *palette* rather than from `.foregroundStyle`. So what reaches
+them is a faded `.tint`, and §21's fix is what lets it arrive at all.
+
+### 23.1 Half a pulse, spelled four times
+
+`accentPulse()` and `accentFillPulse()` each return a **pair**. Four sites took the
+`dim` of one and then wrote their own bright end:
+
+```swift
+// MenuItemButtonStyle, DropdownMenuRenderer
+dim:    palette.accentPulse().dim
+bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
+        // …which is exactly accentFillPulse().bright
+
+// RadioButton, _ToggleCore
+dim:    palette.accentPulse().dim
+bright: palette.accent
+        // …which is exactly what §21 had just stopped being right
+```
+
+Both hand-rolled pairs are the existing functions written out, so this is a
+consolidation that happens to fix a bug: written apart, the two ends disagreed about
+a translucent accent — the dim end spent its alpha and the bright end carried it.
+The `_ToggleCore` and `RadioButton` pairs were the *same* inconsistency §21 removed
+from `accentPulse`, reintroduced locally, which is what a pair-returning function
+exists to prevent.
+
+The distinction between the two functions is real and worth keeping straight: a
+**fill** with a label on it stops at `focusPulseMax` so the content stays readable,
+while a **mark** drawn in the accent has nothing on top of it and can go all the
+way. The menu bar and the drop-down highlight are fills; a checkbox's brackets are a
+mark.
+
+### 23.2 Describing the runs once
+
+An indicator is two or three differently-coloured runs on one row, and the strings
+were built by concatenating `colorize` calls. That is fine for bytes and useless for
+a claim, which needs a **column** — and the column cannot be hardcoded: a `⬛︎` is two
+cells wide, a `[` is one, so an offset guessed at is wrong under two
+`ToggleCharacterSet`s out of three.
+
+So `IndicatorRun` — `(text, ink, field)` — and one function per style that describes
+the runs at a given colour. `painted(_:)` makes the bytes (stating each colour's
+opaque spelling) and `claims(_:)` walks the same list accumulating `strippedLength`.
+Two consumers, one description; they cannot drift.
+
+The blank half of a switch's ASCII track is described as a run even though it is a
+space. No ink lands on a space, so its claim changes nothing — but *omitting* it
+would put the closing bracket's claim one cell to the left.
+
+As everywhere else in this design, a pulsing indicator claims nothing: the run
+repaints those cells from its own frames, and a region carrying the phase drawn now
+would resolve every later phase at the wrong alpha.

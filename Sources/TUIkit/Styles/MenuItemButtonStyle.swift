@@ -79,8 +79,14 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
 
         let palette = context.environment.palette
         let cycle = context.environment.selectionEmphasis.cycle(true)
-        let dim = palette.accentPulse().dim
-        let bright = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
+        // `accentFillPulse()`, not a hand-rolled pair: this bar is a FILL that a
+        // label is drawn on, and that is exactly the distinction the two pulse
+        // functions carry (`accentPulse` reaches the accent, a fill's bright end
+        // stops at `focusPulseMax` so the content stays readable). Spelled out here,
+        // the two ends also disagreed about a translucent accent — the dim end spent
+        // its alpha and the bright end was written from `palette.accent` again. See
+        // `Documentation/Opacity as composition.md` §21.
+        let (dim, bright) = palette.accentFillPulse()
 
         // Squared off first: the bar spans the row, and a short line would
         // otherwise be painted only as far as it happens to reach, leaving the

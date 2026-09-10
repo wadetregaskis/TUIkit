@@ -731,12 +731,16 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             // the run loop to breathe on its own. Asking for the live phase
             // instead would keep the clock ticking and re-render this entire
             // page ten times a second to repaint one cell.
-            let dimAccent = palette.accentPulse().dim
+            // Both ends from `accentPulse()`. Written as a `dim` from there and a
+            // bright of `palette.accent`, the two disagreed about a translucent
+            // accent: the dim end spent its alpha against the page and the bright
+            // end carried it, so half the pulse was a debug trap (§21).
+            let (dimAccent, brightAccent) = palette.accentPulse()
             let cycle = context.environment.selectionEmphasis.cycle(true)
-            indicatorColor = cycle.colorNow(dim: dimAccent, bright: palette.accent)
+            indicatorColor = cycle.colorNow(dim: dimAccent, bright: brightAccent)
             if !context.isMeasuring {
                 indicatorRun = cycle.run(
-                    indicator, dim: dimAccent, bright: palette.accent, offsetX: 0, offsetY: 0)
+                    indicator, dim: dimAccent, bright: brightAccent, offsetX: 0, offsetY: 0)
             }
         } else if isSelected {
             // Selected but not focused: solid accent
@@ -757,7 +761,8 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
                 ViewConstants.disabledForeground, over: palette.background)
         }
 
-        let styledIndicator = ANSIRenderer.colorize(indicator, foreground: indicatorColor)
+        let styledIndicator = ANSIRenderer.colorize(
+            indicator, foreground: indicatorColor.opaqueSpelling)
 
         // Every item renders at its OWN identity, one step off the group's, and
         // its label and content at one step further apiece. Without that the
@@ -804,6 +809,14 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
         buffer.opacityRegions = labelBuffer.shiftedOpacityRegions(byX: indentWidth, y: 0)
         if let indicatorRun {
             buffer.animatedCells.append(indicatorRun)
+        } else if let claim = OpacityRegion.claim(
+            width: indicator.strippedLength, height: 1, ink: indicatorColor)
+        {
+            // The indicator glyph's own alpha — reachable through a theme whose
+            // `accent` or `foregroundTertiary` role is faded. Not while it pulses:
+            // the run repaints this cell from its own frames, and the claim would
+            // resolve every phase at the alpha of the one drawn now.
+            buffer.opacityRegions.append(claim)
         }
         let optionWidth = lines[0].strippedLength
 

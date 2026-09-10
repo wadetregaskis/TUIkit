@@ -407,10 +407,10 @@ enum DropdownMenu {
         palette: any Palette
     ) -> (highlight: (dim: Color, bright: Color), border: (dim: Color, bright: Color)) {
         (
-            highlight: (
-                dim: palette.accentPulse().dim,
-                bright: palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
-            ),
+            // A highlight is a FILL with a label on it, which is what
+            // `accentFillPulse` means — and asking for the pair keeps both ends
+            // agreeing about a translucent accent (§21).
+            highlight: palette.accentFillPulse(),
             border: (
                 dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
                 bright: palette.accent
