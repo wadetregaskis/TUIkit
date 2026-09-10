@@ -50,7 +50,21 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // a picture where the terminal draws them: one colour a pixel instead
         // of one a cell. Behind text it cannot, because a placeholder cell is
         // the image and holds no character; those cells paint below.
+        // A TRANSLUCENT ramp never takes the picture path, whatever the terminal
+        // can draw. `GradientRaster.picture` sends `rgbComponents` in an `.rgb`
+        // format and there is no alpha in it, so this path silently rendered a
+        // translucent ramp at full strength — while the cell path below trips the
+        // emitter's assertion for the same gradient. Which of those a developer
+        // met depended on their terminal: a translucent ramp was quietly wrong on
+        // kitty and Ghostty, and loudly unsupported on Apple Terminal.
+        //
+        // Declining is a better answer than transmitting real RGBA even where the
+        // protocol allows it, because the terminal would composite against the
+        // cells' own background rather than against what TUIkit knows is behind
+        // them — the guess this whole design exists to avoid. Sub-cell smoothness
+        // is lost for translucent ramps only.
         if case .gradient = paint, buffer.animatedCells.isEmpty, buffer.isBlank,
+            paint.isOpaqueThroughout,
             let graphics = context.gradientGraphics(
                 token: "gradient-\(context.identity.path)-\(ObjectIdentifier(owner).hashValue)"),
             let picture = GradientRaster.picture(
@@ -97,13 +111,17 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         }
 
         let palette = context.environment.palette
-        // A translucent RAMP is not honoured, and this is where it would go. A
-        // region carries one alpha for a rectangle while a ramp states a colour
-        // per cell, so a per-stop alpha needs either one region per run or a
-        // per-column payload — the one case in this design where a rectangle is
-        // genuinely the wrong shape. `Color+ANSICodes.swift`'s assertion fires on
-        // a translucent stop in every debug build, so the gap is loud rather than
-        // silent, and it renders at full strength meanwhile.
+        // What of this ramp's translucency can be said with rectangles. The two
+        // shapes that can are most of what is asked for — an evenly faded ramp,
+        // and a ramp down a page — and the one that cannot is a fade running
+        // ALONG a row, which stays unhonoured and stays loud: its entries go to
+        // the emitter as they are, so `Color+ANSICodes.swift`'s assertion fires.
+        let alphaShape = sampler.alphaShape
+        // Spelled opaque ONLY where the alpha is being carried. Spelling it opaque
+        // everywhere would silence the assertion for the case that is not
+        // honoured, turning a loud gap into a discarded alpha.
+        let carriesAlpha = alphaShape != .perCell
+        var rowFieldAlphas: [Double] = []
         // One background escape per ramp ENTRY, built on demand and reused by
         // every later run that lands on the same entry. This is
         // `PaintRenderer.band`'s `sequences` table on the background side, and
@@ -124,7 +142,10 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             guard sampler.variesAcrossRow else {
                 // One colour for the whole row: the same single persistent-fill
                 // this modifier has always emitted, and no per-cell work at all.
-                return filled(padded, with: sampler.colour(row: row).resolve(with: palette))
+                let colour = sampler.colour(row: row).resolve(with: palette)
+                if carriesAlpha { rowFieldAlphas.append(Double(colour.alpha) / 255) }
+                return filled(
+                    padded, with: carriesAlpha ? colour.opaqueSpelling : colour)
             }
             // Otherwise the row is cut at the ramp's own boundaries and each
             // piece filled. The cut carries the styling that was in force where
@@ -173,8 +194,9 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                     if let cached = escapes[entry] {
                         escape = cached
                     } else {
+                        let colour = sampler.ramp[entry].resolve(with: palette)
                         escape = ANSIRenderer.backgroundCode(
-                            for: sampler.ramp[entry].resolve(with: palette))
+                            for: carriesAlpha ? colour.opaqueSpelling : colour)
                         escapes[entry] = escape
                     }
                     // `applyPersistentBackground` spelled out rather than
@@ -200,7 +222,27 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // FrameBuffer(lines:) initializer here would silently drop
         // the child's regions, breaking clicks on any control with a
         // .background() modifier applied to it.
-        return buffer.replacingLines(lines)
+        var painted = buffer.replacingLines(lines)
+        // FIELD claims only, as the flat arm makes: the content's own ink is
+        // already in these lines and a background says nothing about it.
+        switch alphaShape {
+        case .opaque, .perCell:
+            break
+        case .uniform(let alpha):
+            painted.opacityRegions.append(
+                OpacityRegion(
+                    offsetX: 0, offsetY: 0, width: width, height: buffer.lines.count,
+                    opacity: 1, fieldOpacity: Double(alpha) / 255))
+        case .perRow:
+            // One rectangle per row, in the order the rows were painted, so the
+            // claim and the paint cannot disagree about which alpha is where.
+            painted.opacityRegions += rowFieldAlphas.enumerated().map { row, alpha in
+                OpacityRegion(
+                    offsetX: 0, offsetY: row, width: width, height: 1,
+                    opacity: 1, fieldOpacity: alpha)
+            }
+        }
+        return painted
     }
 
     /// Applies background color to a string, preserving existing formatting.

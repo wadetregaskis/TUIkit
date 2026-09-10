@@ -54,6 +54,20 @@ extension Paint {
         if case .color(let colour) = self { return colour }
         return nil
     }
+
+    /// Whether nothing in this paint carries alpha.
+    ///
+    /// Asked of the STOPS rather than of a sampled ramp, because it gates whether
+    /// a path that cannot express alpha at all may be taken — a terminal picture,
+    /// which has no alpha channel here — and that decision comes before any
+    /// sampling. A stop's alpha survives interpolation (`Color.lerp` treats it as
+    /// a fourth channel), so opaque stops cannot produce a translucent ramp.
+    public var isOpaqueThroughout: Bool {
+        switch self {
+        case .color(let colour): colour.isOpaque
+        case .gradient(let paint): paint.gradient.stops.allSatisfy(\.color.isOpaque)
+        }
+    }
 }
 
 // MARK: - A ramp with a shape

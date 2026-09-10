@@ -496,6 +496,52 @@ struct RampSampler {
         ramp[entry(column: 0, rowTerm: rowTerm(row))]
     }
 
+    /// How much of this ramp's translucency can be stated as rectangles.
+    ///
+    /// A colour's alpha reaches the screen through an `OpacityRegion`, which is a
+    /// rectangle carrying one alpha — so what can be honoured is decided by
+    /// whether a rectangle can be drawn around each distinct alpha.
+    ///
+    /// The distinction is worth making rather than declining ramps wholesale,
+    /// because the two shapes that ARE rectangular cover most of what is asked
+    /// for: an evenly-faded ramp, and a ramp down a page. What is left is a fade
+    /// running along a row, where the alpha changes cell by cell.
+    enum AlphaShape: Equatable {
+        /// Every entry is opaque. Nothing to state.
+        case opaque
+
+        /// One alpha for the whole ramp: `Gradient(colors: [.red.opacity(0.5),
+        /// .blue.opacity(0.5)])`, and any ramp between two spellings of one
+        /// alpha. `Color.lerp` interpolates alpha as a fourth channel, so equal
+        /// endpoints give a constant.
+        case uniform(UInt8)
+
+        /// One colour per row, therefore one alpha per row — a vertical linear
+        /// ramp, which is the shape a scrim fading a list out at the bottom has.
+        /// A rectangle each.
+        case perRow
+
+        /// The alpha changes along a row. Not expressible as rectangles, and
+        /// deliberately left unhonoured and LOUD rather than approximated: see
+        /// `Documentation/Opacity as composition.md` §15.
+        case perCell
+    }
+
+    /// - Returns: The narrowest ``AlphaShape`` that describes this ramp.
+    var alphaShape: AlphaShape {
+        guard let first = ramp.first else { return .opaque }
+        var sharesOneAlpha = true
+        var allOpaque = true
+        for colour in ramp {
+            if colour.alpha != first.alpha { sharesOneAlpha = false }
+            if colour.alpha != .max { allOpaque = false }
+            if !sharesOneAlpha, !allOpaque { break }
+        }
+        if allOpaque { return .opaque }
+        if sharesOneAlpha { return .uniform(first.alpha) }
+        return variesAcrossRow ? .perCell : .perRow
+    }
+
     /// The `(columns, entry)` runs across one row, for a ramp that does.
     ///
     /// The ramp ENTRY rather than the colour, so a caller can key a table on

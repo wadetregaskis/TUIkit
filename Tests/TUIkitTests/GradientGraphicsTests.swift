@@ -187,6 +187,43 @@ struct GradientPictureTests {
         #expect(pending.contains("s=160,v=51") || pending.contains("s=320,v=102"), "the box's proportions: \(pending.prefix(80))")
     }
 
+    /// **A translucent ramp is never a picture, whatever the terminal can draw.**
+    ///
+    /// `GradientRaster.picture` sends `rgbComponents` in an `.rgb` format and
+    /// there is no alpha in it, so this path rendered a translucent ramp at full
+    /// strength — silently — while the cell path trips the emitter's assertion for
+    /// the same gradient. Which of those a developer met depended on their
+    /// TERMINAL: quietly wrong on kitty and Ghostty, loudly unsupported on Apple
+    /// Terminal. That is the worst way for a gap to be distributed.
+    ///
+    /// Transmitting real RGBA would not fix it even where the protocol allows it:
+    /// the terminal composites against the cells' own background rather than
+    /// against what TUIkit knows is behind them, which is the guess the whole
+    /// opacity design exists to avoid.
+    @Test("A translucent ramp declines the picture path and claims cells instead")
+    func translucentRampIsNeverAPicture() {
+        var faded = Color.rgb(255, 0, 0)
+        faded.alpha = 128
+        var clear = Color.rgb(0, 0, 255)
+        clear.alpha = 128
+        let veil = LinearGradient(
+            colors: [faded, clear], startPoint: .leading, endPoint: .trailing)
+
+        let (buffer, store) = KittyGraphics.withSupport(true) { rendered(veil) }
+        #expect(placeholders(buffer) == 0, "no picture was transmitted")
+        #expect(store.imageCount == 0, "and nothing reached the image store")
+        #expect(
+            buffer.opacityRegions.count == 1,
+            "the alpha travels as a claim instead: \(buffer.opacityRegions)")
+        #expect(
+            (buffer.opacityRegions.first?.fieldOpacity ?? 0) > 0.49,
+            "at the ramp's own alpha: \(buffer.opacityRegions)")
+        // The opaque twin still takes the picture path, so this is a translucency
+        // gate rather than the graphics support having been switched off.
+        let opaque = KittyGraphics.withSupport(true) { rendered(ramp) }
+        #expect(placeholders(opaque.buffer) == 20 * 3, "the opaque ramp is still a picture")
+    }
+
     @Test("A ramp behind text stays cells: a placeholder cannot carry a character")
     func rampBehindTextStaysCells() {
         let (buffer, store) = KittyGraphics.withSupport(true) {

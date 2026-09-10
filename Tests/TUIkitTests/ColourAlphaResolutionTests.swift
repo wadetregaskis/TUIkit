@@ -605,6 +605,61 @@ struct TranslucentPaintTests {
             "four cells in, not two: \(buffer.opacityRegions)")
     }
 
+    /// **A ramp fading to transparent, down the page.** The scrim idiom: a list
+    /// that fades out at the bottom.
+    ///
+    /// A vertical linear ramp states one colour per ROW, therefore one alpha per
+    /// row, so a rectangle per row says exactly what is true — no per-cell payload
+    /// needed. The claims have to be in the order the rows were painted, or a
+    /// fade runs the wrong way and still looks like a fade.
+    @Test("A vertical translucent ramp claims one rectangle per row")
+    func verticalRampClaimsPerRow() {
+        let context = makeRenderContext(width: 8, height: 4)
+        let scrim = LinearGradient(
+            colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+        let buffer = renderToBuffer(
+            VStack {
+                Text("aaaa")
+                Text("bbbb")
+                Text("cccc")
+                Text("dddd")
+            }.background(scrim),
+            context: context)
+
+        let regions = buffer.opacityRegions.sorted { $0.offsetY < $1.offsetY }
+        #expect(regions.count == 4, "one per row: \(regions)")
+        #expect(regions.allSatisfy { $0.height == 1 }, "each a single row")
+        #expect(regions.allSatisfy { $0.inkOpacity == 1 }, "field claims only")
+        // Opaque at the top, transparent at the bottom, monotonically.
+        let alphas = regions.map(\.fieldOpacity)
+        #expect(alphas.first ?? 0 > 0.9, "opaque at the top: \(alphas)")
+        #expect(alphas.last ?? 1 < 0.1, "transparent at the bottom: \(alphas)")
+        #expect(zip(alphas, alphas.dropFirst()).allSatisfy { $0 >= $1 }, "descending: \(alphas)")
+    }
+
+    /// An evenly translucent ramp is one rectangle, whatever its geometry — the
+    /// alpha does not vary, so nothing about the ramp's shape matters to the claim.
+    @Test("A uniformly translucent ramp claims one rectangle")
+    func uniformRampClaimsOneRectangle() {
+        var red = Color.red
+        var blue = Color.blue
+        red.alpha = 128
+        blue.alpha = 128
+        let context = makeRenderContext(width: 8, height: 2)
+        // Horizontal: the geometry that varies across a row, and still one claim.
+        let ramp = LinearGradient(
+            colors: [red, blue], startPoint: .leading, endPoint: .trailing)
+        let buffer = renderToBuffer(
+            VStack { Text("aaaa"); Text("bbbb") }.background(ramp), context: context)
+
+        #expect(buffer.opacityRegions.count == 1, "one claim: \(buffer.opacityRegions)")
+        let claim = buffer.opacityRegions.first
+        #expect(claim?.height == 2, "over the whole block: \(String(describing: claim?.height))")
+        #expect(
+            (claim?.fieldOpacity ?? 0) > 0.49 && (claim?.fieldOpacity ?? 1) < 0.51,
+            "at 50%: \(String(describing: claim?.fieldOpacity))")
+    }
+
     /// **Copy and paste, end to end through the real view stack.**
     ///
     /// `.foregroundStyle(.clear)` has to leave its own characters in the cells —

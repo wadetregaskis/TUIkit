@@ -1006,3 +1006,54 @@ to `PaintRenderer` as they are rather than in their opaque spelling, so a
 translucent colour there still trips the emitter's assertion. Spelling it opaque
 would have quietly discarded the alpha, which is the failure mode the assertion
 exists to prevent.
+
+
+## 15. A translucent gradient, and the two thirds of one that is rectangular (2026-09-09)
+
+The design records a ramp as "the one case where a rectangle is genuinely the
+wrong shape". That is true of one geometry out of four, and stating it precisely
+shrinks the problem by most of its size. Alpha at a cell is
+`sampler.ramp[entry].alpha`, so:
+
+| the ramp | its alpha | the claim |
+|----------|-----------|-----------|
+| all stops share one alpha | constant | ONE rectangle over the block |
+| vertical linear (`variesAcrossRow == false`) | one per row | one rectangle per row |
+| horizontal / radial / angular / elliptical, stops disagreeing | per cell | **not expressible** |
+
+`RampSampler.alphaShape` returns which, and the two expressible shapes cover what
+is actually asked for: an evenly faded ramp, and *a scrim* — a list fading out at
+the bottom, which is a vertical linear ramp to `.clear`. `Color.lerp` interpolates
+alpha as a fourth channel, so the uniform case falls out of equal endpoints
+rather than needing to be special-cased.
+
+### 15.1 The gap was distributed by terminal, which is worse than being large
+
+`BackgroundModifier` has two ways to draw a ramp. On a terminal that draws
+pictures it rasterises one; otherwise it paints cells. `GradientRaster.picture`
+sends `rgbComponents` in an `.rgb` format — **there is no alpha in it** — so the
+picture path rendered a translucent ramp at full strength with no diagnostic,
+while the cell path trips the emitter's assertion for the same gradient.
+
+So which failure a developer met depended on their terminal: quietly wrong on
+kitty and Ghostty, loudly unsupported on Apple Terminal. Someone developing on
+Ghostty could write `Gradient(colors: [.red, .clear])`, see a solid red-to-black
+ramp, hit no assertion, and ship it.
+
+A translucent ramp now declines the picture path outright (`Paint`
+`.isOpaqueThroughout`, asked of the STOPS, before any sampling). Transmitting real
+RGBA would not fix it even where the protocol allows: the terminal composites
+against the cells' own background rather than against what TUIkit knows is behind
+them, which is the guess this design exists to avoid. The cost is sub-cell
+smoothness, for translucent ramps only.
+
+### 15.2 Opaque only where the alpha is carried
+
+The paint sites spell a colour `opaqueSpelling` **only** when a claim is being
+emitted for it. Spelling it opaque everywhere would silence the assertion for the
+`perCell` case — converting a loud gap into a discarded alpha, which is the one
+failure mode the assertion exists to prevent. `Text`'s ramp arm is unchanged and
+unhonoured for the same reason.
+
+Still open: `perCell` ramps, which want the per-column payload sketched in §9.1's
+successor discussion, and `Text`'s ramped ink.
