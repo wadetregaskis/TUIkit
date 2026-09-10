@@ -2902,3 +2902,34 @@ sharpening, dithering, quantisation and the mono recolouring, and is transmitted
 `f=32`. Nothing there changed.
 
 With this, **§16.1's ledger has no open entry points at all.**
+
+### 42.7 What it cost, measured
+
+`ImageHarness`, 120 × 50 cells, best of nine, against `23b321e9` — the commit before
+this one, so the two resampler fixes are already in the baseline:
+
+| path | before | after | |
+|---|---|---|---|
+| glyph, `ansi256` | 0.484 ms | 0.485 ms | +0.2% |
+| glyph, `truecolor` | 0.497 ms | 0.510 ms | +2.6% |
+| glyph, `grayscale` | 0.226 ms | 0.232 ms | +2.7% |
+| glyph, `mono` | 0.148 ms | 0.161 ms | **+8.8%** |
+| pixel | 4.313 ms | 4.289 ms | −0.6% |
+| recolour | 2.463 ms | 2.440 ms | −0.9% |
+
+**The checksums are identical in every glyph mode**, which is the assertion that an
+opaque picture's output — lines and empty coverage both — did not move.
+
+`mono` is the largest because it is the cheapest: 25 ns a cell, and `isMonoInk` gained
+one compare per PIXEL (two per cell for half-blocks). There is no way to know whether a
+pixel is there without asking. The others pay for two coverage tests and a `switch` where
+there used to be a straight line.
+
+`CoverageMap.note` is `@inline(__always)`, and that was worth 3.7 points on `ansi256`
+alone: unannotated it was a non-inlined call per cell whose whole body, for an opaque
+picture, is its first `guard`. This module counts retain/release pairs in its inner loops;
+a call that does nothing is not free here.
+
+None of it is per-frame. `_ImageCore` keeps an `ImageRenderCache` keyed on the source, the
+size and every conversion parameter, so a picture is converted when something about it
+changes and served from the cache otherwise.

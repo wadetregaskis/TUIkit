@@ -79,6 +79,12 @@ struct CoverageMap {
     /// DIFFERENT pixels — the top pixel is the field and the bottom one the ink — so a
     /// cell can be fully covered in one and not at all in the other. That is also the
     /// case that stops such a cell coalescing with its neighbours.
+    /// `@inline(__always)` because this runs once per CELL of every converted picture,
+    /// and its whole body for an opaque one is the first `guard`. Unannotated it was a
+    /// non-inlined call per cell — 120 × 50 of them per frame — and the glyph path
+    /// measured +3.9% for it. This module counts retain/release pairs in its inner
+    /// loops; a call that does nothing is not free here.
+    @inline(__always)
     mutating func note(line: Int, column: Int, ink: UInt8, field: UInt8) {
         guard ink != .max || field != .max else { return }
         if var last = runs.last, last.line == line, last.columns.upperBound == column,
