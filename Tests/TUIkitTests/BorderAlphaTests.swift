@@ -67,18 +67,23 @@ struct BorderAlphaTests {
         // 0.5 resolves at 0.25 — a visibly darker pip. The shapes that invite it
         // are a divider row crossing the walls and a box small enough that its
         // bands coincide.
-        for (width, height, dividers) in [
-            (6, 4, [Int]()), (6, 5, [2]), (1, 4, []), (6, 1, []), (1, 1, []), (2, 2, []),
-            (8, 6, [2, 4]),
-        ] {
+        // A box holds at most one `├───┤` — the footer separator — which is why
+        // `dividerRow` is an `Int?`. The out-of-range values are in the sweep because
+        // a caller computing one from a footer's position can hand over a row that is
+        // the bottom band, and claiming that row twice is the failure this guards.
+        let shapes: [(width: Int, height: Int, divider: Int?)] = [
+            (6, 4, nil), (6, 5, 2), (1, 4, nil), (6, 1, nil), (1, 1, nil), (2, 2, nil),
+            (8, 6, 3), (6, 4, 0), (6, 4, 3), (6, 4, 99),
+        ]
+        for shape in shapes {
             let claims = BorderRenderer.opacityClaims(
-                outerWidth: width, height: height, style: .line, color: faded(.red, 128),
-                dividerRows: dividers)
+                outerWidth: shape.width, height: shape.height, style: .line,
+                color: faded(.red, 128), dividerRow: shape.divider)
             let cells = covered(claims)
             let unique = Set(cells.map { "\($0.x),\($0.y)" })
             #expect(
                 cells.count == unique.count,
-                "\(width)x\(height) dividers \(dividers): \(cells.count) claims over \(unique.count) cells")
+                "\(shape): \(cells.count) claims over \(unique.count) cells")
         }
     }
 

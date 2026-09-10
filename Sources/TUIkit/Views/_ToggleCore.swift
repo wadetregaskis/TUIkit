@@ -88,21 +88,44 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         var field: Color?
     }
 
-    /// The runs painted, left to right — the bytes stating each colour's opaque
-    /// spelling, because an SGR emitter has no backdrop to composite against.
-    private static func painted(_ runs: [IndicatorRun]) -> String {
-        runs.reduce(into: "") {
-            $0 += ANSIRenderer.colorize(
-                $1.text, foreground: $1.ink.opaqueSpelling,
-                background: $1.field?.opaqueSpelling)
-        }
+    /// One run's bytes, stating its colours' opaque spelling — an SGR emitter has
+    /// no backdrop to composite against, so the alpha travels as a claim instead.
+    private static func painted(_ run: IndicatorRun) -> String {
+        ANSIRenderer.colorize(
+            run.text, foreground: run.ink.opaqueSpelling,
+            background: run.field?.opaqueSpelling)
     }
 
-    /// The claims those runs owe, in the columns they actually landed in.
-    private static func claims(_ runs: [IndicatorRun]) -> [OpacityRegion] {
+    /// The claims a visited sequence of runs owes, in the columns they landed in.
+    ///
+    /// Takes a VISITOR rather than an array, and that is measured rather than
+    /// stylistic. Describing an indicator as `[IndicatorRun]` cost `framedcolumns`
+    /// — the Toggle-heavy stress scenario — **+2.2%**, because the description is
+    /// rebuilt for every phase of a focus pulse, of every toggle, every frame, and
+    /// each rebuild is a heap allocation. Visiting allocates nothing, and the bytes
+    /// and the claims still read one description so their widths cannot drift.
+    private static func claims(
+        visiting runs: ((IndicatorRun) -> Void) -> Void
+    ) -> [OpacityRegion] {
+        // A first pass over the COLOURS alone, before any width is measured.
+        // `strippedLength` is a grapheme walk, and an indicator drawn in opaque
+        // colours — every indicator in nearly every app — would otherwise pay one
+        // per run per frame to discover it owes nothing.
+        //
+        // Measured as NOTHING: `framedcolumns` (24 toggles) went +0.6% → +0.5%,
+        // which is inside its own noise. Kept anyway, and this is the reason rather
+        // than an imagined saving — an indicator's runs are one to three ASCII or
+        // single-glyph strings, so each scan takes the byte fast path, and the count
+        // scales with the number of controls on the page rather than with anything
+        // this scenario varies. It is strictly less work and cannot diverge from the
+        // second pass, since both walk the same visitor.
+        var isTranslucent = false
+        runs { isTranslucent = isTranslucent || !$0.ink.isOpaque || $0.field?.isOpaque == false }
+        guard isTranslucent else { return [] }
+
         var column = 0
         var claims: [OpacityRegion] = []
-        for run in runs {
+        runs { run in
             let width = run.text.strippedLength
             defer { column += width }
             if let claim = OpacityRegion.claim(
@@ -136,7 +159,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // One function DESCRIBES the indicator at a given bracket colour; the bytes
         // and the claims are both derived from it, so the animation's frames are
         // the same cells the render draws and a claim is on the cells it names.
-        func runs(_ bracketColor: Color) -> [IndicatorRun] {
+        func runs(_ bracketColor: Color, _ visit: (IndicatorRun) -> Void) {
             guard !style.openBracket.isEmpty else {
                 // Self-contained glyph (unicode squares): its *shape* shows on/off, so
                 // its colour is free to show state — accent when checked, plus the
@@ -145,29 +168,34 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                     (isOnValue && !isDisabled && !isFocused)
                     ? (isHovered ? palette.hoveredForeground(palette.accent) : palette.accent)
                     : bracketColor
-                return [IndicatorRun(text: mark, ink: markColor)]
+                visit(IndicatorRun(text: mark, ink: markColor))
+                return
             }
             // Two-tone bracketed (ASCII): the brackets show focus while the
             // inner mark shows on/off (accent when checked, dimmed when
             // disabled; the OFF mark is a space, so its colour is moot).
-            return [
-                IndicatorRun(text: style.openBracket, ink: bracketColor),
+            visit(IndicatorRun(text: style.openBracket, ink: bracketColor))
+            visit(
                 IndicatorRun(
                     text: mark,
                     ink: indicatorMarkColor(
                         isOnValue: isOnValue, isDisabled: isDisabled, isHovered: isHovered,
-                        context: context)),
-                IndicatorRun(text: style.closeBracket, ink: bracketColor),
-            ]
+                        context: context)))
+            visit(IndicatorRun(text: style.closeBracket, ink: bracketColor))
         }
-        func draw(_ bracketColor: Color) -> String { Self.painted(runs(bracketColor)) }
+        func draw(_ bracketColor: Color) -> String {
+            var painted = ""
+            runs(bracketColor) { painted += Self.painted($0) }
+            return painted
+        }
         let animation = brackets.run(draw: draw)
         // No claim while it pulses: the run repaints these cells from its own
         // frames, and a region carrying the phase drawn NOW would resolve every
         // later phase at the wrong alpha. That arm stays loud instead.
         return (
             draw(brackets.now), animation,
-            animation == nil ? Self.claims(runs(brackets.now)) : [])
+            animation == nil
+                ? Self.claims(visiting: { runs(brackets.now, $0) }) : [])
     }
 
     /// Bracket color for the two-tone bracketed indicators (checkbox `[x]` and
@@ -310,16 +338,22 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             // ink lands on it, so a claim over it changes nothing, and describing it
             // as a run is what keeps the closing bracket's COLUMN right.
             let gap = IndicatorRun(text: " ", ink: knobColour)
-            func runs(_ bracketColor: Color) -> [IndicatorRun] {
-                [IndicatorRun(text: style.openBracket, ink: bracketColor)]
-                    + (isOnValue ? [gap, knob] : [knob, gap])
-                    + [IndicatorRun(text: style.closeBracket, ink: bracketColor)]
+            func runs(_ bracketColor: Color, _ visit: (IndicatorRun) -> Void) {
+                visit(IndicatorRun(text: style.openBracket, ink: bracketColor))
+                visit(isOnValue ? gap : knob)
+                visit(isOnValue ? knob : gap)
+                visit(IndicatorRun(text: style.closeBracket, ink: bracketColor))
             }
-            func draw(_ bracketColor: Color) -> String { Self.painted(runs(bracketColor)) }
+            func draw(_ bracketColor: Color) -> String {
+                var painted = ""
+                runs(bracketColor) { painted += Self.painted($0) }
+                return painted
+            }
             let animation = brackets.run(draw: draw)
             return (
                 draw(brackets.now), animation,
-                animation == nil ? Self.claims(runs(brackets.now)) : [])
+                animation == nil
+                    ? Self.claims(visiting: { runs(brackets.now, $0) }) : [])
         }
 
         let knob = SwitchIndicatorGlyphs.knob(for: style)
@@ -368,14 +402,18 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
         // Off: knob then a blank cell; on: a blank cell then knob.
         let cells = isOnValue ? " " + knob : knob + " "
-        func runs(_ background: Color) -> [IndicatorRun] {
-            [IndicatorRun(text: cells, ink: knobColor, field: background)]
+        func runs(_ background: Color, _ visit: (IndicatorRun) -> Void) {
+            visit(IndicatorRun(text: cells, ink: knobColor, field: background))
         }
-        func draw(_ background: Color) -> String { Self.painted(runs(background)) }
+        func draw(_ background: Color) -> String {
+            var painted = ""
+            runs(background) { painted += Self.painted($0) }
+            return painted
+        }
         let animation = track.run(draw: draw)
         return (
             draw(track.now), animation,
-            animation == nil ? Self.claims(runs(track.now)) : [])
+            animation == nil ? Self.claims(visiting: { runs(track.now, $0) }) : [])
     }
 
     /// The buffer for one of the built-in toggle styles: the indicator, the

@@ -753,14 +753,22 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // and stays loud — its frames go to the emitter as they are, so
         // `Color+ANSICodes.swift`'s assertion fires on a translucent phase.
         guard !borderColor.isAnimating else { return regions }
-        return regions
-            + BorderRenderer.opacityClaims(
-                outerWidth: outerWidth, height: lineCount, style: borderStyle,
-                color: borderColor.current, title: title,
-                titleColor: titleColor?.resolve(with: palette) ?? palette.accent,
-                focusIndicatorColor: focusIndicator?.current,
-                dividerRows: [dividerRow(bodyBuffer: bodyBuffer, footerBuffer: footerBuffer)]
-                    .compactMap { $0 })
+        // Resolved only when there IS a title: `resolve(with:)` walks the palette
+        // up to sixteen hops, and an untitled `.border()` never reads the answer.
+        // Not attributable to a measured regression — the border work bisected clean
+        // — but a bordered spine reaches here once per level per frame, so a walk
+        // whose result is discarded is worth not doing.
+        let titleNow: Color? =
+            title == nil ? nil : (titleColor?.resolve(with: palette) ?? palette.accent)
+        let claims = BorderRenderer.opacityClaims(
+            outerWidth: outerWidth, height: lineCount, style: borderStyle,
+            color: borderColor.current, title: title, titleColor: titleNow,
+            focusIndicatorColor: focusIndicator?.current,
+            dividerRow: dividerRow(bodyBuffer: bodyBuffer, footerBuffer: footerBuffer))
+        // `regions + claims` allocates a third array whatever is in them, and an
+        // opaque box — every box in nearly every app — has nothing to add.
+        guard !claims.isEmpty else { return regions }
+        return regions + claims
     }
 
     /// Every animated cell of a bordered container: the ones its content

@@ -217,14 +217,21 @@ extension BorderRenderer {
     ///     truncates it.
     ///   - titleColor: The title's colour, already resolved.
     ///   - focusIndicatorColor: The focus dot's colour, if one is drawn.
-    ///   - dividerRows: Rows holding a `├───┤` rule, in the box's own
-    ///     coordinates.
+    ///   - dividerRow: The row holding a `├───┤` rule, in the box's own
+    ///     coordinates, when there is one.
     /// - Returns: The regions, or an empty array when every colour is opaque.
     static func opacityClaims(
         outerWidth: Int, height: Int, style: BorderStyle, color: Color,
         title: String? = nil, titleColor: Color? = nil,
-        focusIndicatorColor: Color? = nil, dividerRows: [Int] = []
+        focusIndicatorColor: Color? = nil, dividerRow: Int? = nil
     ) -> [OpacityRegion] {
+        // The colours FIRST, before any geometry and before anything allocates.
+        // Every box in nearly every app is drawn in opaque colours, and a bordered
+        // spine reaches here once per level per frame, so the answer for one wants
+        // to be three comparisons and a shared empty array.
+        guard !color.isOpaque || titleColor?.isOpaque == false
+            || focusIndicatorColor?.isOpaque == false
+        else { return [] }
         guard outerWidth > 0, height > 0 else { return [] }
         let field = fill(style, color)
         var claims: [OpacityRegion] = []
@@ -280,8 +287,8 @@ extension BorderRenderer {
             add(x: outerWidth - 1, y: 1, width: 1, height: interior, ink: color)
         }
         // Between the walls only — see the note above on multiplication.
-        for row in dividerRows where row > 0 && row < height - 1 {
-            add(x: 1, y: row, width: outerWidth - 2, height: 1, ink: color)
+        if let dividerRow, dividerRow > 0, dividerRow < height - 1 {
+            add(x: 1, y: dividerRow, width: outerWidth - 2, height: 1, ink: color)
         }
         return claims
     }
