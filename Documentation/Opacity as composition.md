@@ -1155,7 +1155,7 @@ than the alpha.
 
 Not honoured: **the image glyph path** (§17), which is the only entry point of §16.1
 still open, and four `Palette` surface derivations that drop a faded slot's alpha
-(§28.2 — the project owner's call).
+(§28.2, detailed in §37 — the project owner's call).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -2484,3 +2484,84 @@ Three assertions, and the third is what makes the pair mean anything: the claim,
 mark's bytes at their opaque spelling, and the same focused render with an OPAQUE tint
 claiming nothing. Without the third a broken claim derivation would still pass; without
 the first two a broken focus would.
+
+
+## 37. The four surface derivations, and the defect underneath them (2026-09-10)
+
+§28.2 recorded that `fieldBackground`, `fieldBackground(on:)`, `liftedBackground` and
+`lifted(from:)` drop a faded slot's alpha, and left the question open. This is the
+detail of *why* they drop it, what the four actually return, and the separate defect
+that turned up when the question was asked properly.
+
+### 37.1 The alpha is not decided away, it is structurally absent
+
+All four end in `Palette.surface(steppedFrom:separation:)` → `surfaceWalk` →
+`scaled(_:by:)`, and `scaled` rebuilds the colour from **`base.rgbComponents`, which is
+a three-tuple**. There is no fourth element to read and `Color.rgb(_:_:_:)` is opaque
+by construction, so the alpha is not weighed and discarded — it never enters the
+arithmetic. That is the whole mechanism, and it is why this is a different kind of
+"drop" from a composite's: `opacity(_:over:)` **spends** an alpha against a stated
+ground and the opaque result is the answer; a lightness step simply cannot carry what it
+never reads.
+
+`scaled` has four exits, and measured against a page at `.rgb(0, 0, 0).opacity(0.5)`:
+
+| exit | when | alpha |
+|---|---|---|
+| `Color.rgb(channel×3)` | the ordinary step | gone (opaque by construction) |
+| `lerp(channels(fits), white)` | brightening would clip a channel | gone (both operands opaque) |
+| `lerp(base, white/black)` | a page with nothing to scale | **partial** — `lerp` carries alpha as a fourth channel, so 128 → somewhere between |
+| `return base` | a semantic colour (cannot happen; these are resolved) | carried |
+
+So "the four drop it" was true of every reachable path *and* the fourth exit would have
+interpolated it to a value that is neither carried nor spent — the same shape as
+§28.1's alpha-184 hover lift. That exit is now spelled opaque explicitly, so the four
+derivations give ONE answer. **Whether that answer is right is still the project
+owner's call**; that they must agree is not.
+
+### 37.2 The defect: a black page got no surface at all
+
+The exit that has to mix detected its own case with `scaled == base`. `Color` is
+`Hashable` over its value **and** its alpha, so that comparison answers "different" for
+two colours that are the same colour, and the branch was unreachable for two pages:
+
+- **`.rgb(0, 0, 0).opacity(0.5)`** — the rebuilt colour is opaque, so 255 ≠ 128.
+- **`Color.black`** — that is `.standard(.black)` and the rebuilt one is `.rgb`, so the
+  CASE differs *at full opacity*. This half was never about alpha at all, and
+  `var background: Color { .black }` is the obvious thing for a custom palette to write.
+
+Measured, before:
+
+| page | `fieldBackground` | `liftedBackground` |
+|---|---|---|
+| `.rgb(0,0,0)` | `rgb(31,31,31)` | `rgb(20,20,20)` |
+| `.rgb(0,0,0).opacity(0.5)` | **`rgb(0,0,0)`** | **`rgb(0,0,0)`** |
+| `Color.black` | **`rgb(0,0,0)`** | **`rgb(0,0,0)`** |
+
+Every surface equal to the page — a field, a tab body and a well all invisible, which
+`surface(steppedFrom:separation:)`'s own note calls "the same as drawing none" — and
+arrived at through **three `surfaceWalk`s of up to 175 steps each**, since a candidate
+that never changes never separates and pure black never saturates at white.
+
+Asked of the CHANNELS instead, both step. No built-in palette is affected: all sixteen
+state `.rgb` backgrounds, and the two pure-black ones (Homebrew, Pro) were already
+reaching the mix. What is fixed is every custom palette that wrote `.black`, or faded
+its page.
+
+### 37.3 What is still open, stated as a choice
+
+A well stepped off a half-transparent page could reasonably be:
+
+- **equally transparent** — one wash all the way down, so the terminal's own background
+  shows through the whole theme evenly; or
+- **deliberately solid** — a field you can read in, which is what a well is *for*.
+
+It changes the chrome depth of every faded theme, and it is a design decision rather
+than a derivation. No paint site migrated in §16–§36 reaches these four, so nothing is
+silently wrong today. `FadedPaletteDerivationTests.surfaceStepsDropIt` pins the current
+answer and says in its own doc comment what to do if it changes: delete it and move its
+rows into `respellingsCarry`.
+
+Worth noting that §32's `supportsOpacity` makes the question more reachable than it
+was: a palette editor bound to `background` can now author a translucent page with two
+keystrokes.

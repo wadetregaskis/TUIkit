@@ -432,4 +432,56 @@ struct FadedPaletteDerivationTests {
                 "\(name) now carries \(derived.alpha) — see this test's own note")
         }
     }
+
+    /// **The defect found underneath the open question, which is not the same thing.**
+    ///
+    /// `scaled(_:by:)` has one branch that must MIX rather than scale — a pure black
+    /// page, where there is no hue to preserve and no product but zero — and it
+    /// detected that case with `scaled == base`. `Color` is `Hashable` over its value
+    /// AND its alpha, so that comparison answered "different" for two colours that are
+    /// the same colour, and the branch was unreachable for:
+    ///
+    /// - a page at `.rgb(0, 0, 0).opacity(0.5)`, because the rebuilt colour is opaque;
+    /// - a page at `Color.black`, because that is `.standard(.black)` and the rebuilt
+    ///   one is `.rgb` — the CASE differs at full opacity. `var background: Color
+    ///   { .black }` is the obvious thing for a custom palette to write, so this half
+    ///   was never about alpha at all.
+    ///
+    /// In both, every surface came back as the page colour: a field, a tab body and a
+    /// well all invisible, which `surface(steppedFrom:separation:)`'s own note calls
+    /// "the same as drawing none". Asked of the CHANNELS instead, both step.
+    @Test("A black page steps whatever its alpha and whatever its spelling")
+    func blackPagesStillStep() {
+        for (name, page) in [
+            ("faded rgb black", Color.rgb(0, 0, 0).opacity(0.5)),
+            ("named black", Color.black),
+            ("opaque rgb black", Color.rgb(0, 0, 0)),
+        ] {
+            let palette = BlackPagePalette(background: page)
+            for (which, surface) in [
+                ("fieldBackground", palette.fieldBackground),
+                ("liftedBackground", palette.liftedBackground),
+                ("lifted(from:)", palette.lifted(from: page)),
+            ] {
+                #expect(
+                    surface.rgbComponents.map { $0 != (0, 0, 0) } ?? false,
+                    "\(name) \(which) came back as the page: \(surface)")
+            }
+        }
+    }
+}
+
+/// A palette whose page is black, in the three spellings that reach
+/// ``Palette/scaled(_:by:)``'s mixing branch differently.
+private struct BlackPagePalette: Palette {
+    let id = "black-page"
+    let name = "Black page"
+    let background: Color
+    let foreground = Color.rgb(230, 230, 240)
+    let accent = Color.rgb(0, 180, 200)
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.red
+    let info = Color.blue
+    let border = Color.brightBlack
 }

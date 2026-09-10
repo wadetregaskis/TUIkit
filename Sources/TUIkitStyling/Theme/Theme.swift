@@ -488,11 +488,15 @@ extension Palette {
     /// zero, so the step becomes a lerp toward the extreme.
     private static func scaled(_ base: Color, by factor: Double) -> Color {
         guard let (red, green, blue) = base.rgbComponents else { return base }
-        func channels(_ factor: Double) -> Color {
+        func stepped(_ factor: Double) -> (red: UInt8, green: UInt8, blue: UInt8) {
             func channel(_ value: UInt8) -> UInt8 {
                 UInt8(clamping: Int((Double(value) * factor).rounded()))
             }
-            return Color.rgb(channel(red), channel(green), channel(blue))
+            return (channel(red), channel(green), channel(blue))
+        }
+        func channels(_ factor: Double) -> Color {
+            let channels = stepped(factor)
+            return Color.rgb(channels.red, channels.green, channels.blue)
         }
 
         // Brightening a page whose brightest channel is already near 255 would
@@ -507,12 +511,38 @@ extension Palette {
             return Color.lerp(channels(fits), Color.rgb(255, 255, 255), phase: 1 - fits / factor)
         }
 
-        let scaled = channels(factor)
-        guard scaled == base else { return scaled }
+        let walked = stepped(factor)
+        // Asked of the CHANNELS, not of the two `Color`s. `Color` is `Hashable` over
+        // its value AND its alpha, so `scaled == base` answered "different" for two
+        // colours that are the same colour, and this branch — the one case that has
+        // to mix — was then never reached:
+        //
+        //   * a page at `.rgb(0, 0, 0).opacity(0.5)`, because `channels` builds an
+        //     opaque colour and 255 != 128;
+        //   * a page at `Color.black`, because that is `.standard(.black)` and the
+        //     rebuilt one is `.rgb`, so the CASE differs even at full opacity. And
+        //     `var background: Color { .black }` is the obvious thing to write.
+        //
+        // In both, every surface came back as the page colour itself, which this
+        // function's own note calls "the same as drawing none" — a field, a tab body
+        // and a well all invisible, after 175 futile steps of `surfaceWalk` each.
+        guard walked == (red, green, blue) else {
+            return Color.rgb(walked.red, walked.green, walked.blue)
+        }
         // Nothing to scale at all (a pure black page): mix instead.
+        //
+        // Spelled opaque, like the two exits above are by construction. A surface
+        // step DROPS a faded page's alpha and this is where all three exits are made
+        // to agree about that — `Color.lerp` carries alpha as a fourth channel, so
+        // without this the mix would interpolate 128 toward 255 and land on a value
+        // that is neither carried nor spent, which is the shape §28.1's alpha-184
+        // hover lift had. Whether a surface stepped off a translucent page SHOULD be
+        // translucent is the open question in §28.2 and the project owner's call; what
+        // is not open is that the four derivations must give one answer.
         return Color.lerp(
             base, factor > 1 ? Color.rgb(255, 255, 255) : Color.rgb(0, 0, 0),
-            phase: min(1, abs(factor - 1)))
+            phase: min(1, abs(factor - 1))
+        ).opaqueSpelling
     }
 
     /// Black or white, whichever `color` is further from — the direction a
