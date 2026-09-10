@@ -57,12 +57,10 @@ struct RampAlphaShapeTests {
         #expect(ramp.alphaShape == .perColumn)
     }
 
-    /// The declined shape has no render-level test, and cannot have one: leaving it
-    /// unclaimed is exactly what makes the emitter's debug assertion fire, and an
-    /// assertion is a trap rather than a throw. Rendering a diagonal translucent ramp
-    /// here crashes the suite — which is the design working. So the decline is
-    /// asserted at the classifier, where it is a value rather than a trap.
-    @Test("A vertical ramp is still perRow, and a diagonal one is still perCell")
+    /// `perCell` is still its own case after §36 honoured it, because the two shapes
+    /// cost different amounts: `perColumn` is answered once for the block and
+    /// `perCell` once per row. Telling them apart is free, so it is worth doing.
+    @Test("A vertical ramp is perRow, and a diagonal one is perCell")
     func theOtherShapes() throws {
         let vertical = try #require(
             sampler(
@@ -92,7 +90,7 @@ struct RampAlphaShapeTests {
         // Both ends at one alpha, so `Color.lerp` holds it constant across the ramp.
         #expect(ramp.alphaShape == .uniform(128))
         let colourRuns = ramp.runs(row: 0, cells: 40)
-        let alphaRuns = ramp.alphaRuns(row: 0, cells: 40)
+        let alphaRuns = ramp.alphaRuns(row: 0, columns: 0..<40)
         #expect(colourRuns.count > 1, "the colour really does change: \(colourRuns.count)")
         #expect(alphaRuns.count == 1, "one rectangle, not \(alphaRuns.count)")
         #expect(alphaRuns.first?.alpha == 128)
@@ -167,7 +165,7 @@ struct RampAlphaShapeTests {
     /// `.opaque` and claimed nothing at all, and a per-cell one left the background's
     /// own bytes translucent while claiming it — a double fade in release and an
     /// assertion in debug, on a path that IS honoured. The field is now always claimed
-    /// and always spelled opaque, and `carriesAlpha` governs the ramp alone.
+    /// and always spelled opaque, and the ramp's own colours are spelled opaque by `band` itself.
     @Test("An opaque ramp over a faded cascade background still claims the field")
     func opaqueRampStillClaimsItsField() throws {
         let drawn = buffer(
@@ -195,5 +193,82 @@ struct RampAlphaShapeTests {
                 LinearGradient(colors: [faded], startPoint: .leading, endPoint: .trailing)))
         #expect(!drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
         #expect(drawn.opacityRegions.allSatisfy { $0.inkOpacity == half }, "\(drawn.opacityRegions)")
+    }
+
+    // MARK: - The shape that varies in both directions (§36)
+
+    /// **A diagonal ramp's ink was unclaimed and LOUD, and this test could not exist.**
+    ///
+    /// Rendering one used to trap the suite: the bytes were left unspelled on purpose,
+    /// so the emitter's debug assertion fired, and an assertion is a trap rather than a
+    /// throw. That it runs at all is half the assertion.
+    ///
+    /// The claim is a run of equal alpha per ROW. Not one rectangle per cell: the ramp
+    /// is quantised, so neighbouring columns often land on the same entry and always on
+    /// the same alpha for stretches of it — which is the difference between the count
+    /// this costs and the count §34.3 estimated.
+    @Test("A diagonal ramp on ink claims runs per row, and spells its bytes opaque")
+    func diagonalRampedInkClaims() {
+        let drawn = buffer(
+            Text("hello there\nsecond line\nthird line!").foregroundStyle(
+                LinearGradient(
+                    colors: [faded, Color.rgb(40, 40, 200).opacity(0.1)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing)),
+            width: 12, height: 4)
+        #expect(!drawn.opacityRegions.isEmpty, "declined before §36: \(drawn.opacityRegions)")
+        #expect(
+            drawn.opacityRegions.allSatisfy { $0.height == 1 },
+            "a run cannot span rows that disagree: \(drawn.opacityRegions)")
+        // Every row of the block, and every claim translucent — an opaque run would
+        // have been dropped by `claim`'s nil contract, which is right here because
+        // these rectangles are a set and not a sequence.
+        #expect(Set(drawn.opacityRegions.map(\.offsetY)).count == 3, "\(drawn.opacityRegions)")
+        #expect(drawn.opacityRegions.allSatisfy { $0.inkOpacity < 1 })
+        // And the two directions really do disagree, or this is `perColumn` in disguise.
+        let byRow = Dictionary(grouping: drawn.opacityRegions, by: \.offsetY)
+        let firstRowAlphas = (byRow[0] ?? []).map(\.inkOpacity)
+        let lastRowAlphas = (byRow[2] ?? []).map(\.inkOpacity)
+        #expect(firstRowAlphas != lastRowAlphas, "\(firstRowAlphas) vs \(lastRowAlphas)")
+    }
+
+    /// The field twin, in `BackgroundModifier` rather than `PaintRenderer` — a second
+    /// derivation of the same shape, which is why it gets its own assertion.
+    @Test("A radial translucent ramp background claims per row")
+    func radialBackgroundClaims() {
+        let drawn = buffer(
+            Text("hello\nworld").background(
+                RadialGradient(
+                    gradient: Gradient(colors: [faded, Color.rgb(40, 40, 200).opacity(0.1)]),
+                    center: .center, startRadius: 0, endRadius: 6)),
+            width: 12, height: 4)
+        #expect(!drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
+        #expect(
+            drawn.opacityRegions.allSatisfy { $0.height == 1 && $0.inkOpacity == 1 },
+            "field claims, a row at a time: \(drawn.opacityRegions)")
+        #expect(Set(drawn.opacityRegions.map(\.offsetY)).count == drawn.lines.count)
+    }
+
+    /// `alphaRuns` takes a column RANGE because a `Table` claims the span its cells
+    /// occupy, which starts past the selection gutter. A run that began at column 0
+    /// would state each cell's alpha one column to the left of where it was painted.
+    @Test("alphaRuns over a span reports that span's own columns and alphas")
+    func alphaRunsHonourTheirOffset() throws {
+        let ramp = try #require(
+            sampler(
+                LinearGradient(
+                    colors: [faded, Color.rgb(40, 40, 200).opacity(0.1)],
+                    startPoint: .leading, endPoint: .trailing),
+                width: 20, height: 2))
+        let whole = ramp.alphaRuns(row: 0, columns: 0..<20)
+        let span = ramp.alphaRuns(row: 0, columns: 4..<20)
+        #expect(span.first?.columns.lowerBound == 4, "\(span)")
+        #expect(span.last?.columns.upperBound == 20, "\(span)")
+        // The alpha at a given column is the same question either way, so the span's
+        // runs are the whole row's runs clipped — never re-derived from column zero.
+        for run in span {
+            let expected = whole.first { $0.columns.contains(run.columns.lowerBound) }?.alpha
+            #expect(run.alpha == expected, "column \(run.columns.lowerBound): \(span) vs \(whole)")
+        }
+        #expect(ramp.alphaRuns(row: 0, columns: 4..<4).isEmpty, "an empty span claims nothing")
     }
 }

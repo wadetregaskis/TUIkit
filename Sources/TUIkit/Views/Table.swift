@@ -1791,8 +1791,7 @@ where Value.ID: Hashable {
         // per row, so `table-multiline` was the one table shape that did not
         // move when `renderRow` was rewritten.
         var cellStyle = TextStyle()
-        // Spelled opaque only on the arm that claims — see the single-line twin.
-        cellStyle.foregroundColor = bandsAcrossRow ? foreground : foreground.opaqueSpelling
+        cellStyle.foregroundColor = foreground.opaqueSpelling
         let cellSequence = bandsAcrossRow ? nil : ANSIRenderer.styleSequence(for: cellStyle)
         var rampSequences: [String?] = []
         let cellCount = min(columns.count, columnWidths.count)
@@ -1858,6 +1857,14 @@ where Value.ID: Hashable {
                 ink: bandsAcrossRow ? nil : foreground,
                 mark: gutter > 0 && lineIndex == 0 ? visual.indicatorColor : nil,
                 fill: claimableFill)
+            // A banded row's ink is not one colour, so it is not one rectangle: the
+            // ramp answers per cell and the claim is a run per equal alpha across the
+            // span the cells actually occupy. Every line of a tall row shares the
+            // ramp's row step (see `bandsAcrossRow` above), so they share the runs too.
+            if let ramp, bandsAcrossRow {
+                claims += ramp.alphaClaims(
+                    row: row, line: lineIndex, columns: gutter..<cellColumn)
+            }
             guard case .none = visual.background else {
                 content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
                 if pulseColors != nil { bareLines.append(content) }
@@ -3412,11 +3419,12 @@ where Value.ID: Hashable {
         let bandsAcrossRow = ramp?.variesAcrossRow ?? false
         let cellInk = cellColour(row: row, ramp: ramp, context: context, palette: palette)
         var cellStyle = TextStyle()
-        // The opaque spelling ONLY on the arm that also claims. A banded row paints
-        // cell by cell through `PaintRenderer.band`, which is §15's `perCell` decline
-        // and is not honoured — spelling that one opaque would turn a loud gap into a
-        // silently discarded alpha, which is the one failure mode §18.3 names.
-        cellStyle.foregroundColor = bandsAcrossRow ? cellInk : cellInk.opaqueSpelling
+        // Opaque on both arms. A banded row's cells take their colour from the ramp
+        // rather than from this style, so what is spelled here only reaches the
+        // single-introducer arm — but a `TextStyle` carrying a translucent colour into
+        // `band` at all is the shape §18.3 warns about, and the answer is the same
+        // either way now that both arms claim (§36).
+        cellStyle.foregroundColor = cellInk.opaqueSpelling
         let cellSequence = bandsAcrossRow ? nil : ANSIRenderer.styleSequence(for: cellStyle)
         var rampSequences: [String?] = []
 
@@ -3480,10 +3488,15 @@ where Value.ID: Hashable {
         /// it is bare and an ink claim on a cell with no ink of its own lets what is
         /// behind it through.
         func claims(fill: Color?) -> [OpacityRegion] {
-            SelectableRowClaims.claims(
+            var stated = SelectableRowClaims.claims(
                 line: 0, width: rowWidth, cells: gutter..<cellColumn,
                 ink: bandsAcrossRow ? nil : cellInk,
                 mark: gutter > 0 ? visualState.indicatorColor : nil, fill: fill)
+            if let ramp, bandsAcrossRow {
+                stated += ramp.alphaClaims(
+                    row: row, line: 0, columns: gutter..<cellColumn)
+            }
+            return stated
         }
         guard case .none = visualState.background else {
             content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))

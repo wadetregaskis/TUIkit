@@ -1143,11 +1143,13 @@ Plus, from 2026-09-10: the style cascade's six control readers (§30); `Table`'s
 channel (§32); `Text`'s ramped ink at every rectangular alpha shape, and a horizontal
 ramp's `.background`, which had been misclassified as per-cell (§34).
 
-Not honoured, each loud at its own line: a ramp whose alpha varies in BOTH directions
-at once — radial, angular, elliptical, diagonal (§34.3, a cost decline with a named
-prerequisite); a `Table` under such a ramp (§33.2); the indeterminate `ProgressView`
-sweep (§31.4); the circular `Gauge`'s own cells; `Text`'s concatenated-run arm under a
-ramp; and the image glyph path (§17).
+And, from §36: a ramp whose alpha varies in BOTH directions — radial, angular,
+elliptical, diagonal — as ink and as a fill; a `Table` under one; `Text`'s
+concatenated-run arm under a ramp, and each fragment's own colour there; and a
+one-stop gradient's representative.
+
+Not honoured, each loud at its own line: the indeterminate `ProgressView` sweep
+(§31.4); the circular `Gauge`'s own cells; and the image glyph path (§17).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -2299,3 +2301,98 @@ would have shown the allocation. It does not. RAM flat everywhere.
 
 So the prerequisite is free at today's shapes and asymptotically better at the shape
 it was for, which is the whole of the case for making it first and separately.
+
+### 36.2 The shape itself, and what it cost
+
+With the fold inverted, `perCell` becomes `perColumn`'s walk asked once per row.
+Nothing else about it is new: `RampSampler.alphaRuns` already coalesced on the ALPHA
+rather than on the ramp entry, so a run of cells that agree is one rectangle, and the
+two shapes are one `case` in `PaintRenderer.claims`. `BackgroundModifier` keeps them
+apart, because there a `perColumn` claim really is one full-height strip and a
+`perCell` one cannot be.
+
+`RampSampler.alphaClaims(row:line:columns:)` is the one derivation, and it takes a
+column RANGE rather than a cell count so a `Table` can claim the span its cells
+actually occupy — its cells start past the selection gutter, and a run derived from
+column zero would state each cell's alpha two columns to the left of the cell it was
+painted for.
+
+**Measured, and it is not free.** `ab_bench.py` against the same tree with the claims
+removed, 24 reps, load 1.73:
+
+| scenario | change | 95% CI | RAM |
+|---|---|---|---|
+| `alpharamp` | **+14.9%** | [+13.6, +16.2] | 11.4 → 12.7 MB |
+| `gradients` | −0.7% | [−1.2, +0.4] | flat |
+| `table`, `tables-scroll`, `translucent`, `megalist`, `textwall`, `kitchensink` | indistinguishable | | flat |
+
+So: **fifteen percent on a page that is nothing but translucent ramps, and nothing
+anywhere else.** That is the right shape — the feature is paid for by the pages that
+ask for it — and it is a price, not a rounding error, so it is written here rather
+than implied.
+
+Where it goes is the region COUNT. A 120-column diagonal band claims a rectangle per
+run of equal alpha per row, and a smooth full-range fade over 120 columns moves ~2 per
+step, so almost every run is one cell: ~120 regions a row, ~3,000 for a band. Each is
+72 bytes, each is copied by `shifted(byX:y:)` at every composite between the leaf and
+the root, and that is both the +14.9% and the +1.3 MB.
+
+**The next step, if it ever matters**, is to stop making the count grow with the area:
+let one region carry a per-column alpha (`[UInt8]` across its width) so a row is ONE
+region whatever its ramp does. `clipped` and `subtracting` would slice the array, and
+`foldedAlphas` — which already walks a region's columns — would sample it. That turns
+~3,000 regions into 24. It is not done here because +14.9% on a synthetic worst case
+and 0% everywhere else does not justify a new field on a public type carried through
+every composite; it is written down so the measurement that would justify it is
+already on record.
+
+### 36.3 A new scenario, because nothing measured this at all
+
+`alpharamp` is 22nd in `Stress`. Every ramp in `gradients` is opaque, so §34's whole
+subject — a ramp's alpha travelling beside its bytes — was invisible to `ab_bench.py`,
+and §34.3 declined the per-cell shape on an *estimate*. That is the same hole
+`gradients` itself was written to fill one layer up, and its own doc comment makes the
+argument.
+
+It also proves the gap was real rather than theoretical. Built against the previous
+commit, in debug:
+
+```
+TUIkitStyling/Color+ANSICodes.swift:70: Assertion failed: a translucent colour
+reached the ANSI emitter (alpha 45): the view that painted it does not carry alpha
+to the compositor, so it renders opaque.
+```
+
+With the claims, all 22 scenarios render clean under `--selfcheck`.
+
+### 36.4 `Table`'s decline was two declines, one of them stale
+
+A `Table` gated its claim on `ramp.variesAcrossRow` — "does the colour change along
+the row" — and dropped the ink claim wholesale when it did. That is broader than
+`perCell`: a HORIZONTAL ramp varies along a row too, and §34.2 had already made that
+shape honourable everywhere else. So half the decline was a cost decline and half was
+exactly the kind of stale one §33.1 caught §19.1 being.
+
+Both arms now claim, through the same `alphaClaims` the text path uses, and
+`bandsAcrossRow` governs only the PAINTING — whether the row gets one SGR introducer
+or one per cell, which is what it was always about.
+
+### 36.5 `Text`'s concatenated arm dropped two things, not one
+
+`PaintRenderer.styled(pieces:)` returned `[String]`. The same structural blocker as
+`TrackRenderer.render` (§31) and for the same reason, and it cost two different claims:
+
+- **the ramp's alpha** over the fragments it painted — the case §16.3 listed;
+- **each fragment's OWN colour**, which is the stranger half. The very same colour on
+  an *unramped* concatenation was claimed by `Text.fragmentAlphaClaims` two branches
+  up. Putting a gradient on a concatenated `Text` silently discarded the alpha of a
+  fragment that had nothing to do with the gradient.
+
+The one-stop-gradient arm is in the same position and now claims too: `RampSampler`
+refuses a single stop, so `Gradient(colors: [.red.opacity(0.5)])` fell through to the
+flat fallback and rendered at full strength.
+
+With that, `band`'s `carriesAlpha: Bool` has one value everywhere and is gone. It
+existed for the arm that dropped its alpha rather than claiming it — bytes in raw so
+the emitter stays loud — and a flag with one value is a place for the next caller to
+guess wrong.

@@ -128,10 +128,6 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // of it, hoisted or not.
         let alphaShape: RampSampler.AlphaShape =
             paint.isOpaqueThroughout ? .opaque : sampler.alphaShape
-        // Spelled opaque ONLY where the alpha is being carried. Spelling it opaque
-        // everywhere would silence the assertion for the case that is not
-        // honoured, turning a loud gap into a discarded alpha.
-        let carriesAlpha = alphaShape != .perCell
         /// The alphas themselves, not `Double(alpha) / 255`: the division belongs in
         /// `OpacityRegion.claim`, which is the one place a claim is derived, and this
         /// was one of three sites doing it by hand.
@@ -157,9 +153,9 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 // One colour for the whole row: the same single persistent-fill
                 // this modifier has always emitted, and no per-cell work at all.
                 let colour = sampler.colour(row: row).resolve(with: palette)
-                if carriesAlpha { rowFieldAlphas.append(colour.alpha) }
+                rowFieldAlphas.append(colour.alpha)
                 return filled(
-                    padded, with: carriesAlpha ? colour.opaqueSpelling : colour)
+                    padded, with: colour.opaqueSpelling)
             }
             // Otherwise the row is cut at the ramp's own boundaries and each
             // piece filled. The cut carries the styling that was in force where
@@ -210,7 +206,7 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                     } else {
                         let colour = sampler.ramp[entry].resolve(with: palette)
                         escape = ANSIRenderer.backgroundCode(
-                            for: carriesAlpha ? colour.opaqueSpelling : colour)
+                            for: colour.opaqueSpelling)
                         escapes[entry] = escape
                     }
                     // `applyPersistentBackground` spelled out rather than
@@ -260,7 +256,7 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
     ) -> [OpacityRegion] {
         var painted: [OpacityRegion] = []
         switch alphaShape {
-        case .opaque, .perCell:
+        case .opaque:
             break
         case .uniform(let alpha):
             painted.append(
@@ -287,13 +283,30 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             // walked once rather than per row, and `alphaRuns` coalesces on the alpha
             // rather than on the ramp entry, so a smooth eighty-column fade between
             // two equally-faded stops is ONE rectangle and not eighty.
-            painted += sampler.alphaRuns(row: 0, cells: width)
+            painted += sampler.alphaRuns(row: 0, columns: 0..<width)
                 .map { run in
                     OpacityRegion(
                         offsetX: run.columns.lowerBound, offsetY: 0, width: run.columns.count,
                         height: rows, opacity: 1,
                         fieldOpacity: OpacityRegion.opacity(of: run.alpha))
                 }
+        case .perCell:
+            // The same runs, asked per ROW — which is the whole difference between
+            // this shape and the one above, and why they are not one case here as
+            // they are in `PaintRenderer.claims`: a strip cannot span rows that
+            // disagree, so the height is 1 and the walk repeats.
+            //
+            // This is the shape whose claim count grows with the block's AREA
+            // rather than its width, and the only one that does. §36 measures it.
+            for row in 0..<rows {
+                painted += sampler.alphaRuns(row: row, columns: 0..<width)
+                    .map { run in
+                        OpacityRegion(
+                            offsetX: run.columns.lowerBound, offsetY: row,
+                            width: run.columns.count, height: 1, opacity: 1,
+                            fieldOpacity: OpacityRegion.opacity(of: run.alpha))
+                    }
+            }
         }
         return painted
     }

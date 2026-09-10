@@ -79,7 +79,6 @@ enum PaintRenderer {
         // per-cell one left the background's own bytes translucent while claiming it.
         let shape: RampSampler.AlphaShape =
             paint.isOpaqueThroughout ? .opaque : sampler.alphaShape
-        let carriesAlpha = shape != .perCell
         // Whether ANY claim is possible, asked once of the shape rather than
         // rediscovered per line. `[]` rather than a list of empties — the contract
         // `Text.uniformAlphaClaims` already states and `rowed` already relies on — so
@@ -102,7 +101,7 @@ enum PaintRenderer {
             var column = 0
             band(
                 line, column: &column, row: row, style: bandStyle, sampler: sampler,
-                sequences: &sequences, into: &painted, carriesAlpha: carriesAlpha)
+                sequences: &sequences, into: &painted)
             result.append(painted)
             guard wantsClaims else { continue }
             claims.append(
@@ -115,16 +114,16 @@ enum PaintRenderer {
 
     /// One line's claims for a ramp of the given shape.
     ///
-    /// Three of the four shapes are rectangles and are stated; the fourth is not, and
-    /// says nothing — its bytes were left unspelled above so the emitter's assertion
-    /// still names it. See §34 for why `perCell` is a cost decline rather than an
-    /// expressiveness one.
+    /// All four shapes are rectangles; they differ in how many. The two that vary
+    /// along the row are one case here — a run of equal alpha at a time — and the
+    /// two that do not are a single rectangle each. See §36 for what the last of
+    /// them cost, and §34.3 for the estimate it replaced.
     private static func claims(
         for shape: RampSampler.AlphaShape, row: Int, cells: Int,
         sampler: RampSampler, fieldAlpha: UInt8
     ) -> [OpacityRegion] {
         switch shape {
-        case .opaque, .perCell:
+        case .opaque:
             // The FIELD alone. A rectangle is a rectangle whether or not the ink over
             // it is one, and refusing it for being adjacent to something unhonourable
             // would be a second gap for no reason. `claim` answers nil when the field
@@ -141,15 +140,18 @@ enum PaintRenderer {
                 offsetY: row, width: cells, height: 1, inkAlpha: sampler.colour(row: row).alpha,
                 fieldAlpha: fieldAlpha)
                 .map { [$0] } ?? []
-        case .perColumn:
+        case .perColumn, .perCell:
+            // One run of equal alpha at a time, which is the same walk for both
+            // shapes: `perColumn` happens to give every row the same answer and
+            // `perCell` a different one, and neither fact changes what a row owes.
+            // Asking the sampler per row is what makes them one case — see
+            // ``RampSampler/AlphaShape/perCell``, where the two used to part.
+            //
             // Per line rather than one full-height strip, because a text block is
             // RAGGED: a strip as tall as the block would reach past a short line's
             // end, where there is nothing of this text to fade.
-            return sampler.alphaRuns(row: row, cells: cells).compactMap { run in
-                OpacityRegion.claim(
-                    offsetX: run.columns.lowerBound, offsetY: row, width: run.columns.count,
-                    height: 1, inkAlpha: run.alpha, fieldAlpha: fieldAlpha)
-            }
+            return sampler.alphaClaims(
+                row: row, line: row, columns: 0..<cells, fieldAlpha: fieldAlpha)
         }
     }
 
@@ -161,6 +163,20 @@ enum PaintRenderer {
     /// `Text("a").foregroundStyle(.red) + Text("b")` under a ramp is a red "a"
     /// and a ramped "b", which is the precedence every other styling follows.
     ///
+    /// ## Claims
+    ///
+    /// This returned bytes and nothing else until §36.5, which is why §16.3 listed
+    /// "`Text`'s concatenated-run arm under a ramp" as not honoured: a fragment's
+    /// own translucent colour was dropped here even though the very same colour on
+    /// an unramped concatenation was claimed (`Text.fragmentAlphaClaims`), and the
+    /// ramp's own alpha was dropped for every fragment it painted. Both halves are
+    /// stated now, and they are two different derivations over one row:
+    ///
+    /// | piece | bytes | claim |
+    /// |---|---|---|
+    /// | states its own colour | its style's opaque spelling | its own ink and field |
+    /// | takes the ramp | the ramp's opaque spelling | the ramp's alpha per run, plus the piece's own FIELD |
+    ///
     /// - Parameters:
     ///   - lines: The laid-out lines, each in its styled pieces, left to right.
     ///   - blockWidth: The widest line — the rectangle's width in cells.
@@ -168,25 +184,33 @@ enum PaintRenderer {
     ///   - paint: What is being painted with.
     ///   - depth: The colour depth to quantise the ramp for.
     ///   - cellAspect: ``EnvironmentValues/imageCellAspect``.
-    /// - Returns: One styled string per line.
+    /// - Returns: One styled string per line, and one list of claims per line in
+    ///   that line's own columns — `[]` for a block with nothing translucent in it,
+    ///   which is the contract `Text.uniformAlphaClaims` states and `rowed` relies
+    ///   on.
     static func styled(
         pieces lines: [[StyledPiece]], blockWidth: Int, frame: GradientFrame? = nil,
         paint: Paint, depth: ColorDepth, cellAspect: Double
-    ) -> [String] {
+    ) -> (lines: [String], claims: [[OpacityRegion]]) {
         let extent = frame ?? GradientFrame(width: blockWidth, height: lines.count)
+        // Asked of the PAINT and the styles, which are a handful, before touching a
+        // single fragment: the walk below costs a width per piece — a grapheme scan
+        // in the general case — and every concatenated `Text` in an app would pay it
+        // to discover that all its colours are opaque, which is the answer for
+        // essentially all of them. §35.1's lesson, applied before it could recur.
+        let wantsClaims =
+            !paint.isOpaqueThroughout
+            || lines.contains { pieces in
+                pieces.contains {
+                    $0.style.foregroundColor?.isOpaque == false
+                        || $0.style.backgroundColor?.isOpaque == false
+                }
+            }
         guard
             let sampler = RampSampler(
                 paint: paint, extent: extent, depth: depth, cellAspect: cellAspect)
         else {
-            // Not a ramp, or a degenerate one — both mean paint flat, each
-            // piece in its own colour or the paint's.
-            return lines.map { pieces in
-                pieces.map { piece in
-                    var flat = piece.style
-                    if piece.takesRamp { flat.foregroundColor = paint.representative }
-                    return ANSIRenderer.render(piece.text, with: flat)
-                }.joined()
-            }
+            return flatPieces(lines, paint: paint, wantsClaims: wantsClaims)
         }
 
         // One sequence table per PIECE STYLE, not per line: the table caches an
@@ -194,31 +218,96 @@ enum PaintRenderer {
         // among pieces that agree about everything else (bold, underline, the
         // background). Pieces are few — a concatenation is a handful of
         // fragments — so a small association list beats hashing a `TextStyle`.
+        //
+        // Keyed on the style as EMITTED, which is its opaque spelling: two pieces
+        // differing only in a background's alpha put the same bytes on the screen,
+        // and the difference between them is in the claim rather than in the table.
         var tables: [(style: TextStyle, sequences: [String?])] = []
         var result: [String] = []
+        var claims: [[OpacityRegion]] = []
         result.reserveCapacity(lines.count)
+        if wantsClaims { claims.reserveCapacity(lines.count) }
 
         for (row, pieces) in lines.enumerated() {
             var painted = ""
             var column = 0
+            var rowClaims: [OpacityRegion] = []
             for piece in pieces {
+                let start = column
                 guard piece.takesRamp else {
-                    painted += ANSIRenderer.render(piece.text, with: piece.style)
+                    painted += ANSIRenderer.render(piece.text, with: piece.style.opaqueColours)
                     column += piece.text.reduce(0) { $0 + $1.terminalWidth }
+                    guard wantsClaims else { continue }
+                    rowClaims.appendCoalescing(
+                        OpacityRegion.claim(
+                            offsetX: start, width: column - start, height: 1,
+                            ink: piece.style.foregroundColor, field: piece.style.backgroundColor))
                     continue
                 }
-                var index = tables.firstIndex { $0.style == piece.style }
+                let bandStyle = piece.style.opaqueColours
+                var index = tables.firstIndex { $0.style == bandStyle }
                 if index == nil {
-                    tables.append((piece.style, []))
+                    tables.append((bandStyle, []))
                     index = tables.count - 1
                 }
                 band(
-                    piece.text, column: &column, row: row, style: piece.style,
+                    piece.text, column: &column, row: row, style: bandStyle,
                     sampler: sampler, sequences: &tables[index!].sequences, into: &painted)
+                guard wantsClaims else { continue }
+                // `band` leaves `column` where it was for a ramp that does not vary
+                // along the row — deliberately, because nothing downstream read it and
+                // advancing it is a grapheme walk per character (26 µs → 108 µs,
+                // measured at its own note). A claim IS something downstream, so the
+                // walk happens here and only when there is a claim to place.
+                if !sampler.variesAcrossRow {
+                    column = start + piece.text.reduce(0) { $0 + $1.terminalWidth }
+                }
+                rowClaims += sampler.alphaClaims(
+                    row: row, line: row, columns: start..<column,
+                    fieldAlpha: piece.style.backgroundColor?.alpha ?? .max)
             }
             result.append(painted)
+            if wantsClaims { claims.append(rowClaims) }
         }
-        return result
+        return (result, claims)
+    }
+
+    /// Not a ramp, or a degenerate one — both mean paint flat, each piece in its own
+    /// colour or the paint's.
+    ///
+    /// Its own function only because the ramped arm reached the complexity limit with
+    /// it inline; it is a real seam, being the one arm with no sampler in it. A
+    /// ONE-STOP gradient lands here (`RampSampler.init?` refuses it), and its
+    /// representative can be translucent, so this arm claims too — a gap that stood
+    /// until §36.5 for the same reason as the ramped one: the function returned bytes.
+    private static func flatPieces(
+        _ lines: [[StyledPiece]], paint: Paint, wantsClaims: Bool
+    ) -> (lines: [String], claims: [[OpacityRegion]]) {
+        let representative = paint.representative
+        var painted: [String] = []
+        var claims: [[OpacityRegion]] = []
+        painted.reserveCapacity(lines.count)
+        if wantsClaims { claims.reserveCapacity(lines.count) }
+        for pieces in lines {
+            var line = ""
+            var row: [OpacityRegion] = []
+            var column = 0
+            for piece in pieces {
+                var flat = piece.style
+                if piece.takesRamp { flat.foregroundColor = representative }
+                line += ANSIRenderer.render(piece.text, with: flat.opaqueColours)
+                guard wantsClaims else { continue }
+                let width = piece.text.reduce(0) { $0 + $1.terminalWidth }
+                row.appendCoalescing(
+                    OpacityRegion.claim(
+                        offsetX: column, width: width, height: 1,
+                        ink: flat.foregroundColor, field: flat.backgroundColor))
+                column += width
+            }
+            painted.append(line)
+            if wantsClaims { claims.append(row) }
+        }
+        return (painted, claims)
     }
 
     /// Paints one piece of a row, splitting it at the ramp's own boundaries.
@@ -238,19 +327,21 @@ enum PaintRenderer {
     ///   - painted: The row being assembled; appended to in place, never
     ///     `a + b + c`, which would build two throwaway strings per run — and a
     ///     horizontal ramp at truecolor is one run per CELL.
-    ///   - carriesAlpha: Whether the caller is going to state this RAMP's alpha as an
-    ///     `OpacityRegion`. When it is, the ramp's colours go into the bytes at their
-    ///     OPAQUE spelling — an emitter has no backdrop to composite against. When it
-    ///     is not (a genuinely per-cell alpha, §34), they go in raw, so the emitter's
-    ///     assertion still fires: spelling them opaque without the claim would turn a
-    ///     loud gap into a silently discarded alpha.
     ///
-    ///     It governs the ramp's colours ONLY. `style`'s own colours are the caller's
-    ///     to spell, because the caller is the one that knows whether it claimed them.
+    /// The ramp's colours go into the bytes at their OPAQUE spelling, always — an
+    /// emitter has no backdrop to composite against, so a translucent colour has no
+    /// SGR spelling at all. `style`'s own colours are the CALLER's to spell, because
+    /// the caller is the one that claimed them.
+    ///
+    /// There was a `carriesAlpha: Bool` here until §36. It existed for the one arm
+    /// whose alpha was dropped rather than claimed — the bytes went in raw so the
+    /// emitter's assertion still fired, because spelling them opaque without a claim
+    /// turns a loud gap into a silently discarded alpha (§18.3). Every arm claims
+    /// now, so the flag had one value, and a flag with one value is a place for the
+    /// next caller to guess wrong.
     static func band(
         _ text: String, column: inout Int, row: Int, style: TextStyle,
-        sampler: RampSampler, sequences: inout [String?], into painted: inout String,
-        carriesAlpha: Bool = false
+        sampler: RampSampler, sequences: inout [String?], into painted: inout String
     ) {
         guard !text.isEmpty else { return }
         let reset = ANSIRenderer.reset
@@ -263,7 +354,7 @@ enum PaintRenderer {
             // `.gradientExtent(.subtree)` and doing it by hand.
             var run = style
             let colour = sampler.colour(row: row)
-            run.foregroundColor = carriesAlpha ? colour.opaqueSpelling : colour
+            run.foregroundColor = colour.opaqueSpelling
             let opening = ANSIRenderer.styleSequence(for: run) ?? ""
             painted += opening.isEmpty ? text : opening + text + reset
             // `column` is deliberately left where it was. Nothing downstream
@@ -310,8 +401,7 @@ enum PaintRenderer {
                 runStart = cursor
                 if sequences[next] == nil {
                     var run = style
-                    run.foregroundColor =
-                        carriesAlpha ? sampler.ramp[next].opaqueSpelling : sampler.ramp[next]
+                    run.foregroundColor = sampler.ramp[next].opaqueSpelling
                     sequences[next] = ANSIRenderer.styleSequence(for: run) ?? ""
                 }
             }
@@ -619,10 +709,11 @@ struct RampSampler {
     /// rectangle carrying one alpha — so what can be honoured is decided by
     /// whether a rectangle can be drawn around each distinct alpha.
     ///
-    /// The distinction is worth making rather than declining ramps wholesale,
-    /// because the two shapes that ARE rectangular cover most of what is asked
-    /// for: an evenly-faded ramp, and a ramp down a page. What is left is a fade
-    /// running along a row, where the alpha changes cell by cell.
+    /// All four are rectangles now; what differs is HOW MANY. A uniform ramp is
+    /// one for the whole block, a vertical one is a row each, a horizontal one a
+    /// strip each, and only the shapes that vary in both directions need a
+    /// rectangle per run per row. The distinction is what lets the cheap shapes
+    /// stay cheap rather than every ramp paying the expensive shape's price.
     enum AlphaShape: Equatable {
         /// Every entry is opaque. Nothing to state.
         case opaque
@@ -648,9 +739,15 @@ struct RampSampler {
         case perColumn
 
         /// The alpha changes along a row AND down a column — radial, angular,
-        /// elliptical, or a diagonal linear ramp. Not expressible as rectangles
-        /// cheaply, and deliberately left unhonoured and LOUD rather than
-        /// approximated: see `Documentation/Opacity as composition.md` §15 and §34.
+        /// elliptical, or a diagonal linear ramp. A run of equal alpha per ROW,
+        /// which is ``perColumn``'s walk repeated rather than shared: the only
+        /// shape whose claim count grows with the block's AREA.
+        ///
+        /// Declined on cost until §36, when the resolver stopped answering per
+        /// column across the regions and started answering per row across them —
+        /// which is what made the count affordable. The case is still named
+        /// separately from ``perColumn`` because the two cost different amounts,
+        /// and a shape that cost nothing to tell apart is worth telling apart.
         case perCell
     }
 
@@ -673,24 +770,29 @@ struct RampSampler {
         return .perCell
     }
 
-    /// The `(columns, alpha)` runs across one row — the claim twin of
+    /// The `(columns, alpha)` runs across a span of one row — the claim twin of
     /// ``runs(row:cells:)``.
+    ///
+    /// A COLUMN RANGE rather than a cell count, because a `Table` claims the span
+    /// it actually painted: its cells start past the selection gutter, and a run
+    /// that began at column 0 would state the alpha of a cell one column to the
+    /// left of the one it was painted for.
     ///
     /// A separate walk rather than a `map` over that one, because it coalesces on a
     /// different key. `runs` breaks at every change of ramp ENTRY, which is right
     /// for emitting colour and wrong for a claim: two adjacent entries usually
     /// share an alpha, so a claim per colour run over-splits — a `uniform` ramp
     /// would come back as eighty width-1 rectangles instead of one.
-    func alphaRuns(row: Int, cells: Int) -> [(columns: Range<Int>, alpha: UInt8)] {
-        guard cells > 0, !ramp.isEmpty else { return [] }
+    func alphaRuns(row: Int, columns: Range<Int>) -> [(columns: Range<Int>, alpha: UInt8)] {
+        guard !columns.isEmpty, !ramp.isEmpty else { return [] }
         let term = rowTerm(row)
         func alpha(at column: Int) -> UInt8 {
             ramp[max(0, min(ramp.count - 1, entry(column: column, rowTerm: term)))].alpha
         }
         var out: [(columns: Range<Int>, alpha: UInt8)] = []
-        var start = 0
-        var current = alpha(at: 0)
-        for column in 1..<cells {
+        var start = columns.lowerBound
+        var current = alpha(at: start)
+        for column in (start + 1)..<columns.upperBound {
             let next = alpha(at: column)
             if next != current {
                 out.append((start..<column, current))
@@ -698,8 +800,39 @@ struct RampSampler {
                 current = next
             }
         }
-        out.append((start..<cells, current))
+        out.append((start..<columns.upperBound, current))
         return out
+    }
+
+    /// The claims this ramp owes for the cells it painted across `columns` of
+    /// `row` — one rectangle per run of equal alpha.
+    ///
+    /// The one derivation, because there are two callers and they are in different
+    /// files: `PaintRenderer.claims` states it for a block of text, and a `Table`'s
+    /// row renderer for the span its cells occupy. Both had the same four lines in
+    /// them, which is how `List` and `Table` drift (see `SelectableRowClaims`).
+    ///
+    /// - Parameters:
+    ///   - row: The ramp's row — which for a tall table row is the ROW's step, shared
+    ///     by every line of it.
+    ///   - line: The line the claim lands on, in the carrying buffer's coordinates.
+    ///     The same as `row` wherever the ramp's rows and the buffer's are the same
+    ///     rows, and not for a `Table`.
+    ///   - columns: The span actually painted. A `Table`'s cells start past the
+    ///     selection gutter, and the padding past the last column is bare — an ink
+    ///     claim on a cell with no ink of its own lets what is behind it through.
+    ///   - fieldAlpha: A flat background's alpha, folded into the same rectangle
+    ///     rather than claimed as a second one over the same cells: overlapping
+    ///     claims multiply at the resolver, so two regions would give the same
+    ///     answer at twice the count, and this path is the hot one.
+    func alphaClaims(
+        row: Int, line: Int, columns: Range<Int>, fieldAlpha: UInt8 = .max
+    ) -> [OpacityRegion] {
+        alphaRuns(row: row, columns: columns).compactMap { run in
+            OpacityRegion.claim(
+                offsetX: run.columns.lowerBound, offsetY: line, width: run.columns.count,
+                height: 1, inkAlpha: run.alpha, fieldAlpha: fieldAlpha)
+        }
     }
 
     /// The `(columns, entry)` runs across one row, for a ramp that does.

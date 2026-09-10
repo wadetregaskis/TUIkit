@@ -70,6 +70,7 @@ enum Scenarios {
         AnimatingScenario.descriptor,
         TranslucentScenario.descriptor,
         GradientsScenario.descriptor,
+        AlphaRampsScenario.descriptor,
         MenuBarScenario.descriptor,
         KitchenSinkScenario.descriptor,
     ]

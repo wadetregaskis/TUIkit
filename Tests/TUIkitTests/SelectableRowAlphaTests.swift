@@ -101,19 +101,48 @@ struct SelectableRowAlphaTests {
         #expect(drawn.opacityRegions.contains { $0.inkOpacity == half })
     }
 
+    /// **A banded row used to claim nothing, and this is the assertion that changed.**
+    ///
     /// A row under a ramp that varies ALONG it paints cell by cell through
-    /// `PaintRenderer.band`, which is §15's `perCell` decline. That arm stays loud —
-    /// its bytes keep the raw colour so the emitter's assertion still fires — and the
-    /// decision is per FRAME, from one sampler, so a table either claims all its rows
-    /// or none of them. Never right on nineteen rows and wrong on the twentieth.
-    @Test("A banded table claims nothing at all, rather than some of its rows")
-    func bandedTableIsAllOrNothing() {
+    /// `PaintRenderer.band`, and that arm dropped its ink claim wholesale — §15's
+    /// `perCell` decline, applied here to every ramp that varies across a row
+    /// including the HORIZONTAL one §34.2 had already made honourable elsewhere. So
+    /// the decline was both a cost decline and, for half its range, a stale one.
+    ///
+    /// It now claims a run of equal alpha per row, from `RampSampler.alphaClaims` —
+    /// the same derivation `PaintRenderer` uses, because two copies of it is how
+    /// `List` and `Table` drift (§33).
+    @Test("A banded table claims a run of equal alpha per row")
+    func bandedTableClaimsItsRuns() {
         let drawn = buffer(
             table().foregroundStyle(
                 LinearGradient(
-                    colors: [.rgb(200, 40, 40), .rgb(40, 40, 200)],
+                    colors: [Color.rgb(200, 40, 40).opacity(0.5), Color.rgb(40, 40, 200)],
                     startPoint: .leading, endPoint: .trailing)))
-        #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
+        #expect(!drawn.opacityRegions.isEmpty, "declined before §36: \(drawn.opacityRegions)")
+        let ink = drawn.opacityRegions.filter { $0.inkOpacity < 1 }
+        #expect(!ink.isEmpty, "\(drawn.opacityRegions)")
+        #expect(ink.allSatisfy { $0.height == 1 }, "a run per row: \(ink)")
+        // Never on the header, which is drawn by its own view and has no ramp step of
+        // this row's — the same boundary `tableCellInkClaims` pins for the flat arm.
+        #expect(ink.allSatisfy { $0.offsetY > 0 }, "a claim landed on the header: \(ink)")
+    }
+
+    /// The claim starts where the CELLS start. A table with a selection binding draws a
+    /// gutter, and the ramp's own column zero is the row's column zero — so a run
+    /// derived from column 0 would state each cell's alpha two columns to the left of
+    /// the cell it was painted for.
+    @Test("A banded row's claims start past the selection gutter")
+    func bandedClaimsStartPastTheGutter() {
+        let drawn = buffer(
+            table(.constant([]))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color.rgb(200, 40, 40).opacity(0.5), Color.rgb(40, 40, 200)],
+                        startPoint: .leading, endPoint: .trailing)))
+        let ink = drawn.opacityRegions.filter { $0.inkOpacity < 1 && $0.offsetY > 0 }
+        #expect(!ink.isEmpty, "\(drawn.opacityRegions)")
+        #expect(ink.allSatisfy { $0.offsetX >= 2 }, "past the gutter: \(ink)")
     }
 
     // MARK: - The `_ListCore` twin

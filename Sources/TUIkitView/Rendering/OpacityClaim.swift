@@ -110,3 +110,38 @@ extension OpacityRegion {
             inkOpacity: Double(inkAlpha) / 255, fieldOpacity: Double(fieldAlpha) / 255)
     }
 }
+
+// MARK: - Collecting claims along a row
+
+extension Array where Element == OpacityRegion {
+    /// Appends `claim`, merging it into the last region already here where the two
+    /// are adjacent on the same row and owe the same alphas.
+    ///
+    /// Three places assemble a row's claims a run at a time — `ClaimingRow` for a
+    /// track or a dial, `Text.fragmentAlphaClaims` for a concatenation's fragments,
+    /// and `PaintRenderer.styled(pieces:)` for those fragments under a ramp — and
+    /// each had written this out. What they share is not the loop but the merge
+    /// rule, so that is what lives here.
+    ///
+    /// Merging is worth doing rather than leaving to the resolver: a rim drawn a cell
+    /// at a time is one colour for most of its length, and the resolver's cost is per
+    /// region per covered row (see `OpacityResolution.foldedAlphas`). It is also what
+    /// keeps a claim COUNT out of the contract — the number of rectangles a row needs
+    /// is an implementation detail, and tests that pinned it were pinning that.
+    ///
+    /// `nil` appends nothing, so a caller can hand the result of
+    /// ``OpacityRegion/claim(offsetX:offsetY:width:height:ink:field:)`` straight in.
+    public mutating func appendCoalescing(_ claim: OpacityRegion?) {
+        guard let claim else { return }
+        if var last, last.offsetY == claim.offsetY, last.height == claim.height,
+            last.offsetX + last.width == claim.offsetX,
+            last.inkOpacity == claim.inkOpacity, last.fieldOpacity == claim.fieldOpacity,
+            last.opacity == claim.opacity, last.cycle == nil, claim.cycle == nil
+        {
+            last.width += claim.width
+            self[count - 1] = last
+            return
+        }
+        append(claim)
+    }
+}

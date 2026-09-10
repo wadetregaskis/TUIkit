@@ -956,20 +956,10 @@ extension Text: Renderable, Layoutable {
                 defer { column += width }
                 guard width > 0, styles.indices.contains(fragment.run) else { continue }
                 let style = styles[fragment.run]
-                guard
-                    let region = OpacityRegion.claim(
+                claims.appendCoalescing(
+                    OpacityRegion.claim(
                         offsetX: column, width: width, height: 1,
-                        ink: style.foregroundColor, field: style.backgroundColor)
-                else { continue }
-                if var last = claims.last, last.offsetX + last.width == column,
-                    last.inkOpacity == region.inkOpacity,
-                    last.fieldOpacity == region.fieldOpacity
-                {
-                    last.width += width
-                    claims[claims.count - 1] = last
-                    continue
-                }
-                claims.append(region)
+                        ink: style.foregroundColor, field: style.backgroundColor))
             }
             return claims
         }
@@ -1061,24 +1051,24 @@ extension Text: Renderable, Layoutable {
         // fragment decides everything else about it. A fragment that stated its
         // own colour keeps it.
         //
-        // No claims: a ramp states a colour, and therefore an alpha, per CELL
-        // along the row, which a rectangle cannot say. The styles go in as they
-        // are rather than in their opaque spelling, so a translucent colour here
-        // still trips `Color+ANSICodes.swift`'s assertion — an unhonoured path has
-        // to stay loud, and spelling it opaque would quietly discard the alpha.
-        return (
-            lines: PaintRenderer.styled(
-                pieces: fragments.map { line in
-                    line.map {
-                        StyledPiece(
-                            text: $0.text, style: resolvedRunStyles[$0.run],
-                            takesRamp: runTakesRamp[$0.run])
-                    }
-                },
-                blockWidth: blockWidth, frame: context.gradientFrame, paint: ramp,
-                depth: ColorDepth.current, cellAspect: context.environment.imageCellAspect),
-            claims: []
-        )
+        // Claims come back beside the bytes now (§36.5). They used to be `[]`, on the
+        // grounds that a ramp states an alpha per cell along the row and a rectangle
+        // cannot say that — which was true of the arithmetic and not of the ramps: a
+        // run of equal alpha is a rectangle, and `RampSampler.alphaClaims` states one
+        // per run. The fragments' OWN colours were dropped here too, which was the
+        // stranger half: the very same colour on an unramped concatenation was
+        // claimed by `fragmentAlphaClaims` two branches up.
+        let painted = PaintRenderer.styled(
+            pieces: fragments.map { line in
+                line.map {
+                    StyledPiece(
+                        text: $0.text, style: resolvedRunStyles[$0.run],
+                        takesRamp: runTakesRamp[$0.run])
+                }
+            },
+            blockWidth: blockWidth, frame: context.gradientFrame, paint: ramp,
+            depth: ColorDepth.current, cellAspect: context.environment.imageCellAspect)
+        return (lines: painted.lines, claims: painted.claims)
     }
 
     /// Fills in `style`'s foreground, and reports a gradient if that is what
