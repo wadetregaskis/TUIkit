@@ -2252,3 +2252,50 @@ at 60. The paired design absorbs preemption but not cache contention.
 So: the allocations were real and worth fixing, and every *width* in the first run was
 wrong. Re-measure a flagged scenario on a quiet box before believing its size, and
 before deciding whether it is worth chasing.
+
+
+## 36. The per-cell ramp: the prerequisite, then the shape (2026-09-10)
+
+§34.3 declined a ramp whose alpha varies in BOTH directions on cost, and named the
+prerequisite: *build the row's answer once per row into a `[CellAlpha?]` indexed by
+column, rather than once per column across the regions.* This is that, and then the
+decline it existed to lift.
+
+### 36.1 The resolver answers a row at a time
+
+`foldedAlpha(of:atColumn:row:)` was asked once per column and walked every region
+covering the row each time — O(width × regions), each region costing a containment
+test of four comparisons plus a call through the `substituting` closure. Fine at one
+or two claims a row, which is every shape §34 honoured. Not fine at eighty: an
+80-column row with 80 width-1 claims is 6,400 containment tests, ~154,000 over a
+24-row block, per resolve per frame.
+
+`foldedAlphas(of:over:row:)` inverts the loops. Walk each region once and fill the
+cells it covers: O(Σ widths + width), which for the same eighty claims is eighty
+stores. Three things fall out of the inversion rather than being optimised:
+
+1. **The containment test disappears.** A region's rows are already known — the
+   caller asks `spans(row:)` first — and its columns become the bounds of the fill
+   loop rather than a predicate evaluated per cell.
+2. **`substituting` is called once per region** instead of once per region per
+   column. For a cycling region that closure walks a phase array and compares
+   clocks, so this is the larger of the two savings on a fading panel.
+3. **A run's frames share one fold.** The run walk was folding per column *per
+   frame*; every frame of a run occupies the same cells, so the answer cannot differ
+   between them. An eight-frame spinner was computing it eight times.
+
+The cost is one array per covered row, where the walk allocated nothing. Measured
+against `172599ec`, 24 reps, load 2.63:
+
+| scenario | change | 95% CI |
+|---|---|---|
+| `translucent` | −0.1% | [−1.0, +0.3] |
+| `gradients` | −0.9% | [−1.8, +0.1] |
+| `table`, `megalist`, `tables-scroll`, `deep`, `dashboard`, `menus`, `kitchensink` | indistinguishable | |
+
+`translucent` is the scenario built for this path — a large faded panel over a
+destination that redraws every frame, half its rows nested — and it is the one that
+would have shown the allocation. It does not. RAM flat everywhere.
+
+So the prerequisite is free at today's shapes and asymptotically better at the shape
+it was for, which is the whole of the case for making it first and separately.

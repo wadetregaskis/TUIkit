@@ -148,15 +148,15 @@ extension FrameBuffer {
             let behindLine =
                 destination.lines.indices.contains(destinationRow)
                 ? destination.lines[destinationRow] : ""
+            let columns = start..<last
+            let alphas = Self.foldedAlphas(
+                of: covering, over: columns, row: row, substituting: substituting)
             let span = Self.blendedSpan(
                 source: line,
                 destination: behindLine,
-                columns: start..<last,
+                columns: columns,
                 destinationShift: position.x,
-                alpha: { column in
-                    Self.foldedAlpha(
-                        of: covering, atColumn: column, row: row, substituting: substituting)
-                },
+                alpha: { alphas[$0 - start] },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground)
             // Collapsed at the seam, where the seam is made: splicing leaves the
@@ -223,27 +223,30 @@ extension FrameBuffer {
             // STATED it, so an indeterminate bar inside `.background(.blue)
             // .opacity(0.5)` drew its tint once and replayed it plain.
             let ownLine = lines.indices.contains(run.offsetY) ? lines[run.offsetY] : ""
+            let columns = run.offsetX..<(run.offsetX + run.width)
+            // The SAME fold the line took, not `covering.first`. A run is spliced
+            // over cells the lines already answered for, so taking one region here
+            // and multiplying there made the very same cell resolve two ways: a
+            // `Spinner` inside `.foregroundStyle(.green.opacity(0.4))
+            // .background(.red.opacity(0.4))` drew faded on both channels and then
+            // replayed with the background back at full strength, once per tick,
+            // forever. §13's bug, which the line path was fixed for and this one
+            // was not — so the two now ask one function.
+            //
+            // Folded once for the whole run rather than once per frame: every
+            // frame of a run occupies the same cells, so the answer cannot differ
+            // between them, and an eight-frame spinner was computing it eight
+            // times.
+            let alphas = Self.foldedAlphas(
+                of: covering, over: columns, row: run.offsetY, substituting: { $0.cellAlpha })
             let fadedFrames = run.frames.map { frame in
                 Self.blendedSpan(
                     source: prefix + frame,
                     destination: behindLine,
-                    columns: run.offsetX..<(run.offsetX + run.width),
+                    columns: columns,
                     destinationShift: position.x,
                     fieldsFrom: ownLine,
-                    // The SAME fold the line took, not `covering.first`. A run
-                    // is spliced over cells the lines already answered for, so
-                    // taking one region here and multiplying there made the very
-                    // same cell resolve two ways: a `Spinner` inside
-                    // `.foregroundStyle(.green.opacity(0.4)).background(.red
-                    // .opacity(0.4))` drew faded on both channels and then
-                    // replayed with the background back at full strength, once
-                    // per tick, forever. §13's bug, which the line path was fixed
-                    // for and this one was not — so the two now ask one function.
-                    alpha: { column in
-                        Self.foldedAlpha(
-                            of: covering, atColumn: column, row: run.offsetY,
-                            substituting: { $0.cellAlpha })
-                    },
+                    alpha: { alphas[$0 - columns.lowerBound] },
                     surface: resolvedSurface,
                     defaultForeground: resolvedForeground)
             }
@@ -256,7 +259,8 @@ extension FrameBuffer {
         return result
     }
 
-    /// The alpha one cell owes, folded across every region that covers it.
+    /// The alpha every cell of one row owes, folded across every region covering
+    /// it, indexed from `columns.lowerBound`.
     ///
     /// The LAYER comes from the first match, and the INK and FIELD are multiplied
     /// across every match. The asymmetry is not a compromise; the two kinds of
@@ -285,27 +289,58 @@ extension FrameBuffer {
     /// because those are the two places the answer is needed and they had already
     /// drifted: the line multiplied and the run took the first match.
     ///
+    /// ## Why the whole row at once
+    ///
+    /// This was asked once per COLUMN, walking every region each time: O(width ×
+    /// regions), which is 4 comparisons and a call per region per cell. Fine while
+    /// a row carried one or two claims, and the reason §34.3 declined a ramp whose
+    /// alpha varies in both directions — 80 width-1 claims on an 80-column row is
+    /// 6,400 containment tests, ~154,000 over a 24-row block, per resolve per
+    /// frame.
+    ///
+    /// Written the other way round — walk each region once and fill the cells it
+    /// covers — it is O(Σ widths + width), which for the same 80 claims is 80
+    /// stores. The containment test disappears entirely: a region's rows are
+    /// already known (`spans(row:)` is asked before this) and its columns become
+    /// the bounds of the fill loop rather than a predicate. `substituting` is
+    /// likewise called once per region instead of once per region per column, and
+    /// for a cycling region that closure walks a phase array and compares clocks.
+    ///
+    /// The cost is one array per row, where the walk allocated nothing. That is
+    /// the trade, and it is measured: see §36.
+    ///
     /// - Parameters:
     ///   - regions: The regions already narrowed to this row.
-    ///   - column: The cell's column, in the source buffer's own coordinates.
-    ///   - row: The cell's row, for the containment test.
+    ///   - columns: The span being rebuilt, in the source buffer's own
+    ///     coordinates. Cells outside it are not answered for — the caller
+    ///     already trimmed the span to the covered columns and the line's own
+    ///     length.
+    ///   - row: The row, for narrowing each region.
     ///   - substituting: What a region's alpha is *right now* — its own
     ///     ``OpacityRegion/cellAlpha``, or a cycling region's phase at one tick.
     ///     `nil` drops that region from the fold.
-    private static func foldedAlpha(
-        of regions: [OpacityRegion], atColumn column: Int, row: Int,
+    /// - Returns: One entry per column of `columns`, `nil` where no region
+    ///   covers that cell.
+    private static func foldedAlphas(
+        of regions: [OpacityRegion], over columns: Range<Int>, row: Int,
         substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
-    ) -> FrameBuffer.CellAlpha? {
-        var result: FrameBuffer.CellAlpha?
-        for region in regions where region.contains(column: column, row: row) {
+    ) -> [FrameBuffer.CellAlpha?] {
+        var result = [FrameBuffer.CellAlpha?](repeating: nil, count: columns.count)
+        for region in regions where region.spans(row: row) {
             guard let cell = substituting(region) else { continue }
-            guard var accumulated = result else {
-                result = cell
-                continue
+            let from = max(columns.lowerBound, region.offsetX)
+            let upTo = min(columns.upperBound, region.offsetX + region.width)
+            guard from < upTo else { continue }
+            for column in from..<upTo {
+                let index = column - columns.lowerBound
+                guard var accumulated = result[index] else {
+                    result[index] = cell
+                    continue
+                }
+                accumulated.ink *= cell.ink
+                accumulated.field *= cell.field
+                result[index] = accumulated
             }
-            accumulated.ink *= cell.ink
-            accumulated.field *= cell.field
-            result = accumulated
         }
         return result
     }
