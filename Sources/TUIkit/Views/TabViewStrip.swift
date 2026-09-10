@@ -19,23 +19,33 @@ extension _TabViewCore {
         width: Int, alignment: HorizontalAlignment
     ) -> (
         lines: [String], regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
-        animatedCells: [AnimatedCellRun]
+        animatedCells: [AnimatedCellRun], claims: [OpacityRegion]
     ) {
         let (inactiveFg, inactiveBg) = stripLabelColors(palette: palette)
         var lines: [String] = []
         var regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)] = []
         var animatedCells: [AnimatedCellRun] = []
+        var claims: [OpacityRegion] = []
 
         // A coloured chip: the half-block caps (▐ … ▌) extend the chip's fill
         // half a cell each side with a clean edge. One function draws it, so
         // the animation's frames are the same cells the render draws — a second
         // spelling of this is how a replayed run drifts from what is on screen.
-        func drawChip(_ index: Int, background: Color, foreground: Color, active: Bool) -> String {
-            ANSIRenderer.colorize("▐", foreground: background)
-                + ANSIRenderer.colorize(
-                    " \(tabs[index].title) ", foreground: foreground,
-                    background: background, bold: active)
-                + ANSIRenderer.colorize("▌", foreground: background)
+        //
+        // Through `ClaimingRow`, which is also what gets the claim's COLUMNS right
+        // without a second piece of arithmetic: the caps are ink-only (a half block
+        // painted in the chip's own colour) and the body is ink on field, so a chip
+        // owes three claims and not one, and the row knows where each begins because
+        // it is the thing that put them there.
+        func drawChip(
+            _ index: Int, background: Color, foreground: Color, active: Bool
+        ) -> ClaimingRow {
+            var row = ClaimingRow()
+            let title = " \(tabs[index].title) "
+            row.append("▐", cells: 1, ink: background)
+            row.append(title, cells: title.strippedLength, ink: foreground, field: background, bold: active)
+            row.append("▌", cells: 1, ink: background)
+            return row
         }
 
         for (y, row) in rows.enumerated() {
@@ -50,15 +60,17 @@ extension _TabViewCore {
                 // tab's, unless that one is already breathing for the focus.
                 let hovered = i == hoveredIndex && !(active && chip.isBreathing)
                 let resting = active ? chip.labelNow : inactiveFg
-                line += drawChip(
+                let drawn = drawChip(
                     i, background: active ? chip.surface : inactiveBg,
                     foreground: hovered ? palette.hoveredForeground(resting) : resting,
                     active: active)
+                line += drawn.text
+                claims += drawn.claims.map { $0.shifted(byX: x, y: y) }
                 let chipWidth = tabWidth(i, style: .compact)  // body + the two caps
                 regions.append((x: x, y: y, width: chipWidth, height: 1, index: i))
                 if active,
                     let run = chip.run(offsetX: x, offsetY: y, draw: {
-                        drawChip(i, background: chip.surface, foreground: $0, active: true)
+                        drawChip(i, background: chip.surface, foreground: $0, active: true).text
                     })
                 {
                     animatedCells.append(run)
@@ -68,7 +80,7 @@ extension _TabViewCore {
             if x < width { line += String(repeating: " ", count: width - x) }
             lines.append(line)
         }
-        return (lines, regions, animatedCells)
+        return (lines, regions, animatedCells, claims)
     }
 
     /// The chrome a folder-tab strip is drawn from: the label colours, the

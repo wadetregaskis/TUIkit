@@ -392,7 +392,11 @@ extension Palette {
         // lightness was still too dark to separate from its page.
         let baseLightness = base.perceivedLightness ?? 0
         let level = UInt8(max(0, min(255, (baseLightness / 100) * 255)))
-        let greyBase = Color.rgb(level, level, level)
+        // Carrying `base`'s alpha, because this grey is a stand-in for the page and
+        // `scaled` carries the alpha of whatever it stepped FROM. Built opaque, the
+        // neutral branch handed back an opaque surface where the hued branch carried
+        // one — the two answers to the same question disagreeing about a third thing.
+        let greyBase = Color.rgb(level, level, level).carryingAlpha(of: base)
         let lighter = (preferred.perceivedLightness ?? baseLightness) > baseLightness
         guard
             let neutral = surfaceWalk(
@@ -486,7 +490,26 @@ extension Palette {
     /// A page with nothing to scale (Homebrew's and Pro's pure black) is the one
     /// case that has to mix: there is no hue to preserve and no product but
     /// zero, so the step becomes a lerp toward the extreme.
+    ///
+    /// The result carries `base`'s alpha: a surface derived from a translucent page is
+    /// translucent, one wash all the way down. §39.
     private static func scaled(_ base: Color, by factor: Double) -> Color {
+        // Every exit through one `carryingAlpha(of: base)`: a surface derived from a
+        // translucent page is translucent, and the arithmetic in between works on the
+        // three channels that exist. The three-tuple is why this has to be said HERE
+        // rather than relied upon — `rgbComponents` has no fourth element, so nothing
+        // below could carry the alpha even by accident, and `Color.lerp` (which does
+        // carry it, as a fourth channel) would interpolate it toward an opaque extreme
+        // and land on a value that is neither the page's nor opaque. That is §28.1's
+        // alpha-184 hover lift, and one exit is what keeps it from recurring here.
+        stepping(base, by: factor).carryingAlpha(of: base)
+    }
+
+    /// The lightness step itself, on the three channels that exist.
+    ///
+    /// Its alpha is meaningless — every return builds a fresh opaque colour, or a
+    /// `lerp` between two of them — and ``scaled(_:by:)`` supplies the real one.
+    private static func stepping(_ base: Color, by factor: Double) -> Color {
         guard let (red, green, blue) = base.rgbComponents else { return base }
         func stepped(_ factor: Double) -> (red: UInt8, green: UInt8, blue: UInt8) {
             func channel(_ value: UInt8) -> UInt8 {
@@ -529,20 +552,13 @@ extension Palette {
         guard walked == (red, green, blue) else {
             return Color.rgb(walked.red, walked.green, walked.blue)
         }
-        // Nothing to scale at all (a pure black page): mix instead.
-        //
-        // Spelled opaque, like the two exits above are by construction. A surface
-        // step DROPS a faded page's alpha and this is where all three exits are made
-        // to agree about that — `Color.lerp` carries alpha as a fourth channel, so
-        // without this the mix would interpolate 128 toward 255 and land on a value
-        // that is neither carried nor spent, which is the shape §28.1's alpha-184
-        // hover lift had. Whether a surface stepped off a translucent page SHOULD be
-        // translucent is the open question in §28.2 and the project owner's call; what
-        // is not open is that the four derivations must give one answer.
+        // Nothing to scale at all (a pure black page): mix instead. From the
+        // channels rather than from `base`, so this exit's alpha is as meaningless as
+        // the others' and its caller supplies the only one that means anything.
         return Color.lerp(
-            base, factor > 1 ? Color.rgb(255, 255, 255) : Color.rgb(0, 0, 0),
-            phase: min(1, abs(factor - 1))
-        ).opaqueSpelling
+            Color.rgb(red, green, blue),
+            factor > 1 ? Color.rgb(255, 255, 255) : Color.rgb(0, 0, 0),
+            phase: min(1, abs(factor - 1)))
     }
 
     /// Black or white, whichever `color` is further from — the direction a

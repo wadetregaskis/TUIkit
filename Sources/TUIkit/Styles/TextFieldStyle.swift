@@ -146,6 +146,15 @@ struct FieldChrome {
     /// The field's surface colour, or `nil` when the style draws none.
     let surface: Color?
 
+    /// The colour the caps are painted in, or `nil` for a style that draws none.
+    ///
+    /// Kept beside the bytes because the bytes state its OPAQUE spelling and the alpha
+    /// has to reach the compositor separately — see ``claims(lineWidth:)``. It is the
+    /// field surface, or the surface lerped toward the accent while hovered, so a
+    /// palette that fades its page fades these too now that a derived surface carries
+    /// the page's alpha (§39).
+    let capColor: Color?
+
     /// Cells before the content starts — the leading cap, or none.
     ///
     /// Everything positioned against the content reads this rather than
@@ -178,6 +187,7 @@ struct FieldChrome {
             self.open = ""
             self.close = ""
             self.surface = nil
+            self.capColor = nil
             return
         }
         let surface =
@@ -188,9 +198,32 @@ struct FieldChrome {
             ? Color.lerp(surface, palette.accent.resolve(with: palette), phase: 0.35)
             : surface
         self.width = 2
-        self.open = ANSIRenderer.colorize(String(TerminalSymbols.openCap), foreground: capColor)
-        self.close = ANSIRenderer.colorize(String(TerminalSymbols.closeCap), foreground: capColor)
+        self.open = ANSIRenderer.colorize(
+            String(TerminalSymbols.openCap), foreground: capColor.opaqueSpelling)
+        self.close = ANSIRenderer.colorize(
+            String(TerminalSymbols.closeCap), foreground: capColor.opaqueSpelling)
         self.surface = surface
+        self.capColor = capColor
+    }
+
+    /// What the caps owe on a field line `lineWidth` cells wide.
+    ///
+    /// Here rather than at the two call sites, because the trailing cap's column is
+    /// `lineWidth - trailingCells` and this is the type that knows what
+    /// ``trailingCells`` is — `TextField` and `SecureField` would each have re-derived
+    /// it, which is how the two drift.
+    ///
+    /// The caps are half-block glyphs with no background of their own, so this is an
+    /// INK claim. The field's surface is claimed by the content renderer, which is what
+    /// paints it (§30).
+    func claims(lineWidth: Int) -> [OpacityRegion] {
+        guard let capColor, width > 0 else { return [] }
+        return [
+            OpacityRegion.claim(width: leadingCells, height: 1, ink: capColor),
+            OpacityRegion.claim(
+                offsetX: lineWidth - trailingCells, width: trailingCells, height: 1,
+                ink: capColor),
+        ].compactMap { $0 }
     }
 
     /// The chrome width for a style, without building the glyphs — what

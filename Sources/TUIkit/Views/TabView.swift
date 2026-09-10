@@ -903,17 +903,37 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             chip: chip, palette: palette,
             width: panelWidth, alignment: alignment)
         let (stripLines, regions) = (strip.lines, strip.regions)
+        let claims = strip.claims
 
         // Centre the content block within the panel as one surface island,
         // shifting it (and its click regions) by a uniform offset so a narrower
         // tab's content is centred without disturbing its internal column
         // alignment (sliders / fields stay lined up).
+        // Spelled opaque, and claimed below. The content between the pads carries its
+        // own claim already — it was rendered `.background(surface)`, which claims —
+        // so the pads are claimed SEPARATELY rather than as one rectangle across the
+        // line: overlapping claims multiply at the resolver, and a claim spanning the
+        // content would fade its surface twice.
         func surfFill(_ n: Int) -> String {
-            n > 0 ? ANSIRenderer.colorize(String(repeating: " ", count: n), background: surface) : ""
+            n > 0
+                ? ANSIRenderer.colorize(
+                    String(repeating: " ", count: n), background: surface.opaqueSpelling)
+                : ""
+        }
+        /// The pads' field claim on one row of the panel, in panel coordinates.
+        func padClaims(row: Int, used: Int) -> [OpacityRegion] {
+            [
+                OpacityRegion.claim(offsetY: row, width: leftPad, height: 1, field: surface),
+                OpacityRegion.claim(
+                    offsetX: leftPad + used, offsetY: row,
+                    width: max(0, panelWidth - leftPad - used), height: 1, field: surface),
+            ].compactMap { $0 }
         }
         let leftPad = max(0, (panelWidth - content.width) / 2)
-        var centredLines = content.lines.map { line -> String in
+        var padded: [OpacityRegion] = []
+        var centredLines = content.lines.enumerated().map { row, line -> String in
             let used = line.strippedLength
+            padded += padClaims(row: row, used: used)
             return surfFill(leftPad) + line + surfFill(max(0, panelWidth - leftPad - used))
         }
         // Size the panel to the TALLEST tab so switching tabs doesn't change the
@@ -921,8 +941,19 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // surface-filled rows, so the shorter tabs read as the same island.
         let panelContentHeight = tallestContentHeight(
             insets: insets, available: context.availableWidth, context: context)
-        while centredLines.count < panelContentHeight { centredLines.append(surfFill(panelWidth)) }
-        let centredContent = content.replacingLines(centredLines, overlayShiftX: leftPad)
+        while centredLines.count < panelContentHeight {
+            // A filler row is surface all the way across and has no content of its own,
+            // so it takes ONE claim rather than two pads.
+            padded += OpacityRegion.claim(
+                offsetY: centredLines.count, width: panelWidth, height: 1, field: surface
+            ).map { [$0] } ?? []
+            centredLines.append(surfFill(panelWidth))
+        }
+        var centredContent = content.replacingLines(centredLines, overlayShiftX: leftPad)
+        // After `replacingLines`, which shifts the content's OWN regions by `leftPad`.
+        // These are already in panel coordinates, so they are appended rather than
+        // carried through that shift.
+        centredContent.opacityRegions += padded
 
         var buffer = FrameBuffer(lines: stripLines)
         buffer.appendVertically(centredContent)
@@ -934,6 +965,9 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // control inside a tab.
         buffer.animatedCells =
             context.isMeasuring ? [] : strip.animatedCells + buffer.animatedCells
+        // The strip opens the buffer, so its claims are already in the buffer's
+        // coordinates; `appendVertically` has carried the panel's up, shifted.
+        buffer.opacityRegions += claims
         attachTabClicks(to: &buffer, regions: regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }

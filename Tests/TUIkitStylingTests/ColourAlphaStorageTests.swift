@@ -350,12 +350,18 @@ private struct FadedEverythingPalette: Palette {
 ///   The alpha is consumed here, by design, and the result is opaque. §21 records
 ///   why the pulse pairs must both do this.
 /// - **drops** — neither. A lightness step taken through `Color.rgb(…)` in
-///   ``Palette/scaled(_:by:)``, which cannot carry what it never reads.
+///   ``Palette/scaled(_:by:)``, which could not carry what it never read: a
+///   three-tuple has no fourth element.
 ///
 /// The suite exists because the third category was invisible: an opaque colour
 /// never trips the emitter's assertion, so a faded theme's chrome came out solid
 /// with no diagnostic at all — exactly §20's failure, one level further out.
 /// Pinning all three means a derivation that changes category fails here instead.
+///
+/// **The third category is now empty** (§39): `scaled` ends in `carryingAlpha(of:)`,
+/// so a surface derived from a translucent page is translucent. The category stays
+/// described here because it is what made the question askable, and because a new
+/// derivation that rebuilds a colour from `rgbComponents` lands in it by default.
 @Suite("Palette derivations and a faded slot")
 struct FadedPaletteDerivationTests {
 
@@ -377,6 +383,16 @@ struct FadedPaletteDerivationTests {
             // 128 back as 184, so the pointer alone half-restored a faded tint.
             ("hoveredForeground(foreground)", palette.hoveredForeground(palette.foreground)),
             ("hoveredForeground(accent)", palette.hoveredForeground(palette.accent)),
+            // The four surface steps. They were the open item — recorded as dropping
+            // the alpha, with this suite's own note saying to move them here if the
+            // question was ever answered by carrying it. It was (§39): a surface
+            // derived from a translucent page is translucent, one wash all the way
+            // down, because a user who fades the page has said what they want and any
+            // other answer overrides it.
+            ("fieldBackground", palette.fieldBackground),
+            ("fieldBackground(on:)", palette.fieldBackground(on: palette.background)),
+            ("liftedBackground", palette.liftedBackground),
+            ("lifted(from:)", palette.lifted(from: palette.background)),
         ]
         for (name, derived) in rows {
             #expect(derived.alpha == 128, "\(name) came back at \(derived.alpha), not 128")
@@ -398,38 +414,6 @@ struct FadedPaletteDerivationTests {
         ]
         for (name, derived) in rows {
             #expect(derived.alpha == .max, "\(name) kept alpha \(derived.alpha)")
-        }
-    }
-
-    /// **The open item, pinned rather than fixed.**
-    ///
-    /// A surface step goes through ``Palette/scaled(_:by:)``, which rebuilds the
-    /// colour from `rgbComponents` as `Color.rgb(…)` and so cannot carry an alpha
-    /// it never reads. Unlike the composites above, nothing here decided to spend
-    /// it: the alpha is simply gone.
-    ///
-    /// Left as it is, on purpose. A surface is exactly where "translucent over
-    /// *what*?" needs an answer rather than a default — a well stepped off a
-    /// half-transparent page could reasonably be equally transparent (one wash,
-    /// all the way down) or deliberately solid (a field you can actually read in),
-    /// and choosing changes the chrome depth of every faded theme. None of the
-    /// paint sites migrated so far reaches these, so nothing is silently wrong
-    /// *today*; what was missing was any statement that the question is open.
-    ///
-    /// If it is answered by carrying the alpha, this test fails and should be
-    /// deleted, with its rows moved into ``respellingsCarry``.
-    @Test("A surface step drops the alpha — recorded, not endorsed")
-    func surfaceStepsDropIt() {
-        let rows: [(name: String, derived: Color)] = [
-            ("fieldBackground", palette.fieldBackground),
-            ("fieldBackground(on:)", palette.fieldBackground(on: palette.background)),
-            ("liftedBackground", palette.liftedBackground),
-            ("lifted(from:)", palette.lifted(from: palette.background)),
-        ]
-        for (name, derived) in rows {
-            #expect(
-                derived.alpha == .max,
-                "\(name) now carries \(derived.alpha) — see this test's own note")
         }
     }
 

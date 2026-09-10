@@ -49,7 +49,9 @@ struct ClaimingRow {
     /// `Slider`'s right-arrow run already learned.
     var cells = 0
 
-    /// Appends one run: `count` columns of `glyphs`, painted in `ink` on `field`.
+    /// Appends one run: `count` columns of `glyphs`, painted in `ink` on `field`, and
+    /// emboldened if asked. `bold` is passed straight to the emitter and does not enter
+    /// the claim — a bold cell owes exactly what a plain one does.
     ///
     /// The claim is merged into the previous one where the two are adjacent and owe
     /// the same alphas, through the shared `appendCoalescing`: a ring dial's rim is
@@ -57,9 +59,11 @@ struct ClaimingRow {
     /// per cell would state twenty rectangles where two will do. The BYTES are not
     /// merged, deliberately: this type does not know whether its caller's runs are
     /// separable, and every caller today emits its own SGR introducer per run anyway.
-    mutating func append(_ glyphs: String, cells count: Int, ink: Color?, field: Color? = nil) {
+    mutating func append(
+        _ glyphs: String, cells count: Int, ink: Color?, field: Color? = nil, bold: Bool = false
+    ) {
         text += ANSIRenderer.colorize(
-            glyphs, foreground: ink?.opaqueSpelling, background: field?.opaqueSpelling)
+            glyphs, foreground: ink?.opaqueSpelling, background: field?.opaqueSpelling, bold: bold)
         claims.appendCoalescing(
             OpacityRegion.claim(
                 offsetX: cells, width: count, height: 1, ink: ink, field: field))

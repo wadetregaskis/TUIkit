@@ -484,7 +484,8 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         let disclosure = Self.disclosureGlyph(
             isOpen: suggestionMenu?.isOpen, palette: palette, surface: chrome.surface)
         var buffer = FrameBuffer(
-            text: hoveredChrome.open + fieldContent.line + disclosure + hoveredChrome.close)
+            text: hoveredChrome.open + fieldContent.line + disclosure.text
+                + hoveredChrome.close)
 
         // The caret animates itself: its cells go to the run loop, which
         // repaints them on the cursor clock without re-rendering anything. Past
@@ -494,44 +495,19 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             buffer.animatedCells = [caret.shifted(byX: chrome.leadingCells, y: 0)]
         }
 
-        // The content's translucent colours, shifted by exactly what the caret is
-        // shifted by — both are in the content's own frame, and the opening cap is
-        // the only chrome before it. A faded `.textFieldTextStyle` foreground, or a
-        // theme that faded the field surface, arrives here rather than being spent
-        // on the escape. §30.
-        buffer.opacityRegions += fieldContent.claims.map {
-            $0.shifted(byX: chrome.leadingCells, y: 0)
-        }
+        Self.attachFieldClaims(
+            to: &buffer, content: fieldContent.claims, chrome: hoveredChrome,
+            disclosure: disclosure.claims, contentStart: chrome.leadingCells,
+            textWidth: textWidth)
 
         // Mouse: click focuses the field and drops the caret at the clicked
         // column; dragging selects. Hover rides on the same region. Shared with
         // SecureField. No-op while measuring or disabled.
         if !isDisabled {
-            // The ▾ disclosure occupies the two cells between the content and
-            // the closing cap; clicks there toggle the menu, not the caret.
-            //
-            // Plus the cap itself, which is leeway rather than sloppiness: the
-            // arrow is ONE cell, the pad to its left already counts, and a
-            // pointer a single cell wide of a target that small has no way to
-            // see the miss coming. The cap is chrome with no click behaviour of
-            // its own, so nothing is taken from anything else — a press on it
-            // used to focus the field and drop the caret at the end, which is
-            // not what someone reaching for the arrow meant.
-            let leading = chrome.leadingCells
-            let disclosureRange: Range<Int>? =
-                suggestionMenu != nil
-                ? (leading + textWidth)..<(leading + textWidth + 2 + chrome.trailingCells)
-                : nil
-            TextFieldMouseHandler.register(
-                buffer: &buffer,
-                context: context,
-                handler: handler,
-                persistedFocusID: persistedFocusID,
-                hoverBox: hoverBox,
-                contentWidth: textWidth,
-                displayCharacter: displayCharacter,
-                leadingCapWidth: leading,
-                disclosureRange: disclosureRange)
+            Self.attachMouse(
+                to: &buffer, context: context, handler: handler,
+                persistedFocusID: persistedFocusID, hoverBox: hoverBox, chrome: chrome,
+                textWidth: textWidth, hasSuggestions: suggestionMenu != nil)
         }
 
         if let suggestionMenu, suggestionMenu.isOpen {
@@ -545,15 +521,74 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
     /// Fetches (or creates) the persistent editing handler from StateStorage
     /// — it maintains the cursor position across renders — and syncs the
     /// per-frame bindings on it.
+    /// Registers the click, drag and hover regions.
+    ///
+    /// The ▾ disclosure occupies the two cells between the content and the closing cap;
+    /// clicks there toggle the menu, not the caret. Plus the cap itself, which is leeway
+    /// rather than sloppiness: the arrow is ONE cell, the pad to its left already
+    /// counts, and a pointer a single cell wide of a target that small has no way to see
+    /// the miss coming. The cap is chrome with no click behaviour of its own, so nothing
+    /// is taken from anything else — a press on it used to focus the field and drop the
+    /// caret at the end, which is not what someone reaching for the arrow meant.
+    private static func attachMouse(
+        to buffer: inout FrameBuffer, context: RenderContext, handler: TextFieldHandler,
+        persistedFocusID: String, hoverBox: StateBox<Bool>, chrome: FieldChrome,
+        textWidth: Int, hasSuggestions: Bool
+    ) {
+        let leading = chrome.leadingCells
+        let disclosureRange: Range<Int>? =
+            hasSuggestions
+            ? (leading + textWidth)..<(leading + textWidth + 2 + chrome.trailingCells) : nil
+        TextFieldMouseHandler.register(
+            buffer: &buffer,
+            context: context,
+            handler: handler,
+            persistedFocusID: persistedFocusID,
+            hoverBox: hoverBox,
+            contentWidth: textWidth,
+            // A text field draws what was typed. Written out here rather than threaded
+            // through as a ninth parameter, and the secure field's bullet is the visible
+            // twin of this line.
+            displayCharacter: { $0 },
+            leadingCapWidth: leading,
+            disclosureRange: disclosureRange)
+    }
+
+    /// Everything a field's line owes, in the line's own columns.
+    ///
+    /// Three sources, each in a different frame, which is the whole reason this is one
+    /// function: the CONTENT's claims are in the content's own frame and shift by the
+    /// opening cap (the only chrome before it — the same shift the caret takes); the
+    /// CAPS' need the finished line's width, because the trailing one sits at its end;
+    /// and the ▾'s sit past the content. A faded `.textFieldTextStyle` foreground, a
+    /// theme that faded the field surface, and a faded page whose surface now carries
+    /// its alpha (§39) all arrive here rather than being spent on the escape.
+    private static func attachFieldClaims(
+        to buffer: inout FrameBuffer, content: [OpacityRegion], chrome: FieldChrome,
+        disclosure: [OpacityRegion], contentStart: Int, textWidth: Int
+    ) {
+        buffer.opacityRegions += content.map { $0.shifted(byX: contentStart, y: 0) }
+        buffer.opacityRegions += chrome.claims(lineWidth: buffer.width)
+        buffer.opacityRegions += disclosure.map {
+            $0.shifted(byX: contentStart + textWidth, y: 0)
+        }
+    }
+
     /// The combo box's ▾/▴ affordance, drawn inside the field surface against
     /// the trailing cap, or `""` when the field has no suggestion menu.
     private static func disclosureGlyph(
         isOpen: Bool?, palette: any Palette, surface: Color?
-    ) -> String {
-        guard let isOpen else { return "" }
+    ) -> ClaimingRow {
+        var row = ClaimingRow()
+        guard let isOpen else { return row }
         let caret = isOpen ? DropdownMenu.openCaret : DropdownMenu.closedCaret
-        return ANSIRenderer.colorize(
-            " " + caret, foreground: palette.foregroundSecondary, background: surface)
+        // Two cells — a pad and the arrow — in one run, which is what it always
+        // emitted; `ClaimingRow` adds the claim its colours owe and states them
+        // opaquely. Both can be faded: the ink is `foregroundSecondary` and the field
+        // is the derived field surface.
+        row.append(
+            " " + caret, cells: 2, ink: palette.foregroundSecondary, field: surface)
+        return row
     }
     private func resolveHandler(
         persistedFocusID: String,

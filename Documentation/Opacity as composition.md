@@ -2608,3 +2608,59 @@ number to write down so the next person who sees it does not go looking twice.
 
 The `alpharamp` figure (§36.2, **+14.9%**) is the one real price, and it is charged
 only to pages that ask for translucent ramps.
+
+
+## 39. A surface stepped off a faded page is faded (2026-09-10)
+
+§28.2 and §37 left one question open and it is now answered: **carry it.** A user who
+fades the page has said what they want, and both other answers override it — a solid
+well or a composited one substitutes the framework's judgement for the theme's.
+
+The change is one exit. `Palette.scaled(_:by:)` is split so that the arithmetic works
+on the three channels that exist (`stepping(_:by:)`) and the one caller re-attaches the
+alpha:
+
+```swift
+private static func scaled(_ base: Color, by factor: Double) -> Color {
+    stepping(base, by: factor).carryingAlpha(of: base)
+}
+```
+
+One exit rather than four, because the four disagreed by construction and one of them
+— the `lerp` that mixes a page with nothing to scale — carries alpha as a fourth
+channel and would have interpolated 128 toward 255. That is §28.1's alpha-184 hover
+lift, and it is the second time the same shape has appeared at a `lerp`.
+
+`quietest`'s synthesised grey needed the same treatment: it is a stand-in for the page,
+walked the same way, so it is built `carryingAlpha(of: base)`. Built opaque, the neutral
+branch handed back an opaque surface where the hued branch carried one — the two
+answers to one question disagreeing about a third thing.
+
+`FadedPaletteDerivationTests.surfaceStepsDropIt` is deleted and its four rows moved into
+`respellingsCarry`, which is exactly what its own doc comment said to do if this was
+ever answered this way.
+
+### 39.1 Two paint sites the answer broke, and what they were
+
+The argument for leaving the surfaces dropping had been "no migrated paint site reaches
+them, so nothing is silently wrong today" — an argument from inspection. Carrying tests
+it, and two sites paint a derived surface without claiming:
+
+- **`FieldChrome`'s caps.** The `▐`/`▌` half-blocks are painted in the field surface
+  (or the surface lerped toward the accent while hovered), and `FieldChrome` held them
+  as finished strings with nowhere to say what they owed. It now keeps `capColor` beside
+  the bytes and answers `claims(lineWidth:)`, because the TRAILING cap's column is
+  `lineWidth - trailingCells` and this is the type that knows what that is —
+  `TextField` and `SecureField` would each have re-derived it, which is how those two
+  drift. The combo box's `▾` goes through `ClaimingRow` in the same commit: its ink is
+  `foregroundSecondary` and its field is the same surface.
+- **A compact `TabView`'s panel.** `surfFill` pads each content row out to the panel
+  width in the surface colour, and fills whole rows below short content. The pads are
+  claimed SEPARATELY from the content between them rather than as one rectangle per
+  line: the content was rendered `.background(surface)`, which already claims, and
+  overlapping claims multiply — one rectangle across the line would fade the panel
+  twice. A filler row, having no content, takes one claim.
+
+The chips went through `ClaimingRow` for the reason §36.6 introduced it: a chip is
+three runs (an ink-only cap, an ink-on-field body, an ink-only cap), so it owes three
+claims, and the row that emits them is the thing that knows where each begins.

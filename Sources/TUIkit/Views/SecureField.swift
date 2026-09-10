@@ -422,6 +422,12 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
         buffer.opacityRegions += fieldContent.claims.map {
             $0.shifted(byX: chrome.leadingCells, y: 0)
         }
+        // The caps, which the content renderer knows nothing about — `hoveredChrome`'s,
+        // because that is the chrome actually drawn, and asked of the finished line's
+        // width because the trailing cap sits at its end. `TextField`'s twin, through
+        // the same `FieldChrome.claims(lineWidth:)`: this file and that one have
+        // drifted before, which is why the arithmetic is not repeated in either.
+        buffer.opacityRegions += hoveredChrome.claims(lineWidth: buffer.width)
 
         // Mouse: click focuses the field and drops the caret at the clicked
         // column (masked cells map to indices just like TextField); dragging
