@@ -717,14 +717,50 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
             bodyBuffer: bodyBuffer, footerBuffer: footerBuffer, innerWidth: innerWidth,
             borderStyle: borderStyle, borderColor: borderColor,
             focusIndicator: focusIndicator, lineCount: lines.count, palette: palette)
-        // Content sits one cell inside the wall — the same shift its overlays
-        // and hit regions take just above.
-        result.opacityRegions = bodyBuffer.shiftedOpacityRegions(byX: 1, y: 1)
+        result.opacityRegions = opacityRegions(
+            bodyBuffer: bodyBuffer, footerBuffer: footerBuffer, outerWidth: knownWidth,
+            borderStyle: borderStyle, borderColor: borderColor,
+            focusIndicator: focusIndicator, lineCount: lines.count, palette: palette)
+        return result
+    }
+
+    /// Every translucent cell of a bordered container: the ones its content
+    /// declared, moved past the border, plus the border's own.
+    ///
+    /// - Parameter outerWidth: The assembled buffer's width, walls included — the
+    ///   figure the frame's claim is a frame OF.
+    private func opacityRegions(
+        bodyBuffer: FrameBuffer,
+        footerBuffer: FrameBuffer?,
+        outerWidth: Int,
+        borderStyle: BorderStyle,
+        borderColor: AnimatedColor,
+        focusIndicator: AnimatedColor?,
+        lineCount: Int,
+        palette: any Palette
+    ) -> [OpacityRegion] {
+        // Content sits one cell inside the wall — the same shift its overlays and
+        // hit regions take.
+        var regions = bodyBuffer.shiftedOpacityRegions(byX: 1, y: 1)
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
-            result.opacityRegions += footerBuf.shiftedOpacityRegions(
+            regions += footerBuf.shiftedOpacityRegions(
                 byX: 1, y: 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0))
         }
-        return result
+        // The border's OWN cells, when any of the colours it drew with was faded.
+        // Only for a still colour: an animating one repaints these cells from its
+        // own frames every tick, and a region carrying the phase drawn NOW would
+        // resolve every later phase at the wrong alpha. That arm stays unhonoured
+        // and stays loud — its frames go to the emitter as they are, so
+        // `Color+ANSICodes.swift`'s assertion fires on a translucent phase.
+        guard !borderColor.isAnimating else { return regions }
+        return regions
+            + BorderRenderer.opacityClaims(
+                outerWidth: outerWidth, height: lineCount, style: borderStyle,
+                color: borderColor.current, title: title,
+                titleColor: titleColor?.resolve(with: palette) ?? palette.accent,
+                focusIndicatorColor: focusIndicator?.current,
+                dividerRows: [dividerRow(bodyBuffer: bodyBuffer, footerBuffer: footerBuffer)]
+                    .compactMap { $0 })
     }
 
     /// Every animated cell of a bordered container: the ones its content

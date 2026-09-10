@@ -1077,7 +1077,7 @@ them among the three:
 
 | entry point | reaches |
 |---|---|
-| `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites |
+| `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites — **fixed, §18** |
 | `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider`, `Spinner`, `Table`, `RadioButton`, `_ToggleCore`, `PaintRenderer`'s flat arm |
 | `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **inconsistently**: `restingControlFace` consumes the alpha while `accentPulse` carries it |
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
@@ -1092,7 +1092,8 @@ them among the three:
 
 Plus a whole second tier: `Palette` is a public protocol of plain
 `var …: Color { get }` members, and nothing normalises what a custom palette
-returns. One `.clear` in a palette reaches everything.
+returns. One `.clear` in a palette reaches everything. (§18 closes the `border`
+role of it — every box the framework draws — and leaves the rest.)
 
 So §1's instinct about the *magnitude* was better than the summary's dismissal of
 it. What the summary got right is the *shape*: none of this needs per-column alpha
@@ -1120,7 +1121,8 @@ so they answer in two ways rather than one:
 `Color` as a view; `.background` with a flat colour; `.background` with a ramp
 whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
 `Text`'s attributed-run arm; `.opacity(_:)` on a view (all three channels);
-`ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree.
+`ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree; `.border` and
+every box the framework draws through `BorderRenderer` (§18).
 
 Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
 `Text`'s ramped ink, and per-cell ramps.
@@ -1181,3 +1183,94 @@ entry was being discarded with no diagnostic anywhere. Discarding it is right �
 palette entry is a candidate in a nearest-colour match and transparency is not an
 axis of one — but it is now a line of code rather than an omission, and `colors`
 and `entries` cannot disagree about it.
+
+
+## 18. `.border`, and the boxes the framework draws (2026-09-09)
+
+`.border(_:)` is the entry point with the most emit sites behind it, and the one
+whose claim is not a rectangle. It is also the one that was *loudest* when wrong:
+`.border(.clear)` drew a solid black box in a release build, because `.clear`'s
+underlying value is black and the emitter's assertion compiles out. §16.2 fixed
+the byte half of that. This is the other half.
+
+### 18.1 A frame, not a rectangle
+
+A box's translucency belongs to its **walls**. One region over the box's full
+extent would fade the content the border was drawn around — which no colour asked
+for, and which is visibly wrong the moment anything is inside it. So the claim is
+the top band, the bottom row, and the two wall columns between:
+
+```
+╭──────────╮   ← claimed
+│          │   ← claimed at columns 0 and 11 only
+╰──────────╯   ← claimed
+```
+
+**Every cell is claimed exactly once**, and that is a correctness requirement
+rather than an economy. Overlapping claims MULTIPLY at the resolver — that is what
+`OpacityResolution`'s fold does, and it has to, because two independent fades over
+one cell compose by multiplication. So a divider row taking the full width *on top
+of* the wall columns would square the alpha at its two end cells: a pair of darker
+pips down the side of the box, at exactly the rows a footer separator sits on. The
+divider therefore claims only the columns between the walls. Likewise a box one
+row or one column across, whose bands coincide, claims that row or column once.
+`BorderAlphaTests.noDoubleClaims` sweeps the seven shapes that invite it.
+
+### 18.2 The title and the focus dot are their own ink
+
+They sit IN the band — an opaque border with an unpainted title cell reads as a
+broken one — so their cells take the border's FIELD and their own INK. Emitting
+them as their own spans is what makes both common shapes come out right, and
+neither is the shape a single whole-row claim would give:
+
+| border | title | what happens |
+|---|---|---|
+| faded | opaque | the band fades, the letters stay |
+| opaque | faded | only the letters fade |
+| faded | faded | each at its own alpha |
+
+The title's span is computed from `BorderRenderer.fittedTitle`, which is the same
+call the band draws through — extracted for exactly that reason. Computed from the
+*untruncated* title instead, a narrow box's claim would fade cells the title never
+reached, and run past the far corner into cells the box does not have.
+
+### 18.3 Why the bytes are funnelled
+
+`BorderRenderer.band` is now the only place this type emits an SGR run, and it
+states the colour's `opaqueSpelling`. Thirteen sites had written
+`colorize(_, foreground: color, background: fill(style, color))` by hand, and the
+pairing — opaque bytes, alpha in a region — is a rule about the *type*, not about a
+call site. A new drawing function reaching for `ANSIRenderer.colorize` directly
+would hand the emitter a translucent colour and trip its assertion; going through
+`band` it cannot.
+
+The consequence is that every caller of `BorderRenderer` had to gain a claim in
+the same commit, or its alpha would go from *loudly* dropped to *silently*
+dropped. That is why this commit touches the tooltip panel, the status bar, the
+app header and the drop-down menu as well: all four draw their chrome from
+`palette.border`, so they are reachable by the second tier of §16.1 — a custom
+`Palette` returning a faded colour.
+
+### 18.4 What is still not honoured here
+
+**An animating border colour.** `.border(emphasis.animatedColor(…))` repaints the
+frame's cells from its own frames every tick, and a region carrying the phase drawn
+*now* would resolve every later phase at the wrong alpha. The claim is therefore
+made only for a still colour; the animating arm stays unhonoured and stays loud —
+its frames reach the emitter as they are, so the assertion fires on a translucent
+phase. Honouring it means a phase-indexed alpha, which is what `OpacityCycle`
+already is for a layer fade; the pieces exist and the wiring does not. The
+drop-down menu is in the same position, and always animating by default, so in
+practice its chrome is the still arm only when the emphasis is `.none`.
+
+**`focusIndicatorPrefix`.** It draws a `●` outside any band, so it has no frame to
+belong to and its caller (`ButtonStyle`) would have to claim the cell. Untouched
+and still loud.
+
+**The contrast floor asks the wrong question of a faded band.** `legible(_:on:_:)`
+floors a title against the border colour, so that a title on an opaque band stays
+readable against the band rather than against the page. On a *translucent* band the
+thing the title is really read against is the blend, which is not known at emit
+time — structurally the same gap the emitters have, and it resolves the same way or
+not at all. Noted rather than fixed: the floor's answer is at worst conservative,
+and a wrong floor is a legibility question rather than a wrong colour.

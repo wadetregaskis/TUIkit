@@ -102,6 +102,38 @@ extension BorderRenderer {
     ///
     /// A titled border always has room — the title is truncated to fit around
     /// the ● — while a plain one needs an inner cell to spare.
+    /// One run of a border's band, coloured the one way.
+    ///
+    /// Every glyph this type emits goes through here, which is what keeps two
+    /// facts true together. First, the incantation
+    /// `colorize(_, foreground: color, background: fill(style, color))` was
+    /// written thirteen times and is now written once. Second — and this is the
+    /// load-bearing part — the bytes state the colour's ``Color/opaqueSpelling``,
+    /// because an SGR emitter has no backdrop and so cannot composite. A faded
+    /// border's alpha travels separately, as the regions
+    /// ``opacityClaims(outerWidth:height:style:color:title:titleColor:focusIndicatorColor:dividerRows:)``
+    /// produces.
+    ///
+    /// That pairing is a rule about this type, not about a call site: a new
+    /// drawing function that reached for `ANSIRenderer.colorize` directly would
+    /// hand the emitter a translucent colour and trip its assertion. Going
+    /// through here it cannot.
+    ///
+    /// - Parameters:
+    ///   - text: The glyphs.
+    ///   - style: The border style, which decides whether a field is painted.
+    ///   - color: The border colour — the field, and the ink unless `ink` says
+    ///     otherwise.
+    ///   - ink: A foreground that is not the border's own: a title, a focus dot.
+    ///   - bold: Whether the run is bold (a title is).
+    private static func band(
+        _ text: String, style: BorderStyle, color: Color, ink: Color? = nil, bold: Bool = false
+    ) -> String {
+        ANSIRenderer.colorize(
+            text, foreground: (ink ?? color).opaqueSpelling,
+            background: fill(style, color)?.opaqueSpelling, bold: bold)
+    }
+
     /// The background a border's cells take, or `nil` for a style that draws
     /// only its glyph. See ``BorderStyle/paintsBackground``.
     static func fill(_ style: BorderStyle, _ color: Color) -> Color? {
@@ -128,20 +160,159 @@ extension BorderRenderer {
     /// chrome rule — and a wall that an animation draws differently from the
     /// one `standardContentLine` draws is a seam down the side of the box.
     static func wall(style: BorderStyle, color: Color) -> String {
-        ANSIRenderer.colorize(
-            String(style.vertical), foreground: color, background: fill(style, color))
+        band(String(style.vertical), style: style, color: color)
     }
 
     /// A horizontal rule in a style — the divider inside a menu, the chrome
     /// rule — drawn the same way the box's own top and bottom are.
     static func rule(style: BorderStyle, width: Int, color: Color) -> String {
-        ANSIRenderer.colorize(
+        band(
             String(repeating: style.horizontal, count: max(0, width)),
-            foreground: color, background: fill(style, color))
+            style: style, color: color)
     }
 
     static func showsFocusIndicator(innerWidth: Int, hasTitle: Bool) -> Bool {
         hasTitle || max(0, innerWidth) > 1
+    }
+
+    // MARK: - The alpha half of a translucent border
+
+    /// The ``OpacityRegion``s a standard-style box's own cells owe, given the
+    /// colours it was drawn in.
+    ///
+    /// A border colour is `.border(.red.opacity(0.5))`'s destination, and this is
+    /// the half of that paint the emitters cannot do: `foregroundCodes` has no
+    /// backdrop, so the bytes state ``Color/opaqueSpelling`` and the alpha travels
+    /// here. See `Documentation/Opacity as composition.md`.
+    ///
+    /// ## Why the frame and not the whole rectangle
+    ///
+    /// Because a box's translucency belongs to its walls. One region over the
+    /// box's full extent would fade the content it was drawn around — which no
+    /// colour asked for, and which is visibly wrong the moment anything is inside
+    /// it. So: the top band, the bottom row, and the two wall columns between.
+    ///
+    /// Every cell is claimed exactly once. Overlapping claims MULTIPLY at the
+    /// resolver (`OpacityResolution` folds them), so a divider row taking the full
+    /// width on top of the wall columns would square the alpha at its two end
+    /// cells — a pair of darker pips down the side of the box. The divider
+    /// therefore claims only the columns between the walls, and a box one row or
+    /// one column across claims that row or column once rather than twice.
+    ///
+    /// ## The title and the focus dot are their own ink
+    ///
+    /// They sit IN the band — an opaque border with an unpainted title cell reads
+    /// as a broken one — so their cells take the border's FIELD and their own INK.
+    /// A span whose ink is opaque yields no claim at all, which is what makes the
+    /// two common shapes both come out right: a translucent border with an opaque
+    /// title fades the band and leaves the letters, and an opaque border with a
+    /// translucent title fades only the letters.
+    ///
+    /// - Parameters:
+    ///   - outerWidth: The box's full width, walls included.
+    ///   - height: The box's full height, top and bottom bands included.
+    ///   - style: The border style, which decides whether a field is painted.
+    ///   - color: The border colour, as it was drawn this frame.
+    ///   - title: The title as given — truncated here exactly as the band
+    ///     truncates it.
+    ///   - titleColor: The title's colour, already resolved.
+    ///   - focusIndicatorColor: The focus dot's colour, if one is drawn.
+    ///   - dividerRows: Rows holding a `├───┤` rule, in the box's own
+    ///     coordinates.
+    /// - Returns: The regions, or an empty array when every colour is opaque.
+    static func opacityClaims(
+        outerWidth: Int, height: Int, style: BorderStyle, color: Color,
+        title: String? = nil, titleColor: Color? = nil,
+        focusIndicatorColor: Color? = nil, dividerRows: [Int] = []
+    ) -> [OpacityRegion] {
+        guard outerWidth > 0, height > 0 else { return [] }
+        let field = fill(style, color)
+        var claims: [OpacityRegion] = []
+        func add(x: Int, y: Int, width: Int, height: Int, ink: Color?) {
+            if let claim = OpacityRegion.claim(
+                offsetX: x, offsetY: y, width: width, height: height, ink: ink, field: field)
+            {
+                claims.append(claim)
+            }
+        }
+
+        // The top band, span by span, in the order `standardTopBorder` draws
+        // them. `column` is where the next span starts, so the arms cannot
+        // disagree about what precedes them.
+        let innerWidth = outerWidth - 2
+        var column = 1  // the corner
+        add(x: 0, y: 0, width: 1, height: 1, ink: color)
+        if let indicator = focusIndicatorColor,
+            showsFocusIndicator(innerWidth: innerWidth, hasTitle: title != nil)
+        {
+            add(
+                x: column, y: 0, width: 1, height: 1,
+                ink: legible(indicator, on: style, color))
+            column += 1
+        }
+        if let title, let fitted = fittedTitle(title, innerWidth: innerWidth) {
+            // The title always starts one inner cell in, whether that cell held
+            // the dot or a `─`, so a band with no dot has a border span to close
+            // before the title begins.
+            if column < 1 + titleUsedLeftWidth {
+                add(
+                    x: column, y: 0, width: 1 + titleUsedLeftWidth - column, height: 1,
+                    ink: color)
+                column = 1 + titleUsedLeftWidth
+            }
+            // ` title ` — the two spaces are painted in the band too.
+            let titleWidth = min(fitted.strippedLength + 2, max(0, outerWidth - column))
+            add(
+                x: column, y: 0, width: titleWidth, height: 1,
+                ink: titleColor.map { legible($0, on: style, color) })
+            column += titleWidth
+        }
+        add(x: column, y: 0, width: outerWidth - column, height: 1, ink: color)
+
+        guard height > 1 else { return claims }
+        add(x: 0, y: height - 1, width: outerWidth, height: 1, ink: color)
+
+        let interior = height - 2
+        guard interior > 0 else { return claims }
+        add(x: 0, y: 1, width: 1, height: interior, ink: color)
+        // A box one column across has one wall, which is both of them.
+        if outerWidth > 1 {
+            add(x: outerWidth - 1, y: 1, width: 1, height: interior, ink: color)
+        }
+        // Between the walls only — see the note above on multiplication.
+        for row in dividerRows where row > 0 && row < height - 1 {
+            add(x: 1, y: row, width: outerWidth - 2, height: 1, ink: color)
+        }
+        return claims
+    }
+
+    /// The one inner cell a titled top border spends before the title starts —
+    /// the `─` or the `●` after the corner.
+    static let titleUsedLeftWidth = 1
+
+    /// The title as a titled top border will actually draw it, or `nil` for one
+    /// that collapses to unbroken border.
+    ///
+    /// Extracted because two things now need it and they must not disagree: the
+    /// border draws the title, and ``inkClaims(outerWidth:height:style:color:title:titleColor:focusIndicatorColor:dividerRows:)``
+    /// says which columns it lands in. A claim computed from the untruncated
+    /// title fades cells the title never reached.
+    ///
+    /// - Parameters:
+    ///   - title: The title as given.
+    ///   - innerWidth: The content width, borders excluded. Clamped at zero.
+    /// - Returns: The truncated title, or `nil` when it is blank or has no room
+    ///   — both of which draw a continuous band instead.
+    static func fittedTitle(_ title: String, innerWidth: Int) -> String? {
+        // The decoration after the corner (─ or ●) occupies one inner cell and
+        // the title display adds two spaces of padding. Truncate the title so the
+        // whole top border fits exactly within `innerWidth`.
+        let maxTitleWidth = max(0, max(0, innerWidth) - titleUsedLeftWidth - 2)
+        let fitted =
+            title.strippedLength > maxTitleWidth
+            ? title.ansiAwarePrefix(visibleCount: maxTitleWidth)
+            : title
+        return fitted.stripped.allSatisfy(\.isWhitespace) ? nil : fitted
     }
 
     /// Renders a plain top border line.
@@ -172,17 +343,15 @@ extension BorderRenderer {
             showsFocusIndicator(innerWidth: innerWidth, hasTitle: false)
         {
             // ╭●──────────────╮
-            let leftCorner = ANSIRenderer.colorize(
-                String(style.topLeft), foreground: color, background: fill(style, color))
-            let indicator = ANSIRenderer.colorize(
-                String(focusIndicator), foreground: legible(indicatorColor, on: style, color),
-                background: fill(style, color))
+            let leftCorner = band(String(style.topLeft), style: style, color: color)
+            let indicator = band(
+                String(focusIndicator), style: style, color: color,
+                ink: legible(indicatorColor, on: style, color))
             let remainingWidth = innerWidth - 1  // -1 for the ● character
-            let rest = ANSIRenderer.colorize(
+            let rest = band(
                 String(repeating: style.horizontal, count: remainingWidth)
                     + String(style.topRight),
-                foreground: color, background: fill(style, color)
-            )
+                style: style, color: color)
             return leftCorner + indicator + rest
         }
 
@@ -190,7 +359,7 @@ extension BorderRenderer {
             String(style.topLeft)
             + String(repeating: style.horizontal, count: innerWidth)
             + String(style.topRight)
-        return ANSIRenderer.colorize(line, foreground: color, background: fill(style, color))
+        return band(line, style: style, color: color)
     }
 
     /// Renders a top border line with an inline title.
@@ -216,53 +385,42 @@ extension BorderRenderer {
         focusIndicatorColor: Color? = nil
     ) -> String {
         let innerWidth = max(0, innerWidth)  // see standardTopBorder: negative traps
-        // The decoration after the corner (─ or ●) occupies one inner cell
-        // and the title display adds two spaces of padding. Truncate the title
-        // so the whole top border fits exactly within `innerWidth`.
-        let usedLeftWidth = 1
-        let maxTitleWidth = max(0, innerWidth - usedLeftWidth - 2)
-        let fittedTitle =
-            title.strippedLength > maxTitleWidth
-            ? title.ansiAwarePrefix(visibleCount: maxTitleWidth)
-            : title
+        let fitted = fittedTitle(title, innerWidth: innerWidth)
 
         let leftPart: String
         if let indicatorColor = focusIndicatorColor {
             // ╭● Title
-            let corner = ANSIRenderer.colorize(
-                String(style.topLeft), foreground: color, background: fill(style, color))
-            let indicator = ANSIRenderer.colorize(
-                String(focusIndicator), foreground: legible(indicatorColor, on: style, color),
-                background: fill(style, color))
+            let corner = band(String(style.topLeft), style: style, color: color)
+            let indicator = band(
+                String(focusIndicator), style: style, color: color,
+                ink: legible(indicatorColor, on: style, color))
             leftPart = corner + indicator
         } else {
             // ╭─ Title
-            leftPart = ANSIRenderer.colorize(
+            leftPart = band(
                 String(style.topLeft) + String(style.horizontal),
-                foreground: color, background: fill(style, color)
-            )
+                style: style, color: color)
         }
 
-        // An empty/blank title would render as `╭─  ─╮` — a gap in the border.
-        // Collapse it to a continuous border `╭────╮` (keeping any focus dot).
-        if fittedTitle.stripped.allSatisfy(\.isWhitespace) {
+        // A title that fits in no room, or is blank, would render as `╭─  ─╮` —
+        // a gap in the border. `fittedTitle` answers `nil` for those, and the
+        // border is drawn continuous `╭────╮` (keeping any focus dot).
+        guard let fittedTitle = fitted else {
             let fill = String(repeating: style.horizontal, count: max(0, innerWidth - 1))
                 + String(style.topRight)
-            return leftPart
-                + ANSIRenderer.colorize(
-                    fill, foreground: color, background: self.fill(style, color))
+            return leftPart + band(fill, style: style, color: color)
         }
 
         // The title sits IN the band rather than in a gap punched through it: an
         // opaque border with an unpainted title cell reads as a broken band.
-        let titleStyled = ANSIRenderer.colorize(
-            " \(fittedTitle) ", foreground: legible(titleColor, on: style, color),
-            background: fill(style, color), bold: true)
-        let rightPartLength = max(0, innerWidth - usedLeftWidth - fittedTitle.strippedLength - 2)
-        let rightPart = ANSIRenderer.colorize(
+        let titleStyled = band(
+            " \(fittedTitle) ", style: style, color: color,
+            ink: legible(titleColor, on: style, color), bold: true)
+        let rightPartLength = max(
+            0, innerWidth - titleUsedLeftWidth - fittedTitle.strippedLength - 2)
+        let rightPart = band(
             String(repeating: style.horizontal, count: rightPartLength) + String(style.topRight),
-            foreground: color, background: fill(style, color)
-        )
+            style: style, color: color)
         return leftPart + titleStyled + rightPart
     }
 
@@ -285,7 +443,7 @@ extension BorderRenderer {
             String(style.bottomLeft)
             + String(repeating: style.horizontal, count: innerWidth)
             + String(style.bottomRight)
-        return ANSIRenderer.colorize(line, foreground: color, background: fill(style, color))
+        return band(line, style: style, color: color)
     }
 
     /// Renders a horizontal divider with T-junctions.
@@ -307,7 +465,7 @@ extension BorderRenderer {
             String(style.leftT)
             + String(repeating: style.horizontal, count: innerWidth)
             + String(style.rightT)
-        return ANSIRenderer.colorize(line, foreground: color, background: fill(style, color))
+        return band(line, style: style, color: color)
     }
 
     /// Wraps a single content line with vertical side borders.

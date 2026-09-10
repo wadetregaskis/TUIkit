@@ -241,7 +241,7 @@ private struct _StatusBarCore: View, Renderable {
             )
         }
 
-        let buffer: FrameBuffer
+        var buffer: FrameBuffer
         let itemColumnOffset: Int
         let itemRowOffset: Int
 
@@ -276,6 +276,13 @@ private struct _StatusBarCore: View, Renderable {
             buffer = FrameBuffer(
                 lines: [ChromeStyle.ruleRow(width: context.availableWidth, context: context)]
                     + tips + (combinedItems.isEmpty ? [] : [result.line]))
+            // The rule is line 0 here, above the items — the mirror of the
+            // header's, which sits below its content.
+            if let claim = ChromeStyle.ruleClaim(
+                width: context.availableWidth, offsetY: 0, context: context)
+            {
+                buffer.opacityRegions.append(claim)
+            }
             itemColumnOffset = 0
             itemRowOffset = 1 + tips.count
             return applyHitTestRegions(
@@ -697,7 +704,7 @@ private struct _StatusBarCore: View, Renderable {
                 color: borderColor)
         }
 
-        let buffer = FrameBuffer(
+        var buffer = FrameBuffer(
             lines: [
                 BorderRenderer.standardTopBorder(
                     style: border, innerWidth: innerWidth, color: borderColor)
@@ -713,6 +720,12 @@ private struct _StatusBarCore: View, Renderable {
                     BorderRenderer.standardBottomBorder(
                         style: border, innerWidth: innerWidth, color: borderColor)
                 ])
+        // The chrome's own cells, when the theme's `border` is faded. The items
+        // between the walls are coloured by their own styling, which makes its own
+        // claims and travels in `aligned.line`.
+        buffer.opacityRegions = BorderRenderer.opacityClaims(
+            outerWidth: innerWidth + BorderRenderer.borderWidthOverhead,
+            height: buffer.lines.count, style: border, color: borderColor)
         return LaidOutBuffer(buffer: buffer, placedColumns: aligned.placedColumns)
     }
 }

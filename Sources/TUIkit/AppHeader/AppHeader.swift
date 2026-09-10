@@ -38,6 +38,8 @@ extension AppHeader: Renderable {
         let width = context.availableWidth
         let palette = context.environment.palette
         var lines: [String] = []
+        /// The row a `.rule` style's rule landed on, for its opacity claim.
+        var ruleRow: Int?
 
         // The box's walls eat two columns, so its content is laid out narrower;
         // the other two styles get the full width. Same figure the modifier
@@ -54,6 +56,10 @@ extension AppHeader: Renderable {
             // two ends of the frame looking like a pair, and it follows the
             // current appearance so a custom border restyles both at once.
             lines.append(ChromeStyle.ruleRow(width: width, context: context))
+            // The rule is the last line, so its row is what the content already
+            // occupies — claimed after `replacingLines` below, where the content's
+            // own claims are already in these coordinates.
+            ruleRow = lines.count - 1
         case .bordered:
             let border = context.environment.appearance.borderStyle
             let innerWidth = max(0, width - BorderRenderer.borderWidthOverhead)
@@ -83,7 +89,7 @@ extension AppHeader: Renderable {
         // right by its wall, down by its top rule — applied to each. Written as
         // four assignments it was four chances to forget one, which is what
         // happened twice.
-        return contentBuffer.replacingLines(
+        var framed = contentBuffer.replacingLines(
             lines,
             // Animated runs: a `Spinner` or any `.animatedCells` in the header
             // was frozen at frame 0, because a dropped run does not look like a
@@ -95,5 +101,19 @@ extension AppHeader: Renderable {
             // away before anything could composite it.
             overlayShiftX: style == .bordered ? 1 : 0,
             overlayShiftY: style == .bordered ? 1 : 0)
+        // The chrome's own cells, when the theme's `border` is faded. Appended
+        // AFTER `replacingLines` has shifted the content's own claims inward, so
+        // the two sets are in the same coordinates.
+        if style == .bordered {
+            framed.opacityRegions += BorderRenderer.opacityClaims(
+                outerWidth: width, height: lines.count,
+                style: context.environment.appearance.borderStyle, color: palette.border)
+        }
+        if let ruleRow,
+            let claim = ChromeStyle.ruleClaim(width: width, offsetY: ruleRow, context: context)
+        {
+            framed.opacityRegions.append(claim)
+        }
+        return framed
     }
 }

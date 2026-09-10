@@ -119,4 +119,28 @@ extension ChromeStyle {
             style: context.environment.appearance.borderStyle, width: width,
             color: context.environment.palette.border)
     }
+
+    /// The claim ``ruleRow(width:context:)`` needs when the theme's border colour
+    /// is faded — its other half, and beside it for that reason.
+    ///
+    /// `BorderRenderer` states the opaque spelling in the bytes because an SGR
+    /// emitter has no backdrop to composite against, so a rule drawn from a
+    /// translucent palette entry has an alpha still to spend. A rule is one row of
+    /// the full width, which makes this the simplest claim in the framework — and
+    /// the easiest to forget, which is why it is not left to the two call sites to
+    /// remember.
+    ///
+    /// - Parameters:
+    ///   - width: The rule's width, matching the row it was drawn for.
+    ///   - offsetY: The row the rule was placed on.
+    ///   - context: The render context, for the palette.
+    /// - Returns: The region, or `nil` when the border colour is opaque.
+    @MainActor
+    static func ruleClaim(width: Int, offsetY: Int, context: RenderContext) -> OpacityRegion? {
+        let style = context.environment.appearance.borderStyle
+        let colour = context.environment.palette.border
+        return OpacityRegion.claim(
+            offsetY: offsetY, width: width, height: 1, ink: colour,
+            field: BorderRenderer.fill(style, colour))
+    }
 }

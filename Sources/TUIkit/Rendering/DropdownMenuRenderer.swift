@@ -210,6 +210,31 @@ enum DropdownMenu {
             context: context)
         var buffer = FrameBuffer(lines: drawn.lines)
         buffer.animatedCells = drawn.runs
+        // The popup's chrome, when the theme's `border` is faded — and only when
+        // the picture is STILL. An emphasis that pulses repaints every one of
+        // these cells from its own frames each tick, and one region carrying the
+        // phase drawn now would resolve every later phase at the wrong alpha. The
+        // pulsing arm stays unhonoured and stays loud: its frames reach the
+        // emitter as they are, so `Color+ANSICodes.swift`'s assertion fires.
+        if drawn.runs.isEmpty {
+            let borderColor = drawn.borderColor
+            buffer.opacityRegions = BorderRenderer.opacityClaims(
+                outerWidth: config.innerWidth + BorderRenderer.borderWidthOverhead,
+                height: drawn.lines.count,
+                style: context.environment.appearance.borderStyle, color: borderColor)
+            // The inset separators, which are neither the frame nor a full-width
+            // rule: they span the content column only, stopping short of a
+            // scrollbar that is coloured by something else entirely.
+            let ruleWidth = wantsBar ? max(1, config.innerWidth - 1) : config.innerWidth
+            // Row `local` of the window is line `local + 1` — the same offset the
+            // hit regions use, for the same reason: the top border is line 0.
+            buffer.opacityRegions += window.visible.enumerated().compactMap { local, index in
+                guard case .divider = rows[index] else { return nil }
+                return OpacityRegion.claim(
+                    offsetX: 1, offsetY: local + 1, width: ruleWidth, height: 1,
+                    ink: borderColor)
+            }
+        }
         attachMouseHandlers(
             to: &buffer,
             config: config,
@@ -438,7 +463,7 @@ enum DropdownMenu {
                 // but not the scrollbar column, macOS-menu-separator style.
                 let rule = ANSIRenderer.colorize(
                     String(repeating: borderStyle.horizontal, count: contentInner),
-                    foreground: borderColor)
+                    foreground: borderColor.opaqueSpelling)
                 if let barCells {
                     let cell = local < barCells.count ? barCells[local] : " "
                     lines.append(verticalBorder + rule + cell + verticalBorder)
@@ -496,7 +521,7 @@ enum DropdownMenu {
         innerWidth: Int,
         barCells: [String]?,
         context: RenderContext
-    ) -> (lines: [String], runs: [AnimatedCellRun]) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], borderColor: Color) {
         func draw(_ highlight: Color, _ border: Color) -> [String] {
             lines(
                 rows: rows, highlightedRow: highlightedRow, visibleRange: visibleRange,
@@ -515,7 +540,9 @@ enum DropdownMenu {
         let borders = cycle.colors(dim: ends.border.dim, bright: ends.border.bright)
         let step = cycle.step % max(1, cycle.frames.count)
         let drawn = draw(highlights[step], borders[step])
-        guard cycle.isAnimating, !context.isMeasuring else { return (drawn, []) }
+        guard cycle.isAnimating, !context.isMeasuring else {
+            return (drawn, [], borders[step])
+        }
         let perStep = zip(highlights, borders).map(draw)
         let runs = drawn.indices.compactMap { row -> AnimatedCellRun? in
             let frames = perStep.map { $0[row] }
@@ -527,7 +554,7 @@ enum DropdownMenu {
             // anyway, and not emitting them keeps the buffer honest.
             return run.isAnimating ? run : nil
         }
-        return (drawn, runs)
+        return (drawn, runs, borders[step])
     }
 
     // MARK: - Mouse wiring

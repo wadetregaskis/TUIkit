@@ -92,14 +92,29 @@ enum TooltipPopover {
                     content: " "
                         + ANSIRenderer.colorize(
                             line.padToVisibleWidth(innerWidth - 2),
-                            foreground: palette.foreground,
-                            background: palette.background) + " ",
+                            foreground: palette.foreground.opaqueSpelling,
+                            background: palette.background.opaqueSpelling) + " ",
                     innerWidth: innerWidth, style: border, color: palette.border)
             }
             + [
                 BorderRenderer.standardBottomBorder(
                     style: border, innerWidth: innerWidth, color: palette.border)
             ]
-        return FrameBuffer(lines: lines)
+        var panel = FrameBuffer(lines: lines)
+        // A `Palette` is a public protocol of plain `var …: Color` members and
+        // nothing normalises what a conformance returns, so a theme's own
+        // translucency arrives here. The frame and the text inside it are two
+        // claims because they are two paints: `standardContentLine` puts the wall
+        // at each end and the tooltip's own text between.
+        panel.opacityRegions = BorderRenderer.opacityClaims(
+            outerWidth: innerWidth + 2, height: lines.count, style: border,
+            color: palette.border)
+        if let text = OpacityRegion.claim(
+            offsetX: 1, offsetY: 1, width: innerWidth, height: wrapped.count,
+            ink: palette.foreground, field: palette.background)
+        {
+            panel.opacityRegions.append(text)
+        }
+        return panel
     }
 }
