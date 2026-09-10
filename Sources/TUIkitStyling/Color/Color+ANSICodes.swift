@@ -34,19 +34,32 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for.
     /// - Returns: The parameter strings, ready to join with `;`.
     package func foregroundCodes(depth: ColorDepth = ColorDepth.current) -> [String] {
-        // A translucent colour has no SGR spelling — the terminal has no alpha
-        // channel, so the only honest answer is the one the compositor gives,
-        // which is a concrete colour blended against what is behind the cell.
-        // Reaching here with one means a path emitted a colour without stamping
-        // an `OpacityRegion` for it; the cell renders at full strength and the
-        // reader sees a solid colour where they asked for a faint one.
+        // FULLY transparent paints no colour at all. That is an ANSWER rather than
+        // a degradation, and the only one available without a backdrop: emitting
+        // nothing leaves the cell the colour it already had, which is what
+        // transparent means. It is also the one case where getting it wrong is
+        // alarming, because `.clear`'s underlying value is black: at full strength
+        // `.border(.clear)` is a solid black box.
+        //
+        // Checked BEFORE the assertion because it is not a gap. `.clear` is public
+        // API, and a reader writing it deserves the sensible answer rather than a
+        // trap, on every path, migrated or not.
+        if alpha == 0 { return [] }
+        // PARTIAL alpha has no answer here — there is no backdrop to blend
+        // against — so reaching this line means the view that painted it does not
+        // yet carry alpha to the compositor.
         //
         // An assertion rather than a `fatalError` (which is what `.semantic`
-        // gets) because unlike an unresolved semantic colour this degrades to
-        // exactly today's behaviour: opaque. Loud in every debug and test build,
-        // and never a crash in someone's terminal. The paths still to be
-        // migrated are listed in `Documentation/Opacity as composition.md`.
-        assert(isOpaque, "translucent colour reached \(#function): alpha \(alpha)")
+        // gets): this is an unmigrated path rather than a broken invariant, and it
+        // degrades to what the framework did before alpha existed. Loud in a debug
+        // build, never a crash in someone's terminal. Section 16 of
+        // `Documentation/Opacity as composition.md` lists which paths honour it.
+        assert(
+            isOpaque,
+            "a translucent colour reached the ANSI emitter (alpha \(alpha)): the view "
+                + "that painted it does not carry alpha to the compositor, so it renders "
+                + "opaque. See 'Opacity as composition.md' §16; prefer .opacity(_:) on "
+                + "the VIEW for a fade that works everywhere.")
         if depth == .noColor { return [] }
         switch downsampled(to: depth).value {
         case .standard(let ansi): return ["\(ansi.foregroundCode)"]
@@ -65,19 +78,32 @@ extension Color {
     /// - Parameter depth: The colour depth to quantise for.
     /// - Returns: The parameter strings, ready to join with `;`.
     package func backgroundCodes(depth: ColorDepth = ColorDepth.current) -> [String] {
-        // A translucent colour has no SGR spelling — the terminal has no alpha
-        // channel, so the only honest answer is the one the compositor gives,
-        // which is a concrete colour blended against what is behind the cell.
-        // Reaching here with one means a path emitted a colour without stamping
-        // an `OpacityRegion` for it; the cell renders at full strength and the
-        // reader sees a solid colour where they asked for a faint one.
+        // FULLY transparent paints no colour at all. That is an ANSWER rather than
+        // a degradation, and the only one available without a backdrop: emitting
+        // nothing leaves the cell the colour it already had, which is what
+        // transparent means. It is also the one case where getting it wrong is
+        // alarming, because `.clear`'s underlying value is black: at full strength
+        // `.border(.clear)` is a solid black box.
+        //
+        // Checked BEFORE the assertion because it is not a gap. `.clear` is public
+        // API, and a reader writing it deserves the sensible answer rather than a
+        // trap, on every path, migrated or not.
+        if alpha == 0 { return [] }
+        // PARTIAL alpha has no answer here — there is no backdrop to blend
+        // against — so reaching this line means the view that painted it does not
+        // yet carry alpha to the compositor.
         //
         // An assertion rather than a `fatalError` (which is what `.semantic`
-        // gets) because unlike an unresolved semantic colour this degrades to
-        // exactly today's behaviour: opaque. Loud in every debug and test build,
-        // and never a crash in someone's terminal. The paths still to be
-        // migrated are listed in `Documentation/Opacity as composition.md`.
-        assert(isOpaque, "translucent colour reached \(#function): alpha \(alpha)")
+        // gets): this is an unmigrated path rather than a broken invariant, and it
+        // degrades to what the framework did before alpha existed. Loud in a debug
+        // build, never a crash in someone's terminal. Section 16 of
+        // `Documentation/Opacity as composition.md` lists which paths honour it.
+        assert(
+            isOpaque,
+            "a translucent colour reached the ANSI emitter (alpha \(alpha)): the view "
+                + "that painted it does not carry alpha to the compositor, so it renders "
+                + "opaque. See 'Opacity as composition.md' §16; prefer .opacity(_:) on "
+                + "the VIEW for a fade that works everywhere.")
         if depth == .noColor { return [] }
         switch downsampled(to: depth).value {
         case .standard(let ansi): return ["\(ansi.backgroundCode)"]

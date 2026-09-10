@@ -1057,3 +1057,70 @@ unhonoured for the same reason.
 
 Still open: `perCell` ramps, which want the per-column payload sketched in §9.1's
 successor discussion, and `Text`'s ramped ink.
+
+
+## 16. What honours `Color` alpha, and what does not (2026-09-09)
+
+### 16.1 A correction: "only three sites write translucency" was the wrong count
+
+The summary above argues that §1's estimate — 169 emit sites needing column
+knowledge — priced a mechanism nobody needed, because translucency is only
+*written* at three sites, all of which already know their rectangle.
+
+The premise is true and the conclusion does not follow. Translucency is
+**authored** at a few sites; it is **carried by `Color`**, and a `Color` flows
+wherever the environment and the palette take it. So the set of paths that must
+*honour* alpha is not the set that authors it — it is every path that paints a
+colour a user could have faded. A sweep of every `Color` → bytes conversion found
+**twelve public entry points** one modifier away from an unhonoured path, none of
+them among the three:
+
+| entry point | reaches |
+|---|---|
+| `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites |
+| `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider`, `Spinner`, `Table`, `RadioButton`, `_ToggleCore`, `PaintRenderer`'s flat arm |
+| `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **inconsistently**: `restingControlFace` consumes the alpha while `accentPulse` carries it |
+| `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
+| `.listRowBackground(…)` | one site |
+| `Text` concatenation | **fixed, §14** |
+| translucent gradient stops | **background fixed, §15**; `Text`'s ramped ink open |
+| `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer`, 3+ sites |
+| `StatusBarState.highlightColor` / `.labelColor` | 2 sites |
+| `.style(.text) { $0.foreground = … }` | the cascade's non-`Text` readers |
+| `.colorMultiply(…)` | a silent drop, not a trap |
+| `ColorPicker` with a translucent binding | the swatch — and `supportsOpacity` is now a real parity gap |
+
+Plus a whole second tier: `Palette` is a public protocol of plain
+`var …: Color { get }` members, and nothing normalises what a custom palette
+returns. One `.clear` in a palette reaches everything.
+
+So §1's instinct about the *magnitude* was better than the summary's dismissal of
+it. What the summary got right is the *shape*: none of this needs per-column alpha
+in the general case, and a rectangle per drawn run is enough for almost all of it.
+What it got wrong is how many places have to draw that rectangle.
+
+### 16.2 The emitter's answer, now that it is a policy rather than a stopgap
+
+`foregroundCodes` / `backgroundCodes` cannot composite — they have no backdrop —
+so they answer in two ways rather than one:
+
+- **alpha 0 → no SGR parameters at all.** An answer, not a degradation: the cell
+  keeps the colour it had, which is what transparent means, near enough, for the
+  one case where "near enough" exists without a backdrop. Checked *before* the
+  assertion, because `.clear` is public API and a reader writing it deserves the
+  sensible result on every path. Without it the answer was this colour at full
+  strength — and `.clear`'s underlying value is black, so `.border(.clear)` drew a
+  solid black box in a release build, where the assertion is compiled out.
+- **partial alpha → full strength, and an assertion in debug.** There is no answer
+  available, so this is a gap marker. It names the framework's own diagnosis and
+  points here rather than naming a `package` function the reader cannot find.
+
+### 16.3 Honoured as of this branch
+
+`Color` as a view; `.background` with a flat colour; `.background` with a ramp
+whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
+`Text`'s attributed-run arm; `.opacity(_:)` on a view (all three channels);
+`ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree.
+
+Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
+`Text`'s ramped ink, and per-cell ramps.

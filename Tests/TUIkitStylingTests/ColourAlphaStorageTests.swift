@@ -170,6 +170,32 @@ struct ColourAlphaStorageTests {
         #expect(Color.red.opacity(.nan).alpha == 0, "and a NaN reads as nothing")
     }
 
+    /// **A fully transparent colour paints nothing, on every path.**
+    ///
+    /// The emitters assert on a translucent colour, because a partial alpha has no
+    /// SGR spelling and reaching them means the painting view does not carry alpha
+    /// to the compositor. Alpha ZERO is different, and is checked before the
+    /// assertion: it has an answer here. Emitting no parameters leaves the cell the
+    /// colour it already had, which is what transparent means, near enough, for the
+    /// one case where "near enough" exists without a backdrop.
+    ///
+    /// Without it, the answer would be this colour at full strength — and
+    /// `Color.clear`'s underlying value is black, so `.border(.clear)` would draw a
+    /// solid black box in a release build, where the assertion is compiled out.
+    /// That is worse than any other wrong answer available here, and it would be
+    /// reached from public API by a reader doing something reasonable.
+    @Test("A fully transparent colour emits no SGR parameters")
+    func transparentPaintsNothing() {
+        #expect(Color.clear.foregroundCodes(depth: .truecolor).isEmpty, "no foreground")
+        #expect(Color.clear.backgroundCodes(depth: .truecolor).isEmpty, "no background")
+        // Any colour, not just `.clear` — it is the ALPHA that decides.
+        #expect(Color.red.opacity(0).foregroundCodes(depth: .truecolor).isEmpty)
+        #expect(Color.red.opacity(0).backgroundCodes(depth: .palette256).isEmpty)
+        // And the opaque twin still paints, so this is an alpha gate rather than
+        // the emitter having been switched off.
+        #expect(!Color.red.foregroundCodes(depth: .truecolor).isEmpty, "opaque red still paints")
+    }
+
     /// The one that would otherwise be silent AND fatal: a semantic colour
     /// resolves through the palette, and the alpha belongs to the value the
     /// caller wrote, not to the palette's answer.
