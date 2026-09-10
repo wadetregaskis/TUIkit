@@ -2410,7 +2410,13 @@ where Value.ID: Hashable {
         // at the wrong index fades the row above or below, every frame, exactly as a
         // misrecorded run repaints one. `transform` is not applied — the paths that
         // use it pad on the RIGHT, which adds bare cells a claim does not want.
-        claims += rowClaims.map { $0.shifted(byX: 0, y: lines.count) }
+        //
+        // Guarded, because this runs once per drawn row per frame and nearly every
+        // row is opaque — the same reason the derivations themselves ask the alphas
+        // first.
+        if !rowClaims.isEmpty {
+            claims += rowClaims.map { $0.shifted(byX: 0, y: lines.count) }
+        }
         lines.append(transform(line))
     }
 
@@ -2422,7 +2428,9 @@ where Value.ID: Hashable {
     ) {
         let base = lines.count
         lines.append(contentsOf: rendered.lines.map(transform))
-        claims += rendered.claims.map { $0.shifted(byX: 0, y: base) }
+        if !rendered.claims.isEmpty {
+            claims += rendered.claims.map { $0.shifted(byX: 0, y: base) }
+        }
         guard let pulseFrames = rendered.pulseFrames else { return }
         for (offset, frames) in pulseFrames.enumerated() where !frames.isEmpty {
             runs.append((y: base + offset, frames: frames.map(transform)))
@@ -2445,7 +2453,8 @@ where Value.ID: Hashable {
     private func rowClaims(
         _ collected: [OpacityRegion], slide: Int, topOffset: Int, lineCount: Int
     ) -> [OpacityRegion] {
-        collected.compactMap { claim in
+        guard !collected.isEmpty else { return [] }
+        return collected.compactMap { claim in
             let y = claim.offsetY + slide + topOffset
             guard y >= topOffset, y < lineCount else { return nil }
             return claim.shifted(byX: 0, y: y - claim.offsetY)

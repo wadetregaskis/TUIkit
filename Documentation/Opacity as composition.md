@@ -2200,3 +2200,55 @@ The field is now always claimed and always spelled opaque; `carriesAlpha` govern
 ramp's colours alone, and `band`'s parameter documentation says so, because it is the
 kind of flag a later reader would reasonably assume covers everything in the style.
 `opaqueRampStillClaimsItsField` pins both halves.
+
+
+## 35. What the whole pass cost (2026-09-10)
+
+`ab_bench.py`, cpu-per-frame, paired, order randomised per rep, against `33e7aab2` —
+the tip before this pass. 20 reps over all nineteen scenarios, then 60 reps on the
+ones that flagged.
+
+**Eighteen of nineteen indistinguishable.** The residual is on the two scenarios built
+out of the thing that gained the most per-row work:
+
+| scenario | change | 95% CI | reps |
+|---|---|---|---|
+| `table` | **+0.4%** | [+0.1, +0.7] | 60 |
+| `tables-scroll` | **+0.5%** | [+0.2, +0.8] | 60 |
+| everything else | indistinguishable | | 20 |
+
+RAM flat everywhere (±0.2 MB).
+
+That is the price of a `Table`'s rows carrying claims for their ink, their selection
+mark and their still background: one extra tuple member and one guarded `+=` per drawn
+row. It is the same shape and the same size as the residual §18–§26 left on
+`framedcolumns` (+0.5%), for the same reason — the scenario made of the thing that
+changed pays, and nothing else does.
+
+### 35.1 Three regressions that were one mistake
+
+The first run flagged `gradients` +2.5% [+0.4, +3.0], `megalist` +1.0% [+0.6, +1.7] and
+`table` +0.7% [+0.4, +1.0]. All three were a claim derivation doing work *before*
+asking whether there was anything to claim — and in these scenarios nearly every row
+and every painted block is fully opaque:
+
+- `PaintRenderer.styled` grew an outer array to `lines.count` empties per ramped block.
+- `_ListCore`'s `claims(over:)` ran a `flatMap` before consulting the alphas.
+- `Table.renderMultiLineRow` evaluated `RowBackground.claimableFill` twice per line.
+
+`gradients` went **+2.5% → −0.1%** from one guard, which is what makes the diagnosis
+confirmed rather than merely consistent. `megalist` went to −0.0% [−0.9, +0.8].
+
+The pattern to copy is already in the tree: `Text.uniformAlphaClaims` answers `[]`
+rather than a list of empties, and says so at the line. Every new derivation should.
+
+### 35.2 A note on the measurements themselves
+
+The first run was taken at load 3.84 with `XprotectService` at 36.6%, which
+`ab_bench` reports in its own header. `megalist` read +1.1% there and −0.0% at load
+1.50; `table` read +1.2% [+0.1, +2.1] at 20 reps on a busy box and +0.4% [+0.1, +0.7]
+at 60. The paired design absorbs preemption but not cache contention.
+
+So: the allocations were real and worth fixing, and every *width* in the first run was
+wrong. Re-measure a flagged scenario on a quiet box before believing its size, and
+before deciding whether it is worth chasing.
