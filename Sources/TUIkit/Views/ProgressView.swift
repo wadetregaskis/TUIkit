@@ -530,9 +530,9 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// indeterminate sweep when there is no measurable progress.
     private func renderBarLine(
         width: Int, palette: any Palette, context: RenderContext, elapsed: Double
-    ) -> DrawnTrack {
+    ) -> ClaimingRow {
         guard let fraction = fractionCompleted else {
-            var row = DrawnTrack()
+            var row = ClaimingRow()
             // The indeterminate sweep still carries no claims — its whole row is an
             // `AnimatedCellRun` whose columns are lit in some frames and not others,
             // so one static region cannot describe it. §31.4.

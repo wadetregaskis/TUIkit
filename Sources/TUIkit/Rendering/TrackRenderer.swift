@@ -24,51 +24,6 @@
 ///     accentColor: palette.accent
 /// )
 /// ```
-/// A track's finished row, the cells that owe a blend, and how many cells it
-/// actually drew.
-///
-/// `TrackRenderer.render` used to return a bare `String`, and that was the whole
-/// reason row 8 of §16.1 could not be migrated: nineteen `colorize` calls across six
-/// functions each knew exactly which columns they were painting — a track's entire
-/// job is to fill exactly `width` cells — and not one of them had anywhere to SAY so.
-struct DrawnTrack {
-    /// The finished ANSI row.
-    var text = ""
-
-    /// The cells owing a blend, in the track's own coordinates: column 0 is the
-    /// track's first cell, whatever the caller draws to its left.
-    var claims: [OpacityRegion] = []
-
-    /// How many cells were drawn — which is not always the width that was asked
-    /// for. The coarse path permanently shrinks a track to a whole multiple of its
-    /// quantum, and a claim must sit on what was DRAWN. Same lesson `Slider`'s
-    /// right-arrow run already learned.
-    var cells = 0
-
-    /// Appends one run: `count` columns of `glyphs`, painted in `ink` on `field`.
-    ///
-    /// **The one place a track's cells become bytes, and the one place its claims
-    /// are derived**, so the two halves of a translucent paint cannot drift apart —
-    /// the same reason `BorderRenderer.band` exists (§18.3). Nineteen call sites
-    /// would otherwise each spell `opaqueSpelling` out, and a twentieth drawing arm
-    /// added later would silently reintroduce the trap.
-    mutating func append(_ glyphs: String, cells count: Int, ink: Color?, field: Color? = nil) {
-        text += ANSIRenderer.colorize(
-            glyphs, foreground: ink?.opaqueSpelling, background: field?.opaqueSpelling)
-        claims +=
-            OpacityRegion.claim(
-                offsetX: cells, width: count, height: 1, ink: ink, field: field).map { [$0] } ?? []
-        cells += count
-    }
-
-    /// Appends bytes that are already finished — a picture's placeholder cells —
-    /// which owe no claim because this renderer chose no colour for them.
-    mutating func appendFinished(_ chunk: String, cells count: Int) {
-        text += chunk
-        cells += count
-    }
-}
-
 enum TrackRenderer {
     /// Renders a track with the specified style and colors.
     ///
@@ -103,13 +58,13 @@ enum TrackRenderer {
         emptyScaling: TrackGradientScaling = .track,
         palette: any Palette,
         graphics: GradientGraphicsContext? = nil
-    ) -> DrawnTrack {
+    ) -> ClaimingRow {
         let style = style.resolvingColours(with: palette)
         // Read once per render, not once per cell. A gradient can only be
         // quantised as a ramp if it knows what the terminal will do to it; at
         // truecolor every helper below falls through to the plain interpolation.
         let depth = ColorDepth.current
-        guard width > 0 else { return DrawnTrack() }
+        guard width > 0 else { return ClaimingRow() }
 
         // Clamp fraction to [0, 1] to prevent track overflow
         let fraction = min(1.0, max(0.0, fraction))
@@ -120,7 +75,7 @@ enum TrackRenderer {
         // cells would all be plain colour and the terminal draws pictures.
         // The named cases are just presets; `.custom` carries a caller-supplied
         // recipe.
-        func configured(_ config: TrackConfiguration) -> DrawnTrack {
+        func configured(_ config: TrackConfiguration) -> ClaimingRow {
             // A PICTURE has no alpha channel to send — `GradientRaster.Picture.format`
             // is `.rgb`, and a terminal would in any case composite it against its own
             // background rather than against what TUIkit drew behind the cell. So a
@@ -140,7 +95,7 @@ enum TrackRenderer {
                     filledColor: filledColor, emptyColor: emptyColor,
                     fillScaling: fillScaling, emptyScaling: emptyScaling, graphics: graphics)
             {
-                var drawn = DrawnTrack()
+                var drawn = ClaimingRow()
                 drawn.appendFinished(row, cells: width)
                 return drawn
             }
@@ -295,7 +250,7 @@ extension TrackRenderer {
         fillScaling: TrackGradientScaling,
         emptyScaling: TrackGradientScaling,
         depth: ColorDepth
-    ) -> DrawnTrack {
+    ) -> ClaimingRow {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
         let emptyChars: [Character]
         let paintsBackground: Bool
@@ -394,7 +349,7 @@ extension TrackRenderer {
                 span: emptySpan, fallback: emptyColor, depth: depth)
         }
 
-        var row = DrawnTrack()
+        var row = ClaimingRow()
         for index in 0..<fullCount {
             let cellColour = fillColour(at: index)
             row.append(
@@ -474,11 +429,11 @@ extension TrackRenderer {
         paintsBackground: Bool,
         fillScaling: TrackGradientScaling,
         depth: ColorDepth
-    ) -> DrawnTrack {
+    ) -> ClaimingRow {
         // The style's own unfilled colour, if it named one — see the fine path.
         let emptyColor = config.emptyColor ?? emptyColor
         let effectiveWidth = (width / quantum) * quantum
-        guard effectiveWidth > 0 else { return DrawnTrack() }
+        guard effectiveWidth > 0 else { return ClaimingRow() }
         let steps = effectiveWidth / quantum
 
         // With a ramp of n glyphs each block has n+1 sub-steps — the same
@@ -509,7 +464,7 @@ extension TrackRenderer {
         // Claimed per GLYPH at its real cell width, which is the whole point of this
         // path: a character-counted rectangle would be wrong by up to `quantum − 1`
         // cells per glyph here, where an emoji fill is two cells wide.
-        var row = DrawnTrack()
+        var row = ClaimingRow()
         var cell = 0
         var index = 0
         while cell < targetCells {
@@ -603,7 +558,7 @@ extension TrackRenderer {
         emptyColor: Color,
         fillScaling: TrackGradientScaling,
         depth: ColorDepth
-    ) -> DrawnTrack {
+    ) -> ClaimingRow {
         let leadingWidth = leading.strippedLength
         let trailingWidth = trailing.strippedLength
         let middleWidth = max(1, middle.strippedLength)
@@ -616,7 +571,7 @@ extension TrackRenderer {
         // last colour.
         let gradientSpan = fillScaling == .track ? width : filledCount
 
-        var row = DrawnTrack()
+        var row = ClaimingRow()
 
         if filledCount <= 0 {
             // Nothing lit at all.
@@ -685,7 +640,7 @@ extension TrackRenderer {
     private static func renderLitRegion(
         leading: String, middleRun: String, trailing: String,
         coloring: SegmentColoring, filledColor: Color, gradientSpan: Int, depth: ColorDepth,
-        into row: inout DrawnTrack
+        into row: inout ClaimingRow
     ) {
         let whole = leading + middleRun + trailing
         switch coloring {
@@ -716,13 +671,13 @@ extension TrackRenderer {
     /// ramp and the rest is simply not reached; that is what makes a gradient
     /// read as a scale rather than as a fade.
     ///
-    /// A translucent gradient stop is fully honourable here, unlike the 2-D ramps §15
-    /// declines: a track is ONE row, so a per-cell alpha is a run of one-cell
-    /// rectangles rather than a grid, and the resolver folds them the same way it
-    /// folds any other claim.
+    /// A translucent gradient stop is honourable here for the reason §36 later made
+    /// the 2-D ramps honourable too, arriving a row early: a track is ONE row, so a
+    /// per-cell alpha is a run of one-cell rectangles rather than a grid, and the
+    /// resolver folds them the same way it folds any other claim.
     private static func gradientCells(
         _ text: String, gradient: Gradient, fallback: Color, span: Int, depth: ColorDepth,
-        into row: inout DrawnTrack
+        into row: inout ClaimingRow
     ) {
         let cells = Array(text)
         guard cells.count > 1, span > 1 else {
@@ -754,8 +709,8 @@ extension TrackRenderer {
         markerChar: Character,
         lineColor: Color,
         markerColor: Color
-    ) -> DrawnTrack {
-        var row = DrawnTrack()
+    ) -> ClaimingRow {
+        var row = ClaimingRow()
         guard width > 1 else {
             row.append(String(markerChar), cells: 1, ink: markerColor)
             return row
@@ -791,8 +746,8 @@ extension TrackRenderer {
         filledColor: Color,
         headColor: Color,
         emptyColor: Color
-    ) -> DrawnTrack {
-        var row = DrawnTrack()
+    ) -> ClaimingRow {
+        var row = ClaimingRow()
         guard width > 1 else {
             row.append(String(headChar), cells: 1, ink: headColor)
             return row

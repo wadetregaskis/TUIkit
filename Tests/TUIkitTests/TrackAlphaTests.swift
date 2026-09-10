@@ -24,7 +24,7 @@ struct TrackAlphaTests {
         _ style: TrackStyle, fraction: Double = 0.5, width: Int = 10,
         filled: Color = .rgb(200, 40, 40), empty: Color = .rgb(40, 40, 40),
         accent: Color = .rgb(40, 200, 40)
-    ) -> DrawnTrack {
+    ) -> ClaimingRow {
         TrackRenderer.render(
             fraction: fraction, width: width, style: style, filledColor: filled,
             emptyColor: empty, accentColor: accent, palette: palette())
@@ -113,38 +113,58 @@ struct TrackAlphaTests {
         #expect((fadedEnds.last?.offsetX ?? 0) > 2, "\(row.claims)")
     }
 
-    /// A translucent gradient stop is fully honourable on a track, unlike the 2-D
-    /// ramps §15 declines: a track is ONE row, so per-cell alpha is a run of one-cell
-    /// rectangles rather than a grid.
-    @Test("SegmentColoring.gradient claims cell by cell")
+    /// A translucent gradient stop is honourable on a track: it is ONE row, so a
+    /// per-cell alpha is a run of rectangles rather than a grid.
+    ///
+    /// Asserted per COLUMN rather than per rectangle. `ClaimingRow` merges adjacent
+    /// runs that owe the same alpha, so how many rectangles a row needs is an
+    /// implementation detail — this pinned `count >= 8` and width 1, and both changed
+    /// the moment the merge arrived without anything about the alpha changing. What
+    /// the track owes is an alpha per column, and that is what this reads.
+    @Test("SegmentColoring.gradient states an alpha for every cell it painted")
     func segmentGradientClaims() {
+        // Two alphas rather than one, so the ramp genuinely varies along the row and
+        // the merge cannot collapse it to a single rectangle by accident.
         let row = drawn(
             .threeSegment(
                 leading: "[", middle: "=", trailing: "]", emptyFill: "·",
                 coloring: .gradient(
                     Gradient(colors: [
-                        Color.rgb(200, 40, 40).opacity(0.5), Color.rgb(40, 40, 200).opacity(0.5),
+                        Color.rgb(200, 40, 40).opacity(0.25), Color.rgb(40, 40, 200).opacity(1.0),
                     ]))),
             fraction: 1.0, width: 8)
-        #expect(row.claims.count >= 8, "one per cell: \(row.claims.count)")
-        for claim in row.claims {
-            #expect(claim.width == 1)
-            #expect(claim.inkOpacity == half, "\(claim)")
+        #expect(row.claims.count > 1, "the alpha varies along it: \(row.claims)")
+        let covered = row.claims.reduce(into: Set<Int>()) { set, claim in
+            set.formUnion(claim.offsetX..<(claim.offsetX + claim.width))
         }
+        // Every cell the track drew, and the alphas rise from the dim stop to the
+        // bright one without ever going backwards.
+        #expect(covered.count < row.cells, "the opaque end owes no claim: \(row.claims)")
+        let ordered = row.claims.sorted { $0.offsetX < $1.offsetX }
+        #expect(ordered.first?.offsetX == 0, "\(ordered)")
+        #expect(
+            zip(ordered, ordered.dropFirst()).allSatisfy { $0.inkOpacity <= $1.inkOpacity },
+            "\(ordered.map(\.inkOpacity))")
     }
 
     // MARK: - The two indicator styles
 
-    @Test("A knob's rail and its head claim separately, so a faded tint fades both")
+    /// `.knob` takes filledColor AND headColor from the accent, so the lit rail and
+    /// the head are both claimed and the unlit remainder — the control's own colour —
+    /// is not. They arrive as ONE rectangle rather than two, because they owe the same
+    /// alpha and `ClaimingRow` merges runs that do; what matters is which columns are
+    /// covered, which is what this reads.
+    @Test("A knob's rail and its head are both claimed, and the unlit remainder is not")
     func knobClaims() {
         let faded = Color.rgb(40, 200, 40).opacity(0.5)
         let row = drawn(.knob, fraction: 0.5, width: 9, accent: faded)
-        // `.knob` takes filledColor AND headColor from the accent, so the lit rail and
-        // the head are both claimed; the unlit remainder is the control's own colour
-        // and is not.
         let fadedClaims = row.claims.filter { $0.inkOpacity == half }
-        #expect(fadedClaims.count == 2, "\(row.claims)")
-        #expect(fadedClaims.contains { $0.width == 1 }, "the head's own cell: \(row.claims)")
+        #expect(fadedClaims.count == 1, "rail and head owe one alpha: \(row.claims)")
+        #expect(fadedClaims.first?.offsetX == 0, "\(row.claims)")
+        // Four rail cells and the head on the fifth, out of nine — so the claim
+        // reaches the head and stops, leaving the unlit tail to the control's colour.
+        #expect(fadedClaims.first?.width == 5, "\(row.claims)")
+        #expect(row.cells == 9)
     }
 
     @Test("A marker's dot claims alone, leaving an opaque rail opaque")
@@ -160,6 +180,10 @@ struct TrackAlphaTests {
 
     /// A wide fill glyph forces the coarse path, where a character-counted claim
     /// would be wrong by a cell per glyph.
+    ///
+    /// The three lit emoji arrive as one rectangle of SIX cells, not three of two:
+    /// they owe the same alpha and adjacent runs that do are merged. Six is the number
+    /// that carries the test — a character count would have said three.
     @Test("The coarse path claims each glyph at its real cell width")
     func coarsePathClaimsInCells() {
         var config = TrackConfiguration.block
@@ -167,10 +191,10 @@ struct TrackAlphaTests {
         let row = drawn(.custom(config), fraction: 0.5, width: 10, filled: Color.rgb(200, 40, 40).opacity(0.5))
         let lit = row.claims.filter { $0.inkOpacity == half }
         #expect(!lit.isEmpty, "\(row.claims)")
-        for claim in lit {
-            #expect(claim.width == 2, "one emoji is two cells: \(claim)")
-            #expect(claim.offsetX.isMultiple(of: 2), "and they tile: \(claim)")
-        }
+        let cells = lit.reduce(0) { $0 + $1.width }
+        #expect(cells.isMultiple(of: 2), "whole emoji only: \(row.claims)")
+        #expect(cells == 6, "three emoji at two cells each: \(row.claims)")
+        #expect(lit.allSatisfy { $0.offsetX.isMultiple(of: 2) }, "and they tile: \(row.claims)")
     }
 
     // MARK: - The picture path declines

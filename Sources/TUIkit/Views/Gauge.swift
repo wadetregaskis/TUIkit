@@ -342,14 +342,26 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     /// The tiny circular dial: a single pie glyph beside the current value, with
     /// the label (if any) on the row below.
     private func renderCircularTiny(palette: any Palette, context: RenderContext) -> FrameBuffer {
-        let dial = ANSIRenderer.colorize(String(GaugePieDial.glyph(for: fraction)), foreground: palette.accent)
+        // Through `ClaimingRow` rather than `colorize` directly, so a translucent
+        // `.tint` states its opaque spelling and sends its alpha up as a region —
+        // this dial is one of the four emit sites §31.4 found bypassing
+        // `TrackRenderer` entirely.
+        var row = ClaimingRow()
+        row.append(
+            String(GaugePieDial.glyph(for: fraction)), cells: 1, ink: palette.accent)
         let valueText = inlineText(currentValueLabel, slot: .currentValue, context: context)
-        var lines = [valueText.strippedLength > 0 ? dial + " " + valueText : dial]
+        if valueText.strippedLength > 0 {
+            row.skip(cells: 1)
+            row.appendFinished(valueText, cells: valueText.strippedLength)
+        }
+        var lines = [row.text]
         let labelText = inlineText(label, slot: .label, context: context)
         if labelText.strippedLength > 0 {
             lines.append(labelText)
         }
-        return FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: lines)
+        buffer.opacityRegions += row.claims
+        return buffer
     }
 
     /// The full ring dial: a rounded box whose border is the gauge track and
@@ -414,6 +426,7 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         }
 
         var lines: [String] = []
+        var claims: [OpacityRegion] = []
         for row in 0..<3 {
             // The middle row is assembled by CELLS, not grid columns. The glyph
             // grid holds one Character per column, and the ring's own glyphs
@@ -423,37 +436,37 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             // and `leftPad` are already cell counts (`strippedLength` sums
             // terminal widths), so composing wall + pad + value + wall directly
             // keeps all three rows the same visible width.
+            var drawn = ClaimingRow()
             if row == 1 {
                 let stripped = valueText.stripped
                 let leftPad = max(0, inner - valueText.strippedLength)
-                let wall = { (col: Int) -> String in
-                    let ch = String(glyphs[1][col])
-                    guard let color = colorAt["1,\(col)"] else { return ch }
-                    return ANSIRenderer.colorize(ch, foreground: color)
+                func wall(_ col: Int) {
+                    drawn.append(
+                        String(glyphs[1][col]), cells: 1, ink: colorAt["1,\(col)"])
                 }
-                let value =
-                    stripped.isEmpty
-                    ? "" : ANSIRenderer.colorize(stripped, foreground: palette.foreground)
-                lines.append(
-                    wall(0) + String(repeating: " ", count: leftPad) + value + wall(inner + 1))
-                continue
-            }
-            var line = ""
-            for col in 0...(inner + 1) {
-                let ch = String(glyphs[row][col])
-                if let color = colorAt["\(row),\(col)"] {
-                    line += ANSIRenderer.colorize(ch, foreground: color)
-                } else {
-                    line += ch
+                wall(0)
+                drawn.skip(cells: leftPad)
+                if !stripped.isEmpty {
+                    drawn.append(
+                        stripped, cells: valueText.strippedLength, ink: palette.foreground)
+                }
+                wall(inner + 1)
+            } else {
+                for col in 0...(inner + 1) {
+                    drawn.append(
+                        String(glyphs[row][col]), cells: 1, ink: colorAt["\(row),\(col)"])
                 }
             }
-            lines.append(line)
+            claims += drawn.claims.map { $0.shifted(byX: 0, y: row) }
+            lines.append(drawn.text)
         }
         let labelText = inlineText(label, slot: .label, context: context)
         if labelText.strippedLength > 0 {
             lines.append(labelText)
         }
-        return FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: lines)
+        buffer.opacityRegions += claims
+        return buffer
     }
 
     /// The natural size of a circular gauge (kept in step with the renderers).

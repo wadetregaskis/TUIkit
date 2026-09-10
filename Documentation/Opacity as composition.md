@@ -1148,8 +1148,10 @@ elliptical, diagonal — as ink and as a fill; a `Table` under one; `Text`'s
 concatenated-run arm under a ramp, and each fragment's own colour there; and a
 one-stop gradient's representative.
 
+Plus the circular `Gauge`'s four emit sites (§36.6).
+
 Not honoured, each loud at its own line: the indeterminate `ProgressView` sweep
-(§31.4); the circular `Gauge`'s own cells; and the image glyph path (§17).
+(§31.4) and the image glyph path (§17).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -2396,3 +2398,25 @@ With that, `band`'s `carriesAlpha: Bool` has one value everywhere and is gone. I
 existed for the arm that dropped its alpha rather than claiming it — bytes in raw so
 the emitter stays loud — and a flag with one value is a place for the next caller to
 guess wrong.
+
+### 36.6 The circular `Gauge`, and a fourth copy of one accumulator
+
+The four emit sites §31.4 found bypassing `TrackRenderer` entirely: the tiny pie dial's
+glyph, and the ring dial's rim, walls and value. A translucent `.tint` reached all four.
+
+They are the same job `DrawnTrack` was doing for a track — bytes and claim flushed
+together, so the two halves of a translucent paint cannot drift — so `DrawnTrack` moved
+out of `TrackRenderer.swift` and became `ClaimingRow`. It gained one thing in the move:
+the claim is merged into the previous one where the two are adjacent and owe the same
+alpha, because a rim drawn a cell at a time is one colour for most of its length and
+twenty rectangles where two will do is twenty the resolver walks per row.
+
+The merge rule itself is now in one place (`Array.appendCoalescing`), which three
+callers share: `ClaimingRow`, `Text.fragmentAlphaClaims`, and the pieces arm above.
+
+**It also invalidated three assertions, and that is worth recording.** `TrackAlphaTests`
+pinned claim COUNTS — "one per cell", `count == 2`, `width == 2` — and every one of
+them changed while nothing about the alpha did. The number of rectangles a row needs is
+an implementation detail; what a row owes is an alpha per column. The three now read
+that instead: the covered columns, the monotonic run of alphas, six cells for three
+double-width glyphs. Better tests, arrived at by breaking worse ones.
