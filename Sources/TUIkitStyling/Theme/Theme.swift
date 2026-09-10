@@ -688,16 +688,35 @@ extension Palette {
         // 1. Away from the page: brighter on a dark palette, darker on a light
         //    one. Contrast can only improve, so the lift can never be mistaken
         //    for the fade a disabled control gets.
-        if let lifted = stepped(toward: Self.extreme(furthestFrom: page)) { return lifted }
         // 2. …unless the colour is already AT that extreme — white text on
         //    black, black on cream — where there is nowhere further to go. Then
         //    toward the accent, which lifts in hue instead of in lightness.
-        if let tinted = stepped(toward: accent.resolve(with: self)) { return tinted }
         // 3. …and if the accent is that same colour again, the only direction
         //    left is toward the page. One step, so it reads as a touch rather
         //    than the fade that means "disabled" — and no built-in palette gets
         //    this far.
-        return stepped(toward: page) ?? resolved
+        let lifted =
+            stepped(toward: Self.extreme(furthestFrom: page))
+            ?? stepped(toward: accent.resolve(with: self))
+            ?? stepped(toward: page)
+            ?? resolved
+        // A hover lift is a re-SPELLING — the same ink, written a step further
+        // from the page — so it ends in `carryingAlpha`, exactly as
+        // ``Color/ensuringContrast(atLeast:against:)`` does.
+        //
+        // It did not, and the number that came out was the tell: a translucent
+        // base at alpha 128 came back at **184**. Neither carried (128) nor spent
+        // (255), because both arms of `stepped(toward:)` lose the alpha in a
+        // different way — `Color.lerp` interpolates it as a fourth channel toward
+        // an opaque target, and the `best == nil` fallback returns that target
+        // outright. So `.tint(.red.opacity(0.5))` was half-restored by the mere
+        // presence of the pointer, and then tripped the emitter's assertion in
+        // whichever control drew the label two frames later.
+        //
+        // Carried and not composited, deliberately: compositing here would spend
+        // the alpha against a ground this function had to *guess*, where carrying
+        // leaves it for the composite that knows the real one.
+        return lifted.carryingAlpha(of: resolved)
     }
 
     /// How coarsely ``hoveredForeground(_:)`` searches for a visible step.

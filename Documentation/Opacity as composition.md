@@ -1683,3 +1683,54 @@ sharing the phase.
 constant: whatever the line did with two claims, the frame spliced at the tick just
 drawn has to do too. That is the property, and stating it that way is what makes the
 test outlive the arithmetic.
+
+
+## 28. A hover lift half-restored a faded colour, and the two other things a palette does with alpha (2026-09-10)
+
+§20 fixed `resolve(with:)` discarding a palette slot's alpha. That was the way *in*;
+this is what happens once it is there. `Palette` is a public protocol of plain
+`var …: Color { get }` members, nothing normalises a custom one, and the derived
+colours — every surface, every pulse end, every hover lift — turned out to do **three
+different things** with a faded slot, only two of them decided by anyone.
+
+| | what it is | the alpha | why |
+|---|---|---|---|
+| **carries** | a re-*spelling* | travels | the same ink written differently; only a composite knows the real backdrop |
+| **spends** | a *composite* over a ground the palette states | consumed, result opaque | `opacity(_:over:)`; §21's rule for pulse pairs |
+| **drops** | a lightness step through `Color.rgb(…)` | gone | `scaled(_:by:)` rebuilds from `rgbComponents` and cannot carry what it never reads |
+
+`FadedPaletteDerivationTests` pins all three, one test per category, because the
+third was invisible: an opaque colour never trips the emitter's assertion, so the
+only symptom was a faded theme rendering solid.
+
+### 28.1 `hoveredForeground` was in none of the three
+
+It came back at **alpha 184** from a slot at 128. That number is the whole diagnosis:
+neither carried (128) nor spent (255), so it was not a decision at all. Both arms
+leak, differently — `stepped(toward:)` builds candidates with `Color.lerp`, which
+interpolates alpha as a fourth channel toward an opaque extreme (correctly: that is
+what makes `withAnimation` fade a colour's own opacity), and its `best == nil`
+fallback returns the opaque target outright.
+
+So the mere presence of the pointer half-restored a translucent `.tint`, and then the
+control that drew the label tripped the assertion two frames later. It is a live
+defect in already-migrated territory: `hoveredForeground` is on the plain-button path
+*and* on `_ToggleCore`'s and `RadioButton`'s indicator path, which §23 closed.
+
+`derivationsCarryAlpha` could not see it. Its `lerp` row is
+`Color.lerp(faded, faded, phase: 0.5)` — two equally-faded ends, the one input to a
+four-channel interpolation that cannot drift.
+
+It now ends in `carryingAlpha(of: resolved)`. Carried and not composited on purpose: a
+composite here would spend the alpha against a ground this function would have to
+*guess*, where carrying leaves it for the one that knows.
+
+### 28.2 The surface steps are left as they are, and said so
+
+`fieldBackground`, `fieldBackground(on:)`, `liftedBackground` and `lifted(from:)` drop
+it. Not fixed, and the test that pins them says why rather than implying they are
+right: a well stepped off a half-transparent page could reasonably be equally
+transparent (one wash all the way down) or deliberately solid (a field you can read
+in), and choosing changes the chrome depth of every faded theme. No paint site
+migrated so far reaches them, so nothing is silently wrong *today* — what was missing
+was any statement that the question is open. This is the project owner's call.

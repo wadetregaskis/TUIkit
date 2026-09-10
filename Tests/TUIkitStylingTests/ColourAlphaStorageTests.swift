@@ -317,3 +317,119 @@ struct FadedPaletteSlotTests {
         #expect(resolved.alpha == 128, "got \(resolved.alpha)")
     }
 }
+
+// MARK: - Every palette derivation, and which of three things it does
+
+/// A palette whose every slot is half-faded — the input that tells the three
+/// kinds of ``Palette`` derivation apart.
+private struct FadedEverythingPalette: Palette {
+    let id = "faded-everything"
+    let name = "Faded everything"
+    let background = Color.rgb(10, 10, 20).opacity(0.5)
+    let foreground = Color.rgb(230, 230, 240).opacity(0.5)
+    let accent = Color.rgb(0, 180, 200).opacity(0.5)
+    let success = Color.green.opacity(0.5)
+    let warning = Color.yellow.opacity(0.5)
+    let error = Color.red.opacity(0.5)
+    let info = Color.blue.opacity(0.5)
+    let border = Color.brightBlack.opacity(0.5)
+}
+
+/// **What every `Palette` derivation does with a faded slot's alpha, written down.**
+///
+/// `Palette` is a public protocol of plain `var …: Color { get }` members and
+/// nothing normalises what a custom one returns, so one faded slot reaches every
+/// derived colour in the theme. Before this there was no record of what happened
+/// to it — and the answers turned out to be three different things, only two of
+/// which anyone had decided:
+///
+/// - **carries** — a re-*spelling*. The same ink written differently (a
+///   pass-through default, a contrast floor, a hover lift), so the alpha travels
+///   with it and the composite that knows the real backdrop spends it.
+/// - **spends** — a *composite* over a ground the palette states (`opacity(_:over:)`).
+///   The alpha is consumed here, by design, and the result is opaque. §21 records
+///   why the pulse pairs must both do this.
+/// - **drops** — neither. A lightness step taken through `Color.rgb(…)` in
+///   ``Palette/scaled(_:by:)``, which cannot carry what it never reads.
+///
+/// The suite exists because the third category was invisible: an opaque colour
+/// never trips the emitter's assertion, so a faded theme's chrome came out solid
+/// with no diagnostic at all — exactly §20's failure, one level further out.
+/// Pinning all three means a derivation that changes category fails here instead.
+@Suite("Palette derivations and a faded slot")
+struct FadedPaletteDerivationTests {
+
+    private let palette = FadedEverythingPalette()
+
+    /// The re-spellings. Each of these must come back at the slot's own alpha.
+    @Test("A re-spelling carries the slot's alpha")
+    func respellingsCarry() {
+        let rows: [(name: String, derived: Color)] = [
+            ("statusBarBackground", palette.statusBarBackground),
+            ("appHeaderBackground", palette.appHeaderBackground),
+            ("overlayBackground", palette.overlayBackground),
+            ("foregroundSecondary", palette.foregroundSecondary),
+            ("foregroundTertiary", palette.foregroundTertiary),
+            ("foregroundQuaternary", palette.foregroundQuaternary),
+            ("cursorColor", palette.cursorColor),
+            ("readableText(on:)", palette.readableText(on: palette.accent)),
+            // The one that was neither: a lerp toward an opaque extreme brought a
+            // 128 back as 184, so the pointer alone half-restored a faded tint.
+            ("hoveredForeground(foreground)", palette.hoveredForeground(palette.foreground)),
+            ("hoveredForeground(accent)", palette.hoveredForeground(palette.accent)),
+        ]
+        for (name, derived) in rows {
+            #expect(derived.alpha == 128, "\(name) came back at \(derived.alpha), not 128")
+        }
+    }
+
+    /// The composites. Each SPENDS the alpha against a ground the palette states,
+    /// so an opaque result is the correct answer and not a leak.
+    @Test("A composite over a stated ground spends the alpha")
+    func compositesSpend() {
+        let rows: [(name: String, derived: Color)] = [
+            ("focusBackground", palette.focusBackground),
+            ("restingControlFace", palette.restingControlFace),
+            ("hoveredControlFace", palette.hoveredControlFace),
+            ("accentPulse.dim", palette.accentPulse().dim),
+            ("accentPulse.bright", palette.accentPulse().bright),
+            ("accentFillPulse.dim", palette.accentFillPulse().dim),
+            ("accentFillPulse.bright", palette.accentFillPulse().bright),
+        ]
+        for (name, derived) in rows {
+            #expect(derived.alpha == .max, "\(name) kept alpha \(derived.alpha)")
+        }
+    }
+
+    /// **The open item, pinned rather than fixed.**
+    ///
+    /// A surface step goes through ``Palette/scaled(_:by:)``, which rebuilds the
+    /// colour from `rgbComponents` as `Color.rgb(…)` and so cannot carry an alpha
+    /// it never reads. Unlike the composites above, nothing here decided to spend
+    /// it: the alpha is simply gone.
+    ///
+    /// Left as it is, on purpose. A surface is exactly where "translucent over
+    /// *what*?" needs an answer rather than a default — a well stepped off a
+    /// half-transparent page could reasonably be equally transparent (one wash,
+    /// all the way down) or deliberately solid (a field you can actually read in),
+    /// and choosing changes the chrome depth of every faded theme. None of the
+    /// paint sites migrated so far reaches these, so nothing is silently wrong
+    /// *today*; what was missing was any statement that the question is open.
+    ///
+    /// If it is answered by carrying the alpha, this test fails and should be
+    /// deleted, with its rows moved into ``respellingsCarry``.
+    @Test("A surface step drops the alpha — recorded, not endorsed")
+    func surfaceStepsDropIt() {
+        let rows: [(name: String, derived: Color)] = [
+            ("fieldBackground", palette.fieldBackground),
+            ("fieldBackground(on:)", palette.fieldBackground(on: palette.background)),
+            ("liftedBackground", palette.liftedBackground),
+            ("lifted(from:)", palette.lifted(from: palette.background)),
+        ]
+        for (name, derived) in rows {
+            #expect(
+                derived.alpha == .max,
+                "\(name) now carries \(derived.alpha) — see this test's own note")
+        }
+    }
+}
