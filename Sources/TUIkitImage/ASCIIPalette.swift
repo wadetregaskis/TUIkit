@@ -147,7 +147,25 @@ public struct ASCIIPalette: Sendable, Equatable {
     }
 
     init(_ colors: [Color], mapping: ASCIIPaletteMapping, adaptive: Adaptive?) {
-        let colors = colors.isEmpty ? [.black, .white] : colors
+        // Alpha is DROPPED here, on purpose and in one place.
+        //
+        // This module spells colours itself — `sgrParameters(at:background:)` and
+        // `ANSIRowBuilder.appendEscape` both switch on `Color.value` directly,
+        // for a measured reason (SGR string interpolation was 97% of a truecolor
+        // frame). So `Color+ANSICodes.swift`'s assertion does not cover this
+        // module at all, and a translucent palette entry would be discarded with
+        // no diagnostic anywhere.
+        //
+        // Discarding it is nevertheless right rather than merely convenient: a
+        // palette entry is a CANDIDATE in a nearest-colour match, and "how
+        // transparent" is not a coordinate any match here has an axis for —
+        // `entry(for:)` builds an opaque `RGBA` for exactly that reason. What an
+        // image's transparency means is decided by the image's own alpha channel,
+        // which the pixel path honours per pixel; see `flattenedOverBlack`.
+        //
+        // Normalised at the boundary so `colors` and `entries` cannot disagree
+        // about it, and so the drop is a line of code rather than an omission.
+        let colors = (colors.isEmpty ? [.black, .white] : colors).map(\.opaqueSpelling)
         let entries = colors.map(Self.entry(for:))
         self.colors = colors
         self.mapping = mapping

@@ -1124,3 +1124,60 @@ whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
 
 Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
 `Text`'s ramped ink, and per-cell ramps.
+
+
+## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
+
+An image is the one thing here with **real per-pixel alpha** already, decoded and
+carried. Straight (un-premultiplied) from `ImageLoader.straightAlphaPixels`, and
+all three resamplers carry it. The two renderers then do opposite things with it.
+
+**The pixel path is already correct.** Alpha survives the tone curve, sharpening,
+Floyd–Steinberg, quantisation and the mono recolouring, and is transmitted as
+`f=32` — real RGBA. Nothing to do.
+
+**The glyph path composites over BLACK,** unconditionally, in
+`flattenedOverBlack()`. With the default `.blocks(.fine)`, which paints a
+background in every cell, a logo with a transparent surround renders as an explicit
+black rectangle: invisible on a dark theme, glaring on a light one.
+
+That is exactly the hack the project owner ruled out — "no hacks (assuming a black
+background or any particular colour otherwise — use the *actual* colour behind the
+cell at composition time)". So the obvious cheap fix, passing `palette.background`
+instead of black, is **declined**: it is a different guess, not the removal of one.
+It would be right for an image on the page's own background and wrong over a
+`ZStack` sibling, which is where the current answer is already wrong.
+
+Honouring it properly means per-cell alpha, and the shape is tractable — an image's
+alpha is mostly large uniform areas, so run-length coalescing per row (the same
+coalescing `Text`'s fragments use in §14) collapses a logo to two or three claims a
+row. What makes it a bigger piece than the ramp work is what it drags with it:
+
+1. **`ASCIIConverter.convert`'s return type is public API** in a public module, and
+   it would have to carry an alpha map beside the lines.
+2. **The half-block coalescing gains an alpha term.** Two same-coloured pixels with
+   different alpha must stop collapsing to a space — and that optimisation is
+   load-bearing for the Warp contrast-lift banding, so it cannot simply go.
+3. **`boxReduced(by:)` averages straight-alpha colour and alpha independently, with
+   no premultiply.** Benign today only because its one production caller runs it
+   *after* the flatten. Stop flattening and every supersampled soft edge gains a
+   halo of the transparent pixels' (0,0,0).
+4. **Floyd–Steinberg diffuses RGB error out of fully transparent pixels**, whose
+   straight colour is (0,0,0), into their visible neighbours. Alpha is preserved but
+   the error is not alpha-weighted, so a hard alpha edge seeds a dark fringe.
+
+(3) and (4) are pre-existing bugs that the flatten currently hides. They have to be
+fixed *first*, and each is worth its own commit and its own test.
+
+Meanwhile `.opacity(_:)` on an `Image` behaves differently per path — the glyph
+path fades, the pixel path declines, because fading a real picture means
+re-transmitting up to megabytes per phase. `OpacityResolution` declines it
+deliberately and should keep declining it.
+
+What this branch did do for the module: `ASCIIPalette.init` normalises its colours
+to their opaque spelling in one place. The module spells SGR itself for a measured
+reason, so the emitters' assertion does not cover it and a translucent palette
+entry was being discarded with no diagnostic anywhere. Discarding it is right — a
+palette entry is a candidate in a nearest-colour match and transparency is not an
+axis of one — but it is now a line of code rather than an omission, and `colors`
+and `entries` cannot disagree about it.

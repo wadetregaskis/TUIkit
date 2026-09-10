@@ -821,6 +821,10 @@ extension _ImageCore {
     /// A palette colour as pixels, or `nil` for a semantic colour that has no
     /// RGB even after resolution.
     fileprivate static func rgba(_ color: Color, in palette: any Palette) -> RGBA? {
+        // Alpha is not carried, for the reason `ASCIIPalette.init` states: this is
+        // a colour being handed to the image pipeline as a MATCHING candidate or a
+        // recolouring target, and transparency is not an axis of either. An
+        // image's own transparency comes from its alpha channel instead.
         guard let components = color.resolve(with: palette).rgbComponents else { return nil }
         return RGBA(r: components.red, g: components.green, b: components.blue)
     }
