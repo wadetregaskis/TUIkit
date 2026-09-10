@@ -915,3 +915,54 @@ contest, so a layer at 0 handing the cell to the destination is the continuous
 answer *there*. The ink channel has no contest at all — it is one cell's own
 glyph on its own field — so keeping the glyph is the continuous answer for it.
 Two channels, two limits, one rule each.
+
+
+## 13. First match wins dropped one of two claims (2026-09-09)
+
+`resolvingOpacity`'s per-cell lookup was `covering.first { $0.contains(...) }`.
+That is right for the LAYER channel and wrong for the other two, and the split is
+not a compromise — the two kinds of claim arrive differently.
+
+A layer's alpha **nests**, and `OpacityFade.fading` has already done that
+arithmetic before the resolver ever sees it: it scales its factor into every
+region it carries up, then appends its own rectangle, so the innermost region
+covering a cell already holds the product of every `.opacity` outside it.
+Multiplying those again at lookup would count each one twice. And it could not
+move into the lookup even if that were free: a CYCLING region carries a list of
+phases, and two cycles of different lengths have no common phase index to
+multiply at. Pre-multiplying a scalar into the inner cycle is exactly what makes
+"a breathing badge inside a fading panel" expressible at all.
+
+A colour's alpha does not nest, and `fading` never touches it. So two independent
+claims on one cell lost one of them, reachable in a single line:
+
+```swift
+Text("hi").foregroundStyle(.green.opacity(0.4)).background(.red.opacity(0.4))
+```
+
+`Text` stamps `(ink 0.4)` per line and `.background` appends `(field 0.4)` over
+the same cells. The text's region came first and won, so the background rendered
+at **full strength under the letters and correctly past the end of the line** —
+which on ragged wrapped text is a visible two-tone block. Ink and field are now
+multiplied across every covering region; the layer still takes the first.
+
+### 13.1 …which then exposed the ink's backdrop being unresolved
+
+With both claims applying, §11's `ownField` was wrong in a way that could not
+occur while one of them was being dropped. It used the field **as painted** —
+full red — so the glyph was drawn 40% of the way toward a colour its own cell
+does not end up having, while sitting on a background that is 40% red.
+
+The field is therefore resolved first, at its own alpha, and the ink blends over
+*that*:
+
+```swift
+let fieldWithinLayer = source.background.map { $0.opacity(alpha.field, over: destinationField) }
+let ownField         = fieldWithinLayer ?? destinationField
+let inkWithinLayer   = sourceInk.map { $0.opacity(alpha.ink, over: ownField) }
+```
+
+The field's own output takes the second blend from the same value rather than
+recomputing the product, which lands on precisely the number one multiplied blend
+gave — the identity in §11 — while keeping one definition of "the surface this
+layer's glyphs sit on". Two definitions of that is how the two channels drift.

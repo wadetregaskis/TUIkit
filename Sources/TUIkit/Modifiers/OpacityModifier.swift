@@ -184,9 +184,11 @@ extension _OpacityView: Renderable {
     /// product of everything inside it, so scaling by this view's factor is the
     /// whole of the rule.
     ///
-    /// The order is load-bearing: the resolution takes the FIRST region
-    /// covering a cell, so the inner product has to come before the outer
-    /// rectangle that also covers it. See
+    /// The order is load-bearing: the resolution takes the LAYER alpha from the
+    /// first region covering a cell, so the inner product has to come before the
+    /// outer rectangle that also covers it. (Ink and field are multiplied across
+    /// every covering region instead, which is why this scales only `opacity` —
+    /// scaling them here would double-count them there.) See
     /// ``FrameBuffer/resolvingOpacity(over:at:surface:palette:)``.
     static func fading(
         _ regions: [OpacityRegion], by factor: Double, cycle: OpacityCycle?,

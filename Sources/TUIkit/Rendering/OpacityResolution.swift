@@ -154,12 +154,44 @@ extension FrameBuffer {
                 columns: start..<last,
                 destinationShift: position.x,
                 alpha: { column in
-                    // First match wins, and the regions arrive innermost-first
-                    // — a nested `.opacity` stamps its own product before the
-                    // outer one appends its rectangle — so the inner alpha is
-                    // the one that applies to a cell both cover.
-                    covering.first { $0.contains(column: column, row: row) }
-                        .flatMap(substituting)
+                    // The LAYER comes from the first match, and the INK and
+                    // FIELD are multiplied across every match. The asymmetry is
+                    // not a compromise; the two kinds of claim arrive differently.
+                    //
+                    // A layer's alpha nests, and `OpacityFade.fading` has already
+                    // done that arithmetic: it scales the factor into every
+                    // region it carries up before appending its own rectangle, so
+                    // the innermost region covering a cell already holds the
+                    // product of every `.opacity` outside it. Multiplying those
+                    // again here would count each one twice. It also could not be
+                    // moved to this loop even if that were free, because a
+                    // CYCLING region carries a list of phases and two cycles of
+                    // different lengths have no common phase index to multiply
+                    // at — pre-multiplying a scalar into the inner cycle is what
+                    // makes a breathing badge inside a fading panel expressible.
+                    //
+                    // A colour's alpha does not nest and `fading` never touches
+                    // it, so first-match-wins silently DROPPED one of two
+                    // independent claims on the same cell. Reachable in one line:
+                    // `Text("hi").foregroundStyle(.green.opacity(0.4))
+                    // .background(.red.opacity(0.4))` stamps (ink 0.4) for the
+                    // text and (field 0.4) for the background over the same
+                    // cells, and the text's region won — so the background
+                    // rendered at FULL strength under the letters and correctly
+                    // past the end of the line, which on ragged wrapped text is a
+                    // visible two-tone block.
+                    var result: FrameBuffer.CellAlpha?
+                    for region in covering where region.contains(column: column, row: row) {
+                        guard let cell = substituting(region) else { continue }
+                        guard var accumulated = result else {
+                            result = cell
+                            continue
+                        }
+                        accumulated.ink *= cell.ink
+                        accumulated.field *= cell.field
+                        result = accumulated
+                    }
+                    return result
                 },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground)

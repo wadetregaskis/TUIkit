@@ -345,19 +345,27 @@ extension FrameBuffer {
         // The LAYER's blend still resolves against `destinationInk`, unchanged:
         // that one is a contest between two layers' glyphs, and blending toward
         // the loser's colour is what makes a fade over text read as a dissolve.
-        let ownField = source.background ?? destinationField
+        // The layer's own field, at its OWN alpha only: the surface this layer's
+        // glyphs actually sit on. A translucent field has to be resolved BEFORE
+        // the ink blends over it, or the glyph is drawn against a colour its own
+        // cell does not end up having — 40% green over FULL red, sitting on a
+        // background that is 40% red.
+        let fieldWithinLayer =
+            source.background.map { $0.opacity(alpha.field, over: destinationField) }
+        let ownField = fieldWithinLayer ?? destinationField
         let inkWithinLayer = sourceInk.map { $0.opacity(alpha.ink, over: ownField) }
         let foreground =
             inkWithinLayer.map { $0.opacity(alpha.layer, over: destinationInk) }
             ?? destination?.foreground
-        // The FIELD needs only one blend, and not as a special case: a field is
-        // the bottom of its own layer, so its within-layer backdrop and its
-        // across-layer backdrop are the same `destinationField` — and sequential
-        // blends against one backdrop multiply exactly
+        // The field takes the second blend too, and lands on exactly the number
+        // one multiplied blend gave: a field is the bottom of its own layer, so
+        // both of its backdrops are `destinationField`, and sequential blends
+        // against ONE backdrop multiply exactly
         // (`c.opacity(a, over: d).opacity(b, over: d) == c.opacity(a * b, over: d)`).
-        // That algebra is why a single number sufficed until ink arrived.
+        // Written as two steps regardless, because the first step is the value the
+        // ink needs above and computing it twice is how the two drift apart.
         let background =
-            source.background.map { $0.opacity(alpha.layer * alpha.field, over: destinationField) }
+            fieldWithinLayer.map { $0.opacity(alpha.layer, over: destinationField) }
             ?? destination?.background
 
         // Only the glyph needs a DECISION, because a cell can hold one and

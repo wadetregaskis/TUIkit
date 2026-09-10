@@ -492,6 +492,49 @@ struct TranslucentPaintTests {
             "and not toward the glyph it displaced")
     }
 
+    /// **Two independent claims on one cell, which first-match-wins dropped.**
+    ///
+    /// A translucent foreground and a translucent background are separate claims
+    /// about separate channels, stamped by separate modifiers — `Text` writes the
+    /// ink region, `.background` appends the field one, over the same cells. The
+    /// resolver used to take the first region covering a cell and stop, so the
+    /// background rendered at FULL strength under the letters and correctly past
+    /// the end of the line: on ragged wrapped text, a visible two-tone block.
+    ///
+    /// Ink and field multiply across every covering region now. The layer channel
+    /// deliberately still takes the first — see the comment at the fold.
+    @Test("A translucent foreground and background both apply")
+    func bothChannelsApplyTogether() {
+        var ink = Color.green
+        ink.alpha = 102  // 0.4
+        var field = Color.red
+        field.alpha = 102
+        let context = makeRenderContext(width: 14, height: 3)
+        let surface = context.environment.palette.background
+        // Rendered and then resolved explicitly: `screen` returns the buffer as
+        // drawn, and regions are resolved at a COMPOSITE. There is no sibling
+        // here — the claim is about the two channels composing with each other.
+        let buffer = renderToBuffer(
+            Text("hi").foregroundStyle(ink).background(field), context: context)
+        #expect(buffer.opacityRegions.count == 2, "one claim each: \(buffer.opacityRegions)")
+        let lines = buffer.resolvingOpacity(
+            surface: surface, palette: context.environment.palette
+        ).lines
+
+        let fadedField = Color.red.opacity(102.0 / 255, over: surface)
+        #expect(
+            lines[0].contains(bgCodes(fadedField)),
+            "the background is 40% red over the surface: \(lines[0].debugDescription)")
+        #expect(
+            !lines[0].contains(bgCodes(Color.red.opacity(1, over: surface))),
+            "and not full-strength red")
+        // …and the ink is 40% green over the FIELD THAT RESULTED, which is the
+        // faded red — the two claims compose rather than one winning.
+        #expect(
+            lines[0].contains(fgCodes(Color.green.opacity(102.0 / 255, over: fadedField))),
+            "the ink blends over the faded field: \(lines[0].debugDescription)")
+    }
+
     /// **Copy and paste, end to end through the real view stack.**
     ///
     /// `.foregroundStyle(.clear)` has to leave its own characters in the cells —
