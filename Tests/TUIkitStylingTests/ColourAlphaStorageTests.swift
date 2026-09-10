@@ -120,6 +120,56 @@ struct ColourAlphaStorageTests {
             "entries \(opaque.map(\.offset)) came back at \(opaque.map(\.element.alpha))")
     }
 
+    /// **`opacity(_:)` multiplies, and the case that proves it must.**
+    ///
+    /// Measured against real SwiftUI on macOS, resolving through
+    /// `Color.resolve(in:)`:
+    ///
+    /// ```
+    /// Color.red.opacity(0.5)                 alpha=0.5
+    /// Color.red.opacity(0.5).opacity(0.5)    alpha=0.25
+    /// Color.red.opacity(0.25).opacity(0.5)   alpha=0.125
+    /// Color.clear.opacity(1.0)               alpha=0.0
+    /// ```
+    ///
+    /// The last line is the one that matters rather than merely differs. Replacing
+    /// the alpha makes `Color.clear.opacity(1)` fully opaque — which turns `.clear`
+    /// into the solid black its underlying value happens to be, in code that reads
+    /// like a no-op. Nothing times anything is nothing.
+    ///
+    /// Exact equality is not available: alpha is stored as a `UInt8`, so 0.5 is
+    /// 128 and two halvings land on 64 rather than on 63.75. The tolerance is one
+    /// channel unit, not a fudge factor.
+    @Test("opacity(_:) multiplies the alpha rather than replacing it")
+    func opacityMultiplies() {
+        #expect(Color.red.opacity(0.5).alpha == 128, "got \(Color.red.opacity(0.5).alpha)")
+        #expect(
+            Color.red.opacity(0.5).opacity(0.5).alpha == 64,
+            "0.5 x 0.5: got \(Color.red.opacity(0.5).opacity(0.5).alpha)")
+        #expect(
+            Color.red.opacity(0.25).opacity(0.5).alpha == 32,
+            "0.25 x 0.5: got \(Color.red.opacity(0.25).opacity(0.5).alpha)")
+        // A factor of 1 is the identity in both directions.
+        #expect(Color.red.opacity(1).alpha == 255, "an opaque colour stays opaque")
+        #expect(
+            Color.red.opacity(0.5).opacity(1).alpha == 128,
+            "and a translucent one is not promoted")
+        // The clincher.
+        #expect(
+            Color.clear.opacity(1).alpha == 0,
+            "clear stays clear: got \(Color.clear.opacity(1).alpha)")
+        #expect(Color.clear.opacity(0.5).alpha == 0, "and at any factor")
+    }
+
+    /// Out-of-range and NaN factors, which a caller is allowed to hand this and
+    /// which `UInt8(_: Double)` would trap on.
+    @Test("An out-of-range or NaN opacity is clamped rather than trapping")
+    func opacityClamps() {
+        #expect(Color.red.opacity(2).alpha == 255, "above the range")
+        #expect(Color.red.opacity(-1).alpha == 0, "below it")
+        #expect(Color.red.opacity(.nan).alpha == 0, "and a NaN reads as nothing")
+    }
+
     /// The one that would otherwise be silent AND fatal: a semantic colour
     /// resolves through the palette, and the alpha belongs to the value the
     /// caller wrote, not to the palette's answer.

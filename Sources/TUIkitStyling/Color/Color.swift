@@ -471,14 +471,26 @@ extension Color {
     /// the many places in this framework that derive a style from a palette and
     /// know exactly what it sits on.
     ///
-    /// - Parameter opacity: The opacity (0–1; clamped, and a NaN reads as 0).
-    /// - Returns: This colour, carrying that opacity.
+    /// **Multiplies** the alpha already there rather than replacing it, which is
+    /// SwiftUI's documented behaviour and is measured: `Color.red.opacity(0.5)`
+    /// `.opacity(0.5)` resolves to alpha 0.25 there, and `.opacity(0.25)`
+    /// `.opacity(0.5)` to 0.125.
+    ///
+    /// The case that makes it matter rather than merely differ is
+    /// `Color.clear.opacity(1)`. SwiftUI answers 0 — nothing times anything is
+    /// nothing. Replacing the alpha answers 255, which turns `.clear` into the
+    /// solid black its underlying value happens to be, in code that reads like a
+    /// no-op.
+    ///
+    /// - Parameter opacity: The factor (0–1; clamped, and a NaN reads as 0).
+    /// - Returns: This colour, at that fraction of the opacity it had.
     public func opacity(_ opacity: Double) -> Self {
         var copy = self
         // Clamped, because a caller is allowed to hand this a number out of
         // range and `UInt8(_: Double)` traps on one. `min`/`max` in this order
         // also fold a NaN to 0, which is the only answer available.
-        copy.alpha = UInt8(min(255, max(0, (min(1, max(0, opacity)) * 255).rounded())))
+        let factor = min(1, max(0, opacity))
+        copy.alpha = UInt8(min(255, max(0, (Double(alpha) * factor).rounded())))
         return copy
     }
 
