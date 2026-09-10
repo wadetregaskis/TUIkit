@@ -1772,6 +1772,21 @@ colour arithmetically; a different colour on any terminal whose palette is not t
 default. This is the bright end of every focus pulse in all sixteen shipped palettes,
 so `opaqueEndKeepsItsSpelling` asserts the **bytes**, not the value.
 
+### 29.3 A fifth copy, in the caret
+
+Found by the migration in §30 walking into it: `TextFieldContentRenderer.caretState`
+builds the same pair a third way — `dim = baseColor.opacity(focusPulseMin, over:)`
+lerped toward a bare `baseColor`. `palette.cursorColor` defaults to the accent, so a
+custom palette (or a palette bound to a live colour editor) gave a caret whose alpha
+swept **128 → 250 across fifteen of sixteen ticks**, and a block caret puts that
+straight into `backgroundCodes`.
+
+Worth recording as a lesson about the test rather than the fix. A two-end assertion
+would have missed it: tick 0 *is* the opaque dim end. The invariant is that a run's
+frames all answer to one static claim, so `caretPulseIsOpaqueAtEveryTick` asserts over
+every tick of every animation — and it is the tick *list* in the failure message that
+makes the interpolation legible.
+
 ### 29.2 What this unblocks, which is more than it fixes
 
 §18.4, §19.1 and §23 all record the same decline: *an animating colour cannot carry a

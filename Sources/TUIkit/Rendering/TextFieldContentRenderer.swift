@@ -704,17 +704,28 @@ struct TextFieldContentRenderer {
     ) -> (visible: Bool, color: Color) {
         switch animation {
         case .none:
-            return (true, baseColor)
+            return (true, baseColor.spendingAlpha(over: surface))
         case .blink:
-            return (CursorTimer.blinkVisible(atTick: tick, speed: speed), baseColor)
+            return (
+                CursorTimer.blinkVisible(atTick: tick, speed: speed),
+                baseColor.spendingAlpha(over: surface)
+            )
         case .pulse:
             let phase = CursorTimer.pulsePhase(atTick: tick, speed: speed)
             // Blended toward the field, not toward black. Bare `opacity` fades
             // to black, which on a light palette makes the dim end of the
             // pulse a DARKER mark than the bright end rather than a fainter
             // one — the caret thickens as it "fades".
-            let dim = baseColor.opacity(ViewConstants.focusPulseMin, over: surface)
-            return (true, Color.lerp(dim, baseColor, phase: phase))
+            //
+            // Through `Color.breathEnds`, so BOTH ends spend a translucent cursor
+            // colour's alpha against the field — the fifth copy of §29's pair, and
+            // the last. `palette.cursorColor` defaults to the accent, so
+            // `.tint(.red.opacity(0.5))` on a text field lerped an opaque dim end
+            // toward a translucent bright one and produced a caret at alpha 139 at
+            // mid-phase: neither carried nor spent, and straight into the emitter.
+            let ends = baseColor.breathEnds(
+                dimmedTo: ViewConstants.focusPulseMin, over: surface)
+            return (true, Color.lerp(ends.dim, ends.bright, phase: phase))
         }
     }
 }

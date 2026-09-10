@@ -73,6 +73,35 @@ struct ControlIndicatorAlphaTests {
             "re-spelled as \(ends.bright.foregroundCodes())")
     }
 
+    /// The caret's pulse is the FIFTH copy of the pair, and the assertion has to be
+    /// over every tick rather than over two ends.
+    ///
+    /// `palette.cursorColor` defaults to the accent, so `.tint(.red.opacity(0.5))` on
+    /// a text field lerped an opaque dim end toward a translucent bright one — and
+    /// the interpolation means most ticks are neither: alpha 139 at mid-phase, which
+    /// went straight into `backgroundCodes` for a block caret. A two-end check misses
+    /// it, because tick 0 IS the opaque dim end; the invariant is that a run's frames
+    /// all answer to one static claim, so every tick must be opaque.
+    @Test("Every tick of a caret's pulse is opaque under a faded tint")
+    func caretPulseIsOpaqueAtEveryTick() {
+        // Asked of the renderer directly, with a translucent caret colour: a custom
+        // `Palette` may set `cursorColor` to anything, and its default is `accent` —
+        // which is how a palette bound to a live colour editor reached this.
+        // `SystemPalette` states its own opaque cursor colour, so a `TintedPalette`
+        // is the wrong fixture and would pass for the wrong reason.
+        let faded = Color.red.opacity(0.5)
+        for animation in TextCursorStyle.Animation.allCases {
+            let states = TextFieldContentRenderer.computeCursorCycle(
+                baseColor: faded, over: .black, animation: animation,
+                speed: .regular, cursorTimer: nil
+            ).states
+            let carried = states.enumerated().filter { !$0.element.color.isOpaque }
+            #expect(
+                carried.isEmpty,
+                "\(animation) ticks \(carried.map(\.offset)) at \(carried.map(\.element.color.alpha))")
+        }
+    }
+
     /// A `ButtonCapCycle`'s caps are a fourth pulse pair, and the one whose dim end
     /// is not a dimmed accent but the button's own face — so it shares only the
     /// bright half of the rule. Every frame of the breath must be opaque, because
