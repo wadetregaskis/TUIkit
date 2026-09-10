@@ -27,7 +27,7 @@ struct TrackPatternTests {
             fraction: fraction, width: width, style: .custom(config),
             filledColor: .white, emptyColor: .brightBlack, accentColor: .cyan,
         palette: SystemPalette.green
-        ).stripped
+        ).text.stripped
     }
 
     @Test("A multi-character fill repeats cyclically with truncation")
@@ -135,7 +135,7 @@ struct TrackPatternTests {
         let track = TrackRenderer.render(
             fraction: 5.0 / 8.0, width: 8, style: .custom(config),
             filledColor: .white, emptyColor: .brightBlack, accentColor: .cyan,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
         #expect(track.stripped == "😀😀▒▒  ", "2 blocks + ½ block of ramp + empty")
     }
 
@@ -146,7 +146,7 @@ struct TrackPatternTests {
                 fraction: fraction, width: 10, style: .knob,
                 filledColor: .white, emptyColor: .brightBlack, accentColor: .cyan,
             palette: SystemPalette.green
-            ).stripped
+            ).text.stripped
         }
         #expect(knob(0.0) == "●─────────", "the knob shows at 0%")
         #expect(knob(0.5) == "━━━━━●────")

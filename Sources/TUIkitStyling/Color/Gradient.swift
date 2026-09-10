@@ -45,6 +45,20 @@
 /// A gradient carries no geometry — see the file note. `t` is supplied by
 /// whatever is painting.
 public struct Gradient: Sendable, Hashable {
+    /// Whether nothing in this ramp carries alpha.
+    ///
+    /// Asked of the STOPS rather than of a sampled ramp, because it gates whether a
+    /// path that cannot express alpha at all may be taken — a terminal picture, which
+    /// has no alpha channel — and that decision comes before any sampling. A stop's
+    /// alpha survives interpolation (``Color/lerp(_:_:phase:)`` treats it as a fourth
+    /// channel), so opaque stops cannot produce a translucent ramp.
+    ///
+    /// Here rather than in `Paint`, which used to spell it out, because a track's
+    /// fill and empty gradients are bare `Gradient`s and were about to spell it a
+    /// third and fourth time.
+    public var isOpaqueThroughout: Bool {
+        stops.allSatisfy(\.color.isOpaque)
+    }
 
     /// One colour, at one position along the ramp.
     public struct Stop: Sendable, Hashable {

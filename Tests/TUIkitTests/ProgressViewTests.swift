@@ -199,11 +199,11 @@ struct ProgressViewStyleTests {
             let blockFine = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .blockFine,
                 filledColor: .green, emptyColor: .red, accentColor: .blue,
-                palette: SystemPalette.green)
+                palette: SystemPalette.green).text
             let block = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .block,
                 filledColor: .green, emptyColor: .red, accentColor: .blue,
-                palette: SystemPalette.green)
+                palette: SystemPalette.green).text
             #expect(blockFine.contains("41"), "blockFine paints a background: \(blockFine.debugDescription)")
             #expect(block.contains("41"), "block paints the empty region as a background: \(block.debugDescription)")
             #expect(!block.contains("░"), "block draws no shade glyph: \(block.debugDescription)")
@@ -225,7 +225,7 @@ struct ProgressViewStyleTests {
             let bar = TrackRenderer.render(
                 fraction: 0.45, width: 10, style: .blockFine,
                 filledColor: .green, emptyColor: .red, accentColor: .blue,
-                palette: SystemPalette.green)
+                palette: SystemPalette.green).text
             #expect(bar.contains("42"), "full cells sit on the fill colour: \(bar.debugDescription)")
             let partialCell = bar.split(separator: "▌").first.map(String.init) ?? ""
             #expect(
@@ -445,7 +445,7 @@ struct TrackRendererClampingTests {
             emptyColor: .white,
             accentColor: .cyan,
         palette: SystemPalette.green
-        )
+        ).text
         #expect(
             track.strippedLength == 10,
             "Track with fraction > 1.0 should clamp to width 10, got \(track.strippedLength)"
@@ -462,7 +462,7 @@ struct TrackRendererClampingTests {
             emptyColor: .white,
             accentColor: .cyan,
         palette: SystemPalette.green
-        )
+        ).text
         #expect(
             track.strippedLength == 10,
             "Track with negative fraction should clamp to width 10, got \(track.strippedLength)"
@@ -482,7 +482,7 @@ struct TrackRendererClampingTests {
                 emptyColor: .white,
                 accentColor: .cyan,
             palette: SystemPalette.green
-            )
+            ).text
             #expect(
                 overTrack.strippedLength == 10,
                 "Style \(style) with fraction 2.0 should render width 10, got \(overTrack.strippedLength)"
@@ -496,7 +496,7 @@ struct TrackRendererClampingTests {
                 emptyColor: .white,
                 accentColor: .cyan,
             palette: SystemPalette.green
-            )
+            ).text
             #expect(
                 underTrack.strippedLength == 10,
                 "Style \(style) with fraction -1.0 should render width 10, got \(underTrack.strippedLength)"

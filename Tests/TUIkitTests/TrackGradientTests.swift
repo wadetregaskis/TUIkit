@@ -27,7 +27,7 @@ struct TrackGradientTests {
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
     }
 
     /// `span` counts cells and a segment can be any string, so a wide glyph
@@ -41,7 +41,7 @@ struct TrackGradientTests {
                 leading: "🌑", middle: "🌕", trailing: "🌖", emptyFill: "·",
                 coloring: .gradient(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)]))),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
         // A wide glyph is coloured at its FIRST cell, so the last glyph (cells
         // 18–19) wears ramp[18] of 20 — not the final stop itself, but eighteen
         // steps along. Per character it wore ramp[9], the middle of the ramp.
@@ -214,7 +214,7 @@ struct TrackEmptyStylingTests {
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
             fillScaling: scaling, emptyScaling: scaling,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
     }
 
     private func hasForeground(_ output: String, _ code: String) -> Bool {
@@ -283,7 +283,7 @@ struct TrackGradientScalingTests {
             emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
             fillScaling: scaling,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
     }
 
     private func hasForeground(_ output: String, _ code: String) -> Bool {
@@ -330,7 +330,7 @@ struct TrackGradientScalingTests {
                 emptyColor: .rgb(9, 9, 9),
                 accentColor: .rgb(7, 7, 7),
                 fillScaling: scaling,
-                palette: SystemPalette.green)
+                palette: SystemPalette.green).text
         }
         let pinned = segments(0.5, .track)
         #expect(
@@ -353,7 +353,7 @@ struct TrackGradientScalingTests {
             fraction: 0.5, width: 10,
             style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
         #expect(defaulted == render(0.5, .track))
         #expect(defaulted != render(0.5, .fill), "…and the two really do differ")
     }
@@ -376,7 +376,7 @@ struct TrackGradientScalingTests {
                     emptyStyle: .background, emptyGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7), fillScaling: scaling, emptyScaling: scaling,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
     }
 
     /// The `(text, background)` pair of every coloured run, in order.
@@ -434,7 +434,7 @@ struct TrackGradientScalingTests {
                     emptyStyle: .background, emptyGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7), fillScaling: .fill, emptyScaling: .fill,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
         let ramp = Color.quantisedRamp(Self.fade, count: 5, depth: .truecolor)
         #expect(runs(in: output).suffix(5).map(\.background) == ramp.map { triple($0) })
     }
@@ -452,7 +452,7 @@ struct TrackGradientScalingTests {
                     emptyGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7), fillScaling: fill, emptyScaling: empty,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green).text
     }
 
     /// The fill's scaling decides only the fill; the unfilled ramp is the same

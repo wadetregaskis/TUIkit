@@ -499,7 +499,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // arrows from `buffer.width`. Taking the requested width put the run one
         // column past the arrow, on the blank before the read-out, where the
         // loop replayed a SECOND ▶ breathing out of step with the real one.
-        let (content, drawnTrackWidth, valueClaim) = buildContent(
+        let (content, drawnTrackWidth, valueClaim, trackClaims) = buildContent(
             fraction: fraction,
             isFocused: isFocused,
             isHovered: isHovered,
@@ -517,6 +517,14 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
 
         var buffer = FrameBuffer(text: content)
         buffer.opacityRegions += valueClaim.map { [$0] } ?? []
+        // The track's own claims, in the track's coordinates, moved to where the
+        // layout actually puts it: `"◀ "` is two cells, which `arrowRuns` states as
+        // `trackLeft` and this must not spell a second time. A disabled slider
+        // produces none — `forState` composites every colour through
+        // `opacity(_:over:)` and stamps the result opaque, so its alpha is spent
+        // against the page rather than claimed. One colour, two answers, decided by
+        // `isEnabled`; §31.3.
+        buffer.opacityRegions += trackClaims.map { $0.shifted(byX: Self.trackLeft, y: 0) }
         if !context.isMeasuring {
             buffer.animatedCells = arrowRuns(
                 cycle: cycle, palette: palette, drawnTrackWidth: drawnTrackWidth)
@@ -847,6 +855,13 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         return box.value
     }
 
+    /// Where the track starts: `"◀ "`, two cells.
+    ///
+    /// One number, because three things now depend on it — the right arrow's run, the
+    /// value read-out's offset, and the track's own opacity claims — and a claim that
+    /// disagreed with the runs by one cell would fade the arrow instead of the rail.
+    static var trackLeft: Int { 2 }
+
     /// The runs that breathe the two arrows, so the loop can advance them
     /// without walking the view tree. Empty unless the slider is focused and
     /// the indicator style actually animates.
@@ -865,7 +880,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     ) -> [AnimatedCellRun] {
         guard cycle.isAnimating else { return [] }
         let (dim, bright) = palette.accentPulse()
-        let trackLeft = 2  // "◀ "
+        let trackLeft = Self.trackLeft
         return [
             cycle.run(
                 TerminalSymbols.leftArrow, dim: dim, bright: bright, offsetX: 0, offsetY: 0),
@@ -893,7 +908,10 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         fillScaling: TrackGradientScaling,
         emptyScaling: TrackGradientScaling,
         graphics: GradientGraphicsContext?
-    ) -> (content: String, drawnTrackWidth: Int, valueClaim: OpacityRegion?) {
+    ) -> (
+        content: String, drawnTrackWidth: Int, valueClaim: OpacityRegion?,
+        trackClaims: [OpacityRegion]
+    ) {
         // Arrow colors:
         //   - Focused: pulsing accent
         //   - Hovered: static accent at the hoverBackground tint, so the
@@ -971,13 +989,14 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // fill ratio. Everything drawn to the RIGHT of the track moves with it,
         // so say where the track actually ended rather than let the caller
         // assume it got what it asked for.
-        let drawnTrackWidth = track.strippedLength
+        let drawnTrackWidth = track.cells
 
         // Pulsing arrows indicate focus - no extra markers needed. The value
         // read-out is omitted when `.sliderShowsValue(false)` (some surrounding
         // control shows the value instead).
         guard showsValue else {
-            return ("\(leftArrow) \(track) \(rightArrow)", drawnTrackWidth, nil)
+            return (
+                "\(leftArrow) \(track.text) \(rightArrow)", drawnTrackWidth, nil, track.claims)
         }
         // Where the read-out's digits start: `"◀ "` + the track as DRAWN + `" ▶ "`.
         // `drawnTrackWidth` and not `trackWidth`, for the reason `arrowRuns` takes
@@ -989,9 +1008,10 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // its colours are §16.1 row 8, still open, and a rectangle over them here
         // would multiply with the claim that migration adds.
         return (
-            "\(leftArrow) \(track) \(rightArrow) \(valueLabel)", drawnTrackWidth,
+            "\(leftArrow) \(track.text) \(rightArrow) \(valueLabel)", drawnTrackWidth,
             OpacityRegion.claim(
                 offsetX: 5 + drawnTrackWidth, width: valueDisplay.strippedLength, height: 1,
-                ink: valueLabelColor))
+                ink: valueLabelColor),
+            track.claims)
     }
 }

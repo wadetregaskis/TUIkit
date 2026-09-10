@@ -248,8 +248,12 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         if let labelLine = visibleLabelLine(width: width, context: context) {
             lines.append(labelLine)
         }
-        lines.append(renderBarLine(width: width, style: style, palette: palette, context: context))
-        return FrameBuffer(lines: lines)
+        let barRow = lines.count
+        let bar = renderBarLine(width: width, style: style, palette: palette, context: context)
+        lines.append(bar.line)
+        var buffer = FrameBuffer(lines: lines)
+        buffer.opacityRegions += bar.claims.map { $0.shifted(byX: 0, y: barRow) }
+        return buffer
     }
 
     // MARK: - Rendering
@@ -305,9 +309,12 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
 
     /// The bar line: `min bar max`, with the bar taking whatever width the
     /// bound labels leave.
+    /// - Returns: The line, and the bar's claims already shifted past the minimum
+    ///   label — the offset is known only here, and re-deriving `minPart` in the
+    ///   caller is exactly the divergence one function per rule exists to prevent.
     private func renderBarLine(
         width: Int, style: GaugeStyle, palette: any Palette, context: RenderContext
-    ) -> String {
+    ) -> (line: String, claims: [OpacityRegion]) {
         let minText = inlineText(minimumValueLabel, slot: .minimumValue, context: context)
         let maxText = inlineText(maximumValueLabel, slot: .maximumValue, context: context)
         let minPart = minText.strippedLength > 0 ? minText + " " : ""
@@ -325,7 +332,9 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             palette: palette,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )
-        return minPart + bar + maxPart
+        return (
+            minPart + bar.text + maxPart,
+            bar.claims.map { $0.shifted(byX: minPart.strippedLength, y: 0) })
     }
 
     // MARK: - Circular rendering

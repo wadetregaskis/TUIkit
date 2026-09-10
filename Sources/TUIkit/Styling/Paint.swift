@@ -65,7 +65,7 @@ extension Paint {
     public var isOpaqueThroughout: Bool {
         switch self {
         case .color(let colour): colour.isOpaque
-        case .gradient(let paint): paint.gradient.stops.allSatisfy(\.color.isOpaque)
+        case .gradient(let paint): paint.gradient.isOpaqueThroughout
         }
     }
 }

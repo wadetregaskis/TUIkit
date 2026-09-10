@@ -347,9 +347,15 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // move one bar. See ``AnimatedCellRun``.
         let barRow = lines.count
         guard fractionCompleted == nil, !context.isMeasuring, width > 0 else {
-            lines.append(
-                renderBarLine(width: width, palette: palette, context: context, elapsed: elapsed))
-            return FrameBuffer(lines: lines)
+            let bar = renderBarLine(
+                width: width, palette: palette, context: context, elapsed: elapsed)
+            lines.append(bar.text)
+            var buffer = FrameBuffer(lines: lines)
+            // Down to the row the bar landed on. Nothing is composited over this
+            // buffer here, so the claim goes on plainly — `ListRowStyleModifiers`'
+            // two-branch punch rule does not apply.
+            buffer.opacityRegions += bar.claims.map { $0.shifted(byX: 0, y: barRow) }
+            return buffer
         }
 
         let cycle = indeterminateCycle(width: width, palette: palette, context: context)
@@ -524,17 +530,23 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// indeterminate sweep when there is no measurable progress.
     private func renderBarLine(
         width: Int, palette: any Palette, context: RenderContext, elapsed: Double
-    ) -> String {
+    ) -> DrawnTrack {
         guard let fraction = fractionCompleted else {
-            return IndeterminateRenderer.render(
-                width: width,
-                style: context.environment.indeterminateStyle,
-                filledColor: palette.foregroundSecondary,
-                emptyColor: palette.foregroundTertiary,
-                accentColor: palette.accent,
-                elapsed: elapsed,
-                palette: palette
-            )
+            var row = DrawnTrack()
+            // The indeterminate sweep still carries no claims — its whole row is an
+            // `AnimatedCellRun` whose columns are lit in some frames and not others,
+            // so one static region cannot describe it. §31.4.
+            row.appendFinished(
+                IndeterminateRenderer.render(
+                    width: width,
+                    style: context.environment.indeterminateStyle,
+                    filledColor: palette.foregroundSecondary,
+                    emptyColor: palette.foregroundTertiary,
+                    accentColor: palette.accent,
+                    elapsed: elapsed,
+                    palette: palette
+                ), cells: width)
+            return row
         }
         return TrackRenderer.render(
             fraction: fraction,

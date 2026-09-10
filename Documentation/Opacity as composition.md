@@ -1891,3 +1891,83 @@ reason:
   `.control(.button)`; `_ButtonStyleBody` compensates for the foreground alone, and
   `cascaded.bold` / `.italic` / `.underline` / `.strikethrough` / `.textCase` are
   read and then never applied to a view label at all.
+
+
+## 31. The track: nineteen emit sites that all knew their columns (2026-09-10)
+
+Row 8 of §16.1 — `TrackConfiguration(emptyColor:)` and `SegmentColoring` — said "3+
+sites". It is **nineteen `ANSIRenderer.colorize` calls across six functions**, and the
+count is the least interesting thing about them: every one already tracked cells,
+because a track's whole job is to fill exactly `width` of them. What none of them did
+was *say* where a run started.
+
+The structural blocker was the return type. `TrackRenderer.render` returned a bare
+`String`, so there was nowhere for a claim to travel. It now returns `DrawnTrack` —
+text, claims, and how many cells were actually drawn — and every arm goes through one
+`append(_:cells:ink:field:)`, which states the opaque spelling and derives the claim
+in the same statement. Nineteen hand-written `opaqueSpelling`s would have been
+nineteen chances to forget, and a twentieth drawing arm added later would have
+reintroduced the trap silently. Same reason `BorderRenderer.band` exists (§18.3).
+
+`cells` is not a convenience. The coarse path permanently shrinks a track to a whole
+multiple of its quantum, so a claim derived from the *requested* width would sit past
+the end of what was drawn — the lesson `Slider`'s right-arrow run had already learned,
+and `drawnTrackWidth` now comes from `DrawnTrack.cells` rather than a
+`strippedLength` recount.
+
+### 31.1 The one cell whose two channels come from different colours
+
+`.blockFine`'s fractional boundary cell takes its **ink** from the fill and its
+**field** from the empty colour: the ramp glyph covers the filled fraction, and the
+unfilled colour shows through the rest of the cell. An opaque `█` fill with a
+translucent `TrackConfiguration.emptyColor` must resolve `inkOpacity == 1,
+fieldOpacity < 1` — solid glyph, faded remainder.
+
+This is the cell that proves the two channels earn their keep. A single alpha per cell
+gets it wrong in *both* directions, and `boundaryCellSplitsItsChannels` pins it.
+
+### 31.2 A track's per-cell gradient is honourable, unlike a page's
+
+§15 declines `perCell` ramps because a 2-D ramp needs a region per cell and the
+resolver's fold is a linear scan per column. A track is **one row**, so per-cell alpha
+is a run of one-cell rectangles rather than a grid — 10 to 40 of them, not 80 × the
+height. So `.threeSegment(coloring: .gradient(…))` with translucent stops is fully
+honoured, and so is a per-cell `emptyGradient`. A narrower result than §15's, and the
+narrowness is the point.
+
+### 31.3 A disabled slider spends where an enabled one claims
+
+`_SliderCore.forState` composites every track colour through
+`opacity(_:over: palette.background)` when the slider is disabled, which consumes the
+alpha and stamps the result opaque. So a disabled slider's translucent tint resolves
+against the *palette's* background and an enabled one's against the real backdrop: one
+colour, two answers, decided by `isEnabled`.
+
+Left as it is — `disabledSliderClaimsNothing` records it — because it is the same
+substitute-versus-compose choice §21.1 makes everywhere else, and a disabled control's
+whole job is to recede against the page it sits on.
+
+### 31.4 What still does not claim, and why each is a decline
+
+- **The picture path.** `.block` — `ProgressView`'s default — becomes Kitty
+  placeholder cells on a terminal that draws pictures, and `GradientRaster.Picture
+  .format` is hardcoded `.rgb`. Even with an alpha channel it would be the *terminal*
+  compositing against its own background, not against what TUIkit drew behind the
+  cell. So a translucent track now **declines** the picture and takes the cell path,
+  which claims correctly. Without the decline the gap would be
+  terminal-distributed — right on Apple Terminal, wrong on kitty and Ghostty — which
+  is the failure §15.1 refuses.
+- **The indeterminate sweep.** Its whole row is one `AnimatedCellRun`, and a sweep
+  *moves*: a given column is lit in some frames and unlit in others. The resolver
+  re-blends a run's frames at one alpha per column for all frames, so a static region
+  is right only if every colour any frame can paint shares one alpha — which
+  `emptyColor` and `accentColor` do not. Still loud.
+- **Pre-styled segment strings.** `.automatic` / `.solid` / `.perSegment` accept
+  segments carrying the caller's own ANSI. Where they do, some cells' effective ink is
+  not the colour the claim is about. The run *was* painted at that alpha, so the claim
+  is approximate rather than wrong, and there is no way to ask a pre-styled string
+  what it will look like.
+- **The circular gauge**, found in passing and NOT part of row 8: `renderCircularTiny`
+  and `renderCircularDial` paint their own cells and bypass `TrackRenderer` entirely.
+  A translucent `.tint` reaches all four of their emit sites. Added to §16.1 as its
+  own line so finishing the track is not mistaken for finishing the `Gauge`.

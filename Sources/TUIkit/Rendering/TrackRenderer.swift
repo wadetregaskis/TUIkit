@@ -24,6 +24,51 @@
 ///     accentColor: palette.accent
 /// )
 /// ```
+/// A track's finished row, the cells that owe a blend, and how many cells it
+/// actually drew.
+///
+/// `TrackRenderer.render` used to return a bare `String`, and that was the whole
+/// reason row 8 of §16.1 could not be migrated: nineteen `colorize` calls across six
+/// functions each knew exactly which columns they were painting — a track's entire
+/// job is to fill exactly `width` cells — and not one of them had anywhere to SAY so.
+struct DrawnTrack {
+    /// The finished ANSI row.
+    var text = ""
+
+    /// The cells owing a blend, in the track's own coordinates: column 0 is the
+    /// track's first cell, whatever the caller draws to its left.
+    var claims: [OpacityRegion] = []
+
+    /// How many cells were drawn — which is not always the width that was asked
+    /// for. The coarse path permanently shrinks a track to a whole multiple of its
+    /// quantum, and a claim must sit on what was DRAWN. Same lesson `Slider`'s
+    /// right-arrow run already learned.
+    var cells = 0
+
+    /// Appends one run: `count` columns of `glyphs`, painted in `ink` on `field`.
+    ///
+    /// **The one place a track's cells become bytes, and the one place its claims
+    /// are derived**, so the two halves of a translucent paint cannot drift apart —
+    /// the same reason `BorderRenderer.band` exists (§18.3). Nineteen call sites
+    /// would otherwise each spell `opaqueSpelling` out, and a twentieth drawing arm
+    /// added later would silently reintroduce the trap.
+    mutating func append(_ glyphs: String, cells count: Int, ink: Color?, field: Color? = nil) {
+        text += ANSIRenderer.colorize(
+            glyphs, foreground: ink?.opaqueSpelling, background: field?.opaqueSpelling)
+        claims +=
+            OpacityRegion.claim(
+                offsetX: cells, width: count, height: 1, ink: ink, field: field).map { [$0] } ?? []
+        cells += count
+    }
+
+    /// Appends bytes that are already finished — a picture's placeholder cells —
+    /// which owe no claim because this renderer chose no colour for them.
+    mutating func appendFinished(_ chunk: String, cells count: Int) {
+        text += chunk
+        cells += count
+    }
+}
+
 enum TrackRenderer {
     /// Renders a track with the specified style and colors.
     ///
@@ -45,7 +90,8 @@ enum TrackRenderer {
     ///     cells are colour and nothing else (`TrackConfiguration.isColourField`)
     ///     on a terminal that draws pictures — `nil` draws cells, which every
     ///     other style does regardless. See ``TrackRaster``.
-    /// - Returns: An ANSI-styled string representing the track.
+    /// - Returns: The track's bytes, the cells that owe a blend, and how many
+    ///   cells were drawn.
     static func render(
         fraction: Double,
         width: Int,
@@ -57,13 +103,13 @@ enum TrackRenderer {
         emptyScaling: TrackGradientScaling = .track,
         palette: any Palette,
         graphics: GradientGraphicsContext? = nil
-    ) -> String {
+    ) -> DrawnTrack {
         let style = style.resolvingColours(with: palette)
         // Read once per render, not once per cell. A gradient can only be
         // quantised as a ramp if it knows what the terminal will do to it; at
         // truecolor every helper below falls through to the plain interpolation.
         let depth = ColorDepth.current
-        guard width > 0 else { return "" }
+        guard width > 0 else { return DrawnTrack() }
 
         // Clamp fraction to [0, 1] to prevent track overflow
         let fraction = min(1.0, max(0.0, fraction))
@@ -74,14 +120,29 @@ enum TrackRenderer {
         // cells would all be plain colour and the terminal draws pictures.
         // The named cases are just presets; `.custom` carries a caller-supplied
         // recipe.
-        func configured(_ config: TrackConfiguration) -> String {
-            if let graphics, config.isColourField,
+        func configured(_ config: TrackConfiguration) -> DrawnTrack {
+            // A PICTURE has no alpha channel to send — `GradientRaster.Picture.format`
+            // is `.rgb`, and a terminal would in any case composite it against its own
+            // background rather than against what TUIkit drew behind the cell. So a
+            // translucent track declines this path and takes the cell one, which
+            // claims correctly. `BackgroundModifier` declines a translucent ramp for
+            // the same reason (§15.1), and it matters more here: `.block` is
+            // `ProgressView`'s default, so without this the gap would be
+            // terminal-distributed — right on Apple Terminal, wrong on kitty.
+            let opaqueThroughout =
+                filledColor.isOpaque && emptyColor.isOpaque
+                && config.emptyColor?.isOpaque != false
+                && config.fillGradient?.isOpaqueThroughout != false
+                && config.emptyGradient?.isOpaqueThroughout != false
+            if let graphics, config.isColourField, opaqueThroughout,
                 let row = renderPicture(
                     fraction: fraction, width: width, config: config,
                     filledColor: filledColor, emptyColor: emptyColor,
                     fillScaling: fillScaling, emptyScaling: emptyScaling, graphics: graphics)
             {
-                return row
+                var drawn = DrawnTrack()
+                drawn.appendFinished(row, cells: width)
+                return drawn
             }
             return renderConfigured(
                 fraction: fraction, width: width, config: config,
@@ -234,7 +295,7 @@ extension TrackRenderer {
         fillScaling: TrackGradientScaling,
         emptyScaling: TrackGradientScaling,
         depth: ColorDepth
-    ) -> String {
+    ) -> DrawnTrack {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
         let emptyChars: [Character]
         let paintsBackground: Bool
@@ -333,20 +394,27 @@ extension TrackRenderer {
                 span: emptySpan, fallback: emptyColor, depth: depth)
         }
 
-        var result = ""
+        var row = DrawnTrack()
         for index in 0..<fullCount {
             let cellColour = fillColour(at: index)
-            result += ANSIRenderer.colorize(
-                String(fillChars[index % fillChars.count]), foreground: cellColour,
-                background: paintsBackground ? cellColour : nil)
+            row.append(
+                String(fillChars[index % fillChars.count]), cells: 1, ink: cellColour,
+                field: paintsBackground ? cellColour : nil)
         }
         if hasPartial, let ramp {
             // The boundary cell is genuinely part-empty: the glyph covers the
             // filled fraction and the empty colour correctly shows behind the
             // rest of the cell.
-            result += ANSIRenderer.colorize(
-                String(ramp[partialStep - 1]), foreground: fillColour(at: fullCount),
-                background: paintsBackground ? emptyColour(at: fullCount) : nil)
+            //
+            // It is also the one cell in the framework whose INK and FIELD come from
+            // different sources, which is what makes the two channels earn their
+            // keep: an opaque `█` fill with a translucent `TrackConfiguration
+            // .emptyColor` must resolve `inkOpacity == 1, fieldOpacity < 1` — the
+            // ramp glyph solid, the rest of the cell faded. One alpha per cell gets
+            // this cell wrong in both directions.
+            row.append(
+                String(ramp[partialStep - 1]), cells: 1, ink: fillColour(at: fullCount),
+                field: paintsBackground ? emptyColour(at: fullCount) : nil)
         }
         let emptyCount = width - litCellCount
         if emptyCount > 0 {
@@ -362,22 +430,22 @@ extension TrackRenderer {
             if config.emptyGradient != nil, emptySpan > 1 {
                 for cell in litCellCount..<width {
                     let colour = emptyColour(at: cell)
-                    result += ANSIRenderer.colorize(
+                    row.append(
                         paintsBackground ? " " : String(emptyChars[cell % emptyChars.count]),
-                        foreground: colour,
-                        background: paintsBackground ? colour : nil)
+                        cells: 1, ink: colour, field: paintsBackground ? colour : nil)
                 }
             } else if paintsBackground {
                 // One run, one escape: a flat unfilled remainder is what almost
                 // every bar draws, and it must not cost a colour change a cell.
-                result += ANSIRenderer.colorize(
-                    String(repeating: " ", count: emptyCount), foreground: emptyColor,
-                    background: emptyColor)
+                // One CLAIM as well, for the same reason.
+                row.append(
+                    String(repeating: " ", count: emptyCount), cells: emptyCount,
+                    ink: emptyColor, field: emptyColor)
             } else {
-                result += ANSIRenderer.colorize(emptyGlyphs(), foreground: emptyColor)
+                row.append(emptyGlyphs(), cells: emptyCount, ink: emptyColor)
             }
         }
-        return result
+        return row
     }
 
     // The coarse pattern mode: some fill/unfilled character is wider than
@@ -406,11 +474,11 @@ extension TrackRenderer {
         paintsBackground: Bool,
         fillScaling: TrackGradientScaling,
         depth: ColorDepth
-    ) -> String {
+    ) -> DrawnTrack {
         // The style's own unfilled colour, if it named one — see the fine path.
         let emptyColor = config.emptyColor ?? emptyColor
         let effectiveWidth = (width / quantum) * quantum
-        guard effectiveWidth > 0 else { return "" }
+        guard effectiveWidth > 0 else { return DrawnTrack() }
         let steps = effectiveWidth / quantum
 
         // With a ramp of n glyphs each block has n+1 sub-steps — the same
@@ -437,7 +505,11 @@ extension TrackRenderer {
         }
 
         // The fill: walk the cyclic pattern up to the step boundary.
-        var result = ""
+        //
+        // Claimed per GLYPH at its real cell width, which is the whole point of this
+        // path: a character-counted rectangle would be wrong by up to `quantum − 1`
+        // cells per glyph here, where an emoji fill is two cells wide.
+        var row = DrawnTrack()
         var cell = 0
         var index = 0
         while cell < targetCells {
@@ -445,19 +517,18 @@ extension TrackRenderer {
             let charWidth = max(1, character.terminalWidth)
             guard cell + charWidth <= targetCells else { break }
             let colour = fillColour(atCell: cell)
-            result += ANSIRenderer.colorize(
-                String(character), foreground: colour,
-                background: paintsBackground ? colour : nil)
+            row.append(
+                String(character), cells: charWidth, ink: colour,
+                field: paintsBackground ? colour : nil)
             cell += charWidth
             index += 1
         }
         if cell < targetCells {
             // A mixed-width pattern that can't land on the boundary: pad the
             // shortfall so the unfilled region still starts on its cell.
-            result += ANSIRenderer.colorize(
-                String(repeating: " ", count: targetCells - cell),
-                foreground: emptyColor,
-                background: paintsBackground ? emptyColor : nil)
+            row.append(
+                String(repeating: " ", count: targetCells - cell), cells: targetCells - cell,
+                ink: emptyColor, field: paintsBackground ? emptyColor : nil)
         }
 
         // The partially-filled block: its ramp glyph (chosen by the sub-block
@@ -479,21 +550,21 @@ extension TrackRenderer {
                 block += String(repeating: " ", count: quantum - rampCells)
                 rampCells = quantum
             }
-            result += ANSIRenderer.colorize(
-                block, foreground: rampColour,
-                background: paintsBackground ? emptyColor : nil)
+            row.append(
+                block, cells: rampCells, ink: rampColour,
+                field: paintsBackground ? emptyColor : nil)
         }
 
         // The unfilled remainder: spaces on the empty colour for
         // `.background`, else the cyclic unfilled pattern truncated at its
         // own character boundaries and space-padded to the track edge.
         let remaining = effectiveWidth - targetCells - rampCells
-        guard remaining > 0 else { return result }
+        guard remaining > 0 else { return row }
         if paintsBackground {
-            result += ANSIRenderer.colorize(
-                String(repeating: " ", count: remaining), foreground: emptyColor,
-                background: emptyColor)
-            return result
+            row.append(
+                String(repeating: " ", count: remaining), cells: remaining, ink: emptyColor,
+                field: emptyColor)
+            return row
         }
         var empty = ""
         var emptyCell = 0
@@ -509,8 +580,8 @@ extension TrackRenderer {
         if emptyCell < remaining {
             empty += String(repeating: " ", count: remaining - emptyCell)
         }
-        result += ANSIRenderer.colorize(empty, foreground: emptyColor)
-        return result
+        row.append(empty, cells: remaining, ink: emptyColor)
+        return row
     }
 
     // Renders the `.threeSegment` style: `[leading][middle × N][trailing]`
@@ -532,7 +603,7 @@ extension TrackRenderer {
         emptyColor: Color,
         fillScaling: TrackGradientScaling,
         depth: ColorDepth
-    ) -> String {
+    ) -> DrawnTrack {
         let leadingWidth = leading.strippedLength
         let trailingWidth = trailing.strippedLength
         let middleWidth = max(1, middle.strippedLength)
@@ -545,7 +616,7 @@ extension TrackRenderer {
         // last colour.
         let gradientSpan = fillScaling == .track ? width : filledCount
 
-        var result = ""
+        var row = DrawnTrack()
 
         if filledCount <= 0 {
             // Nothing lit at all.
@@ -554,10 +625,10 @@ extension TrackRenderer {
             // from the leading edge (per-segment colouring uses the leading
             // colour for the truncated composite).
             let truncated = (leading + trailing).ansiAwarePrefix(visibleCount: filledCount)
-            result += renderLitRegion(
+            renderLitRegion(
                 leading: truncated, middleRun: "", trailing: "",
                 coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan,
-                depth: depth)
+                depth: depth, into: &row)
         } else {
             // Endpoints fit. Repeat `middle` to fill the gap, plus a
             // partial trailing slice if needed.
@@ -571,10 +642,10 @@ extension TrackRenderer {
             if remainder > 0 {
                 middleRun += middle.ansiAwarePrefix(visibleCount: remainder)
             }
-            result += renderLitRegion(
+            renderLitRegion(
                 leading: leading, middleRun: middleRun, trailing: trailing,
                 coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan,
-                depth: depth)
+                depth: depth, into: &row)
         }
 
         let emptyCellCount = max(0, width - filledCount)
@@ -589,9 +660,9 @@ extension TrackRenderer {
             if emptyRemainder > 0 {
                 empty += emptyFill.ansiAwarePrefix(visibleCount: emptyRemainder)
             }
-            result += ANSIRenderer.colorize(empty, foreground: emptyColor)
+            row.append(empty, cells: emptyCellCount, ink: emptyColor)
         }
-        return result
+        return row
     }
 
     /// Colours the assembled lit region of a `.threeSegment` track.
@@ -599,28 +670,41 @@ extension TrackRenderer {
     /// With `.automatic` / `.solid` / `.perSegment` each part is emitted
     /// as-is, so callers can pass already-styled strings (ANSI codes
     /// embedded); `.gradient` re-colours cell by cell and expects plain text.
+    ///
+    /// Widths are measured in CELLS (`strippedLength` sums terminal widths), never in
+    /// characters: a segment can be any string, and the existing wide-glyph tests use
+    /// 🌑/🌕/🌖. A character count would put every claim after the first in the wrong
+    /// column.
+    ///
+    /// - Note: `.automatic` / `.solid` / `.perSegment` accept segments that already
+    ///   carry the caller's own ANSI, and where they do, some cells' effective ink is
+    ///   not the colour the claim is about. The run *was* painted at that alpha, so
+    ///   the claim is not wrong so much as approximate, and there is no way to ask a
+    ///   pre-styled string what it is going to look like. `.gradient` re-colours cell
+    ///   by cell and expects plain text, so it has no such gap.
     private static func renderLitRegion(
         leading: String, middleRun: String, trailing: String,
-        coloring: SegmentColoring, filledColor: Color, gradientSpan: Int, depth: ColorDepth
-    ) -> String {
+        coloring: SegmentColoring, filledColor: Color, gradientSpan: Int, depth: ColorDepth,
+        into row: inout DrawnTrack
+    ) {
+        let whole = leading + middleRun + trailing
         switch coloring {
         case .automatic:
-            return ANSIRenderer.colorize(leading + middleRun + trailing, foreground: filledColor)
+            row.append(whole, cells: whole.strippedLength, ink: filledColor)
         case .solid(let color):
-            return ANSIRenderer.colorize(leading + middleRun + trailing, foreground: color)
+            row.append(whole, cells: whole.strippedLength, ink: color)
         case .perSegment(let leadingColor, let middleColor, let trailingColor):
-            var result = ANSIRenderer.colorize(leading, foreground: leadingColor)
+            row.append(leading, cells: leading.strippedLength, ink: leadingColor)
             if !middleRun.isEmpty {
-                result += ANSIRenderer.colorize(middleRun, foreground: middleColor)
+                row.append(middleRun, cells: middleRun.strippedLength, ink: middleColor)
             }
             if !trailing.isEmpty {
-                result += ANSIRenderer.colorize(trailing, foreground: trailingColor)
+                row.append(trailing, cells: trailing.strippedLength, ink: trailingColor)
             }
-            return result
         case .gradient(let stops):
-            return gradientCells(
-                (leading + middleRun + trailing).stripped, gradient: stops, fallback: filledColor,
-                span: gradientSpan, depth: depth)
+            gradientCells(
+                whole.stripped, gradient: stops, fallback: filledColor,
+                span: gradientSpan, depth: depth, into: &row)
         }
     }
 
@@ -631,14 +715,21 @@ extension TrackRenderer {
     /// be shorter than the span, in which case it uses the first part of the
     /// ramp and the rest is simply not reached; that is what makes a gradient
     /// read as a scale rather than as a fade.
+    ///
+    /// A translucent gradient stop is fully honourable here, unlike the 2-D ramps §15
+    /// declines: a track is ONE row, so a per-cell alpha is a run of one-cell
+    /// rectangles rather than a grid, and the resolver folds them the same way it
+    /// folds any other claim.
     private static func gradientCells(
-        _ text: String, gradient: Gradient, fallback: Color, span: Int, depth: ColorDepth
-    ) -> String {
+        _ text: String, gradient: Gradient, fallback: Color, span: Int, depth: ColorDepth,
+        into row: inout DrawnTrack
+    ) {
         let cells = Array(text)
         guard cells.count > 1, span > 1 else {
-            return ANSIRenderer.colorize(text, foreground: gradient.stops.first?.color ?? fallback)
+            row.append(
+                text, cells: text.strippedLength, ink: gradient.stops.first?.color ?? fallback)
+            return
         }
-        var result = ""
         // Indexed by the CELL column, not the character: `span` counts cells,
         // and a wide glyph — a segment can be any string — covers two. Stepping
         // the ramp per character traversed it at half rate and never drew its
@@ -647,10 +738,10 @@ extension TrackRenderer {
         for cell in cells {
             let color = gradientColor(
                 gradient, index: column, span: span, fallback: fallback, depth: depth)
-            result += ANSIRenderer.colorize(String(cell), foreground: color)
-            column += max(1, cell.terminalWidth)
+            let cellWidth = max(1, cell.terminalWidth)
+            row.append(String(cell), cells: cellWidth, ink: color)
+            column += cellWidth
         }
-        return result
     }
 
     /// Renders a position-marker style: a plain line with a single marker at
@@ -663,23 +754,26 @@ extension TrackRenderer {
         markerChar: Character,
         lineColor: Color,
         markerColor: Color
-    ) -> String {
+    ) -> DrawnTrack {
+        var row = DrawnTrack()
         guard width > 1 else {
-            return ANSIRenderer.colorize(String(markerChar), foreground: markerColor)
+            row.append(String(markerChar), cells: 1, ink: markerColor)
+            return row
         }
         let position = Int((fraction * Double(width - 1)).rounded())
-        var result = ""
         if position > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: lineChar, count: position), foreground: lineColor)
+            row.append(
+                String(repeating: lineChar, count: position), cells: position, ink: lineColor)
         }
-        result += ANSIRenderer.colorize(String(markerChar), foreground: markerColor)
+        // Its own claim, separate from the rail's: an opaque rail with a faded marker
+        // must fade only the dot, and that is `.tint(…opacity(…))` on a `Gauge`.
+        row.append(String(markerChar), cells: 1, ink: markerColor)
         let trailing = width - 1 - position
         if trailing > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: lineChar, count: trailing), foreground: lineColor)
+            row.append(
+                String(repeating: lineChar, count: trailing), cells: trailing, ink: lineColor)
         }
-        return result
+        return row
     }
 
     /// Renders a head-indicator style (filled track + head + empty track).
@@ -697,28 +791,29 @@ extension TrackRenderer {
         filledColor: Color,
         headColor: Color,
         emptyColor: Color
-    ) -> String {
+    ) -> DrawnTrack {
+        var row = DrawnTrack()
         guard width > 1 else {
-            return ANSIRenderer.colorize(String(headChar), foreground: headColor)
+            row.append(String(headChar), cells: 1, ink: headColor)
+            return row
         }
         let position = Int((fraction * Double(width - 1)).rounded())
 
-        var result = ""
         if position > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: filledChar, count: position),
-                foreground: filledColor
-            )
+            row.append(
+                String(repeating: filledChar, count: position), cells: position, ink: filledColor)
         }
-        result += ANSIRenderer.colorize(String(headChar), foreground: headColor)
+        // `.knob` — a `Slider`'s default — takes BOTH `filledColor` and `headColor`
+        // from the accent, so `.tint(.red.opacity(0.5))` fades the lit rail and the
+        // knob together. That is the shortest route from a public modifier to this
+        // renderer, and it is what used to reach the emitter's assertion.
+        row.append(String(headChar), cells: 1, ink: headColor)
         let trailing = width - 1 - position
         if trailing > 0 {
-            result += ANSIRenderer.colorize(
-                String(repeating: emptyChar, count: trailing),
-                foreground: emptyColor
-            )
+            row.append(
+                String(repeating: emptyChar, count: trailing), cells: trailing, ink: emptyColor)
         }
-        return result
+        return row
     }
 }
 
