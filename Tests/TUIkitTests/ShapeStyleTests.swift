@@ -252,38 +252,45 @@ struct ShapeStyleTests {
 
     // MARK: - Modifying a style
 
-    /// The mix is toward the SURFACE, not toward black. Mixing toward black is
-    /// what `Color.opacity(_:)` does and it is why "dim" reads as a smudge on a
-    /// light palette — the bug class this framework already learned once.
-    @Test("A style at opacity blends toward the palette's background")
-    func opacityBlendsTowardTheSurface() {
+    /// **A faded style carries alpha; it does not mix toward anything.**
+    ///
+    /// This used to mix toward `palette.background` and answer with a concrete
+    /// colour, and the test asserted that. It was the right answer while alpha did
+    /// not exist — the alternative then was mixing toward black, which is why
+    /// "dim" read as a smudge on a light palette — and it is the wrong one now.
+    /// The page's background is only what is behind a cell when nothing else is,
+    /// so a faded label over a coloured panel came out mixed toward the page.
+    ///
+    /// The alpha travels instead, and the compositor resolves it against whatever
+    /// is actually behind the cell.
+    @Test("A style at opacity carries the alpha rather than mixing")
+    func opacityCarriesTheAlpha() {
         var light = environment()
         light.palette = PaperPalette()
-        let surface = light.palette.background
         let red = Color.rgb(255, 0, 0)
+        let faded = AnyShapeStyle(red).opacity(0.5).paint(in: light)
+        #expect(faded == .color(red.opacity(0.5)), "got \(faded)")
+        #expect(faded.representative.alpha == 128, "and it is carried, not consumed")
         #expect(
-            AnyShapeStyle(red).opacity(0.5).paint(in: light)
-                == .color(red.opacity(0.5, over: surface)))
-        #expect(
-            red.opacity(0.5, over: surface) != red.opacity(0.5),
-            "on a light palette, toward-the-surface and toward-black must differ")
+            faded.representative.value == red.value,
+            "the colour itself is untouched — nothing was blended into it")
     }
 
-    /// `Color` has its own `opacity(_:)` returning a `Color`, and a member on
-    /// the concrete type beats a protocol extension — so `.red.opacity(0.5)`
-    /// is the older, surface-blind shorthand rather than this. SwiftUI's
-    /// `Color.opacity(_:)` shadows its `ShapeStyle` one the same way, so the
-    /// spelling means what SwiftUI source means — and now it means the same THING
-    /// too. It used to mix toward black and coincide with the `ShapeStyle`
-    /// spelling only on a black palette; it carries real alpha, and the
-    /// compositor resolves it against whatever is behind the cell.
+    /// **The two spellings of `.opacity(_:)` now mean the same thing.**
     ///
-    /// The two therefore genuinely differ now: `AnyShapeStyle(…).opacity(_:)`
-    /// still flattens against `palette.background` at paint time, which is an
-    /// approximation the `ShapeStyle` docs already record — and which SwiftUI
-    /// shares.
-    @Test("Color's own opacity still wins for a Color, as it does in SwiftUI")
-    func colourKeepsItsOwnOpacity() {
+    /// `Color` has its own `opacity(_:)` returning a `Color`, and a member on the
+    /// concrete type beats a protocol extension — so `.red.opacity(0.5)` takes the
+    /// `Color` one and `AnyShapeStyle(.red).opacity(0.5)` takes the `ShapeStyle`
+    /// one. SwiftUI shadows them the same way.
+    ///
+    /// They used to be two different operations wearing one name: one storing
+    /// alpha and deferring to the composite, the other consuming it against
+    /// `palette.background`. Which you got depended on whether the value's static
+    /// type happened to be `Color` — the kind of difference that is invisible at
+    /// the call site and visible on screen. They agree now, and that agreement is
+    /// what this pins.
+    @Test("Color's opacity and ShapeStyle's agree")
+    func theTwoOpacitySpellingsAgree() {
         // `.rgb` as an implicit member is the assertion that it IS a Color:
         // a `ShapeStyle` wrapper would not compare to one.
         let faded = Color.rgb(255, 0, 0).opacity(0.5)
@@ -293,7 +300,8 @@ struct ShapeStyleTests {
         dark.palette = SystemPalette.green
         #expect(
             AnyShapeStyle(Color.rgb(255, 0, 0)).opacity(0.5).paint(in: dark)
-                == .color(Color.rgb(255, 0, 0).opacity(0.5, over: dark.palette.background)))
+                == .color(faded),
+            "the same answer through either spelling")
     }
 
     /// Every stop, not merely the two ends: a three-stop ramp faded halfway is
@@ -301,7 +309,6 @@ struct ShapeStyleTests {
     @Test("A gradient at opacity moves every stop")
     func opacityReachesEveryStop() {
         let values = environment()
-        let surface = values.palette.background
         let stops: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
         let faded = Gradient(colors: stops).opacity(0.25).paint(in: values)
         guard case .gradient(let ramp) = faded else {
@@ -310,22 +317,37 @@ struct ShapeStyleTests {
         }
         #expect(ramp.gradient.stops.count == 3)
         for (stop, original) in zip(ramp.gradient.stops, stops) {
-            #expect(stop.color == original.opacity(0.25, over: surface))
+            #expect(stop.color == original.opacity(0.25))
+            #expect(stop.color.value == original.value, "the hue is untouched")
         }
     }
 
-    /// A semantic colour is resolved before it is mixed, or `.opacity(_:)` on
-    /// the palette's own ink would be a silent no-op — `Color.opacity(_:over:)`
-    /// returns an unresolved colour untouched.
-    @Test("Opacity resolves a semantic colour rather than passing it through")
-    func opacityResolvesSemanticColours() {
+    /// **A semantic colour's own components survive a fade now.**
+    ///
+    /// `Color.paint(in:)` resolves a semantic colour against the palette — that is
+    /// its job and it happens per frame, so a theme change is still followed. What
+    /// changed is what the fade then does with the answer.
+    ///
+    /// It used to MIX the palette's accent toward the palette's background and
+    /// hand back the blend, so the accent was gone: nothing downstream could tell
+    /// a 40% accent from the particular greenish grey it had become. Now the
+    /// accent's own components come through untouched with the alpha alongside
+    /// them, and the compositor decides what 40% of it looks like over whatever is
+    /// actually behind the cell.
+    ///
+    /// (The fade had to resolve, before: `Color.opacity(_:over:)` cannot mix a
+    /// colour it has no components for, so `.palette.accent.opacity(0.4)` would
+    /// otherwise have been a silent no-op.)
+    @Test("Opacity leaves a semantic colour's components unmixed")
+    func opacityKeepsSemanticColours() {
         let values = environment()
         let faded = AnyShapeStyle(Color.palette.accent).opacity(0.4).paint(in: values)
-        #expect(faded != .color(.palette.accent), "the semantic colour was passed through")
+        let accent = values.palette.accent
+        #expect(faded.representative.value == accent.value, "the accent itself: \(faded)")
+        #expect(faded.representative.alpha == 102, "carrying 40%")
         #expect(
-            faded
-                == .color(
-                    values.palette.accent.opacity(0.4, over: values.palette.background)))
+            faded != .color(accent.opacity(0.4, over: values.palette.background)),
+            "and specifically NOT mixed toward the background")
     }
 
     /// `.in(_:)` reads the size and nothing else — the origin is unused because

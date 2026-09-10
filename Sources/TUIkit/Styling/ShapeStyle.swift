@@ -161,9 +161,26 @@ extension ShapeStyle {
     }
 }
 
-/// ``ShapeStyle/opacity(_:)``'s style. Resolves its base and mixes what comes
-/// back, so it composes with everything — including a gradient, whose every
-/// stop is mixed rather than only the two the eye lands on.
+/// ``ShapeStyle/opacity(_:)``'s style. Fades its base and hands back what comes
+/// back, so it composes with everything — including a gradient, whose every stop
+/// is faded rather than only the two the eye lands on.
+///
+/// This used to `resolve(with: palette).opacity(opacity, over: palette.background)`
+/// — mix each colour toward the page's background and answer with a concrete
+/// colour. Two things were wrong with that once `Color` could carry an alpha.
+///
+/// It was the guess `Documentation/Opacity as composition.md` exists to remove: a
+/// style faded here is composited at the CELL, over whatever is actually behind
+/// it, and the palette's background is only that when nothing else is. A faded
+/// label over a coloured panel came out mixed toward the page.
+///
+/// And it made `ShapeStyle.opacity(_:)` and ``Color/opacity(_:)`` two different
+/// operations wearing one name — one storing alpha and deferring, the other
+/// consuming it against a surface — so which you got depended on whether the
+/// value's static type happened to be `Color`.
+///
+/// Resolving is gone with it. A semantic colour stays semantic through a fade
+/// now, so `.foregroundStyle(.primary.opacity(0.6))` still follows the theme.
 struct _OpacityShapeStyle<Base: ShapeStyle>: ShapeStyle {
     let base: Base
     let opacity: Double
@@ -171,20 +188,15 @@ struct _OpacityShapeStyle<Base: ShapeStyle>: ShapeStyle {
     typealias Resolved = Never
 
     func paint(in environment: EnvironmentValues) -> Paint {
-        let palette = environment.palette
-        let surface = palette.background
-        func mixed(_ colour: Color) -> Color {
-            colour.resolve(with: palette).opacity(opacity, over: surface)
-        }
         switch base.paint(in: environment) {
         case .color(let colour):
-            return .color(mixed(colour))
+            return .color(colour.opacity(opacity))
         case .gradient(var ramp):
             // The stops, not the gradient — see the twin in `PaintAnimation`:
             // replacing the whole value drops whatever else it carries, which
             // is how a faded perceptual ramp would come back `.device`.
             ramp.gradient.stops = ramp.gradient.stops.map {
-                Gradient.Stop(color: mixed($0.color), location: $0.location)
+                Gradient.Stop(color: $0.color.opacity(opacity), location: $0.location)
             }
             return .gradient(ramp)
         }
