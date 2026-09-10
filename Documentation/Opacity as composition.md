@@ -1150,8 +1150,12 @@ one-stop gradient's representative.
 
 Plus the circular `Gauge`'s four emit sites (§36.6).
 
-Not honoured, each loud at its own line: the indeterminate `ProgressView` sweep
-(§31.4) and the image glyph path (§17).
+Plus the indeterminate `ProgressView` sweep (§36.7), by declining the RUN rather
+than the alpha.
+
+Not honoured: **the image glyph path** (§17), which is the only entry point of §16.1
+still open, and four `Palette` surface derivations that drop a faded slot's alpha
+(§28.2 — the project owner's call).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -2420,3 +2424,32 @@ them changed while nothing about the alpha did. The number of rectangles a row n
 an implementation detail; what a row owes is an alpha per column. The three now read
 that instead: the covered columns, the monotonic run of alphas, six cells for three
 double-width glyphs. Better tests, arrived at by breaking worse ones.
+
+### 36.7 The indeterminate bar: decline the RUN, not the alpha
+
+§31.4 declined the sweep because "its whole row is one `AnimatedCellRun`, and a sweep
+*moves*: a given column is lit in some frames and unlit in others". True, and it stops
+one step short of the answer. The thing that cannot carry the alpha is the run — so
+the run is what goes.
+
+A pre-rendered cycle is an OPTIMISATION. These bars used to ask the run loop to
+re-render them thirty times a second, and `AnimatedCellRun` took that off the render
+path. A translucent bar gives it back: one frame per render, each with its own exact
+claim, at the cycle's own sampling rate. `Spinner` already does precisely this for a
+cycle whose frames are not all one width — the run cannot express it, so the run is
+not used — and the precedent was in the tree the whole time.
+
+The condition is asked of the INPUTS, not of a built frame: a frame paints only the
+colours it reached and the next one may reach another. `isOpaqueThroughout` reads the
+three palette colours and the style's own gradient stops, which makes it conservative
+in one direction only — a translucent colour that is never actually painted costs the
+bar its pre-rendered cycle, and nothing else.
+
+Two things fall out of routing the frames through `ClaimingRow`:
+
+- `IndeterminateRenderer.laid` was already the single funnel every motion's cells pass
+  through — five motions, one place that turns a colour into bytes — so there was
+  exactly one line to change.
+- The claim is a run per equal alpha, which is the shape a moving ramp actually has:
+  `.sweep`'s trail ramps from the control's opaque empty colour to a faded accent, so
+  the alphas descend across the row and the tint's own alpha is the floor.

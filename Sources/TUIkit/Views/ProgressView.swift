@@ -346,7 +346,25 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // which is a full measure/layout/render/diff of the WHOLE screen, to
         // move one bar. See ``AnimatedCellRun``.
         let barRow = lines.count
-        guard fractionCompleted == nil, !context.isMeasuring, width > 0 else {
+        // A translucent bar cannot be pre-rendered: a run carries frames and no
+        // alpha, and a sweep moves, so no static region describes every frame. It
+        // falls back to what these bars did before runs existed — a re-render at the
+        // cycle's own sampling rate, where each frame states its own exact claim.
+        // Same shape as `Spinner`'s fallback for a mixed-width cycle, and for the
+        // same reason: the run cannot express it, so the run is not used. §36.7.
+        let canPreRender =
+            IndeterminateRenderer.isOpaqueThroughout(
+                style: context.environment.indeterminateStyle,
+                filledColor: palette.foregroundSecondary, emptyColor: palette.foregroundTertiary,
+                accentColor: palette.accent, palette: palette)
+        guard fractionCompleted == nil, !context.isMeasuring, width > 0, canPreRender else {
+            if fractionCompleted == nil, !context.isMeasuring, width > 0 {
+                let style = context.environment.indeterminateStyle
+                context.requestAnimation(
+                    token: "progress-\(context.identity.path)",
+                    frequency: Double(IndeterminateRenderer.frameCount(of: style))
+                        / IndeterminateRenderer.period(of: style))
+            }
             let bar = renderBarLine(
                 width: width, palette: palette, context: context, elapsed: elapsed)
             lines.append(bar.text)
@@ -532,21 +550,17 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         width: Int, palette: any Palette, context: RenderContext, elapsed: Double
     ) -> ClaimingRow {
         guard let fraction = fractionCompleted else {
-            var row = ClaimingRow()
-            // The indeterminate sweep still carries no claims — its whole row is an
-            // `AnimatedCellRun` whose columns are lit in some frames and not others,
-            // so one static region cannot describe it. §31.4.
-            row.appendFinished(
-                IndeterminateRenderer.render(
-                    width: width,
-                    style: context.environment.indeterminateStyle,
-                    filledColor: palette.foregroundSecondary,
-                    emptyColor: palette.foregroundTertiary,
-                    accentColor: palette.accent,
-                    elapsed: elapsed,
-                    palette: palette
-                ), cells: width)
-            return row
+            // The frame's own claims, exact for the one frame this is. Reached either
+            // by a measure pass (which draws nothing) or by the fallback above, where
+            // one frame per render is the whole point.
+            return IndeterminateRenderer.render(
+                width: width,
+                style: context.environment.indeterminateStyle,
+                filledColor: palette.foregroundSecondary,
+                emptyColor: palette.foregroundTertiary,
+                accentColor: palette.accent,
+                elapsed: elapsed,
+                palette: palette)
         }
         return TrackRenderer.render(
             fraction: fraction,

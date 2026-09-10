@@ -178,7 +178,7 @@ struct GradientBandingTests {
             return nil
         }
         #expect(!expected.contains(nil), "the ramp did not quantise")
-        #expect(perCellForegrounds(row) == expected.compactMap { $0 })
+        #expect(perCellForegrounds(row.text) == expected.compactMap { $0 })
     }
 
     /// The 256-colour foreground index under each CELL of a rendered row —

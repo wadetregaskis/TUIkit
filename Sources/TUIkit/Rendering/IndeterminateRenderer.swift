@@ -26,7 +26,9 @@ enum IndeterminateRenderer {
     ///     configuration names no colours of its own.
     ///   - emptyColor: The colour for unlit cells, and the dim end of a ramp.
     ///   - accentColor: The bright end of a ramp.
-    /// - Returns: An ANSI-styled string of exactly `width` visible cells.
+    /// - Returns: The row's bytes — exactly `width` visible cells — and the cells
+    ///   owing a blend. Every colour goes in at its opaque spelling, so a
+    ///   translucent one is claimed rather than dropped.
     static func render(
         width: Int,
         style: IndeterminateStyle,
@@ -35,8 +37,8 @@ enum IndeterminateRenderer {
         accentColor: Color,
         elapsed: Double,
         palette: any Palette
-    ) -> String {
-        guard width > 0 else { return "" }
+    ) -> ClaimingRow {
+        guard width > 0 else { return ClaimingRow() }
         // A motion's own gradient is read straight from the style, so it has
         // never met the palette. See `StyleGradientResolution.swift`.
         let configuration = style.configuration.resolvingColours(with: palette)
@@ -75,15 +77,57 @@ enum IndeterminateRenderer {
         palette: any Palette
     ) -> (frames: [String], frameDuration: Double) {
         let period = period(of: style)
-        let count = max(2, Int((period * 30).rounded()))
+        let count = frameCount(of: style)
         let duration = period / Double(count)
         let frames = (0..<count).map { index in
             render(
                 width: width, style: style, filledColor: filledColor,
                 emptyColor: emptyColor, accentColor: accentColor,
-                elapsed: Double(index) * duration, palette: palette)
+                elapsed: Double(index) * duration, palette: palette
+            ).text
         }
         return (frames, duration)
+    }
+
+    /// How many frames one pass is sampled at — and therefore the rate the
+    /// FALLBACK path asks to be re-rendered at, so a bar that cannot be
+    /// pre-rendered still animates at exactly the speed one that can does.
+    ///
+    /// Both numbers used to be a literal 30 in two places, which is the shape a
+    /// divergence arrives in.
+    static func frameCount(of style: IndeterminateStyle) -> Int {
+        max(2, Int((period(of: style) * framesPerSecond).rounded()))
+    }
+
+    /// The sampling rate of a pre-rendered cycle, in hertz — the rate these bars
+    /// asked the run loop to re-render them at before `AnimatedCellRun` existed,
+    /// kept so the animation looks exactly as it did.
+    static let framesPerSecond: Double = 30
+
+    /// Whether every colour this bar could paint is opaque.
+    ///
+    /// **The condition for pre-rendering the cycle at all**, and the reason is the
+    /// run rather than the colours: an ``AnimatedCellRun`` carries frames and no
+    /// alpha, and a sweep MOVES — a given column is lit in some frames and unlit in
+    /// others — so one static region cannot describe every frame unless every colour
+    /// any frame can paint shares one alpha. §31.4 stopped there and left the bar
+    /// loud. It need not: a `Spinner` whose frames a run cannot express already
+    /// falls back to `requestAnimation`, and a bar can do the same, where each frame
+    /// is rendered with its own exact claim.
+    ///
+    /// Asked of the INPUTS rather than of a built frame, because a frame paints only
+    /// the colours that frame reached and the next one may reach another. That makes
+    /// it conservative in one direction only — a translucent colour that is never
+    /// actually painted costs the bar its pre-rendered cycle, and nothing else.
+    static func isOpaqueThroughout(
+        style: IndeterminateStyle,
+        filledColor: Color, emptyColor: Color, accentColor: Color,
+        palette: any Palette
+    ) -> Bool {
+        guard filledColor.isOpaque, emptyColor.isOpaque, accentColor.isOpaque else { return false }
+        let configuration = style.configuration.resolvingColours(with: palette)
+        guard let gradient = configuration.gradient else { return true }
+        return gradient.stops.allSatisfy { $0.color.isOpaque }
     }
 
     /// A monotonically-advancing signal in `0..<1`, completing one pass every
@@ -152,14 +196,20 @@ extension IndeterminateRenderer {
     /// run; a `sweep` frame is a short ramp and then a long flat tail.
     private static func laid(
         width: Int, cell: (Int) -> (glyph: Character, color: Color)
-    ) -> String {
-        var result = ""
+    ) -> ClaimingRow {
+        var result = ClaimingRow()
         var run = ""
+        var runCells = 0
         var runColor: Color?
         func flush() {
             guard !run.isEmpty, let runColor else { return }
-            result += ANSIRenderer.colorize(run, foreground: runColor)
+            // Through `ClaimingRow`, so the run's bytes state the colour's opaque
+            // spelling and its alpha travels as a region — the one funnel a frame's
+            // cells pass through, which is what lets a translucent bar be honoured
+            // at all (§36.7).
+            result.append(run, cells: runCells, ink: runColor)
             run = ""
+            runCells = 0
         }
         var column = 0
         while column < width {
@@ -176,12 +226,15 @@ extension IndeterminateRenderer {
             let glyphWidth = max(1, glyph.terminalWidth)
             guard column + glyphWidth <= width else { break }
             run.append(glyph)
+            runCells += glyphWidth
             column += glyphWidth
         }
         if column < width {
             // The shortfall a multi-cell pattern leaves, in whatever colour was
             // last drawn — it is the continuation of that run, not a new thing.
-            run += String(repeating: " ", count: width - column)
+            let shortfall = width - column
+            run += String(repeating: " ", count: shortfall)
+            runCells += shortfall
         }
         flush()
         return result
@@ -202,7 +255,7 @@ extension IndeterminateRenderer {
     private static func renderSweep(
         width: Int, configuration: IndeterminateConfiguration,
         empty: Color, accent: Color, elapsed: Double
-    ) -> String {
+    ) -> ClaimingRow {
         let phase = phase(elapsed: elapsed, period: configuration.period)
         let segment = segment(of: configuration, across: width)
         let head = Int(phase * Double(width))
@@ -233,7 +286,7 @@ extension IndeterminateRenderer {
     private static func renderBarberPole(
         width: Int, configuration: IndeterminateConfiguration,
         filled: Color, accent: Color, elapsed: Double
-    ) -> String {
+    ) -> ClaimingRow {
         let fill = Array(configuration.fill)
         let stripes = configuration.gradient.map { $0.stops.map(\.color) }.flatMap {
             $0.isEmpty ? nil : $0
@@ -256,7 +309,7 @@ extension IndeterminateRenderer {
     private static func renderPulse(
         width: Int, configuration: IndeterminateConfiguration,
         dim: Color, bright: Color, elapsed: Double
-    ) -> String {
+    ) -> ClaimingRow {
         // A sine wave gives a smoother breath than a sawtooth `phase()`,
         // and clamping its `0..<2π` range to `[0, 1]` via `(1 - cos)/2`
         // makes the brightest and dimmest points sit at the start and
@@ -277,7 +330,7 @@ extension IndeterminateRenderer {
     private static func renderKnightRider(
         width: Int, configuration: IndeterminateConfiguration,
         empty: Color, accent: Color, elapsed: Double
-    ) -> String {
+    ) -> ClaimingRow {
         let segment = segment(of: configuration, across: width)
         // Bounce with a triangle wave: phase goes 0 → 1 → 0, mapped to
         // head position 0 → (width − 1) → 0.
@@ -317,7 +370,7 @@ extension IndeterminateRenderer {
     /// rightward.
     private static func renderGradient(
         width: Int, configuration: IndeterminateConfiguration, elapsed: Double
-    ) -> String {
+    ) -> ClaimingRow {
         let ramp = cyclic(configuration.gradient)
         let phase = phase(elapsed: elapsed, period: configuration.period)
         let fill = Array(configuration.fill)

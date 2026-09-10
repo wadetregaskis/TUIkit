@@ -25,7 +25,8 @@ struct IndeterminateConfigurationTests {
         IndeterminateRenderer.render(
             width: width, style: style, filledColor: filled, emptyColor: empty,
             accentColor: accent, elapsed: elapsed,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green
+        ).text
     }
 
     private static let builtIns: [(name: String, style: IndeterminateStyle)] = [

@@ -120,7 +120,7 @@ struct TrackGradientTests {
             filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
             elapsed: 0,
             palette: SystemPalette.green)
-        let triples = foregroundTriples(in: output)
+        let triples = foregroundTriples(in: output.text)
         #expect(triples.allSatisfy { $0.hasPrefix("11;22;33") }, "custom stops used: \(triples)")
     }
 
@@ -135,7 +135,8 @@ struct TrackGradientTests {
                     width: 8, style: .gradient(Gradient(colors: stops, colorSpace: space)),
                     filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2),
                     accentColor: .rgb(3, 3, 3), elapsed: 0,
-                    palette: SystemPalette.green))
+                    palette: SystemPalette.green
+                ).text)
         }
         let device = triples(.device)
         let perceptual = triples(.perceptual)
@@ -158,7 +159,7 @@ struct TrackGradientTests {
             width: 30, style: .gradient(squashed), filledColor: .rgb(1, 1, 1),
             emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3), elapsed: 0,
             palette: SystemPalette.green)
-        let cells = ordered(in: output)
+        let cells = ordered(in: output.text)
         let greenest = cells.indices.max { greenness(of: cells[$0]) < greenness(of: cells[$1]) }
         // 0.1 of the ramp × 2/3 of the cycle × 30 cells = column 2.
         #expect(greenest == 2, "green sits where it was put: \(cells)")
@@ -192,7 +193,7 @@ struct TrackGradientTests {
             filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
             elapsed: 0,
             palette: SystemPalette.green)
-        let triples = foregroundTriples(in: output)
+        let triples = foregroundTriples(in: output.text)
         #expect(triples.count >= 4, "built-in rainbow spans many colours: \(triples)")
     }
 }
