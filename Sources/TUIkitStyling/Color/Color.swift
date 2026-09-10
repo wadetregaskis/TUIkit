@@ -548,12 +548,22 @@ extension Color {
     ///     view draws over.
     /// - Returns: The blended color, or `self` if either side is semantic.
     public func opacity(_ opacity: Double, over surface: Color) -> Self {
+        // This colour's OWN alpha is part of the coverage, not something separate
+        // from it. `.tint(.red.opacity(0.5))` reaches here through
+        // `restingControlFace` as `accent.opacity(focusBorderDim, over: background)`,
+        // and reading only the parameter discarded the tint's own translucency
+        // outright — silently, because the result is stamped opaque and so never
+        // trips the emitter's assertion. Folded in, a half-faded tint gives a
+        // subtler face, which is what asking for it means.
+        //
+        // Exact for the overwhelming case: an opaque source multiplies by 1.
+        let coverage = Double(alpha) / 255 * min(1, max(0, opacity))
         // CONSUMES the alpha rather than carrying it: this composites over a
-        // surface that is known, so its answer is a concrete colour and any
+        // surface that is KNOWN, so its answer is a concrete colour and any
         // further alpha would apply the same fade twice. `lerp` interpolates
         // alpha as a fourth channel, which is right for an animation and wrong
         // here, so the result is stamped opaque.
-        var result = Self.lerp(self, surface, phase: 1 - opacity)
+        var result = Self.lerp(self, surface, phase: 1 - coverage)
         result.alpha = .max
         return result
     }

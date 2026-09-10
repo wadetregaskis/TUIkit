@@ -1079,7 +1079,7 @@ them among the three:
 |---|---|
 | `.border(.red.opacity(0.5))` | `BorderRenderer`, 15 emit sites — **fixed, §18** |
 | `.foregroundStyle(…opacity(…))` on anything but a plain `Text` | `Divider` and `Spinner` — **fixed, §19**; `Table` and `PaintRenderer`'s flat arm open; `RadioButton` and `_ToggleCore` reach it only through a label, which is a `Text` |
-| `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **inconsistently**: `restingControlFace` consumes the alpha while `accentPulse` carries it |
+| `.tint(…opacity(…))` | `TintedPalette.accent`, and from there dozens of controls — **fixed, §21**; it was inconsistent, `restingControlFace` consuming the alpha while `accentPulse` carried it |
 | `String.styled(foreground:…)` | the documented escape hatch for a reader's own `Renderable` |
 | `.listRowBackground(…)` | one site |
 | `Text` concatenation | **fixed, §14** |
@@ -1374,3 +1374,57 @@ slot, a silent drop becomes a loud one on the paths that have not been migrated:
 the colour now arrives at the emitter with its alpha intact and trips the assertion
 in `Color+ANSICodes.swift`. That is the intended direction. A theme cannot be
 partly honoured quietly.
+
+
+## 21. `.tint`, and the two answers one derivation gave (2026-09-09)
+
+`.tint(_:)` writes `TintedPalette.accent`, and the accent fans out to dozens of
+controls. §16.1 recorded the fan-out as *inconsistent* rather than merely
+unhonoured, and that is the interesting part: two derivations of the same accent
+disagreed about what a translucent one meant.
+
+```swift
+// before
+restingControlFace  →  accent.opacity(focusBorderDim, over: background)   // opaque
+accentPulse().dim   →  accent.opacity(focusPulseMin,  over: ground)       // opaque
+accentPulse().bright →  accent                                            // translucent
+```
+
+So a focused control breathing between those two ends was honoured for half its
+cycle and a debug trap for the other half — and `restingControlFace` was the
+*silent* half of the same bug: `opacity(_:over:)` read only its parameter and
+ignored the source's own alpha, then stamped the result opaque. A faded tint gave
+the identical face an opaque one gave, with no diagnostic anywhere, because an
+opaque colour is a legal thing to emit.
+
+### 21.1 Consuming an alpha is right *here*
+
+`opacity(_:over:)` composites over a surface the caller has **stated**, so it has
+the one thing an emitter lacks: something to blend against. It is therefore
+allowed to spend the alpha completely and answer with a concrete colour. That is
+not the forbidden "assume a particular colour" hack — the surface is a parameter,
+and `accentPulse(over:)` exists precisely so a mark drawn on a filled row names
+the row rather than the page.
+
+What it was doing wrong was spending only *part* of it. The source's own alpha is
+part of the coverage, not something separate from it, so:
+
+```
+coverage = self.alpha/255 × opacity
+```
+
+Exact for the overwhelming case, an opaque source multiplying by 1.
+
+### 21.2 The opaque accent keeps its *spelling*, not just its colour
+
+`accentPulse().bright` is now `accent.isOpaque ? accent : accent.opacity(1, over:)`,
+and the guard is load-bearing rather than an economy. `opacity(_:over:)` goes
+through `lerp`, and a lerp re-spells `.red` — `ANSIColor.red`, SGR 31, *the
+terminal's own red* — as `rgb(205, 0, 0)`, SGR 38;2;205;0;0. The same colour by
+arithmetic and a different colour on any terminal whose palette is not the default,
+which is most of them (see `Documentation/Terminal-compatibility.md` and the
+"bold is a colour" findings). This is the bright end of every focus pulse on every
+palette that ships, so compositing it unconditionally would have changed what
+sixteen themes actually look like in order to fix a case none of them have.
+
+`opaqueTintUnchanged` asserts the *spelling*, not the colour, for that reason.

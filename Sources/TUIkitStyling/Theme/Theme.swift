@@ -747,7 +747,22 @@ extension Palette {
     ///   pulse stays a pulse of the accent rather than a fade toward the page's
     ///   colour somewhere the page is not.
     public func accentPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
-        (accent.opacity(ViewConstants.focusPulseMin, over: surface ?? background), accent)
+        let ground = surface ?? background
+        return (
+            accent.opacity(ViewConstants.focusPulseMin, over: ground),
+            // BOTH ends spend a translucent tint's alpha against the same stated
+            // ground. The bright end used to be a bare `accent`, which CARRIED the
+            // alpha while the dim end consumed it, so `.tint(.red.opacity(0.5))`
+            // breathed between an opaque colour and a translucent one — half the
+            // cycle honoured, half of it a debug trap.
+            //
+            // The opaque accent is returned untouched rather than composited at 1,
+            // and not as an economy: `opacity(_:over:)` lerps, and a lerp re-spells
+            // `.red` (SGR 31, the terminal's OWN red) as `rgb(205, 0, 0)`
+            // (SGR 38;2;…). Same colour by arithmetic, different colour on any
+            // terminal whose palette is not the default — and this is the bright end
+            // of every focus pulse on every palette that ships.
+            accent.isOpaque ? accent : accent.opacity(1, over: ground))
     }
 
     /// The two ends a focus pulse breathes between, for a FILL that content is
