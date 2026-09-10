@@ -116,7 +116,19 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // and a ramp down a page — and the one that cannot is a fade running
         // ALONG a row, which stays unhonoured and stays loud: its entries go to
         // the emitter as they are, so `Color+ANSICodes.swift`'s assertion fires.
-        let alphaShape = sampler.alphaShape
+        // Asked of the STOPS first, which is two or three comparisons: opaque
+        // endpoints cannot interpolate to a translucent entry, so an ordinary
+        // gradient never walks its sampled ramp. `alphaShape` is O(ramp) and a
+        // ramp is one entry per cell of the run, per background, per frame.
+        //
+        // Deliberately NOT hoisted to share with the picture guard above. That
+        // guard reaches its own `isOpaqueThroughout` only after `buffer.isBlank`,
+        // which is false for a ramp behind text — the common case — so hoisting
+        // makes every background pay for it instead of sharing anything. Measured:
+        // this whole arm is `gradients` +0.2% [-0.4%, +0.4%] against having none
+        // of it, hoisted or not.
+        let alphaShape: RampSampler.AlphaShape =
+            paint.isOpaqueThroughout ? .opaque : sampler.alphaShape
         // Spelled opaque ONLY where the alpha is being carried. Spelling it opaque
         // everywhere would silence the assertion for the case that is not
         // honoured, turning a loud gap into a discarded alpha.
