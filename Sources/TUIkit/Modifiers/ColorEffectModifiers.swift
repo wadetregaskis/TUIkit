@@ -81,6 +81,12 @@ extension View {
     /// A tint: white leaves everything alone, and a colour with a zero channel
     /// removes that channel entirely.
     ///
+    /// `color`'s own opacity multiplies too, as SwiftUI's does — the multiply is of
+    /// RGBA, not RGB — so `.colorMultiply(.white.opacity(0.5))` leaves every hue
+    /// alone and fades the subtree by half, and `.colorMultiply(.clear)` hides it.
+    /// The alpha becomes a fade of the whole layer rather than of its colours: see
+    /// `Documentation/Opacity as composition.md` §25.
+    ///
     /// - Parameter color: The colour to multiply by.
     /// - Returns: A tinted view.
     public func colorMultiply(_ color: Color) -> some View {
@@ -107,14 +113,26 @@ struct _ColorEffectView<Content: View>: View {
         case invert
         case multiply(Color)
 
-        /// Whether `amount` leaves every colour alone, so the whole pass can be
+        /// Whether `amount` leaves every colour alone, so the line rewrite can be
         /// skipped.
+        ///
+        /// About the COLOURS only — a translucent multiply tint also fades the layer,
+        /// and that is not a rewrite of anything (see `renderToBuffer`). Hence
+        /// `opaqueSpelling`: `.white.opacity(0.5)` leaves every hue exactly where it
+        /// was and is answered `true` here, with its alpha handled apart.
+        ///
+        /// `.white` is the multiply identity by SPELLING and not by arithmetic, which
+        /// is worth knowing before touching this. `Color.white` is ANSI white — 229,
+        /// not 255 — so multiplying by its components darkens by 229/255. The
+        /// shortcut is what makes `.colorMultiply(.white)` mean what it says, and
+        /// before `opaqueSpelling` was here a faded white slipped past it and
+        /// darkened the subtree as a side effect of fading it.
         func isIdentity(at amount: Double) -> Bool {
             switch self {
             case .brightness, .grayscale, .hueRotation: amount == 0
             case .contrast, .saturation: amount == 1
             case .invert: false
-            case .multiply(let color): color == .white
+            case .multiply(let color): color.opaqueSpelling == .white
             }
         }
     }
@@ -140,7 +158,29 @@ extension _ColorEffectView: Animatable {
 extension _ColorEffectView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let buffer = TUIkit.renderToBuffer(content, context: context)
-        guard !buffer.isEmpty, !effect.isIdentity(at: amount) else { return buffer }
+        guard !buffer.isEmpty else { return buffer }
+
+        // A translucent multiply tint fades the LAYER, and that is not a stylistic
+        // reading: `colorMultiply` multiplies RGBA, so an alpha of 0.5 in the tint
+        // halves the alpha of everything under it. The RGB half is the arithmetic in
+        // `applied(to:amount:)`; the alpha half cannot be, because a colour's alpha
+        // is not in the SGR bytes that rewrites.
+        //
+        // The LAYER channel rather than ink and field, for the same reason
+        // `.opacity(_:)` uses it: this says how PRESENT the subtree is, not how faint
+        // its colours are, so a cell at 0.4 hands its glyph to whatever is behind it
+        // by the ½ rule. On ink and field instead, a fully transparent
+        // `colorMultiply` would still draw its glyphs — and `.opacity(_:)` would mean
+        // something different from `.colorMultiply(.white.opacity(_:))`, which in
+        // SwiftUI it does not.
+        let layerFade: Double? =
+            if case .multiply(let tint) = effect, !tint.isOpaque {
+                Double(tint.alpha) / 255
+            } else {
+                nil
+            }
+        let rewrites = !effect.isIdentity(at: amount)
+        guard rewrites || layerFade != nil else { return buffer }
 
         // Resolve first: a semantic colour is a silent no-op through the
         // arithmetic and makes `ANSIRenderer` trap outright.
@@ -150,12 +190,22 @@ extension _ColorEffectView: Renderable {
         let effect = self.effect
         let amount = self.amount
 
-        return buffer.replacingLines(
-            buffer.lines.map { line in
-                SGRColorRewrite.rewriting(
-                    line, defaultForeground: foreground, defaultBackground: surface
-                ) { effect.applied(to: $0, amount: amount) }
-            })
+        var result =
+            rewrites
+            ? buffer.replacingLines(
+                buffer.lines.map { line in
+                    SGRColorRewrite.rewriting(
+                        line, defaultForeground: foreground, defaultBackground: surface
+                    ) { effect.applied(to: $0, amount: amount) }
+                })
+            : buffer
+        if let layerFade {
+            result.opacityRegions.append(
+                OpacityRegion(
+                    offsetX: 0, offsetY: 0, width: result.width,
+                    height: result.height, opacity: layerFade))
+        }
+        return result
     }
 }
 

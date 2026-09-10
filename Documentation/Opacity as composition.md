@@ -1087,7 +1087,7 @@ them among the three:
 | `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer`, 3+ sites |
 | `StatusBarState.highlightColor` / `.labelColor` | 2 sites — **fixed, §24** |
 | `.style(.text) { $0.foreground = … }` | the cascade's non-`Text` readers |
-| `.colorMultiply(…)` | a silent drop, not a trap |
+| `.colorMultiply(…)` | a silent drop, not a trap — **fixed, §25** |
 | `ColorPicker` with a translucent binding | the swatch — and `supportsOpacity` is now a real parity gap |
 
 Plus a whole second tier: `Palette` is a public protocol of plain
@@ -1125,7 +1125,8 @@ whose alpha is uniform or varies only down the page; `Text`'s single-style arm;
 `ShapeStyle.opacity(_:)` and `Color.opacity(_:)`, which now agree; `.border` and
 every box the framework draws through `BorderRenderer` (§18); `Divider` and
 `Spinner` (§19); a `Toggle`'s and `RadioButton`'s own indicator glyphs (§23);
-`.listRowBackground` (§22); the status bar's two configurable colours (§24).
+`.listRowBackground` (§22); the status bar's two configurable colours (§24);
+`.colorMultiply` (§25).
 
 Not honoured, each loud at its own line: everything in §16.1 not marked fixed,
 `Text`'s ramped ink, and per-cell ramps.
@@ -1560,3 +1561,39 @@ the app header's side payloads.
 a faded item in the bar must fade toward *the bar*. It was written before anything
 emitted a region there — "it is the sink being put in place first". It was right, and
 this is the first thing to use it. The comment now says so.
+
+
+## 25. `.colorMultiply`, where the alpha is a *layer* (2026-09-09)
+
+`colorMultiply` multiplies **RGBA**, in SwiftUI and here, so a tint's own alpha is
+not decoration on the operation — it halves the alpha of everything under the
+modifier. §16.1 called this "a silent drop, not a trap", and it was: the arithmetic
+rebuilt every colour as `Color.rgb(...)`, so the tint's alpha simply never appeared
+anywhere.
+
+The RGB half is arithmetic on the escapes. The alpha half cannot be, because a
+colour's alpha is not *in* the escapes — so it becomes a region, and specifically a
+**layer** region:
+
+- The layer channel says how *present* the subtree is, so a cell at 0.4 hands its
+  glyph to whatever is behind it by the ½ rule, and `.colorMultiply(.clear)` hides
+  the subtree rather than painting it in the page's colour.
+- On ink and field instead, a fully transparent multiply would still draw its
+  glyphs — and `.opacity(x)` would mean something different from
+  `.colorMultiply(.white.opacity(x))`, which in SwiftUI it does not.
+
+### 25.1 `.white` is the identity by spelling, not by arithmetic
+
+Worth knowing before touching this. `Color.white` is **ANSI white — 229, not 255** —
+so putting it through the multiply darkens everything by 229/255. What makes
+`.colorMultiply(.white)` mean what it says is the `isIdentity` shortcut, which
+compares the colour and skips the pass entirely.
+
+A faded white slipped past that check (`.white.opacity(0.5) != .white`), so it took
+the arithmetic path and **darkened the subtree as a side effect of fading it**. The
+check now asks `color.opaqueSpelling == .white`, and the two halves are separated: the
+line rewrite runs only when the hues actually change, the layer fade is appended
+independently, and either can happen without the other.
+
+That is also why the test asserts the *bytes* are byte-identical to an unmultiplied
+render. It is how the bug was found rather than a restatement of the fix.
