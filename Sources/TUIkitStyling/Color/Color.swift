@@ -81,6 +81,31 @@ public struct Color: Sendable, Hashable {
         return copy
     }
 
+    /// This colour with `factor`'s alpha COMPOSED into its own, rather than
+    /// substituted for it.
+    ///
+    /// The distinction matters at exactly one place, and it is not a style
+    /// preference. ``carryingAlpha(of:)`` is for a re-SPELLING — a downsample, a
+    /// contrast floor — where the result is the same colour written differently and
+    /// there is only ever one alpha in play, so replacing it is right and composing
+    /// it would fade a colour twice for having been quantised.
+    ///
+    /// Resolving a SEMANTIC colour is not a re-spelling: `.palette.accent` and the
+    /// theme's `accent` slot are two different colours, each entitled to its own
+    /// alpha, and the paint is subject to both. `.palette.accent.opacity(0.5)` on a
+    /// theme whose accent is already half-faded means a quarter — the same
+    /// multiplication ``opacity(_:)`` performs, for the same reason.
+    ///
+    /// Multiplied on the 0…255 integers with rounding, which is what keeps a chain
+    /// of full-strength hops exact: 255 × 255 / 255 is 255 and not 254.
+    func composingAlpha(of factor: Self) -> Self {
+        guard !factor.isOpaque else { return self }
+        var copy = self
+        copy.alpha = UInt8(
+            ((Double(alpha) * Double(factor.alpha)) / 255).rounded())
+        return copy
+    }
+
     /// Internal enum for different color types.
     public enum ColorValue: Sendable, Hashable {
         case standard(ANSIColor)
@@ -358,15 +383,21 @@ extension Color {
         // 16 > the number of palette roles, so any acyclic reference chain
         // resolves fully within the cap; only a cycle reaches it.
         for _ in 0..<16 {
-            guard case .semantic(let token) = resolved.value else {
-                return resolved.carryingAlpha(of: self)
-            }
-            resolved = token.resolve(with: palette)
+            // `resolved` carries the accumulated alpha of every hop so far — it
+            // starts as `self`, so the reference's own alpha is in it from the
+            // outset and the exits need no further arithmetic.
+            guard case .semantic(let token) = resolved.value else { return resolved }
+            // The hop's alpha COMPOSES with what it points at rather than replacing
+            // it — see ``composingAlpha(of:)``. A slot's translucency is the theme's
+            // statement and the reference's is the call site's, and the paint is
+            // subject to both. `carryingAlpha` here silently discarded whatever the
+            // theme had said, so a faded palette role rendered solid.
+            resolved = token.resolve(with: palette).composingAlpha(of: resolved)
         }
         if case .semantic = resolved.value {
-            return Color.rgb(128, 128, 128).carryingAlpha(of: self)
+            return Color.rgb(128, 128, 128).carryingAlpha(of: resolved)
         }
-        return resolved.carryingAlpha(of: self)
+        return resolved
     }
 
     /// Creates a color from the 256-color palette.

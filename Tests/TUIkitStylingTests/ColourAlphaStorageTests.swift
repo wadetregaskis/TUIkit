@@ -27,6 +27,23 @@ private struct AlphaTestPalette: Palette {
     let border = Color.brightBlack
 }
 
+/// A palette whose own slots are faded — the second tier of
+/// `Documentation/Opacity as composition.md` §16.1. `Palette` is a public protocol
+/// of plain `var …: Color { get }` members and nothing normalises what a
+/// conformance returns, so this is a thing an app can write.
+private struct FadedSlotPalette: Palette {
+    let id = "faded-slot"
+    let name = "Faded slot"
+    let background = Color.black
+    let foreground = Color.white
+    var accent = Color.cyan.opacity(0.5)
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.red
+    let info = Color.blue
+    let border = Color.brightBlack
+}
+
 @Suite("Colour alpha storage")
 struct ColourAlphaStorageTests {
 
@@ -225,5 +242,78 @@ struct ColourAlphaStorageTests {
     func compositingConsumesAlpha() {
         let result = translucent(.rgb(255, 0, 0)).opacity(0.5, over: .black)
         #expect(result.isOpaque, "got \(result.alpha)")
+    }
+}
+
+// MARK: - A theme's own translucency
+
+/// Resolving a semantic colour composes two alphas: the theme slot's and the
+/// reference's. Discarding either is a silently wrong colour.
+@Suite("A faded palette slot")
+struct FadedPaletteSlotTests {
+
+    private let palette = FadedSlotPalette()
+
+    @Test("A faded slot survives being resolved")
+    func slotAlphaSurvives() {
+        // `carryingAlpha(of: self)` used to end `resolve(with:)`, which replaced the
+        // slot's alpha with the REFERENCE's — and a bare `.palette.accent` is
+        // opaque, so the theme's fade was discarded and the colour rendered solid.
+        let resolved = Color.Semantic.accent.resolve(with: palette)
+        #expect(resolved.alpha == 128, "got \(resolved.alpha)")
+    }
+
+    @Test("A reference's alpha multiplies with the slot's")
+    func alphasCompose() {
+        // Half of a half. The same multiplication `Color.opacity(_:)` performs, and
+        // for the same reason: the theme's translucency and the call site's are two
+        // statements about one paint, and it is subject to both.
+        let resolved = Color.Semantic.accent.opacity(0.5).resolve(with: palette)
+        #expect(resolved.alpha == 64, "got \(resolved.alpha)")
+    }
+
+    @Test("An opaque slot leaves a reference's own alpha exactly alone")
+    func opaqueSlotIsExact() {
+        // The rounding matters: multiplying on the 0…255 integers has to give back
+        // 128 and not 127, or every hop through an opaque slot would fade a colour
+        // slightly. 255 × 128 / 255 is exact only if the arithmetic says so.
+        #expect(Color.Semantic.error.opacity(0.5).resolve(with: palette).alpha == 128)
+        #expect(Color.Semantic.error.resolve(with: palette).isOpaque)
+    }
+
+    @Test("A concrete colour is returned untouched, not squared")
+    func concreteIsUntouched() {
+        // The first version of this fix composed `self`'s alpha at the exit, which
+        // ran for the non-semantic case too and squared it — 128 became 64 for a
+        // colour that had never been near a palette.
+        var faded = Color.rgb(200, 100, 50)
+        faded.alpha = 128
+        #expect(faded.resolve(with: palette).alpha == 128, "got \(faded.resolve(with: palette).alpha)")
+        #expect(Color.red.resolve(with: palette).isOpaque)
+    }
+
+    @Test("A reference cycle still terminates, and keeps what it accumulated")
+    func cycleKeepsAlpha() {
+        // A slot pointing at its own role (a colour picker editing the role it is
+        // displaying) is broken after a bounded number of hops. The fallback grey
+        // takes the alpha accumulated along the way rather than dropping it, so a
+        // faded cyclic reference stays faded instead of turning solid.
+        struct CyclicPalette: Palette {
+            let id = "cyclic"
+            let name = "Cyclic"
+            let background = Color.black
+            let foreground = Color.white
+            let accent = Color(value: .semantic(.accent))
+            let success = Color.green
+            let warning = Color.yellow
+            let error = Color.red
+            let info = Color.blue
+            let border = Color.brightBlack
+        }
+        let resolved = Color.Semantic.accent.opacity(0.5).resolve(with: CyclicPalette())
+        if case .semantic = resolved.value {
+            Issue.record("resolution must never hand a semantic colour to the renderer")
+        }
+        #expect(resolved.alpha == 128, "got \(resolved.alpha)")
     }
 }

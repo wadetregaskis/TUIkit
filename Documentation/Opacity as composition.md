@@ -1093,7 +1093,8 @@ them among the three:
 Plus a whole second tier: `Palette` is a public protocol of plain
 `var …: Color { get }` members, and nothing normalises what a custom palette
 returns. One `.clear` in a palette reaches everything. (§18 closes the `border`
-role of it — every box the framework draws — and leaves the rest.)
+role of it — every box the framework draws. §20 fixed the reason it reached
+*nothing*: `resolve(with:)` was discarding a slot's alpha outright.)
 
 So §1's instinct about the *magnitude* was better than the summary's dismissal of
 it. What the summary got right is the *shape*: none of this needs per-column alpha
@@ -1320,3 +1321,56 @@ the same shape `Divider` has. It is the plumbing:
 provides for layer fades, and (3) is the open item from §15. They are one commit
 each, and the honest order is (2) first: without it, a translucent
 `.foregroundStyle` on a table would be right on every row except the selected one.
+
+
+## 20. A theme's own translucency was discarded on the way out (2026-09-09)
+
+§16.1's second tier turned out to have a bug under it rather than merely a gap.
+`Color.resolve(with:)` ended every arm with `carryingAlpha(of: self)` — the
+*reference's* alpha, substituted for whatever the palette slot had. So a theme
+whose `accent` was `.cyan.opacity(0.5)` resolved to cyan at **full strength**: the
+translucency was not unhonoured, it was deleted, and the assertion that would have
+reported it never fired because an opaque colour is a perfectly legal thing to
+emit.
+
+### 20.1 Substituting versus composing
+
+`carryingAlpha(of:)` is right for a **re-spelling** — a downsample, a contrast
+floor, a monotonicity repair. There the result is the same colour written
+differently, only ever one alpha is in play, and composing would fade a colour
+twice for having been quantised.
+
+Resolving a semantic colour is not a re-spelling. `.palette.accent` and the theme's
+`accent` slot are two *different colours*, each entitled to its own alpha, and the
+paint is subject to both. So `composingAlpha(of:)` — the multiplying sibling, and
+the same rule `Color.opacity(_:)` follows for the same reason:
+
+```
+.palette.accent                  on accent = cyan@0.5  →  0.5
+.palette.accent.opacity(0.5)     on accent = cyan@0.5  →  0.25
+```
+
+Composed at **every hop**, because a slot may itself hold a semantic reference (a
+palette editor setting `accent` to `.semantic(.success)`), so a chain through two
+faded slots fades twice. The accumulator is `resolved` itself, which starts as
+`self` — that way the reference's own alpha is in it from the outset and the exits
+need no further arithmetic. The first version of this fix composed `self` again at
+the exit, which ran for the *non-semantic* case too and **squared** it: 128 became
+64 for a colour that had never been near a palette. `concreteIsUntouched` is that
+bug's test.
+
+The cyclic-reference fallback keeps the accumulated alpha rather than dropping it,
+so a faded cyclic reference stays faded instead of turning solid.
+
+The integer arithmetic has to round: 255 × 128 / 255 must give 128 back, or every
+hop through an *opaque* slot would fade a colour slightly, and the framework
+resolves semantic colours several times per frame. `opaqueSlotIsExact` pins it.
+
+### 20.2 What this changes for an app
+
+Nothing, for any app whose palette is opaque — which is every palette that ships,
+and why the suite is unchanged at 6,469 passing. For an app that *does* fade a
+slot, a silent drop becomes a loud one on the paths that have not been migrated:
+the colour now arrives at the emitter with its alpha intact and trips the assertion
+in `Color+ANSICodes.swift`. That is the intended direction. A theme cannot be
+partly honoured quietly.
