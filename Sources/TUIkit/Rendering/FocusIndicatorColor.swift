@@ -25,14 +25,17 @@ extension AnimatedColor {
     @MainActor
     static func activeSection(_ isActive: Bool, in environment: EnvironmentValues) -> Self? {
         guard isActive else { return nil }
-        let accent = environment.palette.accent
         // Over the surface the section's border is drawn on, not the page:
         // inside a tab the page blend put the trough at the tab body's own
         // luminance (Homebrew: 1.009:1), the defect the button breath had.
+        //
+        // Through `Color.breathEnds`, so BOTH ends spend a translucent tint's
+        // alpha against that surface. The bright end used to be a bare `accent`
+        // and carried it while the dim end consumed it — §29.
+        let ends = environment.palette.accent.breathEnds(
+            dimmedTo: ViewConstants.focusBorderDim, over: environment.enclosingSurface)
         return environment.selectionEmphasis.animatedColor(
-            true,
-            dim: accent.opacity(ViewConstants.focusBorderDim, over: environment.enclosingSurface),
-            bright: accent)
+            true, dim: ends.dim, bright: ends.bright)
     }
 
     /// The ● drawn in this colour — the one description of that glyph, shared

@@ -53,8 +53,15 @@ struct ButtonCapCycle {
         let cycle = context.environment.selectionEmphasis.cycle(isFocused)
         self.cycle = cycle
         self.background = background
-        self.accent = accent
-        breath = cycle.colors(dim: background, bright: accent)
+        // The accent SPENDS a translucent tint's alpha against the button's own
+        // face, which is the dim end of this breath and so the ground both ends
+        // have to agree about. Passed raw it carried the alpha while `background`
+        // — a composite through `restingControlFace` — did not, so the two caps
+        // of a focused button under `.tint(.red.opacity(0.5))` breathed between
+        // one opaque colour and one translucent one, with an alpha that differed
+        // per phase and no static claim that could describe it. §29.
+        self.accent = accent.spendingAlpha(over: background)
+        breath = cycle.colors(dim: background, bright: self.accent)
     }
 
     /// Whether the caps actually move. A still cap needs no run — the ordinary

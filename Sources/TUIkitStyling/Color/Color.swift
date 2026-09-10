@@ -568,6 +568,42 @@ extension Color {
         return result
     }
 
+    /// This colour with a translucent alpha SPENT against `ground` — the bright
+    /// end of a focus breath.
+    ///
+    /// An opaque colour is returned **untouched** rather than composited at 1, and
+    /// not as an economy: ``opacity(_:over:)`` lerps, and a lerp re-spells `.red`
+    /// (SGR 31, the terminal's OWN red) as `rgb(205, 0, 0)` (SGR 38;2;…). Same
+    /// colour by arithmetic, a different colour on any terminal whose palette is
+    /// not the default — and this is the bright end of every focus pulse on every
+    /// palette that ships.
+    ///
+    /// - Parameter ground: What the breath is drawn on. The dim end must be
+    ///   composited over the same colour, or the two ends will not agree.
+    public func spendingAlpha(over ground: Color) -> Self {
+        isOpaque ? self : opacity(1, over: ground)
+    }
+
+    /// The two ends of a breath between a dimmed version of this colour and this
+    /// colour itself, **both** spending a translucent alpha against one ground.
+    ///
+    /// Both ends, together, because a pulse's ends must agree about alpha and
+    /// four separate copies of this pair had already drifted apart in exactly the
+    /// same way: a dim end through ``opacity(_:over:)``, which consumes the alpha
+    /// and stamps the result opaque, beside a bright end that was the colour
+    /// itself and carried it. `.tint(.red.opacity(0.5))` then breathed between an
+    /// opaque colour and a translucent one — half the cycle honoured, half of it a
+    /// debug trap — and no static claim could describe the run, because its alpha
+    /// genuinely differed per phase.
+    ///
+    /// - Parameters:
+    ///   - factor: How far the quiet end recedes toward `ground` (0–1).
+    ///   - ground: What the breath is drawn on — the enclosing surface, not the
+    ///     page, wherever a container has painted one.
+    public func breathEnds(dimmedTo factor: Double, over ground: Color) -> (dim: Self, bright: Self) {
+        (dim: opacity(factor, over: ground), bright: spendingAlpha(over: ground))
+    }
+
     /// This colour mixed with another — SwiftUI's spelling of ``lerp(_:_:phase:)``.
     ///
     /// ```swift

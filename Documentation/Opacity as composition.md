@@ -1734,3 +1734,67 @@ transparent (one wash all the way down) or deliberately solid (a field you can r
 in), and choosing changes the chrome depth of every faded theme. No paint site
 migrated so far reaches them, so nothing is silently wrong *today* — what was missing
 was any statement that the question is open. This is the project owner's call.
+
+
+## 29. Four copies of one pulse pair, three of them wrong (2026-09-10)
+
+§21 fixed `accentPulse`: a focus breath's two ends must **both** spend a translucent
+tint's alpha against the same stated ground, or the run's frames have an alpha that
+genuinely differs per phase and no static claim can describe it.
+
+It fixed one copy. There were four.
+
+| | dim end | bright end |
+|---|---|---|
+| `Palette.accentPulse` | `accent.opacity(min, over: ground)` | `accent` — **fixed in §21** |
+| `BorderRenderer.breathEnds` | `resting.opacity(focusBorderDim, over: surface)` | `resting` |
+| `AnimatedColor.activeSection` | `accent.opacity(focusBorderDim, over: surface)` | `accent` |
+| `ButtonCapCycle` | the button's own face | `accent` |
+
+The first three are the *same expression*, written out three times with different
+constants; the fourth shares only its bright half, because a cap recedes to the
+button's face rather than to a dimmed accent. Every one of them consumed the alpha at
+the quiet end and carried it at the loud one — so a focused `Link`, a focus section's
+●, a bordered box's ● and a standard button's caps all breathed between an opaque
+colour and a translucent one under `.tint(.red.opacity(0.5))`.
+
+`Color.breathEnds(dimmedTo:over:)` is now the one place the rule lives, with
+`spendingAlpha(over:)` as its bright half for the fourth caller. Four copies of an
+expression that had already drifted three ways is the shape `CONTRIBUTING`'s reuse
+rule exists for, and the fix is cheaper than the fourth copy would have been.
+
+### 29.1 Why the bright end is a guard and not a composite
+
+`spendingAlpha(over:)` returns an opaque colour **untouched** instead of compositing
+it at 1. That is not an economy. `opacity(_:over:)` goes through `lerp`, and a lerp
+re-spells `.red` — SGR 31, the terminal's *own* red — as `rgb(205, 0, 0)`. The same
+colour arithmetically; a different colour on any terminal whose palette is not the
+default. This is the bright end of every focus pulse in all sixteen shipped palettes,
+so `opaqueEndKeepsItsSpelling` asserts the **bytes**, not the value.
+
+### 29.2 What this unblocks, which is more than it fixes
+
+§18.4, §19.1 and §23 all record the same decline: *an animating colour cannot carry a
+claim, because the run repaints its cells per tick and one region would resolve every
+phase at the alpha drawn now.* That is **too strong**, and the pulse asymmetry above
+is most of why it looked true.
+
+`resolvingOpacity` already re-blends every frame of every covered run
+(§27's neighbourhood, `OpacityResolution` lines 238–279): each frame passes through
+`blendedSpan` against the real destination at the region's alpha. So a run under a
+**static** claim replays correctly — the frames come back at *different* faded
+colours, each blended from its own phase. Verified directly: two frames at
+`rgb(200,40,40)` and `rgb(255,90,90)` under one `inkOpacity: 0.5` claim over a blue
+backdrop resolve to `rgb(100,20,139)` and `rgb(128,45,164)`.
+
+What actually blocks a claim is narrower, and there are only two cases:
+
+1. **A `cycle`-bearing region** — a repeating `.opacity` fade. Those runs are dropped
+   (`covering.allSatisfy { $0.cycle == nil }`), because the fade's phases and the
+   run's frames tick independently and their product is not one run.
+2. **A pulse whose phases have different alphas** — which was this bug, in four
+   places, and is now none.
+
+So the declines that named the pulse as their reason are stale. Their real remaining
+obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
+different problem with a different answer — §15.

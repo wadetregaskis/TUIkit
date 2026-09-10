@@ -48,8 +48,14 @@ extension BorderRenderer {
     /// over the page inside a `TabView` body put a focused link's quiet end at
     /// the exact luminance of the tab it sat on — 1.01:1 on Homebrew, where
     /// compositing over the tab's own colour gives 1.61:1.
+    /// Both ends spend a translucent colour's alpha against `surface`. The bright
+    /// end used to be a bare `resting`, which CARRIED the alpha while the dim end
+    /// consumed it — so a focused `Link` under a faded `.tint` breathed between an
+    /// opaque colour and a translucent one, and no static claim could describe the
+    /// run because its alpha really did differ per phase. `Color.breathEnds` is
+    /// that rule in one place; see §29.
     static func breathEnds(from resting: Color, on surface: Color) -> (dim: Color, bright: Color) {
-        (dim: resting.opacity(ViewConstants.focusBorderDim, over: surface), bright: resting)
+        resting.breathEnds(dimmedTo: ViewConstants.focusBorderDim, over: surface)
     }
 
     /// ``breathEnds(from:on:)`` for the ● — the accent's breath.
