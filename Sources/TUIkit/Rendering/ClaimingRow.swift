@@ -70,11 +70,26 @@ struct ClaimingRow {
         cells += count
     }
 
-    /// Appends bytes that are already finished — a picture's placeholder cells —
-    /// which owe no claim because this renderer chose no colour for them.
+    /// Appends bytes that are already finished — a picture's placeholder cells, or a
+    /// child's rendered line whose claims travel on its own buffer — which owe no
+    /// claim here because this renderer chose no colour for them.
     mutating func appendFinished(_ chunk: String, cells count: Int) {
         text += chunk
         cells += count
+    }
+
+    /// Appends another row after this one: its bytes, and its claims moved to the
+    /// columns they now sit at.
+    ///
+    /// For a piece drawn by a function of its own — a folder tab's label, a panel row
+    /// between two walls — because an animation's frames must be the same cells the
+    /// render drew, so the piece is built once for the line and again per frame.
+    /// Splicing it here keeps its claims' columns this row's arithmetic, not the
+    /// caller's.
+    mutating func append(contentsOf row: Self) {
+        text += row.text
+        for claim in row.claims { claims.appendCoalescing(claim.shifted(byX: cells, y: 0)) }
+        cells += row.cells
     }
 
     /// Advances past cells this row draws nothing for.

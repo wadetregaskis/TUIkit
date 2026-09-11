@@ -1165,16 +1165,16 @@ bar's breath (§43–§45). Plus the navigation bar's crumbs, at rest and breath
 Plus a colour swatch's focused bullet, on any fill under any palette (§48). Plus a
 hovered button's face under a fully faded tint (§49). Plus the text scroll indicators,
 still and breathing, on every host that draws them (§53). Plus a `TabView`'s active chip,
-breathing, in both strips (§55).
+breathing, in both strips (§55), and the bordered strip's own chrome — its tops, walls,
+mouth, pads, fillers and rules (§56).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret; a bordered `TabView`'s strip; a `Toggle`'s
-bracketed mark and its coloured switch track while focused; and an animated `.border`
-whose frames disagree about alpha. Two were seen to trap in a debug build when probed —
-the editor and the bordered strip. The toggle's two and the border drop the alpha
-without a word.
+reading: a `TextEditor`'s rows and caret; a `Toggle`'s bracketed mark and its coloured
+switch track while focused; and an animated `.border` whose frames disagree about
+alpha. One was seen to trap in a debug build when probed — the editor. The toggle's
+two and the border drop the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -3451,8 +3451,32 @@ floored, then spent — the loud end fell under the 3.0 readability floor for te
 sixteen shipped palettes under a faded tint, as low as 1.53:1, and the suite now checks
 the floor after the spend.
 
-The bordered strip's own chrome — its walls, tops and mouth — still paints raw, and still
-traps under a wholly faded palette (§16.3).
+The bordered strip's own chrome — its walls, tops and mouth — painted raw until §56.
+
+
+## 56. The bordered strip claims what it paints (2026-09-10)
+
+A bordered `TabView` draws its folder tabs and the box around its panel itself:
+`folderStripRows` the tops and labels of every row of tabs, `activeRowBottomBorder` the
+box's top border curving up around the active tab, and `renderBordered` the walls, the
+pads either side of the content, the filler rows under a short tab and the bottom rule.
+Every one of those went to the emitter through a raw `colorize`, so a palette whose
+border, page or surface was translucent trapped on the first wall in a debug build
+(§16.3), and drew opaque in a release one.
+
+Each line is a `ClaimingRow` now, as the compact chips' already were. A wall or a rule is
+border ink on nothing; a label is ink on field; the mouth under the active tab is the
+panel's surface with no ink. The row that emits each run is the thing that knows its
+column, so each claim sits where its cells are. A label is drawn by a function of its
+own, because the chip's breath has to replay the same cells, and
+`ClaimingRow.append(contentsOf:)` splices it into its line, claims and all; an assertion
+ties the column the row reached to the one the click region and the run were given. The
+box's rows are `panelRow`'s, the compact panel's, between two walls. `renderBordered`
+collects every line, the strip's first, and places each line's claims on the row it
+lands on, once.
+
+Under an opaque palette the bytes do not change: the TabView pins hold, still and
+focused, at truecolor and at 256 colours.
 
 An opaque palette's bytes do not change: an opaque colour is its own opaque spelling,
 and spending it returns it untouched.

@@ -634,17 +634,25 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
         let content = full.clamped(toWidth: min(natural, interior), height: full.height)
 
-        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
-        func surf(_ n: Int) -> String {
-            n > 0 ? ANSIRenderer.colorize(String(repeating: " ", count: n), background: surface) : ""
-        }
-        var (lines, regions, animatedCells) = folderStripRows(
+        let strip = folderStripRows(
             rows: rows, selectedIndex: selectedIndex, chip: chip,
             style: FolderStripStyle(
                 inactiveFg: inactiveFg, hoveredIndex: hoveredTabBox(context: context).value,
                 palette: palette, inactiveBg: inactiveBg,
                 border: border, surface: surface, interior: interior, boxWidth: boxWidth,
                 alignment: alignment))
+        /// Every line of the box, the strip's first. Each carries its own claims,
+        /// placed on the row it lands on when the box is flattened below.
+        var box = strip.lines
+        /// A line of the box below the strip: border ink on nothing either side, and
+        /// whatever lies between them bringing its own claims.
+        func boxLine(_ inside: ClaimingRow) -> ClaimingRow {
+            var line = ClaimingRow()
+            line.append("│", cells: 1, ink: border)
+            line.append(contentsOf: inside)
+            line.append("│", cells: 1, ink: border)
+            return line
+        }
 
         // Content rows, centred within the interior as one block (a uniform
         // offset, so internal column alignment is preserved), then the bottom.
@@ -661,26 +669,34 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // the terminal. Either way the content clips INSIDE the border, like
         // any other bordered container.
         let contentPad = max(0, (interior - content.width) / 2)
-        let contentStartY = lines.count
+        let contentStartY = box.count
         let (visibleContent, panelContentHeight) = borderedPanelContent(
             content: content, insets: insets, avail: avail, chrome: chrome, context: context)
         for line in visibleContent.lines {
-            let used = line.strippedLength
-            lines.append(
-                bc("│") + surf(contentPad) + line + surf(max(0, interior - contentPad - used)) + bc("│"))
+            box.append(boxLine(panelRow(
+                line, used: line.strippedLength, leftPad: contentPad, width: interior, surface: surface)))
         }
         // Size the box to the TALLEST tab so switching tabs doesn't change the
         // box height: pad the (selected) content down to that height with
         // surface-filled interior rows before the bottom border.
-        while lines.count - contentStartY < panelContentHeight {
-            lines.append(bc("│") + surf(interior) + bc("│"))
+        while box.count - contentStartY < panelContentHeight {
+            box.append(boxLine(panelRow("", used: 0, leftPad: 0, width: interior, surface: surface)))
         }
-        lines.append(bc("╰" + String(repeating: "─", count: interior) + "╯"))
+        var bottom = ClaimingRow()
+        let rule = "╰" + String(repeating: "─", count: interior) + "╯"
+        bottom.append(rule, cells: rule.count, ink: border)
+        box.append(bottom)
 
-        var buffer = FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: box.map(\.text))
+        // The box's own claims — the strip's chrome and labels, the walls, the pads,
+        // the fillers, the rule — each on the row its line landed on. The content
+        // between the pads is claimed by its own buffer, added below.
+        buffer.opacityRegions = box.enumerated().flatMap { row, line in
+            line.claims.map { $0.shifted(byX: 0, y: row) }
+        }
         // The strip's rows open the buffer, so the run's coordinates are the
         // buffer's already.
-        buffer.animatedCells = context.isMeasuring ? [] : animatedCells
+        buffer.animatedCells = context.isMeasuring ? [] : strip.animatedCells
         // Re-attach the content's interactive regions/overlays (slider, toggle, …):
         // the content rows above were rebuilt as fresh strings, so the content
         // buffer's hit regions are not carried automatically. Shift them past the
@@ -705,7 +721,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         buffer.opacityRegions.append(
             contentsOf: visibleContent.shiftedOpacityRegions(
                 byX: contentShiftX, y: contentStartY))
-        attachTabClicks(to: &buffer, regions: regions, context: context)
+        attachTabClicks(to: &buffer, regions: strip.regions, context: context)
         return buffer.clamped(toWidth: context.availableWidth, height: context.availableHeight)
     }
 

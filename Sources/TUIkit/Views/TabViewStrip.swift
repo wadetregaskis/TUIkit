@@ -104,16 +104,20 @@ extension _TabViewCore {
     /// around the active tab.
     ///
     /// Returns the lines, the per-tab click regions, and the active chip's
-    /// animation run — all in box coordinates, which are also the buffer's,
-    /// because the strip opens it.
+    /// animation run. The regions and the run are in box coordinates, which are
+    /// also the buffer's, because the strip opens it; each line's claims are in its
+    /// own, and the caller places them on the row the line lands on.
+    ///
+    /// Every line is a ``ClaimingRow``, for the reason the compact chips are: a wall
+    /// is border ink on nothing, a label is ink on field, the mouth under the active
+    /// tab is field and no ink — and the row that emits each run is the thing that
+    /// knows its column (§56).
     func folderStripRows(
         rows: [[Int]], selectedIndex: Int, chip: ActiveChipCycle, style: FolderStripStyle
     ) -> (
-        lines: [String], regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
+        lines: [ClaimingRow], regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
         animatedCells: [AnimatedCellRun]
     ) {
-        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: style.border) }
-        func base(_ n: Int) -> String { n > 0 ? String(repeating: " ", count: n) : "" }
         // The absolute box column of a row's left wall, per the strip alignment.
         func rowOffset(_ rowWidth: Int) -> Int {
             1 + max(0, style.alignment.childOffset(childWidth: rowWidth, in: style.interior))
@@ -121,13 +125,15 @@ extension _TabViewCore {
         // One function draws a tab's label so the animation's frames are the
         // same cells the render draws. The walls either side are border chrome
         // and do not breathe, so a folder tab's run is its body only.
-        func drawLabel(_ index: Int, background: Color, foreground: Color, active: Bool) -> String {
-            ANSIRenderer.colorize(
-                " \(tabs[index].title) ", foreground: foreground,
-                background: background, bold: active)
+        func drawLabel(_ index: Int, background: Color, foreground: Color, active: Bool) -> ClaimingRow {
+            var label = ClaimingRow()
+            let title = " \(tabs[index].title) "
+            label.append(
+                title, cells: title.strippedLength, ink: foreground, field: background, bold: active)
+            return label
         }
 
-        var lines: [String] = []
+        var lines: [ClaimingRow] = []
         var regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)] = []
         var animatedCells: [AnimatedCellRun] = []
 
@@ -163,20 +169,31 @@ extension _TabViewCore {
                     activeRight: activeRight, activeLeft: activeLeft)
                 if k < bodySpans.count { top += String(repeating: "─", count: bodySpans[k].len) }
             }
-            lines.append(base(off) + bc(top) + base(style.boxWidth - off - top.count))
+            var tops = ClaimingRow()
+            tops.skip(cells: off)
+            tops.append(top, cells: top.count, ink: style.border)
+            tops.skip(cells: style.boxWidth - off - top.count)
+            lines.append(tops)
 
             // Tab labels: `│ title │ title │ …`, the active chip on the surface.
             let labelsY = lines.count
-            var labels = base(off)
+            var labels = ClaimingRow()
+            labels.skip(cells: off)
             for (k, i) in row.enumerated() {
                 let active = i == selectedIndex
                 let hovered = i == style.hoveredIndex && !(active && chip.isBreathing)
                 let resting = active ? chip.labelNow : style.inactiveFg
-                labels += bc("│")
-                labels += drawLabel(
+                labels.append("│", cells: 1, ink: style.border)
+                // One column reached two ways: this row's, which places the claim,
+                // and `bodySpans`', which places the run and the click region.
+                // Asserted, because a run one cell off repaints a wall forever.
+                assert(
+                    labels.cells == bodySpans[k].start,
+                    "folder label at \(labels.cells), span at \(bodySpans[k].start)")
+                labels.append(contentsOf: drawLabel(
                     i, background: active ? chip.surface : style.inactiveBg,
                     foreground: hovered ? style.palette.hoveredForeground(resting) : resting,
-                    active: active)
+                    active: active))
                 // The chrome above and below a tab is the tab's, not the
                 // page's: a folder tab is drawn as three rows and read as one
                 // control, so a click on the line over the title should not
@@ -190,13 +207,14 @@ extension _TabViewCore {
                 if active,
                     let run = chip.run(
                         offsetX: bodySpans[k].start, offsetY: labelsY,
-                        draw: { drawLabel(i, background: chip.surface, foreground: $0, active: true) })
+                        draw: { drawLabel(i, background: chip.surface, foreground: $0, active: true).text })
                 {
                     animatedCells.append(run)
                 }
             }
-            labels += bc("│")
-            lines.append(labels + base(style.boxWidth - off - folderRowWidth(row)))
+            labels.append("│", cells: 1, ink: style.border)
+            labels.skip(cells: style.boxWidth - off - folderRowWidth(row))
+            lines.append(labels)
 
             // Under the active (bottom) row: the content box's top border, curving
             // up to wrap the active tab and opening (surface gap) beneath it.
@@ -242,14 +260,16 @@ extension _TabViewCore {
     func activeRowBottomBorder(
         wallCols: [Int], bodySpans: [(start: Int, len: Int, index: Int)],
         selectedIndex: Int, boxWidth: Int, border: Color, surface: Color
-    ) -> String {
-        func bc(_ s: String) -> String { ANSIRenderer.colorize(s, foreground: border) }
+    ) -> ClaimingRow {
+        var line = ClaimingRow()
         let activeWall = wallCols.firstIndex { wc in
             bodySpans.contains { $0.index == selectedIndex && $0.start == wc + 1 }
         } ?? 0
         let aLeft = wallCols[activeWall]
         guard let aBody = bodySpans.first(where: { $0.index == selectedIndex }) else {
-            return bc("╰" + String(repeating: "─", count: max(0, boxWidth - 2)) + "╯")
+            let rule = "╰" + String(repeating: "─", count: max(0, boxWidth - 2)) + "╯"
+            line.append(rule, cells: rule.count, ink: border)
+            return line
         }
         let aRight = aBody.start + aBody.len
         let inactiveWalls = Set(wallCols).subtracting([aLeft, aRight])
@@ -264,10 +284,14 @@ extension _TabViewCore {
         for c in 0..<aBody.start { left += borderGlyph(c) }
         var right = ""
         for c in aRight..<boxWidth { right += borderGlyph(c) }
-        let gap =
-            aBody.len > 0
-            ? ANSIRenderer.colorize(String(repeating: " ", count: aBody.len), background: surface)
-            : ""
-        return bc(left) + gap + bc(right)
+        line.append(left, cells: aBody.start, ink: border)
+        // The mouth: the active tab's body opening into the panel, in the panel's
+        // surface with nothing drawn in it — so it owes a field and no ink. Nothing at
+        // all for a body of no width.
+        if aBody.len > 0 {
+            line.append(String(repeating: " ", count: aBody.len), cells: aBody.len, ink: nil, field: surface)
+        }
+        line.append(right, cells: boxWidth - aRight, ink: border)
+        return line
     }
 }
