@@ -1168,15 +1168,15 @@ still and breathing, on every host that draws them (§53). Plus a `TabView`'s ac
 breathing, in both strips (§55), and the bordered strip's own chrome — its tops, walls,
 mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark and knob
 (§57), and a focused switch's coloured track (§58). Plus an animated `.border` whose frames
-share one alpha (§59).
+share one alpha (§59). Plus a `TextEditor`'s rows, its blank rows and its caret's ink
+(§61).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
-Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret, which were seen to trap in a debug build when
-probed. And found by reading or review, not yet probed: an animated `.border` whose
+Still open, found by reading or review and not yet probed: an animated `.border` whose
 frames are at several alphas and the drop-down menu's breathing border, which drop their
-alpha without a word, and a resizable view's grips, which trap (§59.4).
+alpha without a word; a resizable view's grips, which trap (§59.4); and the field under a
+text caret, which both carets drop while they blink over a faded well (§61.2).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -3020,7 +3020,7 @@ They are gone; `fit` pads — claims and all — only when there is something to
 |---|---|---|---|
 | `ScrollView`, vertical | `contentWidth` | 0 | the memo keeps the column, claims included |
 | `ScrollView`, horizontal | 0 | the appended last row | the corner is appended to the same row: a field and no ink |
-| `TextEditor` | `contentWidth` | 0 | its first claims of any kind |
+| `TextEditor` | `contentWidth` | 0 | its first claims of any kind; its rows' came in §61 |
 | `List` | `contentRowWidth` | 0 | not slid |
 | `Table`, single-line | `contentInnerWidth` | 0 | not slid |
 | `Table`, multi-line | `contentWidth` | 0 | not slid |
@@ -3063,10 +3063,10 @@ the resolver makes for that one cell. The corner is checked for owing a field an
 ink; the editor, which draws no arrows, for claiming nothing off the bar's column.
 
 The popup's breathing arm and the editor are asserted under a palette that fades ONLY
-the track. A breathing popup border and an editor's well under a wholly faded palette
-are gaps of their own, and neither is what these assert. The border's is not loud, as
-this said: its frames go through `band` at their opaque spelling, so it drops the alpha
-in silence (§59).
+the track. A breathing popup border under a wholly faded palette is a gap of its own,
+and not what these assert; an editor's well was another, and is claimed since §61. The
+border's gap is not loud, as this said: its frames go through `band` at their opaque
+spelling, so it drops the alpha in silence (§59).
 
 
 ## 44. The scrollbar's breath: a sixth copy of the pulse pair (2026-09-10)
@@ -3633,3 +3633,58 @@ or background; a faded foreground or background does.
 It is spent now, over the highlight. That is literally what is behind the ink in that
 frame, and it is the blend the resolver makes for the claimed selected cells beside it:
 an ink claim over the cell's own opaque field. An opaque palette's bytes do not change.
+
+
+## 61. The text editor's rows claim (2026-09-10)
+
+A `TextEditor` under a wholly faded palette trapped in a debug build on its first frame.
+Three of its paint sites had never been migrated: each row's runs handed the palette's
+foreground and the well to the emitter with their alpha; blank rows did the same with the
+well; and the focused caret built its own colours and passed the translucent well and
+text straight through. §43.3's "its first claims of any kind" was the bar's alone. The
+well is `fieldBackground`, which a faded page fades since §39.
+
+### 61.1 One accumulator, shared as it was
+
+The rows go through `TextFieldContentRenderer.RunAccumulator`, the type a focused field's
+content already writes into; only its access changed. The editor's row walk has the
+field's shape — runs of colours compared by equality, an external column (`outputCells`)
+that holds the next cell's column wherever a run opens or flushes, and the caret written
+out of band — which is why it is not `ClaimingRow`. A row states its claims in its own
+frame and the render shifts them by the VIEWPORT row, as it shifts the caret; the
+downward merge folds a plain editor's identical rows into one rectangle. A blank row is
+one run with no caret, so it goes through `ClaimingRow`, claiming the well as a field with
+no ink. A disabled editor has no well, so its text claims ink only — as a disabled
+`TextField`'s does, and not §31.3's spend, which is the slider's own composite.
+
+The colours are derived once per render and resolved there, because the bytes no longer
+pass through `TextStyle.resolved(with:)` and a custom palette may state a slot
+semantically. Selected cells claim their text's alpha over the highlight's opaque field
+(§60). An opaque palette's bytes do not change.
+
+### 61.2 The caret goes through `caretSetup`
+
+The editor's caret now takes its colours from the field's `caretSetup`, once per render,
+so the two carets agree about what a faded palette's caret spends. Its ink owes nothing in
+any frame: the caret's own colour is opaque at every tick (§29.3), a block caret punches
+its character out in the well's opaque spelling, and the blink-OFF text, selected or not,
+is spent (§60).
+
+Its FIELD is still open, in both carets. The frames paint the well's opaque spelling and
+claim nothing, so under a translucent well the caret's cell shows the well at full
+strength. Whether one claim could fit turns on the frames. A bar or underscore off a
+selection shows the well in every frame, and a pulsing block shows only its own opaque
+colour; but a blinking block — the default — and a blinking bar on a selected cell
+alternate between the well and an opaque colour, and no one claim fits them. Declining
+their runs, as §36.7 does, would re-render the page every tick while the editor or field
+is focused over a faded well — the cost the caret's runs were built to remove — and
+§59.2's reason applies to how it would ask. It is recorded here for a decision rather than
+taken.
+
+### 61.3 What the tests assert
+
+`FadedPaletteRenderTests` draws the editor under a wholly faded palette — overflowing,
+blank, scrolled across a tab and a wide glyph, disabled, focused with every caret shape
+and animation, and with a selection — and checks cells for owing exactly the colours
+painted in them. The caret's own cell is checked for owing no ink, and deliberately not
+for its field. Under an opaque palette nothing is claimed.

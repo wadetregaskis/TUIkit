@@ -171,7 +171,10 @@ struct TextFieldContentRenderer {
     /// highlight along with the text. The run boundaries are already the colour
     /// boundaries — that is what the coalescing is for — so this costs nothing
     /// beyond remembering the column each run opened at.
-    private struct RunAccumulator {
+    ///
+    /// Internal rather than private: a `TextEditor`'s rows are written into it too,
+    /// for the same reason and with the same out-of-band caret.
+    struct RunAccumulator {
         /// The finished line so far.
         private(set) var line = ""
 
@@ -437,7 +440,7 @@ struct TextFieldContentRenderer {
         // would take its colour from whatever the line happened to look like
         // when it was spliced in. Costs one escape pair; buys the whole cheap
         // animation path. See ``AnimatedCellRun``.
-        let (cycle, colors) = caretSetup(
+        let (cycle, colors) = Self.caretSetup(
             palette: palette, background: background, textForeground: textForeground,
             selection: (selectionForeground, selectionBackground),
             cursorStyle: cursorStyle, cursorTimer: cursorTimer)
@@ -517,7 +520,9 @@ struct TextFieldContentRenderer {
     /// resolver would have given a claim. Only a `.plain` field — which emits no
     /// background at all — falls back to the page, and then only on the cells the
     /// caret occupies while it is visible.
-    private func caretSetup(
+    ///
+    /// Static, and shared with `TextEditor`, whose rows draw this same caret.
+    static func caretSetup(
         palette: any Palette, background: Color?, textForeground: Color,
         selection: (foreground: Color, background: Color),
         cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?

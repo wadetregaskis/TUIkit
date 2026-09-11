@@ -29,9 +29,10 @@ import TUIkitStyling
 ///
 /// ## Its relatives, and why they are still separate
 ///
-/// `TextFieldContentRenderer.RunAccumulator` does the same job for a text field
-/// and keeps its own external column, because the caret is written out of band and
-/// the field's `outputCells` is read elsewhere. Converting it would mean moving
+/// `TextFieldContentRenderer.RunAccumulator` does the same job for a text field and
+/// a `TextEditor`'s rows, and keeps its own external column, because in both the
+/// caret is written out of band and `outputCells` is read elsewhere. Converting it
+/// would mean moving
 /// that bookkeeping in here, which is a change to the field's cursor arithmetic
 /// wearing a refactor's clothes. It shares this type's *rule* and states it at its
 /// own declaration.

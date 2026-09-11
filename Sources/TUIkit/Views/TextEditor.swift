@@ -198,9 +198,13 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             : (context.environment.surfaceBackground.map { palette.fieldBackground(on: $0) }
                 ?? palette.fieldBackground).resolve(with: palette)
 
+        let styling = RowStyling(palette: palette, isDisabled: isDisabled, background: fieldBackground)
+
         // The caret honours `.textCursor(_:)` exactly like TextField: same
         // shape, same blink/pulse animation, same speed — one setting styles
-        // every text input.
+        // every text input. And through the same `caretSetup`, so both carets
+        // agree about what a faded palette's caret SPENDS: the editor built its
+        // own colours and handed the translucent well and text to the emitter.
         //
         // The whole cycle, not this tick's frame. A caret that sampled the live
         // clock re-rendered the WHOLE screen 20 times a second to blink one
@@ -209,52 +213,21 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         // converted. Computed only while focused: even reading the cycle's
         // `step` is pointless work for an editor with no caret to draw.
         let cursorStyle = context.environment.textCursorStyle
-        let caret: RowCaret.Cycle? =
-            isFocused
-            ? RowCaret.Cycle(
-                shape: cursorStyle.shape,
-                cursor: TextFieldContentRenderer.computeCursorCycle(
-                    baseColor: palette.cursorColor,
-                    over: fieldBackground ?? palette.background,
-                    animation: cursorStyle.animation,
-                    speed: cursorStyle.speed,
-                    cursorTimer: context.environment.cursorTimer))
-            : nil
-
-        var output: [String] = []
-        var caretRun: AnimatedCellRun?
-        output.reserveCapacity(height)
-        for row in 0..<height {
-            let lineIndex = handler.scrollLine + row
-            guard lineIndex < displayLines.count else {
-                output.append(emptyRow(width: contentWidth, background: fieldBackground, palette: palette))
-                continue
-            }
-            let lineChars = displayLines[lineIndex]
-            let rowCaret: RowCaret? =
-                (isFocused && lineIndex == handler.cursorLine)
-                ? caret.map { RowCaret(column: cursorDisplayColumn, cycle: $0) } : nil
-            // The handler's selection is character-indexed; the row is painted
-            // in display cells, so convert the bounds (a char range maps to a
-            // contiguous display range — expansion is monotonic — and a
-            // selected tab highlights its whole span, as in any editor).
-            let selection: Range<Int>? = isFocused
-                ? handler.selectedColumns(inLine: lineIndex, lineLength: lineChars.count).map { range in
-                    TabLayout.displayColumn(ofCharIndex: range.lowerBound, in: lineChars, tabWidth: tabWidth)
-                        ..< TabLayout.displayColumn(ofCharIndex: range.upperBound, in: lineChars, tabWidth: tabWidth)
-                }
-                : nil
-            let rendered = styledRow(
-                lineChars, tabWidth: tabWidth,
-                scrollColumn: handler.scrollColumn, width: contentWidth,
-                caret: rowCaret, selection: selection,
-                styling: RowStyling(
-                    palette: palette, isDisabled: isDisabled, background: fieldBackground))
-            output.append(rendered.line)
-            // The row knows WHERE in itself the caret landed; only the loop
-            // knows which row that is.
-            caretRun = caretRun ?? rendered.caret?.shifted(byX: 0, y: row)
+        var caret: RowCaret?
+        if isFocused {
+            let setup = TextFieldContentRenderer.caretSetup(
+                palette: palette, background: fieldBackground, textForeground: styling.text,
+                selection: styling.selection, cursorStyle: cursorStyle,
+                cursorTimer: context.environment.cursorTimer)
+            caret = RowCaret(
+                column: cursorDisplayColumn,
+                cycle: .init(shape: cursorStyle.shape, cursor: setup.cycle, colors: setup.colors))
         }
+
+        let rows = renderRows(
+            displayLines, handler: handler, width: contentWidth, height: height,
+            tabWidth: tabWidth, caret: caret, styling: styling)
+        var output = rows.lines
 
         var bar: (runs: [AnimatedCellRun], claims: [OpacityRegion]) = ([], [])
         if hasVerticalOverflow {
@@ -265,13 +238,15 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         }
 
         var buffer = FrameBuffer(lines: output)
-        buffer.opacityRegions += bar.claims
+        // Disjoint by construction: every row stops at `contentWidth`, the bar's
+        // column — so concatenated rather than merged.
+        buffer.opacityRegions += rows.claims + bar.claims
         // Never from a measure pass: its buffer describes a size being tried
         // on, not cells on screen, and a run outliving its cells repaints — on
         // a clock — over whatever took their place.
         if !context.isMeasuring {
             buffer.animatedCells += bar.runs
-            if let caretRun { buffer.animatedCells.append(caretRun) }
+            if let caretRun = rows.caret { buffer.animatedCells.append(caretRun) }
         }
         registerMouse(
             context: context, buffer: &buffer, handler: handler,
@@ -319,12 +294,65 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             claims)
     }
 
-    /// A blank row filled to `width`, painted with the field background.
-    private func emptyRow(width: Int, background: Color?, palette: any Palette) -> String {
-        guard let background else { return String(asciiSpaces(width)) }
-        var style = TextStyle()
-        style.backgroundColor = background
-        return ANSIRenderer.render(String(asciiSpaces(width)), with: style.resolved(with: palette))
+    /// Every visible row: its line, the claims its colours owe — already in the
+    /// buffer's rows — and the caret's run, if it landed on one. `caret` is non-nil
+    /// exactly when the editor is focused: the caret and the selection show only then.
+    ///
+    /// Its own function for the reason `appendScrollbar` is: `renderToBuffer` sits at
+    /// the body-length limit, and this block reads the handler's window and writes
+    /// nothing back.
+    private func renderRows(
+        _ displayLines: [[Character]], handler: TextEditorHandler, width: Int, height: Int,
+        tabWidth: TabWidth, caret: RowCaret?, styling: RowStyling
+    ) -> (lines: [String], claims: [OpacityRegion], caret: AnimatedCellRun?) {
+        var lines: [String] = []
+        var claims: [OpacityRegion] = []
+        var caretRun: AnimatedCellRun?
+        lines.reserveCapacity(height)
+        for row in 0..<height {
+            let lineIndex = handler.scrollLine + row
+            let rendered: RenderedRow
+            if lineIndex < displayLines.count {
+                let lineChars = displayLines[lineIndex]
+                // The handler's selection is character-indexed; the row is painted
+                // in display cells, so convert the bounds (a char range maps to a
+                // contiguous display range — expansion is monotonic — and a
+                // selected tab highlights its whole span, as in any editor).
+                let selection: Range<Int>? =
+                    caret == nil
+                    ? nil
+                    : handler.selectedColumns(inLine: lineIndex, lineLength: lineChars.count).map {
+                        TabLayout.displayColumn(ofCharIndex: $0.lowerBound, in: lineChars, tabWidth: tabWidth)
+                            ..< TabLayout.displayColumn(ofCharIndex: $0.upperBound, in: lineChars, tabWidth: tabWidth)
+                    }
+                rendered = styledRow(
+                    lineChars, tabWidth: tabWidth, scrollColumn: handler.scrollColumn, width: width,
+                    caret: lineIndex == handler.cursorLine ? caret : nil,
+                    selection: selection, styling: styling)
+            } else {
+                rendered = emptyRow(width: width, background: styling.background)
+            }
+            lines.append(rendered.line)
+            // A row states its claims, and its caret, in its own frame: only the loop
+            // knows which row it is — the VIEWPORT row, not the line index. The
+            // downward merge stacks a plain editor's identical rows into one rectangle.
+            for claim in rendered.claims { claims.appendCoalescing(claim.shifted(byX: 0, y: row)) }
+            caretRun = caretRun ?? rendered.caret?.shifted(byX: 0, y: row)
+        }
+        return (lines, claims, caretRun)
+    }
+
+    /// A blank row filled to `width`, painted with the field background, and owing
+    /// that field's alpha — a claim with no ink, since nothing is drawn here.
+    ///
+    /// Through `ClaimingRow` rather than the row's accumulator: a blank row is one run
+    /// with no caret, which is that type's shape, and the accumulator would have to
+    /// state an ink — and emit a foreground code — just to open.
+    private func emptyRow(width: Int, background: Color?) -> RenderedRow {
+        guard let background else { return RenderedRow(line: String(asciiSpaces(width))) }
+        var row = ClaimingRow()
+        row.append(String(asciiSpaces(width)), cells: width, ink: nil, field: background)
+        return RenderedRow(line: row.text, claims: row.claims)
     }
 
     // MARK: - Helpers
@@ -364,7 +392,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     /// cursor cell a caret — both set explicit palette colours rather than
     /// SGR 7 reverse-video (which inverts the terminal's *default* colours
     /// and collapses to dark-on-dark on a mid-tone palette). Consecutive
-    /// cells that share a colour coalesce into one ANSI run.
+    /// cells that share a colour coalesce into one ANSI run, and each run states
+    /// the claim its colours owe.
     ///
     /// The walk is in terminal CELLS over the line's characters — the same
     /// model as ``TextFieldContentRenderer``: a tab spans to its stop, a wide
@@ -382,76 +411,77 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         struct Cycle {
             let shape: TextCursorStyle.Shape
             let cursor: TextFieldContentRenderer.CursorCycle
+            /// What the frames paint with, from `caretSetup`: every ink is spent, so
+            /// the caret's cells owe no ink claim in any frame.
+            let colors: TextFieldContentRenderer.CaretColors
         }
     }
 
-    /// A row's line, plus the caret run it left behind — the same pair
-    /// ``TextFieldContentRenderer/FieldContent`` carries, for the same reason:
-    /// the row knows where in itself the caret's cells are, and only its caller
-    /// knows where the row is.
+    /// A row's line, the caret run it left behind, and the claims its colours owe —
+    /// what ``TextFieldContentRenderer/FieldContent`` carries, for the same reason:
+    /// the row knows where in itself its cells are, and only its caller knows where
+    /// the row is.
     private struct RenderedRow {
         let line: String
         let caret: AnimatedCellRun?
+        /// The cells owing a blend, in the ROW's frame — row 0, column 0 the first
+        /// content cell — shifted into the buffer by the caller, as the caret is.
+        let claims: [OpacityRegion]
+
+        init(line: String, caret: AnimatedCellRun? = nil, claims: [OpacityRegion] = []) {
+            (self.line, self.caret, self.claims) = (line, caret, claims)
+        }
     }
 
-    /// The frame-level painting context every row shares: the palette, the
-    /// disabled tint, and the field background. Constant across a render pass —
-    /// grouped so the per-row walk takes one appearance argument, not three.
+    /// The frame-level colours every row paints with — the well, the text, and the
+    /// selection's pair — derived once per render: the pair used to be re-derived for
+    /// every row, contrast floor and all.
+    ///
+    /// Resolved here because the bytes no longer pass through
+    /// `TextStyle.resolved(with:)`: `RunAccumulator` hands its colours to `colorize`
+    /// as they are, and a custom palette may state a slot semantically.
     private struct RowStyling {
-        let palette: any Palette
-        let isDisabled: Bool
         let background: Color?
+        let text: Color
+        let selection: (foreground: Color, background: Color)
+
+        @MainActor
+        init(palette: any Palette, isDisabled: Bool, background: Color?) {
+            self.background = background
+            // A disabled editor's text CLAIMS its tint's alpha, as a disabled
+            // TextField's does — not §31.3's spend, which is the slider's own
+            // dimming composite; the editor has no composite to spend through.
+            text = (isDisabled ? palette.foregroundTertiary : palette.foreground).resolve(with: palette)
+            let pair = TextFieldContentRenderer.selectionColors(palette: palette, background: background)
+            selection = (pair.foreground.resolve(with: palette), pair.background.resolve(with: palette))
+        }
     }
 
-    // The row walk is one coherent cell-clipping pass; splitting it would
-    // scatter the window arithmetic its closures share.
-    // swiftlint:disable:next function_body_length
     private func styledRow(
         _ chars: [Character], tabWidth: TabWidth, scrollColumn: Int, width: Int,
         caret: RowCaret?, selection: Range<Int>?, styling: RowStyling
     ) -> RenderedRow {
-        let palette = styling.palette
-        let isDisabled = styling.isDisabled
         let background = styling.background
+        let textForeground = styling.text
+        let (selectionForeground, selectionBackground) = styling.selection
         let windowStart = scrollColumn
         let windowEnd = scrollColumn + width
-
-        let textForeground = isDisabled ? palette.foregroundTertiary : palette.foreground
-        let (selectionBackground, selectionForeground) = TextFieldContentRenderer.selectionColors(
-            palette: palette, background: background)
-
-        var result = ""
-        var runText = ""
-        var runForeground = textForeground
-        var runBackground = background
-        var hasRun = false
-
-        func flush() {
-            guard hasRun else { return }
-            var style = TextStyle()
-            style.foregroundColor = runForeground
-            style.backgroundColor = runBackground
-            result += ANSIRenderer.render(runText, with: style.resolved(with: palette))
-            runText = ""
-            hasRun = false
-        }
-        func emit(_ character: Character, foreground: Color, background: Color?) {
-            if hasRun, foreground != runForeground || background != runBackground {
-                flush()
-            }
-            if !hasRun {
-                runForeground = foreground
-                runBackground = background
-                hasRun = true
-            }
-            runText.append(character)
-        }
 
         // Walks the line in cell space, clipping each element against the
         // window: fully inside → emitted whole; straddling an edge → spaces
         // for its visible cells; outside → skipped.
         var cellX = 0
         var outputCells = 0
+        // A run's bytes and its claim, written together — the accumulator a focused
+        // TextField's content uses, for §30.1's reason: a row's cells genuinely
+        // differ (the highlight's field is opaque; the well's and the text's are the
+        // palette's), and run boundaries already are colour boundaries. Its column
+        // is `outputCells`, which holds the next cell's column wherever a run opens
+        // or flushes — mid-straddle included, where `outputCells` advances after.
+        var runs = TextFieldContentRenderer.RunAccumulator(ink: textForeground, field: background)
+        func emit(_ character: Character, foreground: Color, background: Color?) {
+            runs.append(character, ink: foreground, field: background, atColumn: outputCells)
+        }
         func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color?) {
             let start = cellX
             let end = cellX + cells
@@ -480,10 +510,6 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         // from whatever escape happened to precede it in the line. Costs one
         // escape pair; buys the whole cheap animation path. See
         // ``AnimatedCellRun``.
-        let caretColors = TextFieldContentRenderer.CaretColors(
-            background: background, blockText: background ?? palette.background,
-            text: textForeground, selectionText: selectionForeground,
-            selectionBackground: selectionBackground)
         var caretRun: AnimatedCellRun?
 
         func emitCaret(
@@ -502,9 +528,12 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             }
             let frames = TextFieldContentRenderer.caretFrames(
                 cycle.cursor, shape: cycle.shape, cells: cells,
-                underlying: underlying, isSelected: isSelected, colors: caretColors)
-            flush()
-            result += frames[cycle.cursor.step % frames.count]
+                underlying: underlying, isSelected: isSelected, colors: cycle.colors)
+            // Out of band, and claiming nothing. Every frame's ink is spent, so the
+            // frames agree at full strength and "no ink claim" is true of them all;
+            // the cell's FIELD, under a faded well, is still open (§61.2).
+            runs.flush(atColumn: outputCells)
+            runs.appendVerbatim(frames[cycle.cursor.step % frames.count])
             if cycle.cursor.isAnimating {
                 caretRun = AnimatedCellRun(
                     offsetX: outputCells, offsetY: 0, width: cells,
@@ -565,8 +594,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             emit(" ", foreground: textForeground, background: background)
             outputCells += 1
         }
-        flush()
-        return RenderedRow(line: result, caret: caretRun)
+        runs.flush(atColumn: outputCells)
+        return RenderedRow(line: runs.line, caret: caretRun, claims: runs.claims)
     }
 
     /// A single wide region: a left-click focuses the editor and drops the
