@@ -224,4 +224,91 @@ struct BorderAlphaTests {
             band.contains(halfway),
             "the band is halfway to the backdrop: \(band.debugDescription)")
     }
+
+    // MARK: - An animating border (§59)
+
+    /// `Text("hi")` in a border of `colour`, rendered with a volatile-read tracker so a
+    /// test can see whether the border asked to be drawn again.
+    private func bordered(
+        _ colour: AnimatedColor, tracker: VolatileReadTracker = VolatileReadTracker()
+    ) -> FrameBuffer {
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        environment.volatileReadTracker = tracker
+        let context = RenderContext(
+            availableWidth: 12, availableHeight: 3, environment: environment, tuiContext: tuiContext
+        ).isolatingRenderCache()
+        return renderToBuffer(Text("hi").border(colour), context: context)
+    }
+
+    @Test("An animated colour is one alpha only when every frame is")
+    func hasOneAlpha() {
+        #expect(AnimatedColor(faded(.red, 128)).hasOneAlpha)
+        #expect(AnimatedColor(frames: [faded(.red, 128), faded(.green, 128)], step: 0).hasOneAlpha)
+        #expect(AnimatedColor(frames: [.red, .green], step: 0).hasOneAlpha)
+        #expect(!AnimatedColor(frames: [.red, faded(.blue, 128)], step: 0).hasOneAlpha)
+    }
+
+    /// The type's own documented breath, from `border` to `accent`. A faded tint fades
+    /// only the accent, so its frames disagree; a palette fading both alike does not.
+    @Test("The documented focus breath is one alpha only where its two slots agree")
+    func documentedBreath() {
+        let emphasis = EnvironmentValues().selectionEmphasis
+        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
+        let breath = emphasis.animatedColor(true, dim: tinted.border, bright: tinted.accent)
+        #expect(breath.isAnimating && !breath.hasOneAlpha, "\(breath.frames.map(\.alpha))")
+        let palette = FadedAll()
+        #expect(emphasis.animatedColor(true, dim: palette.border, bright: palette.accent).hasOneAlpha)
+    }
+
+    /// A border whose frames share one alpha keeps its runs and claims what a still
+    /// border in its first frame's colour claims, which every frame owes. It claimed
+    /// nothing while it animated, and the alpha went in silence (§59).
+    @Test("An animating border at one alpha keeps its runs and claims its frame")
+    func animatingOneAlphaClaims() {
+        let tracker = VolatileReadTracker()
+        let breathing = bordered(
+            AnimatedColor(frames: [faded(.red, 128), faded(.green, 128)], step: 0), tracker: tracker)
+        let still = bordered(AnimatedColor(faded(.red, 128)))
+        #expect(!breathing.animatedCells.isEmpty, "its frames are replayed")
+        #expect(!still.opacityRegions.isEmpty, "the premise: a faded frame is claimed")
+        #expect(breathing.opacityRegions == still.opacityRegions, "\(breathing.opacityRegions)")
+        #expect(tracker.reads == 0, "a replayed border asks for no render")
+    }
+
+    /// Frames at different alphas share no claim, so the border states none of its own and
+    /// keeps its runs: the open arm (§59.2). Pinned both ways. It must not ask to be
+    /// rendered every tick — a pass-wide request outlives a render whose buffer is thrown
+    /// away — and it does not yet blend its faded frame, which the known issue records.
+    @Test("An animating border at several alphas keeps its runs and asks for no render")
+    func animatingSeveralAlphasStaysOpen() {
+        let tracker = VolatileReadTracker()
+        let drawn = bordered(AnimatedColor(frames: [.red, faded(.green, 128)], step: 0), tracker: tracker)
+        #expect(!drawn.animatedCells.isEmpty, "its frames are replayed")
+        #expect(tracker.reads == 0, "the border asked to be rendered every tick")
+        let resolved = drawn.resolvingOpacity(surface: .blue, palette: EnvironmentValues().palette)
+        let top = resolved.animatedCells.first { $0.offsetY == 0 }
+        let blended = Color.green.opacity(128.0 / 255, over: .blue).foregroundCodes().joined(separator: ";")
+        withKnownIssue("frames at several alphas are not blended (§59.2)") {
+            #expect(
+                top?.frames[1].contains(blended) == true,
+                "\(top?.frames[1].debugDescription ?? "no top run")")
+        }
+    }
+
+    /// A replayed frame is blended as the drawn line is: each against the backdrop, at
+    /// the one claim they share.
+    @Test("A one-alpha border's replayed frames resolve against the backdrop")
+    func replayedFramesResolve() throws {
+        let drawn = bordered(AnimatedColor(frames: [faded(.red, 128), faded(.green, 128)], step: 0))
+        let resolved = drawn.resolvingOpacity(surface: .blue, palette: EnvironmentValues().palette)
+        let top = try #require(resolved.animatedCells.first { $0.offsetY == 0 }, "the top band's run")
+        for (index, colour) in [Color.red, .green].enumerated() {
+            let blended = colour.opacity(128.0 / 255, over: .blue).foregroundCodes().joined(separator: ";")
+            #expect(
+                top.frames[index].contains(blended),
+                "frame \(index): \(top.frames[index].debugDescription)")
+        }
+    }
 }

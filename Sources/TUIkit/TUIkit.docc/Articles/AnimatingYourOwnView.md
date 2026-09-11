@@ -133,6 +133,13 @@ No offsets, no ``Renderable``, nothing to get wrong — and an unfocused view
 produces a still colour, which draws exactly what `.border(_ colour: Color)`
 would and leaves nothing behind. That is the shape to reach for first.
 
+One caution. A replayed run is blended at one alpha per cell, so a colour whose
+frames are at *different* alphas cannot be blended at all — the breath above under
+`.tint(.red.opacity(0.5))`, for one, where the accent is faded and the border is
+not. That border shows every frame at full strength. Give both ends one alpha and
+it is blended as it should be: `palette.accent.breathEnds(dimmedTo:over:)` spends a
+faded accent at both of them.
+
 ## Composed views declare their runs
 
 A ``Renderable`` owns a buffer and can write runs onto it. A view whose `body`

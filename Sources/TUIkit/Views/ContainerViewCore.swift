@@ -747,12 +747,18 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 byX: 1, y: 1 + bodyBuffer.lines.count + (style.showFooterSeparator ? 1 : 0))
         }
         // The border's OWN cells, when any of the colours it drew with was faded.
-        // Only for a still colour: an animating one repaints these cells from its
-        // own frames every tick, and a region carrying the phase drawn NOW would
-        // resolve every later phase at the wrong alpha. That arm stays unhonoured
-        // and stays loud — its frames go to the emitter as they are, so
-        // `Color+ANSICodes.swift`'s assertion fires on a translucent phase.
-        guard !borderColor.isAnimating else { return regions }
+        // Every frame goes through `BorderRenderer.band` at its opaque spelling, so
+        // the alpha is only ever in this claim, and a replayed frame is blended under
+        // it — so it is stated only when it is true of every frame: a still colour, or
+        // an animating one whose frames share one alpha (§59). Frames at several
+        // alphas stay unclaimed: no one claim fits them, and declining their runs
+        // would need a request for a render that goes with the buffer (§59.2). This
+        // used to skip every animating border and call it loud; it stopped being loud
+        // at §18.3, when `band` began stating the opaque spelling.
+        guard !borderColor.isAnimating || borderColor.hasOneAlpha else { return regions }
+        // The ● is claimed at its current frame, so it must be one alpha too. Its one
+        // producer, `activeSection`, spends both of its ends.
+        assert(focusIndicator?.hasOneAlpha != false, "a focus ●'s frames disagree about alpha (§59)")
         // Resolved only when there IS a title: `resolve(with:)` walks the palette
         // up to sixteen hops, and an untitled `.border()` never reads the answer.
         // Not attributable to a measured regression — the border work bisected clean

@@ -201,8 +201,8 @@ struct FadedPaletteRenderTests {
     /// with the pulse, and a claim is one alpha for every frame — and the bar was
     /// nearly left out with it. The bar does not breathe, so its claim holds in every
     /// frame. That arm is asserted under a palette that fades only the track, because
-    /// a breathing border under a wholly faded palette is the popup's own open gap,
-    /// and it is loud.
+    /// a breathing border under a wholly faded palette is the popup's own open gap — a
+    /// silent one, since its frames go through `band` at their opaque spelling (§59).
     @Test("A drop-down's bar owes what it painted, still or breathing")
     func dropdownBarClaims() {
         for (palette, animation) in [

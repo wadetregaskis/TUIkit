@@ -1167,14 +1167,16 @@ hovered button's face under a fully faded tint (§49). Plus the text scroll indi
 still and breathing, on every host that draws them (§53). Plus a `TabView`'s active chip,
 breathing, in both strips (§55), and the bordered strip's own chrome — its tops, walls,
 mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark and knob
-(§57), and a focused switch's coloured track (§58).
+(§57), and a focused switch's coloured track (§58). Plus an animated `.border` whose frames
+share one alpha (§59).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret, and an animated `.border` whose frames
-disagree about alpha. The editor was seen to trap in a debug build when probed; the
-border drops the alpha without a word.
+reading: a `TextEditor`'s rows and caret, which were seen to trap in a debug build when
+probed. And found by reading or review, not yet probed: an animated `.border` whose
+frames are at several alphas and the drop-down menu's breathing border, which drop their
+alpha without a word, and a resizable view's grips, which trap (§59.4).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1304,13 +1306,14 @@ app header and the drop-down menu as well: all four draw their chrome from
 
 **An animating border colour.** `.border(emphasis.animatedColor(…))` repaints the
 frame's cells from its own frames every tick, and a region carrying the phase drawn
-*now* would resolve every later phase at the wrong alpha. The claim is therefore
-made only for a still colour; the animating arm stays unhonoured and stays loud —
-its frames reach the emitter as they are, so the assertion fires on a translucent
-phase. Honouring it means a phase-indexed alpha, which is what `OpacityCycle`
-already is for a layer fade; the pieces exist and the wiring does not. The
-drop-down menu is in the same position, and always animating by default, so in
-practice its chrome is the still arm only when the emphasis is `.none`.
+*now* would resolve every later phase at the wrong alpha — where the phases differ in
+alpha. The claim was therefore made only for a still colour, and the animating arm was
+said to stay loud. It did not: §18.3 put every frame through `band` at its opaque
+spelling, so the arm dropped the alpha in silence. Half closed in §59: a border whose frames
+share one alpha claims it and keeps its runs; one whose frames do not is still unclaimed
+(§59.2). The drop-down menu is in the same position and is not
+closed: always animating by default, so in practice its chrome is claimed only when the
+emphasis is `.none`.
 
 **`focusIndicatorPrefix`.** It draws a `●` outside any band, so it has no frame to
 belong to and its caller (`ButtonStyle`) would have to claim the cell. Untouched
@@ -1855,6 +1858,11 @@ What actually blocks a claim is narrower, and there are only two cases:
    bullet under a faded palette — §48; nine, with the text scroll indicators' breath
    under a faded tint — §53; ten, with a tab chip's breath under a faded tint — §55;
    eleven, with a switch track's under a faded tint or foreground — §58.)
+
+A caller's own `AnimatedColor` is outside all of that: nothing normalises its frames, and
+the type's documented example breathes between two palette slots that a faded tint sets
+at different alphas. A border handed one whose frames disagree still cannot claim
+(§59.2). Nor, unfixed, can the drop-down menu's border pair, a twelfth copy (§59.4).
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3054,8 +3062,10 @@ the resolver makes for that one cell. The corner is checked for owing a field an
 ink; the editor, which draws no arrows, for claiming nothing off the bar's column.
 
 The popup's breathing arm and the editor are asserted under a palette that fades ONLY
-the track. A breathing border and an editor's well under a wholly faded palette are gaps
-of their own, and loud, and neither is what these assert.
+the track. A breathing popup border and an editor's well under a wholly faded palette
+are gaps of their own, and neither is what these assert. The border's is not loud, as
+this said: its frames go through `band` at their opaque spelling, so it drops the alpha
+in silence (§59).
 
 
 ## 44. The scrollbar's breath: a sixth copy of the pulse pair (2026-09-10)
@@ -3519,3 +3529,88 @@ every frame.
 end; off, the lerp toward the foreground as it shows. Every frame is opaque, so the
 track claims while it breathes, through `IndicatorCycle.claims(at:)` and its assertion.
 An opaque palette's bytes do not change: spending an opaque colour returns it untouched.
+
+
+## 59. An animated border's alpha, when its frames share one (2026-09-10)
+
+`.border(_:)` takes an `AnimatedColor` and replays every cell it drew from the colour's
+frames. The claims for those cells were skipped whenever the colour animated, on §18.4's
+reasoning, and the comment beside the skip said the arm "stays loud": that the emitter's
+assertion would fire on a translucent phase. It could not. Since §18.3 every frame goes
+through `BorderRenderer.band` at its opaque spelling, so an animating border's alpha was
+dropped in silence — the band's, a faded title's and the ●'s alike. The same wording was
+stale in three more places — `DropdownMenuRenderer`, a `FadedPaletteRenderTests` doc
+comment, and §43.5 — and each became a silent drop the day `band` began stating the
+opaque spelling.
+
+### 59.1 One alpha, or not
+
+A run replays bytes under one static claim per cell (§29.2), so the question is whether
+every frame is at one alpha. For an `AnimatedColor` that is not a property of the type.
+A pulse interpolates alpha as a fourth channel and a blink alternates its ends, so the
+alpha holds only when the two ends agree, and `AnimatedColor(frames:)` can hold anything.
+The type's own documented example, `animatedColor(isFocused, dim: palette.border,
+bright: palette.accent)`, breathes between two slots that a faded tint sets at different
+alphas; under a palette fading both alike, it is one alpha.
+
+`hasOneAlpha` asks the frames. The layout is the same in every frame and only the colours
+change, and `BorderRenderer.opacityClaims` reads a colour only through its alpha — the
+floored title keeps its alpha, and a painted field is the colour itself — so one alpha
+across the frames is one claim across them.
+
+- **One alpha:** the border keeps its runs and claims the drawn frame, which is every
+  frame's claim. That is `FadedAll`'s border and accent, a faded tint's breath spelled
+  through `Color.breathEnds(dimmedTo:over:)`, and every opaque one.
+- **Several:** the border keeps its runs and claims nothing of its own, as before. Its
+  alpha is dropped and the frames replay at full strength. Still open; §59.2 says why.
+
+### 59.2 Why frames at several alphas are not declined
+
+§36.7's answer for a run that cannot carry the alpha is to decline the RUN: draw the
+frame the run would be showing now, claim it exactly, and render again next tick. It was
+the first design here, and it is not used, because of what "render again next tick" has
+to be made of.
+
+A run goes with its buffer. A render whose buffer is thrown away takes its runs with it:
+a `NavigationStack`'s root while a screen is pushed over it, which is rendered to keep its
+state and then discarded; the content of `.hidden()`. So does a `ScrollView` that renders
+its whole canvas and keeps only the rows in view. Every other way of asking for the next
+frame is pass-wide — a volatile read, or `requestAnimation` — and outlives the buffer it
+was made for. So a declined border that animates regardless of focus kept the loop doing
+a full render every 50 ms while nothing of it was on screen, where the replayed border it
+replaced let the loop idle. Found in review and traced through the code, not run.
+
+`requestAnimation` has a second problem of its own, by reading: it bumps a side-effect
+count, and `App.renderFrame` stops the cursor timer — zeroing its elapsed time — unless a
+frame read the pulse or the caret or left runs. A border indexing its frames by that timer
+would then draw tick 0 on every render the scheduler drove.
+
+So the arm stays as it was until a request for a render can ride on the buffer, the way a
+run does, and go where the buffer goes. For a caller the remedy is in reach now: give both
+ends one alpha. `palette.accent.breathEnds(dimmedTo:over:)` spends a faded accent at
+both, and the framework's own focus ● is built that way.
+
+The ● in the top border is claimed at its current frame whenever the border is, so it must
+be one alpha too. Its only producer, `activeSection`, spends both of its ends, and a debug
+build asserts it.
+
+### 59.3 Not `OpacityCycle`
+
+§18.4 as first written, and §19.1, named `OpacityCycle` as the route: a phase-indexed
+alpha. It is the *layer* channel, a repeating `.opacity` fade whose phases tick
+independently of any run, and a run under a cycle-bearing region is dropped (§29.2's first
+case). A colour whose alpha moves with its frames is not that.
+
+### 59.4 Still open
+
+- **An animated border at several alphas** (§59.2).
+- **The drop-down menu's breathing border.** It is its own renderer, not `.border`, and its
+  pair is §29's again — the dim end spent, the bright end carried — so it is several
+  alphas under any faded accent, and wants `breathEnds` before any claim can hold. It
+  states no claims while it pulses.
+- **A resizable view's grips**, the other `AnimatedColor.run` consumer. They draw their
+  still frame through `colorize` with the raw tint and state no claim, so a faded tint
+  trips the emitter's assertion — loud, not silent. By review, not yet run.
+- **§36.7's indeterminate bar, and `Spinner` for a cycle whose frames differ in width.**
+  They decline their runs through `requestAnimation`, so both of §59.2's problems apply
+  to them by reading; neither has been tested.

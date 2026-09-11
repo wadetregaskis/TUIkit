@@ -36,7 +36,10 @@ import TUIkitCore
 /// animating. ``isAnimating`` is what the framework branches on, and it is false
 /// for a single frame *and* for several identical ones.
 ///
-/// See <doc:AnimatingYourOwnView>.
+/// A faded colour is blended as well, as long as every frame is at one alpha: a
+/// replayed run is blended at one alpha per cell. The example above under a faded
+/// `.tint` is not — its accent is faded and its border is not — and shows at full
+/// strength. See <doc:AnimatingYourOwnView>.
 public struct AnimatedColor: Sendable, Equatable {
     /// A colour that does not vary is stored AS one colour, not as an array of
     /// one. Every bordered container in a frame builds one of these, and an
@@ -109,6 +112,15 @@ public struct AnimatedColor: Sendable, Equatable {
     public var isAnimating: Bool {
         guard case .cycle(let frames) = storage else { return false }
         return frames.contains { $0 != frames[0] }
+    }
+
+    /// Whether every frame is at one alpha — whether one static claim is true of every
+    /// replayed frame (§59). Not a property of the type: a pulse interpolates alpha as
+    /// a fourth channel, so this type's own example (`dim: palette.border, bright:
+    /// palette.accent`) under `.tint(.red.opacity(0.5))` is a different alpha each tick.
+    var hasOneAlpha: Bool {
+        guard case .cycle(let frames) = storage else { return true }
+        return frames.allSatisfy { $0.alpha == frames[0].alpha }
     }
 
     /// The colour at an arbitrary point in the cycle — for a caller drawing

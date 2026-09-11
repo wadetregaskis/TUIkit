@@ -216,9 +216,12 @@ enum DropdownMenu {
         // The popup's chrome, when the theme's `border` is faded — and only when
         // the picture is STILL. An emphasis that pulses repaints every one of
         // these cells from its own frames each tick, and one region carrying the
-        // phase drawn now would resolve every later phase at the wrong alpha. The
-        // pulsing arm stays unhonoured and stays loud: its frames reach the
-        // emitter as they are, so `Color+ANSICodes.swift`'s assertion fires.
+        // phase drawn now would resolve every later phase at the wrong alpha — and
+        // this pair's phases do differ, since its dim end is spent and its bright end
+        // carries the accent's alpha (§59.4). The pulsing arm stays unhonoured, and
+        // silently: its frames are emitted at their opaque spelling — through
+        // `BorderRenderer.band`, and `opaqueSpelling` directly for the inset rule — so
+        // nothing trips the emitter.
         if drawn.runs.isEmpty {
             let borderColor = drawn.borderColor
             buffer.opacityRegions = BorderRenderer.opacityClaims(

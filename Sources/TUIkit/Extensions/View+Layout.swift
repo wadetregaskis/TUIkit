@@ -58,7 +58,10 @@ extension View {
     /// The cheap way to show that your own view holds the focus. The border is
     /// drawn here, so it is this modifier — not the caller — that knows which
     /// cells to animate, and it leaves ``AnimatedCellRun``s for them. Nothing
-    /// re-renders per tick.
+    /// re-renders per tick. A faded colour is blended too, provided every frame is
+    /// at one alpha: a replayed run is blended at one alpha per cell, so frames at
+    /// different alphas — the example below under `.tint(.red.opacity(0.5))` — show
+    /// at full strength. `Color.breathEnds(dimmedTo:over:)` gives two ends at one.
     ///
     /// ```swift
     /// Text("Right-click me")
