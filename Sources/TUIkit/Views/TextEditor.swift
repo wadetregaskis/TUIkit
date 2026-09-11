@@ -524,11 +524,17 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             if let caret, caret.column == cellX {
                 if character == "\t" {
                     // Caret on a tab: the caret occupies the stop run's first
-                    // cell, the rest of the run pads.
+                    // cell, and the rest of the run pads — cell by cell, as an
+                    // uncareted tab's run does. `emitClipped` draws ONE character
+                    // however many cells it is told, which is right for a wide
+                    // glyph and was wrong here: the rest of a tab three or more
+                    // cells wide came out as one space, so the row ran short and
+                    // whatever was drawn after it, a scroll bar included, landed
+                    // early.
                     emitCaret(" ", cells: 1, cycle: caret.cycle, isSelected: isSelected)
-                    if cells > 1 {
+                    for _ in 0..<max(0, cells - 1) {
                         emitClipped(
-                            " ", cells: cells - 1,
+                            " ", cells: 1,
                             foreground: isSelected ? selectionForeground : textForeground,
                             background: isSelected ? selectionBackground : background)
                     }

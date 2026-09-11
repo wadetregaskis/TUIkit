@@ -144,4 +144,30 @@ struct TextEditorTabTests {
         let lines = render(text)
         #expect(lines[0].hasPrefix("ab  "), "tab expanded to the stop: '\(lines[0])'")
     }
+
+    // MARK: - The caret on a tab
+
+    /// An editor over `text` as it first renders: focused, with its caret at (0, 0).
+    private func buffer(_ text: String, width: Int, height: Int = 3) -> FrameBuffer {
+        renderToBuffer(
+            TextEditor(text: .constant(text)).frame(height: height),
+            context: makeRenderContext(width: width, height: height + 2))
+    }
+
+    /// The caret takes a tab's first cell, and the rest of the tab pads. That rest was
+    /// drawn as ONE space while the row's column count advanced by all of it, so a caret
+    /// on a tab three or more cells wide left the row short — and an overflowing
+    /// editor's scroll bar, drawn after the row, landed that many cells early.
+    @Test("A caret on a wide tab pads the tab's whole width", arguments: [2, 30])
+    func caretOnWideTabPadsItsWidth(lines: Int) {
+        // The caret opens at (0, 0), on a tab running to the first 4-column stop. Two
+        // lines fit the editor; thirty overflow it, so every row ends in the bar.
+        let text = "\tX\n" + Array(repeating: "abc", count: lines - 1).joined(separator: "\n")
+        let drawn = buffer(text, width: 12)
+        #expect(
+            drawn.lines.allSatisfy { $0.strippedLength == 12 },
+            "row widths \(drawn.lines.map(\.strippedLength))")
+        let row = drawn.lines[0].stripped
+        #expect(row.dropFirst().hasPrefix("   X"), "row 0: '\(row)'")
+    }
 }
