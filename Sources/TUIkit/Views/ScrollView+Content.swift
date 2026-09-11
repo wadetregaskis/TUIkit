@@ -433,6 +433,17 @@ extension _ScrollViewCore {
         // focus ring's cells over the "▲ 3 more above" text, on a clock, for as
         // long as the row stayed the first one.
         result.animatedCells = result.animatedCells.filter { !replacedRows.contains($0.offsetY) }
+        // …and whatever the content CLAIMED on them goes too. Left, a translucent
+        // line's claim sat under "▼ 3 more below" and faded the indicator at an
+        // alpha nobody painted it with — the run filter above, missing its twin.
+        // The replaced rows are only ever the edges, so one clip to the band that
+        // survives does it, with no slivers: the trim a clipping container makes.
+        let kept =
+            (replacedRows.contains(0) ? 1 : 0)
+            ..< (replacedRows.contains(lines.count - 1) ? lines.count - 1 : lines.count)
+        result.opacityRegions = result.opacityRegions.compactMap {
+            kept.isEmpty ? nil : $0.clipped(toColumns: 0..<Int.max, rows: kept)
+        }
         result.animatedCells += runs
         return result
     }

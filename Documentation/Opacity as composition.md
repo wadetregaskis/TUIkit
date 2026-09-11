@@ -3288,3 +3288,23 @@ dim end, which was only ever as opaque as the face.
 What remains: a tint too faint to show a hover step now shows no hover at all. Before, a
 release build drew the accent's opaque spelling in the caps — black, for `.clear` —
 which was a hover of sorts, and a wrong one.
+
+
+## 50. An overwritten row kept the content's claims (2026-09-10)
+
+A scroll view with `.scrollIndicatorStyle(.text)` shows its "N more" lines one of two
+ways. Under `.visible` it reserves two lines and draws the content between them. Under
+`.automatic` it OVERWRITES the viewport's first or last line: an indicator is there only
+when there is content past it, so the line it covers is one the reader reaches at a
+neighbouring offset.
+
+The overwrite dropped the content's RUNS on those rows — a focus ring's breath would
+otherwise repaint over "▲ 3 more above" on a clock — and kept its CLAIMS. So a
+translucent content line under the indicator left its alpha behind, and the indicator
+resolved at an alpha nobody had painted it with. While the indicators claimed nothing of
+their own that faded an opaque indicator; once they claim, the two would multiply.
+
+Every claim is now clipped to the band of rows that survives. The replaced rows are only
+ever the edges, so one clip does it — the trim a clipping container makes — where
+cutting each row out separately would have split a claim spanning the whole viewport into
+slivers.

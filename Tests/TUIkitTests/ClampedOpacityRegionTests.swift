@@ -107,4 +107,35 @@ struct ScrollWindowOpacityClipTests {
                 OpacityRegion(offsetX: 0, offsetY: 0, width: 20, height: 1, opacity: 0.4)
             ])
     }
+
+    /// The overwrite path replaces a scroll view's first or last line with an "N
+    /// more" indicator, and filtered the content's RUNS off that row — but not its
+    /// claims. A translucent content line under "▼ N more below" left its claim
+    /// behind, and the indicator resolved at the content's alpha (§50).
+    ///
+    /// Lines exactly one viewport wide, so none wraps short of the indicator's
+    /// column; an opaque palette, so the indicator's own paint is not the subject.
+    @Test("An indicator overwriting a row takes the content's claims on it away")
+    func overwrittenRowKeepsNoClaim() throws {
+        let width = 24
+        let faded = Color.red.opacity(0.5)
+        let drawn = renderToBuffer(
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<30, id: \.self) { _ in
+                        Text(String(repeating: "x", count: width)).foregroundStyle(faded)
+                    }
+                }
+            }
+            .scrollIndicatorStyle(.text),
+            context: makeRenderContext(width: width, height: 8))
+        // At offset 0 only the bottom indicator shows, on the last row.
+        let arrow = try #require(cells(of: "▼", in: drawn).first, "\(drawn.lines.map(\.stripped))")
+        // The precondition: the content's claim really does reach that column on the
+        // row above, or the assertion below would prove nothing.
+        let above = owed(atColumn: arrow.column, row: arrow.row - 1, in: drawn)
+        #expect(above.ink == owed(faded), "the row above owes \(above)")
+        let owes = owed(atColumn: arrow.column, row: arrow.row, in: drawn)
+        #expect(owes.ink == 1 && owes.field == 1, "the ▼ cell owes \(owes)")
+    }
 }
