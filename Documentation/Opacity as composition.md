@@ -3115,3 +3115,37 @@ track had; this changes what that alpha is, not whether it is claimed.
 — opaque, faded, and light, so the walk runs both ways — asserting that each really
 moved, since an unmoved rung proves nothing, and that each kept its 128. And it walks an
 opaque rung toward a faded page, which must stay opaque.
+
+
+## 46. What the scrollbar work cost, measured (2026-09-10)
+
+`ab_bench.py`, CPU time per frame, 15 paired reps, release builds of `77f1b443` (before
+§43) and `99d9bdfb` (after §45), over every scenario that draws a scrollbar. The change
+column is the median of the paired ratios, not the ratio of the two medians, which is
+why `table` reads +1.6% beside medians 0.6% apart.
+
+| scenario | before | after | change | 95% CI | |
+|---|---|---|---|---|---|
+| `scrollfollow` | 779.0 µs | 787.4 µs | −0.0% | −1.0% … +2.4% | indistinguishable |
+| `table` | 447.4 µs | 450.3 µs | +1.6% | −1.9% … +2.5% | indistinguishable |
+| `table-multiline` | 367.0 µs | 372.8 µs | +2.0% | −1.2% … +2.5% | indistinguishable |
+| `tables-scroll` | 1773.9 µs | 1763.2 µs | −0.1% | −1.8% … +1.9% | indistinguishable |
+| `framedcolumns` | 583.4 µs | 585.9 µs | −0.1% | −2.1% … +2.4% | indistinguishable |
+| `menus` | 2137.0 µs | 2127.3 µs | −0.5% | −1.5% … +0.5% | indistinguishable |
+| `kitchensink` | 488.3 µs | 486.6 µs | −1.0% | −1.8% … +1.4% | indistinguishable |
+| `megalist` | 420.7 µs | 421.8 µs | −0.0% | −0.8% … +0.5% | indistinguishable |
+| `tables-vstack` | 725.6 µs | 721.1 µs | −0.2% | −1.1% … +0.3% | indistinguishable |
+
+Peak RAM moved by at most 0.2 MB either way. The load average was 1.5 during the run,
+which the harness flags: CPU time absorbs preemption, not cache contention.
+
+On an opaque palette the conversion adds, for every cell of a vertical bar, a
+`ClaimingRow` whose claim comes back `nil`, and per frame a `fit` that pads nothing; the
+pulse's frames each build a column where they built an array, and `assertOneClaim` is a
+debug check. None of it resolves above this machine's floor. `table` and
+`table-multiline` lean positive, with intervals that include zero and sit inside the
+±1.7% `table` null-tests at.
+
+What is NOT measured is a bar under a faded palette. No scenario renders one, so the
+cost of the claims themselves — a handful of stacked rectangles per bar, which is what
+the downward merge in §43.1 exists to keep a handful — is argued, not timed.
