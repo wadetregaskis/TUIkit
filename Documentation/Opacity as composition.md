@@ -1169,7 +1169,8 @@ breathing, in both strips (§55), and the bordered strip's own chrome — its to
 mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark and knob
 (§57), and a focused switch's coloured track (§58). Plus an animated `.border` whose frames
 share one alpha (§59). Plus a `TextEditor`'s rows, its blank rows and its caret's ink
-(§61). Plus a resizable view's grips, at rest and breathing (§62).
+(§61). Plus a resizable view's grips, at rest and breathing (§62). Plus a split view
+divider's grip dots and pulsing field (§63).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
@@ -1857,12 +1858,13 @@ What actually blocks a claim is narrower, and there are only two cases:
    a navigation crumb's breath under a faded tint — §47; eight, with a colour swatch's
    bullet under a faded palette — §48; nine, with the text scroll indicators' breath
    under a faded tint — §53; ten, with a tab chip's breath under a faded tint — §55;
-   eleven, with a switch track's under a faded tint or foreground — §58.)
+   eleven, with a switch track's under a faded tint or foreground — §58; twelve, with a
+   split view divider's grip dot on hover — §63.)
 
 A caller's own `AnimatedColor` is outside all of that: nothing normalises its frames, and
 the type's documented example breathes between two palette slots that a faded tint sets
 at different alphas. A border handed one whose frames disagree still cannot claim
-(§59.2). Nor, unfixed, can the drop-down menu's border pair, a twelfth copy (§59.4).
+(§59.2). Nor, unfixed, can the drop-down menu's border pair — another copy (§59.4).
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3714,3 +3716,22 @@ opaque at both ends, and the field is the page's in all of them. At rest and hov
 grip keeps its floored tint and claims its alpha. An opaque palette's bytes do not change
 at rest; focused, the frame drawn is the breath's current one rather than the floored
 accent, which is what the next tick showed anyway.
+
+
+## 63. A split view divider's grip dots (2026-09-10)
+
+A resizable `NavigationSplitView` draws its divider as three `◦` dots in the quiet
+tertiary rung, breathing toward the accent while hovered, over a background that pulses
+while the divider is focused or dragged. Every cell went through `colorize` with the raw
+colours, and nothing claimed. So a palette whose tertiary rung is faded trapped the moment
+the split drew, hovered or not; and the hovered breath was §29's pair a twelfth time — its
+dim end the accent composited over the page, its bright end the raw accent — so a faded
+tint trapped on hover.
+
+The dot's ends now come from `breathEnds`, and each cell is built through `ClaimingRow`:
+the bytes state the opaque spelling, and the divider's buffer carries the drawn frame's
+claims. Those are every frame's claims. The colours that move are the dot's breath and the
+background's `accentFillPulse`, both spent at both ends, and a resting dot is the tertiary
+rung in every frame. `combineColumns` already carried a divider's claims across, through
+`appendHorizontally`; there had been none to carry. An opaque palette's bytes do not
+change.

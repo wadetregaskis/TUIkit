@@ -676,25 +676,29 @@ extension _NavigationSplitViewCore {
         let center = h / 2
         let gripRows = Set([center - 1, center, center + 1].filter { $0 >= 0 && $0 < h })
 
-        /// One divider cell as it looks at a given point in the pulse.
+        // Both ends of the hovered dot's breath come from `breathEnds`, so both spend
+        // a faded accent. A dim end composited over the page beside a bright end
+        // that kept the accent's alpha breathed between two alphas — §29's pair.
+        let dot = palette.accent.breathEnds(
+            dimmedTo: ViewConstants.focusBorderDim, over: palette.background)
+        let pulse = palette.accentFillPulse()
+
+        /// One divider cell as it looks at a given point in the pulse, with the
+        /// claim its colours owe.
         ///
         /// A single closure rather than a colour computed up front, because a
         /// divider can pulse two things at once — the grip dots while hovered,
         /// the background while focused or dragging — and the runs below have
         /// to reproduce exactly what was drawn here, not an approximation of it.
-        func cell(row: Int, at emphasis: SelectionEmphasis) -> String {
+        func cell(row: Int, at emphasis: SelectionEmphasis) -> ClaimingRow {
             let isGrip = gripRows.contains(row)
             // Grip foreground: a quiet dot, pulsing toward the accent while
             // hovered.
             let dotColor = info.isHovered
-                ? emphasis.color(
-                    dim: palette.accent.opacity(
-                        ViewConstants.focusBorderDim, over: palette.background),
-                    bright: palette.accent)
+                ? emphasis.color(dim: dot.dim, bright: dot.bright)
                 : palette.foregroundTertiary
             // Background: pulses across the whole divider while focused /
             // dragging (same min/max the List focus-pulse uses).
-            let pulse = palette.accentFillPulse()
             let background: Color? = info.isActive
                 ? emphasis.color(dim: pulse.dim, bright: pulse.bright)
                 : nil
@@ -703,23 +707,29 @@ extension _NavigationSplitViewCore {
             // single column. `withPersistentBackground` deliberately does NOT
             // emit a trailing reset (it is built for full-width row fills), so
             // using it here let the background bleed into the next column to the
-            // end of the line.
-            return ANSIRenderer.colorize(
-                isGrip ? "◦" : " ",
-                foreground: isGrip ? dotColor : nil,
-                background: background)
+            // end of the line. Through `ClaimingRow`, so the bytes state the
+            // opaque spelling and the alpha travels as the claim.
+            var drawn = ClaimingRow()
+            drawn.append(isGrip ? "◦" : " ", cells: 1, ink: isGrip ? dotColor : nil, field: background)
+            return drawn
         }
 
         let now = cycle.frames[cycle.step % cycle.frames.count]
-        let lines: [String] = (0..<h).map { cell(row: $0, at: now) }
+        let cells = (0..<h).map { cell(row: $0, at: now) }
 
-        var buffer = FrameBuffer(lines: lines)
+        var buffer = FrameBuffer(lines: cells.map(\.text))
+        // The drawn frame's claims are every frame's: the only colours that move are
+        // the dot's breath and the background's, both spent at both ends, and a
+        // resting dot is one colour in every frame (§63).
+        buffer.opacityRegions = cells.enumerated().flatMap { row, cell in
+            cell.claims.map { $0.shifted(byX: 0, y: row) }
+        }
         // One run per row: a run covers one row, and the divider is one column
         // wide. Rows that look the same at every point in the cycle — the plain
         // spaces of a merely-hovered divider — produce a still run, which the
         // loop drops.
         buffer.animatedCells = (0..<h).compactMap { row in
-            cycle.run(offsetX: 0, offsetY: row) { cell(row: row, at: $0) }
+            cycle.run(offsetX: 0, offsetY: row) { cell(row: row, at: $0).text }
         }.filter(\.isAnimating)
         if let id = info.mouseHandlerID {
             buffer.hitTestRegions.append(
