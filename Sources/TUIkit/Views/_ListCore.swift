@@ -331,11 +331,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// click mapping must measure from this, not from the handler, or the
         /// absorbed frame puts every row a line off its hit band.
         let origin: WindowOrigin
+        /// Where each entry the frame drew landed, top to bottom: its rows, its
+        /// section headers, and a reorder's slot (row index `reorderSlotRowIndex`).
+        /// An entry the frame took back off screen, at either end, has no range.
         let visibleRowYRanges: [VisibleRowRange]
-        /// The rows behind ``visibleRowYRanges``, index-aligned with it (both
-        /// are built from the same visible-window walk). Their buffers carry
-        /// the rows' own hit-test regions, which `attachMouseHandlers` merges
-        /// into the list's buffer.
+        /// The window's rows, the DRAWN ones first: `visibleRows[i]` is the row
+        /// `visibleRowYRanges[i]` was drawn from, for every `i` the ranges have.
+        /// That is what lets the `attach*` passes `zip` the two to carry each row's
+        /// own hit regions, overlays and opacity claims into the list's buffer.
+        ///
+        /// NOT aligned because both come from one window walk. They do, but the
+        /// composers then drop ranges and keep the rows, some off the FRONT; they
+        /// are aligned because `putDrawnRowsFirst(_:pairedWith:)` puts them back in
+        /// step before this is built. The rows after the paired ones were rendered
+        /// and drew nothing, in no particular order, and stay for the dialogs they
+        /// present.
+        ///
+        /// The pairing is by ROW, not by line: a row cut partway through its top,
+        /// by the reorder clip or a slide, still reads its payload from the top of
+        /// its own buffer, so that payload sits as many lines low as were cut.
         let visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
 
         /// The rows' `.dropDestination(for:action:)` insertion action, if any —
@@ -714,6 +728,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
             rowContentWidth = max(0, rowWidth - 1)
         }
+        // Before anything pairs them: the composers can drop ranges ahead of rows
+        // they still hold. See `putDrawnRowsFirst(_:pairedWith:)`.
+        Self.putDrawnRowsFirst(&visibleRows, pairedWith: visibleRowYRanges)
 
         return (
             lines: lines,
@@ -1656,6 +1673,66 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
     }
 
+    /// Moves the rows the frame DREW to the front of `rows`, in the order of
+    /// `ranges`, so that `rows[i]` is the row `ranges[i]` was drawn from: the
+    /// pairing every `zip` over ``PopulatedRenderState`` reads.
+    ///
+    /// NOT "both come from one window walk, so they already line up". Both do,
+    /// one range per row, but the composers then drop ranges and keep the rows,
+    /// and two of them drop off the FRONT: a reorder hold's overrun when the slot
+    /// is last (``clipReorderOverrun(lines:ranges:pulseRuns:budget:)``), and a
+    /// push past the bottom (``slidRanges(_:handler:lineCount:)``). Zipped by
+    /// position after either, each surviving row carried the hit regions,
+    /// overlays and opacity claims of a row further up, and the last rows' went
+    /// nowhere. A drop off the END misplaced nothing, because `zip` stops at the
+    /// shorter array — a budget `break`, a pull past the top, the overrun's back
+    /// trim — though it did lose those rows' dialogs (below).
+    ///
+    /// Leans on what every producer KEEPS rather than on what it drops, because a
+    /// slide also drops a zero-line row's range from the MIDDLE. The ranges are an
+    /// in-order subsequence of the rows — appended walking them, and from then on
+    /// only `map`ped and `compactMap`ped — and an index names one row: the window
+    /// is a `Range`, and the slot's -1 goes in once.
+    ///
+    /// The rows no range was kept for are KEPT, after the drawn ones, not trimmed.
+    /// Each was rendered, so a dialog it presents has already taken the keyboard,
+    /// and `attachRowOverlays` still owes it a place on screen: the positional
+    /// pairing gave the rows dropped off the front one by accident, and never gave
+    /// those dropped off the end one at all.
+    ///
+    /// In place, and allocation-free on every path: the rare frame that has to
+    /// move anything swaps elements, and the common one compares two integers.
+    private static func putDrawnRowsFirst(
+        _ rows: inout [(index: Int, row: SelectableListRow<SelectionValue>)],
+        pairedWith ranges: [VisibleRowRange]
+    ) {
+        // Debug builds check the whole pairing on every frame, so a producer that
+        // one day reorders or invents a range fails the List suites instead of
+        // quietly misplacing a row's payload. `assert` is not evaluated in release.
+        defer {
+            assert(
+                rows.count >= ranges.count
+                    && zip(ranges, rows).allSatisfy { $0.rowIndex == $1.index },
+                "a row range is not beside the row it was drawn from")
+        }
+        // NOT a spot check that trusts the rest. The ranges are a subsequence of
+        // the rows, so if the last range's row already sits at the last range's
+        // position, they are the prefix and every row is beside its range. That is
+        // every frame that dropped nothing ahead of a drawn row — one cut short at
+        // the END included — and a frame with no range at all.
+        guard let last = ranges.indices.last, last < rows.count,
+            rows[last].index != ranges[last].rowIndex
+        else { return }
+        // NOT a stable partition: `swapAt` needs no scratch array, and all it gives
+        // up is the order of the undrawn rows among themselves. The walk never
+        // looks back — the next range's row can only lie after the last one matched.
+        var drawn = 0
+        for next in rows.indices where drawn < ranges.count && rows[next].index == ranges[drawn].rowIndex {
+            rows.swapAt(next, drawn)
+            drawn += 1
+        }
+    }
+
     // MARK: - Mouse handler wiring
 
     /// Registers the list's container-wide mouse handler and
@@ -1868,6 +1945,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// above the in-flow content is the point of an overlay and a picker on
     /// the last row must not lose its options to the list's own edge.
     ///
+    /// A row the frame rendered but drew none of (clipped, slid or cut off) has
+    /// no on-screen position to give an anchored layer, so it hands up its
+    /// centred layers alone.
+    ///
     /// A layer carrying a piece of a row's own DRAWING is clipped to the list,
     /// which is the same rule ``ScrollView`` applies — there for a SOURCED
     /// reason (SwiftUI's `scrollClipDisabled(_:)` documents that "by default, a
@@ -1910,6 +1991,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 if let clipped = layer.clipped(toWidth: bounds.width, height: bounds.height) {
                     buffer.overlays.append(clipped)
                 }
+            }
+        }
+        // The rows after the paired ones were rendered but drew nothing (see
+        // `putDrawnRowsFirst(_:pairedWith:)`). NOT skipped with the rest of their
+        // payload: an anchored layer has no line left to hang from, but a centred
+        // one never needed one, and dropping it would leave its dialog holding the
+        // keyboard unseen. Empty unless the frame dropped a row it had rendered.
+        for visible in state.visibleRows.dropFirst(state.visibleRowYRanges.count) {
+            for layer in visible.row.buffer.overlays where layer.centered {
+                buffer.overlays.append(layer)
             }
         }
     }

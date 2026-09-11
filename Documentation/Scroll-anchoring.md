@@ -441,6 +441,18 @@ cannot move. `_ListCore`'s `VisibleRowRange`s take the same slide (clipped, not
 translated, so a partly-visible row stays clickable over the part that is drawn),
 or clicks would land on the wrong row.
 
+That held for the click that picks a row, which reads the ranges alone. It did not
+hold for a row's OWN payload — its buttons' hit regions, its overlays, its opacity
+claims — which `_ListCore` carries up by pairing each range with the row it was
+drawn from, by position. A push past the bottom slides the top rows out and drops
+their ranges, and the rows stayed: every row after them was paired with a range
+further down, and a click on a row's button pressed the button of the row as many
+rows above it as the push had slid out (fixed 2026-09-10). A reorder hold's
+overrun, clipped from the front, did the same. The rows are now put back in step
+with the ranges before anything pairs them, and a row that drew nothing still hands
+up its centred dialogs — which a row slid off the BOTTOM had been losing, since the
+positional pairing stopped short of it.
+
 > **Table configures its handler from TWO independent places** — `resolveHandler`
 > for single-line rows, and an inline block in `buildMultiLineContent` for
 > multi-line ones. Anything captured in only one is silently dead on the other

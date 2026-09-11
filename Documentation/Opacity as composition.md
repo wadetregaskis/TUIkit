@@ -3019,7 +3019,9 @@ Two of those notes are the ones that could have gone wrong quietly:
 - **The rows' claims slide; the bar's do not.** `List` and `Table` move their rows under
   overscroll (§1.5 of the anchoring spec) and slide the rows' claims with them, while the
   bar stays exactly where it is. The bar's claims are added after the slide, not fed
-  through it.
+  through it. (For a `List` that held of the claims the list paints itself. Its rows'
+  content claims ride the row ranges, and a push past the bottom paired those with the
+  wrong rows until §51.)
 - **The popup claims its bar in the breathing arm too.** That arm states none of its
   border's claims, because the border's alpha moves with the breath and a claim is one
   alpha for every frame the line runs replay. The bar does not breathe — its colours are
@@ -3308,3 +3310,25 @@ Every claim is now clipped to the band of rows that survives. The replaced rows 
 ever the edges, so one clip does it — the trim a clipping container makes — where
 cutting each row out separately would have split a claim spanning the whole viewport into
 slivers.
+
+
+## 51. A List row's claims landed on another row after a front drop (2026-09-10)
+
+A `List` carries each visible row's content claims up into its buffer the way it carries
+the row's hit regions and overlays: by pairing the frame's row ranges with the rows they
+were drawn from, by position (`attachRowOpacity`). Two things drop ranges off the FRONT
+and keep the rows — a push past the bottom, which slides the top rows out, and a reorder
+hold's overrun, clipped away from the slot — and after either, each row's claims sat on
+the line of a row further down, one of them on the slot's blank line, and the last rows'
+claims went nowhere.
+
+The rows are now put back in step with the ranges before anything pairs them. The
+anchoring spec's overscroll record carries the fix, because the claims were one of three
+payloads with the same defect, and a row's buttons were the one a user would see.
+
+Two things stay. A row cut partway through its top, by either producer, still reads its
+claims from the top of its own buffer, so they sit as many lines low as were cut. And
+the claims the list paints itself (`rowClaims`: the selection mark and fixed fills) do
+not go through the reorder clip at all. No hold constructed so far has had any to move —
+every selected row is in hand, and the slot's background is a pulse — so that one is
+recorded here rather than fixed.
