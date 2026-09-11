@@ -233,11 +233,15 @@ private struct ContextMenuTarget: View {
     /// between — deliberately not `palette.border` at the dim end, or the
     /// bottom of every pulse would be indistinguishable from not being focused
     /// at all. Unfocused it is one frame, so the border simply sits still.
+    ///
+    /// Both ends from `breathEnds`, which spends a faded accent at each of them.
+    /// A dim end composited over the page beside a bright end that kept the
+    /// accent's alpha would breathe between two alphas, and a border at two
+    /// alphas cannot be blended — see the `AnimatingYourOwnView` article.
     private var borderColor: AnimatedColor {
         guard isFocused else { return AnimatedColor(palette.border) }
-        return emphasis.animatedColor(
-            true,
-            dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-            bright: palette.accent)
+        let ends = palette.accent.breathEnds(
+            dimmedTo: ViewConstants.focusBorderDim, over: palette.background)
+        return emphasis.animatedColor(true, dim: ends.dim, bright: ends.bright)
     }
 }
