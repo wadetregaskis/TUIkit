@@ -3018,7 +3018,7 @@ spellings now — and the claim under it is the drawn bar's, applied to every fr
 alpha per cell (§29.2). So the runs are right only if every frame owes exactly the
 claims the drawn bar does.
 
-That is written down as `assertOneClaim`, a debug assertion over every frame's claims.
+That is written down as `assertFramesOweOneClaim`, a debug assertion over every frame's claims.
 The drawn bar is one of the frames — its colour is `colorNow`, which indexes the same
 cycle `ScrollbarPulse.frames` maps — so the check is exact, not a sample.
 
@@ -3061,7 +3061,7 @@ So a faded accent breathed from 128 to 255, and the cycle between them interpola
 alpha as a fourth channel. §29's bug exactly, arriving by another route — not a
 composite at the quiet end and a bare colour at the loud one, but a lift that was
 written as a composite. Before §43 its bytes reached the emitter translucent and
-trapped. Had the bar been converted without `assertOneClaim`, the bytes would have been
+trapped. Had the bar been converted without `assertFramesOweOneClaim`, the bytes would have been
 opaque at every phase, and every frame but one blended at the wrong alpha in silence.
 
 The candidate is a lift, so it carries: `resting.compositing(…, over: extreme)
@@ -3141,7 +3141,7 @@ which the harness flags: CPU time absorbs preemption, not cache contention.
 
 On an opaque palette the conversion adds, for every cell of a vertical bar, a
 `ClaimingRow` whose claim comes back `nil`, and per frame a `fit` that pads nothing; the
-pulse's frames each build a column where they built an array, and `assertOneClaim` is a
+pulse's frames each build a column where they built an array, and `assertFramesOweOneClaim` is a
 debug check. None of it resolves above this machine's floor. `table` and
 `table-multiline` lean positive, with intervals that include zero and sit inside the
 ±1.7% `table` null-tests at.

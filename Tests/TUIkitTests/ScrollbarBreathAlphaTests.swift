@@ -18,7 +18,7 @@ import Testing
 struct ScrollbarBreathAlphaTests {
 
     /// Every shipped palette under a half-faded tint, and one whose every slot is
-    /// faded — the palette `assertOneClaim` first tripped on.
+    /// faded — the palette `assertFramesOweOneClaim` first tripped on.
     private var palettes: [any Palette] {
         PaletteRegistry.all.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
             + [FadedAll()]
@@ -60,7 +60,7 @@ struct ScrollbarBreathAlphaTests {
         #expect(tookTheLoop > 0, "no palette took pulseLift's loop, so this sweep could not fail")
     }
 
-    /// The render `assertOneClaim` trapped on: a focused scroll view under a wholly
+    /// The render `assertFramesOweOneClaim` trapped on: a focused scroll view under a wholly
     /// faded palette. It must breathe through runs, and the thumb under them must owe
     /// the accent's alpha as its field — the one claim every frame now shares.
     @Test("A focused scroll view's breathing bar renders, and claims its thumb")

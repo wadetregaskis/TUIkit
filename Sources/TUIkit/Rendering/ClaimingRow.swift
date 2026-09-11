@@ -143,3 +143,26 @@ struct ClaimingColumn {
         claims.map { $0.shifted(byX: column, y: row) }
     }
 }
+
+// MARK: - A run's frames and the one claim under them
+
+/// Traps, in a debug build, when the frames of one breath do not all owe the same
+/// claims.
+///
+/// A run replays BYTES, and the bytes are opaque spellings. The alpha is in the drawn
+/// picture's claims, which the resolver applies to every frame of a run at one alpha
+/// per cell (§29.2) — so a run is right only if every frame owes exactly what the
+/// drawn one does. A breath whose ends disagree about alpha blends all but one of its
+/// frames at the wrong alpha with nothing on screen to say so, since the bytes are
+/// fine; this is what says so. The scrollbar's breath is where it was written and what
+/// it first caught (§44); anything that pre-renders a cycle and claims under it owes
+/// the same check.
+///
+/// - Parameters:
+///   - claims: Each frame's claims, in the drawn picture's own coordinates.
+///   - what: Whose frames these are, for the message — "a scrollbar's pulse".
+func assertFramesOweOneClaim(_ claims: [[OpacityRegion]], _ what: @autoclosure () -> String) {
+    assert(
+        claims.allSatisfy { $0 == claims.first },
+        "\(what()) frames owe different claims: its breath's two ends disagree about alpha (§29)")
+}

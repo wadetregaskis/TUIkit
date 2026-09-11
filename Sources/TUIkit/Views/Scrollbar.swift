@@ -954,7 +954,7 @@ enum ScrollbarRenderer {
                 arrows: arrows, proportional: proportional, colors: colors)
         }
         guard let first = frames.first else { return [] }
-        assertOneClaim(frames.map(\.claims))
+        assertFramesOweOneClaim(frames.map(\.claims), "a scrollbar's pulse")
         return (0..<first.count).compactMap { row in
             let cells = frames.map { $0.lines.indices.contains(row) ? $0.lines[row] : "" }
             guard Set(cells).count > 1 else { return nil }
@@ -981,29 +981,14 @@ enum ScrollbarRenderer {
                 width: width, extent: extent, viewport: viewport, offset: offset,
                 arrows: arrows, proportional: proportional, colors: colors)
         }
-        assertOneClaim(rows.map(\.claims))
+        // The drawn bar is one of these frames — its colour is `colorNow`, which
+        // indexes the same cycle — so asking the frames is asking the drawn bar.
+        assertFramesOweOneClaim(rows.map(\.claims), "a scrollbar's pulse")
         let frames = rows.map(\.text)
         guard let first = frames.first, Set(frames).count > 1 else { return nil }
         return AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: first.strippedLength,
             frames: frames, clock: .cursor)
-    }
-
-    /// Traps, in a debug build, when a pulse's frames do not all owe the same
-    /// claims.
-    ///
-    /// A run replays BYTES, and the bytes are opaque spellings. The alpha is in the
-    /// drawn bar's claims, which the resolver applies to every frame of a run at one
-    /// alpha per cell (§29.2) — so a run is right only if every frame owes exactly
-    /// what the drawn bar does, and the drawn bar is one of these frames (its colour
-    /// is `colorNow`, which indexes the same cycle). That holds by construction while
-    /// both ends of the breath carry the accent's alpha. A breath whose ends disagree
-    /// would blend all but one of its frames at the wrong alpha with nothing on
-    /// screen to say so, since the bytes are fine; this is what says so.
-    private static func assertOneClaim(_ claims: [[OpacityRegion]]) {
-        assert(
-            claims.allSatisfy { $0 == claims.first },
-            "a scrollbar's pulse frames owe different claims: its breath's two ends disagree about alpha (§29)")
     }
 
     /// A horizontal scrollbar `width` cells wide: a `◀`/`▶` arrow assembly at each
