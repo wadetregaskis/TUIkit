@@ -2495,6 +2495,10 @@ Two things fall out of routing the frames through `ClaimingRow`:
   `.sweep`'s trail ramps from the control's opaque empty colour to a faded accent, so
   the alphas descend across the row and the tint's own alpha is the floor.
 
+What drives the declined bar is the scheduler, so its frame comes from the frame clock.
+Until §66 it came from the cursor timer, which nothing kept running on such a page, and
+the bar did not move.
+
 ### 36.8 §33.3's hole was two mistakes, not a limitation
 
 `_ListCore`'s focused path is testable headlessly. Both reasons the earlier attempt
@@ -3613,8 +3617,9 @@ case). A colour whose alpha moves with its frames is not that.
   frame through `colorize` with the raw tint and claimed nothing, so a faded tint trapped.
   Closed in §62.
 - **§36.7's indeterminate bar, and `Spinner` for a cycle whose frames differ in width.**
-  They decline their runs through `requestAnimation`, so both of §59.2's problems apply
-  to them by reading; neither has been tested.
+  They decline their runs through `requestAnimation`. The freeze was real and is fixed in
+  §66; the other problem, a request that outlives a render whose buffer is thrown away,
+  still applies to them by reading.
 
 
 ## 60. A caret on a selected character carried its text's alpha (2026-09-10)
@@ -3765,3 +3770,27 @@ colour, which a faded palette fades.
 Both now go through `ClaimingRow`, and their claims join the ones the body and footer
 carry up — the title's on its row, the rule's on its. A plain list's border colour never
 animates, so each claim is every frame's. An opaque palette's bytes do not change.
+
+
+## 66. A declined run's clock (2026-09-11)
+
+§36.7's translucent bar, and `Spinner` for a cycle whose frames differ in width, decline
+their runs and ask the scheduler to render them at the cycle's own rate. Both still took
+the frame to draw from the cursor timer's content clock — the clock a RUN replays on, and
+right on the run path, where the frame drawn must be the frame the loop will splice. On the
+declined path nothing keeps that timer running: the loop stops it, zeroing it, after any
+frame that read neither the pulse nor the caret and left no runs, which is exactly a page
+holding only such a view. So every render the scheduler drove drew frame zero: a bar or a
+spinner that did not move, re-rendered several times a second for nothing.
+
+A declined run now takes its frame from the frame clock, `frameNowNanos`, which the loop
+stamps on every render and which the other per-render animations already read —
+interpolations, transitions, tooltips. That adds no wake-ups: the scheduler request each
+already made is the only driver. The run path keeps the cursor timer, so a bar that moves
+between the two — a tint fading or unfading it — may jump once, on a change that re-renders
+the screen anyway.
+
+The test drives `RenderLoop` itself: four frames of a page holding only such a spinner, or
+only such a bar, at advancing frame times and with the cursor timer as the loop leaves it.
+Nothing in those frames would keep the timer alive, the scheduler has a next firing after
+each, and the pictures differ. Before this, all four were one picture.

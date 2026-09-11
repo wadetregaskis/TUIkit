@@ -365,8 +365,14 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                     frequency: Double(IndeterminateRenderer.frameCount(of: style))
                         / IndeterminateRenderer.period(of: style))
             }
+            // The scheduler drives this path, not the cursor timer — which the loop
+            // stops, and zeroes, on a page that leaves no runs and reads nothing, so
+            // a bar reading it drew frame zero forever. Its frame comes from the
+            // frame clock instead, as every other per-render animation's does (§66).
+            // A determinate bar ignores it.
             let bar = renderBarLine(
-                width: width, palette: palette, context: context, elapsed: elapsed)
+                width: width, palette: palette, context: context,
+                elapsed: Double(context.environment.frameNowNanos) / 1_000_000_000)
             lines.append(bar.text)
             var buffer = FrameBuffer(lines: lines)
             // Down to the row the bar landed on. Nothing is composited over this

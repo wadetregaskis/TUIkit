@@ -307,7 +307,8 @@ extension SpinnerStyle {
 /// no re-measure, nothing asked of this view (`99b91c0f`). Only a
 /// ``SpinnerStyle/custom(_:)`` sequence whose frames are not all one width
 /// escapes that, since a run must claim exactly the cells every frame fills; it
-/// falls back to asking the loop to re-render at the style's rate.
+/// falls back to asking the loop to re-render at the style's rate, and takes its
+/// frame from the frame clock, since nothing keeps the cursor timer running for it.
 ///
 /// # Example
 ///
@@ -462,8 +463,14 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
 
         // The clock, not a per-spinner start time: every spinner of a style is
         // then in phase, and — much more to the point — the frame drawn is the
-        // frame the run loop will replay, so the first tick does not jump.
-        let elapsed = context.environment.cursorTimer?.elapsed(for: .content) ?? 0
+        // frame the run loop will replay, so the first tick does not jump. A cycle
+        // whose frames are not all one width leaves no run and is re-rendered by
+        // the scheduler instead; the cursor timer is stopped, and zeroed, on a page
+        // with nothing else animating, so that one takes the frame clock (§66).
+        let elapsed =
+            glyphWidths.count == 1
+            ? context.environment.cursorTimer?.elapsed(for: .content) ?? 0
+            : Double(context.environment.frameNowNanos) / 1_000_000_000
         let step = Int((elapsed / style.interval).rounded(.down))
         let frameIndex = cycle.isEmpty ? 0 : ((step % cycle.count) + cycle.count) % cycle.count
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]

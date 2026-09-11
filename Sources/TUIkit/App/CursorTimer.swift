@@ -8,7 +8,10 @@ import Foundation
 
 /// The app's one animation TIMER, and the two clocks it ticks: the
 /// focus-relative one the cursor's blink and every focus indicator's breath
-/// read, and the monotonic one a spinner or an indeterminate bar reads.
+/// read, and the monotonic one a spinner's or an indeterminate bar's run replays
+/// on. One that declines its run reads the frame clock instead: this timer is
+/// stopped, and zeroed, on a page that leaves no runs and reads nothing (§66 of
+/// `Opacity as composition.md`).
 ///
 /// `CursorTimer` maintains two phase values for different animation styles:
 /// - `blinkVisible`: Boolean for sharp on/off blinking
