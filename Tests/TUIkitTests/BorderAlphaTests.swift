@@ -311,4 +311,64 @@ struct BorderAlphaTests {
                 "frame \(index): \(top.frames[index].debugDescription)")
         }
     }
+
+    // MARK: - A container with no border (§65)
+
+    /// Every slot opaque but the border's, so a plain list's footer rule, drawn in it,
+    /// is what owes an alpha — and its title, in the accent, does not.
+    private struct FadedBorder: Palette {
+        let id = "faded-border"
+        let name = "Faded border"
+        let background = Color.rgb(10, 10, 20)
+        let foreground = Color.rgb(230, 230, 240)
+        let accent = Color.rgb(0, 180, 200)
+        let success = Color.rgb(40, 200, 40)
+        let warning = Color.rgb(220, 200, 40)
+        let error = Color.rgb(220, 40, 40)
+        let info = Color.rgb(40, 120, 220)
+        let border = Color.rgb(120, 120, 130).opacity(0.5)
+    }
+
+    /// A plain list's buffer under `palette`, twenty cells wide.
+    private func plain<V: View>(_ list: V, palette: any Palette, height: Int) -> FrameBuffer {
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.palette = palette
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: height, environment: environment, tuiContext: tuiContext
+        ).isolatingRenderCache()
+        return renderToBuffer(list.listStyle(.plain), context: context)
+    }
+
+    /// A plain list draws its title on a line of its own, in the accent by default —
+    /// which a faded tint fades. It went to the emitter unclaimed (§65).
+    @Test("A plain list's title claims a faded tint's alpha")
+    func plainListTitleClaims() throws {
+        let drawn = plain(
+            List("Items", selection: Binding<Int?>.constant(nil)) { Text("a") }.tint(faded(.red, 128)),
+            palette: SystemPalette.default, height: 5)
+        try #require(drawn.lines.first?.stripped.hasPrefix("Items") == true, "\(drawn.lines.map(\.stripped))")
+        for column in 0..<5 {
+            let owes = owed(atColumn: column, row: 0, in: drawn)
+            #expect(owes.ink == 128.0 / 255 && owes.field == 1, "title (\(column), 0) owes \(owes)")
+        }
+    }
+
+    /// Above a footer, a plain list draws a full-width rule in the border's colour —
+    /// which a faded palette fades. It went to the emitter unclaimed too (§65).
+    @Test("A plain list's footer rule claims a faded border's alpha")
+    func plainListFooterRuleClaims() throws {
+        let palette = FadedBorder()
+        let drawn = plain(
+            List("Items", selection: Binding<Int?>.constant(nil)) { Text("a") } footer: { Text("f") },
+            palette: palette, height: 8)
+        let row = try #require(
+            drawn.lines.firstIndex { !$0.stripped.isEmpty && $0.stripped.allSatisfy { $0 == "─" } },
+            "no rule: \(drawn.lines.map(\.stripped))")
+        for column in 0..<drawn.lines[row].stripped.count {
+            let owes = owed(atColumn: column, row: row, in: drawn)
+            #expect(owes.ink == owed(palette.border) && owes.field == 1, "rule (\(column), \(row)) owes \(owes)")
+        }
+    }
 }

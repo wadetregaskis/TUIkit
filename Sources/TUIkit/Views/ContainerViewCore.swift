@@ -932,12 +932,19 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         }
 
         // Optional title line, rendered plainly (no border decoration) since
-        // there is no top border to host it.
+        // there is no top border to host it. Through `ClaimingRow`, like the
+        // separator below, so a faded colour — the title's defaults to the accent,
+        // which a faded tint fades — states its opaque spelling and claims its
+        // alpha (§65).
         var titleRows = 0
+        var chromeClaims: [OpacityRegion] = []
         if let titleText = title {
-            let styled = ANSIRenderer.colorize(
-                titleText, foreground: titleColor?.resolve(with: palette) ?? palette.accent)
-            lines.append(padded(styled))
+            var drawn = ClaimingRow()
+            drawn.append(
+                titleText, cells: titleText.strippedLength,
+                ink: titleColor?.resolve(with: palette) ?? palette.accent)
+            lines.append(padded(drawn.text))
+            chromeClaims += drawn.claims
             titleRows = 1
         }
 
@@ -948,9 +955,12 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         var footerSeparatorRows = 0
         if let footerBuf = footerBuffer, !footerBuf.isEmpty {
             if style.showFooterSeparator {
-                lines.append(
-                    ANSIRenderer.colorize(
-                        String(repeating: "─", count: max(0, innerWidth)), foreground: borderColor))
+                var rule = ClaimingRow()
+                rule.append(
+                    String(repeating: "─", count: max(0, innerWidth)), cells: max(0, innerWidth),
+                    ink: borderColor)
+                chromeClaims += rule.claims.map { $0.shifted(byX: 0, y: lines.count) }
+                lines.append(rule.text)
                 footerSeparatorRows = 1
             }
             for line in footerBuf.lines { lines.append(padded(line)) }
@@ -973,8 +983,9 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         result.hitTestRegions = carriedRegions
         result.animatedCells = carriedRuns
         // The fourth payload. This rebuilds with a bare `FrameBuffer(lines:)`,
-        // so anything not re-attached here is simply gone.
-        result.opacityRegions = carriedOpacity
+        // so anything not re-attached here is simply gone — and the title and the
+        // separator, drawn here, add their own.
+        result.opacityRegions = carriedOpacity + chromeClaims
         return result
     }
 }

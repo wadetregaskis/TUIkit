@@ -1171,7 +1171,7 @@ mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark 
 share one alpha (§59). Plus a `TextEditor`'s rows, its blank rows and its caret's ink
 (§61). Plus a resizable view's grips, at rest and breathing (§62). Plus a split view
 divider's grip dots and pulsing field (§63). Plus a drop-down menu's breathing border
-(§64).
+(§64). Plus a plain container's title and footer rule (§65).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
@@ -3751,3 +3751,17 @@ share one alpha. Under `.none` the border is the accent spent over the page rath
 the raw accent claimed: how every other focus breath treats its bright end, blending toward
 the page rather than toward whatever the popup covers. An opaque palette's bytes do not
 change.
+
+
+## 65. A plain container's title and footer rule (2026-09-10)
+
+A container with no border — `.listStyle(.plain)`'s, the only one — draws its title on a
+line of its own and, above a footer, a full-width rule, since there is no top border to
+host the one and no walls to cap the other. Both went through `colorize` with the raw
+colour and claimed nothing. A title defaults to the accent, so a plain list with a title
+under a faded tint handed the tint to the emitter and trapped; the rule is the border's
+colour, which a faded palette fades.
+
+Both now go through `ClaimingRow`, and their claims join the ones the body and footer
+carry up — the title's on its row, the rule's on its. A plain list's border colour never
+animates, so each claim is every frame's. An opaque palette's bytes do not change.
