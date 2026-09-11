@@ -42,6 +42,34 @@ struct FadedPaletteRenderTests {
         renderToBuffer(view, context: context(palette: palette, width: width, height: height))
     }
 
+    /// Every glyph set's toggle, focused, as a checkbox and as a switch, under a pulse
+    /// and a blink: each renders with its one run, and — since `IndicatorCycle.claims(at:)`
+    /// claims while the indicator breathes — its frames agree about alpha, which that
+    /// asserts in a debug build (§57, §58).
+    @Test(
+        "Focused toggles in every glyph set render under a faded palette",
+        arguments: [TextCursorStyle.Animation.pulse, .blink])
+    func focusedTogglesDraw(animation: TextCursorStyle.Animation) {
+        func focused<V: View>(_ view: V) -> FrameBuffer {
+            renderToBuffer(
+                view,
+                context: context(palette: FadedAll(), width: 30, height: 3) {
+                    // A focus manager of its own, so the lone toggle takes the focus.
+                    $0.focusManager = FocusManager()
+                    $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+                })
+        }
+        for glyphs in [ToggleCharacterSet.unicode, .ascii, .emoji] {
+            for isSwitch in [false, true] {
+                let toggle = Toggle("Enable", isOn: .constant(true)).toggleCharacterSet(glyphs)
+                let drawn = isSwitch ? focused(toggle.toggleStyle(.switch)) : focused(toggle)
+                #expect(
+                    drawn.animatedCells.count == 1,
+                    "\(glyphs) \(isSwitch ? "switch" : "checkbox"): not focused and breathing")
+            }
+        }
+    }
+
     private func context(
         palette: any Palette, width: Int, height: Int,
         configure: (inout EnvironmentValues) -> Void = { _ in }

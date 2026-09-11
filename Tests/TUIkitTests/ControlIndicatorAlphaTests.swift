@@ -207,10 +207,52 @@ struct ControlIndicatorAlphaTests {
         }
     }
 
+    // MARK: - A breathing coloured switch track
+
+    /// Focused under a wholly faded palette, the track breathes and the knob — drawn in
+    /// the page's colour — is the same in every frame. Its claim was withheld while the
+    /// track breathed (§58).
+    @Test("A focused coloured switch claims its knob while the track breathes")
+    func focusedSwitchClaimsItsKnob() throws {
+        let palette = FadedAll()
+        let drawn = focused(Toggle("Enable", isOn: .constant(true)).toggleStyle(.switch), palette: palette)
+        let run = try #require(drawn.animatedCells.first, "the track breathes")
+        for column in run.offsetX..<(run.offsetX + run.width) {
+            let owes = owed(atColumn: column, row: run.offsetY, in: drawn)
+            #expect(
+                owes.ink == owed(palette.background) && owes.field == 1,
+                "the track's (\(column), \(run.offsetY)) owes \(owes)")
+        }
+    }
+
+    /// Under a faded tint alone the knob is opaque, so nothing is claimed either way;
+    /// what shows the track spent its alpha is its bright frame — the accent spent over
+    /// the page — in the run's own bytes. It used to be the tint's opaque spelling.
+    @Test("A focused coloured switch under a faded tint breathes to the spent accent")
+    func focusedSwitchUnderFadedTintSpendsTheAccent() throws {
+        try withColorDepth(.truecolor) {
+            let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
+            let drawn = focused(Toggle("Enable", isOn: .constant(true)).toggleStyle(.switch), palette: palette)
+            let run = try #require(drawn.animatedCells.first, "the track breathes")
+            #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
+            let spent = try #require(
+                palette.accent.spendingAlpha(over: palette.background).resolve(with: palette).rgbComponents)
+            // The track is the run's FIELD, so it is spelled as a background.
+            let field = "48;2;\(spent.red);\(spent.green);\(spent.blue)"
+            #expect(run.frames.contains { $0.contains(field) }, "no frame reaches the spent accent")
+        }
+    }
+
     /// Rendered focused: the fresh focus manager hands the focus to the first control
     /// that registers, which is the toggle — nothing else here is focusable.
-    private func focused<V: View>(_ view: V, width: Int = 20) -> FrameBuffer {
-        renderToBuffer(view, context: makeRenderContext(width: width, height: 3))
+    private func focused<V: View>(
+        _ view: V, width: Int = 20, palette: (any Palette)? = nil
+    ) -> FrameBuffer {
+        renderToBuffer(
+            view,
+            context: makeRenderContext(width: width, height: 3) { environment, _ in
+                if let palette { environment.palette = palette }
+            })
     }
 
     // MARK: - Radio button

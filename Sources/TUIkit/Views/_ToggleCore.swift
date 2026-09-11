@@ -274,7 +274,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
 
         /// The claims this indicator owes: the drawn frame's, which every frame of its
         /// run shares. The only colour that moves is this cycle's, and both of its ends
-        /// spend their alpha (`accentPulse`), so a moving cell owes nothing in any frame
+        /// spend their alpha (`accentPulse` for the brackets, `SwitchTrackBreath` for a
+        /// coloured track), so a moving cell owes nothing in any frame
         /// and a still one — the mark, the knob — owes the same in all. Asserted,
         /// because a breath whose ends disagree is silent otherwise (§44).
         @MainActor
@@ -405,12 +406,12 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // accent for on, neutral grey lifted toward the foreground for off —
         // so the breathing never misreads as a state change, and the knob's
         // half-block margin keeps it visible at the dim end of the pulse.
+        // Both ends spend their alpha over the page — see `SwitchTrackBreath`.
+        let ends = SwitchTrackBreath.ends(track: trackColor, isOn: isOnValue, palette: palette)
         let track = IndicatorCycle(
             isFocused: isFocused && !isDisabled,
-            dim: trackColor.opacity(ViewConstants.focusPulseMin, over: palette.background),
-            bright: isOnValue
-                ? palette.accent
-                : Color.lerp(.brightBlack, palette.foreground, phase: 0.45),
+            dim: ends.dim,
+            bright: ends.bright,
             resting: trackColor,
             context: context)
 
@@ -425,9 +426,11 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             return painted
         }
         let animation = track.run(draw: draw)
+        // Claimed while it breathes, as the bracketed indicators are: both of the
+        // track's ends spend, so the claim taken now is every frame's (§58).
         return (
             draw(track.now), animation,
-            animation == nil ? Self.claims(visiting: { runs(track.now, $0) }) : [])
+            track.claims { colour in Self.claims(visiting: { runs(colour, $0) }) })
     }
 
     /// The buffer for one of the built-in toggle styles: the indicator, the
@@ -460,8 +463,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             buffer.animatedCells = [animation]
         }
         // The indicator opens the first row, so its claims need no shifting either.
-        // The bracketed indicators claim while they pulse too — their claims hold for
-        // every frame (`IndicatorCycle.claims(at:)`) — and the coloured track, not yet.
+        // Every indicator claims while it pulses too: its claims hold for every frame
+        // (`IndicatorCycle.claims(at:)`).
         buffer.opacityRegions += styledIndicator.claims
         return (
             buffer, composed.titleWidth, composed.titleRows,

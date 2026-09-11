@@ -1167,15 +1167,14 @@ hovered button's face under a fully faded tint (§49). Plus the text scroll indi
 still and breathing, on every host that draws them (§53). Plus a `TabView`'s active chip,
 breathing, in both strips (§55), and the bordered strip's own chrome — its tops, walls,
 mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark and knob
-(§57).
+(§57), and a focused switch's coloured track (§58).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret; a `Toggle`'s coloured switch track while
-focused; and an animated `.border` whose frames disagree about alpha. One was seen to
-trap in a debug build when probed — the editor. The switch track and the border drop
-the alpha without a word.
+reading: a `TextEditor`'s rows and caret, and an animated `.border` whose frames
+disagree about alpha. The editor was seen to trap in a debug build when probed; the
+border drops the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1571,9 +1570,9 @@ The blank half of a switch's ASCII track is described as a run even though it is
 space. No ink lands on a space, so its claim changes nothing — but *omitting* it
 would put the closing bracket's claim one cell to the left.
 
-A pulsing bracketed indicator claims too, since §57: only the brackets move, between
-two spent ends, so the claim taken at the drawn phase is every frame's. The coloured
-switch track, whose ends still disagree, withholds its claims while it breathes.
+A pulsing indicator claims too: a bracketed one since §57, a coloured switch track since
+§58. Only the breathing colour moves, between two spent ends, so the claim taken at the
+drawn phase is every frame's.
 
 
 ## 24. The status bar's two colours, and the sink that was already right (2026-09-09)
@@ -1854,7 +1853,8 @@ What actually blocks a claim is narrower, and there are only two cases:
    lift, which was not migrated until §43 and so could not be tested — §44; seven, with
    a navigation crumb's breath under a faded tint — §47; eight, with a colour swatch's
    bullet under a faded palette — §48; nine, with the text scroll indicators' breath
-   under a faded tint — §53; ten, with a tab chip's breath under a faded tint — §55.)
+   under a faded tint — §53; ten, with a tab chip's breath under a faded tint — §55;
+   eleven, with a switch track's under a faded tint or foreground — §58.)
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3496,9 +3496,26 @@ opaque either way.
 `IndicatorCycle.claims(at:)` returns the drawn frame's claims, and in a debug build
 asserts, through the shared `assertFramesOweOneClaim`, that every frame of the cycle
 owes the same. The checkbox and the bracketed switch use it. The coloured switch track
-does not yet: its bright end carries the accent's alpha when on, and a lerp takes it to
-198 of 128 when off, so its frames disagree and its claims stay withheld until its ends
-agree.
+did not: its bright end carried the accent's alpha when on, and a lerp took it to 198
+of 128 when off, so its frames disagreed and its claims stayed withheld until §58.
 
 An opaque palette's bytes do not change: an opaque colour is its own opaque spelling,
 and spending it returns it untouched.
+
+
+## 58. A switch track's breath ends disagreed about alpha (2026-09-10)
+
+A focused switch in the coloured-track styles breathes its track — the switch's own
+background — between the track dimmed over the page and a brighter tone in the state's
+hue. The dim end was composited, so opaque. The bright end was the raw accent when on,
+carrying its alpha; off, it was a lerp from `.brightBlack` toward the raw foreground,
+and a lerp interpolates alpha as a fourth channel: 198 of 128 under a half-faded
+foreground, neither kept nor spent. §29's pair, an eleventh time. `_ToggleCore` withheld
+the indicator's claims while it breathed, so no frame blended at a wrong alpha — every
+frame simply dropped it, and with it the knob's claim, although the knob is the same in
+every frame.
+
+`SwitchTrackBreath` now gives both ends spent over the page: on, `accentPulse`'s bright
+end; off, the lerp toward the foreground as it shows. Every frame is opaque, so the
+track claims while it breathes, through `IndicatorCycle.claims(at:)` and its assertion.
+An opaque palette's bytes do not change: spending an opaque colour returns it untouched.
