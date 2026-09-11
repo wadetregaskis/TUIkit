@@ -1160,9 +1160,20 @@ than the alpha.
 Plus the image glyph path (§42), which was the last of them, and the four `Palette`
 surface derivations, which now carry (§39).
 
-Not honoured: **the scrollbars' track and thumb** (§40.2 — a bar is `[String]` across
-nine call sites, and making it claim-bearing is its own commit), and `.opacity(_:)` on
-an `Image`'s PIXEL path, which is declined deliberately (§17).
+Plus the scrollbars: every host's track, thumb, arrows and corner, and the focused
+bar's breath (§43–§45).
+
+Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
+
+Still open, found by rendering pages under a wholly faded palette rather than by
+reading: a `TextEditor`'s rows and caret; the text-style scroll indicators; a bordered
+`TabView`'s strip and its active chip's breath; `NavigationStack`'s crumbs; a
+`ColorPicker` swatch's focus breath; a hovered button face under a fully faded tint; a
+`Toggle`'s bracketed mark and its coloured switch track while focused; and an animated
+`.border` whose frames disagree about alpha. Four were seen to trap in a debug build
+when probed — the editor, the indicators, the bordered strip and the crumbs. Two more
+trap by reading, not yet by running: the swatch and the hovered face. The toggle's
+two, the border, and the compact strip's chip drop the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
