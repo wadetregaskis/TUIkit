@@ -1254,7 +1254,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if handler.reorder != nil {
             clipReorderOverrun(
                 lines: &rowLines, ranges: &ranges, pulseRuns: &pulseRuns,
-                budget: rowLineBudget)
+                claims: &rowClaims, budget: rowLineBudget)
         }
 
         if origin.reservesBelow {
@@ -1546,7 +1546,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Slot-aware overrun clip for a reorder hold (see composeRowLines).
         if handler.reorder != nil {
             clipReorderOverrun(
-                lines: &lines, ranges: &ranges, pulseRuns: &pulseRuns, budget: contentHeight)
+                lines: &lines, ranges: &ranges, pulseRuns: &pulseRuns,
+                claims: &rowClaims, budget: contentHeight)
         }
 
         // Fill the area below the last row so the bar spans the full height.
@@ -1623,12 +1624,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// ``ItemListHandler/reorderOverrun(lineCount:budget:endsWithSlot:)``,
     /// shared with `Table.clipOverrun`; see it for the rule and for why the
     /// `max(1, budget)` floor this used to carry is gone. What is left here is
-    /// the application, which is the List's own: its ranges and pulse runs
-    /// travel with the lines they describe, and one clipped away above the
-    /// viewport goes with it.
+    /// the application, which is the List's own: its ranges, pulse runs and
+    /// claims travel with the lines they describe, and one clipped away above
+    /// the viewport goes with it.
+    ///
+    /// The claims were the one that did not. A cursor row the clip cut through
+    /// left the claims its fill had on the lines cut past the rows — on the "N
+    /// more below" line and the border — because `slidClaims` drops nothing when
+    /// nothing is overscrolled (§54).
     private func clipReorderOverrun(
         lines: inout [String], ranges: inout [VisibleRowRange],
-        pulseRuns: inout [RowRun], budget: Int
+        pulseRuns: inout [RowRun], claims: inout [OpacityRegion], budget: Int
     ) {
         let clip = ItemListHandler<SelectionValue>.reorderOverrun(
             lineCount: lines.count, budget: budget,
@@ -1642,6 +1648,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             pulseRuns = pulseRuns.compactMap {
                 $0.y >= overrun ? $0.moved(to: $0.y - overrun) : nil
             }
+            // So do the claims: moved up with their lines, and cut where one spanned
+            // the lines clipped away. Asked first — nearly every hold has none.
+            if !claims.isEmpty {
+                claims = claims.compactMap {
+                    $0.shifted(byX: 0, y: -overrun)
+                        .clipped(toColumns: 0..<Int.max, rows: 0..<lines.count)
+                }
+            }
             ranges = ranges.compactMap { range in
                 let end = range.yStart + range.height - overrun
                 guard end > 0 else { return nil }
@@ -1654,6 +1668,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             lines.removeLast(overrun)
             let cap = lines.count
             pulseRuns = pulseRuns.filter { $0.y < cap }
+            if !claims.isEmpty {
+                claims = claims.compactMap { $0.clipped(toColumns: 0..<Int.max, rows: 0..<cap) }
+            }
             ranges = ranges.compactMap { range in
                 guard range.yStart < cap else { return nil }
                 return (
@@ -1686,7 +1703,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// NOT "both come from one window walk, so they already line up". Both do,
     /// one range per row, but the composers then drop ranges and keep the rows,
     /// and two of them drop off the FRONT: a reorder hold's overrun when the slot
-    /// is last (``clipReorderOverrun(lines:ranges:pulseRuns:budget:)``), and a
+    /// is last (``clipReorderOverrun(lines:ranges:pulseRuns:claims:budget:)``), and a
     /// push past the bottom (``slidRanges(_:handler:lineCount:)``). Zipped by
     /// position after either, each surviving row carried the hit regions,
     /// overlays and opacity claims of a row further up, and the last rows' went

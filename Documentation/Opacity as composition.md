@@ -3330,9 +3330,9 @@ payloads with the same defect, and a row's buttons were the one a user would see
 Two things stay. A row cut partway through its top, by either producer, still reads its
 claims from the top of its own buffer, so they sit as many lines low as were cut. And
 the claims the list paints itself (`rowClaims`: the selection mark and fixed fills) do
-not go through the reorder clip at all. No hold constructed so far has had any to move —
-every selected row is in hand, and the slot's background is a pulse — so that one is
-recorded here rather than fixed.
+not go through the reorder clip at all. No hold constructed then had any to move —
+every selected row is in hand, and the slot's background is a pulse — so it was
+recorded here. A `.live` hold turned out to have one, and §54 fixes it.
 
 
 ## 52. A row in hand lost its claims at the slot (2026-09-10)
@@ -3400,6 +3400,26 @@ the exact twin: a resting rung and the accent, both spent (§47.2).
 
 A focused line under `.selectionIndicatorStyle(.none)` is still — one frame, no run —
 and spends all the same, so focus shows one colour whether it breathes or not.
+
+
+## 54. A back clip left the list's own claims past the rows (2026-09-10)
+
+`_ListCore.clipReorderOverrun` clips a reorder frame that holds more lines than fit,
+and it took the lines, the row ranges and the pulse runs with it — not `rowClaims`, the
+claims the list paints on its rows itself. §51 found none to move in any hold it built.
+There is one. A `.live` hold draws no slot, so the cursor row stays a drawn row —
+focused, not selected — and its focus wash is a fixed fill on every line of it. Pressed
+on a row taller than the lines left at the bottom, the frame is clipped from the back,
+and the wash's claims on the lines cut stayed past the rows: on the "N more below" line
+and the border, and — since §53 — on top of the indicator's own claim wherever that
+line claims too.
+
+Only a palette that states a translucent `focusBackground` reaches it; the default
+derives the wash with `opacity(_:over:)`, which spends the alpha. The claims now travel
+with their lines by the rule the runs already follow: moved up and cut at a front clip,
+cut at the cap at a back one. The front branch has no reachable claim today — a front
+clip needs a drawn slot, and a drawn slot leaves no cursor row — and takes the same
+rule regardless.
 
 An opaque palette's bytes do not change: an opaque colour is its own opaque spelling,
 and spending it returns it untouched.

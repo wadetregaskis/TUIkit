@@ -209,6 +209,46 @@ struct ListRowAlignmentTests {
         #expect(presented.overlays.contains { $0.level == .modal }, "the slid-off row's dialog was dropped")
     }
 
+    // MARK: - The list's own claims at a back clip
+
+    /// A press on the row straddling the bottom. During a hold the per-row budget
+    /// clip stands down for `clipReorderOverrun`, which cuts the straddling row's
+    /// lower lines from the BACK — `.live` draws no slot, so nothing else decides the
+    /// end. That row is the cursor row, focused and not selected, so the list paints
+    /// its focus wash on every line of it; and the wash's claims on the lines cut
+    /// stayed behind, past the rows, on the "N more below" line and the border (§54).
+    @Test("A reorder frame clipped from the back takes the cut lines' claims with it")
+    func backClipTakesTheListsOwnClaims() throws {
+        let fixture = ListReorderFixture(items: (0..<12).map { "row\($0)" }, feedback: .live)
+        fixture.tallRows = ["row5": 3]
+        fixture.env.palette = FadedFocus()
+        let resting = fixture.render()
+        let line = fixture.rowY(resting, "row5")
+        try #require(line >= 0, "the tall row is on screen: \(resting.lines.map(\.stripped))")
+        fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 2, y: line))
+        let pressed = fixture.render()
+        defer {
+            fixture.dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 2, y: line))
+        }
+
+        let lines = pressed.lines.map(\.stripped)
+        #expect(fixture.handler?.reorder != nil, "the press began a hold")
+        #expect(lines.filter { $0.contains("row5") }.count == 1, "row5 still straddles the bottom: \(lines)")
+        #expect(!pressed.opacityRegions.isEmpty, "the cursor row's wash claims")
+        let strays = pressed.opacityRegions.flatMap { claim in
+            (claim.offsetY..<(claim.offsetY + claim.height)).filter {
+                !(lines.indices.contains($0)
+                    && lines[$0].range(of: "row[0-9]", options: .regularExpression) != nil)
+            }
+        }
+        #expect(
+            strays.isEmpty,
+            """
+            claims on lines \(strays), which show no row:
+            \(lines.joined(separator: "\n"))
+            """)
+    }
+
     // MARK: - Helpers
 
     /// A 24×8 context whose lists may be pushed past their ends by the given
@@ -289,4 +329,22 @@ struct ListRowAlignmentTests {
         let screen = frame.lines.map(\.stripped)
         return Self.labels.indices.filter { index in screen.contains { $0.contains(Self.labels[index]) } }
     }
+}
+
+/// Opaque everywhere but the focus wash, which a custom palette may set to anything:
+/// the default derives it with `opacity(_:over:)`, which spends the alpha, so only a
+/// palette that states its own reaches a translucent one. It is the one claim a List
+/// paints on EVERY line of a row, so the one a back clip can cut.
+private struct FadedFocus: Palette {
+    let id = "faded-focus"
+    let name = "Faded focus"
+    let background = Color.rgb(10, 10, 20)
+    let foreground = Color.rgb(230, 230, 240)
+    let accent = Color.rgb(0, 180, 200)
+    let success = Color.rgb(40, 200, 40)
+    let warning = Color.rgb(220, 200, 40)
+    let error = Color.rgb(220, 40, 40)
+    let info = Color.rgb(40, 120, 220)
+    let border = Color.rgb(120, 120, 130)
+    let focusBackground = Color.rgb(60, 60, 200).opacity(0.5)
 }
