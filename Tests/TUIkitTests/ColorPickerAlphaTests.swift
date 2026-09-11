@@ -47,6 +47,44 @@ struct ColorPickerAlphaTests {
         #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
     }
 
+    /// `swatchFades` renders with no focus manager, so the swatch's RUN was never
+    /// built there: §26's "the swatch needed nothing" was true of the still paint
+    /// only. Focused, the run's frames stated the fill raw as their field, and a
+    /// translucent fill trapped whatever the palette. A frame now states no field —
+    /// the line's is what shows — so no frame carries a background code (§48).
+    @Test("A focused swatch on a translucent colour breathes, and its frames state no field")
+    func focusedTranslucentSwatch() {
+        withColorDepth(.truecolor) {
+            let faded = Color.rgb(80, 160, 255).opacity(0.5)
+            let drawn = focusedRender(
+                Button("") {}.buttonStyle(_ColorSwatchButtonStyle(color: faded)), width: 20, height: 2)
+            expectAnimates(drawn, runs: 1, "a focused translucent swatch")
+            expectReplayIsIdentity(drawn)
+            let centre = owed(atColumn: 1, row: 0, in: drawn)
+            #expect(centre.ink == 1 && centre.field == owed(faded), "the centre owes \(centre)")
+            let frames = drawn.animatedCells.first?.frames ?? []
+            #expect(!frames.contains { $0.contains("48;") }, "a frame states a field: \(frames)")
+        }
+    }
+
+    /// The case that tells "state no field" from "state the fill's opaque spelling":
+    /// `.background` paints nothing at alpha 0, so an opaque-spelled field in the
+    /// frame would paint black behind the bullet on every tick, with nothing to
+    /// catch it.
+    @Test("A focused clear swatch breathes over nothing")
+    func focusedClearSwatch() {
+        withColorDepth(.truecolor) {
+            let drawn = focusedRender(
+                Button("") {}.buttonStyle(_ColorSwatchButtonStyle(color: .clear)), width: 20, height: 2)
+            expectAnimates(drawn, runs: 1, "a focused clear swatch")
+            expectReplayIsIdentity(drawn)
+            let centre = owed(atColumn: 1, row: 0, in: drawn)
+            #expect(centre.ink == 1 && centre.field == 1, "the centre owes \(centre)")
+            let frames = drawn.animatedCells.first?.frames ?? []
+            #expect(!frames.contains { $0.contains("48;") }, "a frame states a field: \(frames)")
+        }
+    }
+
     /// The successor to `noAlphaChannel`, which pinned the gap and has now been
     /// rewritten by the fourth channel landing — exactly as it asked to be.
     ///

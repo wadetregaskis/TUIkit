@@ -1162,18 +1162,18 @@ surface derivations, which now carry (§39).
 
 Plus the scrollbars: every host's track, thumb, arrows and corner, and the focused
 bar's breath (§43–§45). Plus the navigation bar's crumbs, at rest and breathing (§47).
+Plus a colour swatch's focused bullet, on any fill under any palette (§48).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
 reading: a `TextEditor`'s rows and caret; the text-style scroll indicators; a bordered
-`TabView`'s strip and its active chip's breath; a `ColorPicker` swatch's focus breath; a
-hovered button face under a fully faded tint; a `Toggle`'s bracketed mark and its
-coloured switch track while focused; and an animated `.border` whose frames disagree
-about alpha. Three were seen to trap in a debug build when probed — the editor, the
-indicators and the bordered strip. Two more trap by reading, not yet by running: the
-swatch and the hovered face. The toggle's two, the border, and the compact strip's chip
-drop the alpha without a word.
+`TabView`'s strip and its active chip's breath; a hovered button face under a fully
+faded tint; a `Toggle`'s bracketed mark and its coloured switch track while focused;
+and an animated `.border` whose frames disagree about alpha. Three were seen to trap in
+a debug build when probed — the editor, the indicators and the bordered strip. One more
+traps by reading, not yet by running: the hovered face. The toggle's two, the border,
+and the compact strip's chip drop the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1847,7 +1847,8 @@ What actually blocks a claim is narrower, and there are only two cases:
 2. **A pulse whose phases have different alphas** — which was this bug, in four
    places, and is now none. (Five, with the caret in §29.3; six, with the scrollbar's
    lift, which was not migrated until §43 and so could not be tested — §44; seven, with
-   a navigation crumb's breath under a faded tint — §47.)
+   a navigation crumb's breath under a faded tint — §47; eight, with a colour swatch's
+   bullet under a faded palette — §48.)
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3220,3 +3221,40 @@ would pass. The breath is checked by its bytes — spent over the page under a f
 and under a faded tint, and over a set surface rather than the page. The disabled test
 passes before and after the fix, and says so: it guards §31.3's choice rather than
 covering this one.
+
+
+## 48. A swatch's breath, and the field its frames stated (2026-09-10)
+
+A focused colour swatch marks itself with a bullet in its centre cell, breathing between
+two readable colours: `readableText(on: fill)`, and that colour dimmed over the fill. Two
+faults, one in each half of the run.
+
+### 48.1 The ends disagreed about alpha
+
+`readableText(on:)` picks the palette's foreground or background and floors it for
+contrast, which carries that slot's alpha; the dim end was `opacity(_:over:)`, which
+spends it. Under a faded palette the breath ran from an opaque colour to a translucent
+one — §29's pair, an eighth time, and reachable only through the palette, which is why
+every `.tint` sweep missed it: `readableText` never reads the accent. Both ends now go
+through `breathEnds(dimmedTo:over: fill)`, the helper §29 made for exactly this; the fill
+is the cell the bullet is drawn on.
+
+### 48.2 The frames stated the fill as their field
+
+Each frame was `colorize("●", foreground: colour, background: fill)`. With a translucent
+fill that put the fill's alpha into the emitter on every tick, whatever the palette. §26's
+"the swatch needed nothing" was true only of the still paint: `swatchFades` renders with
+no focus manager, and so never built the run.
+
+The fix is NOT the fill's opaque spelling. `.background` paints nothing at alpha 0, so an
+opaque-spelled `.clear` would have painted black behind the bullet on every tick, with no
+claim to catch it. The frame now states no field at all: a spliced frame is painted over
+the background the line already has, and the resolver takes a run frame's field from the
+line it replaces — so the frame gets exactly what `.background(fill)` drew, the same in
+every frame, or nothing.
+
+### 48.3 What stays approximate
+
+On a translucent fill under a faded palette, the focused bullet is spent over the fill's
+opaque RGB, while the selected — still — bullet carries and claims, so the two can differ
+slightly. They agree whenever the fill is opaque. Every §29 spend site makes this trade.

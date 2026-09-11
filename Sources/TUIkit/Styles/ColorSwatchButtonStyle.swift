@@ -101,9 +101,17 @@ struct _ColorSwatchCells: View {
     /// The two ends of the focused bullet's breath. One definition: the drawn
     /// bullet and the run that replays it have to agree, or the loop's first
     /// tick jumps to a different colour than the render left.
+    ///
+    /// Both ends SPEND a translucent palette's alpha against the fill, through
+    /// ``Color/breathEnds(dimmedTo:over:)`` (§29). `readableText(on:)` is a
+    /// re-spelling — it ends in a contrast floor, which carries the palette's
+    /// foreground or background alpha — while the dim end was a composite, so under
+    /// a faded palette the run breathed between an opaque colour and a translucent
+    /// one, and building its frames tripped the emitter. The fill is not a guess:
+    /// it is the cell the bullet is drawn on. An opaque palette's bright end comes
+    /// back untouched, spelling included (§29.1).
     private func pulseEndpoints(on fill: Color) -> (dim: Color, bright: Color) {
-        let readable = palette.readableText(on: fill)
-        return (readable.opacity(ViewConstants.focusPulseMin, over: fill), readable)
+        palette.readableText(on: fill).breathEnds(dimmedTo: ViewConstants.focusPulseMin, over: fill)
     }
 
     /// The run that breathes the centre cell, or none when the swatch is not
@@ -111,11 +119,15 @@ struct _ColorSwatchCells: View {
     private func bulletRuns(on fill: Color, cycle: SelectionEmphasisCycle) -> [AnimatedCellRun] {
         guard isFocused else { return [] }
         let (dim, bright) = pulseEndpoints(on: fill)
-        return [
-            cycle.run(dim: dim, bright: bright, offsetX: 1, offsetY: 0) { colour in
-                ANSIRenderer.colorize("●", foreground: colour, background: fill)
-            }
-        ].compactMap { $0 }
+        // The bullet alone, and NO field in the frame. A spliced frame is painted
+        // over the background the line already has (`patchingAnimatedCells`
+        // restates it), and the resolver takes a run frame's field from the line it
+        // replaces — so the frame gets exactly what `.background(fill)` drew: the
+        // fill's opaque spelling and its field claim, the same in every frame
+        // (§29.2), or nothing at all for a fill at alpha 0. Stating `fill` here raw
+        // put a translucent swatch's colour into the emitter whatever the palette;
+        // stating its opaque spelling would have painted black behind a `.clear` one.
+        return [cycle.run("●", dim: dim, bright: bright, offsetX: 1, offsetY: 0)].compactMap { $0 }
     }
 }
 

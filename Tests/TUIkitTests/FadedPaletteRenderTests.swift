@@ -222,6 +222,44 @@ struct FadedPaletteRenderTests {
             "no cell of the bar owes the track's alpha: \(drawn.opacityRegions)")
     }
 
+    // MARK: - The colour swatch
+
+    /// A focused swatch's bullet under a faded palette, on opaque fills and a
+    /// translucent one. Every frame is built with the run, so a translucent frame
+    /// traps here; after the fix every frame is opaque. On the translucent fill the
+    /// centre cell owes the fill's field and no ink, and the outer cells owe the fill
+    /// as both (§48).
+    @Test("A focused swatch breathes under a faded palette")
+    func focusedSwatchBreathes() {
+        withColorDepth(.truecolor) {
+            let fills: [Color] = [.rgb(200, 40, 40), .white, .black, .rgb(128, 128, 128)]
+            for fill in fills {
+                let drawn = renderToBuffer(
+                    Button("") {}.buttonStyle(_ColorSwatchButtonStyle(color: fill)),
+                    context: makeRenderContext(width: 20, height: 2) { environment, _ in
+                        environment.palette = FadedAll()
+                    })
+                expectAnimates(drawn, runs: 1, "a focused swatch on \(fill)")
+                #expect(drawn.opacityRegions.isEmpty, "on \(fill): \(drawn.opacityRegions)")
+            }
+            let faded = Color.rgb(200, 40, 40).opacity(0.5)
+            let drawn = renderToBuffer(
+                Button("") {}.buttonStyle(_ColorSwatchButtonStyle(color: faded)),
+                context: makeRenderContext(width: 20, height: 2) { environment, _ in
+                    environment.palette = FadedAll()
+                })
+            expectAnimates(drawn, runs: 1, "a focused translucent swatch")
+            let centre = owed(atColumn: 1, row: 0, in: drawn)
+            #expect(centre.ink == 1 && centre.field == owed(faded), "the centre owes \(centre)")
+            for column in [0, 2] {
+                let outer = owed(atColumn: column, row: 0, in: drawn)
+                #expect(
+                    outer.ink == owed(faded) && outer.field == owed(faded),
+                    "column \(column) owes \(outer)")
+            }
+        }
+    }
+
     // MARK: - The navigation bar
 
     /// The probe that trapped, and then every cell of the trail under a palette whose
