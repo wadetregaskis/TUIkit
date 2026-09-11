@@ -645,7 +645,7 @@ extension Palette {
     public var hoveredControlFace: Color {
         let resting = restingControlFace.resolve(with: self).downsampledToPalette256()
         var distinct: [Color] = []
-        var furthest = accent
+        var furthest: Color?
         var tint = ViewConstants.hoverBackground
         while tint < 1.0 {
             let candidate = accent.opacity(tint, over: background)
@@ -657,10 +657,15 @@ extension Palette {
             }
             tint += Self.hoverTintStep
         }
-        // Ran out of room: the furthest visibly-different tint found, or the
-        // accent itself when there was none. A palette whose accent cannot be
-        // told from its own 20% tint has nothing left to hover with.
-        return distinct.isEmpty ? accent : furthest
+        // Ran out of room: the furthest visibly-different tint found — or, when
+        // there was none, the accent SPENT against the page, the ground
+        // `restingControlFace` composites over (§21.1). This was the one exit of
+        // either face that did not composite: it returned the raw accent, so at
+        // `.tint(.clear)` merely pointing at a button put a transparent colour into
+        // the caps' emitter. An opaque accent comes back untouched, spelling and
+        // all (§29.1). A palette whose accent cannot be told from its own 20% tint
+        // has nothing left to hover with (§49).
+        return furthest ?? accent.spendingAlpha(over: background)
     }
 
     /// A foreground lifted to answer the pointer.

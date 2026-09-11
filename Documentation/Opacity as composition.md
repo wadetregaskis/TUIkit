@@ -1162,18 +1162,18 @@ surface derivations, which now carry (§39).
 
 Plus the scrollbars: every host's track, thumb, arrows and corner, and the focused
 bar's breath (§43–§45). Plus the navigation bar's crumbs, at rest and breathing (§47).
-Plus a colour swatch's focused bullet, on any fill under any palette (§48).
+Plus a colour swatch's focused bullet, on any fill under any palette (§48). Plus a
+hovered button's face under a fully faded tint (§49).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
 reading: a `TextEditor`'s rows and caret; the text-style scroll indicators; a bordered
-`TabView`'s strip and its active chip's breath; a hovered button face under a fully
-faded tint; a `Toggle`'s bracketed mark and its coloured switch track while focused;
-and an animated `.border` whose frames disagree about alpha. Three were seen to trap in
-a debug build when probed — the editor, the indicators and the bordered strip. One more
-traps by reading, not yet by running: the hovered face. The toggle's two, the border,
-and the compact strip's chip drop the alpha without a word.
+`TabView`'s strip and its active chip's breath; a `Toggle`'s bracketed mark and its
+coloured switch track while focused; and an animated `.border` whose frames disagree
+about alpha. Three were seen to trap in a debug build when probed — the editor, the
+indicators and the bordered strip. The toggle's two, the border, and the compact
+strip's chip drop the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1787,6 +1787,9 @@ It fixed one copy. There were four.
 | `BorderRenderer.breathEnds` | `resting.opacity(focusBorderDim, over: surface)` | `resting` |
 | `AnimatedColor.activeSection` | `accent.opacity(focusBorderDim, over: surface)` | `accent` |
 | `ButtonCapCycle` | the button's own face | `accent` |
+
+(`ButtonCapCycle`'s dim end was only ever as opaque as the button's face, and one exit of
+the hovered face returned the raw accent — §49.)
 
 The first three are the *same expression*, written out three times with different
 constants; the fourth shares only its bright half, because a cap recedes to the
@@ -3258,3 +3261,30 @@ every frame, or nothing.
 On a translucent fill under a faded palette, the focused bullet is spent over the fill's
 opaque RGB, while the selected — still — bullet carries and claims, so the two can differ
 slightly. They agree whenever the fill is opaque. Every §29 spend site makes this trade.
+
+
+## 49. A hovered face that did not composite (2026-09-10)
+
+A standard button rests on `restingControlFace` and, under the pointer, on
+`hoveredControlFace` — a tint that walks toward the accent until the colour cube can show
+the step. Every exit of either face composited over the page, and so was opaque, except
+one: when no tint cleared the cube, the fallback returned the RAW accent. At
+`.tint(.clear)` every candidate composites to the page, so that fallback is certain there,
+and the caps — drawn with no claim, on the strength of being "opaque by construction" —
+put a transparent colour into the emitter on hover alone. Focus was not needed: an
+unfocused cap is drawn in the face itself.
+
+The fallback now spends the accent over the page, the ground the resting face uses. An
+opaque accent comes back untouched, so no shipped palette's bytes move.
+
+The comment that called the caps opaque by construction was true of the resting face
+only. It is true of both faces now, and `ButtonCapCycle` asserts it, because without the
+check the caps' two label paths fail differently: loudly on the string path, and on the
+view path — where the caps are `Text` — as a silent claim at ink 0.
+
+This is not another copy of §29's pair. It is the INPUT to copy four: `ButtonCapCycle`'s
+dim end, which was only ever as opaque as the face.
+
+What remains: a tint too faint to show a hover step now shows no hover at all. Before, a
+release build drew the accent's opaque spelling in the caps — black, for `.clear` —
+which was a hover of sorts, and a wrong one.

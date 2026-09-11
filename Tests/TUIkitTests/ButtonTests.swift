@@ -269,6 +269,65 @@ struct ButtonTests {
         }
     }
 
+    /// Hovers the first hit region of `view` and returns the render before and the
+    /// buffer after. `focused`: whether the button is the first registrant, and so
+    /// takes the focus, or a sentinel holds it.
+    private func hovered<V: View>(_ view: V, focused: Bool) -> (before: String, after: FrameBuffer)? {
+        let context = createTestContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+        if !focused { context.environment.focusManager!.register(FocusSentinel()) }
+        let before = ansiRendered(view, context: context)
+        let regions = renderToBuffer(view, context: context).hitTestRegions
+        dispatcher.setRegions(regions)
+        guard let region = regions.first else {
+            Issue.record("expected a hit-test region from the button")
+            return nil
+        }
+        _ = dispatcher.dispatch(
+            MouseEvent(button: .none, phase: .moved, x: region.offsetX + 1, y: region.offsetY))
+        return (before, renderToBuffer(view, context: context))
+    }
+
+    /// `hoveredControlFace`'s fallback returned the RAW accent when no tint step
+    /// cleared the colour cube, which `.tint(.clear)` guarantees. An unfocused cap is
+    /// drawn in the face itself, so hover ALONE put a transparent colour into the
+    /// caps' emitter on the string path — and on the view path claimed ink 0 (§49).
+    @Test("A hovered button under a fully transparent tint draws opaque caps and claims nothing")
+    func hoveredClearTintButton() {
+        withColorDepth(.truecolor) {
+            for label in ["string", "view"] {
+                for focused in [false, true] {
+                    let result =
+                        label == "string"
+                        ? hovered(Button("Save") {}.tint(.clear), focused: focused)
+                        : hovered(Button {} label: { Text("Save") }.tint(.clear), focused: focused)
+                    guard let after = result?.after else { continue }
+                    #expect(
+                        after.opacityRegions.isEmpty,
+                        "\(label) label, focused \(focused): \(after.opacityRegions)")
+                    if focused {
+                        // The caps' two runs — and NOT `expectAnimates`: at `.clear`
+                        // both ends of the breath are the page, so the frames are
+                        // identical and the runs do not move.
+                        #expect(after.animatedCells.count == 2, "\(label): \(after.animatedCells.count) runs")
+                        expectReplayIsIdentity(after)
+                    } else {
+                        #expect(after.animatedCells.isEmpty, "\(label): a still button has no runs")
+                    }
+                }
+            }
+            // The control: at `.clear` a hovered face can be the same bytes as a
+            // resting one, so show that this harness does hover — a red tint must
+            // change what is drawn.
+            if let red = hovered(Button("Save") {}.tint(.red), focused: false) {
+                #expect(
+                    red.before != red.after.lines.joined(separator: "\n"),
+                    "the pointer changed nothing, so the clear-tint case proves nothing")
+            }
+        }
+    }
+
     @Test("Hover .exited restores Button's un-hovered tint")
     func hoverExitRestoresTint() {
         let context = createTestContext()

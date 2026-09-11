@@ -66,6 +66,35 @@ struct TintAlphaTests {
         #expect(face == palette.background.resolve(with: palette), "got \(face)")
     }
 
+    /// `hoveredControlFace`'s fallback returned the RAW accent when no tint step
+    /// cleared the colour cube — and at `.tint(.clear)` every candidate composites to
+    /// the page, so the fallback is certain there. A transparent colour then reached
+    /// the caps' emitter on hover alone. It is spent over the page now, like every
+    /// other exit of either face (§49).
+    @Test("A fully transparent tint hovers at the page itself")
+    func clearTintHovers() {
+        let face = tinted(Color.clear).hoveredControlFace
+        #expect(face.isOpaque, "the hovered face at a clear tint: alpha \(face.alpha)")
+        #expect(face.resolve(with: palette) == palette.background.resolve(with: palette), "got \(face)")
+    }
+
+    /// Every shipped palette under a faint tint: each hovered face is opaque. And the
+    /// sweep must reach the fallback at least once — alpha 0 guarantees it — or it
+    /// could pass on the first exit alone and prove nothing about the one that broke.
+    @Test("The hovered face is opaque under every faint tint")
+    func hoveredFaceIsOpaqueUnderFaintTints() {
+        var fellBack = 0
+        for base in PaletteRegistry.phosphorPresets + PaletteRegistry.terminalProfiles {
+            for step in stride(from: 0, through: 48, by: 4) {
+                let tinted = TintedPalette(base: base, tint: Color.red.opacity(Double(step) / 255))
+                let face = tinted.hoveredControlFace
+                #expect(face.isOpaque, "\(base.name) at alpha \(step): \(face.alpha)")
+                if face == tinted.accent.spendingAlpha(over: tinted.background) { fellBack += 1 }
+            }
+        }
+        #expect(fellBack > 0, "the sweep never reached the fallback")
+    }
+
     @Test("An opaque tint is unchanged in every derivation")
     func opaqueTintUnchanged() {
         // The regression guard: every palette that ships is opaque, so folding the

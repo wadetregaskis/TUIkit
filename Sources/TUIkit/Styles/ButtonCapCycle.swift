@@ -24,7 +24,9 @@ struct ButtonCapCycle {
     private let cycle: SelectionEmphasisCycle
 
     /// The button's own face: what an unfocused cap shows, and the recessive
-    /// end of the breath.
+    /// end of the breath. Always opaque — a composite over the page, or an
+    /// opaque accent kept at its own spelling (`Palette.hoveredControlFace`,
+    /// §49) — which is what lets the caps go to the emitter with no claim.
     private let background: Color
 
     /// The full accent: the loud end of the breath.
@@ -53,6 +55,11 @@ struct ButtonCapCycle {
         let cycle = context.environment.selectionEmphasis.cycle(isFocused)
         self.cycle = cycle
         self.background = background
+        // Checked, because the caps are drawn with no claim on the strength of it.
+        // A face that stopped being opaque would put its alpha into the emitter on
+        // the string path and be claimed at ink 0 on the view path — loud in one
+        // place and silent in the other (§49).
+        assert(background.isOpaque, "a button's face must be opaque; its alpha is \(background.alpha)")
         // The accent SPENDS a translucent tint's alpha against the button's own
         // face, which is the dim end of this breath and so the ground both ends
         // have to agree about. Passed raw it carried the alpha while `background`

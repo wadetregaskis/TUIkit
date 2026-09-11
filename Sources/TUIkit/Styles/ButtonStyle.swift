@@ -530,10 +530,11 @@ private struct _ButtonStyleBody: View, Renderable {
             isFocused: isFocused && !isDisabled,
             background: buttonBg, accent: palette.accent, context: context)
 
-        // The caps are opaque by construction — `ButtonCapCycle` spends a
-        // translucent tint's alpha against the button's own face, so every phase
-        // of the breath states a concrete colour (§29). They therefore need no
-        // spelling and earn no claim.
+        // The caps are always opaque: both faces are composites over the page, or
+        // an opaque accent kept at its own spelling (`hoveredControlFace`, §49),
+        // and `ButtonCapCycle` spends a translucent tint's alpha against that face,
+        // so every phase of the breath states a concrete colour (§29). They
+        // therefore need no spelling and earn no claim.
         let openCap = ANSIRenderer.colorize(
             String(TerminalSymbols.openCap),
             foreground: caps.colorNow
@@ -542,9 +543,10 @@ private struct _ButtonStyleBody: View, Renderable {
             String(TerminalSymbols.closeCap),
             foreground: caps.colorNow
         )
-        // The label's two colours are not: `labelFg` is the app author's cascade
-        // colour where there is one, left unfloored on purpose, and `buttonBg`
-        // comes from a palette slot a theme may have faded.
+        // The label's ink is not: `labelFg` is the app author's cascade colour
+        // where there is one, left unfloored on purpose, or a palette slot through
+        // `ensuringRenderedContrast`, a re-spelling that carries its alpha (§28).
+        // The face is opaque (above), so as the field it claims nothing.
         let styledLabel = ANSIRenderer.colorize(
             paddedLabel,
             foreground: labelFg.opaqueSpelling,
