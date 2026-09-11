@@ -189,13 +189,11 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             return painted
         }
         let animation = brackets.run(draw: draw)
-        // No claim while it pulses: the run repaints these cells from its own
-        // frames, and a region carrying the phase drawn NOW would resolve every
-        // later phase at the wrong alpha. That arm stays loud instead.
+        // Claimed while it pulses too: the only colour that moves is the brackets',
+        // between two spent ends, so the claim taken now is every frame's (§57).
         return (
             draw(brackets.now), animation,
-            animation == nil
-                ? Self.claims(visiting: { runs(brackets.now, $0) }) : [])
+            brackets.claims { colour in Self.claims(visiting: { runs(colour, $0) }) })
     }
 
     /// Bracket color for the two-tone bracketed indicators (checkbox `[x]` and
@@ -272,6 +270,22 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         @MainActor
         func run(draw: (Color) -> String) -> AnimatedCellRun? {
             cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: 0, draw: draw)
+        }
+
+        /// The claims this indicator owes: the drawn frame's, which every frame of its
+        /// run shares. The only colour that moves is this cycle's, and both of its ends
+        /// spend their alpha (`accentPulse`), so a moving cell owes nothing in any frame
+        /// and a still one — the mark, the knob — owes the same in all. Asserted,
+        /// because a breath whose ends disagree is silent otherwise (§44).
+        @MainActor
+        func claims(at claimsAt: (Color) -> [OpacityRegion]) -> [OpacityRegion] {
+            if cycle.isAnimating {
+                // Every frame's claims, built for the assertion — as the scrollbar's and
+                // the scroll indicator's are.
+                assertFramesOweOneClaim(
+                    cycle.colors(dim: dim, bright: bright).map(claimsAt), "a toggle's indicator")
+            }
+            return claimsAt(now)
         }
     }
 
@@ -350,10 +364,10 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
                 return painted
             }
             let animation = brackets.run(draw: draw)
+            // Claimed while it pulses, as the checkbox is: only the brackets move.
             return (
                 draw(brackets.now), animation,
-                animation == nil
-                    ? Self.claims(visiting: { runs(brackets.now, $0) }) : [])
+                brackets.claims { colour in Self.claims(visiting: { runs(colour, $0) }) })
         }
 
         let knob = SwitchIndicatorGlyphs.knob(for: style)
@@ -446,7 +460,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             buffer.animatedCells = [animation]
         }
         // The indicator opens the first row, so its claims need no shifting either.
-        // Empty while the indicator pulses — see `styledToggleIndicator`.
+        // The bracketed indicators claim while they pulse too — their claims hold for
+        // every frame (`IndicatorCycle.claims(at:)`) — and the coloured track, not yet.
         buffer.opacityRegions += styledIndicator.claims
         return (
             buffer, composed.titleWidth, composed.titleRows,

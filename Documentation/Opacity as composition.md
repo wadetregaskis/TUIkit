@@ -1166,15 +1166,16 @@ Plus a colour swatch's focused bullet, on any fill under any palette (§48). Plu
 hovered button's face under a fully faded tint (§49). Plus the text scroll indicators,
 still and breathing, on every host that draws them (§53). Plus a `TabView`'s active chip,
 breathing, in both strips (§55), and the bordered strip's own chrome — its tops, walls,
-mouth, pads, fillers and rules (§56).
+mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark and knob
+(§57).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret; a `Toggle`'s bracketed mark and its coloured
-switch track while focused; and an animated `.border` whose frames disagree about
-alpha. One was seen to trap in a debug build when probed — the editor. The toggle's
-two and the border drop the alpha without a word.
+reading: a `TextEditor`'s rows and caret; a `Toggle`'s coloured switch track while
+focused; and an animated `.border` whose frames disagree about alpha. One was seen to
+trap in a debug build when probed — the editor. The switch track and the border drop
+the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1570,9 +1571,9 @@ The blank half of a switch's ASCII track is described as a run even though it is
 space. No ink lands on a space, so its claim changes nothing — but *omitting* it
 would put the closing bracket's claim one cell to the left.
 
-As everywhere else in this design, a pulsing indicator claims nothing: the run
-repaints those cells from its own frames, and a region carrying the phase drawn now
-would resolve every later phase at the wrong alpha.
+A pulsing bracketed indicator claims too, since §57: only the brackets move, between
+two spent ends, so the claim taken at the drawn phase is every frame's. The coloured
+switch track, whose ends still disagree, withholds its claims while it breathes.
 
 
 ## 24. The status bar's two colours, and the sink that was already right (2026-09-09)
@@ -3477,6 +3478,27 @@ lands on, once.
 
 Under an opaque palette the bytes do not change: the TabView pins hold, still and
 focused, at truecolor and at 256 colours.
+
+
+## 57. A breathing bracketed toggle claims its mark (2026-09-10)
+
+A focused `Toggle` drawn with bracketed glyphs — `.toggleCharacterSet(.ascii)` —
+breathes its brackets through a run, and the mark between them, or a switch's knob,
+does not move. `_ToggleCore` withheld the indicator's claims whenever a run existed, on
+§23.2's reasoning: a region carrying the phase drawn now would resolve every later phase
+at the wrong alpha. That holds for a cell whose alpha moves, and none of these does. The
+brackets breathe between `accentPulse`'s two ends, and both are spent, so every frame of
+them is opaque and owes nothing; the mark and the knob are one colour in every frame. So
+the claims taken at the drawn phase are every frame's, and withholding them left a
+faded tint's mark replaying at its opaque spelling — silently, since the bytes were
+opaque either way.
+
+`IndicatorCycle.claims(at:)` returns the drawn frame's claims, and in a debug build
+asserts, through the shared `assertFramesOweOneClaim`, that every frame of the cycle
+owes the same. The checkbox and the bracketed switch use it. The coloured switch track
+does not yet: its bright end carries the accent's alpha when on, and a lerp takes it to
+198 of 128 when off, so its frames disagree and its claims stay withheld until its ends
+agree.
 
 An opaque palette's bytes do not change: an opaque colour is its own opaque spelling,
 and spending it returns it untouched.

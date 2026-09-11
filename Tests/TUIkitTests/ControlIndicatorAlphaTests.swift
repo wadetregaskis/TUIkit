@@ -160,6 +160,59 @@ struct ControlIndicatorAlphaTests {
         #expect(!drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
     }
 
+    // MARK: - A breathing bracketed indicator
+
+    /// Focused, the brackets breathe through a run and the mark between them does not
+    /// move. Its claim was withheld while the run existed, so a faded tint's mark
+    /// replayed opaque (§57).
+    @Test("A focused ASCII checkbox claims its mark while the brackets breathe")
+    func focusedAsciiCheckboxClaimsItsMark() {
+        let drawn = focused(
+            Toggle("Enable", isOn: .constant(true))
+                .toggleCharacterSet(.ascii)
+                .tint(Color.red.opacity(0.5)))
+        #expect(drawn.animatedCells.count == 1, "the brackets breathe")
+        let mark = owed(atColumn: 1, row: 0, in: drawn)
+        #expect(mark.ink == 128.0 / 255 && mark.field == 1, "the mark owes \(mark)")
+        for column in [0, 2] {
+            let bracket = owed(atColumn: column, row: 0, in: drawn)
+            #expect(bracket.ink == 1 && bracket.field == 1, "a bracket owes \(bracket)")
+        }
+    }
+
+    @Test("A focused ASCII checkbox under an opaque tint breathes and claims nothing")
+    func focusedOpaqueAsciiCheckbox() {
+        let drawn = focused(
+            Toggle("Enable", isOn: .constant(true)).toggleCharacterSet(.ascii).tint(Color.red))
+        #expect(drawn.animatedCells.count == 1, "the brackets breathe")
+        #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
+    }
+
+    /// The bracketed switch the same way: `[ o]`, the knob still while the brackets
+    /// breathe. The track's blank half carries the knob's ink over a space, which
+    /// changes nothing, and is not asserted.
+    @Test("A focused ASCII switch claims its knob while the brackets breathe")
+    func focusedAsciiSwitchClaimsItsKnob() {
+        let drawn = focused(
+            Toggle("Enable", isOn: .constant(true))
+                .toggleStyle(.switch)
+                .toggleCharacterSet(.ascii)
+                .tint(Color.red.opacity(0.5)))
+        #expect(drawn.animatedCells.count == 1, "the brackets breathe")
+        let knob = owed(atColumn: 2, row: 0, in: drawn)
+        #expect(knob.ink == 128.0 / 255, "the knob owes \(knob)")
+        for column in [0, 3] {
+            let bracket = owed(atColumn: column, row: 0, in: drawn)
+            #expect(bracket.ink == 1 && bracket.field == 1, "a bracket owes \(bracket)")
+        }
+    }
+
+    /// Rendered focused: the fresh focus manager hands the focus to the first control
+    /// that registers, which is the toggle — nothing else here is focusable.
+    private func focused<V: View>(_ view: V, width: Int = 20) -> FrameBuffer {
+        renderToBuffer(view, context: makeRenderContext(width: width, height: 3))
+    }
+
     // MARK: - Radio button
 
     @Test("A radio button's dot claims one glyph, not the label beside it")
