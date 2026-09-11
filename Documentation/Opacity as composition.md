@@ -1834,7 +1834,8 @@ What actually blocks a claim is narrower, and there are only two cases:
    (`covering.allSatisfy { $0.cycle == nil }`), because the fade's phases and the
    run's frames tick independently and their product is not one run.
 2. **A pulse whose phases have different alphas** — which was this bug, in four
-   places, and is now none.
+   places, and is now none. (Five, with the caret in §29.3; six, with the scrollbar's
+   lift, which was not migrated until §43 and so could not be tested — §44.)
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3021,11 +3022,7 @@ That is written down as `assertOneClaim`, a debug assertion over every frame's c
 The drawn bar is one of the frames — its colour is `colorNow`, which indexes the same
 cycle `ScrollbarPulse.frames` maps — so the check is exact, not a sample.
 
-**It does not hold on every palette yet.** `pulseLift`'s loop and fallback leave through
-`compositing`, which drops the colour's alpha, so on a palette that takes them a faded
-accent breathes between 128 and 255 — and a debug build traps here, rather than
-blending every frame but one at the wrong alpha in silence. That is a fault in the
-breath, not in the bar, and it is fixed as its own change.
+It did not hold on every palette, and the assertion is how that was found: §44.
 
 ### 43.5 What the test asserts
 
@@ -3038,3 +3035,56 @@ ink; the editor, which draws no arrows, for claiming nothing off the bar's colum
 The popup's breathing arm and the editor are asserted under a palette that fades ONLY
 the track. A breathing border and an editor's well under a wholly faded palette are gaps
 of their own, and loud, and neither is what these assert.
+
+
+## 44. The scrollbar's breath: a sixth copy of the pulse pair (2026-09-10)
+
+§43.4's assertion tripped on its first render under a wholly faded palette: a focused
+`ScrollView`'s pulse frames owed different claims. The bar was right. The breath was not.
+
+A focused bar breathes between two colours: the accent, `separated` from its track, and
+`pulseLift` — the accent *lifted* one visible step away from the page. Both are
+re-spellings of one colour, and `separated` and `hoveredForeground` both end in
+`carryingAlpha`. `pulseLift` has three exits. The first returns the hovered-foreground
+lift, and carries. The loop and the fallback, taken when that lift is too close to the
+resting accent to be seen, step toward an extreme through `compositing(_:over:)` — and
+**`compositing` drops the colour's alpha**: only its `opacity` parameter enters the mix,
+and it returns a fresh `.rgb` at 255.
+
+The loop is not the edge case its comments make it look. They name Ocean and Man Page,
+as the reason it exists. Measured, under a half-faded tint, **eight of the sixteen
+shipped palettes take it** — Green, Amber, White, Grass, Homebrew, Pro, Red Sands and
+Silver Aerogel — and so does a wholly faded palette. Ocean and Man Page do not: the
+comments are the history of why the floor was added, not a list of who reaches it now.
+
+So a faded accent breathed from 128 to 255, and the cycle between them interpolated
+alpha as a fourth channel. §29's bug exactly, arriving by another route — not a
+composite at the quiet end and a bare colour at the loud one, but a lift that was
+written as a composite. Before §43 its bytes reached the emitter translucent and
+trapped. Had the bar been converted without `assertOneClaim`, the bytes would have been
+opaque at every phase, and every frame but one blended at the wrong alpha in silence.
+
+The candidate is a lift, so it carries: `resting.compositing(…, over: extreme)
+.carryingAlpha(of: resting)`, at both exits. The extreme is a *direction*, not a
+backdrop — nothing is drawn behind the bar in white — which is why the fix is at the
+call site and not in `compositing`.
+
+### 44.1 `compositing(_:over:)` ignores its own alpha, and nothing reaches that
+
+Its two callers are these two lines. A translucent colour composited through it is
+composited as if it were opaque, where `opacity(_:over:)` folds the colour's alpha into
+the coverage. With both callers now carrying, nothing reaches the difference. It is
+recorded rather than changed: changing it is a decision about a public primitive's
+contract, with no caller to test the decision against.
+
+### 44.2 §29.2's count was low
+
+§29.2 said the pulse whose phases have different alphas had been "in four places, and
+is now none". §29.3 found a fifth, in the caret. This is a sixth, missed because the
+scrollbar had not been migrated then and so could not be tested.
+
+`ScrollbarBreathAlphaTests` sweeps every shipped palette under a half-faded tint, and a
+wholly faded palette, asserting that every phase of the breath — the thumb, the arrows
+and the hovered arrow — carries the accent's alpha, for a pulse and for a blink. It also
+asserts that some palette in the sweep takes the loop: a sweep that only ever exercised
+the first exit could not fail. And the render that trapped is a test of its own.

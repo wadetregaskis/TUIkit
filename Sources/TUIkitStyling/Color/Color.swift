@@ -75,7 +75,13 @@ public struct Color: Sendable, Hashable {
     /// alpha" is one call to look for rather than a field to remember at each
     /// `return`. `ColourAlphaStorageTests.derivationsCarryAlpha` is the table
     /// that fails when a new derivation forgets.
-    func carryingAlpha(of source: Self) -> Self {
+    ///
+    /// `package` rather than internal because not every derivation lives in this
+    /// module: the scrollbar's lift is TUIkit's (§44), and spelling
+    /// `copy.alpha = source.alpha` out there would be the one site this exists to
+    /// make unnecessary. Not public: an app has `opacity(_:)` for stating an
+    /// alpha, and has no derivations of the framework's to keep honest.
+    package func carryingAlpha(of source: Self) -> Self {
         var copy = self
         copy.alpha = source.alpha
         return copy

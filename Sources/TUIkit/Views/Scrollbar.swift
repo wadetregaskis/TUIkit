@@ -525,17 +525,26 @@ struct ScrollbarColors {
         // one across the range (Man Page measured a 5.50:1 breath, which is a
         // flash rather than a breath). Largest surviving fraction first, so the
         // first acceptable answer is the least movement that clears the floor.
+        //
+        // A LIFT, not a composite: nothing is drawn behind the bar in white or
+        // black — the extreme is only a direction to step the resting accent in.
+        // `compositing` mixes the two and returns a fresh opaque `.rgb`, dropping
+        // the accent's own alpha, and a step that re-spells the accent has to
+        // carry it, as `hoveredForeground` — the first exit — does. Dropped, a
+        // faded accent breathed from 128 to 255 whenever this loop was taken,
+        // and no one claim could describe the run's frames (§44).
+        func towardExtreme(_ surviving: Double) -> Color {
+            resting.compositing(surviving, over: extreme).carryingAlpha(of: resting)
+        }
         for surviving in stride(from: 0.98, through: ViewConstants.chromePulseDepth, by: -0.02) {
             let candidate = separated(
-                resting.compositing(surviving, over: extreme),
-                in: palette, standingOffThePage: false)
+                towardExtreme(surviving), in: palette, standingOffThePage: false)
             if renderedRatio(candidate, resting) >= ViewConstants.chromePulseFloor {
                 return candidate
             }
         }
         return separated(
-            resting.compositing(ViewConstants.chromePulseDepth, over: extreme),
-            in: palette, standingOffThePage: false)
+            towardExtreme(ViewConstants.chromePulseDepth), in: palette, standingOffThePage: false)
     }
 
     /// `thumb`, pushed until it is legible against `track`.

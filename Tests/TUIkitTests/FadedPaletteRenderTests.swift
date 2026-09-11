@@ -271,7 +271,10 @@ struct FadedPaletteRenderTests {
 /// Every slot translucent. `Palette` requires nine and derives the rest, so this is
 /// the smallest type that fades a whole theme — and the reason the second tier of
 /// §16.1 exists: nothing normalises what a custom palette returns.
-private struct FadedAll: Palette {
+///
+/// Internal rather than private: `ScrollbarBreathAlphaTests` sweeps it too, as the
+/// palette the scrollbar's breath first came apart under.
+struct FadedAll: Palette {
     let id = "faded-all"
     let name = "Faded all"
     let background = Color.rgb(10, 10, 20).opacity(0.5)
