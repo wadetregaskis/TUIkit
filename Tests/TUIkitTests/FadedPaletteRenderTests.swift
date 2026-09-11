@@ -70,6 +70,37 @@ struct FadedPaletteRenderTests {
         }
     }
 
+    /// A caret on a selected character draws, in its blink-OFF frame, that character in
+    /// the selection's text colour — `readableText(on:)`, a palette slot that keeps its
+    /// alpha — and handed it to the emitter unspent (§60). Every shape and animation, so
+    /// the frames that draw the character are all built; and the selected cell beside
+    /// the caret still claims its text's alpha over the highlight's opaque field.
+    @Test("A text field's caret on a selected character draws under a faded palette")
+    func textFieldCaretOnSelectionDraws() throws {
+        let palette = FadedAll()
+        let surface = palette.fieldBackground.resolve(with: palette)
+        let selection = TextFieldContentRenderer.selectionColors(palette: palette, background: surface)
+        try #require(!selection.foreground.isOpaque, "the premise: the selection's text is faded")
+        let renderer = TextFieldContentRenderer(
+            prompt: nil, isDisabled: false, displayCharacter: { $0 }, surface: surface,
+            contentForeground: nil)
+        for shape in TextCursorStyle.Shape.allCases {
+            for animation in TextCursorStyle.Animation.allCases {
+                // The caret on "b", with "b" and "c" selected — as a leftward drag leaves it.
+                let content = renderer.buildContent(
+                    text: "abcdef", cursorPosition: 1, selectionRange: 1..<3, isFocused: true,
+                    palette: palette, cursorStyle: TextCursorStyle(shape: shape, animation: animation),
+                    cursorTimer: CursorTimer?.none, contentWidth: 10)
+                let owes = content.claims
+                    .filter { $0.offsetX <= 2 && 2 < $0.offsetX + $0.width }
+                    .reduce((ink: 1.0, field: 1.0)) { ($0.ink * $1.inkOpacity, $0.field * $1.fieldOpacity) }
+                #expect(
+                    owes.ink == owed(selection.foreground) && owes.field == 1,
+                    "\(shape) \(animation): the selected cell owes \(owes)")
+            }
+        }
+    }
+
     private func context(
         palette: any Palette, width: Int, height: Int,
         configure: (inout EnvironmentValues) -> Void = { _ in }

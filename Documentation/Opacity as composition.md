@@ -1896,8 +1896,9 @@ that stops being true.
 ### 30.1 A focused field claims per run, not per field
 
 One rectangle for the content would have been simpler and wrong. A focused field's
-cells genuinely differ: the selection's two colours are opaque by construction
-(`selectionColors` goes through `opacity(_:over:)`), the entered text's are the
+cells genuinely differ: the selection's field is opaque by construction
+(`selectionColors` goes through `opacity(_:over:)`), its text is `readableText(on:)` — a
+palette slot, floored, carrying that slot's alpha (§60) — and the entered text's are the
 cascade's. One rectangle fades the highlight along with the text.
 
 The run boundaries *are* the colour boundaries — that is what the coalescing exists
@@ -3614,3 +3615,21 @@ case). A colour whose alpha moves with its frames is not that.
 - **§36.7's indeterminate bar, and `Spinner` for a cycle whose frames differ in width.**
   They decline their runs through `requestAnimation`, so both of §59.2's problems apply
   to them by reading; neither has been tested.
+
+
+## 60. A caret on a selected character carried its text's alpha (2026-09-10)
+
+§30.1 said a selection's two colours are opaque by construction. Only its FIELD is: the
+highlight goes through `opacity(_:over:)`, which stamps its result opaque. Its text is
+`readableText(on:)` — a palette slot floored for contrast, and the floor keeps the slot's
+alpha. The runs claimed that text's alpha correctly, run by run: §30.1's mechanism was
+right and only its reason wrong. The caret was not. `caretSetup` spent the entered text
+over the field but handed the selection's text to the emitter as it was, so when the
+caret sat on a selected character — which any leftward selection leaves it doing — its
+blink-OFF frame drew that character in a translucent colour, and the emitter's assertion
+fired. A faded tint alone does not reach it, since the text is the palette's foreground
+or background; a faded foreground or background does.
+
+It is spent now, over the highlight. That is literally what is behind the ink in that
+frame, and it is the blend the resolver makes for the claimed selected cells beside it:
+an ink claim over the cell's own opaque field. An opaque palette's bytes do not change.

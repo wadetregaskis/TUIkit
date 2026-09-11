@@ -102,8 +102,9 @@ struct StyleCascadeAlphaTests {
     }
 
     /// A focused field claims per RUN, not one rectangle for the field: the
-    /// selection's colours are opaque by construction and the entered text's are
-    /// the cascade's, so one rectangle would fade the highlight along with the text.
+    /// selection's field is opaque by construction — and under this palette so is its
+    /// text — while the entered text's are the cascade's, so one rectangle would fade
+    /// the highlight along with the text.
     @Test("A focused field's claims stop at the selection, and cover the rest")
     func focusedFieldClaimsPerRun() {
         let renderer = TextFieldContentRenderer(
@@ -114,8 +115,9 @@ struct StyleCascadeAlphaTests {
             palette: makeRenderContext(width: 20, height: 1).environment.palette,
             cursorStyle: TextCursorStyle(), cursorTimer: CursorTimer?.none, contentWidth: 10)
         #expect(!content.claims.isEmpty, "the cascade colour never left the renderer")
-        // Every claim is at the cascade's alpha; the selected cells produce none,
-        // because `selectionColors` spends its alpha through `opacity(_:over:)`.
+        // Every claim is at the cascade's alpha; the selected cells produce none: the
+        // highlight is opaque by construction, and its text is this opaque palette's
+        // own slot. Under a faded palette that text would claim (§60).
         for claim in content.claims {
             #expect(claim.inkOpacity == half, "\(claim)")
         }

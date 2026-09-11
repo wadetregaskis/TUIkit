@@ -164,8 +164,9 @@ struct TextFieldContentRenderer {
     /// describes, and keeping them in one `flush` is what stops them drifting.
     ///
     /// Claims are per RUN rather than one rectangle for the field, because a
-    /// focused field's cells genuinely differ: the selection's two colours are
-    /// opaque by construction (`selectionColors` goes through `opacity(_:over:)`)
+    /// focused field's cells genuinely differ: the selection's FIELD is opaque by
+    /// construction (`selectionColors` goes through `opacity(_:over:)`), its text is
+    /// `readableText(on:)` — a palette slot, floored, carrying that slot's alpha —
     /// and the entered text's are the style cascade's. One rectangle would fade the
     /// highlight along with the text. The run boundaries are already the colour
     /// boundaries — that is what the coalescing is for — so this costs nothing
@@ -540,7 +541,12 @@ struct TextFieldContentRenderer {
                 background: background?.opaqueSpelling,
                 blockText: ground.opaqueSpelling,
                 text: textForeground.spendingAlpha(over: ground),
-                selectionText: selection.foreground,
+                // Spent over the highlight: the opaque field that is literally behind
+                // this ink in the blink-OFF frame, as the ground is behind `text`'s. It
+                // is not opaque itself — `readableText(on:)` floors a palette slot and
+                // keeps its alpha — so a faded palette's caret on a selected character
+                // handed the emitter a translucent colour (§60).
+                selectionText: selection.foreground.spendingAlpha(over: selection.background),
                 selectionBackground: selection.background)
         )
     }
