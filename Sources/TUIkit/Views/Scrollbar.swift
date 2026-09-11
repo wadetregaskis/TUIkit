@@ -678,11 +678,17 @@ struct ScrollbarColors {
                 && renderedRatio(candidate, page) >= ViewConstants.chromeGrooveFloor
         }
         guard !acceptable(base) else { return base }
+        // Each candidate is the RUNG moved, not a mix of two paints: the page and
+        // the ink are only directions here. `lerp` would otherwise walk the alpha
+        // toward theirs as a fourth channel — a faded rung coming back part-way
+        // opaque, an opaque one part-way faded, by however far it had to move
+        // (§45). The floors are measured on the channels alone, so carrying the
+        // alpha changes which colour comes back, never which step is chosen.
         for step in 1...12 {
             let phase = Double(step) / 12
             for candidate in [
                 Color.lerp(base, page, phase: phase), Color.lerp(base, ink, phase: phase),
-            ] where acceptable(candidate) {
+            ].map({ $0.carryingAlpha(of: base) }) where acceptable(candidate) {
                 return candidate
             }
         }

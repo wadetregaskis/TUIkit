@@ -3088,3 +3088,30 @@ wholly faded palette, asserting that every phase of the breath — the thumb, th
 and the hovered arrow — carries the accent's alpha, for a pulse and for a blink. It also
 asserts that some palette in the sweep takes the loop: a sweep that only ever exercised
 the first exit could not fail. And the render that trapped is a test of its own.
+
+
+## 45. A scroll track's alpha moved with its colour (2026-09-10)
+
+`ScrollbarColors.resolvedTrack` is the palette's quietest rung, moved along a line until
+it can be told from both the accent drawn on it and the page it sits on — toward the
+page first, toward the ink when that runs out. It moves through `Color.lerp`, and `lerp`
+interpolates alpha as a fourth channel. So a faded rung walked toward an opaque page
+came back part-way opaque — 139, 149, … 255 across the twelve steps — and an opaque rung
+walked toward a faded page came back part-way faded. The groove's alpha was a function
+of how far it had to move, which is not something anybody asked for.
+
+The moved rung re-spells the rung — the track's own documentation says the requirement
+is met "here rather than in the derivation" — so it carries the rung's alpha:
+`.carryingAlpha(of: base)` on each candidate, the answer §37 gave the surface
+derivations for the same four-channel lerp. The floors are measured on the channels
+alone, so this changes which colour comes back and never which step is chosen.
+
+Only a custom palette reaches it. Every shipped palette is opaque in all four inputs, and
+`.tint` changes only the accent, which decides *whether* the rung moves and never the
+alpha it moves with. The bar's claims (§43) were already exact for whatever alpha the
+track had; this changes what that alpha is, not whether it is claimed.
+
+`ScrollbarTrackAlphaTests` walks a faded rung one shade off the accent over three pages
+— opaque, faded, and light, so the walk runs both ways — asserting that each really
+moved, since an unmoved rung proves nothing, and that each kept its 128. And it walks an
+opaque rung toward a faded page, which must stay opaque.
