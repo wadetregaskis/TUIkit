@@ -908,33 +908,16 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // Centre the content block within the panel as one surface island,
         // shifting it (and its click regions) by a uniform offset so a narrower
         // tab's content is centred without disturbing its internal column
-        // alignment (sliders / fields stay lined up).
-        // Spelled opaque, and claimed below. The content between the pads carries its
-        // own claim already — it was rendered `.background(surface)`, which claims —
-        // so the pads are claimed SEPARATELY rather than as one rectangle across the
-        // line: overlapping claims multiply at the resolver, and a claim spanning the
-        // content would fade its surface twice.
-        func surfFill(_ n: Int) -> String {
-            n > 0
-                ? ANSIRenderer.colorize(
-                    String(repeating: " ", count: n), background: surface.opaqueSpelling)
-                : ""
-        }
-        /// The pads' field claim on one row of the panel, in panel coordinates.
-        func padClaims(row: Int, used: Int) -> [OpacityRegion] {
-            [
-                OpacityRegion.claim(offsetY: row, width: leftPad, height: 1, field: surface),
-                OpacityRegion.claim(
-                    offsetX: leftPad + used, offsetY: row,
-                    width: max(0, panelWidth - leftPad - used), height: 1, field: surface),
-            ].compactMap { $0 }
-        }
+        // alignment (sliders / fields stay lined up). Each row is `panelRow`'s — the
+        // content spliced in, the pads either side claimed — and its claims move to
+        // the row it lands on, in panel coordinates.
         let leftPad = max(0, (panelWidth - content.width) / 2)
         var padded: [OpacityRegion] = []
         var centredLines = content.lines.enumerated().map { row, line -> String in
-            let used = line.strippedLength
-            padded += padClaims(row: row, used: used)
-            return surfFill(leftPad) + line + surfFill(max(0, panelWidth - leftPad - used))
+            let panelLine = panelRow(
+                line, used: line.strippedLength, leftPad: leftPad, width: panelWidth, surface: surface)
+            padded += panelLine.claims.map { $0.shifted(byX: 0, y: row) }
+            return panelLine.text
         }
         // Size the panel to the TALLEST tab so switching tabs doesn't change the
         // panel height: pad the (selected) content down to that height with
@@ -942,12 +925,11 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let panelContentHeight = tallestContentHeight(
             insets: insets, available: context.availableWidth, context: context)
         while centredLines.count < panelContentHeight {
-            // A filler row is surface all the way across and has no content of its own,
-            // so it takes ONE claim rather than two pads.
-            padded += OpacityRegion.claim(
-                offsetY: centredLines.count, width: panelWidth, height: 1, field: surface
-            ).map { [$0] } ?? []
-            centredLines.append(surfFill(panelWidth))
+            // A filler row is a panel row with no content: surface all the way across,
+            // one pad and so one claim.
+            let filler = panelRow("", used: 0, leftPad: 0, width: panelWidth, surface: surface)
+            padded += filler.claims.map { $0.shifted(byX: 0, y: centredLines.count) }
+            centredLines.append(filler.text)
         }
         var centredContent = content.replacingLines(centredLines, overlayShiftX: leftPad)
         // After `replacingLines`, which shifts the content's OWN regions by `leftPad`.
