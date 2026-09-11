@@ -361,7 +361,10 @@ private struct FadedTrack: Palette {
 /// Every text rung faded by a different amount, so a claim can be traced to the slot
 /// that painted it — under `FadedAll` every slot owes 128, and a cell claimed from the
 /// wrong one would pass.
-private struct FadedNavigation: Palette {
+///
+/// Internal rather than private: the scroll indicator suites trace their tertiary
+/// with it too.
+struct FadedNavigation: Palette {
     let id = "faded-navigation"
     let name = "Faded navigation"
     let background = Color.rgb(10, 10, 20)

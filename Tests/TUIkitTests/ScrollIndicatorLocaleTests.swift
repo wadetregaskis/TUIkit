@@ -34,14 +34,19 @@ struct ScrollIndicatorLocaleTests {
 
     @Test("The indicator label carries the grouped count")
     func indicatorLabelGrouped() {
+        let palette = EnvironmentValues().palette
         let en = renderScrollIndicator(
             direction: .down, count: 12000, unit: .lines, width: 40,
-            palette: EnvironmentValues().palette, locale: Locale(identifier: "en"))
+            palette: palette, cycle: nil, over: palette.background,
+            locale: Locale(identifier: "en")
+        ).text
         #expect(en.stripped.contains("12,000"), "en grouping in the label: \(en.stripped)")
 
         let de = renderScrollIndicator(
             direction: .down, count: 12000, unit: .lines, width: 40,
-            palette: EnvironmentValues().palette, locale: Locale(identifier: "de"))
+            palette: palette, cycle: nil, over: palette.background,
+            locale: Locale(identifier: "de")
+        ).text
         #expect(de.stripped.contains("12.000"), "de grouping in the label: \(de.stripped)")
     }
 

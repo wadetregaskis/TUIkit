@@ -75,8 +75,9 @@ struct ScrollIndicatorApproximationTests {
         ) -> String {
             renderScrollIndicator(
                 direction: direction, count: count, unit: unit,
-                width: width, palette: palette, approximate: approximate
-            ).stripped.trimmingCharacters(in: .whitespaces)
+                width: width, palette: palette, approximate: approximate,
+                cycle: nil, over: palette.background
+            ).text.stripped.trimmingCharacters(in: .whitespaces)
         }
 
         // The unit is named, and agrees in number with the count.

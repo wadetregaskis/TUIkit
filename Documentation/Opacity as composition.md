@@ -1163,17 +1163,17 @@ surface derivations, which now carry (§39).
 Plus the scrollbars: every host's track, thumb, arrows and corner, and the focused
 bar's breath (§43–§45). Plus the navigation bar's crumbs, at rest and breathing (§47).
 Plus a colour swatch's focused bullet, on any fill under any palette (§48). Plus a
-hovered button's face under a fully faded tint (§49).
+hovered button's face under a fully faded tint (§49). Plus the text scroll indicators,
+still and breathing, on every host that draws them (§53).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret; the text-style scroll indicators; a bordered
-`TabView`'s strip and its active chip's breath; a `Toggle`'s bracketed mark and its
-coloured switch track while focused; and an animated `.border` whose frames disagree
-about alpha. Three were seen to trap in a debug build when probed — the editor, the
-indicators and the bordered strip. The toggle's two, the border, and the compact
-strip's chip drop the alpha without a word.
+reading: a `TextEditor`'s rows and caret; a bordered `TabView`'s strip and its active
+chip's breath; a `Toggle`'s bracketed mark and its coloured switch track while focused;
+and an animated `.border` whose frames disagree about alpha. Two were seen to trap in a
+debug build when probed — the editor and the bordered strip. The toggle's two, the
+border, and the compact strip's chip drop the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1851,7 +1851,8 @@ What actually blocks a claim is narrower, and there are only two cases:
    places, and is now none. (Five, with the caret in §29.3; six, with the scrollbar's
    lift, which was not migrated until §43 and so could not be tested — §44; seven, with
    a navigation crumb's breath under a faded tint — §47; eight, with a colour swatch's
-   bullet under a faded palette — §48.)
+   bullet under a faded palette — §48; nine, with the text scroll indicators' breath
+   under a faded tint — §53.)
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3352,3 +3353,53 @@ hand is not a control; and so do the overlays, whose drawing the dim never reach
 
 The slot's claims reach the list's buffer through the row pairing §51 repaired, so this
 needed that first: a front-clipped hold would have put them on another row.
+
+
+## 53. The text scroll indicators claim what they paint (2026-09-10)
+
+The "N more above" / "N more below" lines of `.scrollIndicatorStyle(.text)` are drawn in
+the palette's tertiary and, on a focused scrollable, breathe to its accent. They went to
+the emitter through a raw `colorize` with no claims, on every host that draws them:
+`List`, both of `Table`'s paths, and both of `ScrollView`'s. Rendering a page under a
+wholly faded palette trapped on them in a debug build (§16.3); a release build drew
+them opaque. The suites never saw it. Plenty of them draw the text style, but none
+under a palette that faded its tertiary — one that had would have trapped — and the
+faded fixture nearest the line, `FadedInk`, pins the tertiary opaque by its own
+comment, because the line was drawn in it.
+
+### 53.1 A line is a row
+
+`renderScrollIndicator` returns a `ScrollIndicatorLine`: a `ClaimingRow` whose
+centring blanks are a `skip` — no colour, so no claim — and whose arrow and label are
+appended in the ink, so the bytes spell the colour opaque and the claim carries its
+alpha, the pairing every claiming paint uses (§43.1). Each host places the claim on
+the row it drew the line on, beside the run it already moved there:
+
+| host | rows | |
+|---|---|---|
+| `List` | the first and last assembled lines | added after the slide, as the runs are (§43.3) |
+| `Table`, single- and multi-line | 0 and `lines.count` | before the line is appended |
+| `ScrollView`, overwriting | 0 and last | after §50's cut, so the content's claims are gone from those rows first |
+| `ScrollView`, reserving | 0 and `height - 1` | the content's claims moved down a row with it |
+
+`Table`'s measure asks `scrollIndicatorWidth`, which chooses no colour at all; it used
+to render the whole line to read its width.
+
+### 53.2 The unfocused line carries, the focused one spends
+
+Unfocused, nothing replays the line, so the tertiary's alpha goes into its claim
+(§29.2).
+
+Focused, the line breathes between two palette slots with alphas of their own, so both
+ends spend against the enclosing surface (`scrollIndicatorBreath`) and every frame is
+opaque. The scrollbar's breath carries instead, because its two ends are re-spellings
+of one accent (§44). Here a faded `.tint` alone put 255 at the dim end and 128 at the
+bright one — §29's pair, a ninth time. The frames' claims go through
+`assertFramesOweOneClaim`, and all of them owe nothing. A navigation crumb's breath is
+the exact twin: a resting rung and the accent, both spent (§47.2).
+
+A focused line under `.selectionIndicatorStyle(.none)` is still — one frame, no run —
+and spends all the same, so focus shows one colour whether it breathes or not.
+
+An opaque palette's bytes do not change: an opaque colour is its own opaque spelling,
+and spending it returns it untouched.

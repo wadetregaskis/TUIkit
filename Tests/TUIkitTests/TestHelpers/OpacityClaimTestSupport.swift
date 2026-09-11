@@ -46,6 +46,14 @@ func cells(of glyph: Character, in buffer: FrameBuffer) -> [(column: Int, row: I
     }
 }
 
+/// The truecolor SGR a colour renders as — for asserting about one specific colour, a
+/// breath's end spent over a particular ground, rather than about "some escape
+/// changed". Meaningful under `withColorDepth(.truecolor)`.
+func code(_ color: Color, _ palette: any Palette) -> String {
+    let rgb = color.resolve(with: palette).rgbComponents!
+    return "38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
+}
+
 /// Every cell of a row's label owes ``FadedInk``'s ink, and no other cell of `frame`
 /// owes any. A label is `row`, its digits, and any dashes after them (`row7`,
 /// `row11--`), which is how the suites using this name their rows — and not "rows",

@@ -62,8 +62,8 @@ struct ScrollGeometryUnitTests {
         func label(_ width: Int) -> String {
             renderScrollIndicator(
                 direction: .down, count: 14, unit: .lines,
-                width: width, palette: palette
-            ).stripped.trimmingCharacters(in: .whitespaces)
+                width: width, palette: palette, cycle: nil, over: palette.background
+            ).text.stripped.trimmingCharacters(in: .whitespaces)
         }
         // Rung minima for count 14 / .lines: full 22, no-"more" 17,
         // no-direction 11, bare count 5. One column narrower drops a rung;
@@ -83,8 +83,8 @@ struct ScrollGeometryUnitTests {
         func zero(_ width: Int) -> String {
             renderScrollIndicator(
                 direction: .down, count: 0, unit: .lines,
-                width: width, palette: palette
-            ).stripped.trimmingCharacters(in: .whitespaces)
+                width: width, palette: palette, cycle: nil, over: palette.background
+            ).text.stripped.trimmingCharacters(in: .whitespaces)
         }
         #expect(zero(21) == "▼ 0 more lines below")
         #expect(zero(20) == "▼ 0 lines below")
@@ -95,6 +95,15 @@ struct ScrollGeometryUnitTests {
         for width in 1...25 {
             let body = label(width)
             #expect(body.count <= width, "width \(width) overflows: '\(body)'")
+            // `Table`'s measure asks for the width without drawing: it must be the
+            // width the drawn line has, or the column is sized to a line never drawn.
+            let drawn = renderScrollIndicator(
+                direction: .down, count: 14, unit: .lines, width: width, palette: palette,
+                cycle: nil, over: palette.background)
+            #expect(
+                scrollIndicatorWidth(direction: .down, count: 14, unit: .lines, width: width)
+                    == drawn.text.strippedLength,
+                "width \(width): the measure and the drawn line disagree")
         }
     }
 

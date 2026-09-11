@@ -641,6 +641,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 handler: handler,
                 width: contentWidth,
                 palette: context.environment.palette,
+                surface: context.environment.enclosingSurface,
                 // A CYCLE, not this tick's colour: the indicator hands its
                 // cells to the run loop and reads no clock (see
                 // `AnimatedCellRun`). Still only when one will be drawn —

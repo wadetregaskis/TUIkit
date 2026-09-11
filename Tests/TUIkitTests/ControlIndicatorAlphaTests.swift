@@ -48,6 +48,9 @@ struct ControlIndicatorAlphaTests {
             ("BorderRenderer.focusIndicatorEnds",
                 BorderRenderer.focusIndicatorEnds(palette: tinted, on: surface)),
             ("Color.breathEnds", tinted.accent.breathEnds(dimmedTo: 0.35, over: surface)),
+            // A focused scrollable's "N more" line: its ends are two palette slots, not
+            // one colour re-spelled, so both spend (§53).
+            ("scrollIndicatorBreath", scrollIndicatorBreath(palette: tinted, over: surface)),
         ] {
             #expect(pair.dim.isOpaque, "\(name) dim carried an alpha")
             #expect(pair.bright.isOpaque, "\(name) bright carried an alpha")

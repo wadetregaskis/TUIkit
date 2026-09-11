@@ -365,6 +365,7 @@ extension _ScrollViewCore {
         handler: ScrollViewHandler,
         width: Int,
         palette: any Palette,
+        surface: Color,
         cycle: SelectionEmphasisCycle?,
         locale: Locale,
         always: Bool = false,
@@ -377,13 +378,15 @@ extension _ScrollViewCore {
         if reserving {
             return reservingScrollIndicators(
                 around: buffer, handler: handler, width: width, palette: palette,
-                cycle: cycle, locale: locale)
+                surface: surface, cycle: cycle, locale: locale)
         }
 
         var lines = buffer.lines
         // The indicators' own runs, so a focused scroll view breathes them
         // without the page being rendered again on every tick of the clock.
         var runs: [AnimatedCellRun] = []
+        /// The indicators' own claims, on the rows they were drawn on.
+        var claims: [OpacityRegion] = []
         /// The rows the indicators overwrite — whatever the content had
         /// animating on them goes with them.
         var replacedRows: Set<Int> = []
@@ -400,10 +403,12 @@ extension _ScrollViewCore {
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate,
                 cycle: cycle,
+                over: surface,
                 locale: locale
             )
             lines[0] = indicator.text.padToVisibleWidth(width)
             replacedRows.insert(0)
+            claims += indicator.claims(atRow: 0)
             if let animation = indicator.animation { runs.append(animation) }
         }
 
@@ -416,10 +421,12 @@ extension _ScrollViewCore {
                 palette: palette,
                 approximate: handler.contentHeightIsEstimate,
                 cycle: cycle,
+                over: surface,
                 locale: locale
             )
             lines[lines.count - 1] = indicator.text.padToVisibleWidth(width)
             replacedRows.insert(lines.count - 1)
+            claims += indicator.claims(atRow: lines.count - 1)
             // The renderer builds every run at row 0 — it does not know which
             // row its caller put the indicator on — so move this one down to
             // the row it was actually drawn on.
@@ -444,6 +451,9 @@ extension _ScrollViewCore {
         result.opacityRegions = result.opacityRegions.compactMap {
             kept.isEmpty ? nil : $0.clipped(toColumns: 0..<Int.max, rows: kept)
         }
+        // The indicators' own claims go in after that cut, not through it: they are
+        // the one thing on those rows that owes anything now.
+        result.opacityRegions += claims
         result.animatedCells += runs
         return result
     }
@@ -474,27 +484,31 @@ extension _ScrollViewCore {
         handler: ScrollViewHandler,
         width: Int,
         palette: any Palette,
+        surface: Color,
         cycle: SelectionEmphasisCycle?,
         locale: Locale
     ) -> FrameBuffer {
-        func line(_ direction: ScrollIndicatorDirection, count: Int) -> (String, AnimatedCellRun?) {
-            let indicator = renderScrollIndicator(
+        func line(_ direction: ScrollIndicatorDirection, count: Int) -> ScrollIndicatorLine {
+            renderScrollIndicator(
                 direction: direction, count: count, unit: .lines, width: width,
                 palette: palette, approximate: handler.contentHeightIsEstimate,
-                cycle: cycle, locale: locale)
-            return (indicator.text.padToVisibleWidth(width), indicator.animation)
+                cycle: cycle, over: surface, locale: locale)
         }
         let above = line(.up, count: handler.rowsAbove)
         let below = line(.down, count: handler.rowsBelow)
         var result = buffer.replacingLines(
-            [above.0] + buffer.lines + [below.0], width: width, uniformWidth: true,
-            overlayShiftY: 1)
-        if let run = above.1 { result.animatedCells.append(run) }
+            [above.text.padToVisibleWidth(width)] + buffer.lines
+                + [below.text.padToVisibleWidth(width)],
+            width: width, uniformWidth: true, overlayShiftY: 1)
+        if let run = above.animation { result.animatedCells.append(run) }
         // The renderer builds every run at row 0, so the bottom one moves to the
         // row it was actually drawn on — as the overwriting path does.
-        if let run = below.1 {
+        if let run = below.animation {
             result.animatedCells.append(run.shifted(byX: 0, y: result.height - 1))
         }
+        // And the claims, the same way. The content's own moved down a row with it
+        // in `replacingLines`, so neither line's row carries one of those.
+        result.opacityRegions += above.claims(atRow: 0) + below.claims(atRow: result.height - 1)
         return result
     }
 }

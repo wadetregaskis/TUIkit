@@ -174,13 +174,6 @@ struct NavigationCrumbAppearanceTests {
         Button(label) {}.buttonStyle(_NavigationCrumbButtonStyle())
     }
 
-    /// The truecolor SGR a colour renders as, for asserting about a specific
-    /// palette entry rather than about "some escape changed".
-    private func code(_ color: Color, _ palette: any Palette) -> String {
-        let rgb = color.resolve(with: palette).rgbComponents!
-        return "38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
-    }
-
     @Test("A focused crumb breathes its own text, with no bullet beside it")
     func focusIsTheTextItself() {
         withColorDepth(.truecolor) {

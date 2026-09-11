@@ -1135,8 +1135,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// selection marks and the still backgrounds — travelling beside the runs
         /// because both are positioned by LINE and both take the same slide.
         var rowClaims: [OpacityRegion] = []
-        var topIndicator: (text: String, animation: AnimatedCellRun?)?
-        var bottomIndicator: (text: String, animation: AnimatedCellRun?)?
+        var topIndicator: ScrollIndicatorLine?
+        var bottomIndicator: ScrollIndicatorLine?
 
         // A focused list with no scrollbar pulses its "N more" indicators as
         // its focus cue (in addition to the pulsing cursor row) — the
@@ -1155,6 +1155,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             drawsIndicator
             ? scrollIndicatorCycle(isFocused: listHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
+        let indicatorSurface = context.environment.enclosingSurface
 
         // Drawn iff a line was RESERVED for it — one answer, so the rows' budget
         // and the chrome cannot disagree. Under
@@ -1172,6 +1173,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 width: rowWidth,
                 palette: palette,
                 cycle: indicatorCycle,
+                over: indicatorSurface,
                 locale: numberLocale
             )
         }
@@ -1263,6 +1265,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 width: rowWidth,
                 palette: palette,
                 cycle: indicatorCycle,
+                over: indicatorSurface,
                 locale: numberLocale
             )
         }
@@ -1283,8 +1286,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func slideAndWrap(
         rowLines: [String], ranges: [VisibleRowRange],
         pulseRuns: [RowRun], rowClaims: [OpacityRegion],
-        topIndicator: (text: String, animation: AnimatedCellRun?)?,
-        bottomIndicator: (text: String, animation: AnimatedCellRun?)?,
+        topIndicator: ScrollIndicatorLine?,
+        bottomIndicator: ScrollIndicatorLine?,
         handler: ItemListHandler<SelectionValue>, rowWidth: Int
     ) -> (
         lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
@@ -1309,9 +1312,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if let bottom = bottomIndicator?.animation {
             runs.append(bottom.shifted(byX: 0, y: assembled.count - 1))
         }
-        return (
-            assembled, moved, runs,
-            slidClaims(rowClaims, handler: handler, lineCount: slidRows.count, topOffset: topOffset))
+        var claims = slidClaims(
+            rowClaims, handler: handler, lineCount: slidRows.count, topOffset: topOffset)
+        // …and so do their claims: added after the slide, not fed through it (§43.3).
+        if let top = topIndicator { claims += top.claims(atRow: 0) }
+        if let bottom = bottomIndicator { claims += bottom.claims(atRow: assembled.count - 1) }
+        return (assembled, moved, runs, claims)
     }
 
     /// The rows' own claims, moved exactly as ``slidRuns(_:handler:lineCount:topOffset:)``

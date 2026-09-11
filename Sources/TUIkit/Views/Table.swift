@@ -617,20 +617,18 @@ where Value.ID: Hashable {
                 if rowsAbove > 0 {
                     widest = max(
                         widest,
-                        renderScrollIndicator(
+                        scrollIndicatorWidth(
                             direction: .up, count: rowsAbove,
                             unit: .rows,
-                            width: contentWidth, palette: palette, locale: measureLocale
-                        ).strippedLength)
+                            width: contentWidth, locale: measureLocale))
                 }
                 if rowsBelow > 0 {
                     widest = max(
                         widest,
-                        renderScrollIndicator(
+                        scrollIndicatorWidth(
                             direction: .down, count: rowsBelow,
                             unit: .rows,
-                            width: contentWidth, palette: palette, locale: measureLocale
-                        ).strippedLength)
+                            width: contentWidth, locale: measureLocale))
                 }
             }
             contentSize = (widest, min(data.count, rowArea))
@@ -1633,11 +1631,14 @@ where Value.ID: Hashable {
             drawsIndicator
             ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
+        let indicatorSurface = context.environment.enclosingSurface
         var lines: [String] = []
         /// The indicators' own runs. They are chrome — the rows slide past them
         /// — so each sits at the assembled line it was appended to, whatever
         /// the rows did.
         var chromeRuns: [AnimatedCellRun] = []
+        /// …and their claims, placed the same way (§53).
+        var chromeClaims: [OpacityRegion] = []
         // Drawn iff a line was RESERVED — see `ScrollRowWindow.reservesAbove`. The
         // count is legitimately 0 under `alwaysShowsVerticalTextIndicators`.
         if window.reservesAbove {
@@ -1649,9 +1650,8 @@ where Value.ID: Hashable {
                 count: window.showsAbove ? max(1, window.range.lowerBound) : 0,
                 unit: .rows,
                 width: contentWidth, palette: palette, cycle: indicatorCycle,
-                locale: numberLocale)
-            if let run = indicator.animation { chromeRuns.append(run.shifted(byX: 0, y: 0)) }
-            lines.append(indicator.text)
+                over: indicatorSurface, locale: numberLocale)
+            appendIndicator(indicator, to: &lines, runs: &chromeRuns, claims: &chromeClaims)
         }
         // The content area fills EXACTLY: the bottom row may be partially
         // clipped (the top row already can be, via `scrollTopClipLines`), so
@@ -1730,11 +1730,8 @@ where Value.ID: Hashable {
                 direction: .down, count: data.count - window.range.upperBound,
                 unit: .rows,
                 width: contentWidth, palette: palette, cycle: indicatorCycle,
-                locale: numberLocale)
-            if let run = indicator.animation {
-                chromeRuns.append(run.shifted(byX: 0, y: lines.count))
-            }
-            lines.append(indicator.text)
+                over: indicatorSurface, locale: numberLocale)
+            appendIndicator(indicator, to: &lines, runs: &chromeRuns, claims: &chromeClaims)
         }
         // A scrolled/overflowing table fills its content area EXACTLY,
         // whatever the granularity: whole rows can underfill under row
@@ -1749,7 +1746,7 @@ where Value.ID: Hashable {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
         }
-        guard showsBar else { return (lines, runs + chromeRuns, claims) }
+        guard showsBar else { return (lines, runs + chromeRuns, claims + chromeClaims) }
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
         // is (§1.5) — the same composition the single-line path uses, claims
@@ -1762,7 +1759,7 @@ where Value.ID: Hashable {
         bar.fit(toCount: lines.count, field: ScrollbarColors.track(in: palette))
         return (
             zip(lines, bar.lines).map { $0 + $1 },
-            runs + chromeRuns, claims + bar.claims(atColumn: contentWidth))
+            runs + chromeRuns, claims + chromeClaims + bar.claims(atColumn: contentWidth))
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first
@@ -2168,6 +2165,7 @@ where Value.ID: Hashable {
             indicators.above || indicators.below
             ? scrollIndicatorCycle(isFocused: tableHasFocus, context: context) : nil
         let numberLocale = context.environment.locale
+        let indicatorSurface = context.environment.enclosingSurface
         // The "N more" indicators are chrome — they describe where the content
         // sits — so the rows are collected separately and only they slide (§1.5).
         var lines: [String] = []
@@ -2175,6 +2173,8 @@ where Value.ID: Hashable {
         /// The indicators' own runs, at the assembled lines they were appended
         /// to — the rows slide past them, so those positions are final.
         var chromeRuns: [AnimatedCellRun] = []
+        /// …and their claims, placed the same way (§53).
+        var chromeClaims: [OpacityRegion] = []
         if indicators.above {
             let indicator = renderScrollIndicator(
                 direction: .up,
@@ -2183,10 +2183,10 @@ where Value.ID: Hashable {
                 width: contentWidth,
                 palette: palette,
                 cycle: indicatorCycle,
+                over: indicatorSurface,
                 locale: numberLocale
             )
-            if let run = indicator.animation { chromeRuns.append(run.shifted(byX: 0, y: 0)) }
-            lines.append(indicator.text)
+            appendIndicator(indicator, to: &lines, runs: &chromeRuns, claims: &chromeClaims)
         }
         let visibleRange = handler.drawnVisibleRange
         // A reorder drag takes the dragged row out and opens a slot where it
@@ -2285,17 +2285,17 @@ where Value.ID: Hashable {
                 width: contentWidth,
                 palette: palette,
                 cycle: indicatorCycle,
+                over: indicatorSurface,
                 locale: numberLocale
             )
-            if let run = indicator.animation {
-                chromeRuns.append(run.shifted(byX: 0, y: lines.count))
-            }
-            lines.append(indicator.text)
+            appendIndicator(indicator, to: &lines, runs: &chromeRuns, claims: &chromeClaims)
         }
         // The row lines are handed back separately for a `.cursor` drag's
         // floating preview; the press frame is drawn in plain data order, so
         // indexing them by `visibleRange` offset is exact.
-        return (lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns, claims, bands)
+        return (
+            lines, handler.onMove == nil ? [] : rowLines, runs + chromeRuns, claims + chromeClaims,
+            bands)
     }
 
     // MARK: - Reorder drag
@@ -2460,6 +2460,19 @@ where Value.ID: Hashable {
         for (offset, frames) in pulseFrames.enumerated() where !frames.isEmpty {
             runs.append((y: base + offset, frames: frames.map(transform)))
         }
+    }
+
+    /// Appends a "N more" line to `lines`, with its run and its claims moved to the
+    /// row it lands on. Chrome, not a row: the rows slide past it, so the line it is
+    /// appended as is where it stays. The one spelling of what all four indicator
+    /// sites — two paths, two ends — do.
+    private func appendIndicator(
+        _ indicator: ScrollIndicatorLine, to lines: inout [String],
+        runs: inout [AnimatedCellRun], claims: inout [OpacityRegion]
+    ) {
+        if let run = indicator.animation { runs.append(run.shifted(byX: 0, y: lines.count)) }
+        claims += indicator.claims(atRow: lines.count)
+        lines.append(indicator.text)
     }
 
     /// The collected pulse frames as runs, moved the way the row bands are

@@ -21,13 +21,6 @@ struct ColorPickerSwatchTests {
         ColorPicker("Accent", selection: .constant(color))
     }
 
-    /// The truecolor SGR a colour renders as, so an assertion can name the
-    /// palette entry it means rather than "some escape changed".
-    private func code(_ color: Color, _ palette: any Palette) -> String {
-        let rgb = color.resolve(with: palette).rgbComponents!
-        return "38;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
-    }
-
     // MARK: - Appearance
 
     @Test("A resting swatch is an unbroken block of its colour")
