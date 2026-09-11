@@ -234,35 +234,10 @@ struct FadedPaletteRenderTests {
             let found = cells(of: glyph, in: buffer)
             #expect(found.count == 1, "'\(glyph)' is drawn once: \(buffer.lines.map(\.stripped))")
             for cell in found {
-                let owed = owed(atColumn: cell.column, row: cell.row, in: buffer)
+                let owes = owed(atColumn: cell.column, row: cell.row, in: buffer)
                 #expect(
-                    owed.ink == expected.ink && owed.field == expected.field,
-                    "'\(glyph)' at \(cell) owes \(owed), and was painted at \(expected)")
-            }
-        }
-    }
-
-    /// The factor a colour's alpha becomes in a claim.
-    private func owed(_ color: Color) -> Double {
-        OpacityRegion.opacity(of: color.alpha)
-    }
-
-    /// What the claims covering one cell multiply to, ink and field: the fold the
-    /// resolver makes for that cell (`OpacityResolution.foldedAlphas`).
-    private func owed(
-        atColumn column: Int, row: Int, in buffer: FrameBuffer
-    ) -> (ink: Double, field: Double) {
-        buffer.opacityRegions
-            .filter { $0.contains(column: column, row: row) }
-            .reduce((ink: 1.0, field: 1.0)) { ($0.ink * $1.inkOpacity, $0.field * $1.fieldOpacity) }
-    }
-
-    /// Every cell `glyph` was drawn in. Columns are characters of the stripped line,
-    /// which are cells for everything these tests draw.
-    private func cells(of glyph: Character, in buffer: FrameBuffer) -> [(column: Int, row: Int)] {
-        buffer.lines.enumerated().flatMap { row, line in
-            line.stripped.enumerated().compactMap { column, character in
-                character == glyph ? (column: column, row: row) : nil
+                    owes.ink == expected.ink && owes.field == expected.field,
+                    "'\(glyph)' at \(cell) owes \(owes), and was painted at \(expected)")
             }
         }
     }

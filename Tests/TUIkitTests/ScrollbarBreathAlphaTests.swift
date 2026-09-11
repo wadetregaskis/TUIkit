@@ -65,53 +65,25 @@ struct ScrollbarBreathAlphaTests {
     /// the accent's alpha as its field — the one claim every frame now shares.
     @Test("A focused scroll view's breathing bar renders, and claims its thumb")
     func focusedBarClaimsItsThumb() {
-        let drawn = focusedRender(
+        // The shared context: its fresh focus manager hands the focus to the first
+        // control that registers, which is the scroll view — nothing else here is
+        // focusable.
+        let drawn = renderToBuffer(
             ScrollView {
                 VStack(alignment: .leading) {
                     ForEach(0..<30, id: \.self) { Text("row \($0)") }
                 }
             }
-            .focusID("breathing").scrollIndicators(.visible),
-            focusID: "breathing", palette: FadedAll())
+            .scrollIndicators(.visible),
+            context: makeRenderContext(width: 30, height: 10) { environment, _ in
+                environment.palette = FadedAll()
+            })
         #expect(!drawn.animatedCells.isEmpty, "the focused bar breathes through runs")
         // Scrolled to the top, the thumb is the first cell under the ▲: a full cell,
         // painted as a field in the thumb colour with no glyph.
-        let column = drawn.width - 1
-        let owed = drawn.opacityRegions
-            .filter { $0.contains(column: column, row: 1) }
-            .reduce((ink: 1.0, field: 1.0)) { ($0.ink * $1.inkOpacity, $0.field * $1.fieldOpacity) }
+        let thumb = owed(atColumn: drawn.width - 1, row: 1, in: drawn)
         #expect(
-            owed.ink == 1 && owed.field == OpacityRegion.opacity(of: 128),
-            "the thumb's cell owes \(owed): \(drawn.lines.map(\.stripped))")
-    }
-
-    /// Two passes with the focus manager in the environment — the first registers,
-    /// and a view cannot be focused before it has said it exists (§36.8).
-    private func focusedRender<V: View>(
-        _ view: V, focusID: String, palette: any Palette
-    ) -> FrameBuffer {
-        let tuiContext = TUIContext()
-        let focusManager = FocusManager()
-        func pass() -> FrameBuffer {
-            var environment = EnvironmentValues()
-            environment.palette = palette
-            environment.focusManager = focusManager
-            environment.applyRuntimeServices(from: tuiContext)
-            let context = RenderContext(
-                availableWidth: 30, availableHeight: 10,
-                environment: environment, tuiContext: tuiContext)
-            tuiContext.preferences.beginRenderPass()
-            tuiContext.stateStorage.beginRenderPass()
-            tuiContext.renderCache.beginRenderPass()
-            focusManager.beginRenderPass()
-            let buffer = renderToBuffer(view, context: context)
-            focusManager.endRenderPass()
-            tuiContext.stateStorage.endRenderPass()
-            tuiContext.renderCache.removeInactive()
-            return buffer
-        }
-        _ = pass()
-        focusManager.focus(id: focusID)
-        return pass()
+            thumb.ink == 1 && thumb.field == OpacityRegion.opacity(of: 128),
+            "the thumb's cell owes \(thumb): \(drawn.lines.map(\.stripped))")
     }
 }
