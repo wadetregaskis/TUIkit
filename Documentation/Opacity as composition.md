@@ -1164,16 +1164,17 @@ Plus the scrollbars: every host's track, thumb, arrows and corner, and the focus
 bar's breath (§43–§45). Plus the navigation bar's crumbs, at rest and breathing (§47).
 Plus a colour swatch's focused bullet, on any fill under any palette (§48). Plus a
 hovered button's face under a fully faded tint (§49). Plus the text scroll indicators,
-still and breathing, on every host that draws them (§53).
+still and breathing, on every host that draws them (§53). Plus a `TabView`'s active chip,
+breathing, in both strips (§55).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
-reading: a `TextEditor`'s rows and caret; a bordered `TabView`'s strip and its active
-chip's breath; a `Toggle`'s bracketed mark and its coloured switch track while focused;
-and an animated `.border` whose frames disagree about alpha. Two were seen to trap in a
-debug build when probed — the editor and the bordered strip. The toggle's two, the
-border, and the compact strip's chip drop the alpha without a word.
+reading: a `TextEditor`'s rows and caret; a bordered `TabView`'s strip; a `Toggle`'s
+bracketed mark and its coloured switch track while focused; and an animated `.border`
+whose frames disagree about alpha. Two were seen to trap in a debug build when probed —
+the editor and the bordered strip. The toggle's two and the border drop the alpha
+without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1852,7 +1853,7 @@ What actually blocks a claim is narrower, and there are only two cases:
    lift, which was not migrated until §43 and so could not be tested — §44; seven, with
    a navigation crumb's breath under a faded tint — §47; eight, with a colour swatch's
    bullet under a faded palette — §48; nine, with the text scroll indicators' breath
-   under a faded tint — §53.)
+   under a faded tint — §53; ten, with a tab chip's breath under a faded tint — §55.)
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3420,6 +3421,38 @@ with their lines by the rule the runs already follow: moved up and cut at a fron
 cut at the cap at a back one. The front branch has no reachable claim today — a front
 clip needs a drawn slot, and a drawn slot leaves no cursor row — and takes the same
 rule regardless.
+
+
+## 55. A tab chip's breath ends disagreed about alpha (2026-09-10)
+
+A focused `TabView`'s active chip breathes its label between a resting tone and the
+accent. The resting end is black or white, chosen for contrast with the chip's surface,
+so it is opaque by construction; the loud end was the accent floored for readability,
+and it carried the accent's alpha. A faded palette, or a faded tint alone, therefore put
+255 at one end and 128 at the other — §29's pair, a tenth time — and the pulse
+interpolated alpha as a fourth channel through every phase between.
+
+The two strips failed differently. The compact one claims what it draws, and draws the
+cycle's current phase — the loud end, with no cursor timer running — so it claimed half
+the label's ink and replayed every other phase under that one claim, silently. The
+bordered one paints its labels through a raw `colorize`, so the translucent end went to
+the emitter: a debug trap under a faded tint alone.
+
+The loud end is now spent against the chip's surface, then floored. Spent, because the
+other end cannot carry: it is not a palette slot, and giving it the accent's alpha would
+fade a label the theme never faded. Floored after, because the floor reads RGB, not
+alpha. Exact for a faded tint on an opaque surface; under a faded surface an
+approximation, since what the cell shows is that surface composited over whatever is
+behind it. `ActiveChipCycle` asserts that its two ends agree about alpha. An opaque
+accent is untouched by the spend, so a shipped palette's bytes do not move.
+
+The order matters in practice, not only in principle. Tried the other way round once —
+floored, then spent — the loud end fell under the 3.0 readability floor for ten of the
+sixteen shipped palettes under a faded tint, as low as 1.53:1, and the suite now checks
+the floor after the spend.
+
+The bordered strip's own chrome — its walls, tops and mouth — still paints raw, and still
+traps under a wholly faded palette (§16.3).
 
 An opaque palette's bytes do not change: an opaque colour is its own opaque spelling,
 and spending it returns it untouched.

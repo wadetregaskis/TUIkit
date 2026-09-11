@@ -21,12 +21,23 @@ struct ActiveChipCycle {
     /// state, and its fill says which place; the focus says so in the label.
     let surface: Color
 
-    /// Where the active label rests: readable on the chip, and quiet.
+    /// Where the active label rests: readable on the chip, and quiet. Black or white
+    /// for the surface (`contrastingForeground`) — never a palette slot, so it has no
+    /// alpha of its own, which is what decides how ``labelBright`` treats one.
     let labelDim: Color
 
-    /// The loud end of the breath: the accent, floored so it stays readable on
-    /// the chip it is drawn on (a mid-tone accent on a mid-tone surface is the
-    /// case that fails).
+    /// The loud end of the breath: the accent, SPENT against the chip's surface and
+    /// then floored so it stays readable there (a mid-tone accent on a mid-tone
+    /// surface is the case that fails).
+    ///
+    /// Spent because the other end cannot carry: a breath between an opaque end and
+    /// a translucent one has an alpha that moves with its phase, and the run the strip
+    /// leaves behind is replayed under ONE claim per cell (§29). Exact for a faded tint
+    /// on an opaque surface; under a faded SURFACE an approximation, since what the cell
+    /// shows is that surface composited over whatever is behind it.
+    ///
+    /// Spent THEN floored: the floor reads RGB, not alpha, so a floor passed before
+    /// the spend is no floor after it.
     let labelBright: Color
 
     /// - Parameter restingLabel: where the active label sits when the strip
@@ -40,7 +51,14 @@ struct ActiveChipCycle {
         self.surface = surface
         labelDim = restingLabel
         labelBright = palette.accent.resolve(with: palette)
+            .spendingAlpha(over: surface)
             .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: surface)
+        // Every frame is a lerp or a swap of these two, so agreeing here is agreeing
+        // everywhere — and it is what the claim both strips derive from `labelNow`
+        // silently depends on.
+        assert(
+            labelDim.alpha == labelBright.alpha,
+            "a tab chip's breath ends disagree about alpha: \(labelDim.alpha) vs \(labelBright.alpha)")
     }
 
     /// Whether the active chip is breathing — the strip holds the focus, and
