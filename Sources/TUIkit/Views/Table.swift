@@ -2334,7 +2334,7 @@ where Value.ID: Hashable {
         // and for every mouse drag: see `reorderPrimaryHeldRow`.
         let primary = handler.reorderPrimaryHeldRow
         let rowRamp = cellRamp(rowWidth: rowWidth, context: context)
-        let rendered = sources.map { source -> (line: String, frames: [String]?) in
+        let rendered = sources.map { source -> (line: String, frames: [String]?, claims: [OpacityRegion]) in
             let row = renderRow(
                 item: data[source],
                 paint: RowPaint(row: source, ramp: rowRamp, width: rowWidth),
@@ -2342,7 +2342,7 @@ where Value.ID: Hashable {
                 isFocused: held, isSelected: held, context: context, palette: palette)
             let line = row.line
             let frames = row.pulseFrames
-            guard source != primary else { return (line, frames) }
+            guard source != primary else { return (line, frames, row.claims) }
             // ADDITIVE, as it is in `_ListCore`: the emphasis says "you are
             // steering this", the dim says "it is not in the list right now",
             // and both are true at once. Substituting one for the other is why
@@ -2354,12 +2354,20 @@ where Value.ID: Hashable {
             // the undimmed row would un-dim it on the first tick.
             return (
                 ANSIRenderer.applyPersistentDim(line),
-                frames.map { $0.map(ANSIRenderer.applyPersistentDim) })
+                frames.map { $0.map(ANSIRenderer.applyPersistentDim) },
+                row.claims)
         }
         return RenderedRow(
             lines: rendered.map(\.line),
             pulseFrames: rendered.contains { $0.frames != nil }
-                ? rendered.map { $0.frames ?? [] } : nil)
+                ? rendered.map { $0.frames ?? [] } : nil,
+            // Each copy's claims, on its own line of the slot. The dim moves no cell,
+            // so they name the cells they did; dropped, a translucent row showed at
+            // its opaque spelling for as long as it was held (§52). The claims and
+            // not the runs are what the `List` twin's `dimmed(_:)` carries, too.
+            claims: rendered.enumerated().flatMap { line, copy in
+                copy.claims.map { $0.shifted(byX: 0, y: line) }
+            })
     }
 
     /// Registers the table's rows as a drop destination that reports WHERE —

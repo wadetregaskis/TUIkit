@@ -2110,11 +2110,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let removedCount = handler.reorderRemovedRows.count
         if body.height < removedCount {
             let width = max(1, body.width)
+            // The pad goes BELOW the rows that were rendered, so their claims still
+            // name their own cells and come across unchanged.
+            let claims = body.opacityRegions
             body = FrameBuffer(
                 lines: body.lines
                     + Array(
                         repeating: String(repeating: " ", count: width),
                         count: removedCount - body.height))
+            body.opacityRegions = claims
         }
         // A keyboard move has no pointer to say where the row is, so the slot
         // says it: the row you are steering is emphasised, not a gap. Carried as
@@ -2184,7 +2188,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// Persistent, not a bare wrapper: a row of several styled runs carries a
     /// reset per run, and each one would otherwise end the dim early.
     private func dimmed(_ buffer: FrameBuffer) -> FrameBuffer {
-        FrameBuffer(lines: buffer.lines.map { ANSIRenderer.applyPersistentDim($0) })
+        var faint = FrameBuffer(lines: buffer.lines.map { ANSIRenderer.applyPersistentDim($0) })
+        // The claims come too, and nothing else does. The dim moves no cell, so a
+        // claim still names the cells it named; dropped, a translucent row showed at
+        // its opaque spelling for as long as it was held (§52). NOT the runs:
+        // replaying the undimmed frames would un-dim the copy on the first tick. Nor
+        // the hit regions, which would make a row in hand clickable, nor the
+        // overlays, whose drawing the dim never reached.
+        faint.opacityRegions = buffer.opacityRegions
+        return faint
     }
 
     /// The rows in hand as one buffer, in data order — what travels together,
@@ -2192,7 +2204,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// external drag hovering, which has no rows of ours to show).
     private func stacked(_ buffers: [FrameBuffer]) -> FrameBuffer? {
         guard !buffers.isEmpty else { return nil }
-        return FrameBuffer(lines: buffers.flatMap(\.lines))
+        var block = FrameBuffer(lines: buffers.flatMap(\.lines))
+        // Each row's claims, moved down past the rows stacked above it — and only
+        // its claims, for `dimmed(_:)`'s reasons. The row the cursor is on is not
+        // dimmed, so this is the only place its claims survive. Asked per row:
+        // nearly every row is opaque and has none.
+        var top = 0
+        for buffer in buffers {
+            if !buffer.opacityRegions.isEmpty {
+                block.opacityRegions += buffer.opacityRegions.map { $0.shifted(byX: 0, y: top) }
+            }
+            top += buffer.lines.count
+        }
+        return block
     }
 
     /// A gap the size of the dragged rows — `.cursor`'s "they land here".

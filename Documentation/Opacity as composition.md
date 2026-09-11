@@ -3332,3 +3332,23 @@ the claims the list paints itself (`rowClaims`: the selection mark and fixed fil
 not go through the reorder clip at all. No hold constructed so far has had any to move —
 every selected row is in hand, and the slot's background is a pulse — so that one is
 recorded here rather than fixed.
+
+
+## 52. A row in hand lost its claims at the slot (2026-09-10)
+
+A reorder takes the rows in hand out of the list and draws them only at the slot where
+they would land: as a faint copy under `.dimmed`, which is also what every keyboard move
+shows. Both twins built that copy from the rows' lines alone. `_ListCore` dimmed and
+stacked them with `FrameBuffer(lines:)`, which carries none of a buffer's payloads, and
+`Table.reorderSlotLines` kept each held row's line and pulse from a `renderRow` that
+returns its claims as well. So a translucent row showed at its opaque spelling for as
+long as it was held, and at its own alpha again once dropped. The grabbed row of a
+multi-row keyboard hold, which is not dimmed, showed it at full strength.
+
+The copies now carry their claims, and only their claims. The dim moves no cell, so a
+claim still names the cells it did. The runs stay behind, because replaying the undimmed
+frames would un-dim the copy on its first tick; so do the hit regions, because a row in
+hand is not a control; and so do the overlays, whose drawing the dim never reached.
+
+The slot's claims reach the list's buffer through the row pairing §51 repaired, so this
+needed that first: a front-clipped hold would have put them on another row.
