@@ -367,8 +367,11 @@ struct ListRenderTests {
         // end, so it's drawn purely by background colour — no glyph survives ANSI
         // stripping. Verify it in the raw output via the thumb's filled cell.
         let palette = context.environment.palette
-        let thumbCell = ScrollbarRenderer.styledCell(
-            .full, thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary)
+        let full = ScrollbarRenderer.paint(
+            of: .full, thumb: palette.foregroundSecondary, track: palette.foregroundQuaternary)
+        var column = ClaimingColumn()
+        column.append(full.glyph, ink: full.ink, field: full.field)
+        let thumbCell = column.lines[0]
         #expect(buffer.lines.contains { $0.contains(thumbCell) }, "background-filled thumb present: \(lines)")
         // A two-line row renders both of its lines next to the bar.
         #expect(joined.contains("Item 0") && joined.contains("detail"), "multi-line row renders: \(lines)")

@@ -256,20 +256,21 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             caretRun = caretRun ?? rendered.caret?.shifted(byX: 0, y: row)
         }
 
-        var barRuns: [AnimatedCellRun] = []
+        var bar: (runs: [AnimatedCellRun], claims: [OpacityRegion]) = ([], [])
         if hasVerticalOverflow {
-            barRuns = appendScrollbar(
+            bar = appendScrollbar(
                 to: &output, height: height, extent: displayLines.count,
                 offset: handler.scrollLine, barColumn: contentWidth,
                 isFocused: isFocused, context: context)
         }
 
         var buffer = FrameBuffer(lines: output)
+        buffer.opacityRegions += bar.claims
         // Never from a measure pass: its buffer describes a size being tried
         // on, not cells on screen, and a run outliving its cells repaints — on
         // a clock — over whatever took their place.
         if !context.isMeasuring {
-            buffer.animatedCells += barRuns
+            buffer.animatedCells += bar.runs
             if let caretRun { buffer.animatedCells.append(caretRun) }
         }
         registerMouse(
@@ -280,7 +281,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     }
 
     /// Appends a one-column vertical scroll indicator to each row, and returns
-    /// the animation runs its cells earn.
+    /// the animation runs its cells earn and the claims its colours owe.
     ///
     /// Converted WITH the caret rather than after it. The bar's pulse and the
     /// caret's blink shared one cause — a frame that read the live clock — so
@@ -291,8 +292,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     private func appendScrollbar(
         to output: inout [String], height: Int, extent: Int, offset: Int,
         barColumn: Int, isFocused: Bool, context: RenderContext
-    ) -> [AnimatedCellRun] {
-        let bar = ScrollbarRenderer.verticalScrollbar(
+    ) -> (runs: [AnimatedCellRun], claims: [OpacityRegion]) {
+        var bar = ScrollbarRenderer.verticalScrollbar(
             height: height, extent: extent, viewport: height, offset: offset,
             arrows: .none, proportional: true,
             // Pulses the accent while the editor is focused — the shared
@@ -300,17 +301,22 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             // The editor's bar is not a mouse target (it registers no region of
             // its own), so there is no hovered cell to answer.
             colors: .focusIndicating(isFocused: isFocused, hoveredCell: nil, context: context))
-        for index in 0..<min(height, output.count) {
-            output[index] += index < bar.count ? bar[index] : " "
-        }
+        // One cell per row the editor drew — an unpainted space past the bar's
+        // end, as it always was — so no claim outlives the row it was for.
+        let rows = min(height, output.count)
+        bar.fit(toCount: rows, field: nil)
+        for index in 0..<rows { output[index] += bar.lines[index] }
+        let claims = bar.claims(atColumn: barColumn)
         guard
             let pulse = ScrollbarColors.focusPulse(
                 isFocused: isFocused, hoveredCell: nil, context: context)
-        else { return [] }
-        return ScrollbarRenderer.verticalScrollbarRuns(
-            height: height, extent: extent, viewport: height, offset: offset,
-            arrows: .none, proportional: true, pulse: pulse
-        ).map { $0.shifted(byX: barColumn, y: 0) }
+        else { return ([], claims) }
+        return (
+            ScrollbarRenderer.verticalScrollbarRuns(
+                height: height, extent: extent, viewport: height, offset: offset,
+                arrows: .none, proportional: true, pulse: pulse
+            ).map { $0.shifted(byX: barColumn, y: 0) },
+            claims)
     }
 
     /// A blank row filled to `width`, painted with the field background.

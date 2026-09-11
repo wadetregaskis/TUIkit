@@ -115,13 +115,14 @@ extension OpacityRegion {
 
 extension Array where Element == OpacityRegion {
     /// Appends `claim`, merging it into the last region already here where the two
-    /// are adjacent on the same row and owe the same alphas.
+    /// are adjacent — side by side on the same rows, or stacked in the same columns —
+    /// and owe the same alphas.
     ///
-    /// Three places assemble a row's claims a run at a time — `ClaimingRow` for a
-    /// track or a dial, `Text.fragmentAlphaClaims` for a concatenation's fragments,
-    /// and `PaintRenderer.styled(pieces:)` for those fragments under a ramp — and
-    /// each had written this out. What they share is not the loop but the merge
-    /// rule, so that is what lives here.
+    /// Four places assemble claims a run at a time — `ClaimingRow` for a track or a
+    /// dial, `ClaimingColumn` for a scrollbar, `Text.fragmentAlphaClaims` for a
+    /// concatenation's fragments, and `PaintRenderer.styled(pieces:)` for those
+    /// fragments under a ramp — and each had written this out. What they share is
+    /// not the loop but the merge rule, so that is what lives here.
     ///
     /// Merging is worth doing rather than leaving to the resolver: a rim drawn a cell
     /// at a time is one colour for most of its length, and the resolver's cost is per
@@ -129,18 +130,33 @@ extension Array where Element == OpacityRegion {
     /// keeps a claim COUNT out of the contract — the number of rectangles a row needs
     /// is an implementation detail, and tests that pinned it were pinning that.
     ///
+    /// Stacking is the scrollbar's half. A bar is drawn a line at a time, one cell per
+    /// line, so its track is one rectangle only if a merge can go DOWN — otherwise a
+    /// bar as tall as the page states a region per row, and every row of the page
+    /// then scans all of them. The row-at-a-time callers state every claim on one
+    /// row, where two claims can never be stacked, so it changes nothing for them.
+    ///
     /// `nil` appends nothing, so a caller can hand the result of
     /// ``OpacityRegion/claim(offsetX:offsetY:width:height:ink:field:)`` straight in.
     public mutating func appendCoalescing(_ claim: OpacityRegion?) {
         guard let claim else { return }
-        if var last, last.offsetY == claim.offsetY, last.height == claim.height,
-            last.offsetX + last.width == claim.offsetX,
-            last.inkOpacity == claim.inkOpacity, last.fieldOpacity == claim.fieldOpacity,
+        if var last, last.inkOpacity == claim.inkOpacity, last.fieldOpacity == claim.fieldOpacity,
             last.opacity == claim.opacity, last.cycle == nil, claim.cycle == nil
         {
-            last.width += claim.width
-            self[count - 1] = last
-            return
+            if last.offsetY == claim.offsetY, last.height == claim.height,
+                last.offsetX + last.width == claim.offsetX
+            {
+                last.width += claim.width
+                self[count - 1] = last
+                return
+            }
+            if last.offsetX == claim.offsetX, last.width == claim.width,
+                last.offsetY + last.height == claim.offsetY
+            {
+                last.height += claim.height
+                self[count - 1] = last
+                return
+            }
         }
         append(claim)
     }

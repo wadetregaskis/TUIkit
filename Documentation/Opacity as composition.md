@@ -2729,6 +2729,10 @@ folded in here. The test hides the scrollbars with `.scrollIndicators(.hidden)` 
 so at the line, which is the difference between a gap that is recorded and one that is
 papered over.
 
+**Closed in §43**, which found the shape right and the count low: seven hosts drawing a
+bar, but also four padding cells that were emitted every frame whether or not any line
+used them — and would have kept trapping with every bar converted.
+
 ### 40.3 What the test does and does not prove
 
 It renders a spread — fields, a tab view, a toggle, a slider, a list, a table, a box, two
@@ -2933,3 +2937,104 @@ a call that does nothing is not free here.
 None of it is per-frame. `_ImageCore` keeps an `ImageRenderCache` keyed on the source, the
 size and every conversion parameter, so a picture is converted when something about it
 changes and served from the cache otherwise.
+
+
+## 43. The scrollbars claim (2026-09-10)
+
+§40.2 left the scrollbars open and said what the work was: a bar had to stop being
+`[String]`. That was right, and it was not all of it.
+
+### 43.1 A bar is a column, so its type is the row transposed
+
+`verticalScrollbar` returns a `ClaimingColumn`: one finished single-cell string per line,
+and the claims in the bar's own coordinates — column 0, row N for line N. It is built
+*out of* `ClaimingRow`: every cell goes through `ClaimingRow.append`, so the opaque
+spelling and the claim are still derived in one statement, in one place.
+`horizontalScrollbar` returns a `ClaimingRow` outright, because a horizontal bar is a row.
+
+`styledCell` was the one place a bar cell became bytes, which made it the one place the
+claim belonged and the one place with nowhere to put it. It is now
+`paint(of:thumb:track:)`, which returns the glyph and its two colours rather than bytes —
+and the two colours are the point: a fractional end cell draws its glyph in one of thumb
+and track and its field in the other, which way round depending on the edge it is
+anchored to. `.blockFine`'s boundary cell (§31.1) again.
+
+Two pieces of the shared machinery grew:
+
+- **`appendCoalescing` merges downward as well as across.** A bar is drawn a line at a
+  time, one cell per line, so its track is one rectangle only if a merge can stack.
+  Without it a bar as tall as the page states a region per row, and the resolver's fold
+  (§36.1) scans every region for every row — quadratic in the bar's height. The
+  row-at-a-time callers (`ClaimingRow`, `Text.fragmentAlphaClaims`,
+  `PaintRenderer.styled(pieces:)`) state every claim on one row, where two claims can
+  never be stacked, so it changes nothing for them.
+- **`ClaimingColumn.fit(toCount:field:)`.** Every host pairs the bar with lines of its
+  own, one for one, and the two counts are not always equal. It pads with blank cells in
+  whatever the host used to pad with — plain track for `List` and `Table`, an unpainted
+  space for the popup and the editor — and it *cuts* the claims with the lines they were
+  for: a popup showing fewer rows than its bar is tall must not leave a claim over its
+  bottom border.
+
+### 43.2 The trap that was not in the bar
+
+`Table` (twice), `_ListCore` and `ScrollView` each built an `emptyCell` —
+`ANSIRenderer.colorize(" ", background: track)` — eagerly, every frame, to pad any line
+past the bar's end. There is essentially never such a line: each host clips or pads its
+lines to the bar's height first, and in `ScrollView` it cannot happen at all. But
+`colorize` ran regardless, so under a faded palette the emitter's assertion fired from a
+cell nobody drew, and **converting the bar alone would have left all four trapping**.
+They are gone; `fit` pads — claims and all — only when there is something to pad.
+
+### 43.3 Seven hosts, and where each one's claim goes
+
+| host | column | row | |
+|---|---|---|---|
+| `ScrollView`, vertical | `contentWidth` | 0 | the memo keeps the column, claims included |
+| `ScrollView`, horizontal | 0 | the appended last row | the corner is appended to the same row: a field and no ink |
+| `TextEditor` | `contentWidth` | 0 | its first claims of any kind |
+| `List` | `contentRowWidth` | 0 | not slid |
+| `Table`, single-line | `contentInnerWidth` | 0 | not slid |
+| `Table`, multi-line | `contentWidth` | 0 | not slid |
+| drop-down popup | past the wall and the fitted content | 1 | in both arms |
+
+Two of those notes are the ones that could have gone wrong quietly:
+
+- **The rows' claims slide; the bar's do not.** `List` and `Table` move their rows under
+  overscroll (§1.5 of the anchoring spec) and slide the rows' claims with them, while the
+  bar stays exactly where it is. The bar's claims are added after the slide, not fed
+  through it.
+- **The popup claims its bar in the breathing arm too.** That arm states none of its
+  border's claims, because the border's alpha moves with the breath and a claim is one
+  alpha for every frame the line runs replay. The bar does not breathe — its colours are
+  the same in every frame — so its claim is true of all of them. Left inside the same
+  gate, it would have gone missing whenever an open menu's highlight pulsed.
+
+### 43.4 The focused bar keeps its runs, and says what that assumes
+
+A focused bar breathes through `AnimatedCellRun`s: the whole bar rendered once per frame
+of the cycle, and the rows that differ kept as runs. A run replays BYTES — opaque
+spellings now — and the claim under it is the drawn bar's, applied to every frame at one
+alpha per cell (§29.2). So the runs are right only if every frame owes exactly the
+claims the drawn bar does.
+
+That is written down as `assertOneClaim`, a debug assertion over every frame's claims.
+The drawn bar is one of the frames — its colour is `colorNow`, which indexes the same
+cycle `ScrollbarPulse.frames` maps — so the check is exact, not a sample.
+
+**It does not hold on every palette yet.** `pulseLift`'s loop and fallback leave through
+`compositing`, which drops the colour's alpha, so on a palette that takes them a faded
+accent breathes between 128 and 255 — and a debug build traps here, rather than
+blending every frame but one at the wrong alpha in silence. That is a fault in the
+breath, not in the bar, and it is fixed as its own change.
+
+### 43.5 What the test asserts
+
+`FadedPaletteRenderTests` draws every host's bar, no longer hiding them, and asserts more
+than that somebody claimed. A bar's arrows say exactly where it is, so each arrow's cell
+is checked for owing the arrow colour's alpha as ink and the track's as field — the fold
+the resolver makes for that one cell. The corner is checked for owing a field and no
+ink; the editor, which draws no arrows, for claiming nothing off the bar's column.
+
+The popup's breathing arm and the editor are asserted under a palette that fades ONLY
+the track. A breathing border and an editor's well under a wholly faded palette are gaps
+of their own, and loud, and neither is what these assert.

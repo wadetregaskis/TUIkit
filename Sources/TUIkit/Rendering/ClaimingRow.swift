@@ -3,7 +3,7 @@
 //
 //  A row of cells being assembled, together with the claim each run of them
 //  owes — the two halves of a translucent paint, written in one place so they
-//  cannot drift apart.
+//  cannot drift apart. And its transpose, a column one cell wide.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -86,5 +86,60 @@ struct ClaimingRow {
     mutating func skip(cells count: Int) {
         text += String(repeating: " ", count: max(0, count))
         cells += max(0, count)
+    }
+}
+
+// MARK: - A column of single cells
+
+/// A column one cell wide, assembled a line at a time: each line's finished bytes,
+/// and the cells that owe a blend.
+///
+/// The transpose of ``ClaimingRow``, and built out of it — every cell goes through
+/// `ClaimingRow.append`, so the pairing is still stated in exactly one place. Its
+/// user is the vertical scrollbar, which used to be `[String]`: one styled cell per
+/// line, handed to call sites that each put it at a column of their own, with
+/// nowhere for a claim to travel (§40.2). Claims in the column's own coordinates
+/// are what let each of them place the bar with one shift.
+struct ClaimingColumn {
+    /// One finished single-cell string per line, top to bottom.
+    private(set) var lines: [String] = []
+
+    /// The cells owing a blend, in the column's own coordinates: column 0, and row
+    /// N for line N. Cells stacked on one another that owe the same alphas are one
+    /// rectangle — see `appendCoalescing`.
+    private(set) var claims: [OpacityRegion] = []
+
+    var count: Int { lines.count }
+
+    var isEmpty: Bool { lines.isEmpty }
+
+    /// Appends one line: a single cell of `glyph`, painted in `ink` on `field`.
+    mutating func append(_ glyph: String, ink: Color?, field: Color?) {
+        var cell = ClaimingRow()
+        cell.append(glyph, cells: 1, ink: ink, field: field)
+        let line = lines.count
+        lines.append(cell.text)
+        for claim in cell.claims { claims.appendCoalescing(claim.shifted(byX: 0, y: line)) }
+    }
+
+    /// Cuts or pads the column to exactly `count` lines — padding with blank cells
+    /// painted in `field`, and cutting each claim back to the lines that are left.
+    ///
+    /// Every caller pairs the column with lines of its own, one for one, and the two
+    /// counts are not always equal: a list pads a bar shorter than its rows with
+    /// plain track, and a menu draws fewer rows than its bar is tall when it has
+    /// fewer to show. Stated here so a claim cannot outlive the line it was for.
+    mutating func fit(toCount count: Int, field: Color?) {
+        let count = max(0, count)
+        if lines.count > count {
+            lines.removeLast(lines.count - count)
+            claims = claims.compactMap { $0.clipped(toColumns: 0..<1, rows: 0..<count) }
+        }
+        while lines.count < count { append(" ", ink: nil, field: field) }
+    }
+
+    /// The claims where the column is drawn: in `column`, its line 0 on `row`.
+    func claims(atColumn column: Int, row: Int = 0) -> [OpacityRegion] {
+        claims.map { $0.shifted(byX: column, y: row) }
     }
 }

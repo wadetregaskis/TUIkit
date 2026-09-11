@@ -180,8 +180,9 @@ extension _ScrollViewCore {
             memo = VerticalScrollbarMemo(key: key, bar: bar, runs: runs)
             handler.verticalScrollbarMemo = memo
         }
-        let bar = memo.bar
-        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
+        var bar = memo.bar
+        // A cell on every line: plain track below a bar shorter than the viewport.
+        bar.fit(toCount: height, field: ScrollbarColors.track(in: palette))
         var lines = buffer.lines
         // The pad is what the buffer already knows about its lines where it
         // knows it; a scan of every line for the width it was just rendered
@@ -195,10 +196,10 @@ extension _ScrollViewCore {
                 ? (uniformPad ?? lineWidths.map { max(0, contentWidth - $0[index]) })
                 : contentWidth
             let pad = known ?? max(0, contentWidth - content.strippedLength)
-            let cell = index < bar.count ? bar[index] : emptyCell
-            lines[index] = content + String(repeating: " ", count: pad) + cell
+            lines[index] = content + String(repeating: " ", count: pad) + bar.lines[index]
         }
         var result = buffer.replacingLines(lines, width: contentWidth + 1, uniformWidth: true)
+        result.opacityRegions += bar.claims(atColumn: contentWidth)
         // The bar's own cells, handed to the run loop. Its column is the last
         // one — the content was padded out to `contentWidth` above — and only
         // the rows that actually change earn a run, so a tall bar does not
@@ -217,7 +218,7 @@ extension _ScrollViewCore {
         handler: ScrollViewHandler, isFocused: Bool, context: RenderContext
     ) -> FrameBuffer {
         let palette = context.environment.palette
-        let bar = ScrollbarRenderer.horizontalScrollbar(
+        var bar = ScrollbarRenderer.horizontalScrollbar(
             width: contentWidth,
             extent: handler.horizontal.extent,
             viewport: handler.horizontal.viewportHeight,
@@ -227,14 +228,14 @@ extension _ScrollViewCore {
             colors: .focusIndicating(
                 isFocused: isFocused, hoveredCell: handler.horizontal.hoveredBarCell,
                 context: context))
-        let corner =
-            hasVerticalBar
-            ? ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
-            : ""
+        if hasVerticalBar {
+            bar.append(" ", cells: 1, ink: nil, field: ScrollbarColors.track(in: palette))
+        }
         var lines = buffer.lines
-        lines.append(bar + corner)
+        lines.append(bar.text)
         var result = buffer.replacingLines(
             lines, width: contentWidth + (hasVerticalBar ? 1 : 0), uniformWidth: true)
+        result.opacityRegions += bar.claims.map { $0.shifted(byX: 0, y: lines.count - 1) }
         // The bar occupies the row just appended.
         if !context.isMeasuring,
             let pulse = ScrollbarColors.focusPulse(
@@ -278,6 +279,6 @@ struct VerticalScrollbarMemo {
     }
 
     let key: Key
-    let bar: [String]
+    let bar: ClaimingColumn
     let runs: [AnimatedCellRun]
 }

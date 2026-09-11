@@ -32,24 +32,29 @@ struct FadedPaletteRenderTests {
     /// only thing standing between carrying the alpha and a debug build that traps on
     /// somebody's theme.
     ///
-    /// **The scrollbars are deliberately hidden here, and that is a gap rather than a
-    /// tidy-up.** `ScrollbarRenderer.styledCell` and `_ListCore`'s `emptyCell` paint a
-    /// bar cell in `ScrollbarColors.track(in:)`, which carries the palette's alpha, and
-    /// neither can claim it: a bar is `[String]` — one styled cell per line — handed to
-    /// nine call sites that each place it at a column of their own. Closing it means the
-    /// bar becoming a claim-bearing type, exactly as `TrackRenderer.render` became
-    /// `ClaimingRow`, and that is its own commit. §40.2 records it; until then this
-    /// suite covers everything else and the emitter's assertion is the standing net.
-    private func render<V: View>(_ view: V, width: Int = 40, height: Int = 14) -> FrameBuffer {
+    /// The scrollbars were hidden here until a bar could claim (§40.2). They are drawn
+    /// now, and asserted more closely than the rest: a bar's arrows say exactly where
+    /// it is, so each arrow's cell is checked for owing the alpha of the colours
+    /// painted in it — not merely for somebody having claimed something.
+    private func render<V: View>(
+        _ view: V, palette: any Palette = FadedAll(), width: Int = 40, height: Int = 14
+    ) -> FrameBuffer {
+        renderToBuffer(view, context: context(palette: palette, width: width, height: height))
+    }
+
+    private func context(
+        palette: any Palette, width: Int, height: Int,
+        configure: (inout EnvironmentValues) -> Void = { _ in }
+    ) -> RenderContext {
         let tuiContext = TUIContext()
         var environment = EnvironmentValues()
-        environment.palette = FadedAll()
+        environment.palette = palette
         environment.applyRuntimeServices(from: tuiContext)
-        let context = RenderContext(
+        configure(&environment)
+        return RenderContext(
             availableWidth: width, availableHeight: height,
             environment: environment, tuiContext: tuiContext
         ).isolatingRenderCache()
-        return renderToBuffer(view, context: context)
     }
 
     /// `fieldBackground` is what a `TextField` draws its well in, and
@@ -87,9 +92,7 @@ struct FadedPaletteRenderTests {
                 List(selection: .constant(Set([0]))) {
                     ForEach(rows) { Text($0.name) }
                 }
-                .scrollIndicators(.hidden)
                 Table(rows) { TableColumn("Name") { $0.name } }
-                    .scrollIndicators(.hidden)
                 Text("boxed").padding().border()
             })
         #expect(!drawn.lines.isEmpty)
@@ -115,6 +118,154 @@ struct FadedPaletteRenderTests {
         #expect(!drawn.lines.isEmpty)
         #expect(!drawn.opacityRegions.isEmpty)
     }
+
+    // MARK: - The scrollbars
+
+    /// Both of a scroll view's bars, and the corner where they meet — which is
+    /// painted in the track colour with nothing drawn in it, so it owes a field and
+    /// no ink.
+    @Test("A scroll view's bars and their corner owe what they painted")
+    func scrollViewBarsClaim() {
+        let palette = FadedAll()
+        let drawn = render(
+            ScrollView([.horizontal, .vertical]) {
+                VStack(alignment: .leading) {
+                    ForEach(0..<30, id: \.self) { index in
+                        Text("row \(index) " + String(repeating: "x", count: 60))
+                    }
+                }
+            }
+            .scrollIndicators(.visible),
+            palette: palette, width: 30, height: 10)
+        expectArrowsClaimed(["▲", "▼", "◀", "▶"], in: drawn, palette: palette)
+        let corner = owed(atColumn: drawn.width - 1, row: drawn.height - 1, in: drawn)
+        #expect(
+            corner.ink == 1 && corner.field == owed(ScrollbarColors.track(in: palette)),
+            "the corner owes \(corner): \(drawn.lines.map(\.stripped))")
+    }
+
+    /// A list's bar and a table's, on both of the table's paths: the multi-line one
+    /// meters its bar in lines and merges it through code of its own.
+    @Test("List and table bars owe what they painted")
+    func listAndTableBarsClaim() {
+        struct Row: Identifiable, Hashable {
+            let id: Int
+            let name: String
+        }
+        let rows = (0..<30).map { Row(id: $0, name: "row\($0)") }
+        let palette = FadedAll()
+        let list = render(
+            List(selection: .constant(Set<Int>())) { ForEach(rows) { Text($0.name) } },
+            palette: palette, height: 10)
+        expectArrowsClaimed(["▲", "▼"], in: list, palette: palette)
+        let table = render(
+            Table(rows) { TableColumn("Name") { $0.name } }, palette: palette, height: 10)
+        expectArrowsClaimed(["▲", "▼"], in: table, palette: palette)
+        let wrapped = render(
+            Table(rows) { TableColumn("Name") { "\($0.name)\nsecond" }.lineLimit(2) },
+            palette: palette, height: 10)
+        expectArrowsClaimed(["▲", "▼"], in: wrapped, palette: palette)
+    }
+
+    /// A drop-down's bar, in both of the popup's arms.
+    ///
+    /// The breathing arm states none of its BORDER's claims — the border's alpha moves
+    /// with the pulse, and a claim is one alpha for every frame — and the bar was
+    /// nearly left out with it. The bar does not breathe, so its claim holds in every
+    /// frame. That arm is asserted under a palette that fades only the track, because
+    /// a breathing border under a wholly faded palette is the popup's own open gap,
+    /// and it is loud.
+    @Test("A drop-down's bar owes what it painted, still or breathing")
+    func dropdownBarClaims() {
+        for (palette, animation) in [
+            (FadedAll() as any Palette, TextCursorStyle.Animation.none), (FadedTrack(), .pulse),
+        ] {
+            let popup = DropdownMenu.popup(
+                DropdownMenu.Configuration(
+                    rows: (0..<20).map { .option(" item \($0)") }, highlightedRow: 0,
+                    innerWidth: 12, scroll: ScrollAxis(), followHighlight: false,
+                    autoRepeatToken: "faded-dropdown"),
+                context: context(palette: palette, width: 30, height: 10) {
+                    $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+                    // Room for six of the twenty rows, so the popup scrolls and draws
+                    // its bar. The default budget is 24 lines, and every row fits.
+                    $0.overlayContentHeight = 8
+                },
+                onHover: { _ in }, onActivate: { _ in }, onDismiss: {})
+            #expect(
+                popup.animatedCells.isEmpty == (animation == TextCursorStyle.Animation.none),
+                "the \(animation) arm is the one being asserted")
+            expectArrowsClaimed(["▲", "▼"], in: popup, palette: palette)
+        }
+    }
+
+    /// A text editor's bar, which has no arrows: every claim the editor makes must be
+    /// on the bar's column, and a track cell there must owe the track's alpha. Under a
+    /// palette that fades only the track, because the editor's well is painted in
+    /// `fieldBackground`, which a wholly faded palette fades too — and the well is not
+    /// what this asserts.
+    @Test("A text editor's bar owes what it painted, and nothing else claims")
+    func textEditorBarClaims() {
+        let palette = FadedTrack()
+        let drawn = render(
+            TextEditor(text: .constant((0..<30).map { "line \($0)" }.joined(separator: "\n")))
+                .frame(width: 20, height: 6),
+            palette: palette)
+        let column = drawn.width - 1
+        #expect(!drawn.opacityRegions.isEmpty, "the bar claimed nothing")
+        #expect(
+            drawn.opacityRegions.allSatisfy { $0.offsetX == column && $0.width == 1 },
+            "a claim off the bar's column \(column): \(drawn.opacityRegions)")
+        let track = owed(ScrollbarColors.track(in: palette))
+        #expect(
+            (0..<drawn.height).contains { owed(atColumn: column, row: $0, in: drawn).field == track },
+            "no cell of the bar owes the track's alpha: \(drawn.opacityRegions)")
+    }
+
+    /// Asserts each of `glyphs` was drawn exactly once, and that its cell owes the
+    /// arrow colour's alpha as ink and the track's as field — which is what a bar
+    /// that is neither focused nor hovered paints there.
+    private func expectArrowsClaimed(
+        _ glyphs: [Character], in buffer: FrameBuffer, palette: any Palette
+    ) {
+        let expected = (
+            ink: owed(palette.foregroundTertiary), field: owed(ScrollbarColors.track(in: palette)))
+        for glyph in glyphs {
+            let found = cells(of: glyph, in: buffer)
+            #expect(found.count == 1, "'\(glyph)' is drawn once: \(buffer.lines.map(\.stripped))")
+            for cell in found {
+                let owed = owed(atColumn: cell.column, row: cell.row, in: buffer)
+                #expect(
+                    owed.ink == expected.ink && owed.field == expected.field,
+                    "'\(glyph)' at \(cell) owes \(owed), and was painted at \(expected)")
+            }
+        }
+    }
+
+    /// The factor a colour's alpha becomes in a claim.
+    private func owed(_ color: Color) -> Double {
+        OpacityRegion.opacity(of: color.alpha)
+    }
+
+    /// What the claims covering one cell multiply to, ink and field: the fold the
+    /// resolver makes for that cell (`OpacityResolution.foldedAlphas`).
+    private func owed(
+        atColumn column: Int, row: Int, in buffer: FrameBuffer
+    ) -> (ink: Double, field: Double) {
+        buffer.opacityRegions
+            .filter { $0.contains(column: column, row: row) }
+            .reduce((ink: 1.0, field: 1.0)) { ($0.ink * $1.inkOpacity, $0.field * $1.fieldOpacity) }
+    }
+
+    /// Every cell `glyph` was drawn in. Columns are characters of the stripped line,
+    /// which are cells for everything these tests draw.
+    private func cells(of glyph: Character, in buffer: FrameBuffer) -> [(column: Int, row: Int)] {
+        buffer.lines.enumerated().flatMap { row, line in
+            line.stripped.enumerated().compactMap { column, character in
+                character == glyph ? (column: column, row: row) : nil
+            }
+        }
+    }
 }
 
 /// Every slot translucent. `Palette` requires nine and derives the rest, so this is
@@ -131,4 +282,21 @@ private struct FadedAll: Palette {
     let error = Color.rgb(220, 40, 40).opacity(0.5)
     let info = Color.rgb(40, 120, 220).opacity(0.5)
     let border = Color.rgb(120, 120, 130).opacity(0.5)
+}
+
+/// Every slot opaque but the quietest rung, which is where a scroll track's colour
+/// comes from — so a bar can be asserted inside a control whose other paints are not
+/// the subject.
+private struct FadedTrack: Palette {
+    let id = "faded-track"
+    let name = "Faded track"
+    let background = Color.rgb(10, 10, 20)
+    let foreground = Color.rgb(230, 230, 240)
+    let accent = Color.rgb(0, 180, 200)
+    let success = Color.rgb(40, 200, 40)
+    let warning = Color.rgb(220, 200, 40)
+    let error = Color.rgb(220, 40, 40)
+    let info = Color.rgb(40, 120, 220)
+    let border = Color.rgb(120, 120, 130)
+    let foregroundQuaternary = Color.rgb(110, 110, 120).opacity(0.5)
 }

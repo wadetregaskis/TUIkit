@@ -1357,7 +1357,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler: ItemListHandler<SelectionValue>,
         context: RenderContext,
         palette: any Palette
-    ) -> [String] {
+    ) -> ClaimingColumn {
         let extentLines: Int
         let offsetLines: Int
         if visibleRows.allSatisfy({ $0.row.buffer.height == 1 }) {
@@ -1424,7 +1424,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         origin: WindowOrigin,
         listHasFocus: Bool,
         contentRowWidth: Int,
-        bar: [String],
+        bar: ClaimingColumn,
         style: any ListStyle,
         context: RenderContext
     ) -> (
@@ -1433,8 +1433,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     ) {
         let palette = context.environment.palette
         let contentHeight = bar.count
-        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
-        func barCell(at line: Int) -> String { line < bar.count ? bar[line] : emptyCell }
 
         // Content-only row lines. The bar cell is merged in at the END, keyed by
         // absolute line index, so an overscroll slide moves the rows and leaves
@@ -1533,13 +1531,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         while lines.count < contentHeight { lines.append(blank) }
 
         // §1.5: slide the rows within the bar's span, then pair each with its
-        // bar cell by absolute line index — the bar itself never moves.
+        // bar cell by absolute line index — the bar itself never moves, and
+        // neither do its claims. Plain track below a bar shorter than the lines.
         let slid = handler.overscrollState.slid(lines, blank: blank)
+        var bar = bar
+        bar.fit(toCount: slid.count, field: ScrollbarColors.track(in: palette))
         return (
-            slid.enumerated().map { $0.element + barCell(at: $0.offset) },
+            zip(slid, bar.lines).map { $0 + $1 },
             slidRanges(ranges, handler: handler, lineCount: slid.count),
             slidRuns(pulseRuns, handler: handler, lineCount: slid.count, topOffset: 0),
-            slidClaims(rowClaims, handler: handler, lineCount: slid.count, topOffset: 0))
+            slidClaims(rowClaims, handler: handler, lineCount: slid.count, topOffset: 0)
+                + bar.claims(atColumn: contentRowWidth))
     }
 
     /// A row's lines, its pulse frames and its own runs, clipped TOGETHER.

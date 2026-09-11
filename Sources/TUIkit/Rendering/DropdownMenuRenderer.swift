@@ -188,7 +188,7 @@ enum DropdownMenu {
         let wantsBar = window.wantsBar
 
         let palette = context.environment.palette
-        let barCells: [String]? =
+        var bar: ClaimingColumn? =
             wantsBar
             ? ScrollbarRenderer.verticalScrollbar(
                 height: maxVisible, extent: rows.count, viewport: maxVisible,
@@ -200,13 +200,16 @@ enum DropdownMenu {
                     thumb: palette.foregroundSecondary, track: ScrollbarColors.track(in: palette),
                     arrow: palette.foregroundTertiary))
             : nil
+        // One cell per row drawn — an unpainted space past the bar's end, as it
+        // always was — so no claim is left over a row the popup does not have.
+        bar?.fit(toCount: window.visible.count, field: nil)
 
         let drawn = animatedLines(
             rows: rows,
             highlightedRow: config.highlightedRow,
             visibleRange: window.visible,
             innerWidth: config.innerWidth,
-            barCells: barCells,
+            barCells: bar?.lines,
             context: context)
         var buffer = FrameBuffer(lines: drawn.lines)
         buffer.animatedCells = drawn.runs
@@ -234,6 +237,16 @@ enum DropdownMenu {
                     offsetX: 1, offsetY: local + 1, width: ruleWidth, height: 1,
                     ink: borderColor)
             }
+        }
+        // The scrollbar's claims, in BOTH arms. The reason the pulsing arm states
+        // nothing above is that the border breathes, and a claim is one alpha for
+        // every frame; the bar does not breathe — its colours are the same in every
+        // frame the runs replay — so its claim is true of all of them. It sits in the
+        // rightmost interior column, past the wall and the content `lines` fitted to
+        // it, and its line 0 is the popup's row 1, under the top border.
+        if let bar {
+            buffer.opacityRegions += bar.claims(
+                atColumn: 1 + max(1, config.innerWidth - 1), row: 1)
         }
         attachMouseHandlers(
             to: &buffer,

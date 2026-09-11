@@ -845,7 +845,7 @@ enum ScrollbarRenderer {
         return Character(UnicodeScalar(0x2590 - min(8, eighths))!)
     }
 
-    /// Styles one track cell.
+    /// The glyph one track cell draws, and the colours it draws it in.
     ///
     /// Fully-covered and empty cells are drawn as a *space* coloured by background
     /// — the thumb colour and the track colour respectively — never as a `█` glyph.
@@ -858,17 +858,20 @@ enum ScrollbarRenderer {
     /// colour over the track, an inverted (top-/right-anchored) end swaps them so
     /// the thumb colour is the cell background — which is also how the two anchors
     /// Unicode lacks a partial-block series for are produced.
-    static func styledCell(_ cell: ScrollbarCell, thumb: Color, track: Color) -> String {
-        if cell.glyph == " " {
-            return ANSIRenderer.colorize(" ", background: track)
-        }
-        if cell.glyph == "█" {
-            return ANSIRenderer.colorize(" ", background: thumb)
-        }
-        if cell.inverted {
-            return ANSIRenderer.colorize(String(cell.glyph), foreground: track, background: thumb)
-        }
-        return ANSIRenderer.colorize(String(cell.glyph), foreground: thumb, background: track)
+    ///
+    /// A description rather than bytes. It used to return the styled cell, which was
+    /// the one place a bar cell became bytes and so the one place its claim belonged
+    /// — with nowhere to put one. The row or column the cell lands in now turns this
+    /// into bytes AND a claim in one statement, and an end cell is why that has to
+    /// know both colours: its glyph is one of thumb and track and its field the
+    /// other, the same two-channel cell as `.blockFine`'s boundary (§31.1).
+    static func paint(
+        of cell: ScrollbarCell, thumb: Color, track: Color
+    ) -> (glyph: String, ink: Color?, field: Color) {
+        if cell.glyph == " " { return (" ", nil, track) }
+        if cell.glyph == "█" { return (" ", nil, thumb) }
+        if cell.inverted { return (String(cell.glyph), track, thumb) }
+        return (String(cell.glyph), thumb, track)
     }
 
     /// The number of cells an arrow configuration reserves at each *end* combined
@@ -882,39 +885,34 @@ enum ScrollbarRenderer {
     }
 
     /// A vertical scrollbar `height` cells tall: a `▲`/`▼` arrow assembly at each
-    /// end (per `arrows`) wrapped around a sub-cell-precise track. Returns one
-    /// styled single-cell string per line. Arrows are dropped if the bar is too
-    /// short to also show a track.
+    /// end (per `arrows`) wrapped around a sub-cell-precise track. One cell per
+    /// line, with the claims its colours owe in the bar's own coordinates — the
+    /// caller knows which column the bar lands in and shifts them there. Arrows are
+    /// dropped if the bar is too short to also show a track.
     static func verticalScrollbar(
         height: Int, extent: Int, viewport: Int, offset: Int,
         arrows: ScrollbarArrows, proportional: Bool, colors: ScrollbarColors
-    ) -> [String] {
-        guard height > 0 else { return [] }
+    ) -> ClaimingColumn {
+        var bar = ClaimingColumn()
+        guard height > 0 else { return bar }
         let reserve = height > arrowReserve(arrows) ? arrowReserve(arrows) : 0
-        let trackLen = height - reserve
-        let lines = trackCells(
-            count: trackLen, extent: extent, viewport: viewport, offset: offset,
-            proportional: proportional, vertical: true
-        ).map {
-            styledCell($0, thumb: colors.thumb, track: colors.track)
-        }
-
-        guard reserve > 0 else { return lines }
-        func arrow(_ glyph: String, atCell cell: Int) -> String {
-            ANSIRenderer.colorize(
-                glyph, foreground: colors.arrowColor(atCell: cell),
-                background: colors.track)
+        func arrow(_ glyph: String, atCell cell: Int) {
+            bar.append(glyph, ink: colors.arrowColor(atCell: cell), field: colors.track)
         }
         // `single` → ▲ … ▼; `double` → ▲▼ … ▲▼ (both arrows at each end).
         let last = height - 1
-        let head =
-            reserve == 4
-            ? [arrow("▲", atCell: 0), arrow("▼", atCell: 1)] : [arrow("▲", atCell: 0)]
-        let tail =
-            reserve == 4
-            ? [arrow("▲", atCell: last - 1), arrow("▼", atCell: last)]
-            : [arrow("▼", atCell: last)]
-        return head + lines + tail
+        if reserve > 0 { arrow("▲", atCell: 0) }
+        if reserve == 4 { arrow("▼", atCell: 1) }
+        for cell in trackCells(
+            count: height - reserve, extent: extent, viewport: viewport, offset: offset,
+            proportional: proportional, vertical: true)
+        {
+            let drawn = paint(of: cell, thumb: colors.thumb, track: colors.track)
+            bar.append(drawn.glyph, ink: drawn.ink, field: drawn.field)
+        }
+        if reserve == 4 { arrow("▲", atCell: last - 1) }
+        if reserve > 0 { arrow("▼", atCell: last) }
+        return bar
     }
 
     /// The vertical bar's animation runs: one per row whose cell actually
@@ -941,8 +939,9 @@ enum ScrollbarRenderer {
                 arrows: arrows, proportional: proportional, colors: colors)
         }
         guard let first = frames.first else { return [] }
+        assertOneClaim(frames.map(\.claims))
         return (0..<first.count).compactMap { row in
-            let cells = frames.map { $0.indices.contains(row) ? $0[row] : "" }
+            let cells = frames.map { $0.lines.indices.contains(row) ? $0.lines[row] : "" }
             guard Set(cells).count > 1 else { return nil }
             return AnimatedCellRun(
                 offsetX: 0, offsetY: row, width: cells[0].strippedLength,
@@ -962,47 +961,61 @@ enum ScrollbarRenderer {
         width: Int, extent: Int, viewport: Int, offset: Int,
         arrows: ScrollbarArrows, proportional: Bool, pulse: ScrollbarPulse
     ) -> AnimatedCellRun? {
-        let frames = pulse.frames.map { colors in
+        let rows = pulse.frames.map { colors in
             horizontalScrollbar(
                 width: width, extent: extent, viewport: viewport, offset: offset,
                 arrows: arrows, proportional: proportional, colors: colors)
         }
+        assertOneClaim(rows.map(\.claims))
+        let frames = rows.map(\.text)
         guard let first = frames.first, Set(frames).count > 1 else { return nil }
         return AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: first.strippedLength,
             frames: frames, clock: .cursor)
     }
 
+    /// Traps, in a debug build, when a pulse's frames do not all owe the same
+    /// claims.
+    ///
+    /// A run replays BYTES, and the bytes are opaque spellings. The alpha is in the
+    /// drawn bar's claims, which the resolver applies to every frame of a run at one
+    /// alpha per cell (§29.2) — so a run is right only if every frame owes exactly
+    /// what the drawn bar does, and the drawn bar is one of these frames (its colour
+    /// is `colorNow`, which indexes the same cycle). That holds by construction while
+    /// both ends of the breath carry the accent's alpha. A breath whose ends disagree
+    /// would blend all but one of its frames at the wrong alpha with nothing on
+    /// screen to say so, since the bytes are fine; this is what says so.
+    private static func assertOneClaim(_ claims: [[OpacityRegion]]) {
+        assert(
+            claims.allSatisfy { $0 == claims.first },
+            "a scrollbar's pulse frames owe different claims: its breath's two ends disagree about alpha (§29)")
+    }
+
     /// A horizontal scrollbar `width` cells wide: a `◀`/`▶` arrow assembly at each
-    /// end wrapped around a sub-cell-precise track, joined into one styled string.
+    /// end wrapped around a sub-cell-precise track, as one row with the claims its
+    /// colours owe.
     static func horizontalScrollbar(
         width: Int, extent: Int, viewport: Int, offset: Int,
         arrows: ScrollbarArrows, proportional: Bool, colors: ScrollbarColors
-    ) -> String {
-        guard width > 0 else { return "" }
+    ) -> ClaimingRow {
+        var bar = ClaimingRow()
+        guard width > 0 else { return bar }
         let reserve = width > arrowReserve(arrows) ? arrowReserve(arrows) : 0
-        let trackLen = width - reserve
-        let trackStr = trackCells(
-            count: trackLen, extent: extent, viewport: viewport, offset: offset,
-            proportional: proportional, vertical: false
-        ).map {
-            styledCell($0, thumb: colors.thumb, track: colors.track)
-        }.joined()
-
-        guard reserve > 0 else { return trackStr }
-        func arrow(_ glyph: String, atCell cell: Int) -> String {
-            ANSIRenderer.colorize(
-                glyph, foreground: colors.arrowColor(atCell: cell),
-                background: colors.track)
+        func arrow(_ glyph: String, atCell cell: Int) {
+            bar.append(glyph, cells: 1, ink: colors.arrowColor(atCell: cell), field: colors.track)
         }
         let last = width - 1
-        let head =
-            reserve == 4
-            ? arrow("◀", atCell: 0) + arrow("▶", atCell: 1) : arrow("◀", atCell: 0)
-        let tail =
-            reserve == 4
-            ? arrow("◀", atCell: last - 1) + arrow("▶", atCell: last)
-            : arrow("▶", atCell: last)
-        return head + trackStr + tail
+        if reserve > 0 { arrow("◀", atCell: 0) }
+        if reserve == 4 { arrow("▶", atCell: 1) }
+        for cell in trackCells(
+            count: width - reserve, extent: extent, viewport: viewport, offset: offset,
+            proportional: proportional, vertical: false)
+        {
+            let drawn = paint(of: cell, thumb: colors.thumb, track: colors.track)
+            bar.append(drawn.glyph, cells: 1, ink: drawn.ink, field: drawn.field)
+        }
+        if reserve == 4 { arrow("◀", atCell: last - 1) }
+        if reserve > 0 { arrow("▶", atCell: last) }
+        return bar
     }
 }

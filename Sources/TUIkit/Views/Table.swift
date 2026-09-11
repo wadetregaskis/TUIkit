@@ -1073,14 +1073,13 @@ where Value.ID: Hashable {
         // measure pass (the clamp above is render-gated), and the raw form
         // would construct an inverted range (e.g. `1300..<2`) and trap.
         let visibleRange = handler.visibleRange
-        let bar = ScrollbarRenderer.verticalScrollbar(
+        var bar = ScrollbarRenderer.verticalScrollbar(
             height: contentHeight, extent: data.count, viewport: contentHeight, offset: visibleRange.lowerBound,
             arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             colors: ScrollbarColors(
                 thumb: palette.foregroundSecondary, track: ScrollbarColors.track(in: palette),
                 arrow: palette.foregroundTertiary))
-        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
 
         // Content-only row lines; the bar cell is merged in at the END, keyed by
         // absolute line index, so an overscroll slide moves the rows and leaves
@@ -1149,9 +1148,10 @@ where Value.ID: Hashable {
             indicatorLines: 0, lineCount: contentHeight)
         while rowLines.count < contentHeight { rowLines.append(padded("")) }
         let blankRow = String(repeating: " ", count: max(0, contentInnerWidth))
-        let lines = handler.overscrollState.slid(rowLines, blank: blankRow)
-            .enumerated()
-            .map { $0.element + ($0.offset < bar.count ? bar[$0.offset] : emptyCell) }
+        let slid = handler.overscrollState.slid(rowLines, blank: blankRow)
+        // A bar cell on every line — plain track below a bar shorter than the lines.
+        bar.fit(toCount: slid.count, field: ScrollbarColors.track(in: palette))
+        let lines = zip(slid, bar.lines).map { $0 + $1 }
 
         return (
             lines,
@@ -1159,7 +1159,9 @@ where Value.ID: Hashable {
             // indicator line on this path — so a run and the band it belongs to
             // can never end up on different rows.
             rowRuns(pulseRuns, slide: slide, topOffset: 0, lineCount: lines.count),
-            rowClaims(rowOpacity, slide: slide, topOffset: 0, lineCount: lines.count),
+            // The bar's claims are NOT slid: the bar stays put while the rows move.
+            rowClaims(rowOpacity, slide: slide, topOffset: 0, lineCount: lines.count)
+                + bar.claims(atColumn: contentInnerWidth),
             PopulatedRenderState(
                 handler: handler, focusID: persistedFocusID, visibleRange: visibleRange,
                 scrollOffsetAbove: 0, drawnBands: bands, hasScrollbar: true,
@@ -1357,13 +1359,13 @@ where Value.ID: Hashable {
         // never needs (see `heightOf`), so it is summed only when a bar is
         // actually drawn — the same discipline `_ListCore.listScrollbarCells`
         // keeps.
-        let bar: [String] =
+        let bar =
             showsScrollbar
             ? multiLineScrollbarCells(
                 window: window, contentHeight: contentHeight,
                 height: heightOf, handler: handler, columnWidths: columnWidths,
                 context: context, palette: palette)
-            : []
+            : ClaimingColumn()
         let composed = composeMultiLineRows(
             window: window, handler: handler, tableHasFocus: tableHasFocus,
             rows: MultiLineRowLayouts(columnWidths: columnWidths, layout: layoutOf),
@@ -1427,7 +1429,7 @@ where Value.ID: Hashable {
         columnWidths: [Int],
         context: RenderContext,
         palette: any Palette
-    ) -> [String] {
+    ) -> ClaimingColumn {
         // Everything that shapes a row's wrapped height, so a stale mean
         // cannot outlive the layout that produced it (see `extentMeanCache`).
         var hasher = Hasher()
@@ -1604,7 +1606,7 @@ where Value.ID: Hashable {
         rows: MultiLineRowLayouts,
         innerWidth: Int,
         contentHeight: Int,
-        bar: [String],
+        bar: ClaimingColumn,
         context: RenderContext
     ) -> (lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion]) {
         let palette = context.environment.palette
@@ -1750,16 +1752,17 @@ where Value.ID: Hashable {
         guard showsBar else { return (lines, runs + chromeRuns, claims) }
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
-        // is (§1.5) — the same composition the single-line path uses.
-        let emptyCell = ANSIRenderer.colorize(" ", background: ScrollbarColors.track(in: palette))
+        // is (§1.5) — the same composition the single-line path uses, claims
+        // included: plain track below a bar shorter than the lines, and the
+        // bar's claims on its own column, unslid.
         while lines.count < contentHeight {
             lines.append(String(repeating: " ", count: contentWidth))
         }
+        var bar = bar
+        bar.fit(toCount: lines.count, field: ScrollbarColors.track(in: palette))
         return (
-            lines.enumerated().map { index, line in
-                line + (index < bar.count ? bar[index] : emptyCell)
-            },
-            runs + chromeRuns, claims)
+            zip(lines, bar.lines).map { $0 + $1 },
+            runs + chromeRuns, claims + bar.claims(atColumn: contentWidth))
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first

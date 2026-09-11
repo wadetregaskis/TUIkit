@@ -70,14 +70,27 @@ struct ScrollbarTests {
         // Adjacent block glyphs leave a hairline gap in some terminals; a
         // background-coloured space does not, and it covers the whole cell so a
         // one-cell thumb is as solid as a multi-cell one.
-        let full = Bar.styledCell(.full, thumb: .red, track: .blue)
-        #expect(!full.contains("█"), "full cell must not use a block glyph: \(full)")
-        let empty = Bar.styledCell(.empty, thumb: .red, track: .blue)
-        #expect(!empty.contains("█"), "empty cell must not use a block glyph: \(empty)")
+        let full = Bar.paint(of: .full, thumb: Color.red, track: Color.blue)
+        #expect(
+            full.glyph == " " && full.ink == nil && full.field == Color.red,
+            "a full cell is a thumb-coloured space, not a block glyph: \(full)")
+        let empty = Bar.paint(of: .empty, thumb: Color.red, track: Color.blue)
+        #expect(
+            empty.glyph == " " && empty.ink == nil && empty.field == Color.blue,
+            "an empty cell is a track-coloured space: \(empty)")
         // A fractional end still needs a partial glyph — there is no background-only
-        // way to draw a sub-cell boundary.
-        let partial = Bar.styledCell(ScrollbarCell(glyph: "▄", inverted: false), thumb: .red, track: .blue)
-        #expect(partial.contains("▄"), "a fractional end keeps its partial glyph: \(partial)")
+        // way to draw a sub-cell boundary — and its two channels come from different
+        // colours, which way round depending on which edge it is anchored to.
+        let partial = Bar.paint(
+            of: ScrollbarCell(glyph: "▄", inverted: false), thumb: Color.red, track: Color.blue)
+        #expect(
+            partial.glyph == "▄" && partial.ink == Color.red && partial.field == Color.blue,
+            "a fractional end keeps its partial glyph, in the thumb over the track: \(partial)")
+        let inverted = Bar.paint(
+            of: ScrollbarCell(glyph: "▄", inverted: true), thumb: Color.red, track: Color.blue)
+        #expect(
+            inverted.glyph == "▄" && inverted.ink == Color.blue && inverted.field == Color.red,
+            "an inverted end draws the track's glyph over a thumb field: \(inverted)")
     }
 
     @Test("The thumb is at least one whole cell")
