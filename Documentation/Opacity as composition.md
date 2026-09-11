@@ -1170,13 +1170,13 @@ mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark 
 (§57), and a focused switch's coloured track (§58). Plus an animated `.border` whose frames
 share one alpha (§59). Plus a `TextEditor`'s rows, its blank rows and its caret's ink
 (§61). Plus a resizable view's grips, at rest and breathing (§62). Plus a split view
-divider's grip dots and pulsing field (§63).
+divider's grip dots and pulsing field (§63). Plus a drop-down menu's breathing border
+(§64).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
-Still open, found by reading or review and not yet probed: an animated `.border` whose
-frames are at several alphas and the drop-down menu's breathing border, which drop their
-alpha without a word (§59.4); and the field under a text caret, which both carets drop
+Still open: an animated `.border` whose frames are at several alphas, which drops its
+alpha without a word (§59.2); and the field under a text caret, which both carets drop
 while they blink over a faded well (§61.2).
 
 
@@ -1312,9 +1312,9 @@ alpha. The claim was therefore made only for a still colour, and the animating a
 said to stay loud. It did not: §18.3 put every frame through `band` at its opaque
 spelling, so the arm dropped the alpha in silence. Half closed in §59: a border whose frames
 share one alpha claims it and keeps its runs; one whose frames do not is still unclaimed
-(§59.2). The drop-down menu is in the same position and is not
-closed: always animating by default, so in practice its chrome is claimed only when the
-emphasis is `.none`.
+(§59.2). The drop-down menu was in the same position, and its
+border pair disagreed besides; both of its ends are spent since §64, so it claims in
+either arm.
 
 **`focusIndicatorPrefix`.** It draws a `●` outside any band, so it has no frame to
 belong to and its caller (`ButtonStyle`) would have to claim the cell. Untouched
@@ -1859,12 +1859,13 @@ What actually blocks a claim is narrower, and there are only two cases:
    bullet under a faded palette — §48; nine, with the text scroll indicators' breath
    under a faded tint — §53; ten, with a tab chip's breath under a faded tint — §55;
    eleven, with a switch track's under a faded tint or foreground — §58; twelve, with a
-   split view divider's grip dot on hover — §63.)
+   split view divider's grip dot on hover — §63; thirteen, with a drop-down menu's
+   breathing border — §64.)
 
 A caller's own `AnimatedColor` is outside all of that: nothing normalises its frames, and
 the type's documented example breathes between two palette slots that a faded tint sets
 at different alphas. A border handed one whose frames disagree still cannot claim
-(§59.2). Nor, unfixed, can the drop-down menu's border pair — another copy (§59.4).
+(§59.2).
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3065,10 +3066,9 @@ the resolver makes for that one cell. The corner is checked for owing a field an
 ink; the editor, which draws no arrows, for claiming nothing off the bar's column.
 
 The popup's breathing arm and the editor are asserted under a palette that fades ONLY
-the track. A breathing popup border under a wholly faded palette is a gap of its own,
-and not what these assert; an editor's well was another, and is claimed since §61. The
-border's gap is not loud, as this said: its frames go through `band` at their opaque
-spelling, so it drops the alpha in silence (§59).
+the track. A breathing popup border under a faded accent was a gap of its own — silent,
+not loud as this once said, since its frames go through `band` at their opaque spelling —
+and its ends are spent since §64; an editor's well was another, claimed since §61.
 
 
 ## 44. The scrollbar's breath: a sixth copy of the pulse pair (2026-09-10)
@@ -3607,10 +3607,8 @@ case). A colour whose alpha moves with its frames is not that.
 ### 59.4 Still open
 
 - **An animated border at several alphas** (§59.2).
-- **The drop-down menu's breathing border.** It is its own renderer, not `.border`, and its
-  pair is §29's again — the dim end spent, the bright end carried — so it is several
-  alphas under any faded accent, and wants `breathEnds` before any claim can hold. It
-  states no claims while it pulses.
+- **The drop-down menu's breathing border**, its own renderer, whose pair was §29's again —
+  the dim end spent, the bright end carried. Closed in §64.
 - **A resizable view's grips**, the other `AnimatedColor.run` consumer, drew their still
   frame through `colorize` with the raw tint and claimed nothing, so a faded tint trapped.
   Closed in §62.
@@ -3734,4 +3732,22 @@ claims. Those are every frame's claims. The colours that move are the dot's brea
 background's `accentFillPulse`, both spent at both ends, and a resting dot is the tertiary
 rung in every frame. `combineColumns` already carried a divider's claims across, through
 `appendHorizontally`; there had been none to carry. An opaque palette's bytes do not
+change.
+
+
+## 64. A drop-down menu's breathing border (2026-09-10)
+
+An open drop-down's border echoes the highlighted row's pulse at lower intensity, from
+`DropdownMenu.pulseEnds`. That pair was §29's a thirteenth time: the dim end the accent
+composited over the page, the bright end the raw accent. Under a faded accent its frames
+were at different alphas, so the breathing arm — the default — stated no claim for its
+chrome, and its frames went out at their opaque spelling: the tint's alpha dropped in
+silence. The still arm, under `.none`, claimed the raw accent's alpha.
+
+The pair now comes from `breathEnds`, spent at both ends. Every frame of the border is
+opaque, so the claim taken from the frame drawn is every frame's, and it is stated in both
+arms now — empty in both, since the colour is opaque. A debug build asserts that the frames
+share one alpha. Under `.none` the border is the accent spent over the page rather than
+the raw accent claimed: how every other focus breath treats its bright end, blending toward
+the page rather than toward whatever the popup covers. An opaque palette's bytes do not
 change.

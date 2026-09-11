@@ -213,38 +213,32 @@ enum DropdownMenu {
             context: context)
         var buffer = FrameBuffer(lines: drawn.lines)
         buffer.animatedCells = drawn.runs
-        // The popup's chrome, when the theme's `border` is faded — and only when
-        // the picture is STILL. An emphasis that pulses repaints every one of
-        // these cells from its own frames each tick, and one region carrying the
-        // phase drawn now would resolve every later phase at the wrong alpha — and
-        // this pair's phases do differ, since its dim end is spent and its bright end
-        // carries the accent's alpha (§59.4). The pulsing arm stays unhonoured, and
-        // silently: its frames are emitted at their opaque spelling — through
-        // `BorderRenderer.band`, and `opaqueSpelling` directly for the inset rule — so
-        // nothing trips the emitter.
-        if drawn.runs.isEmpty {
-            let borderColor = drawn.borderColor
-            buffer.opacityRegions = BorderRenderer.opacityClaims(
-                outerWidth: config.innerWidth + BorderRenderer.borderWidthOverhead,
-                height: drawn.lines.count,
-                style: context.environment.appearance.borderStyle, color: borderColor)
-            // The inset separators, which are neither the frame nor a full-width
-            // rule: they span the content column only, stopping short of a
-            // scrollbar that is coloured by something else entirely.
-            let ruleWidth = wantsBar ? max(1, config.innerWidth - 1) : config.innerWidth
-            // Row `local` of the window is line `local + 1` — the same offset the
-            // hit regions use, for the same reason: the top border is line 0.
-            buffer.opacityRegions += window.visible.enumerated().compactMap { local, index in
-                guard case .divider = rows[index] else { return nil }
-                return OpacityRegion.claim(
-                    offsetX: 1, offsetY: local + 1, width: ruleWidth, height: 1,
-                    ink: borderColor)
-            }
+        // The popup's chrome — the frame and the inset rules, in the border's colour,
+        // the accent's breath. Both of that breath's ends are spent (`pulseEnds`,
+        // §64), so every frame of it is at one alpha, and the claim taken from the
+        // frame drawn is every frame's, in the breathing arm as in the still one. The
+        // bytes are the opaque spelling: through `BorderRenderer.band`, and
+        // `opaqueSpelling` directly for the inset rule.
+        let borderColor = drawn.borderColor
+        buffer.opacityRegions = BorderRenderer.opacityClaims(
+            outerWidth: config.innerWidth + BorderRenderer.borderWidthOverhead,
+            height: drawn.lines.count,
+            style: context.environment.appearance.borderStyle, color: borderColor)
+        // The inset separators, which are neither the frame nor a full-width
+        // rule: they span the content column only, stopping short of a
+        // scrollbar that is coloured by something else entirely.
+        let ruleWidth = wantsBar ? max(1, config.innerWidth - 1) : config.innerWidth
+        // Row `local` of the window is line `local + 1` — the same offset the
+        // hit regions use, for the same reason: the top border is line 0.
+        buffer.opacityRegions += window.visible.enumerated().compactMap { local, index in
+            guard case .divider = rows[index] else { return nil }
+            return OpacityRegion.claim(
+                offsetX: 1, offsetY: local + 1, width: ruleWidth, height: 1,
+                ink: borderColor)
         }
-        // The scrollbar's claims, in BOTH arms. The reason the pulsing arm states
-        // nothing above is that the border breathes, and a claim is one alpha for
-        // every frame; the bar does not breathe — its colours are the same in every
-        // frame the runs replay — so its claim is true of all of them. It sits in the
+        // The scrollbar's claims, in both arms, like the chrome's: the bar does not
+        // breathe — its colours are the same in every frame the runs replay — so its
+        // claim is true of all of them. It sits in the
         // rightmost interior column, past the wall and the content `lines` fitted to
         // it, and its line 0 is the popup's row 1, under the top border.
         if let bar {
@@ -427,10 +421,12 @@ enum DropdownMenu {
             // `accentFillPulse` means — and asking for the pair keeps both ends
             // agreeing about a translucent accent (§21).
             highlight: palette.accentFillPulse(),
-            border: (
-                dim: palette.accent.opacity(ViewConstants.focusBorderDim, over: palette.background),
-                bright: palette.accent
-            )
+            // The border's pair through `breathEnds`, for the same reason. A dim end
+            // composited over the page beside a bright end that kept a faded accent's
+            // alpha breathed between two alphas, and no one claim could describe it
+            // (§64).
+            border: palette.accent.breathEnds(
+                dimmedTo: ViewConstants.focusBorderDim, over: palette.background)
         )
     }
 
@@ -554,6 +550,11 @@ enum DropdownMenu {
         let ends = Self.pulseEnds(palette: context.environment.palette)
         let highlights = cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
         let borders = cycle.colors(dim: ends.border.dim, bright: ends.border.bright)
+        // One alpha in every frame, or the chrome's claim — taken from the frame drawn —
+        // would be wrong for the rest (§64).
+        assert(
+            borders.allSatisfy { $0.alpha == borders[0].alpha },
+            "the popup border's breath disagrees about alpha (§29)")
         let step = cycle.step % max(1, cycle.frames.count)
         let drawn = draw(highlights[step], borders[step])
         guard cycle.isAnimating, !context.isMeasuring else {

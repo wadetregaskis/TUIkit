@@ -51,6 +51,9 @@ struct ControlIndicatorAlphaTests {
             // A focused scrollable's "N more" line: its ends are two palette slots, not
             // one colour re-spelled, so both spend (§53).
             ("scrollIndicatorBreath", scrollIndicatorBreath(palette: tinted, over: surface)),
+            // An open drop-down's border, echoing its highlight's pulse: a thirteenth
+            // copy, whose bright end was the raw accent (§64).
+            ("DropdownMenu.pulseEnds border", DropdownMenu.pulseEnds(palette: tinted).border),
         ] {
             #expect(pair.dim.isOpaque, "\(name) dim carried an alpha")
             #expect(pair.bright.isOpaque, "\(name) bright carried an alpha")

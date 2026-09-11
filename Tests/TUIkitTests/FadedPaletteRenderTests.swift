@@ -228,12 +228,11 @@ struct FadedPaletteRenderTests {
 
     /// A drop-down's bar, in both of the popup's arms.
     ///
-    /// The breathing arm states none of its BORDER's claims — the border's alpha moves
-    /// with the pulse, and a claim is one alpha for every frame — and the bar was
+    /// The breathing arm once stated none of its BORDER's claims — the border's alpha
+    /// moved with the pulse, and a claim is one alpha for every frame — and the bar was
     /// nearly left out with it. The bar does not breathe, so its claim holds in every
-    /// frame. That arm is asserted under a palette that fades only the track, because
-    /// a breathing border under a wholly faded palette is the popup's own open gap — a
-    /// silent one, since its frames go through `band` at their opaque spelling (§59).
+    /// frame. That arm is asserted under a palette that fades only the track, so the
+    /// bar's claims are the only ones in play; the border's breath is its own test.
     @Test("A drop-down's bar owes what it painted, still or breathing")
     func dropdownBarClaims() {
         for (palette, animation) in [
@@ -255,6 +254,31 @@ struct FadedPaletteRenderTests {
                 popup.animatedCells.isEmpty == (animation == TextCursorStyle.Animation.none),
                 "the \(animation) arm is the one being asserted")
             expectArrowsClaimed(["▲", "▼"], in: popup, palette: palette)
+        }
+    }
+
+    /// An open drop-down's border breathes toward the accent. Under a faded tint its
+    /// bright end kept the tint's alpha while its dim end spent it, so no one claim could
+    /// describe the breath, none was stated, and the frames replayed the raw accent at
+    /// full strength (§64). Both ends are spent now: the bright frame is the accent
+    /// spent over the page, and with every frame opaque the border claims nothing.
+    @Test("A drop-down's breathing border spends a faded accent at both ends")
+    func dropdownBorderBreathSpends() throws {
+        try withColorDepth(.truecolor) {
+            let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
+            let popup = DropdownMenu.popup(
+                DropdownMenu.Configuration(
+                    rows: (0..<3).map { .option(" item \($0)") }, highlightedRow: 0,
+                    innerWidth: 12, scroll: ScrollAxis(), followHighlight: false,
+                    autoRepeatToken: "faded-dropdown-border"),
+                context: context(palette: palette, width: 30, height: 10) {
+                    $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .pulse)
+                },
+                onHover: { _ in }, onActivate: { _ in }, onDismiss: {})
+            let top = try #require(popup.animatedCells.first { $0.offsetY == 0 }, "the border breathes")
+            let spent = code(palette.accent.spendingAlpha(over: palette.background), palette)
+            #expect(top.frames[0].contains(spent), "the bright frame: \(top.frames[0].debugDescription)")
+            #expect(popup.opacityRegions.isEmpty, "\(popup.opacityRegions)")
         }
     }
 
