@@ -22,6 +22,10 @@ import TUIkitStyling
 /// So focus is the text itself breathing between ``Palette/foregroundSecondary``
 /// and the accent, hover is a single lift of the resting colour, and the trail
 /// spaces itself with the single blanks in ``NavigationCrumbs/lead``.
+///
+/// Under a translucent palette or tint, a crumb at rest claims its colour's alpha
+/// over its own cells, and a focused one breathes between ends SPENT against the
+/// surface it sits on, so every frame is opaque (`Opacity as composition.md`, §47).
 struct _NavigationCrumbButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         _NavigationCrumbLabel(configuration: configuration)
@@ -57,33 +61,44 @@ private struct _NavigationCrumbLabel: View, Renderable, Layoutable {
         // resting on the crumb it already focused should not freeze the breath.
         let hovered = configuration.isHovered && !isFocused
 
+        // A disabled crumb spends its alpha against the page, as every disabled
+        // control does (§31.3): opaque, so it claims nothing below.
         let resting: Color =
             configuration.isEnabled
             ? palette.foregroundSecondary
             : palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
-        let bright = palette.accent
 
-        func drawn(_ color: Color) -> String {
-            var styled = style
-            styled.foregroundColor = color
-            return ANSIRenderer.render(label, with: styled)
-        }
-
+        // Still: nothing replays these cells, so the colour CARRIES its alpha — the
+        // bytes state its opaque spelling and the alpha travels as a claim over
+        // exactly the crumb's cells, the pairing a plain button's label makes. The
+        // pointer's lift carries too (§28.1), so it is claimed the same way.
         guard isFocused else {
-            return FrameBuffer(
-                lines: [drawn(hovered ? palette.hoveredForeground(resting) : resting)])
+            let color = hovered ? palette.hoveredForeground(resting) : resting
+            var still = style
+            still.foregroundColor = color
+            var buffer = FrameBuffer(lines: [ANSIRenderer.render(label, with: still.opaqueColours)])
+            buffer.opacityRegions.appendCoalescing(
+                OpacityRegion.claim(width: label.strippedLength, height: 1, ink: color))
+            return buffer
         }
 
-        let cycle = context.environment.selectionEmphasis.cycle(true)
-        var buffer = FrameBuffer(lines: [drawn(cycle.colorNow(dim: resting, bright: bright))])
-        // A still cycle (`.selectionIndicatorStyle(.none)`) is already drawn —
-        // at `bright`, which is how focus still reads with the animation off.
-        guard !context.isMeasuring else { return buffer }
-        buffer.animatedCells += [
-            cycle.run(dim: resting, bright: bright, offsetX: 0, offsetY: 0, draw: drawn)
-        ].compactMap { $0 }
-        return buffer
+        // Breathing: a run replays its frames under ONE claim per cell (§29.2), so
+        // both ends SPEND their alpha against the ground the crumb is drawn on, and
+        // every frame is opaque and owes nothing. They were a resting rung and the
+        // accent — two slots with alphas of their own, so a faded tint alone put 255
+        // at one end and 128 at the other, and a faded palette put a translucent
+        // colour into every frame. `spendingAlpha` on each end, not
+        // `BorderRenderer.breathEnds(from:on:)`: that breathes one colour against a
+        // dimmed copy of itself, and would lose the accent. A still focus
+        // (`.selectionIndicatorStyle(.none)`) is drawn spent too, as the plain
+        // button's ● is (§30.3), so focus shows one bright colour either way.
+        let surface = context.environment.enclosingSurface
+        return BreathingLabel.draw(
+            label, style: style,
+            ends: (resting.spendingAlpha(over: surface), palette.accent.spendingAlpha(over: surface)),
+            cycle: context.environment.selectionEmphasis.cycle(true),
+            indicating: true, isMeasuring: context.isMeasuring)
     }
 
     /// The crumb's text, clipped to what it was offered.

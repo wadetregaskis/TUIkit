@@ -222,6 +222,47 @@ struct FadedPaletteRenderTests {
             "no cell of the bar owes the track's alpha: \(drawn.opacityRegions)")
     }
 
+    // MARK: - The navigation bar
+
+    /// The probe that trapped, and then every cell of the trail under a palette whose
+    /// rungs fade by DIFFERENT amounts — under `FadedAll` every slot owes 128, so a
+    /// cell claimed from the wrong slot would pass. The crumb is at rest here: this
+    /// suite's context installs no focus manager.
+    @Test("A navigation bar's trail owes what each part painted")
+    func navigationBarClaims() {
+        let probe = NavigationStack(path: .constant([1])) {
+            Text("root").navigationTitle("Root")
+                .navigationDestination(for: Int.self) { Text("screen \($0)").navigationTitle("Next") }
+        }
+        #expect(!render(probe).lines.isEmpty)
+
+        let palette = FadedNavigation()
+        let drawn = render(probe, palette: palette, width: 40, height: 8)
+        #expect(
+            drawn.lines.first?.stripped.hasPrefix(" Root \(NavigationCrumbs.separator) Next") == true,
+            "the trail, not the Back button: \(drawn.lines.map(\.stripped))")
+        let spans: [(columns: Range<Int>, ink: Double)] = [
+            (0..<5, owed(palette.foregroundSecondary)),  // " Root": the crumb, lead blank included
+            (5..<7, owed(palette.foregroundTertiary)),  // " ›": the separator
+            (7..<12, owed(palette.foreground)),  // " Next": the screen you are on
+            (12..<40, 1),  // the spacer and the padding
+        ]
+        for span in spans {
+            for column in span.columns {
+                let owes = owed(atColumn: column, row: 0, in: drawn)
+                #expect(
+                    owes.ink == span.ink && owes.field == 1,
+                    "row 0 column \(column) owes \(owes), painted at \(span.ink)")
+            }
+        }
+        let rule = cells(of: "─", in: drawn).filter { $0.row == 1 }
+        #expect(rule.count == 40, "the rule spans the bar: \(drawn.lines.map(\.stripped))")
+        for cell in rule {
+            let owes = owed(atColumn: cell.column, row: 1, in: drawn)
+            #expect(owes.ink == owed(palette.border) && owes.field == 1, "rule \(cell) owes \(owes)")
+        }
+    }
+
     /// Asserts each of `glyphs` was drawn exactly once, and that its cell owes the
     /// arrow colour's alpha as ink and the track's as field — which is what a bar
     /// that is neither focused nor hovered paints there.
@@ -277,4 +318,22 @@ private struct FadedTrack: Palette {
     let info = Color.rgb(40, 120, 220)
     let border = Color.rgb(120, 120, 130)
     let foregroundQuaternary = Color.rgb(110, 110, 120).opacity(0.5)
+}
+
+/// Every text rung faded by a different amount, so a claim can be traced to the slot
+/// that painted it — under `FadedAll` every slot owes 128, and a cell claimed from the
+/// wrong one would pass.
+private struct FadedNavigation: Palette {
+    let id = "faded-navigation"
+    let name = "Faded navigation"
+    let background = Color.rgb(10, 10, 20)
+    let foreground = Color.rgb(230, 230, 240).opacity(0.5)
+    let foregroundSecondary = Color.rgb(200, 200, 210).opacity(0.7)
+    let foregroundTertiary = Color.rgb(150, 150, 160).opacity(0.3)
+    let accent = Color.rgb(0, 180, 200).opacity(0.6)
+    let success = Color.rgb(40, 200, 40)
+    let warning = Color.rgb(220, 200, 40)
+    let error = Color.rgb(220, 40, 40)
+    let info = Color.rgb(40, 120, 220)
+    let border = Color.rgb(120, 120, 130).opacity(0.4)
 }

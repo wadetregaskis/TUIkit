@@ -1161,19 +1161,19 @@ Plus the image glyph path (§42), which was the last of them, and the four `Pale
 surface derivations, which now carry (§39).
 
 Plus the scrollbars: every host's track, thumb, arrows and corner, and the focused
-bar's breath (§43–§45).
+bar's breath (§43–§45). Plus the navigation bar's crumbs, at rest and breathing (§47).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by rendering pages under a wholly faded palette rather than by
 reading: a `TextEditor`'s rows and caret; the text-style scroll indicators; a bordered
-`TabView`'s strip and its active chip's breath; `NavigationStack`'s crumbs; a
-`ColorPicker` swatch's focus breath; a hovered button face under a fully faded tint; a
-`Toggle`'s bracketed mark and its coloured switch track while focused; and an animated
-`.border` whose frames disagree about alpha. Four were seen to trap in a debug build
-when probed — the editor, the indicators, the bordered strip and the crumbs. Two more
-trap by reading, not yet by running: the swatch and the hovered face. The toggle's
-two, the border, and the compact strip's chip drop the alpha without a word.
+`TabView`'s strip and its active chip's breath; a `ColorPicker` swatch's focus breath; a
+hovered button face under a fully faded tint; a `Toggle`'s bracketed mark and its
+coloured switch track while focused; and an animated `.border` whose frames disagree
+about alpha. Three were seen to trap in a debug build when probed — the editor, the
+indicators and the bordered strip. Two more trap by reading, not yet by running: the
+swatch and the hovered face. The toggle's two, the border, and the compact strip's chip
+drop the alpha without a word.
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -1846,7 +1846,8 @@ What actually blocks a claim is narrower, and there are only two cases:
    run's frames tick independently and their product is not one run.
 2. **A pulse whose phases have different alphas** — which was this bug, in four
    places, and is now none. (Five, with the caret in §29.3; six, with the scrollbar's
-   lift, which was not migrated until §43 and so could not be tested — §44.)
+   lift, which was not migrated until §43 and so could not be tested — §44; seven, with
+   a navigation crumb's breath under a faded tint — §47.)
 
 So the declines that named the pulse as their reason are stale. Their real remaining
 obstacle is per-*cell* alpha (`Table`'s banded arm, `Text`'s ramped ink), which is a
@@ -3160,3 +3161,62 @@ debug check. None of it resolves above this machine's floor. `table` and
 What is NOT measured is a bar under a faded palette. No scenario renders one, so the
 cost of the claims themselves — a handful of stacked rectangles per bar, which is what
 the downward merge in §43.1 exists to keep a handful — is argued, not timed.
+
+
+## 47. The navigation bar's crumbs: one paint site, three arms (2026-09-10)
+
+`NavigationStack(path: [1])` under a wholly faded palette trapped. Of everything in the
+bar, one paint was raw: `_NavigationCrumbLabel`'s `drawn`, which handed
+`palette.foregroundSecondary` to `ANSIRenderer.render` as it came. The rest was already
+honoured — the separator and the current screen are `Text` (§16.3), the rule is a
+`Divider` (§19), and the Back button is the plain style, whose label claims and whose ●
+spends.
+
+### 47.1 At rest, the crumb claims
+
+A still crumb is drawn once and nothing replays it, so its colour carries its alpha: the
+bytes state the opaque spelling and one claim covers exactly the crumb's cells, its lead
+blank included, as `Text` claims its own blanks. The pointer's lift carries its base's
+alpha (§28.1) and is claimed the same way. A disabled crumb is unchanged — it was already
+a composite over the page (§31.3), opaque, and claims nothing.
+
+### 47.2 Focused, both ends spend
+
+The breath ran between the resting rung and the accent: two slots, each with an alpha of
+its own. Under a wholly faded palette every frame was translucent and building the run
+trapped. Under a faded `.tint` alone the resting end was opaque and the accent was not, so
+the frames' alphas moved with the phase — §29's pair, a seventh time.
+
+Both ends now SPEND against the surface the crumb is drawn on (`enclosingSurface`):
+`spendingAlpha` on each, which is `ButtonCapCycle`'s shape. Not
+`BorderRenderer.breathEnds(from:on:)`, which breathes one colour against a dimmed copy of
+itself and would lose the accent. Every frame is opaque and the run owes nothing.
+
+A still focus (`.selectionIndicatorStyle(.none)`) is drawn spent too, as the plain
+button's ● is (§30.3). That is the one place this departs from "a still paint claims",
+and it is deliberate: focus then shows one bright colour whether it animates or not.
+
+### 47.3 One breath, not two ramps
+
+The crumb had its own copy of the focused arm — `colorNow` for the colour drawn now and
+`run(dim:bright:)` for the frames — which built the identical pulse ramp twice. It now goes
+through `BreathingLabel.draw`, the breath a `Link` and a plain-style button already used,
+lifted out of the private button-style body that kept it from anyone else.
+
+### 47.4 What focus changes about the blend
+
+At rest the crumb resolves against the real backdrop at composite time; focused, its ends
+are spent over `enclosingSurface`. The two agree unless something other than that surface
+is behind the bar — a `ZStack` sibling, or a surface that is itself translucent, whose
+colour the spend uses as though it were opaque. Every §29 spend site makes the same
+approximation. `Link` spends even at rest, to guarantee continuity (§30.3); the crumb takes
+the other side of that trade, so that a still crumb honours what is really behind it.
+
+### 47.5 The tests
+
+The bar is checked cell by cell under a palette whose rungs fade by DIFFERENT amounts:
+under a wholly faded palette every slot owes 128, and a claim taken from the wrong slot
+would pass. The breath is checked by its bytes — spent over the page under a faded palette
+and under a faded tint, and over a set surface rather than the page. The disabled test
+passes before and after the fix, and says so: it guards §31.3's choice rather than
+covering this one.

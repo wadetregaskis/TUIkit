@@ -266,4 +266,149 @@ struct NavigationCrumbAppearanceTests {
             "one blank between each part: \(bar)")
         #expect(!bar.contains(String(BorderRenderer.focusIndicator)), "no bullet in the bar: \(bar)")
     }
+
+    // MARK: - Under a translucent palette or tint (§47)
+
+    /// The breath under a wholly faded palette: every frame must be spent — opaque —
+    /// so the run replays with no claim under it. Every frame is drawn when the run
+    /// is built, so a translucent one traps inside this test: that covers every tick,
+    /// not only the two ends (§29.3).
+    @Test("A focused crumb under a faded palette breathes opaque, and claims nothing")
+    func focusedCrumbSpendsAFadedPalette() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+                environment.palette = FadedAll()
+            }
+            let palette = context.environment.palette
+            let ground = palette.background.resolve(with: palette)
+            let buffer = renderToBuffer(crumb(" Library"), context: context)
+            #expect(buffer.opacityRegions.isEmpty, "\(buffer.opacityRegions)")
+            let frames = buffer.animatedCells.first?.frames ?? []
+            #expect(frames.count > 1, "still focused, still breathing")
+            #expect(frames.contains { $0.contains(code(palette.accent.spendingAlpha(over: ground), palette)) })
+            #expect(frames.contains {
+                $0.contains(code(palette.foregroundSecondary.spendingAlpha(over: ground), palette))
+            })
+        }
+    }
+
+    /// The ground is the surface the crumb sits on, not the page. With no surface set
+    /// the two are one colour, and the test above cannot tell them apart.
+    @Test("A focused crumb spends over the surface it sits on, not the page")
+    func focusedCrumbSpendsOverTheSurface() {
+        withColorDepth(.truecolor) {
+            let surface = Color.rgb(90, 20, 20)
+            let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+                environment.palette = FadedAll()
+                environment.surfaceBackground = surface
+            }
+            let palette = context.environment.palette
+            let page = palette.background.resolve(with: palette)
+            let frames =
+                renderToBuffer(crumb(" Library"), context: context).animatedCells.first?.frames ?? []
+            #expect(frames.contains { $0.contains(code(palette.accent.spendingAlpha(over: surface), palette)) })
+            #expect(!frames.contains { $0.contains(code(palette.accent.spendingAlpha(over: page), palette)) })
+        }
+    }
+
+    /// §29's pair again: an opaque resting rung and a translucent tint. Pinned by the
+    /// bytes: the bright end is the tint spent over the page, the dim end the rung as
+    /// it was.
+    @Test("A focused crumb under a faded tint breathes opaque, and claims nothing")
+    func focusedCrumbSpendsAFadedTint() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3)
+            let palette = context.environment.palette
+            let ground = palette.background.resolve(with: palette)
+            let tint = Color.red.opacity(0.5)
+            let buffer = renderToBuffer(crumb(" Library").tint(tint), context: context)
+            let frames = buffer.animatedCells.first?.frames ?? []
+            #expect(frames.count > 1)
+            #expect(frames.contains { $0.contains(code(tint.spendingAlpha(over: ground), palette)) })
+            #expect(frames.contains { $0.contains(code(palette.foregroundSecondary, palette)) })
+            #expect(buffer.opacityRegions.isEmpty, "\(buffer.opacityRegions)")
+        }
+    }
+
+    @Test("A still focus under a faded palette is drawn spent: no run, no claim")
+    func stillFocusSpends() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+                environment.palette = FadedAll()
+                environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .none)
+            }
+            let palette = context.environment.palette
+            let ground = palette.background.resolve(with: palette)
+            let buffer = renderToBuffer(crumb(" Library"), context: context)
+            #expect(buffer.animatedCells.isEmpty && buffer.opacityRegions.isEmpty)
+            #expect(buffer.lines.joined().contains(code(palette.accent.spendingAlpha(over: ground), palette)))
+        }
+    }
+
+    /// Every cell of the label owes the rung's alpha — the lead blank included, as a
+    /// `Text` claims its own blanks — and the cell after it owes nothing.
+    @Test("A resting crumb under a faded palette claims exactly its own cells")
+    func restingCrumbClaims() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+                environment.palette = FadedAll()
+            }
+            let palette = context.environment.palette
+            context.environment.focusManager!.register(FocusSentinel())
+            let buffer = renderToBuffer(crumb(" Albums"), context: context)
+            for column in 0..<7 {
+                let owes = owed(atColumn: column, row: 0, in: buffer)
+                #expect(
+                    owes.ink == owed(palette.foregroundSecondary) && owes.field == 1,
+                    "column \(column) owes \(owes): \(buffer.opacityRegions)")
+            }
+            let past = owed(atColumn: 7, row: 0, in: buffer)
+            #expect(past.ink == 1 && past.field == 1, "the cell after the crumb owes \(past)")
+            #expect(buffer.lines.joined().contains(code(palette.foregroundSecondary, palette)))
+        }
+    }
+
+    /// The lift carries its base's alpha, so the ALPHA cannot tell a hover claim from
+    /// a resting one — the bytes are what show the lift happened.
+    @Test("A hovered crumb under a faded palette claims the lift it drew")
+    func hoveredCrumbClaims() {
+        withColorDepth(.truecolor) {
+            let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+                environment.palette = FadedAll()
+            }
+            let dispatcher = context.environment.mouseEventDispatcher!
+            dispatcher.setActiveSupport(.full)
+            let palette = context.environment.palette
+            context.environment.focusManager!.register(FocusSentinel())
+
+            let view = crumb(" Albums")
+            let regions = renderToBuffer(view, context: context).hitTestRegions
+            dispatcher.setRegions(regions)
+            guard let region = regions.first else {
+                Issue.record("expected a hit-test region from a crumb")
+                return
+            }
+            _ = dispatcher.dispatch(
+                MouseEvent(
+                    button: .none, phase: .moved, x: region.offsetX + 2, y: region.offsetY))
+
+            let hovered = renderToBuffer(view, context: context)
+            let lift = palette.hoveredForeground(palette.foregroundSecondary)
+            #expect(hovered.lines.joined().contains(code(lift, palette)), "lifted: \(hovered.lines)")
+            for column in 0..<7 {
+                #expect(owed(atColumn: column, row: 0, in: hovered).ink == owed(lift))
+            }
+        }
+    }
+
+    /// A GUARD, not coverage of the fix: the disabled colour was already a composite
+    /// over the page, opaque, so this passes before and after. It holds §31.3's
+    /// choice in place.
+    @Test("A disabled crumb spends against the page, and claims nothing")
+    func disabledCrumbSpends() {
+        let context = makeRenderContext(width: 40, height: 3) { environment, _ in
+            environment.palette = FadedAll()
+        }
+        #expect(renderToBuffer(crumb(" Albums").disabled(true), context: context).opacityRegions.isEmpty)
+    }
 }
