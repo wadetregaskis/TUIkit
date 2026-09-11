@@ -470,52 +470,62 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // same three-step vocabulary every other affordance uses, and floored
         // against the surface it sits on for the same reason.
         let resting = palette.border
-        let tint: Color =
-            isFocused
-            ? palette.accent
-            : (isHovered ? palette.hoveredForeground(resting) : resting)
         let background = palette.background
         // Focused, the marks breathe — the same affordance every other focused
         // control shows, and the reason is the same: a still highlight on a
         // terminal reads as decoration, a breathing one reads as "this is where
         // the keyboard is".
         let animated = AnimatedColor.activeSection(isFocused, in: context.environment)
+        // The ink drawn now. Focused, it is the breath's current frame: the colour
+        // the run replays over it on the next tick, opaque at both ends. It used to
+        // be the raw accent, floored — so a faded tint reached the emitter, and the
+        // grip jumped shade on the first replayed tick (§62).
+        let ink =
+            animated?.current
+            ?? (isHovered ? palette.hoveredForeground(resting) : resting)
+                .ensuringRenderedContrast(atLeast: 2.4, against: background)
 
         // The corner belongs to a two-axis drag. A painted border has no line to
         // replace, so its corner is marked by tint alone — which is the only
         // mark it can carry, and the reason the block case stops there.
+        let corner = (x: buffer.width - 1, y: buffer.height - 1)
         if paintsItsCells {
-            stamp(
-                String(existing!), into: &buffer, at: (buffer.width - 1, buffer.height - 1),
-                tint: tint, animated: animated, background: background)
+            mark(
+                String(existing!), cells: 1, into: &buffer, at: corner,
+                ink: ink, animated: animated, background: background)
             return
         }
         if liveAxes == .all {
-            stamp(
-                glyphs.corner, into: &buffer, at: (buffer.width - 1, buffer.height - 1),
-                tint: tint, animated: animated, background: background)
+            mark(
+                glyphs.corner, cells: 1, into: &buffer, at: corner,
+                ink: ink, animated: animated, background: background)
         }
         drawEdgeGrips(
-            into: &buffer, axes: liveAxes, glyphs: glyphs, tint: tint, animated: animated,
+            into: &buffer, axes: liveAxes, glyphs: glyphs, ink: ink, animated: animated,
             background: background)
     }
 
-    /// Paints `glyph` over one cell, in the resting tint and in every frame of
-    /// the focused breath.
-    private func stamp(
-        _ glyph: String, into buffer: inout FrameBuffer, at cell: (x: Int, y: Int),
-        tint: Color, animated: AnimatedColor?, background: Color
+    /// Paints `text`, `cells` wide, over the border at `cell` — in `ink`, on the page's
+    /// own background — and leaves the focused breath's run over it.
+    ///
+    /// Through `ClaimingRow`, so the bytes state the opaque spelling and the overlay
+    /// carries the claim. `composited` punches the border's own claim from those cells
+    /// and lifts this one in its place, so each is claimed once; and the claim holds
+    /// for every frame of the run, since the breath's ink is opaque at both ends and
+    /// the field is the page's in all of them.
+    private func mark(
+        _ text: String, cells: Int, into buffer: inout FrameBuffer, at cell: (x: Int, y: Int),
+        ink: Color, animated: AnimatedColor?, background: Color
     ) {
-        let styled = ANSIRenderer.colorize(
-            glyph,
-            foreground: tint.ensuringRenderedContrast(atLeast: 2.4, against: background),
-            background: background)
-        // Plain `composited`: the overlay is one glyph this function just
-        // built, so it carries no opacity region to resolve. (The BASE may;
-        // resolution is a property of what is being drawn ON, not drawn on to.)
-        buffer = buffer.composited(with: FrameBuffer(lines: [styled]), at: cell)
-        if let run = animated?.run(offsetX: cell.x, offsetY: cell.y, draw: {
-            ANSIRenderer.colorize(glyph, foreground: $0, background: background)
+        var drawn = ClaimingRow()
+        drawn.append(text, cells: cells, ink: ink, field: background)
+        var overlay = FrameBuffer(lines: [drawn.text])
+        overlay.opacityRegions = drawn.claims
+        buffer = buffer.composited(with: overlay, at: cell)
+        if let run = animated?.run(offsetX: cell.x, offsetY: cell.y, draw: { colour in
+            var frame = ClaimingRow()
+            frame.append(text, cells: cells, ink: colour, field: background)
+            return frame.text
         }) {
             buffer.animatedCells.append(run)
         }
@@ -530,12 +540,8 @@ struct _UserResizableCore<Content: View>: View, Renderable {
     /// cell of border that would have said it more prettily.
     private func drawEdgeGrips(
         into buffer: inout FrameBuffer, axes liveAxes: ResizableAxes, glyphs: GripGlyphs,
-        tint: Color, animated: AnimatedColor?, background: Color
+        ink: Color, animated: AnimatedColor?, background: Color
     ) {
-        func styled(_ text: String, _ colour: Color) -> String {
-            ANSIRenderer.colorize(text, foreground: colour, background: background)
-        }
-
         /// `size` cells of `run`, centred — the border's own span between its
         /// two corners, which is `1..<(extent - 1)`.
         func centred(in extent: Int, size cap: Int) -> Range<Int>? {
@@ -550,15 +556,10 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         if liveAxes.contains(.vertical),
             let span = centred(in: buffer.width, size: GripSize.horizontal)
         {
-            let y = buffer.height - 1
-            let line = String(repeating: glyphs.horizontal, count: span.count)
-            buffer = buffer.composited(
-                with: FrameBuffer(lines: [styled(line, tint)]), at: (x: span.lowerBound, y: y))
-            if let run = animated?.run(
-                offsetX: span.lowerBound, offsetY: y, draw: { styled(line, $0) })
-            {
-                buffer.animatedCells.append(run)
-            }
+            mark(
+                String(repeating: glyphs.horizontal, count: span.count), cells: span.count,
+                into: &buffer, at: (x: span.lowerBound, y: buffer.height - 1),
+                ink: ink, animated: animated, background: background)
         }
 
         if liveAxes.contains(.horizontal),
@@ -566,13 +567,9 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         {
             let x = buffer.width - 1
             for row in span {
-                buffer = buffer.composited(
-                    with: FrameBuffer(lines: [styled(glyphs.vertical, tint)]), at: (x: x, y: row))
-                if let run = animated?.run(
-                    offsetX: x, offsetY: row, draw: { styled(glyphs.vertical, $0) })
-                {
-                    buffer.animatedCells.append(run)
-                }
+                mark(
+                    glyphs.vertical, cells: 1, into: &buffer, at: (x: x, y: row),
+                    ink: ink, animated: animated, background: background)
             }
         }
     }

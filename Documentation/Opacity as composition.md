@@ -1169,14 +1169,14 @@ breathing, in both strips (§55), and the bordered strip's own chrome — its to
 mouth, pads, fillers and rules (§56). Plus a focused `Toggle`'s bracketed mark and knob
 (§57), and a focused switch's coloured track (§58). Plus an animated `.border` whose frames
 share one alpha (§59). Plus a `TextEditor`'s rows, its blank rows and its caret's ink
-(§61).
+(§61). Plus a resizable view's grips, at rest and breathing (§62).
 
 Declined deliberately: `.opacity(_:)` on an `Image`'s PIXEL path (§17).
 
 Still open, found by reading or review and not yet probed: an animated `.border` whose
 frames are at several alphas and the drop-down menu's breathing border, which drop their
-alpha without a word; a resizable view's grips, which trap (§59.4); and the field under a
-text caret, which both carets drop while they blink over a faded well (§61.2).
+alpha without a word (§59.4); and the field under a text caret, which both carets drop
+while they blink over a faded well (§61.2).
 
 
 ## 17. Images: what is already right, and why the glyph path is a bigger piece (2026-09-09)
@@ -3609,9 +3609,9 @@ case). A colour whose alpha moves with its frames is not that.
   pair is §29's again — the dim end spent, the bright end carried — so it is several
   alphas under any faded accent, and wants `breathEnds` before any claim can hold. It
   states no claims while it pulses.
-- **A resizable view's grips**, the other `AnimatedColor.run` consumer. They draw their
-  still frame through `colorize` with the raw tint and state no claim, so a faded tint
-  trips the emitter's assertion — loud, not silent. By review, not yet run.
+- **A resizable view's grips**, the other `AnimatedColor.run` consumer, drew their still
+  frame through `colorize` with the raw tint and claimed nothing, so a faded tint trapped.
+  Closed in §62.
 - **§36.7's indeterminate bar, and `Spinner` for a cycle whose frames differ in width.**
   They decline their runs through `requestAnimation`, so both of §59.2's problems apply
   to them by reading; neither has been tested.
@@ -3688,3 +3688,29 @@ blank, scrolled across a tab and a wide glyph, disabled, focused with every care
 and animation, and with a selection — and checks cells for owing exactly the colours
 painted in them. The caret's own cell is checked for owing no ink, and deliberately not
 for its field. Under an opaque palette nothing is claimed.
+
+
+## 62. A resizable view's grips (2026-09-10)
+
+`.userResizable()` marks each draggable edge — and the corner, when both axes move — by
+stamping a glyph over the border in a tint: the border colour at rest, lifted when
+hovered, and while focused the breath `activeSection` gives a focus section's ●. The still
+frame went through `colorize` with the raw tint and the raw page background, and nothing
+claimed, so a faded tint — or a faded palette's border or background — reached the
+emitter and trapped.
+
+It was also two colours, not one, while focused. The still frame was the accent, floored
+for contrast; the run that replaced it on the next tick breathed through
+`activeSection`'s spent ends. So the grip changed shade on the first replayed tick, and
+under a faded tint the drawn frame and the run disagreed about alpha as well: no one claim
+could have fitted both.
+
+Now the frame drawn while focused is the breath's current one — the colour the run
+replays over it — and every frame is emitted at its opaque spelling through `ClaimingRow`,
+whose claim the overlay carries: the ink's alpha, and the page background's as a field.
+`composited` punches the border's own claim from those cells and lifts the grip's in its
+place, so each is claimed once, and the claim holds in every frame: the breath's ink is
+opaque at both ends, and the field is the page's in all of them. At rest and hovered the
+grip keeps its floored tint and claims its alpha. An opaque palette's bytes do not change
+at rest; focused, the frame drawn is the breath's current one rather than the floored
+accent, which is what the next tick showed anyway.
