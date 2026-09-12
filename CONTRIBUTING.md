@@ -140,8 +140,12 @@ The known blockers, in rough order of difficulty:
    `ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN`.
    `GetConsoleScreenBufferInfo` replaces `ioctl(TIOCGWINSZ)`.
 4. **The PTY smoke harness.** Everything in `Tools/Smoke/` — `tui_walk.py`,
-   `tui_screens.py`, `raw_probe.py`, `persistence_probe.py` — uses
-   `pty`/`termios`, so it is POSIX-only; a Windows equivalent needs ConPTY.
+   `tui_screens.py`, `raw_probe.py`, `persistence_probe.py`,
+   `faded_palette_sweep.py` — uses `pty`/`termios`, so it is POSIX-only; a
+   Windows equivalent needs ConPTY. (`faded_palette_sweep.py` is not wired into
+   CI: it takes about seven minutes, and §68 of `Documentation/Opacity as
+   composition.md` explains both what it catches that the walk cannot and why
+   that is a budget decision.)
    `Tools/Smoke/ci-pty-smoke.sh` is skipped on the Windows lanes for this
    reason, and they run `Stress --selfcheck` alone.
 

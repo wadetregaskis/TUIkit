@@ -3856,12 +3856,36 @@ ledger low by 3–6× each time — all of them re-read the same list, and each 
 recovered what the last one had missed rather than what nobody had looked at.
 
 So the app was run instead, with translucency everywhere. `CustomizablePalette.init(from:)`
-in the example takes a snapshot of every semantic colour; appending `.opacity(0.5)` to all
-of them but the four grounds fades every page of the app at once. In a debug build the
-emitter's assertion is armed, so any unclaimed paint site is a trap with the alpha in its
-message. One PTY process per page — a trap kills a walk, so `ci-pty-smoke.sh full` found
-exactly one bad page and stopped — with stderr on its own pipe, because `pyte`
-reconstructs a screen and a backtrace interleaves into unreadable columns through it.
+in the example takes a snapshot of every semantic colour, and
+`TUIKIT_EXAMPLE_PALETTE_ALPHA=0.5` now fades all of them but the four grounds — the grounds
+being a claim about how present a LAYER is rather than about paint, so fading them tests the
+compositor instead and makes every cell owe something, which buries the one that does not.
+In a debug build the emitter's assertion is armed, so any unclaimed paint site is a trap
+with the alpha in its message.
+
+It was found by patching that initialiser by hand; the environment variable is what the
+find turned into, and `Tools/Smoke/faded_palette_sweep.py` is the sweep itself, so the
+check is repeatable rather than a thing that happened once.
+
+**The existing walk cannot do this job, and that is measured rather than assumed.**
+Wiring a second `ci-pty-smoke.sh` walk under the fade looked like the cheap answer; with
+the drop-down marker's fix reverted on purpose, that walk reported every page alive,
+including the two the sweep names first. `tui_walk.py` steps a menu — `down*3,up` per item
+— and a `Picker`'s ✓ is not painted until the pop-up is OPENED. **A walk that only
+navigates cannot see a control that has to be opened**, so under a fade it proves only
+that the pages draw at rest. The sweep pokes each page (Tab, Space, arrows) and catches
+all six; on the same reverted build it trapped on six pages and exited non-zero.
+
+Two other things the sweep does that the walk cannot. It runs one process per page, so it
+reports the whole inventory instead of stopping at the first trap — which is the
+difference between six fixes and six rounds. And it keeps stderr on a pipe of its own,
+which the walk cannot: reconstructing a screen with `pyte` is the walk's whole method, and
+a Swift backtrace interleaves into unreadable columns through it.
+
+The cost is why it is not in CI: **7 min 15 s** for 35 pages, nearly all of it settling
+between keystrokes (12% CPU). `ci-pty-smoke.sh full` is about two minutes today and runs
+on one lane per OS, so this would roughly quadruple it. Whether that is worth buying is a
+budget question, not a technical one.
 
 Six sites, on ten-plus pages, none of them in any ledger here:
 
