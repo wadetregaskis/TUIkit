@@ -142,10 +142,10 @@ The known blockers, in rough order of difficulty:
 4. **The PTY smoke harness.** Everything in `Tools/Smoke/` — `tui_walk.py`,
    `tui_screens.py`, `raw_probe.py`, `persistence_probe.py`,
    `faded_palette_sweep.py` — uses `pty`/`termios`, so it is POSIX-only; a
-   Windows equivalent needs ConPTY. (`faded_palette_sweep.py` is not wired into
-   CI: it takes about seven minutes, and §68 of `Documentation/Opacity as
-   composition.md` explains both what it catches that the walk cannot and why
-   that is a budget decision.)
+   Windows equivalent needs ConPTY. (`faded_palette_sweep.py` runs at `full`
+   depth only, and is 7 min 15 s of the 11 min 23 s that costs; §68 of
+   `Documentation/Opacity as composition.md` explains what it catches that a
+   walk cannot.)
    `Tools/Smoke/ci-pty-smoke.sh` is skipped on the Windows lanes for this
    reason, and they run `Stress --selfcheck` alone.
 

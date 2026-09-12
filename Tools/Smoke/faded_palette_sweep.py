@@ -24,10 +24,10 @@ whole point of a separate script:
   separate, it is verbatim — and the frame that matters is the first one that is
   neither the emitter nor generic layout, which is the paint site.
 
-Not wired into CI: it takes about 7 min 15 s for 35 pages, nearly all of it
-settling between keystrokes (12% CPU), against the two minutes `ci-pty-smoke.sh
-full` costs today. Run it after touching a paint site, or when §68's class of bug
-is suspected.
+`ci-pty-smoke.sh full` runs this last, after the checks that answer in seconds,
+because it is 7 min 15 s of the 11 min 23 s that `full` now measures — nearly all
+of it settling between keystrokes, at 12% CPU. Worth running by hand after
+touching a paint site rather than waiting for CI.
 
 The system `python3` is enough: this reads raw bytes and reconstructs no screen,
 so unlike `tui_walk.py` it needs no `pyte` and no virtualenv.

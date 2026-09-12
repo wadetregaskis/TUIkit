@@ -3882,10 +3882,13 @@ difference between six fixes and six rounds. And it keeps stderr on a pipe of it
 which the walk cannot: reconstructing a screen with `pyte` is the walk's whole method, and
 a Swift backtrace interleaves into unreadable columns through it.
 
-The cost is why it is not in CI: **7 min 15 s** for 35 pages, nearly all of it settling
-between keystrokes (12% CPU). `ci-pty-smoke.sh full` is about two minutes today and runs
-on one lane per OS, so this would roughly quadruple it. Whether that is worth buying is a
-budget question, not a technical one.
+It runs in CI, at `full` depth, last in `ci-pty-smoke.sh` because it is far and away the
+most expensive thing there: **7 min 15 s** for 35 pages, nearly all of it settling between
+keystrokes (12% CPU). Measured end to end, `full` went from about four minutes to
+**11 min 23 s**. Two lanes run it — macOS 26 and Linux 6.3 — so that is the bill, and it
+was the owner's call to pay it. The ordering is deliberate: every other check in that
+script gives its signal in seconds, so the seven-minute one goes last and a fast failure
+stays fast.
 
 Six sites, on ten-plus pages, none of them in any ledger here:
 

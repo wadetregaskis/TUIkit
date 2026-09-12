@@ -17,7 +17,9 @@
 #                      CI lane, which is the point: an interactive-only crash
 #                      that is specific to one Swift version or architecture
 #                      still gets caught.
-#   full             — every menu item, ~2 minutes. One lane per OS runs this.
+#   full             — every menu item, plus the persistence probe and the
+#                      faded-palette sweep: ~11.5 minutes measured, of which the
+#                      sweep is 7.25. One lane per OS runs this.
 #
 # The split exists because tui_walk settles 0.25s after every keystroke, so the
 # walk is bounded by keystrokes rather than by anything the app does. It used to
@@ -114,6 +116,34 @@ echo "── mode 2027: pinned when needed, and only then ──"
 if [ "$DEPTH" = "full" ]; then
     echo "── persistence: settings survive a relaunch ──"
     "$VENV/bin/python" "$HERE/persistence_probe.py" --binary "$REPO/$BUILD_DIR/Example"
+fi
+
+# Last, because it is far and away the most expensive thing here — 7 min 15 s of
+# the 11 min 23 s `full` now measures, against about four for everything above,
+# and everything above gives its signal in seconds.
+#
+# A different failure class again: a paint site that hands a TRANSLUCENT colour
+# straight to the ANSI emitter trips the assertion in `Color+ANSICodes.swift`,
+# which in a debug build is a trap. Six such sites shipped past the whole unit
+# suite and past three re-counts of the ledger meant to list them, because every
+# one of those re-read the same list (§68 of `Documentation/Opacity as
+# composition.md`). Only running the app finds the site nobody wrote down.
+#
+# NOT a walk, and that distinction is the whole reason this is a second script
+# rather than `walk Example … ` with the fade exported. A walk was tried: with
+# one of those six fixes reverted on purpose it reported every page alive, while
+# the sweep trapped on six. `tui_walk.py` steps a menu, and a `Picker`'s selected
+# marker is not painted until the pop-up is OPENED — a walk that only navigates
+# cannot see a control that has to be opened, so under a fade it proves only that
+# the pages draw at rest. The sweep pokes each page, and runs one process per
+# page so that a trap (which kills the app) reports the whole inventory instead
+# of only the first one.
+#
+# Run through the venv's interpreter for one interpreter across `Tools/Smoke`,
+# though unlike the walk this one needs no `pyte` and would run under any
+# `python3`.
+if [ "$DEPTH" = "full" ]; then
+    "$VENV/bin/python" "$HERE/faded_palette_sweep.py" "$BUILD_DIR"
 fi
 
 echo "PTY smoke ($DEPTH): both apps survived."
