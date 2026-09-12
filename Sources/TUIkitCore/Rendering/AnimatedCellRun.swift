@@ -64,6 +64,40 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// frame would otherwise spin a core to animate cells no terminal can
     /// repaint that fast.
     public static let minimumFrameDuration: Double = 0.01
+
+    /// `seconds` as whole nanoseconds, rounded to the nearest.
+    ///
+    /// The one conversion every animation step boundary goes through. A clock's
+    /// elapsed time is a SUM of the sleeps it credited, and a sum of binary doubles is
+    /// not the decimal it spells: seven 0.05 s sleeps add to one ulp under 0.35, so a
+    /// floor taken in seconds selects the step BEFORE the one that is due — at every
+    /// step from 6 to 12 of a 50 ms grid, and at the literal `0.35 / 0.05` too. A flip
+    /// due on that wake did not happen, the time to the next change came out ~1e-17 s,
+    /// and a steady blink turned into a skipped half and a double flip.
+    ///
+    /// Nanoseconds are far finer than any frame and exact in an `Int64` for centuries,
+    /// so rounding there and dividing in integers puts every boundary on its own step.
+    /// `AnimatedCellRun`'s frame index, its time-to-change and `CursorTimer`'s tick
+    /// count all ask this, so what the render draws and what a replay splices cannot
+    /// disagree about which step an instant is in.
+    public static func nanoseconds(_ seconds: Double) -> Int64 {
+        Int64((seconds * 1_000_000_000).rounded())
+    }
+
+    /// Whole `frameDuration` steps in `elapsed`, counted at nanosecond resolution —
+    /// see ``nanoseconds(_:)``.
+    ///
+    /// `Int64` rather than `Int`, which is 32 bits on wasm32: a step count is bounded by
+    /// elapsed time, not by anything this can clamp, and a narrowing conversion that
+    /// traps there has shipped in this codebase before. Floor division, so a negative
+    /// elapsed steps backwards rather than towards zero.
+    public static func step(atElapsed elapsed: Double, frameDuration: Double) -> Int64 {
+        let duration = nanoseconds(frameDuration)
+        guard duration > 0 else { return 0 }
+        let time = nanoseconds(elapsed)
+        let quotient = time / duration
+        return time % duration < 0 ? quotient - 1 : quotient
+    }
 }
 
 // MARK: - AnimatedCellRun
@@ -215,8 +249,8 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// animation.
     public func index(atElapsed elapsed: Double) -> Int {
         guard frames.count > 1 else { return 0 }
-        let step = Int((elapsed / frameDuration).rounded(.down))
-        let index = step % frames.count
+        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: frameDuration)
+        let index = Int(step % Int64(frames.count))
         return index < 0 ? index + frames.count : index
     }
 
@@ -254,7 +288,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   fast one.
     public func timeUntilChange(afterElapsed elapsed: Double) -> Double {
         guard frames.count > 1 else { return frameDuration }
-        let step = (elapsed / frameDuration).rounded(.down)
+        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: frameDuration)
         let index = index(atElapsed: elapsed)
         let current = frames[index]
         // Time to the end of the frame now showing, then whole frames after it
@@ -266,8 +300,17 @@ public struct AnimatedCellRun: Sendable, Equatable {
         // and the answer was ~1e-17. That is not a rounding blemish, it is a
         // spinning run loop — a sleep of nothing, at the very moment the loop
         // is most likely to ask.
+        //
+        // And in whole NANOSECONDS, the unit `AnimationClock.step` counts in, so the end
+        // asked about is the end of the step actually showing. The seconds floor that
+        // replaced `truncatingRemainder` had the same flaw one level up: at a boundary
+        // reached by summing sleeps it picked the step before, whose end had already
+        // passed, and answered ~1e-17 again.
+        let untilStepEnds =
+            AnimationClock.nanoseconds(frameDuration) * (step + 1)
+            - AnimationClock.nanoseconds(elapsed)
         var remaining = max(
-            Self.shortestUsefulSleep, (step + 1) * frameDuration - elapsed)
+            Self.shortestUsefulSleep, Double(untilStepEnds) / 1_000_000_000)
         // The (picture, alpha) PAIR, not the picture alone: a frame that paints the
         // same cells in the same bytes but owes a different alpha shows something
         // different once the resolver has spent it, and sleeping through it would

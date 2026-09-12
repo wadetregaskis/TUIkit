@@ -104,7 +104,11 @@ final class CursorTimer {
 
     /// ``elapsed(for:)`` on the tick grid the phase formulas are written in.
     func ticks(for clock: AnimationClock) -> Int {
-        Int((elapsed(for: clock) / Self.tickInterval).rounded(.down))
+        // Through the one conversion every step boundary shares, so the phase formulas
+        // and the pre-rendered runs agree on which tick an instant is in — a floor in
+        // seconds put a summed 0.35 s in tick 6. Clamped rather than narrowed: `Int` is
+        // 32 bits on wasm32.
+        Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameDuration: Self.tickInterval))
     }
 
     /// Whether the cursor clock was read during the current render frame.

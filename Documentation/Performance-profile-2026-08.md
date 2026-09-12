@@ -2902,6 +2902,18 @@ Two guards, both earned. A 10 ms floor on any frame duration. And
 so at every exact frame boundary the answer was one ulp short of a whole frame —
 ~1e-17, i.e. a spinning run loop, at the moment the loop is most likely to ask.
 
+**Follow-up, 2026-09-12: the floor that replaced it had the same flaw, one level up.**
+The frame's end was computed from `floor(elapsed / frameDuration)` in seconds, and the
+clock's `elapsed` is a SUM of the sleeps it credited. Seven 0.05 s sleeps add to one ulp
+under 0.35, so the floor picked the step before the one due — at every step from 6 to 12
+of the grid, and at the literal `0.35 / 0.05` too — and the time to its already-passed
+end was ~1e-17 again, raised to the 10 ms floor. A steady 350 ms blink became plans of
+0.35 → 0.01 → 0.34 s, which with the timer's one-wake-stale sleep gave holds of ~370,
+~700 and ~45 ms. Steps and ends are now counted in whole nanoseconds by one conversion,
+`AnimationClock.step(atElapsed:frameDuration:)`, shared by the run index, the time to
+change and `CursorTimer`'s tick count. Measured on a focused field over 22 s: 17 of 53
+holds within 350 ± 40 ms before, 54 of 54 after.
+
 ### The indeterminate progress bar
 
 The last live-clock producer, and the most expensive: it read `Date()` while
