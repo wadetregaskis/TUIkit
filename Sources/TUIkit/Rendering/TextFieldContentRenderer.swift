@@ -459,15 +459,15 @@ struct TextFieldContentRenderer {
                     background: isSelected ? selectionBackground : background)
                 return
             }
-            let frames = Self.caretFrames(
+            let drawn = Self.caretFrames(
                 cycle, shape: cursorStyle.shape, cells: cells,
                 underlying: underlying, isSelected: isSelected, colors: colors)
             flushRun()
-            runs.appendVerbatim(frames[cycle.step % frames.count])
+            runs.appendVerbatim(drawn.frames[drawn.drawnIndex])
             if cycle.isAnimating {
                 caret = AnimatedCellRun(
                     offsetX: outputCells, offsetY: 0, width: cells,
-                    frames: frames, clock: .cursor)
+                    frames: drawn.frames, clock: .cursor, alpha: drawn.alpha)
             }
             (cellX, outputCells) = (cellX + cells, outputCells + cells)
         }
@@ -543,7 +543,7 @@ struct TextFieldContentRenderer {
         return (
             cycle,
             CaretColors(
-                background: background?.opaqueSpelling,
+                background: background,
                 blockText: ground.opaqueSpelling,
                 text: textForeground.spendingAlpha(over: ground),
                 // Spent over the highlight: the opaque field that is literally behind
@@ -564,6 +564,11 @@ struct TextFieldContentRenderer {
         /// The field's surface, or `nil` for a plain field with none — the
         /// caret's own cells then take what is behind the field, exactly as
         /// the rest of the line does.
+        ///
+        /// As AUTHORED, alpha intact. ``caretCells(_:shape:cells:underlying:isSelected:colors:)``
+        /// spells it opaque where it paints it and reports the alpha back, so the bytes
+        /// and the claim beside them come from the one colour. It used to be stored
+        /// already spelled, which is where a faded well's alpha was lost (§61.2).
         let background: Color?
 
         /// What a BLOCK caret punches its character out in. The surface where
@@ -584,12 +589,42 @@ struct TextFieldContentRenderer {
         underlying: Character,
         isSelected: Bool,
         colors: CaretColors
-    ) -> [String] {
-        cycle.states.map {
+    ) -> Caret {
+        let drawn = cycle.states.map {
             caretCells(
                 $0, shape: shape, cells: cells,
                 underlying: underlying, isSelected: isSelected, colors: colors)
         }
+        // One span per frame, the whole caret wide, because a caret paints its cells in
+        // ONE field per frame — a block shows its own opaque colour, every other frame
+        // shows the well. The ink never owes anything: every foreground the caret can
+        // paint is spent or opaque already (§60, §29.3), which is why this is a field
+        // statement and not a pair.
+        let perFrame = drawn.map { frame in
+            frame.fieldAlpha < 1
+                ? [AnimatedRunAlpha.Span(start: 0, cells: cells, field: frame.fieldAlpha)]
+                : []
+        }
+        let step = cycle.states.isEmpty ? 0 : cycle.step % cycle.states.count
+        return Caret(
+            frames: drawn.map(\.cells),
+            drawnIndex: step < 0 ? step + cycle.states.count : step,
+            alpha: perFrame.contains(where: { !$0.isEmpty })
+                ? AnimatedRunAlpha(
+                    perFrame: perFrame,
+                    drawnIndex: step < 0 ? step + cycle.states.count : step)
+                : nil)
+    }
+
+    /// A caret's cycle, the frame the render is drawing, and what its cells owe.
+    ///
+    /// The index comes back with the frames rather than being recomputed at each call
+    /// site: the buffer's own line is drawn at it AND ``AnimatedRunAlpha/drawnIndex``
+    /// is it, and two spellings of one modulo is exactly how those come apart.
+    struct Caret {
+        let frames: [String]
+        let drawnIndex: Int
+        let alpha: AnimatedRunAlpha?
     }
 
     /// One frame of the caret: its cells, styled, standing alone.
@@ -619,12 +654,23 @@ struct TextFieldContentRenderer {
         underlying: Character,
         isSelected: Bool,
         colors: CaretColors
-    ) -> String {
+    ) -> (cells: String, fieldAlpha: Double) {
+        // The FIELD each arm paints, reported beside the bytes so the two cannot
+        // disagree about which colour this frame actually put down. A caret's frames
+        // disagree about it — a block shows its own opaque colour where the blink-off
+        // frame shows a translucent well — which is why no one rectangle can describe
+        // the cell and the alpha rides on the run instead (``AnimatedRunAlpha``).
+        func owed(_ colour: Color?) -> Double {
+            colour.map { OpacityRegion.opacity(of: $0.alpha) } ?? 1
+        }
         guard state.visible else {
-            return ANSIRenderer.colorize(
-                String(underlying),
-                foreground: isSelected ? colors.selectionText : colors.text,
-                background: isSelected ? colors.selectionBackground : colors.background)
+            let field = isSelected ? colors.selectionBackground : colors.background
+            return (
+                ANSIRenderer.colorize(
+                    String(underlying),
+                    foreground: isSelected ? colors.selectionText : colors.text,
+                    background: field?.opaqueSpelling),
+                owed(field))
         }
         switch shape {
         case .block:
@@ -633,23 +679,34 @@ struct TextFieldContentRenderer {
             // a palette whose caret sits near its own "text on the caret" tone
             // drew the character invisibly — and the caret pulses, so the pair
             // has to be judged at the shade actually being drawn, not once.
-            return ANSIRenderer.colorize(
-                String(underlying),
-                foreground: colors.blockText.ensuringRenderedContrast(
-                    atLeast: ViewConstants.labelContrastFloor, against: state.color),
-                background: state.color)
+            // The block is the caret's OWN colour, opaque by §29.3, so this frame's
+            // cells owe nothing whatever the well beneath them is.
+            return (
+                ANSIRenderer.colorize(
+                    String(underlying),
+                    foreground: colors.blockText.ensuringRenderedContrast(
+                        atLeast: ViewConstants.labelContrastFloor, against: state.color),
+                    background: state.color),
+                owed(state.color))
         case .underscore where cells == 1 && underlying != " ":
-            return ANSIRenderer.colorize(
-                String(underlying), foreground: state.color, background: colors.background,
-                underline: true)
+            return (
+                ANSIRenderer.colorize(
+                    String(underlying), foreground: state.color,
+                    background: colors.background?.opaqueSpelling,
+                    underline: true),
+                owed(colors.background))
         default:
             let glyph = ANSIRenderer.colorize(
-                String(shape.character), foreground: state.color, background: colors.background)
-            guard cells > 1 else { return glyph }
-            return glyph
-                + ANSIRenderer.colorize(
-                    String(repeating: " ", count: cells - 1),
-                    foreground: colors.text, background: colors.background)
+                String(shape.character), foreground: state.color,
+                background: colors.background?.opaqueSpelling)
+            guard cells > 1 else { return (glyph, owed(colors.background)) }
+            return (
+                glyph
+                    + ANSIRenderer.colorize(
+                        String(repeating: " ", count: cells - 1),
+                        foreground: colors.text,
+                        background: colors.background?.opaqueSpelling),
+                owed(colors.background))
         }
     }
 

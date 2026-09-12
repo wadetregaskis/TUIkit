@@ -526,18 +526,19 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                     background: isSelected ? selectionBackground : background)
                 return
             }
-            let frames = TextFieldContentRenderer.caretFrames(
+            let drawn = TextFieldContentRenderer.caretFrames(
                 cycle.cursor, shape: cycle.shape, cells: cells,
                 underlying: underlying, isSelected: isSelected, colors: cycle.colors)
-            // Out of band, and claiming nothing. Every frame's ink is spent, so the
-            // frames agree at full strength and "no ink claim" is true of them all;
-            // the cell's FIELD, under a faded well, is still open (§61.2).
+            // Out of band, and claiming its FIELD per frame. Every frame's ink is spent,
+            // so "no ink claim" is true of them all; the field is not — a blink-off
+            // frame shows the well and a block frame shows the caret's own opaque
+            // colour — so it rides on the run, one statement per frame (§61.2).
             runs.flush(atColumn: outputCells)
-            runs.appendVerbatim(frames[cycle.cursor.step % frames.count])
+            runs.appendVerbatim(drawn.frames[drawn.drawnIndex])
             if cycle.cursor.isAnimating {
                 caretRun = AnimatedCellRun(
                     offsetX: outputCells, offsetY: 0, width: cells,
-                    frames: frames, clock: .cursor)
+                    frames: drawn.frames, clock: .cursor, alpha: drawn.alpha)
             }
             cellX += cells
             outputCells += cells

@@ -469,6 +469,81 @@ struct FadedPaletteRenderTests {
         #expect(drawn.opacityRegions.isEmpty, "a spent ramp claims nothing: \(drawn.opacityRegions)")
     }
 
+    /// A blinking caret over a translucent well is the case no rectangle can describe:
+    /// its block frames show the caret's own opaque colour and its blink-off frames show
+    /// the well, so a single claim on that cell is wrong for half the cycle. It used to
+    /// state nothing at all and the cell rendered at full strength (§61.2); the alpha now
+    /// rides on the run, one statement per frame (``AnimatedRunAlpha``).
+    ///
+    /// Asserted through the resolver rather than on the claim alone, because the point is
+    /// the pixels: the block frame must come out unblended, the blink-off frame must be
+    /// the well spent against what is behind it, and the LINE the render drew must agree
+    /// with the frame it was drawn at.
+    @Test("A caret over a faded well owes its field per frame")
+    func caretFieldClaimsPerFrame() throws {
+        let palette = FadedAll()
+        // An OPAQUE ground, as a real page has: resolving any run against a translucent
+        // surface trips a separate, pre-existing assertion — a plain `Spinner` does it
+        // too — and that is not what this is about.
+        let ground = Color.rgb(10, 10, 20)
+        let drawn = renderToBuffer(
+            TextField("label", text: .constant("abc")),
+            context: context(palette: palette, width: 20, height: 3) {
+                $0.focusManager = FocusManager()
+            })
+
+        let run = try #require(drawn.animatedCells.first, "the caret leaves a run")
+        let alpha = try #require(run.alpha, "carrying its per-frame field")
+        #expect(alpha.varies, "the frames disagree, which is the whole reason it exists")
+        let hasSilentFrame = alpha.perFrame.contains { $0.isEmpty }
+        let wellOwed = owed(palette.fieldBackground)
+        let hasWellFrame = alpha.perFrame.contains { spans in
+            spans.contains { $0.field == wellOwed }
+        }
+        #expect(hasSilentFrame, "the block frames own their colour and owe nothing")
+        #expect(hasWellFrame, "the blink-off frames owe the well: \(alpha.perFrame)")
+
+        let resolved = drawn.resolvingOpacity(surface: ground, palette: palette)
+        #expect(resolved.animatedCells.first?.alpha == nil, "the payload is spent, not carried on")
+        let frames = try #require(resolved.animatedCells.first?.frames)
+        let rgb = try #require(
+            palette.fieldBackground.spendingAlpha(over: ground).resolve(with: palette).rgbComponents)
+        let spentWell = "48;2;\(rgb.red);\(rgb.green);\(rgb.blue)"
+        let anyShowsWell = frames.contains { $0.contains(spentWell) }
+        let anyDoesNot = frames.contains { !$0.contains(spentWell) }
+        #expect(anyShowsWell, "a blink-off frame shows the well spent against the ground")
+        #expect(anyDoesNot, "and a block frame does not — it is the caret's own opaque colour")
+
+        // The line the render drew is the drawn frame, resolved the same way: both sets
+        // of bytes exist and a reader must not be able to tell them apart. This is the
+        // half that needs the drawn frame's claim to reach the LINE — without it the
+        // first paint sits at full strength until the first replay tick.
+        /// The background the cell ENDS in — the last one stated, not the first.
+        /// `ansiAwareSlice` carries every code in force at the cut, so a slice of a
+        /// styled row opens with the row's background and only then states its own.
+        func backgroundCode(of text: String) -> String? {
+            var search = text.startIndex..<text.endIndex
+            var last: String?
+            while let found = text.range(
+                of: "48;2;[0-9]+;[0-9]+;[0-9]+", options: .regularExpression, range: search)
+            {
+                last = String(text[found])
+                search = found.upperBound..<text.endIndex
+            }
+            return last
+        }
+        let cell = resolved.lines[run.offsetY].ansiAwareSlice(
+            visibleStart: run.offsetX, visibleCount: run.width)
+        let cellBackground = backgroundCode(of: cell)
+        let frameBackground = backgroundCode(of: frames[alpha.drawnIndex])
+        #expect(
+            cellBackground == frameBackground,
+            """
+            the drawn line's caret cell and the drawn frame state the same background:
+            cell \(cell.debugDescription) vs frame \(frames[alpha.drawnIndex].debugDescription)
+            """)
+    }
+
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
     /// on the bar's column, and a track cell there must owe the track's alpha. Under a
     /// palette that fades only the track, because the editor's well is painted in

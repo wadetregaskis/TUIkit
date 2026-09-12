@@ -148,6 +148,15 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// The clock that advances this run.
     public let clock: AnimationClock
 
+    /// What these cells owe the compositor, per frame — `nil` for the overwhelming
+    /// majority of runs, whose frames agree about alpha (or are wholly opaque) and
+    /// whose producer states an ordinary ``OpacityRegion`` instead.
+    ///
+    /// See ``AnimatedRunAlpha`` for why the statement rides here rather than beside the
+    /// run: frames and their alphas are the same array in the same order, so they
+    /// cannot drift apart.
+    public var alpha: AnimatedRunAlpha?
+
     /// Creates a run.
     ///
     /// - Parameters:
@@ -159,9 +168,13 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   - frameDuration: How long each frame is shown. Defaults to the clock's
     ///     own interval, and is floored at ``AnimationClock/minimumFrameDuration``.
     ///   - clock: Which clock advances it.
+    ///   - alpha: What the cells owe per frame, for the rare run whose frames disagree
+    ///     about alpha. Defaults to `nil`, which is a run that owes nothing beyond
+    ///     whatever regions cover it.
     public init(
         offsetX: Int, offsetY: Int, width: Int, frames: [String],
-        frameDuration: Double? = nil, clock: AnimationClock
+        frameDuration: Double? = nil, clock: AnimationClock,
+        alpha: AnimatedRunAlpha? = nil
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
@@ -170,6 +183,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
         self.frameDuration = max(
             AnimationClock.minimumFrameDuration, frameDuration ?? clock.tickInterval)
         self.clock = clock
+        self.alpha = alpha
     }
 
     /// Whether this run actually animates.
@@ -184,10 +198,17 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// cube can show, and on a dim palette in a narrow hue that can be one
     /// shade. Keeping such a run alive holds the animation clock open forever
     /// to repaint a picture that cannot change.
+    ///
+    /// A run whose frames are identical PICTURES but disagree about alpha is animating
+    /// too, and saying otherwise is not a nicety: the clip, punch and clamp paths all
+    /// drop a run this calls still, and they run before the resolver blends the alphas
+    /// into the frames — so a blinking caret whose two frames differ only in what the
+    /// cell owes would be discarded before anything could tell them apart.
     public var isAnimating: Bool {
         guard frames.count > 1 else { return false }
         let first = frames[0]
-        return frames.contains { $0 != first }
+        if frames.contains(where: { $0 != first }) { return true }
+        return alpha?.varies ?? false
     }
 
     /// Which frame of the cycle is showing `elapsed` seconds into the
@@ -247,8 +268,15 @@ public struct AnimatedCellRun: Sendable, Equatable {
         // is most likely to ask.
         var remaining = max(
             Self.shortestUsefulSleep, (step + 1) * frameDuration - elapsed)
+        // The (picture, alpha) PAIR, not the picture alone: a frame that paints the
+        // same cells in the same bytes but owes a different alpha shows something
+        // different once the resolver has spent it, and sleeping through it would
+        // freeze exactly the animation ``AnimatedRunAlpha`` exists for.
+        let currentSpans = alpha?.spans(atFrame: index)
         for offset in 1..<frames.count {
-            if frames[(index + offset) % frames.count] != current { return remaining }
+            let next = (index + offset) % frames.count
+            if frames[next] != current { return remaining }
+            if let currentSpans, alpha?.spans(atFrame: next) != currentSpans { return remaining }
             remaining += frameDuration
         }
         // Every frame identical: nothing will ever change, so the caller may
@@ -300,13 +328,17 @@ public struct AnimatedCellRun: Sendable, Equatable {
         let window = columns.clamped(to: offsetX..<(offsetX + width))
         guard !window.isEmpty else { return nil }
         guard window != offsetX..<(offsetX + width) else { return self }
+        let kept = (window.lowerBound - offsetX)..<(window.upperBound - offsetX)
         return Self(
             offsetX: window.lowerBound, offsetY: offsetY, width: window.count,
             frames: frames.map {
                 $0.ansiAwareSlice(
                     visibleStart: window.lowerBound - offsetX, visibleCount: window.count)
             },
-            frameDuration: frameDuration, clock: clock)
+            frameDuration: frameDuration, clock: clock,
+            // Sliced in the same breath as the frames, and to the same window, so a cut
+            // run's spans describe the cells the cut actually kept.
+            alpha: alpha?.sliced(toRunColumns: kept))
     }
 }
 

@@ -1855,6 +1855,10 @@ backdrop resolve to `rgb(100,20,139)` and `rgb(128,45,164)`.
 
 What actually blocks a claim is narrower, and there are only two cases:
 
+> **Case 2 is no longer a block** — see §69. A run can carry an alpha per FRAME
+> (`AnimatedRunAlpha`), so phases that disagree are stated rather than declined. What
+> follows is the reasoning as it stood, and it is still why case 1 blocks.
+
 1. **A `cycle`-bearing region** — a repeating `.opacity` fade. Those runs are dropped
    (`covering.allSatisfy { $0.cycle == nil }`), because the fade's phases and the
    run's frames tick independently and their product is not one run.
@@ -3681,16 +3685,19 @@ any frame: the caret's own colour is opaque at every tick (§29.3), a block care
 its character out in the well's opaque spelling, and the blink-OFF text, selected or not,
 is spent (§60).
 
-Its FIELD is still open, in both carets. The frames paint the well's opaque spelling and
-claim nothing, so under a translucent well the caret's cell shows the well at full
-strength. Whether one claim could fit turns on the frames. A bar or underscore off a
-selection shows the well in every frame, and a pulsing block shows only its own opaque
-colour; but a blinking block — the default — and a blinking bar on a selected cell
-alternate between the well and an opaque colour, and no one claim fits them. Declining
-their runs, as §36.7 does, would re-render the page every tick while the editor or field
-is focused over a faded well — the cost the caret's runs were built to remove — and
-§59.2's reason applies to how it would ask. It is recorded here for a decision rather than
-taken.
+Its FIELD was open, in both carets, and is **closed in §69.1**. The analysis below is why
+it could not be a rectangle, and it stands; what changed is that it no longer has to be
+one. The frames painted the well's opaque spelling and claimed nothing, so under a
+translucent well the caret's cell showed the well at full strength. Whether one claim
+could fit turns on the frames: a bar or underscore off a selection shows the well in every
+frame, and a pulsing block shows only its own opaque colour; but a blinking block — the
+default — and a blinking bar on a selected cell alternate between the well and an opaque
+colour, and no one claim fits them.
+
+The way out was not the one considered here. Declining their runs, as §36.7 does, would
+re-render the page every tick while the editor or field is focused over a faded well — the
+cost the caret's runs were built to remove — and §59.2's reason applies to how it would
+ask. Stating the alpha per FRAME, on the run, costs no renders at all.
 
 ### 61.3 What the tests assert
 
@@ -4042,3 +4049,78 @@ separate: **a decline is a decision about a cost, and the cost can be re-priced.
 was taken when the alternative looked like per-cell claims. It was never re-examined when
 `spendingAlpha(over:)` made a second alternative cheap, because the note recording it read
 as settled rather than as a trade.
+
+## 69. A run can carry an alpha per frame (2026-09-12)
+
+§29.2 narrowed "an animating colour cannot carry a claim" to two cases. The second — a
+breath whose phases have different alphas — was closed nine times over by making the
+phases AGREE, which is what `breathEnds(dimmedTo:over:)` is for. Twice that was not
+available, and those two sat open: an animated `.border` at several alphas (§59.2) and a
+caret's field over a translucent well (§61.2). Both simply dropped the alpha.
+
+The answer is not to decline the run. It is to let the run say what its cells owe **per
+frame**, which is `AnimatedRunAlpha`: one list of spans per frame, in the run's own frame
+order, plus the index the buffer's lines were drawn at. The resolver already walks every
+frame of every covered run and blends each one; all that was fixed was the alpha, folded
+once for the whole run on the argument that "every frame of a run occupies the same cells,
+so the answer cannot differ between them". The cells are the same; what they owe is not.
+
+### 69.1 Four things that made it correct rather than merely plausible
+
+Three independent designs were written for this and **all three were refuted** on first
+reading — the survivor by a defect that the obvious implementation would have shipped.
+They are worth recording as the shape of the problem.
+
+**The line needs the drawn frame's claim, and the run cannot be the only carrier.** A run
+is the one payload this codebase deliberately DROPS where a region is clipped and kept:
+`ScrollView+Content.visibleRuns` drops a run wider than its viewport whole while
+`visibleOpacity` clips and keeps every region; `clipped(toCanvasColumns:rows:)` and the
+punch path drop a cut that stopped animating. Had the alpha ridden only on the run, a
+bordered box wider than its `ScrollView` would have drawn an opaque top rule with faded
+side walls — the very bug class this branch exists to close, reintroduced behind the fix.
+So `resolvingOpacity` keeps **two** region lists: `regionsForLines` (what covers the
+buffer, PLUS each run's drawn-frame spans as ordinary rectangles) and `regionsForRuns`
+(what covers it, and nothing else). The lines fade at the drawn frame; the frames fade at
+their own. `AnimatedRunAlpha.drawnRegions(forRunAt:offsetY:)` is the same statement for a
+site that discards a run to leave behind, so those cells degrade to a static claim —
+right at the drawn frame, frozen after — instead of to full strength.
+
+**Appended, never prepended.** `foldedAlphas` takes the LAYER from the first region
+covering a cell and multiplies only ink and field across the rest. A run's payload has no
+layer channel at all — deliberately, because a layer's alpha nests and `OpacityFade` has
+already folded every enclosing `.opacity(_:)` into the regions it can see, which will
+never include a payload riding on a run. Put ahead of an enclosing fade it would answer
+the glyph contest with a 1 that is not true.
+
+**`isAnimating` had to learn about it.** Four sites drop a run they consider still, and
+all four run BEFORE the resolver blends alphas into frames. A blinking caret whose frames
+differ only in what the cell owes is byte-identical until then, so without teaching that
+predicate — and `timeUntilChange`, which decides how long the loop may sleep — the fix
+would have been discarded before anything could see it.
+
+**Spans are run-relative.** Column 0 is the run's first cell, so `shifted(byX:y:)` and
+`movedTo(row:)` are the identity for the payload and no compositing shift touches it. That
+is also what will let a border share one payload across all `2 × (height − 2)` of its side
+walls rather than computing one per row.
+
+### 69.2 The caret's field
+
+Closed. `caretCells` now reports the field it painted alongside the bytes it painted it in
+— one function, one switch, so the claim cannot drift from the colour — and `CaretColors`
+holds the well as AUTHORED rather than pre-spelled, which is where the alpha used to be
+lost. A block frame owes nothing (its colour is its own, opaque by §29.3); every other
+frame owes the well. The ink owes nothing in any frame, which §60 and §29.3 already
+established, so this is a field statement and not a pair.
+
+Measured on a focused `TextField` under a wholly faded palette, over an opaque ground:
+before, **7 of the 14 frames showed the well at full strength** (`48;2;31;31;62`) and none
+showed it resolved; after, those seven are `48;2;21;21;41` — the well at its own alpha
+over the ground — and the block frames are untouched at `48;2;15;106;131`. The line the
+render drew states the same background as the frame it was drawn at, which is the
+invariant the two-list split exists for and what the test pins.
+
+One thing this does NOT change: resolving any run against a *translucent surface* trips a
+separate assertion (`OpacityBlend.swift:608`). A plain `Spinner` under a faded palette
+does it too, so it predates this and is not caused by it — but it is now written down.
+Every shipped palette's background is opaque, and the example's fade seam deliberately
+leaves the four grounds alone (§68), which is why nothing has met it.

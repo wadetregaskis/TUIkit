@@ -72,7 +72,11 @@ extension FrameBuffer {
         surface: Color,
         palette: any Palette
     ) -> Self {
-        guard !opacityRegions.isEmpty else { return self }
+        // A run may be the only thing on the buffer with anything to say: a blinking
+        // caret over a faded well claims nothing statically, because no one rectangle
+        // is true of both its frames (see ``AnimatedRunAlpha``).
+        let runAlphaMatters = animatedCells.contains { $0.alpha?.isTranslucent == true }
+        guard !opacityRegions.isEmpty || runAlphaMatters else { return self }
         // A fully opaque region is the identity ONLY where there is nothing
         // behind it, and that is the test rather than the alpha alone.
         //
@@ -93,10 +97,31 @@ extension FrameBuffer {
         // dropping it there would mean the fade never produced any frames at
         // all and never ran.
         let opaqueMatters = !destination.isEmpty
-        let translucent = opacityRegions.filter {
+        // TWO lists, and the split is load-bearing.
+        //
+        // `regionsForRuns` is what actually covers a run from OUTSIDE it — an enclosing
+        // `.opacity(_:)`, a row's fill — and folds into every one of its frames.
+        // `translucent` adds what each run's own payload says about the frame the LINES
+        // were drawn at, because the render drew that frame into the lines and nothing
+        // else claims those cells: without it the first paint would be at full strength
+        // until the first replay tick, and every path that keeps the lines while
+        // dropping the run would stay there.
+        //
+        // APPENDED, never prepended: `foldedAlphas` takes the LAYER from the first
+        // region covering a cell and multiplies only ink and field across the rest, and
+        // a run's payload has no layer to give (``AnimatedRunAlpha/Span``). Ahead of an
+        // enclosing fade it would answer the glyph contest with a 1 that is not true.
+        let regionsForRuns = opacityRegions.filter {
             $0.isTranslucent || $0.cycle != nil || opaqueMatters
         }
-        guard !translucent.isEmpty else {
+        let drawnClaims =
+            runAlphaMatters
+            ? animatedCells.flatMap {
+                $0.alpha?.drawnRegions(forRunAt: $0.offsetX, offsetY: $0.offsetY) ?? []
+            }
+            : []
+        let translucent = regionsForRuns + drawnClaims
+        guard !translucent.isEmpty || runAlphaMatters else {
             var resolved = self
             resolved.opacityRegions = []
             return resolved
@@ -200,59 +225,10 @@ extension FrameBuffer {
         // keeps animating — a bounded compromise where the alternative was a
         // full render per tick.
         result.animatedCells = result.animatedCells.compactMap { run in
-            let covering = translucent.filter { region in
-                region.spans(row: run.offsetY)
-                    && run.offsetX < region.offsetX + region.width
-                    && region.offsetX < run.offsetX + run.width
-            }
-            guard !covering.isEmpty else { return run }
-            guard covering.allSatisfy({ $0.cycle == nil }) else { return nil }
-            let destinationRow = run.offsetY + position.y
-            let behindLine =
-                destination.lines.indices.contains(destinationRow)
-                ? destination.lines[destinationRow] : ""
-            // Aligned into a pseudo-row so the frame's cells sit at the run's
-            // own columns, where the per-column alpha and the destination line
-            // expect them.
-            let prefix = String(repeating: " ", count: max(0, run.offsetX))
-            // The frame's cells inherit their FIELD from the line they replace
-            // — a frame from `colorize(glyph, foreground:)` states none, and
-            // the splice relies on the line's background applying under it.
-            // Blended against what is behind the layer alone, such a cell took
-            // the destination's field unblended (or the bare surface) and then
-            // STATED it, so an indeterminate bar inside `.background(.blue)
-            // .opacity(0.5)` drew its tint once and replayed it plain.
-            let ownLine = lines.indices.contains(run.offsetY) ? lines[run.offsetY] : ""
-            let columns = run.offsetX..<(run.offsetX + run.width)
-            // The SAME fold the line took, not `covering.first`. A run is spliced
-            // over cells the lines already answered for, so taking one region here
-            // and multiplying there made the very same cell resolve two ways: a
-            // `Spinner` inside `.foregroundStyle(.green.opacity(0.4))
-            // .background(.red.opacity(0.4))` drew faded on both channels and then
-            // replayed with the background back at full strength, once per tick,
-            // forever. §13's bug, which the line path was fixed for and this one
-            // was not — so the two now ask one function.
-            //
-            // Folded once for the whole run rather than once per frame: every
-            // frame of a run occupies the same cells, so the answer cannot differ
-            // between them, and an eight-frame spinner was computing it eight
-            // times.
-            let alphas = Self.foldedAlphas(
-                of: covering, over: columns, row: run.offsetY, substituting: { $0.cellAlpha })
-            let fadedFrames = run.frames.map { frame in
-                Self.blendedSpan(
-                    source: prefix + frame,
-                    destination: behindLine,
-                    columns: columns,
-                    destinationShift: position.x,
-                    fieldsFrom: ownLine,
-                    alpha: { alphas[$0 - columns.lowerBound] },
-                    surface: resolvedSurface,
-                    defaultForeground: resolvedForeground)
-            }
-            return AnimatedCellRun(
-                offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-                frames: fadedFrames, frameDuration: run.frameDuration, clock: run.clock)
+            Self.faded(
+                run, covering: regionsForRuns, ownLines: lines, destination: destination,
+                position: position, surface: resolvedSurface,
+                defaultForeground: resolvedForeground)
         }
         result.animatedCells += Self.cyclingRuns(
             of: translucent, over: lines, rebuilding: rebuild)
@@ -321,6 +297,119 @@ extension FrameBuffer {
     ///     `nil` drops that region from the fold.
     /// - Returns: One entry per column of `columns`, `nil` where no region
     ///   covers that cell.
+    /// One run, with every alpha covering it spent into its frames.
+    ///
+    /// Extracted from ``resolvingOpacity(over:at:surface:palette:)`` because it grew a
+    /// second arm — a run carrying its own per-frame alpha (``AnimatedRunAlpha``) — and
+    /// the two together put that function past its length. The split is also the honest
+    /// one: everything here is about a RUN, and nothing about it is about the lines.
+    ///
+    /// - Parameters:
+    ///   - covering: What covers the run from OUTSIDE it, and only that. A run's own
+    ///     per-frame statement must not be in this list or every frame would be folded
+    ///     with the drawn frame's alpha as well as its own.
+    ///   - ownLines: The carrying buffer's lines — where a frame's cells inherit their
+    ///     FIELD from, a frame stating none.
+    private static func faded(
+        _ run: AnimatedCellRun,
+        covering regions: [OpacityRegion],
+        ownLines lines: [String],
+        destination: FrameBuffer,
+        position: (x: Int, y: Int),
+        surface resolvedSurface: Color,
+        defaultForeground resolvedForeground: Color
+    ) -> AnimatedCellRun? {
+        let covering = regions.filter { region in
+            region.spans(row: run.offsetY)
+                && run.offsetX < region.offsetX + region.width
+                && region.offsetX < run.offsetX + run.width
+        }
+        guard !covering.isEmpty || run.alpha?.isTranslucent == true else { return run }
+        guard covering.allSatisfy({ $0.cycle == nil }) else { return nil }
+        let destinationRow = run.offsetY + position.y
+        let behindLine =
+            destination.lines.indices.contains(destinationRow)
+            ? destination.lines[destinationRow] : ""
+        // Aligned into a pseudo-row so the frame's cells sit at the run's
+        // own columns, where the per-column alpha and the destination line
+        // expect them.
+        let prefix = String(repeating: " ", count: max(0, run.offsetX))
+        // The frame's cells inherit their FIELD from the line they replace
+        // — a frame from `colorize(glyph, foreground:)` states none, and
+        // the splice relies on the line's background applying under it.
+        // Blended against what is behind the layer alone, such a cell took
+        // the destination's field unblended (or the bare surface) and then
+        // STATED it, so an indeterminate bar inside `.background(.blue)
+        // .opacity(0.5)` drew its tint once and replayed it plain.
+        let ownLine = lines.indices.contains(run.offsetY) ? lines[run.offsetY] : ""
+        let columns = run.offsetX..<(run.offsetX + run.width)
+        // The SAME fold the line took, not `covering.first`. A run is spliced
+        // over cells the lines already answered for, so taking one region here
+        // and multiplying there made the very same cell resolve two ways: a
+        // `Spinner` inside `.foregroundStyle(.green.opacity(0.4))
+        // .background(.red.opacity(0.4))` drew faded on both channels and then
+        // replayed with the background back at full strength, once per tick,
+        // forever. §13's bug, which the line path was fixed for and this one
+        // was not — so the two now ask one function.
+        //
+        // Folded once for the whole run rather than once per frame: every
+        // frame of a run occupies the same cells, so the answer cannot differ
+        // between them, and an eight-frame spinner was computing it eight
+        // times.
+        let alphas = Self.foldedAlphas(
+            of: covering, over: columns, row: run.offsetY, substituting: { $0.cellAlpha })
+        /// The blend for one frame, at `perColumn` alphas indexed from the run's
+        /// first cell — the one expression both arms below go through, so the frame
+        /// a payload describes and the frame it does not are blended identically.
+        func blend(_ frame: String, at perColumn: [FrameBuffer.CellAlpha?]) -> String {
+            Self.blendedSpan(
+                source: prefix + frame,
+                destination: behindLine,
+                columns: columns,
+                destinationShift: position.x,
+                fieldsFrom: ownLine,
+                alpha: { perColumn[$0 - columns.lowerBound] },
+                surface: resolvedSurface,
+                defaultForeground: resolvedForeground)
+        }
+        let fadedFrames: [String]
+        if let perFrameAlpha = run.alpha, perFrameAlpha.isTranslucent {
+            // The fold is still done ONCE for what covers the run from outside; only
+            // the run's own spans are laid over it per frame, which is a handful of
+            // cells rather than a re-walk of every region.
+            fadedFrames = run.frames.indices.map { index in
+                var perColumn = alphas
+                for span in perFrameAlpha.spans(atFrame: index) {
+                    let from = max(0, span.start)
+                    let upTo = min(perColumn.count, span.start + span.cells)
+                    guard from < upTo else { continue }
+                    for column in from..<upTo {
+                        // MULTIPLIED into what covers it, never replacing: an
+                        // enclosing fade applies to a run's cells as it does to
+                        // everything else, and the layer channel stays the outer
+                        // region's because the payload has none.
+                        let outer = perColumn[column]
+                        perColumn[column] = FrameBuffer.CellAlpha(
+                            layer: outer?.layer ?? 1,
+                            ink: (outer?.ink ?? 1) * span.ink,
+                            field: (outer?.field ?? 1) * span.field)
+                    }
+                }
+                return blend(run.frames[index], at: perColumn)
+            }
+        } else {
+            fadedFrames = run.frames.map { blend($0, at: alphas) }
+        }
+        // The payload is SPENT: its alphas are in these bytes now, and carrying it
+        // further would fade them a second time wherever the buffer is resolved
+        // again (a floating surface resolves, then the root resolves what it landed
+        // on). Same reason the regions themselves are cleared.
+        return AnimatedCellRun(
+            offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
+            frames: fadedFrames, frameDuration: run.frameDuration, clock: run.clock,
+            alpha: nil)
+    }
+
     private static func foldedAlphas(
         of regions: [OpacityRegion], over columns: Range<Int>, row: Int,
         substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
