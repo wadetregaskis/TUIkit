@@ -307,6 +307,43 @@ struct BorderAlphaTests {
         #expect(resolved.animatedCells.allSatisfy { $0.alpha == nil }, "every payload is spent")
     }
 
+    /// An ANCESTOR's translucent claim over a run carrying per-frame alpha composes; it
+    /// is not a producer stating both.
+    ///
+    /// The resolver used to assert that no ink or field claim covered a run with a
+    /// translucent payload, to catch one producer double-stating its alpha. But it sees
+    /// the sum of every producer, and `.background(Color.blue.opacity(0.5))` states a
+    /// field claim over the whole box — border rows included — for an entirely legitimate
+    /// reason. The multiply the resolver then performs is the right answer, and the
+    /// assertion trapped every debug build that wrapped an animated border (or a focused
+    /// text field's caret) in a translucent background.
+    @Test("A translucent background over a multi-alpha border composes without trapping")
+    func translucentBackgroundOverAMultiAlphaBorderComposes() throws {
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 12, availableHeight: 3, environment: environment, tuiContext: tuiContext
+        ).isolatingRenderCache()
+        let drawn = renderToBuffer(
+            Text("hi")
+                .border(AnimatedColor(frames: [.red, faded(.green, 128)], step: 0))
+                .background(Color.blue.opacity(0.5)),
+            context: context)
+        let backgroundCoversTheRule = drawn.opacityRegions.contains { $0.offsetY == 0 && $0.fieldOpacity < 1 }
+        #expect(backgroundCoversTheRule, "the precondition: an ancestor claim over the rule")
+
+        let resolved = drawn.resolvingOpacity(surface: .black, palette: EnvironmentValues().palette)
+
+        let top = try #require(resolved.animatedCells.first { $0.offsetY == 0 }, "the top rule")
+        let plainGreen = Color.green.foregroundCodes().joined(separator: ";")
+        #expect(
+            !top.frames[1].contains(plainGreen),
+            "the translucent frame is blended, not drawn at full strength: \(top.frames[1].debugDescription)")
+        let spent = resolved.animatedCells.allSatisfy { $0.alpha == nil }
+        #expect(spent, "every payload is spent")
+    }
+
     /// A replayed frame is blended as the drawn line is: each against the backdrop, at
     /// the one claim they share.
     @Test("A one-alpha border's replayed frames resolve against the backdrop")

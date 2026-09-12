@@ -494,6 +494,20 @@ struct FadedPaletteRenderTests {
 
         let run = try #require(drawn.animatedCells.first, "the caret leaves a run")
         let alpha = try #require(run.alpha, "carrying its per-frame field")
+        // The producer's half of the rule the resolver cannot check (§70.3): the caret
+        // states its field on the run and nowhere else. A static field claim under the
+        // same cell would be folded with the payload and fade the well twice — and the
+        // resolver, which sees every producer's claims summed, can no longer tell that
+        // apart from an ancestor's `.background` legitimately covering it.
+        let staticFieldUnderCaret = drawn.opacityRegions.contains { region in
+            region.offsetY <= run.offsetY && run.offsetY < region.offsetY + region.height
+                && region.offsetX < run.offsetX + run.width
+                && run.offsetX < region.offsetX + region.width
+                && region.fieldOpacity < 1
+        }
+        #expect(
+            !staticFieldUnderCaret,
+            "no static field claim under the caret's own cell: \(drawn.opacityRegions)")
         #expect(alpha.varies, "the frames disagree, which is the whole reason it exists")
         let hasSilentFrame = alpha.perFrame.contains { $0.isEmpty }
         let wellOwed = owed(palette.fieldBackground)

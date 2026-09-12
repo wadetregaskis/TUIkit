@@ -4266,3 +4266,32 @@ to the screen and loses its overhang out of its content instead — cuts the sam
 run carrying a translucent `AnimatedRunAlpha` satisfies the resolver's entry guard on its
 own (§69.1). A dragged preview holding a focused `TextField`, or an animated border, needed
 nothing else in the tree to reach it.
+
+### 70.3 The §69.1 assertion, which could not tell a producer from its ancestors
+
+`b9804700` added an assertion to the run walk: a run carrying a translucent per-frame
+payload must have no ink or field claim covering its cells, because a producer stating
+both would have them folded together and the run faded twice. The rule is real. The
+assertion was not a test of it.
+
+`faded` sees the SUM of every producer's claims, and an ancestor states ink and field
+claims over a run's cells for entirely legitimate reasons. `.background(Color.blue
+.opacity(0.5))` claims a field over its whole box, border rows included;
+`.listRowBackground` does the same for a row. The multiply four lines below the assertion
+— "MULTIPLIED into what covers it, never replacing" — is exactly the right answer for
+those, and could only ever act on the states the assertion forbade. So every debug build
+that wrapped an animated border of several alphas, or a focused text field under a faded
+palette, in a translucent background trapped on the first frame, on a blend release got
+right. Minimal repro, two public modifiers:
+`Text("hi").border(AnimatedColor(frames: [.red, faded], step: 0)).background(Color.blue.opacity(0.5))`.
+
+Narrowing it — to a region exactly the run's own rectangle — was considered and not done:
+a translucent `.background` on a view exactly as wide as its run is the same false
+positive with a smaller window, and nothing at this altitude can tell who stated a
+rectangle. The rule belongs where the producer is, and is pinned there: the border's
+several-alphas test asserts it states no static claim on its rule rows, and the caret's
+per-frame test asserts its field claim rides only on the run.
+
+Found by the 2026-09-12 hunt (entry 17 of `Review-batch-2026-09-12.md`), in the same
+branch that added it — the hunt's "holes in the last 30 commits" lens, which has now found
+a defect in the preceding work on every hunt this project has run.
