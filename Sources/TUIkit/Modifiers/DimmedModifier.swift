@@ -102,12 +102,23 @@ extension FrameBuffer {
     /// popover left open behind the modal drawing half-bright on top — is handled
     /// where the layers are composited, not by discarding them here.)
     ///
-    /// ``FrameBuffer/opacityRegions`` are dropped, and unlike the hit regions that
-    /// is because they have been CONSUMED rather than suppressed. The flatten
-    /// rewrites every cell to one foreground on one background, so a region saying
-    /// "these cells are 40% translucent" no longer describes anything that is
-    /// there: honouring it would fade the DIM toward whatever is behind the page,
-    /// and the dim is deliberately flat and opaque. Stated because a bare
+    /// The content's ``FrameBuffer/opacityRegions`` are dropped, and unlike the hit
+    /// regions that is because they have been CONSUMED rather than suppressed. The
+    /// flatten rewrites every cell to one foreground on one background, so a region
+    /// saying "these cells are 40% translucent" no longer describes anything that is
+    /// there: honouring it would fade the DIM toward whatever is behind the page.
+    ///
+    /// What replaces them is ONE region of the flatten's own, because the two colours
+    /// it washes everything in can themselves be translucent — `overlayBackground`
+    /// and `foregroundTertiary` both carry a faded theme's alpha since §39, and both
+    /// reached the emitter and trapped (§68.5). The dim is flat, which is a statement
+    /// about it being one colour everywhere and not about that colour being opaque:
+    /// whether it is, is the theme's business. So the FIELD is claimed — every cell
+    /// of a backdrop is painted in it, and a translucent theme means the terminal
+    /// shows through the wash — while the INK is SPENT against that field, because a
+    /// dimmed row's glyphs sit on the wash and nowhere else, and an ink claim would
+    /// also cover the blanks between words, where there is no glyph to blend and what
+    /// is behind would show through a cell this one painted. Stated because a bare
     /// `FrameBuffer(lines:)` that re-attaches some payloads and not others is the
     /// shape a dropped payload hides in, and the next reader should not have to
     /// work out which of these three drops was an oversight.
@@ -128,7 +139,12 @@ extension FrameBuffer {
     public func dimmedAsBackdrop(foreground: Color, background: Color) -> FrameBuffer {
         guard !isEmpty else { return self }
         let width = self.width
-        let wrap = Flattening(foreground: foreground, background: background)
+        // Opaque bytes for both channels, and the field's alpha claimed below. The
+        // ink is spent against the field rather than claimed beside it — see the
+        // note above on why the two channels are answered differently.
+        let wrap = Flattening(
+            foreground: foreground.spendingAlpha(over: background),
+            background: background.opaqueSpelling)
         var result = FrameBuffer(lines: lines.map { wrap($0, toWidth: width) })
         // Pending layers ride through: a backdrop is dimmed under a modal,
         // and anything still waiting to be drawn above it must not vanish.
@@ -140,6 +156,13 @@ extension FrameBuffer {
                 frameDuration: run.frameDuration, clock: run.clock)
             return dimmed.isAnimating ? dimmed : nil
         }
+        // One rectangle, over everything the wash covers — the runs included, whose
+        // frames are flattened to the same two colours, so the static claim a run
+        // replays under is true of every frame of it.
+        result.opacityRegions =
+            OpacityRegion.claim(
+                width: width, height: result.lines.count, field: background)
+            .map { [$0] } ?? []
         return result
     }
 }

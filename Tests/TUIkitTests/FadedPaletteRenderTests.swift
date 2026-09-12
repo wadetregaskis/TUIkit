@@ -431,6 +431,30 @@ struct FadedPaletteRenderTests {
             "a component's digits owe the foreground's alpha")
     }
 
+    /// The wash a modal dims its page with is drawn in `overlayBackground` and
+    /// `foregroundTertiary`, both of which carry a faded theme's alpha since §39 — and
+    /// both of which reached the emitter (§68.5). The two channels are answered
+    /// differently, and this asserts that: the field is CLAIMED over everything the
+    /// wash covers, and the ink is SPENT against it, so no cell owes any ink at all.
+    @Test("A dimmed backdrop claims its wash and spends its ink")
+    func dimmedBackdropClaims() throws {
+        let palette = FadedAll()
+        let drawn = render(
+            VStack { Text("behind"); Text("the sheet") }.dimmed(),
+            palette: palette, width: 20, height: 4)
+
+        #expect(
+            drawn.lines.contains { $0.stripped.contains("behind") },
+            "the page is still there under the wash: \(drawn.lines.map(\.stripped))")
+        let cell = owed(atColumn: 2, row: 0, in: drawn)
+        #expect(
+            cell.field == owed(palette.overlayBackground),
+            "the wash owes the overlay background's alpha")
+        #expect(cell.ink == 1, "its ink was spent against the wash, so nothing owes it")
+        // One rectangle for the whole wash, not one per row.
+        #expect(drawn.opacityRegions.count == 1, "\(drawn.opacityRegions)")
+    }
+
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
     /// on the bar's column, and a track cell there must owe the track's alpha. Under a
     /// palette that fades only the track, because the editor's well is painted in

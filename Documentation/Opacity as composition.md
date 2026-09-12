@@ -3954,3 +3954,30 @@ alpha off the wrong colour. Both halves ask the one resolved colour.
 Two rungs on one line is also why this is claimed per cell rather than as a rectangle over
 the field: the separators and the digits are different colours, and a single ink claim
 across both resolves one of them at the other's alpha — §23.2's mistake again.
+
+### 68.5 The wash a modal dims its page with
+
+`dimmedAsBackdrop` flattens the page under a modal to one foreground on one background,
+and those are `foregroundTertiary` and `overlayBackground` — both of which carry a faded
+theme's alpha since §39. Both went to the emitter.
+
+The doc comment there already explained why the CONTENT's claims are dropped: the flatten
+rewrites every cell, so a region saying "these cells are 40% translucent" no longer
+describes anything present. That reasoning stands. What it went on to say — "the dim is
+deliberately flat and opaque" — conflated two things. Flat means one colour everywhere.
+Whether that colour is opaque is the theme's business, and a theme that asks for a
+translucent overlay is asking to see the terminal through the wash.
+
+So the two channels are answered differently, which is the interesting part:
+
+- The **field is claimed**, as one rectangle over everything the wash covers. Every cell
+  of a backdrop is painted in it, so the rectangle is honest, and one region is all a
+  uniform wash needs.
+- The **ink is spent** against that field. A dimmed row's glyphs sit on the wash and
+  nowhere else, so `spendingAlpha(over:)` gives exactly the right colour — and an ink
+  claim would also have to cover the blanks between words, where there is no glyph to
+  blend and what is behind would show through a cell this one painted (§68.2's rule about
+  the pad, met from the other side).
+
+The claim covers the flattened runs too — their frames are washed in the same two colours,
+so the one static claim a run replays under is true of every frame of it.
