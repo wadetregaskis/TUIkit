@@ -132,4 +132,57 @@ struct OverlayPlacementTests {
         #expect(placed.content.hitTestRegions.first?.offsetX == 1)
         #expect(placed.content.hitTestRegions.first?.offsetY == 0)
     }
+
+    /// A run whose ROW a container's clip cut away must not survive the cut.
+    ///
+    /// `clipped(toWidth:height:)` re-bases the layer to the CONTAINER's origin,
+    /// and every container outside it then adds a positive shift — so a run left
+    /// at a negative offset does not stay negative until the screen's filter sees
+    /// it. At a page row of 3 a run left at -2 arrives at absolute row 1, passes
+    /// the `offsetY >= 0` filter, and replays onto a row belonging to something
+    /// else, having drawn nothing of itself. `placed(maxWidth:maxHeight:)` is the
+    /// caller that may rely on the negative offset, because its own placement is
+    /// 0 on the axis it cut; this one may not.
+    @Test("A container's top clip takes the runs on the rows it cut")
+    func aTopClipTakesTheRunsOnTheRowsItCut() throws {
+        var content = FrameBuffer(lines: ["aaaa", "bbbb", "cccc"])
+        content.animatedCells = [
+            // On the first row, which the clip cuts away entirely.
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 1, frames: ["|", "/"], clock: .content),
+            // On the last row, which survives — and must come out re-based.
+            AnimatedCellRun(offsetX: 1, offsetY: 2, width: 1, frames: ["-", "="], clock: .content),
+        ]
+        let layer = OverlayLayer(offsetX: 0, offsetY: -2, content: content, isOpaque: false)
+
+        let clipped = try #require(layer.clipped(toWidth: 4, height: 4))
+
+        #expect(clipped.content.lines.map(\.stripped) == ["cccc"], "two rows cut")
+        #expect(clipped.content.animatedCells.count == 1, "the cut rows' run went with them")
+        let run = try #require(clipped.content.animatedCells.first)
+        #expect(run.offsetY == 0, "the surviving run followed its row up")
+        #expect(run.offsetX == 1)
+        #expect(run.frames.map(\.stripped) == ["-", "="])
+    }
+
+    /// The same, on the other axis: a leading column cut cuts its runs.
+    @Test("A container's leading clip cuts the runs that straddle it")
+    func aLeadingClipCutsTheRunsThatStraddleIt() throws {
+        var content = FrameBuffer(lines: ["abcdef"])
+        content.animatedCells = [
+            // Wholly left of the cut: gone with the cells it named.
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 2, frames: ["ab", "AB"], clock: .content),
+            // Straddling it: cut to the three cells that survive.
+            AnimatedCellRun(offsetX: 1, offsetY: 0, width: 4, frames: ["bcde", "BCDE"], clock: .content),
+        ]
+        let layer = OverlayLayer(offsetX: -2, offsetY: 0, content: content, isOpaque: false)
+
+        let clipped = try #require(layer.clipped(toWidth: 6, height: 1))
+
+        #expect(clipped.content.lines.map(\.stripped) == ["cdef"])
+        #expect(clipped.content.animatedCells.count == 1, "the run left of the cut went with it")
+        let run = try #require(clipped.content.animatedCells.first)
+        #expect(run.offsetX == 0, "re-based: 'c' is now column 0")
+        #expect(run.width == 3)
+        #expect(run.frames.map(\.stripped) == ["cde", "CDE"])
+    }
 }

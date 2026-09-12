@@ -342,9 +342,18 @@ public struct OverlayLayer: Sendable, Equatable {
     /// No pre-clip against the surviving box is needed on the way: unlike
     /// `HitTestRegion`, a run and an opacity region record no clip counters, so
     /// translation and clipping commute, and payload left at a negative offset
-    /// names cells that were cut away — dropped by
-    /// `AnimatedCellRun.clipped(toCanvasColumns:rows:)` at the screen, and
-    /// already read as `max(0, …)` by the opacity resolution.
+    /// names cells that were cut away.
+    ///
+    /// Whether that is SAFE depends on the caller, and only one of the two may
+    /// rely on it. `placed(maxWidth:maxHeight:)` may: it returns a placement of
+    /// 0 on whichever axis it cut, so the offset is still negative at the screen,
+    /// where the run filter drops it (negative row) or cuts it to the surviving
+    /// cells (negative column). `clipped(toWidth:height:)` may NOT, and pre-clips
+    /// its runs itself: it re-bases the layer to a CONTAINER's origin, and the
+    /// containers outside it then add positive shifts that can carry a negative
+    /// offset back into range — a run that draws nothing and replays on someone
+    /// else's row. Opacity regions need no such pre-clip either way, being
+    /// resolved in the layer's own coordinates and then cleared.
     private static func cutting(
         _ buffer: FrameBuffer, leadingColumns dropColumns: Int, rows dropRows: Int
     ) -> FrameBuffer {
@@ -447,6 +456,27 @@ public struct OverlayLayer: Sendable, Equatable {
             cut.hitTestRegions = content.hitTestRegions.compactMap {
                 $0.clipped(
                     toColumns: dropX..<(dropX + boxWidth), rows: dropY..<(dropY + boxHeight))
+            }
+            // Runs too, and for a reason `cutting`'s own rationale does not cover.
+            // Payload left at a negative offset is safe only while that offset stays
+            // negative all the way to the screen, where the run filter reads it. Here
+            // it does not: the layer's origin is re-based to `x`/`y` below — the
+            // CONTAINER's coordinates, not the screen's — and every enclosing
+            // container then adds a positive shift, so a run cut off the top of a
+            // viewport inside a page at row 3 arrives at absolute row 1 and passes the
+            // screen's `offsetY >= 0` filter unharmed. It then replays, every tick,
+            // onto a row belonging to something else, having drawn nothing of itself.
+            //
+            // Rows are all-or-nothing (a run is one row) and columns are cut, which is
+            // what `clipped(toColumns:)` does; a run cut to nothing goes with the cells
+            // it named. Deliberately no `isAnimating` drop for a cut that stopped
+            // moving, unlike `clamped`: the screen filters those anyway
+            // (`RenderLoop`), and dropping one here would discard the only statement
+            // of a non-varying translucent `AnimatedRunAlpha` — §69.4's rule that a run
+            // must never be the sole carrier of an alpha.
+            cut.animatedCells = content.animatedCells.compactMap { run in
+                guard (dropY..<(dropY + boxHeight)).contains(run.offsetY) else { return nil }
+                return run.clipped(toColumns: dropX..<(dropX + boxWidth))
             }
             cut = Self.cutting(cut, leadingColumns: dropX, rows: dropY)
         }

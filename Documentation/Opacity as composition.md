@@ -4204,6 +4204,27 @@ contract ("already trimmed to the source's own coordinates, by the caller, which
 only thing that knows which cells to drop") is now asserted at `blendedSpan`'s own head
 rather than left in its doc comment.
 
+### 70.1 And the cut site, which had a second consequence
+
+The same negative offsets had a second effect that the resolver's cut does not address,
+because it is not about alpha at all. `clipped(toWidth:height:)` re-bases the layer's own
+origin to the CONTAINER's coordinates — not the screen's — and every container outside it
+then adds a positive shift. So a run left at row -2 inside a viewport that ends up at page
+row 3 arrives at absolute row 1, passes the screen's `offsetY >= 0` filter unharmed, and
+replays there every tick: a spinner animating on a header line above the `ScrollView` it
+belongs to, having drawn nothing of itself anywhere.
+
+`clipped(toWidth:height:)` therefore pre-clips its runs, next to the `hitTestRegions` clip
+that was already there and for the same reason. `placed(maxWidth:maxHeight:)` does not need
+to and does not: its own returned placement is 0 on whichever axis it cut, so the offset is
+still negative when the screen's filter reads it. That distinction is now in `cutting`'s
+comment, which previously offered one rationale for both callers and was right about one.
+
+Deliberately no `isAnimating` drop for a cut piece that stopped moving, unlike `clamped`:
+`RenderLoop` filters those at the screen anyway, and dropping one here would discard the
+only statement of a *non-varying* translucent `AnimatedRunAlpha` — a payload `varies`
+reports false for and `isTranslucent` reports true for — which is §69.4's rule.
+
 **Live route, no `.opacity(_:)` required.** The pointer-anchored branch of
 `OverlayLayer.placed(maxWidth:maxHeight:)` — a drag preview, which declines to be clamped
 to the screen and loses its overhang out of its content instead — cuts the same way, and a
