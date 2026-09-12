@@ -1691,7 +1691,10 @@ where Value.ID: Hashable {
             // taken off the FRONT move every survivor's index down by as many.
             var rowRegions = rendered.claims
             if rowIndex == window.range.lowerBound, window.topClip > 0 {
-                let clipped = min(window.topClip, rowLines.count - 1)
+                // Total by `max(0, …)`: the same guard `_ListCore.clipRow` carries,
+                // for the same reason — `clampTopClip()` keeps a zero-line row's clip at
+                // zero, and `removeFirst(-1)` would trap if that ever stopped holding.
+                let clipped = min(window.topClip, max(0, rowLines.count - 1))
                 rowLines.removeFirst(clipped)
                 pulseFrames?.removeFirst(clipped)
                 rowRegions = rowRegions.compactMap { claim in

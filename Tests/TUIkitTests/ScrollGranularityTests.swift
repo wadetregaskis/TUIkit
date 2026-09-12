@@ -237,6 +237,51 @@ struct ScrollGranularityTests {
     /// Like ``renderList(granularity:linesPerRow:wheelTicks:)`` but returns
     /// every frame's buffer, for asserting across-scroll invariants (constant
     /// height, partial bottom rows).
+    /// A row can render nothing at all — a conditional row whose branch went empty —
+    /// while the line clip lives on the handler, measured against the lines the row had
+    /// LAST frame. `clampTopClip()` is what stops that reaching the renderers: it runs
+    /// on every render pass with this frame's heights, before the window resolves, and a
+    /// row of no lines has no line to clip to. Pinned here because the arithmetic
+    /// downstream — `min(topClip, lines.count - 1)` in both twins — is only total while
+    /// this holds.
+    @Test("A row that empties under a line clip draws, and takes the clip with it")
+    func emptiedRowDropsItsClip() throws {
+        final class Branch {
+            var isTall = true
+        }
+        let branch = Branch()
+        let context = makeRenderContext(width: 20, height: 6)
+        let view = List(selection: .constant(Int?.none)) {
+            ForEach(0..<4, id: \.self) { row in
+                if row == 0 {
+                    if branch.isTall { Text("r0a\nr0b\nr0c") } else { EmptyView() }
+                } else {
+                    Text("r\(row)")
+                }
+            }
+        }
+        _ = renderToBuffer(view, context: context)
+        let handler = try #require(
+            context.environment.focusManager?.currentFocused as? ItemListHandler<Int>)
+
+        // Two of the tall row's three lines scrolled off: the frame starts at its last.
+        handler.scrollTopClipLines = 2
+        context.renderCache?.clearAll()
+        let clipped = renderToBuffer(view, context: context).lines.map(\.stripped)
+        #expect(clipped.contains { $0.contains("r0c") }, "\(clipped)")
+        #expect(!clipped.contains { $0.contains("r0a") }, "the clip took the first lines: \(clipped)")
+
+        // The row now draws nothing, with the clip still standing on the handler.
+        branch.isTall = false
+        handler.scrollTopClipLines = 2
+        context.renderCache?.clearAll()
+        let emptied = renderToBuffer(view, context: context).lines.map(\.stripped)
+        #expect(handler.scrollTopClipLines == 0, "the clip outlived the lines it was measured against")
+        #expect(
+            emptied.contains { $0.contains("r1") } && emptied.contains { $0.contains("r3") },
+            "the rows below it are drawn: \(emptied)")
+    }
+
     private func renderListFrames(
         granularity: ScrollGranularity = .line,
         linesPerRow: Int = 3,

@@ -1599,7 +1599,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // index, so lines taken off the FRONT move every survivor down by as many.
         var claims = rendered.claims
         if topClip > 0 {
-            let clipped = min(topClip, lines.count - 1)
+            // `max(0, …)` for totality, not because a zero-line row reaches here:
+            // `clampTopClip()` runs on every render pass with THIS frame's row heights,
+            // before the window resolves, and holds the stored clip inside the origin
+            // row's height — which is zero for a row that renders nothing, so the clip
+            // goes with the lines it was measured against. Left as `lines.count - 1`
+            // alone, such a row would call `removeFirst(-1)`, which traps in release as
+            // well, so this is what keeps a future reordering of those two steps from
+            // being a crash rather than a misdraw.
+            let clipped = min(topClip, max(0, lines.count - 1))
             lines.removeFirst(clipped)
             pulseFrames?.removeFirst(clipped)
             childRuns = childRuns.compactMap {
