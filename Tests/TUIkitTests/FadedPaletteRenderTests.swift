@@ -240,7 +240,7 @@ struct FadedPaletteRenderTests {
         ] {
             let popup = DropdownMenu.popup(
                 DropdownMenu.Configuration(
-                    rows: (0..<20).map { .option(" item \($0)") }, highlightedRow: 0,
+                    rows: (0..<20).map { .option(" item \($0)", claims: []) }, highlightedRow: 0,
                     innerWidth: 12, scroll: ScrollAxis(), followHighlight: false,
                     autoRepeatToken: "faded-dropdown"),
                 context: context(palette: palette, width: 30, height: 10) {
@@ -268,7 +268,7 @@ struct FadedPaletteRenderTests {
             let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
             let popup = DropdownMenu.popup(
                 DropdownMenu.Configuration(
-                    rows: (0..<3).map { .option(" item \($0)") }, highlightedRow: 0,
+                    rows: (0..<3).map { .option(" item \($0)", claims: []) }, highlightedRow: 0,
                     innerWidth: 12, scroll: ScrollAxis(), followHighlight: false,
                     autoRepeatToken: "faded-dropdown-border"),
                 context: context(palette: palette, width: 30, height: 10) {
@@ -280,6 +280,49 @@ struct FadedPaletteRenderTests {
             #expect(top.frames[0].contains(spent), "the bright frame: \(top.frames[0].debugDescription)")
             #expect(popup.opacityRegions.isEmpty, "\(popup.opacityRegions)")
         }
+    }
+
+    /// The ✓ beside a drop-down's current value, drawn in the palette accent by the
+    /// layer ABOVE the renderer — so it is neither the chrome's claim nor a row the
+    /// renderer painted, and it reached the emitter with a faded accent's alpha on it.
+    /// It trapped on six of the example's pages, every one of them a `Picker`, and no
+    /// test here opened a menu through `attach` — the two cases above build a
+    /// `Configuration` directly, which is the layer past where the marker is made.
+    ///
+    /// Asserted on the cell as well as by not trapping: the marker's own cell owes the
+    /// accent's alpha, and no cell of the label beside it owes anything, so the claim
+    /// is the marker's and not a rectangle thrown over the row.
+    @Test("A drop-down option's selected marker owes the faded accent")
+    func dropdownSelectedMarkerClaims() throws {
+        let palette = FadedAll()
+        var buffer = FrameBuffer(lines: [String(repeating: " ", count: 20)])
+        DropdownMenu.attach(
+            DropdownMenu.OptionMenu(
+                entries: [
+                    .option(label: "alpha", isSelected: false),
+                    .option(label: "beta", isSelected: true),
+                    .divider,
+                    .option(label: "gamma", isSelected: false),
+                ],
+                highlightedOption: 0, scroll: ScrollAxis(), followHighlight: false,
+                autoRepeatToken: "faded-marker", isEnabled: true),
+            to: &buffer,
+            context: context(palette: palette, width: 24, height: 10),
+            onHover: { _ in }, onActivate: { _ in }, onDismiss: {})
+
+        let popup = try #require(buffer.overlays.first?.content, "the menu is attached")
+        let marker = cells(of: Character(DropdownMenu.selectedMarker), in: popup)
+        #expect(
+            marker.count == 1,
+            "one row is selected:\n\(popup.lines.map(\.stripped).joined(separator: "\n"))")
+        let cell = try #require(marker.first)
+        #expect(
+            owed(atColumn: cell.column, row: cell.row, in: popup).ink == owed(palette.accent),
+            "the marker's cell owes the accent's alpha")
+        // The label's first letter, two columns along, is drawn in nothing faded.
+        #expect(
+            owed(atColumn: cell.column + 2, row: cell.row, in: popup).ink == 1,
+            "the claim covers the marker only")
     }
 
     /// A text editor's bar, which has no arrows: every claim the editor makes must be

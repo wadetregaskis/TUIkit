@@ -124,12 +124,25 @@ extension DropdownMenu {
             case .option(let label, let isSelected):
                 // The marker column keeps every label on one left edge whether
                 // or not its row is the selected one.
+                //
+                // Opaque bytes, and the accent's own alpha in a claim beside
+                // them: a faded accent reached the emitter here and trapped, on
+                // six of the example's pages. The claim is row-local — interior
+                // column 1, the cell the space above puts the marker in — and
+                // the renderer places it, since the scroll window is its.
                 let marker =
                     isSelected
-                    ? ANSIRenderer.colorize(selectedMarker, foreground: accent) : " "
+                    ? ANSIRenderer.colorize(selectedMarker, foreground: accent.opaqueSpelling)
+                    : " "
+                let markerClaim =
+                    isSelected
+                    ? OpacityRegion.claim(
+                        offsetX: 1, offsetY: 0, width: 1, height: 1, ink: accent)
+                        .map { [$0] } ?? []
+                    : []
                 ordinalByRow[rows.count] = rowByOrdinal.count
                 rowByOrdinal.append(rows.count)
-                rows.append(.option(" " + marker + " " + label))
+                rows.append(.option(" " + marker + " " + label, claims: markerClaim))
             }
         }
         let highlightedRow = menu.highlightedOption.flatMap {

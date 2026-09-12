@@ -132,7 +132,7 @@ struct SelectionEmphasisRampTests {
         ColorDepth.withCurrent(.palette256) {
             let context = makeRenderContext(width: 30, height: 12)
             let config = DropdownMenu.Configuration(
-                rows: [.option("One"), .option("Two"), .divider, .option("Three")],
+                rows: [.option("One", claims: []), .option("Two", claims: []), .divider, .option("Three", claims: [])],
                 highlightedRow: 0, innerWidth: 12, scroll: ScrollAxis(),
                 followHighlight: true, autoRepeatToken: "ramp-test")
             let buffer = DropdownMenu.popup(

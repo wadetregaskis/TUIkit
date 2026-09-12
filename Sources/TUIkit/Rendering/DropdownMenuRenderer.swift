@@ -37,7 +37,16 @@ enum DropdownMenu {
         /// A selectable option. The string is the row's interior text,
         /// already carrying its leading marker/padding; the renderer fits it
         /// to the menu width and applies the highlight background.
-        case option(String)
+        ///
+        /// `claims` is what that text owes the compositor, in ROW-LOCAL
+        /// columns — 0 is the interior's first column, and `offsetY` is always
+        /// 0 — because the producer knows which cells it painted in a faded
+        /// colour and only the renderer knows where the row lands. It places
+        /// them through the same window it draws the row with, as it already
+        /// does for a divider's rule: a producer that worked out its own line
+        /// number would be re-deriving the scroll window, and the two would
+        /// part the first time one of them changed.
+        case option(String, claims: [OpacityRegion])
 
         /// A horizontal rule between option groups. Never highlighted,
         /// hovered, or clickable.
@@ -235,6 +244,16 @@ enum DropdownMenu {
             return OpacityRegion.claim(
                 offsetX: 1, offsetY: local + 1, width: ruleWidth, height: 1,
                 ink: borderColor)
+        }
+        // What the rows themselves owe — a selected option's marker, drawn in a
+        // palette accent the user may have faded — placed from row-local columns
+        // into the popup's, by the window resolved above. The rows are inside the
+        // runs (every line is, since every line carries border cells), and this is
+        // sound for the same reason the chrome's claim is: a marker's colour is the
+        // same in every frame the breath replays, so one claim is true of them all.
+        buffer.opacityRegions += window.visible.enumerated().flatMap { local, index -> [OpacityRegion] in
+            guard case .option(_, let claims) = rows[index] else { return [] }
+            return claims.map { $0.shifted(byX: 1, y: local + 1) }
         }
         // The scrollbar's claims, in both arms, like the chrome's: the bar does not
         // breathe — its colours are the same in every frame the runs replay — so its
@@ -492,7 +511,7 @@ enum DropdownMenu {
                 } else {
                     lines.append(verticalBorder + fitted + ANSIRenderer.reset + verticalBorder)
                 }
-            case .option(let content):
+            case .option(let content, _):
                 let isHighlighted = index == highlightedRow
                 if let barCells {
                     let fitted = fit(content, to: contentInner)

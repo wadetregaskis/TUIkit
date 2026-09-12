@@ -3841,3 +3841,54 @@ The `topClip` path was never affected: it trims the row's lines before its heigh
 recorded, so its bands were right all along. Only the two things applied AFTER the heights
 were taken — the overscroll excursion and the reorder overrun's front clip — could cut a
 row the bands still described at full height.
+
+## 68. Six sites the ledger never had: the faded-palette live sweep (2026-09-12)
+
+Every count of "the sites that must honour alpha" in this document was arrived at by
+reading. §16.1's thirteen entry points, the re-counts at §40.2 and §43 that found the
+ledger low by 3–6× each time — all of them re-read the same list, and each re-read
+recovered what the last one had missed rather than what nobody had looked at.
+
+So the app was run instead, with translucency everywhere. `CustomizablePalette.init(from:)`
+in the example takes a snapshot of every semantic colour; appending `.opacity(0.5)` to all
+of them but the four grounds fades every page of the app at once. In a debug build the
+emitter's assertion is armed, so any unclaimed paint site is a trap with the alpha in its
+message. One PTY process per page — a trap kills a walk, so `ci-pty-smoke.sh full` found
+exactly one bad page and stopped — with stderr on its own pipe, because `pyte`
+reconstructs a screen and a backtrace interleaves into unreadable columns through it.
+
+Six sites, on ten-plus pages, none of them in any ledger here:
+
+| Site | |
+|---|---|
+| `DropdownOptionMenu.attach` — the ✓ beside a drop-down's current value | six pages |
+| `Spinner.renderBouncingFrame` | alpha **192** |
+| `DimmedModifier`'s `Flattening`, via `dimmedAsBackdrop` | |
+| `_ListCore.renderLineWithBadge` | |
+| `_ImageCore.renderPlaceholder` | |
+| `_DatePickerCore.renderToBuffer` | |
+
+The alpha-192 one is the sharpest lesson. Nobody greps for a paint site that never
+mentions opacity, and `renderBouncingFrame` does not: it calls
+`Color.lerp(color, trackColor, phase:)`, and a lerp between a faded colour and an opaque
+one MAKES an alpha that no palette slot holds and no author wrote. An audit by reading
+cannot find that; running it finds it in a second.
+
+### 68.1 A drop-down option's selected marker
+
+`DropdownOptionMenu.attach` paints the ✓ in `palette.accent`, one layer ABOVE the renderer
+that draws the popup — so it is neither the chrome's claim (§64) nor a row the renderer
+painted, and it fell between them. Every `Picker` in the example trapped on opening.
+
+The marker's bytes are now the accent's opaque spelling, and its alpha travels as a claim
+on `Row.option` — in ROW-LOCAL columns, `offsetX: 1` being the cell the row's leading
+space puts the marker in. The renderer places it, shifting by the same window it draws the
+row with, exactly as it already does for a divider's rule. The alternative — having
+`attach` work out the line number itself — means re-deriving the scroll window outside the
+only thing that owns it, and the two would part the first time either changed. That the
+claim rides on the case rather than in a dictionary beside `rows` is the same argument one
+step further in: a `[Int: [OpacityRegion]]` can be keyed wrong, an associated value cannot.
+
+The claim is sound under the popup's breath for the reason §64 gives for the chrome: every
+line of the popup is inside a run, and a marker's colour is the same in every frame of
+that run, so one static claim describes them all.
