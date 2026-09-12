@@ -347,9 +347,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// and drew nothing, in no particular order, and stay for the dialogs they
         /// present.
         ///
-        /// The pairing is by ROW, not by line: a row cut partway through its top,
-        /// by the reorder clip or a slide, still reads its payload from the top of
-        /// its own buffer, so that payload sits as many lines low as were cut.
+        /// The pairing is by ROW; a row cut partway through its top — by the reorder
+        /// clip or a slide — says so in its range's `linesCutAbove`, which every
+        /// payload consumer adds to the scroll's own clip. Read from the row's own top
+        /// instead, the payload sat as many lines low as were cut (§67).
         let visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)]
 
         /// The rows' `.dropDestination(for:action:)` insertion action, if any —
@@ -365,8 +366,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var rowContentWidth = 0
     }
 
+    /// Where an entry the frame drew landed, and how much of its own top went.
+    ///
+    /// `linesCutAbove` is the row's OWN lines cut from its top AFTER it was drawn:
+    /// a reorder overrun clipped away from the slot, or a push past the bottom
+    /// sliding it out. The scroll's `topClip` is not in it — that one belongs to the
+    /// origin row alone, and every consumer adds it itself. Both move a row's payload
+    /// the same way: the drawn lines start at row-local `topClip + linesCutAbove`, so
+    /// a consumer reading from the row's own top lands its payload that many lines
+    /// LOW (§67).
     private typealias VisibleRowRange = (
-        rowIndex: Int, yStart: Int, height: Int, type: ListRowType<SelectionValue>
+        rowIndex: Int, yStart: Int, height: Int, linesCutAbove: Int,
+        type: ListRowType<SelectionValue>
     )
 
     /// The first row of the window and how many of its lines are scrolled off
@@ -1238,11 +1249,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
             rowLinesEmitted += styledLines.count
             ranges.append((
-                rowIndex: rowIndex,
-                yStart: yStart,
-                height: styledLines.count,
-                type: row.type
-            ))
+                rowIndex: rowIndex, yStart: yStart, height: styledLines.count,
+                linesCutAbove: 0, type: row.type))
             if case .content = row.type { sectionContentIndex += 1 }
         }
 
@@ -1301,7 +1309,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let moved = slidRanges(ranges, handler: handler, lineCount: slidRows.count)
             .map {
                 (rowIndex: $0.rowIndex, yStart: $0.yStart + topOffset, height: $0.height,
-                 type: $0.type)
+                 linesCutAbove: $0.linesCutAbove, type: $0.type)
             }
         var runs = slidRuns(
             pulseRuns, handler: handler, lineCount: slidRows.count, topOffset: topOffset)
@@ -1536,11 +1544,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 rowClaims += rowRegions.map { $0.shifted(byX: 0, y: yStart) }
             }
             ranges.append((
-                rowIndex: rowIndex,
-                yStart: yStart,
-                height: styledLines.count,
-                type: row.type
-            ))
+                rowIndex: rowIndex, yStart: yStart, height: styledLines.count,
+                linesCutAbove: 0, type: row.type))
             if case .content = row.type { sectionContentIndex += 1 }
         }
         // Slot-aware overrun clip for a reorder hold (see composeRowLines).
@@ -1659,10 +1664,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             ranges = ranges.compactMap { range in
                 let end = range.yStart + range.height - overrun
                 guard end > 0 else { return nil }
-                let start = max(0, range.yStart - overrun)
+                let moved = range.yStart - overrun
+                let start = max(0, moved)
+                // The first survivor is cut THROUGH: `start` is 0 where `moved` is
+                // negative, and the difference is its own lines gone from its top —
+                // which its payload must move by as well (§67).
                 return (
                     rowIndex: range.rowIndex, yStart: start, height: end - start,
-                    type: range.type)
+                    linesCutAbove: range.linesCutAbove + (start - moved), type: range.type)
             }
         } else {
             lines.removeLast(overrun)
@@ -1675,7 +1684,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 guard range.yStart < cap else { return nil }
                 return (
                     rowIndex: range.rowIndex, yStart: range.yStart,
-                    height: min(range.height, cap - range.yStart), type: range.type)
+                    height: min(range.height, cap - range.yStart),
+                    linesCutAbove: range.linesCutAbove, type: range.type)
             }
         }
     }
@@ -1692,7 +1702,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             else { return nil }
             return (
                 rowIndex: range.rowIndex, yStart: moved.yStart, height: moved.height,
-                type: range.type)
+                linesCutAbove: range.linesCutAbove + moved.cutAbove, type: range.type)
         }
     }
 
@@ -1909,7 +1919,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // off above the viewport, so its row-local coordinates shift up
             // by that much. Every other row has no clip. Measured from the
             // RESOLVED origin — the same one the rows were drawn from.
-            let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
+            let clip =
+                (visible.index == state.origin.offset ? state.origin.topClip : 0)
+                + position.linesCutAbove
             for region in visible.row.buffer.hitTestRegions {
                 // Rows can be partially visible — the top row clipped above
                 // (line granularity), the last row clipped below: intersect
@@ -1999,7 +2011,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
         let bounds = (width: buffer.width, height: buffer.height)
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
-            let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
+            let clip =
+                (visible.index == state.origin.offset ? state.origin.topClip : 0)
+                + position.linesCutAbove
             for layer in visible.row.buffer.shiftedOverlays(
                 byX: rowContentX, y: topInset + position.yStart - clip)
             {
@@ -2051,7 +2065,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let topInset = (style.showsBorder ? 1 : 0) + paddingTop
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
-            let clip = visible.index == state.origin.offset ? state.origin.topClip : 0
+            let clip =
+                (visible.index == state.origin.offset ? state.origin.topClip : 0)
+                + position.linesCutAbove
             for region in visible.row.buffer.opacityRegions {
                 // The shared trim, so this is not a third spelling of it: the
                 // rows the window kept of this row, and the columns the row

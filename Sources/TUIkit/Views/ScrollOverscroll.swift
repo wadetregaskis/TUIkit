@@ -104,19 +104,28 @@ extension ScrollOverscrollState {
 
     /// Where a row that occupied `yStart..<yStart + height` in the unslid
     /// content lands afterwards, clipped to `0..<lineCount` — or `nil` when the
-    /// slide pushed it off entirely.
+    /// slide pushed it off entirely — and how many of the row's own lines that
+    /// clip took off its TOP.
     ///
     /// Row hit-testing indexes the *drawn* lines, so a range that does not move
     /// with its row sends clicks to the wrong one. Clipping rather than
     /// translating keeps a partially-visible row clickable over the part of it
     /// that is actually on screen.
-    func slidRange(yStart: Int, height: Int, lineCount: Int) -> (yStart: Int, height: Int)? {
-        guard excursion != 0 else { return (yStart, height) }
+    ///
+    /// `cutAbove` is that clip's own size, reported rather than left to be
+    /// re-derived: anything positioned in the row's coordinates — its hit
+    /// regions, its overlays, its claims — starts at the row's first DRAWN line,
+    /// and a consumer measuring from the row's top instead lands it that many
+    /// lines low (§67).
+    func slidRange(
+        yStart: Int, height: Int, lineCount: Int
+    ) -> (yStart: Int, height: Int, cutAbove: Int)? {
+        guard excursion != 0 else { return (yStart, height, 0) }
         let moved = yStart - excursion
         let clippedStart = max(0, moved)
         let clippedEnd = min(lineCount, moved + height)
         guard clippedEnd > clippedStart else { return nil }
-        return (clippedStart, clippedEnd - clippedStart)
+        return (clippedStart, clippedEnd - clippedStart, clippedStart - moved)
     }
 }
 

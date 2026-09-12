@@ -324,6 +324,150 @@ struct ListRowAlignmentTests {
         return renderToBuffer(view, context: ctx)
     }
 
+    // MARK: - Within a row cut through its top
+
+    /// Which line's button answered a click.
+    private final class TapBox {
+        var label: String?
+    }
+
+    /// The selection a reorder picks up, boxed so the binding outlives the expression
+    /// that made it.
+    private final class SelectionBox {
+        var rows: Set<Int> = []
+    }
+
+    /// The lines a row can draw, each its own button and every label distinct: a
+    /// payload placed from the row's own top rather than from its first DRAWN line
+    /// lands on another line of the SAME row, which a click then names. How many a row
+    /// draws is each test's to choose, because what cuts a row through differs — the
+    /// slide engages only on a row-aligned bottom, and the reorder overrun lands
+    /// mid-row only at some row heights.
+    private static let lineLabels = (0..<8).map { row in
+        ["a", "bb", "ccc"].map { "r\(row)\($0)" }
+    }
+
+    private func rows(_ tapped: TapBox, lines: Int) -> some View {
+        List(selection: .constant(Int?.none)) {
+            ForEach(Self.lineLabels.indices, id: \.self) { row in
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(Self.lineLabels[row].prefix(lines)), id: \.self) { label in
+                        Button(label) { tapped.label = label }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every line of every row the frame drew, with the label drawn on it.
+    private func drawnLineLabels(_ frame: FrameBuffer) -> [(y: Int, label: String)] {
+        let all = Self.lineLabels.flatMap { $0 }
+        return frame.lines.enumerated().compactMap { y, line in
+            let stripped = line.stripped
+            guard let label = all.first(where: { stripped.contains($0) }) else { return nil }
+            return (y, label)
+        }
+    }
+
+    /// Clicks every drawn line and reports which label answered, so a payload one line
+    /// off its own content shows up as another line of the same row answering.
+    private func labelsAnsweringAClick(
+        _ frame: FrameBuffer, _ tapped: TapBox, context ctx: RenderContext
+    ) -> [(drawn: String, answered: String?)] {
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        dispatcher.setRegions(frame.hitTestRegions)
+        return drawnLineLabels(frame).map { line in
+            tapped.label = nil
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: line.y))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: line.y))
+            return (line.label, tapped.label)
+        }
+    }
+
+    /// A push past the bottom slides the top row out through its own lines: it keeps
+    /// drawing its last line, and that line's own button must be the one a click
+    /// reaches. Read from the row's top instead, the region of the line the slide cut
+    /// away sat on it.
+    @Test("A push past the bottom leaves a cut row's buttons on their own lines")
+    func overscrollKeepsCutRowsButtonsOnTheirLines() throws {
+        let tapped = TapBox()
+        // A push is a step the edge BLOCKED, so it engages only where the resting
+        // bottom is row-aligned: two-line rows, an eight-line viewport, and a bar
+        // rather than the "N more" lines, which would take one of them. Off that
+        // lattice every tick still has a line of the top row to give, the allowance is
+        // never reached — and that is why the suite's other push cases, on single-line
+        // rows, cut no row through.
+        let ctx = pushableContext(
+            palette: EnvironmentValues().palette, style: .scrollbar, bottom: .rows(1))
+        let pushed = pushedPastTheBottom(rows(tapped, lines: 2), context: ctx)
+        let handler = ctx.environment.focusManager?.currentFocused as? ItemListHandler<Int>
+        #expect(handler?.overscrollState.excursion == 1, "pushed the whole allowance")
+        let screen = pushed.lines.map(\.stripped)
+        let answers = labelsAnsweringAClick(pushed, tapped, context: ctx)
+        let top = try #require(
+            answers.first, "no row line is drawn:\n\(screen.joined(separator: "\n"))")
+        #expect(
+            top.drawn.hasSuffix("bb"),
+            "the premise: the slide cut the top row through, leaving its last line — \(top.drawn)")
+        for answer in answers {
+            #expect(
+                answer.answered == answer.drawn,
+                """
+                clicking the line drawn as \(answer.drawn) tapped \(answer.answered ?? "nothing")
+                \(screen.joined(separator: "\n"))
+                """)
+        }
+    }
+
+    /// The same cut from the other path: a reorder frame that overruns is clipped from
+    /// the front, away from the slot, and the first row to survive is cut through its
+    /// own lines.
+    @Test("A reorder overrun clipped from the front leaves a cut row's buttons on their lines")
+    func reorderOverrunKeepsCutRowsButtonsOnTheirLines() throws {
+        let tapped = TapBox()
+        let selection = SelectionBox()
+        selection.rows = [0, 1, 2]
+        let ctx = pushableContext(palette: EnvironmentValues().palette)
+        // Three lines a row: the overrun a three-row block leaves lands inside a row at
+        // this height, and on a row boundary at two.
+        let view = List(
+            selection: Binding(get: { selection.rows }, set: { selection.rows = $0 })
+        ) {
+            ForEach(Self.lineLabels.indices, id: \.self) { row in
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Self.lineLabels[row], id: \.self) { label in
+                        Button(label) { tapped.label = label }
+                    }
+                }
+            }
+            .onMove { _, _ in }
+        }
+        _ = renderToBuffer(view, context: ctx)
+        _ = ctx.environment.focusManager?.dispatchKeyEvent(
+            KeyEvent(key: .character("r"), ctrl: true))
+        _ = renderToBuffer(view, context: ctx)
+        _ = ctx.environment.focusManager?.dispatchKeyEvent(KeyEvent(key: .end))
+        let held = renderToBuffer(view, context: ctx)
+
+        let screen = held.lines.map(\.stripped)
+        let handler = ctx.environment.focusManager?.currentFocused as? ItemListHandler<Int>
+        #expect(handler?.reorder?.held.count == 3, "the whole block is in hand")
+        let answers = labelsAnsweringAClick(held, tapped, context: ctx)
+        let top = try #require(
+            answers.first, "no row line is drawn:\n\(screen.joined(separator: "\n"))")
+        #expect(
+            !top.drawn.hasSuffix("a"),
+            "the premise: the overrun cut the top row through — \(top.drawn)")
+        for answer in answers {
+            #expect(
+                answer.answered == answer.drawn,
+                """
+                clicking the line drawn as \(answer.drawn) tapped \(answer.answered ?? "nothing")
+                \(screen.joined(separator: "\n"))
+                """)
+        }
+    }
+
     /// The rows whose labels `frame` draws, in index order.
     private func drawnRows(_ frame: FrameBuffer) -> [Int] {
         let screen = frame.lines.map(\.stripped)

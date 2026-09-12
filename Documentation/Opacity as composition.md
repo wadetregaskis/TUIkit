@@ -3346,12 +3346,12 @@ The rows are now put back in step with the ranges before anything pairs them. Th
 anchoring spec's overscroll record carries the fix, because the claims were one of three
 payloads with the same defect, and a row's buttons were the one a user would see.
 
-Two things stay. A row cut partway through its top, by either producer, still reads its
-claims from the top of its own buffer, so they sit as many lines low as were cut. And
-the claims the list paints itself (`rowClaims`: the selection mark and fixed fills) do
-not go through the reorder clip at all. No hold constructed then had any to move —
-every selected row is in hand, and the slot's background is a pulse — so it was
-recorded here. A `.live` hold turned out to have one, and §54 fixes it.
+Two things stayed, and both are closed now. A row cut partway through its top, by either
+producer, still read its claims from the top of its own buffer, so they sat as many lines
+low as were cut — §67. And the claims the list paints itself (`rowClaims`: the selection
+mark and fixed fills) did not go through the reorder clip at all. No hold constructed then
+had any to move — every selected row is in hand, and the slot's background is a pulse — so
+it was recorded here; a `.live` hold turned out to have one, and §54 fixed it.
 
 
 ## 52. A row in hand lost its claims at the slot (2026-09-10)
@@ -3794,3 +3794,37 @@ The test drives `RenderLoop` itself: four frames of a page holding only such a s
 only such a bar, at advancing frame times and with the cursor timer as the loop leaves it.
 Nothing in those frames would keep the timer alive, the scheduler has a next firing after
 each, and the pictures differ. Before this, all four were one picture.
+
+
+## 67. A row cut through its top carried its payload a line low (2026-09-12)
+
+§51 paired a `List`'s drawn rows with the ranges they were drawn from, and recorded what
+that left: a row cut partway through its own TOP still read its payload — its hit regions,
+its overlays, its opacity claims — from the top of its own buffer, so the payload sat as
+many lines low as were cut. Two paths cut a row that way, and both trim its range to the
+viewport's first line: a reorder frame's overrun, clipped from the front away from the
+slot, and a push past the bottom, whose slide takes the top row's first lines.
+
+The scroll's own `topClip` was never the problem — that one belongs to the origin row
+alone, and every consumer added it already. What nothing recorded was the extra cut. A
+range carries it now as `linesCutAbove`: the reorder clip adds what it took, the slide
+reports it from `slidRange`, which owns that arithmetic, and the three consumers add it to
+the clip they already applied — both to the window they read from the row's buffer and to
+the shift they place it by.
+
+Measured with a button on every line of a multi-line row, clicking each line the frame
+drew: the line drawn as `r5bb` tapped `r5a` after a push, and under a reorder overrun
+`r7ccc` tapped `r7bb` and `r7bb` tapped `r7a` — each exactly one line off, which is what
+each path had cut.
+
+Single-line rows never showed it, which is why §51's own cases did not: a cut of one line
+does not cut a one-line row, it drops it, and a dropped row's payload was §51's subject. A
+push also engages only where the resting bottom is row-aligned — a push IS a step the edge
+blocked, and off that lattice every tick still has a line of the top row to give — so the
+fixture picks a row height and indicator style that land there, and asserts it.
+
+The `Table` is unaffected: it carries no per-row payload at all, its cells being drawn by
+the table itself, so nothing sits in a row's own coordinates to misplace. Its bands do
+differ from the List's — `drawnBands` drops a band whose start goes negative, where the
+List trims it to the viewport's first line — which is a separate divergence, recorded
+there and not touched here.
