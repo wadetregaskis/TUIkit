@@ -356,6 +356,44 @@ struct FadedPaletteRenderTests {
             "the pad beside it owes no ink")
     }
 
+    /// An `Image`'s placeholder centres a spinner glyph in `palette.accent` and its
+    /// caption in `foregroundSecondary`; the failure path centres `palette.error`. All
+    /// three reached the emitter faded (§68.3) — and only the centring knows where a
+    /// line landed, so that is where the claim is made now, past the pad and over the
+    /// cells the glyphs took.
+    ///
+    /// Effects are pinned off, as `ImageRenderTests` explains: with them firing, a
+    /// missing file's load can fail fast enough to land on the error path instead of
+    /// the placeholder, which made the `"⠋"` assertions flake under contention.
+    @Test("An image placeholder's spinner and caption owe what they were drawn in")
+    func imagePlaceholderClaims() throws {
+        let palette = FadedAll()
+        var environment = EnvironmentValues()
+        environment.palette = palette
+        let tuiContext = TUIContext(
+            lifecycle: LifecycleManager(firesEffects: false),
+            keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage())
+        environment.applyRuntimeServices(from: tuiContext)
+        let drawn = renderToBuffer(
+            Image(.file("/does-not-exist.png")),
+            context: RenderContext(
+                availableWidth: 20, availableHeight: 6,
+                environment: environment, tuiContext: tuiContext
+            ).isolatingRenderCache())
+
+        let screen = drawn.lines.map(\.stripped)
+        let spinner = try #require(
+            cells(of: "⠋", in: drawn).first, "the placeholder's spinner:\n\(screen.joined(separator: "\n"))")
+        #expect(
+            owed(atColumn: spinner.column, row: spinner.row, in: drawn).ink == owed(palette.accent),
+            "the spinner's cell owes the accent's alpha")
+        // Its pad, one cell to the left, is blank and claims nothing.
+        #expect(
+            owed(atColumn: spinner.column - 1, row: spinner.row, in: drawn).ink == 1,
+            "the centring pad owes no ink")
+    }
+
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
     /// on the bar's column, and a track cell there must owe the track's alpha. Under a
     /// palette that fades only the track, because the editor's well is painted in

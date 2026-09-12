@@ -595,22 +595,22 @@ extension _ImageCore {
     ) -> FrameBuffer {
         let palette = context.environment.palette
 
-        // Build placeholder content lines
-        var contentLines: [String] = []
+        // Build placeholder content lines, each with the colour it is to be drawn
+        // in rather than already drawn in it: `centerContent` is the only thing that
+        // knows where a centred line lands, so it is the only thing that can claim
+        // the cells (§68.3).
+        var contentLines: [(text: String, ink: Color)] = []
 
         if showSpinner {
-            let spinnerText = "⠋"
-            let colored = ANSIRenderer.colorize(spinnerText, foreground: palette.accent)
-            contentLines.append(colored)
+            contentLines.append((text: "⠋", ink: palette.accent))
         }
 
         if let text {
-            let colored = ANSIRenderer.colorize(text, foreground: palette.foregroundSecondary)
-            contentLines.append(colored)
+            contentLines.append((text: text, ink: palette.foregroundSecondary))
         }
 
         if contentLines.isEmpty {
-            contentLines.append(ANSIRenderer.colorize("Loading...", foreground: palette.foregroundSecondary))
+            contentLines.append((text: "Loading...", ink: palette.foregroundSecondary))
         }
 
         return centerContent(contentLines, width: width, height: height)
@@ -624,8 +624,8 @@ extension _ImageCore {
         context: RenderContext
     ) -> FrameBuffer {
         let palette = context.environment.palette
-        let errorText = ANSIRenderer.colorize("Error: \(message)", foreground: palette.error)
-        return centerContent([errorText], width: width, height: height)
+        return centerContent(
+            [(text: "Error: \(message)", ink: palette.error)], width: width, height: height)
     }
 
     /// Centers content lines vertically and horizontally within the given
@@ -638,9 +638,12 @@ extension _ImageCore {
     /// centring pads on the left only), so the buffer stays non-uniform: do not
     /// pass `uniformWidth: true`, or `appendHorizontally` skips the pad for a
     /// centred row and lands the next sibling mid-box.
-    private func centerContent(_ contentLines: [String], width: Int, height: Int) -> FrameBuffer {
+    private func centerContent(
+        _ contentLines: [(text: String, ink: Color)], width: Int, height: Int
+    ) -> FrameBuffer {
         let emptyLine = String(repeating: " ", count: width)
         var lines = [String](repeating: emptyLine, count: height)
+        var claims: [OpacityRegion] = []
 
         let startY = max(0, (height - contentLines.count) / 2)
 
@@ -648,8 +651,12 @@ extension _ImageCore {
             let y = startY + i
             guard y < height else { break }
 
-            // Calculate visible width of content (excluding ANSI codes, accounting for wide chars)
-            var line = content
+            // Drawn here, in the opaque spelling, with the alpha claimed below once
+            // the pad and any cut have decided which cells it covers. A placeholder's
+            // accent and an error's `palette.error` both reached the emitter with a
+            // faded palette's alpha on them before this (§68.3).
+            var line = ANSIRenderer.colorize(
+                content.text, foreground: content.ink.opaqueSpelling)
             var visibleWidth = line.strippedLength
 
             // Cut it, rather than merely failing to pad it. "Loading..." is 10
@@ -685,9 +692,21 @@ extension _ImageCore {
             let padding = max(0, (width - visibleWidth) / 2)
             let padded = String(repeating: " ", count: padding) + line
             lines[y] = padded
+            // The cells the glyphs actually took: past the pad, and `visibleWidth`
+            // wide, which the clip above has already reduced if it cut the line. The
+            // pad itself is a bare space and claims nothing — an ink claim over one
+            // lets what is behind show through where this drew blank.
+            if let claim = OpacityRegion.claim(
+                offsetX: padding, offsetY: y, width: visibleWidth, height: 1,
+                ink: content.ink)
+            {
+                claims.append(claim)
+            }
         }
 
-        return FrameBuffer(lines: lines, width: width)
+        var buffer = FrameBuffer(lines: lines, width: width)
+        buffer.opacityRegions = claims
+        return buffer
     }
 }
 

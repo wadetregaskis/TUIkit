@@ -3912,3 +3912,21 @@ counting back from the right edge, because the fill between content and badge is
 and leave the badge opaque. That the pad after the badge owes no ink is asserted too, for
 the reason the shared builder already states about the gap cell beside a mark: an ink
 claim on a bare space lets what is behind it through where the row drew a pad.
+
+### 68.3 An image's placeholder and its error line
+
+Three paints, one shape: the placeholder's spinner glyph in `palette.accent`, its caption
+in `foregroundSecondary`, and the failure path's whole line in `palette.error`. All three
+were colorized by their callers and handed to `centerContent` already drawn.
+
+That is why the claim could not be made where the colour was known: only the centring
+knows what cells a line ends up on — it pads on the left by `(width − visibleWidth) / 2`,
+and it may CUT a line wider than the buffer, which changes that width. So the content now
+travels as `(text, ink)` pairs and `centerContent` does both halves: opaque bytes from
+`ink.opaqueSpelling`, and the claim over `padding ..< padding + visibleWidth` after the
+cut has had its say. The pad itself claims nothing, for the reason §68.2 gives.
+
+This is the same conclusion as §68.1 reached from the other direction. There, the producer
+knew the colour and the renderer knew the position, so the claim travelled as data to the
+renderer. Here the producer could hand over the colour itself, so it does. What is not
+allowed is the third option: deriving the position twice.
