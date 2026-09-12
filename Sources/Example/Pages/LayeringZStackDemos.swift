@@ -2,8 +2,9 @@
 //  LayeringZStackDemos.swift
 //
 //  The Layering page's ZStack section: five bands making one claim from
-//  five angles — the top layer owns every cell it lands on, and nothing shows
-//  through.
+//  five angles — at full opacity the top layer owns every cell it lands on —
+//  and the page's controls fading either layer to show what a composite does
+//  instead.
 //
 //  Created by LAYERED.work
 //  License: MIT
@@ -127,6 +128,7 @@ extension LayeringPage {
             band(Self.zstackCase1) {
                 Text(String(repeating: "▒", count: Self.zstackCase1.under))
                     .foregroundStyle(.palette.accent)
+            } over: {
                 Text(" \(L("page.layering.onTop")) ").bold().inverted()
                     .offset(x: Self.zstackCase1.offset(travel))
             }
@@ -142,12 +144,14 @@ extension LayeringPage {
                 band(Self.zstackCase2Padded) {
                     Text(String(repeating: "▒", count: Self.zstackCase2Padded.under))
                         .foregroundStyle(.palette.accent)
+                } over: {
                     Text(verbatim: "   \(L("page.layering.zstack.word"))   ")
                         .offset(x: Self.zstackCase2Padded.offset(travel))
                 }
                 band(Self.zstackCase2Bare) {
                     Text(String(repeating: "▒", count: Self.zstackCase2Bare.under))
                         .foregroundStyle(.palette.accent)
+                } over: {
                     Text(verbatim: L("page.layering.zstack.word"))
                         .offset(x: Self.zstackCase2Bare.offset(travel))
                 }
@@ -166,6 +170,7 @@ extension LayeringPage {
         band(Self.zstackCase3, alignment: .leading) {
             Text(verbatim: "UNDERNEATH·UNDERNEATH")
                 .foregroundStyle(.palette.foregroundSecondary)
+        } over: {
             Text(verbatim: "OVER")
                 .bold()
                 .foregroundStyle(.palette.warning)
@@ -186,6 +191,7 @@ extension LayeringPage {
         band(Self.zstackCase4) {
             Text(String(repeating: "▒", count: Self.zstackCase4.under))
                 .foregroundStyle(.palette.accent)
+        } over: {
             topLayer(" \(L("page.layering.zstack.faded")) ")
                 .opacity(zstackOpacity)
                 .offset(x: Self.zstackCase4.offset(travel))
@@ -215,6 +221,7 @@ extension LayeringPage {
                 .frame(width: Self.zstackCase5.under, alignment: .trailing)
                 .foregroundStyle(.palette.background)
                 .background(.palette.info)
+        } over: {
             Text("page.layering.zstack.over")
                 .frame(width: Self.zstackCase5.over, alignment: .center)
                 .foregroundStyle(.palette.background)
@@ -258,15 +265,26 @@ extension LayeringPage {
         }
     }
 
-    /// One demo band: the layers stacked, inset far enough inside a bordered
-    /// box that the top one stays in the box at either extreme of its travel.
+    /// One demo band: the layer beneath and the layer on top, stacked and inset far
+    /// enough inside a bordered box that the top one stays in the box at either
+    /// extreme of its travel.
+    ///
+    /// Two closures rather than one, so exactly one place knows which child is the
+    /// lower layer and applies the page's "Lower-layer opacity" to it — what `block()`
+    /// is for the page's other lower layers. With one undifferentiated closure there
+    /// was nowhere to put it, the slider never reached these bands, and six inline
+    /// modifiers would have let a seventh band forget.
     @ViewBuilder
-    private func band<Content: View>(
+    private func band<Under: View, Over: View>(
         _ geometry: ZStackBand,
         alignment: Alignment = .center,
-        @ViewBuilder content: () -> Content
+        @ViewBuilder under: () -> Under,
+        @ViewBuilder over: () -> Over
     ) -> some View {
-        ZStack(alignment: alignment) { content() }
+        ZStack(alignment: alignment) {
+            under().opacity(zstackLowerOpacity)
+            over()
+        }
             .padding(.leading, geometry.inset)
             .padding(.trailing, geometry.inset)
             .frame(width: geometry.bandWidth, alignment: .leading)

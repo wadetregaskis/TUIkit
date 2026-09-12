@@ -71,6 +71,15 @@ struct LayeringPage: View {
     /// slider the demos below use, so one control means one thing on the page.
     var zstackOpacity: Double { opacity }
 
+    /// The opacity the ZStack demos' LOWER layer is composited at — the same
+    /// "Lower-layer opacity" slider every other lower layer on the page reads.
+    ///
+    /// The same bridge as `zstackOpacity`, for the same reason: the bands live in an
+    /// `extension LayeringPage` in another file, where `lowerOpacity` (private) cannot
+    /// be seen. Without it the slider reached every demo on the page except the one it
+    /// sits beside.
+    var zstackLowerOpacity: Double { lowerOpacity }
+
     var body: some View {
         // The controls to one side and every demo to the other, because the
         // controls drive ALL of them: down a single column the sliders scrolled
@@ -167,9 +176,9 @@ struct LayeringPage: View {
                             + "\(Self.percent(outer)) → \(Self.percent(outer * opacity))")
                 }
                 // The layer beneath. Reaches every demo on the page — the coloured
-                // blocks, the text behind text, and the three fields — because
-                // every one of them is a composite and the thing being composited
-                // ONTO is half of it.
+                // blocks, the text behind text, the three fields and the ZStack
+                // section's bands — because every one of them is a composite and the
+                // thing being composited ONTO is half of it.
                 Slider(value: $lowerOpacity, in: 0...1, step: 0.01) {
                     Text(
                         "\(L("page.layering.slider.lower")) \(Self.percent(lowerOpacity))")
@@ -228,7 +237,8 @@ struct LayeringPage: View {
             .frame(width: width, height: height, alignment: .leading)
             .background(color)
             // Every block on the page is a LOWER layer, so the one slider reaches
-            // all of them from here.
+            // all of them from here. The ZStack bands' lower layers are the other
+            // application site, `band(_:alignment:under:over:)`, for the same reason.
             .opacity(lowerOpacity)
     }
 
