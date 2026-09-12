@@ -1350,9 +1350,15 @@ asking the view anything, so a region describing only the frame drawn *now* woul
 be wrong from the first tick. It is valid here because every frame of a cycle is
 the *same colour* and only the glyph changes — which is exactly why `.bouncing` is
 excluded. Its trail lerps a different colour into every cell of every frame, so no
-rectangle can say what is true; it stays unhonoured and stays loud.
-`ForegroundStyleAlphaTests.bouncingSpinnerDeclined` puts that on the record so it
-reads as a decision rather than an omission.
+rectangle can say what is true.
+
+It used to stay unhonoured **and loud**, on the argument that the emitter's assertion
+firing beats a wrong colour appearing silently. It fired — on the example's own page,
+under a faded palette (§68.6) — so it SPENDS instead: both ends of the ramp are
+composited against the page before the lerp, which is §29's remedy for a pair that
+cannot agree about alpha, and is what the track colour beside it was already doing.
+Per-cell claims stay declined; spending is what replaced the trap, not them.
+`ForegroundStyleAlphaTests.bouncingSpinnerSpends` pins the colour.
 
 ### 19.1 Why `Table` is not here
 
@@ -3981,3 +3987,31 @@ So the two channels are answered differently, which is the interesting part:
 
 The claim covers the flattened runs too — their frames are washed in the same two colours,
 so the one static claim a run replays under is true of every frame of it.
+
+
+### 68.6 The bouncing spinner, and a decline that had to be revisited
+
+This one was already written down. `spinnerFrames` says `.bouncing` "stays unhonoured",
+§16.3 says it "stays loud", and `ForegroundStyleAlphaTests.bouncingSpinnerDeclined` existed
+so that reading as a decision rather than an omission. The reasoning was sound: its trail
+lerps a different colour into every cell of every frame, a run replays its frames under one
+static claim per cell, and no such claim can describe a ramp that moves.
+
+What the decision got wrong was the cost. "Stays loud" meant a debug build traps, and the
+alpha it trapped on — **192** — is one no palette holds and no author wrote:
+`Color.lerp(color, trackColor, phase:)` between a faded colour and an opaque one MAKES it.
+So the one paint site in the framework deliberately left to trap is also the one that
+manufactures its own alphas, and it took a live run under a faded palette to notice that
+the decline was reachable from a plain theme rather than only from a deliberate tint.
+
+Spending both ends against the page costs nothing and needed no machinery: `trackColor` was
+already spent, by the `over:` on its own `opacity(_:)`, one line above. The other end now
+gets the same treatment from the same ground, every lerp between two opaque colours is
+opaque, and the style claims nothing — which is what the claim-exclusion in `renderToBuffer`
+had been saying all along, for a different reason.
+
+The general lesson is narrower than "re-probe a stale note" (§59.4's) and worth keeping
+separate: **a decline is a decision about a cost, and the cost can be re-priced.** This one
+was taken when the alternative looked like per-cell claims. It was never re-examined when
+`spendingAlpha(over:)` made a second alternative cheap, because the note recording it read
+as settled rather than as a trade.

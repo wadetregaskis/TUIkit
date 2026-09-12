@@ -455,6 +455,20 @@ struct FadedPaletteRenderTests {
         #expect(drawn.opacityRegions.count == 1, "\(drawn.opacityRegions)")
     }
 
+    /// The bouncing spinner's trail lerps its colour into a different value in every
+    /// cell of every frame, so no rectangle can describe it and the one static claim a
+    /// run replays under cannot exist. It was left unhonoured for exactly that reason
+    /// — and then trapped here, under the example's own faded palette (§68.6). Both
+    /// ends of the ramp are spent now, so it claims nothing and states no translucent
+    /// colour; `ForegroundStyleAlphaTests.bouncingSpinnerSpends` pins the colour, this
+    /// pins that a faded PALETTE (rather than a tint) reaches the same place.
+    @Test("A bouncing spinner draws under a faded palette")
+    func bouncingSpinnerDraws() {
+        let drawn = render(Spinner(style: .bouncing), palette: FadedAll(), width: 20, height: 1)
+        #expect(!drawn.animatedCells.isEmpty, "the track animates")
+        #expect(drawn.opacityRegions.isEmpty, "a spent ramp claims nothing: \(drawn.opacityRegions)")
+    }
+
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
     /// on the bar's column, and a track cell there must owe the track's alpha. Under a
     /// palette that fades only the track, because the editor's well is painted in

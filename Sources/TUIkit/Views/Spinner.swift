@@ -495,7 +495,9 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         var buffer = FrameBuffer(text: output)
         // Two claims, because a spinner draws two things in two colours: its glyph
         // in the accent (or whatever `.foregroundStyle` said) and its label in the
-        // palette's foreground. `.bouncing` is excluded — see `spinnerFrames`.
+        // palette's foreground. `.bouncing` is excluded because it has nothing left
+        // to claim: it SPENDS its colour instead, a ramp being the one shape a
+        // rectangle cannot describe — see `spinnerFrames`.
         var isBouncing: Bool { if case .bouncing = style { true } else { false } }
         if !isBouncing, let glyphWidth = cycle.first?.strippedLength,
             let claim = OpacityRegion.claim(
@@ -547,20 +549,30 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
     private func spinnerFrames(color: Color, context: RenderContext) -> [String] {
         switch style {
         case .bouncing:
-            let trackColor = context.environment.palette.foregroundQuaternary.opacity(
-                0.4, over: context.environment.palette.background)
+            // BOTH ends spent against the page, so every cell of every frame states a
+            // concrete colour and nothing claims. The trail LERPS between them, and a
+            // lerp of a faded colour with an opaque one makes an alpha nobody
+            // authored — 192, out of 128 and 255 — which is how this reached the
+            // emitter (§68.6). No rectangle can describe a ramp whose cells change
+            // colour every frame, so the alternative to spending is the trap that was
+            // here; and spending is what §29 prescribes for a pair whose ends
+            // disagree about alpha. `trackColor` was already doing it, by the `over:`
+            // on its own `opacity(_:)` — this is the other end getting the same
+            // treatment from the same ground.
+            let palette = context.environment.palette
+            let trackColor = palette.foregroundQuaternary.opacity(0.4, over: palette.background)
             let positions = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth)
             return positions.indices.map {
                 SpinnerStyle.renderBouncingFrame(
-                    frameIndex: $0, color: color, trackColor: trackColor)
+                    frameIndex: $0, color: color.spendingAlpha(over: palette.background),
+                    trackColor: trackColor)
             }
         default:
             // The opaque spelling, with the alpha claimed in `renderToBuffer`. Safe
             // across the whole cycle precisely because every frame is this one
             // colour — only the glyph changes — so one region describes them all.
-            // `.bouncing` above is the exception and stays unhonoured: its trail
-            // lerps a different colour into every cell of every frame, which is
-            // the per-cell case §16.3 still declines.
+            // `.bouncing` above is the exception: it cannot be claimed, so it spends
+            // instead, which is why it is the one style that claims nothing.
             return style.frames.map { ANSIRenderer.colorize($0, foreground: color.opaqueSpelling) }
         }
     }

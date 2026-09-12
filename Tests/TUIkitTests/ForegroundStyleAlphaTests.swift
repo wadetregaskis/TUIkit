@@ -116,18 +116,41 @@ struct ForegroundStyleAlphaTests {
         #expect(buffer(Spinner(), width: 10, height: 1).opacityRegions.isEmpty)
     }
 
-    @Test("A bouncing spinner is declined, and stays declined")
-    func bouncingSpinnerDeclined() {
-        // Its trail lerps a different colour into every cell of every frame, so a
-        // rectangle cannot say what is true. Left unhonoured DELIBERATELY: its
-        // frames reach the emitter as they are, so the assertion in
-        // `Color+ANSICodes.swift` fires on a translucent one rather than a wrong
-        // colour appearing silently. This test exists so that staying declined is
-        // a decision on the record, not an omission — if the per-cell payload
-        // lands, it should fail and be rewritten.
-        let drawn = buffer(
-            Spinner(style: .bouncing).foregroundStyle(Color.red), width: 20, height: 1)
-        #expect(drawn.opacityRegions.isEmpty, "the opaque case claims nothing either way")
+    @Test("A bouncing spinner SPENDS its alpha rather than claiming it")
+    func bouncingSpinnerSpends() throws {
+        // Its trail lerps a different colour into every cell of every frame, so no
+        // rectangle can say what is true and the run's one static claim per cell
+        // cannot exist. This used to be left unhonoured on purpose — its frames
+        // reached the emitter as they were, so the assertion in
+        // `Color+ANSICodes.swift` fired rather than a wrong colour appearing
+        // silently. It fired for real, on the example's own page, under a faded
+        // palette (§68.6), so the decision changed: both ends of the ramp are now
+        // spent against the page, which is §29's remedy for a pair that cannot agree
+        // about alpha, and is what `trackColor` was already doing beside it. Per-CELL
+        // claims stay declined; this is what replaces the trap, not them.
+        try withColorDepth(.truecolor) {
+            // Its own context, because the spent colour depends on the ground it was
+            // spent over and that is this palette's background, not a named default's.
+            let context = RenderContext(
+                availableWidth: 20, availableHeight: 1, tuiContext: TUIContext()
+            ).isolatingRenderCache()
+            let palette = context.environment.palette
+            let tint = Color.red.opacity(0.5)
+            let drawn = renderToBuffer(
+                Spinner(style: .bouncing).foregroundStyle(tint), context: context)
+            #expect(drawn.opacityRegions.isEmpty, "a spent ramp claims nothing")
+            let run = try #require(drawn.animatedCells.first, "the track animates")
+            // The head is drawn in the tint SPENT against the page, and the raw tint —
+            // whose bytes are plain red, alpha living nowhere in them — appears in no
+            // frame at all. Not every frame has a head: the bounce's turnaround holds
+            // the highlight off the track for a few, leaving only trail cells.
+            let spent = code(tint.spendingAlpha(over: palette.background), palette)
+            #expect(
+                run.frames.contains { $0.contains(spent) }, "the head states the spent colour")
+            #expect(
+                !run.frames.contains { $0.contains(code(Color.red, palette)) },
+                "and no frame states the unspent one")
+        }
     }
 
     // MARK: - Resolution, end to end
