@@ -552,9 +552,43 @@ extension _ImageCore {
     private static func buffer(
         for art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
     ) -> FrameBuffer {
-        var buffer = FrameBuffer(lines: inked(art.lines, mode: mode, palette: palette))
+        let inkedLines = inked(art.lines, mode: mode, palette: palette)
+        var buffer = FrameBuffer(lines: inkedLines)
         buffer.opacityRegions += art.claims
+        // The other half of `inked`'s claim/bytes pairing. `art.claims` says what the
+        // SOURCE PICTURE owes — its own per-pixel transparency — and is empty for the
+        // overwhelming majority of pictures, which are opaque; it says nothing at all
+        // about the two THEME colours `inked` stamps over every cell of every line. A
+        // faded palette's `foreground`/`background` therefore reached the emitter at
+        // full strength and with nothing claimed, which is §68's bug in its seventh
+        // place (§42.4 is right that the mono CONVERTER paints no colours and has no
+        // claim to make; this post-pass is not the converter).
+        //
+        // Per line, over the whole line, because that is exactly what `inked` colours:
+        // `colorize` puts both codes in force for the row. The resolver multiplies ink
+        // and field across every region covering a cell, so these compose with the
+        // coverage claims above rather than contradicting them.
+        buffer.opacityRegions += Self.inkClaims(
+            forLines: inkedLines, mode: mode, palette: palette)
         return buffer
+    }
+
+    /// What ``inked(_:mode:palette:)``'s two colours owe, one region per line.
+    ///
+    /// `nil`-free by construction: `OpacityRegion.claim` answers `nil` for an opaque
+    /// pair, so an ordinary palette adds nothing and allocates nothing past the
+    /// `guard`.
+    private static func inkClaims(
+        forLines lines: [String], mode: ASCIIColorMode, palette: any Palette
+    ) -> [OpacityRegion] {
+        guard mode == .mono,
+            !palette.foreground.isOpaque || !palette.background.isOpaque
+        else { return [] }
+        return lines.enumerated().compactMap { index, line in
+            OpacityRegion.claim(
+                offsetX: 0, offsetY: index, width: line.strippedLength, height: 1,
+                ink: palette.foreground, field: palette.background)
+        }
     }
 
     /// Mono output, given the theme's ink and paper.
@@ -574,9 +608,15 @@ extension _ImageCore {
         _ lines: [String], mode: ASCIIColorMode, palette: any Palette
     ) -> [String] {
         guard mode == .mono else { return lines }
+        // The opaque spelling, with the alpha claimed beside it by `inkClaims` — the
+        // pairing every other painted colour in the framework uses (§16). Handing
+        // `palette.foreground`/`palette.background` to `colorize` raw trapped the
+        // emitter's `isOpaque` assertion on a faded palette, and in release drew the
+        // picture at full strength over a page it was supposed to follow.
         return lines.map {
             ANSIRenderer.colorize(
-                $0, foreground: palette.foreground, background: palette.background)
+                $0, foreground: palette.foreground.opaqueSpelling,
+                background: palette.background.opaqueSpelling)
         }
     }
 }

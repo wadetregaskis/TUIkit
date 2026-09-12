@@ -1157,7 +1157,8 @@ Plus the circular `Gauge`'s four emit sites (§36.6).
 Plus the indeterminate `ProgressView` sweep (§36.7), by declining the RUN rather
 than the alpha.
 
-Plus the image glyph path (§42), which was the last of them, and the four `Palette`
+Plus the image glyph path (§42), thought at the time to be the last of them (§70.2 found
+the mono post-pass behind it), and the four `Palette`
 surface derivations, which now carry (§39).
 
 Plus the scrollbars: every host's track, thumb, arrows and corner, and the focused
@@ -2922,7 +2923,10 @@ glyphs, at the ½ threshold. Four renderers make glyph decisions and all four no
 - **braille** lights a dot only at coverage ≥ ½ (a transparent dot used to light itself
   from whatever colour the encoder left in it);
 - **mono** — `isMonoInk` — the same, and it is the *only* way coverage reaches mono, which
-  paints no colours at all and therefore has no claim to make;
+  paints no colours at all and therefore has no claim to make (true of the CONVERTER, and
+  read for two months as though it were true of mono as a whole: `_ImageCore.inked` stamps
+  the theme's two colours over the converter's output afterwards, and had a claim to make.
+  See §70.2);
 - **the ramp charsets** draw a space in no colour where there is no coverage, rather than
   whichever glyph the straight colour's luminance names;
 - **the shape matcher** weights its darkness samples by coverage: an uncovered sample is
@@ -4203,6 +4207,37 @@ they do not belong to — silently, and only for a view displaced past an edge. 
 contract ("already trimmed to the source's own coordinates, by the caller, which is the
 only thing that knows which cells to drop") is now asserted at `blendedSpan`'s own head
 rather than left in its doc comment.
+
+### 70.2 The seventh faded-palette site: a mono image's theme colours
+
+§68 closed six paint sites by running the app under a wholly faded palette. This is the
+seventh, and the sweep could not have found it: the poke sequence is fixed
+(`tab tab space down space right tab space up`) and cannot drive the Images page's radio
+group to Mono and then toggle "Theme colours", and every page gets a fresh
+`TUIKIT_CONFIG_DIR`, so no persisted setting steers it there either. It took a reader.
+
+`_ImageCore.inked(_:mode:palette:)` is the post-cache pass that gives `.mono` art the
+theme's ink and paper — applied after the render cache deliberately, because the cache is
+not keyed on the palette. It handed `palette.foreground` and `palette.background` to
+`ANSIRenderer.colorize` raw. The only regions the buffer carried were `art.claims`, which
+describe the SOURCE PICTURE's per-pixel transparency and are empty for the overwhelming
+majority of pictures; they say nothing about the two colours this pass stamps over every
+cell of every line. So a faded theme tripped the emitter's `isOpaque` assertion in debug,
+and in release drew the whole picture at full strength with nothing claimed — the picture
+not following the page it sits on, which is the class §68 closed six times.
+
+Two records said this path was clear, and both were right about something else. §16.3 named
+the image glyph path "the last of them", meaning §42's converter. §42.4 says mono "paints
+no colours at all and therefore has no claim to make", which is true of `isMonoInk` inside
+the converter and false of the post-pass four hundred lines away. `fc37ec97` migrated the
+placeholder and the error line in this very file and walked past `inked` a few lines below.
+Both records now say which half they meant.
+
+Fixed the way every other painted colour in the framework is: `opaqueSpelling` in the
+bytes, the alpha claimed beside them, one region per line over the whole line — because a
+whole line is exactly what `colorize` puts both codes in force for. `OpacityRegion.claim`
+answers `nil` for an opaque pair, so an ordinary palette adds no regions and the resolver
+keeps its `opacityRegions.isEmpty` fast path.
 
 ### 70.1 And the cut site, which had a second consequence
 
