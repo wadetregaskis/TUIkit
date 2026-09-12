@@ -178,24 +178,49 @@ struct RunLoopFoldTests {
 
     // MARK: - A served replay re-bases the sleep
 
-    @Test("A served replay advances the clock by the frame's own next change")
-    func servedReplayRebasesTheSleep() {
-        let runner = freshRunner(SpinningProbeApp())
+    /// The sleep after a wake is THAT wake's plan.
+    ///
+    /// This test used to serve a tick and then check the stored `sleepSeconds` — which
+    /// the serve did re-base, correctly, and too late: the timer had already begun its
+    /// next sleep with the value planned one wake earlier. What the timer sleeps next is
+    /// the only thing that matters, so that is what is asserted.
+    @Test("A wake plans the sleep that follows it, from the time it just credited")
+    func aWakePlansTheSleepAfterIt() {
         let harness = Harness()
         let loop = harness.loop(SpinningProbeApp())
         let timer = CursorTimer(renderNotifier: AppState.shared)
         _ = loop.render(cursorTimer: timer)
+        timer.planner = { [loop] elapsed in loop.timeUntilNextChange(elapsed: elapsed) }
         #expect(timer.sleepSeconds == AnimationClock.cursor.tickInterval, "the clock starts on its own grid")
 
-        AppState.shared.setNeedsAnimationTick(.content)
-        #expect(runner.serveAnimationTicks(renderer: loop, cursorTimer: timer))
+        timer.creditWake(slept: AnimationClock.cursor.tickInterval)
 
-        // The point of the rule: the sleep is now the run's cadence (a `.dots`
-        // spinner's 0.110 s), not the clock's 0.05 s grid — without it the loop
-        // re-wakes on the old grid and compares identical pictures.
+        // The run's own cadence from where the clock now is (a `.dots` spinner's), not
+        // the 0.05 s grid, and not a plan made a wake earlier.
         let expected = loop.timeUntilNextChange(elapsed: timer.elapsed)
         #expect(expected != AnimationClock.cursor.tickInterval, "the run must ask for its own rate")
         #expect(abs(timer.sleepSeconds - expected) < 1e-9, "\(timer.sleepSeconds) vs \(expected)")
+    }
+
+    /// Plans that VARY from wake to wake, which is where the one-wake lag showed: every
+    /// sleep must be the plan made at the wake just before it.
+    @Test("Each sleep is the plan made at the wake just before it, when plans vary")
+    func eachSleepIsItsOwnWakesPlan() {
+        let timer = CursorTimer(renderNotifier: AppState.shared)
+        // Long while the clock is young, short after: a planner whose answer depends on
+        // WHEN it is asked, so a plan answered for the wrong wake cannot pass.
+        timer.planner = { elapsed in elapsed(.content) < 0.2 ? 0.07 : 0.03 }
+        var slept = AnimationClock.cursor.tickInterval
+        var plans: [Double] = []
+        for _ in 0..<6 {
+            timer.creditWake(slept: slept)
+            let owed = timer.elapsed(for: .content) < 0.2 ? 0.07 : 0.03
+            #expect(abs(timer.sleepSeconds - owed) < 1e-9, "after \(timer.elapsed(for: .content)) s")
+            plans.append(timer.sleepSeconds)
+            slept = timer.sleepSeconds
+        }
+        let changedOnce = plans.contains(0.07) && plans.contains(0.03)
+        #expect(changedOnce, "the plan must actually vary for this to prove anything: \(plans)")
     }
 
     @Test("Nothing ticked is served trivially, without touching the frame")

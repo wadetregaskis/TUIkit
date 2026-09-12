@@ -293,6 +293,13 @@ extension AppRunner {
             appState?.setNeedsRender()
         }
 
+        // The timer plans its own next sleep, at the moment it wakes, from the frame on
+        // screen. Deciding it here in the loop after serving the tick was one wake too
+        // late — see `CursorTimer.planner`.
+        cursorTimer.planner = { [weak renderer] elapsed in
+            renderer?.timeUntilNextChange(elapsed: elapsed) ?? AnimationClock.cursor.tickInterval
+        }
+
         isRunning = true
 
         // Owns when a frame is due: never renders two frames closer together than
@@ -469,13 +476,10 @@ extension AppRunner {
         for clock in replayable {
             elapsed[clock] = cursorTimer.elapsed(for: clock)
         }
-        let served = renderer.replayAnimations(elapsed: elapsed)
-        if served {
-            // The runs are unchanged, but the time is not: recompute how long
-            // the clock may sleep from where it now is.
-            cursorTimer.advance(by: renderer.timeUntilNextChange(elapsed: cursorTimer.elapsed))
-        }
-        return served
+        // No re-plan of the sleep here, although there used to be one. By the time this
+        // runs the timer has already begun its next sleep — the plan it needed was the
+        // one made at its wake, which `CursorTimer.planner` now makes.
+        return renderer.replayAnimations(elapsed: elapsed)
     }
 
     /// Renders one frame and returns the per-frame state the run loop tracks: the

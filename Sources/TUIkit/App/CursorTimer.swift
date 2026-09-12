@@ -143,9 +143,32 @@ final class CursorTimer {
     private(set) var sleepSeconds = CursorTimer.tickInterval
 
     /// Sets how far the next wake-up is. Takes effect after the current sleep.
+    ///
+    /// For a RENDER, which has just replaced the runs and may be about to start the
+    /// timer: `start()` reads this for its first sleep. A running timer replans at
+    /// every wake through ``planner`` and does not depend on it.
     func advance(by seconds: Double) {
         sleepSeconds = max(AnimationClock.minimumFrameDuration, seconds)
     }
+
+    /// How the NEXT sleep is chosen, asked at the moment the timer wakes.
+    ///
+    /// The run loop installs it once, as `RenderLoop.timeUntilNextChange(elapsed:)`.
+    /// The plan used to arrive through ``advance(by:)``, called by the loop AFTER it had
+    /// served the tick — but this task keeps the main actor straight from posting that
+    /// tick back to the top of its loop, so by the time the loop ran the timer had
+    /// already begun its next sleep, with the value planned one wake EARLIER. While every
+    /// plan was the same length the lag could not be seen. Wherever plans vary — two runs
+    /// at different rates on one page, a quantised pulse holding a shade — each sleep was
+    /// the previous wake's: a change was slept through, and the next landed on top of it.
+    /// It was half of the owner's "complex period" blink (the other half being the step
+    /// floor fixed beside `AnimationClock.step(atElapsed:frameDuration:)`, which is what
+    /// made a blink's plans vary at all).
+    ///
+    /// Asked here, after crediting the time just slept, the plan and the sleep are the
+    /// same wake's, and no ordering between the task and the loop can come between them.
+    /// `nil` leaves the sleep where ``advance(by:)`` last put it.
+    var planner: (((AnimationClock) -> Double) -> Double)?
 
     /// The render notifier to trigger re-renders.
     private weak var renderNotifier: AppState?
@@ -279,8 +302,9 @@ extension CursorTimer {
 
         task = Task { [weak self] in
             while !Task.isCancelled {
-                // Read per iteration: `advance(by:)` is called after each wake,
-                // so the NEXT sleep is the one the frame just served asked for.
+                // Read per iteration: `creditWake(slept:)` planned it at the end of
+                // the previous pass, from the time that wake had just credited — or,
+                // for the first pass, a render set it through `advance(by:)`.
                 let seconds = self?.sleepSeconds ?? Self.tickInterval
                 do {
                     try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
@@ -296,17 +320,30 @@ extension CursorTimer {
                 // precisely the jump those cancels exist to prevent.
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
-                // Advanced by what was SLEPT, not by a grid step, which is what
-                // keeps `elapsedSeconds` a real elapsed time under a variable
-                // cadence — and therefore keeps every phase derived from it
-                // honest.
-                self.elapsedSeconds += seconds
-                // Both clocks, because both advance on this one timer: they
-                // differ in where their zero sits, not in when they tick.
-                for clock in AnimationClock.allCases {
-                    self.renderNotifier?.setNeedsAnimationTick(clock)
-                }
+                self.creditWake(slept: seconds)
             }
+        }
+    }
+
+    /// Credits a wake that slept `seconds`, plans the sleep that follows it, and posts
+    /// the ticks — in that order, which is the point.
+    ///
+    /// The body of the timer's loop, separate so a test can step it without racing a
+    /// real `Task.sleep`.
+    func creditWake(slept seconds: Double) {
+        // Advanced by what was SLEPT, not by a grid step, which is what keeps
+        // `elapsedSeconds` a real elapsed time under a variable cadence — and therefore
+        // keeps every phase derived from it honest.
+        elapsedSeconds += seconds
+        // Planned BEFORE the ticks go out: see `planner` for what planning after them
+        // did.
+        if let planner {
+            advance(by: planner(elapsed(for:)))
+        }
+        // Both clocks, because both advance on this one timer: they differ in where
+        // their zero sits, not in when they tick.
+        for clock in AnimationClock.allCases {
+            renderNotifier?.setNeedsAnimationTick(clock)
         }
     }
 

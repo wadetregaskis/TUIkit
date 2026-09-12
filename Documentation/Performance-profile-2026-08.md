@@ -2912,7 +2912,10 @@ end was ~1e-17 again, raised to the 10 ms floor. A steady 350 ms blink became pl
 ~700 and ~45 ms. Steps and ends are now counted in whole nanoseconds by one conversion,
 `AnimationClock.step(atElapsed:frameDuration:)`, shared by the run index, the time to
 change and `CursorTimer`'s tick count. Measured on a focused field over 22 s: 17 of 53
-holds within 350 ± 40 ms before, 54 of 54 after.
+holds within 350 ± 40 ms before, 54 of 54 after. The timer's other half — it slept on the
+plan made one wake earlier, because the loop re-planned only after serving the tick —
+is fixed beside it by planning at the wake (`CursorTimer.planner`); after both, 53 of 53
+holds, 366–377 ms.
 
 ### The indeterminate progress bar
 
