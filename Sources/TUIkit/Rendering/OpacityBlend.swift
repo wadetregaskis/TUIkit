@@ -70,6 +70,16 @@ extension FrameBuffer {
         surface: Color,
         defaultForeground: Color
     ) -> String {
+        // Pinned rather than clamped: the span is documented as already trimmed to
+        // the source's own coordinates, and the walk below indexes `sourceCells` by
+        // absolute column with no bounds test — a negative start is `sourceCells[-1]`
+        // and aborts. Clamping here instead would silently draw the frame's leading
+        // cells at the wrong columns, which is how it went unnoticed; the caller is
+        // the only place that knows which cells to drop.
+        assert(
+            columns.lowerBound >= 0,
+            "blendedSpan's span starts left of the source's first column "
+                + "(\(columns)): trim it at the caller, which knows what to cut")
         let sourceCells = cells(
             in: source, through: columns.upperBound,
             defaultForeground: defaultForeground, surface: surface)

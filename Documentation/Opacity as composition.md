@@ -4169,3 +4169,44 @@ frame, frozen after — instead of to full strength. `RowRun` also had to CARRY 
 for the runs it keeps, which is the same omission its own comment already records about
 `frameDuration`: rebuilding a child's run with the defaults silently retimed a spinner,
 and rebuilding it without the alpha would silently unfade a caret.
+
+## 70. A run left outside the buffer that carries it (2026-09-12)
+
+`OverlayLayer`'s leading cut (`cutting(_:leadingColumns:rows:)`) moves every payload
+riding on a buffer by `(-dropX, -dropY)` and deliberately leaves what it cut naming
+columns and rows that are no longer there. Its comment states the rationale:
+
+> `HitTestRegion`, a run and an opacity region record no clip counters, so translation
+> and clipping commute, and payload left at a negative offset names cells that were cut
+> away — dropped by `AnimatedCellRun.clipped(toCanvasColumns:rows:)` at the screen, and
+> already read as `max(0, …)` by the opacity resolution.
+
+The second of those two escapes was not true. `resolvingOpacity`'s run walk clamps only
+the alignment `prefix` it builds for the frame; the span it then hands to `blendedSpan` is
+the run's raw `offsetX..<(offsetX + width)`, and `blendedSpan` indexes its source array by
+ABSOLUTE column with no bounds test — `sourceCells[-1]`, which aborts the process in
+release as well as debug, an array subscript being a precondition and not an assertion.
+The destination side of that same walk *is* bounds-checked, and carries a comment saying
+in as many words that a negative shift is legal. The line path escaped only because
+`rebuild` clamps its own start to `max(0, first)`.
+
+So the resolver now cuts before it blends, with `AnimatedCellRun.clipped(toColumns:)` —
+the primitive the punch and `clamped` already use — which drops the cells that are not
+here from every frame and slices the per-frame `AnimatedRunAlpha` to the same window in
+the same expression. A run wholly left of the edge returns `nil` and takes nothing with
+it: §69.4's rule is that a run must never be the sole carrier of an alpha, and a run with
+no surviving cells is the one case where there is nothing to have carried it for.
+
+A cut and not a clamp, because a clamp is what hid it. Pinning the frame's first cell at
+column 0 makes the arithmetic *work* while drawing the frame's leading cells at columns
+they do not belong to — silently, and only for a view displaced past an edge. The span's
+contract ("already trimmed to the source's own coordinates, by the caller, which is the
+only thing that knows which cells to drop") is now asserted at `blendedSpan`'s own head
+rather than left in its doc comment.
+
+**Live route, no `.opacity(_:)` required.** The pointer-anchored branch of
+`OverlayLayer.placed(maxWidth:maxHeight:)` — a drag preview, which declines to be clamped
+to the screen and loses its overhang out of its content instead — cuts the same way, and a
+run carrying a translucent `AnimatedRunAlpha` satisfies the resolver's entry guard on its
+own (§69.1). A dragged preview holding a focused `TextField`, or an animated border, needed
+nothing else in the tree to reach it.

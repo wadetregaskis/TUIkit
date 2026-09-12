@@ -319,6 +319,30 @@ extension FrameBuffer {
         surface resolvedSurface: Color,
         defaultForeground resolvedForeground: Color
     ) -> AnimatedCellRun? {
+        // Cut to the buffer's own columns FIRST, because a run can name columns to
+        // the LEFT of column 0. `OverlayLayer`'s leading cut moves every payload by
+        // -dropX and leaves a run that straddles — or wholly precedes — the first
+        // surviving cell; `OverlayLayer.cutting`'s own comment says such payload is
+        // "already read as `max(0, …)` by the opacity resolution", and only the
+        // `prefix` below ever was.
+        //
+        // The blend indexes its SOURCE array by absolute column, so a negative
+        // `columns.lowerBound` reaches `sourceCells[-1]` and aborts the process —
+        // in release as well as debug, an array subscript being a precondition.
+        // The destination side of that same walk is bounds-checked, and says in as
+        // many words that a negative shift is legal; the source side never was, and
+        // the line path escapes only because `rebuild` clamps its start.
+        //
+        // A cut and not a clamp, because those cells genuinely are not here: the
+        // frame's first `-offsetX` cells belong to columns this buffer does not
+        // have. `clipped(toColumns:)` drops them from every frame and slices the
+        // per-frame alpha payload to the same window in the same expression, so a
+        // cut run's spans still describe the cells it kept. A run wholly left of
+        // the edge comes back `nil` and takes nothing with it — there are no cells
+        // left for it to have been the carrier of an alpha for.
+        guard let run = run.clipped(toColumns: 0..<(run.offsetX + run.width)) else {
+            return nil
+        }
         let covering = regions.filter { region in
             region.spans(row: run.offsetY)
                 && run.offsetX < region.offsetX + region.width
