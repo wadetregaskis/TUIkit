@@ -374,21 +374,43 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
 
         /// The active component's cell on its block — one description, used for
         /// the frame drawn now and for every frame of the run that replays it.
+        ///
+        /// The ink is the opaque spelling; its alpha is claimed by `claimCell` below,
+        /// once, which is right for every frame because only the BLOCK breathes here
+        /// and `accentFillPulse` spends a faded accent at both ends, so no frame of
+        /// this run states a translucent colour of its own (§29.2, §68.4).
         func activeCell(_ text: String, on block: Color) -> String {
             var style = TextStyle()
             style.backgroundColor = block
-            style.foregroundColor = palette.foreground
+            style.foregroundColor = palette.foreground.opaqueSpelling
             style.isUnderlined = !isDisabled
             return ANSIRenderer.render(text, with: style.resolved(with: palette))
         }
 
         var line = ""
         var runs: [AnimatedCellRun] = []
+        var claims: [OpacityRegion] = []
+
+        /// What the cell about to be appended owes, at the column `line` has already
+        /// reached — so it is called BEFORE the bytes go on, and exactly once per
+        /// cell rather than once per run frame.
+        ///
+        /// Resolved first: a palette slot may be `.semantic`, and both halves have to
+        /// be asked of the same concrete colour or the claim states an alpha the
+        /// emitter never sees (and the emitter would `fatalError` on the spelling).
+        func claimCell(_ text: String, ink: Color?, field: Color? = nil) {
+            claims.appendCoalescing(
+                OpacityRegion.claim(
+                    offsetX: line.strippedLength, width: text.strippedLength, height: 1,
+                    ink: ink?.resolve(with: palette), field: field?.resolve(with: palette)))
+        }
+
         for cell in cells {
             var style = TextStyle()
             if cell.kind == nil {
                 // Separators (the "-", ":" and spaces) stay quiet.
-                style.foregroundColor = palette.foregroundSecondary
+                claimCell(cell.text, ink: palette.foregroundSecondary)
+                style.foregroundColor = palette.foregroundSecondary.opaqueSpelling
             } else if let activeKind, cell.kind == activeKind, activeHighlight != nil {
                 // Bright text on the pulsing accent block — the same
                 // high-contrast, readable affordance List/Picker focused rows use.
@@ -399,6 +421,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                 {
                     runs.append(run)
                 }
+                claimCell(cell.text, ink: palette.foreground)
                 line += activeCell(cell.text, on: cycle.colorNow(dim: dimBlock, bright: brightBlock))
                 continue
             } else {
@@ -408,8 +431,9 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                     isDisabled ? palette.foregroundTertiary : palette.foreground
                 // …and lifts under the pointer, unless the field already has
                 // the focus and is saying so with its pulsing block.
-                style.foregroundColor =
-                    isHovered ? palette.hoveredForeground(resting) : resting
+                let ink = isHovered ? palette.hoveredForeground(resting) : resting
+                claimCell(cell.text, ink: ink)
+                style.foregroundColor = ink.opaqueSpelling
                 style.isUnderlined = !isDisabled
             }
             line += ANSIRenderer.render(cell.text, with: style.resolved(with: palette))
@@ -417,6 +441,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
 
         var buffer = FrameBuffer(lines: [line])
         buffer.animatedCells = runs
+        buffer.opacityRegions = claims
         registerMouse(context: context, buffer: &buffer, handler: handler, cells: cells, isDisabled: isDisabled)
         return buffer
     }

@@ -3930,3 +3930,27 @@ This is the same conclusion as §68.1 reached from the other direction. There, t
 knew the colour and the renderer knew the position, so the claim travelled as data to the
 renderer. Here the producer could hand over the colour itself, so it does. What is not
 allowed is the third option: deriving the position twice.
+
+### 68.4 A date picker's field
+
+`_DatePickerCore` draws every component of the field itself: the separators in
+`foregroundSecondary`, the editable parts in `foreground` (or `foregroundTertiary` when
+disabled, or `hoveredForeground` under the pointer), and the focused component's glyph on
+a breathing accent block. All of it went to the emitter with the palette's alpha on it.
+
+The claim is taken at the column `line` has already reached, before the bytes go on, and
+once per cell — never once per run frame, which is the trap the run here invites: the
+active component's `activeCell` is called for the line AND for every frame of its breath.
+One claim is nonetheless right for all of them, because only the BLOCK breathes and
+`accentFillPulse` spends a faded accent against the page at both ends, so no frame states
+a translucent colour of its own. That is the same argument §51 records for a list row's
+breathing fill, and it is why the ink can be claimed while the field cannot.
+
+The colours are resolved before either half is taken. A palette slot may be `.semantic`,
+and `opaqueSpelling` only clears the alpha field — it cannot flatten a semantic case, so
+the emitter would `fatalError` on it rather than assert, and the claim would be reading an
+alpha off the wrong colour. Both halves ask the one resolved colour.
+
+Two rungs on one line is also why this is claimed per cell rather than as a rectangle over
+the field: the separators and the digits are different colours, and a single ink claim
+across both resolves one of them at the other's alpha — §23.2's mistake again.

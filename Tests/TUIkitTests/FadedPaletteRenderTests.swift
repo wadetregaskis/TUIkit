@@ -8,6 +8,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -392,6 +393,42 @@ struct FadedPaletteRenderTests {
         #expect(
             owed(atColumn: spinner.column - 1, row: spinner.row, in: drawn).ink == 1,
             "the centring pad owes no ink")
+    }
+
+    /// A `DatePicker`'s field draws every component itself — separators in
+    /// `foregroundSecondary`, the editable parts in `foreground`, and the focused
+    /// component's glyph over a breathing accent block — and all of them went to the
+    /// emitter with the palette's alpha on them (§68.4).
+    ///
+    /// Focused, so the active component's run is built too: its block breathes while
+    /// its ink does not, so the one claim on that cell is true of every frame the run
+    /// replays, which is what makes claiming it legal at all.
+    @Test("A date picker's components owe what each was drawn in")
+    func datePickerFieldClaims() throws {
+        let palette = FadedAll()
+        let drawn = renderToBuffer(
+            DatePicker("When", selection: .constant(Date(timeIntervalSince1970: 86_400 * 400))),
+            context: context(palette: palette, width: 30, height: 3) {
+                $0.focusManager = FocusManager()
+            })
+
+        let screen = drawn.lines.map(\.stripped)
+        #expect(!drawn.animatedCells.isEmpty, "the focused component breathes: \(screen)")
+        // A separator: the "-" between the date's parts, drawn in the quieter rung.
+        let dash = try #require(cells(of: "-", in: drawn).first, "a separator: \(screen)")
+        #expect(
+            owed(atColumn: dash.column, row: dash.row, in: drawn).ink
+                == owed(palette.foregroundSecondary),
+            "the separator owes the secondary rung's alpha")
+        // The field's own digits are `foreground`, a different rung, so a single
+        // rectangle over the whole field would resolve one of the two wrongly.
+        let digits = screen[dash.row]
+        let digit = try #require(
+            digits.firstIndex(where: \.isNumber).map { digits.distance(from: digits.startIndex, to: $0) },
+            "a digit: \(screen)")
+        #expect(
+            owed(atColumn: digit, row: dash.row, in: drawn).ink == owed(palette.foreground),
+            "a component's digits owe the foreground's alpha")
     }
 
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
