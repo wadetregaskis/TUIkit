@@ -325,6 +325,37 @@ struct FadedPaletteRenderTests {
             "the claim covers the marker only")
     }
 
+    /// A list row's badge is the one text the LIST draws itself — everything else on
+    /// the row is a child buffer that claims for itself — and it is drawn in
+    /// `foregroundTertiary`, which a faded palette fades by derivation. It trapped
+    /// (§68.2), and the claim now comes from the same arithmetic that places the
+    /// glyphs, because `max(1, …)` on the fill means a narrow row does not put the
+    /// badge where counting back from the right edge says it does.
+    @Test("A list row's badge owes its faded ink, on its own cells")
+    func listBadgeClaims() throws {
+        let palette = FadedAll()
+        let drawn = render(
+            List(selection: .constant(Int?.none)) {
+                Text("alpha").badge(7)
+                Text("beta")
+            },
+            palette: palette, width: 24, height: 6)
+
+        let badge = try #require(cells(of: "7", in: drawn).first, """
+            the badge is drawn:
+            \(drawn.lines.map(\.stripped).joined(separator: "\n"))
+            """)
+        #expect(
+            owed(atColumn: badge.column, row: badge.row, in: drawn).ink
+                == owed(palette.foregroundTertiary),
+            "the badge's cell owes the tertiary rung's alpha")
+        // The cell after it is the row's trailing pad — a bare space, which must owe
+        // no INK at all, or what is behind the row shows through where it drew a pad.
+        #expect(
+            owed(atColumn: badge.column + 1, row: badge.row, in: drawn).ink == 1,
+            "the pad beside it owes no ink")
+    }
+
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
     /// on the bar's column, and a track cell there must owe the track's alpha. Under a
     /// palette that fades only the track, because the editor's well is painted in

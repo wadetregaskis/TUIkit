@@ -3892,3 +3892,23 @@ step further in: a `[Int: [OpacityRegion]]` can be keyed wrong, an associated va
 The claim is sound under the popup's breath for the reason §64 gives for the chrome: every
 line of the popup is inside a run, and a marker's colour is the same in every frame of
 that run, so one static claim describes them all.
+
+### 68.2 A list row's badge
+
+`.badge(7)` on a row is the one text a `List` draws itself — the rest of the row is a
+child buffer that claims for itself and `attachRowOpacity` carries those up — and it is
+drawn in `foregroundTertiary`, which a wholly faded palette fades by derivation rather
+than by declaration. So it trapped on a list nobody had thought to fade.
+
+The claim goes in `SelectableRowClaims.claims`' `cells`/`ink` pair, which the `Table`
+already fills with the text it draws and the `List` had been passing `0..<0, nil`. That
+parameter's own documentation says what it is for: "the columns the row's TEXT occupies …
+empty where the caller draws no text of its own". A badge is exactly that text.
+
+Its columns come from one derivation shared with the bytes (`badgePlacement`) rather than
+counting back from the right edge, because the fill between content and badge is
+`max(1, rowWidth − used)`: on a row too narrow for both, the badge is NOT at
+`rowWidth − badgeWidth − 1`, and a claim placed there would fade a cell of the content
+and leave the badge opaque. That the pad after the badge owes no ink is asserted too, for
+the reason the shared builder already states about the gap cell beside a mark: an ink
+claim on a bare space lets what is behind it through where the row drew a pad.

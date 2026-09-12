@@ -2910,9 +2910,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             indicator.isBlank
             ? " " : ANSIRenderer.colorize(indicator.glyph, foreground: indicator.color.opaqueSpelling)
 
-        /// The mark and the fill this row owes, per line, from the one derivation
-        /// `Table` also calls. `cells` is empty: a list row's content is a child
-        /// buffer that claims for itself, and `attachRowOpacity` carries those up.
+        // Check for badge on the row (only for content rows, on first line only)
+        let badge = row.badge
+        let shouldRenderBadge = badge != nil && !badge!.isHidden && row.isSelectable
+        // Where its glyphs land, worked out once: the claim below and the bytes in
+        // `renderLineWithBadge` have to name the same cells, and a badge is the one
+        // text a list row draws ITSELF rather than taking from its content buffer.
+        let badgeColumns =
+            shouldRenderBadge && !palette.foregroundTertiary.isOpaque
+            ? badgePlacement(
+                line: row.buffer.lines.first ?? "", badge: badge!, rowWidth: rowWidth,
+                gutterCells: 1
+            ).columns
+            : 0..<0
+
+        /// The mark, the badge and the fill this row owes, per line, from the one
+        /// derivation `Table` also calls. `cells` is the BADGE's columns and nothing
+        /// else: the rest of a list row's content is a child buffer that claims for
+        /// itself, and `attachRowOpacity` carries those up.
         func claims(over backgroundColor: Color?) -> [OpacityRegion] {
             // Asked before the walk, so a row with nothing translucent — every row of
             // nearly every list — allocates nothing at all. The `flatMap` below built
@@ -2920,18 +2935,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // precisely the shape to notice.
             guard (!indicator.isBlank && !indicator.color.isOpaque)
                 || backgroundColor?.isOpaque == false
+                || !badgeColumns.isEmpty
             else { return [] }
             return (0..<row.buffer.lines.count).flatMap { line in
                 SelectableRowClaims.claims(
-                    line: line, width: rowWidth, cells: 0..<0, ink: nil,
+                    line: line, width: rowWidth,
+                    cells: line == 0 ? badgeColumns : 0..<0,
+                    ink: line == 0 && !badgeColumns.isEmpty ? palette.foregroundTertiary : nil,
                     mark: line == 0 && !indicator.isBlank ? indicator.color : nil,
                     fill: backgroundColor)
             }
         }
-
-        // Check for badge on the row (only for content rows, on first line only)
-        let badge = row.badge
-        let shouldRenderBadge = badge != nil && !badge!.isHidden && row.isSelectable
 
         /// The row's lines over a given background — the ONE description of what
         /// this row looks like, called once for the frame on screen and once per
@@ -3151,6 +3165,32 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return nil
     }
 
+    /// How a badged line is laid out: the content fitted to leave room, the fill
+    /// between them, and the columns the badge itself occupies.
+    ///
+    /// One derivation because two things need it — the bytes, and the claim the
+    /// badge's colour owes when a palette fades `foregroundTertiary`. Deriving the
+    /// columns a second time beside the claim is the shape that keeps going wrong
+    /// here: `max(1, …)` on the fill means a row too narrow for both does NOT put
+    /// the badge where `rowWidth − badgeWidth − 1` says it is.
+    private func badgePlacement(
+        line: String, badge: BadgeValue, rowWidth: Int, gutterCells: Int
+    ) -> (fitted: String, fillPadding: Int, columns: Range<Int>) {
+        let badgeWidth = badge.displayText.strippedLength
+        // When the row is too narrow for both, the CONTENT truncates and the
+        // badge survives (as in SwiftUI, where the label truncates first) —
+        // overflowing instead put the badge in the cells the container
+        // clips, silently hiding it.
+        let contentBudget = rowWidth - badgeWidth - 3
+        let fitted =
+            line.strippedLength > contentBudget
+            ? line.truncatedToWidth(max(1, contentBudget)) : line
+        let usedWidth = gutterCells + fitted.strippedLength + badgeWidth + 1
+        let fillPadding = max(1, rowWidth - usedWidth)
+        let start = gutterCells + fitted.strippedLength + fillPadding
+        return (fitted, fillPadding, start..<(start + badgeWidth))
+    }
+
     /// Renders a line with a right-aligned badge.
     /// Layout: [1 pad][content][fill padding][badge][1 pad]
     private func renderLineWithBadge(
@@ -3161,23 +3201,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         palette: any Palette,
         gutter: String
     ) -> String {
-        let badgeText = badge.displayText
-        let styledBadge = ANSIRenderer.colorize(badgeText, foreground: palette.foregroundTertiary)
-        let badgeWidth = badgeText.strippedLength
-
-        // When the row is too narrow for both, the CONTENT truncates and the
-        // badge survives (as in SwiftUI, where the label truncates first) —
-        // overflowing instead put the badge in the cells the container
-        // clips, silently hiding it.
-        let contentBudget = rowWidth - badgeWidth - 3
-        let fittedLine =
-            line.strippedLength > contentBudget
-            ? line.truncatedToWidth(max(1, contentBudget)) : line
-
-        let usedWidth = 1 + fittedLine.strippedLength + badgeWidth + 1
-        let fillPadding = max(1, rowWidth - usedWidth)
+        let placement = badgePlacement(
+            line: line, badge: badge, rowWidth: rowWidth, gutterCells: 1)
+        // Opaque bytes: a faded `foregroundTertiary` reached the emitter here and
+        // trapped (§68.2). Its alpha is claimed by `renderRow`, over the columns
+        // `placement` names, so both come from the one arithmetic.
+        let styledBadge = ANSIRenderer.colorize(
+            badge.displayText, foreground: palette.foregroundTertiary.opaqueSpelling)
         let paddedLine =
-            gutter + fittedLine + String(repeating: " ", count: fillPadding) + styledBadge + " "
+            gutter + placement.fitted
+            + String(repeating: " ", count: placement.fillPadding) + styledBadge + " "
 
         return terminatedBackground(paddedLine, backgroundColor)
     }
