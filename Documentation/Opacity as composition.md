@@ -4295,3 +4295,46 @@ per-frame test asserts its field claim rides only on the run.
 Found by the 2026-09-12 hunt (entry 17 of `Review-batch-2026-09-12.md`), in the same
 branch that added it — the hunt's "holes in the last 30 commits" lens, which has now found
 a defect in the preceding work on every hunt this project has run.
+
+### 70.4 A translucent ground, which has nothing behind it
+
+Reported by the owner: moving the alpha channel of `background` on the Example's Theme page
+crashed the app instantly. It was the trap §69.2 wrote down and left, reached by the most
+direct route there is — every colour picker on that page offers `A`, grounds included.
+
+The page background, the app header's and the status bar's are composite ROOTS. Nothing
+inside the app is behind them; only the terminal's own background is, and the framework does
+not know its colour. So a translucent root ground has nothing to be composited over, and
+every path that spells a colour asserts it is opaque. `RenderBackgroundCodes` spells all
+three at the top of every frame, before any view has drawn — hence "instantly" — and behind
+it the root `resolvingOpacity(surface:)` calls, the opaque-layer paint in
+`compositingOverlays`, and twenty-odd controls that paint `palette.background` directly
+would each have trapped in turn. Proven red at the parent:
+`OpacityBlend.swift:618: Assertion failed: translucent colour reached sgrBackground: alpha
+128`.
+
+Fixed once, at the boundary where a palette enters the environment, instead of at those
+sites — twenty-odd being exactly the kind of count §68 exists to distrust. The
+`EnvironmentValues.palette` setter hands every palette back unchanged unless one of the three
+root grounds is translucent, and wraps that one in `GroundedPalette`, which spends those three
+and forwards every other role. Every write to the palette comes through that setter:
+`.palette(_:)`, `.tint(_:)`, a theme, and the render loop's own. An ordinary palette pays three
+alpha compares at the rare write and nothing on the hot reads.
+
+`overlayBackground` is deliberately NOT spent. It is the wash a modal dims its page with, the
+page IS behind it, and §68.5 already claims its field and resolves it there.
+
+**What "spent" means here, and the open question.** With no colour to spend against, spent
+means the opaque spelling: the alpha is dropped. That is precisely what a release build
+already drew, so no picture changes — the change is that a debug build no longer traps. It
+also means the ground's alpha channel does nothing visible yet. The honest way to give it a
+meaning is to ask the terminal: `OSC 11 ; ? ST` reports the terminal's default background on
+most hosts, and a reported colour is exactly the "what is behind it" this boundary lacks —
+`GroundedPalette` would then spend each root ground over it with `spendingAlpha(over:)`, one
+line, and keep the opaque spelling where a terminal does not answer. That is a
+terminal-specific behaviour with its own measurement to do (which hosts answer, over tmux and
+ssh, how late), so it is left for a decision rather than built here.
+
+Proven across the app, not only at the sites read: the Example's
+`TUIKIT_EXAMPLE_GROUND_ALPHA` seam fades the four grounds and nothing else, and the faded-
+palette sweep, which passes its environment through, runs every page under it.

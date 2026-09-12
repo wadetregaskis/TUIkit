@@ -34,8 +34,87 @@ extension EnvironmentValues {
     /// ```
     public var palette: any Palette {
         get { self[PaletteKey.self] }
-        set { self[PaletteKey.self] = newValue }
+        // Through `GroundedPalette.grounding`, which hands back every palette whose
+        // root grounds are opaque exactly as it was given. See there for why one whose
+        // grounds are translucent cannot be stored as stated.
+        set { self[PaletteKey.self] = GroundedPalette.grounding(newValue) }
     }
+}
+
+// MARK: - Root Grounds
+
+/// A palette whose three ROOT grounds reach the renderer already spent.
+///
+/// The page background, the app header's and the status bar's are composite roots:
+/// nothing inside the app is behind them — only the terminal's own background, whose
+/// colour the framework does not know. A translucent one has nothing to be composited
+/// over. Every path that spells a colour asserts it is opaque, so such a palette trapped
+/// a debug build on its first frame (`RenderBackgroundCodes` spells all three before any
+/// view has drawn) and in release drew the grounds at full strength anyway, claiming
+/// nothing. The Theme page's colour pickers offer an alpha channel on every role, so
+/// this was one arrow key away.
+///
+/// Spent HERE, once, where a palette enters the environment — every write to
+/// ``EnvironmentValues/palette`` comes through the setter, `.palette(_:)`, `.tint(_:)`,
+/// a theme and the render loop's own alike — rather than at the twenty-odd sites that
+/// paint a ground, a count §68 of `Documentation/Opacity as composition.md` is the
+/// standing warning against trusting. With no colour to spend against, spent means the
+/// opaque spelling: precisely what release already drew, without the trap. §70.4 records
+/// what a terminal that reports its own background would let this do instead.
+///
+/// `overlayBackground` is deliberately not a root, and keeps its alpha: the wash a modal
+/// dims its page with has the page behind it, and §68.5 claims its field and resolves it
+/// against that page. Spending it here would freeze every translucent wash opaque.
+///
+/// Every other role FORWARDS, and has to: `Palette`'s protocol defaults are collapsing, so
+/// an omitted role silently recomputes from this palette's other roles instead of taking
+/// the base's (the trap `TintedPalette` documents from experience). Adding a role to
+/// ``Palette`` means adding a line here; `StyleCascadeCoverageTests` asserts all of them.
+package struct GroundedPalette: Palette {
+    package let base: any Palette
+
+    /// `palette` as the environment should hold it.
+    ///
+    /// Unchanged unless a root ground is translucent, which no bundled palette's is: the
+    /// common case pays three alpha compares at the rare WRITE and nothing on the hot
+    /// reads, where a wrapper around every palette would have added a forwarding hop to
+    /// every colour every view asks for. Idempotent — a grounded palette's grounds are
+    /// opaque, so it is handed straight back, and so is a `TintedPalette` built over one.
+    package static func grounding(_ palette: any Palette) -> any Palette {
+        guard palette.background.alpha != .max
+            || palette.appHeaderBackground.alpha != .max
+            || palette.statusBarBackground.alpha != .max
+        else { return palette }
+        return Self(base: palette)
+    }
+
+    package init(base: any Palette) {
+        self.base = base
+    }
+
+    package var id: String { base.id }
+    package var name: String { base.name }
+
+    package var background: Color { base.background.opaqueSpelling }
+    package var statusBarBackground: Color { base.statusBarBackground.opaqueSpelling }
+    package var appHeaderBackground: Color { base.appHeaderBackground.opaqueSpelling }
+    package var overlayBackground: Color { base.overlayBackground }
+
+    package var foreground: Color { base.foreground }
+    package var foregroundSecondary: Color { base.foregroundSecondary }
+    package var foregroundTertiary: Color { base.foregroundTertiary }
+    package var foregroundQuaternary: Color { base.foregroundQuaternary }
+
+    package var accent: Color { base.accent }
+    package var success: Color { base.success }
+    package var warning: Color { base.warning }
+    package var error: Color { base.error }
+    package var info: Color { base.info }
+
+    package var border: Color { base.border }
+    package var focusBackground: Color { base.focusBackground }
+    package var cursorColor: Color { base.cursorColor }
+    package var fieldBackground: Color { base.fieldBackground }
 }
 
 // MARK: - PaletteManager Environment Key

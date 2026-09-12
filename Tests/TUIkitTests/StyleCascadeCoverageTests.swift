@@ -179,6 +179,25 @@ struct StyleCascadeCoverageTests {
         #expect(tinted.name == base.name)
     }
 
+    /// The environment's ground-spending wrapper forwards every role, and changes only the
+    /// three ROOT grounds — to their opaque spelling. `overlayBackground` is not a root
+    /// (the page is behind a modal's wash) and must delegate like everything else.
+    @Test("GroundedPalette forwards EVERY role, spending only the three root grounds")
+    func groundedPaletteDelegates() {
+        let base = EveryRolePalette()
+        let grounded = GroundedPalette(base: base)
+        let roots: Set<String> = ["background", "appHeaderBackground", "statusBarBackground"]
+        for role in paletteRoles {
+            let isRoot = roots.contains(role.name)
+            let expected = isRoot ? role.read(base).opaqueSpelling : role.read(base)
+            #expect(
+                role.read(grounded) == expected,
+                "\(role.name) did not delegate: \(role.read(grounded)) vs \(expected)")
+        }
+        #expect(grounded.id == base.id)
+        #expect(grounded.name == base.name)
+    }
+
     @Test("TintedPalette resolves a semantic tint against its base")
     func tintedPaletteResolvesSemantic() {
         let base = SystemPalette(.green)
