@@ -544,6 +544,37 @@ struct FadedPaletteRenderTests {
             """)
     }
 
+    /// A child's run is rebuilt by the List from its own `RowRun`, which carries only
+    /// what it was told to. It already had to be told the frame duration — rebuilding
+    /// with the defaults ran a `.dots` spinner 2.2× too fast — and the per-frame alpha
+    /// is the same class of omission: a caret inside a row would render at full strength
+    /// while the identical field outside one did not. Pinned so the round-trip keeps it.
+    @Test("A caret inside a List row keeps its per-frame field")
+    func caretInsideAListRowKeepsItsAlpha() throws {
+        let palette = FadedAll()
+        let drawn = renderToBuffer(
+            List(selection: .constant(Int?.none)) {
+                TextField("label", text: .constant("abc"))
+            },
+            context: context(palette: palette, width: 24, height: 5) {
+                // Its own focus manager, or nothing is focused and the caret never
+                // blinks — there is no run to carry anything.
+                $0.focusManager = FocusManager()
+            })
+
+        let carried = try #require(
+            drawn.animatedCells.first { $0.alpha != nil },
+            """
+            the caret's run reached the list with its alpha:
+            \(drawn.animatedCells.map { "x=\($0.offsetX) y=\($0.offsetY) alpha=\($0.alpha != nil)" })
+            """)
+        let alpha = try #require(carried.alpha)
+        #expect(alpha.varies, "and it still says different things on different frames")
+        let wellOwed = owed(palette.fieldBackground)
+        let owesTheWell = alpha.perFrame.contains { spans in spans.contains { $0.field == wellOwed } }
+        #expect(owesTheWell, "the blink-off frames still owe the well: \(alpha.perFrame)")
+    }
+
     /// A text editor's bar, which has no arrows: every claim the editor makes must be
     /// on the bar's column, and a track cell there must owe the track's alpha. Under a
     /// palette that fades only the track, because the editor's well is painted in

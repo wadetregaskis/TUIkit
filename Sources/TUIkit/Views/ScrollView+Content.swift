@@ -285,6 +285,9 @@ extension _ScrollViewCore {
         // viewport must stop, or it would repaint on a clock over whatever row
         // took its place. Survivors move into viewport coordinates with the
         // lines they describe.
+        // What a run this viewport cannot carry leaves behind — see `droppedRunClaims`
+        // below, and §69.1 for why a run must not be the only carrier of an alpha.
+        var droppedRunClaims: [OpacityRegion] = []
         let visibleRuns = full.animatedCells.compactMap { run -> AnimatedCellRun? in
             guard run.offsetY >= viewportTop, run.offsetY < viewportBottom else { return nil }
             // Horizontally too, and for the same reason: a run carried past
@@ -294,7 +297,18 @@ extension _ScrollViewCore {
             // terminal — it then wraps and smears the row below, and the diff
             // writer, which believes that row is untouched, never repairs it.
             let shiftedX = run.offsetX + dx
-            guard shiftedX >= 0, shiftedX + run.width <= viewportWidth else { return nil }
+            guard shiftedX >= 0, shiftedX + run.width <= viewportWidth else {
+                // Dropped on GEOMETRY, while `visibleOpacity` below clips and KEEPS every
+                // region — so a run stating its alpha per frame would take the only
+                // statement about those cells with it and they would render at full
+                // strength. The concrete shape: a bordered box wider than its viewport,
+                // whose top and bottom rules are dropped here while its width-1 side
+                // walls survive, drawing an opaque rule with faded walls. Its drawn
+                // frame degrades to an ordinary claim instead (§69.1).
+                droppedRunClaims += run.alpha?
+                    .drawnRegions(forRunAt: run.offsetX, offsetY: run.offsetY) ?? []
+                return nil
+            }
             return run.shifted(byX: dx, y: -scrollOffset)
         }
 
@@ -333,10 +347,11 @@ extension _ScrollViewCore {
         // Shifted first and clipped second, for the reason the hit-region block
         // gives — and here without even that block's caveat: an opacity region
         // carries no clip counters for a translation to disturb.
-        let visibleOpacity = full.opacityRegions.compactMap { region -> OpacityRegion? in
-            region.shifted(byX: dx, y: -scrollOffset)
-                .clipped(toColumns: 0..<viewportWidth, rows: 0..<viewportHeight)
-        }
+        let visibleOpacity = (full.opacityRegions + droppedRunClaims)
+            .compactMap { region -> OpacityRegion? in
+                region.shifted(byX: dx, y: -scrollOffset)
+                    .clipped(toColumns: 0..<viewportWidth, rows: 0..<viewportHeight)
+            }
 
         var result = FrameBuffer(
             lines: visibleLines, width: viewportWidth,

@@ -750,11 +750,13 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // Every frame goes through `BorderRenderer.band` at its opaque spelling, so
         // the alpha is only ever in this claim, and a replayed frame is blended under
         // it — so it is stated only when it is true of every frame: a still colour, or
-        // an animating one whose frames share one alpha (§59). Frames at several
-        // alphas stay unclaimed: no one claim fits them, and declining their runs
-        // would need a request for a render that goes with the buffer (§59.2). This
-        // used to skip every animating border and call it loud; it stopped being loud
-        // at §18.3, when `band` began stating the opaque spelling.
+        // an animating one whose frames share one alpha (§59). Frames at several alphas
+        // state NOTHING here and state it per frame on the runs instead (§69.3), because
+        // no one rectangle is true of them all. That is an XOR, and the resolver asserts
+        // it: a claim here beside a payload there would fold twice and fade the border
+        // at the product of the two. This used to skip every animating border and call
+        // it loud; it stopped being loud at §18.3, when `band` began stating the opaque
+        // spelling.
         guard !borderColor.isAnimating || borderColor.hasOneAlpha else { return regions }
         // The ● is claimed at its current frame, so it must be one alpha too. Its one
         // producer, `activeSection`, spends both of its ends.
@@ -860,6 +862,36 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         let titleColour = titleColor?.resolve(with: palette) ?? palette.accent
         var runs: [AnimatedCellRun] = []
 
+        // What each frame's cells owe, for the border whose frames DISAGREE about alpha
+        // — the case `opacityRegions` declines to claim, because no one rectangle is
+        // true of them all (§59.2). Stated per frame on the runs instead (§69).
+        //
+        // `nil` for every other border: one whose frames share an alpha is claimed
+        // statically, and claiming it here as well would fold it twice. That XOR is the
+        // one rule this pairing asks a reader to hold, and the two branches are four
+        // lines apart so it can be checked by eye.
+        //
+        // Built once per STEP, not once per run: the same call `opacityRegions` makes,
+        // at each frame's colours, so the claim cannot drift from the bytes — both come
+        // from one colour per step. Each run then slices its own cells out of that.
+        let perStepClaims: [[OpacityRegion]]? =
+            borderColor.isAnimating && !borderColor.hasOneAlpha
+            ? BorderRenderer.perFrameOpacityClaims(
+                borderColor, indicator: indicator,
+                outerWidth: innerWidth + BorderRenderer.borderWidthOverhead,
+                height: lineCount, style: borderStyle, title: titleText,
+                titleColor: titleColour, dividerRow: dividerRow)
+            : nil
+
+        /// The payload for a run of `width` cells at `(offsetX, row)`. Run-relative, so
+        /// a shifted copy carries it unchanged.
+        func payload(row: Int, offsetX: Int, width: Int) -> AnimatedRunAlpha? {
+            guard let perStepClaims else { return nil }
+            return AnimatedRunAlpha(
+                slicing: perStepClaims, row: row, offsetX: offsetX, width: width,
+                drawnIndex: borderColor.drawnIndex)
+        }
+
         if let top = borderColor.run(offsetX: 0, offsetY: 0, drawAtStep: { step, colour in
             let dot = indicator?.color(atStep: step)
             guard let titleText else {
@@ -871,6 +903,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                 style: borderStyle, innerWidth: innerWidth, color: colour, title: titleText,
                 titleColor: titleColour, focusIndicatorColor: dot)
         }) {
+            var top = top
+            top.alpha = payload(row: 0, offsetX: 0, width: top.width)
             runs.append(top)
         }
 
@@ -878,6 +912,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
             BorderRenderer.standardBottomBorder(
                 style: borderStyle, innerWidth: innerWidth, color: $0)
         }) {
+            var bottom = bottom
+            bottom.alpha = payload(row: lineCount - 1, offsetX: 0, width: bottom.width)
             runs.append(bottom)
         }
 
@@ -887,6 +923,8 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
                     style: borderStyle, innerWidth: innerWidth, color: $0)
             })
         {
+            var divider = divider
+            divider.alpha = payload(row: dividerRow, offsetX: 0, width: divider.width)
             runs.append(divider)
         }
 
@@ -896,9 +934,21 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         guard let wall = borderColor.run(offsetX: 0, offsetY: 0, draw: {
             BorderRenderer.wall(style: borderStyle, color: $0)
         }) else { return runs }
+        // The payload is worked out ONCE per side and carried by every shifted copy —
+        // spans are run-relative, so a shift is the identity for them, exactly as it
+        // already is for the frames. A box of height H emits 2 × (H − 2) wall runs (44
+        // for a 24-row section), and computing a payload inside that loop would be ~950
+        // array allocations per box per render for an answer that is the same every
+        // time. The rule is one payload per DISTINCT claim geometry — here three shapes,
+        // not 2H − 1 rows.
+        let interiorRow = (1..<(lineCount - 1)).first { $0 != dividerRow } ?? 1
+        var leftWall = wall
+        leftWall.alpha = payload(row: interiorRow, offsetX: 0, width: wall.width)
+        var rightWall = wall
+        rightWall.alpha = payload(row: interiorRow, offsetX: innerWidth + 1, width: wall.width)
         for row in 1..<(lineCount - 1) where row != dividerRow {
-            runs.append(wall.shifted(byX: 0, y: row))
-            runs.append(wall.shifted(byX: innerWidth + 1, y: row))
+            runs.append(leftWall.shifted(byX: 0, y: row))
+            runs.append(rightWall.shifted(byX: innerWidth + 1, y: row))
         }
         return runs
     }

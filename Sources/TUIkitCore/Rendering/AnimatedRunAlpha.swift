@@ -93,6 +93,35 @@ public struct AnimatedRunAlpha: Sendable, Equatable {
         self.drawnIndex = drawnIndex
     }
 
+    /// The payload for a run of `width` cells at `(offsetX, row)`, sliced out of one
+    /// list of ordinary regions per frame.
+    ///
+    /// For a producer that already has a function stating what a thing owes as regions —
+    /// `BorderRenderer.opacityClaims` is the one this was written for — and needs the
+    /// same answer per frame, for a run. Calling that function once per frame and
+    /// slicing here means the claim and the bytes come from one colour per frame and
+    /// cannot drift; deriving the spans by hand beside it is the drift.
+    ///
+    /// `nil` when no frame owes anything, so an opaque producer attaches nothing.
+    public init?(
+        slicing perFrameRegions: [[OpacityRegion]],
+        row: Int, offsetX: Int, width: Int, drawnIndex: Int
+    ) {
+        let columns = offsetX..<(offsetX + width)
+        let sliced = perFrameRegions.map { regions in
+            regions.compactMap { region -> Span? in
+                guard region.spans(row: row) else { return nil }
+                let kept = (region.offsetX..<(region.offsetX + region.width)).clamped(to: columns)
+                guard !kept.isEmpty else { return nil }
+                return Span(
+                    start: kept.lowerBound - offsetX, cells: kept.count,
+                    ink: region.inkOpacity, field: region.fieldOpacity)
+            }
+        }
+        guard sliced.contains(where: { !$0.isEmpty }) else { return nil }
+        self.init(perFrame: sliced, drawnIndex: drawnIndex)
+    }
+
     /// The spans for frame `index`, wrapped like ``AnimatedCellRun/frame(atIndex:)``.
     public func spans(atFrame index: Int) -> [Span] {
         guard !perFrame.isEmpty else { return [] }

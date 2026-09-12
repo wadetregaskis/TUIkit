@@ -226,6 +226,29 @@ extension BorderRenderer {
     ///   - dividerRow: The row holding a `├───┤` rule, in the box's own
     ///     coordinates, when there is one.
     /// - Returns: The regions, or an empty array when every colour is opaque.
+    /// ``opacityClaims(outerWidth:height:style:color:title:titleColor:focusIndicatorColor:dividerRow:)``
+    /// asked once per FRAME of an animated border, for the runs that replay it.
+    ///
+    /// Here rather than at the call site so both answers come from one function: the
+    /// static claim a still border states and the per-frame spans a moving one states
+    /// are then the same arithmetic over the same colours, and a title or a focus ● is
+    /// carried at its own alpha without the caller knowing where either sits.
+    @MainActor
+    static func perFrameOpacityClaims(
+        _ color: AnimatedColor, indicator: AnimatedColor?,
+        outerWidth: Int, height: Int, style: BorderStyle,
+        title: String?, titleColor: Color?, dividerRow: Int?
+    ) -> [[OpacityRegion]] {
+        color.frames.indices.map { step in
+            opacityClaims(
+                outerWidth: outerWidth, height: height, style: style,
+                color: color.color(atStep: step), title: title,
+                titleColor: title == nil ? nil : titleColor,
+                focusIndicatorColor: indicator?.color(atStep: step),
+                dividerRow: dividerRow)
+        }
+    }
+
     static func opacityClaims(
         outerWidth: Int, height: Int, style: BorderStyle, color: Color,
         title: String? = nil, titleColor: Color? = nil,

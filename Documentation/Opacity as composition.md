@@ -4124,3 +4124,48 @@ separate assertion (`OpacityBlend.swift:608`). A plain `Spinner` under a faded p
 does it too, so it predates this and is not caused by it — but it is now written down.
 Every shipped palette's background is opaque, and the example's fade seam deliberately
 leaves the four grounds alone (§68), which is why nothing has met it.
+
+
+### 69.3 The animated border at several alphas
+
+Closed, and it is the case §59.2 left open. The border states no region of its own when
+its frames disagree — that guard stays exactly as it was — and states the alpha on its
+RUNS instead, one list of spans per frame.
+
+The spans come from `BorderRenderer.opacityClaims` called once per STEP, at that frame's
+colours: the same function the static claim uses, so the claim cannot drift from the
+bytes, and a title and a focus ● come along at their own alphas without this code knowing
+anything about where they sit. Each run then slices its own cells out of that one answer.
+
+The interesting part is the side walls, and it is a cost lesson rather than a correctness
+one. A bordered box emits **2 × (height − 2)** wall runs — 44 for a 24-row section, not
+the four a reader might picture — because the wall is one run shifted to every interior
+row. Building a payload inside that loop would be ~950 array allocations per box per
+render for an answer that is identical every time. Because spans are run-relative, the
+payload is worked out once per SIDE and every shifted copy carries it, exactly as the
+frames already were. The rule to keep is *one payload per distinct claim geometry* —
+three shapes here, top band, bottom band and wall — never one per row.
+
+### 69.4 Where a dropped run degrades
+
+A run is the one payload this codebase discards where a region is clipped and kept, so
+"the run carries the alpha" needs an answer for the places the run cannot go. Two of the
+four are answered by ``AnimatedCellRun/isAnimating`` consulting the payload: the overlay
+punch and `clamped` both drop a cut that stopped animating, and a cut whose frames are
+byte-identical but whose alphas differ is now animating, so it survives.
+
+The other two drop on GEOMETRY and needed the degradation:
+
+- `ScrollView+Content.visibleRuns` drops a run wider than its viewport whole, while
+  `visibleOpacity` clips and keeps every region. The shape that would have broken: a
+  bordered box wider than its viewport, whose top and bottom rules are dropped here while
+  its width-1 side walls survive — an opaque rule above faded walls.
+- `_ListCore` drops a child's run that will not fit the row, while the row's claims are
+  carried through.
+
+Both now append `AnimatedRunAlpha.drawnRegions(forRunAt:offsetY:)` at the point of the
+drop, so those cells degrade to what a static claim would have said — right at the drawn
+frame, frozen after — instead of to full strength. `RowRun` also had to CARRY the payload
+for the runs it keeps, which is the same omission its own comment already records about
+`frameDuration`: rebuilding a child's run with the defaults silently retimed a spinner,
+and rebuilding it without the alpha would silently unfade a caret.

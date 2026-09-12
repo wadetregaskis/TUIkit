@@ -277,24 +277,34 @@ struct BorderAlphaTests {
         #expect(tracker.reads == 0, "a replayed border asks for no render")
     }
 
-    /// Frames at different alphas share no claim, so the border states none of its own and
-    /// keeps its runs: the open arm (§59.2). Pinned both ways. It must not ask to be
-    /// rendered every tick — a pass-wide request outlives a render whose buffer is thrown
-    /// away — and it does not yet blend its faded frame, which the known issue records.
-    @Test("An animating border at several alphas keeps its runs and asks for no render")
-    func animatingSeveralAlphasStaysOpen() {
+    /// Frames at different alphas share no claim, so the border states no REGION of its
+    /// own — and states the alpha per frame on the runs instead (§69). It keeps its runs,
+    /// so it still must not ask to be rendered every tick: a pass-wide request outlives a
+    /// render whose buffer is thrown away (§59.2), which is why declining the run was
+    /// never the answer. The faded frame now blends, which is what §59.2 left open.
+    @Test("An animating border at several alphas blends each frame at its own alpha")
+    func animatingSeveralAlphasBlendsPerFrame() throws {
         let tracker = VolatileReadTracker()
         let drawn = bordered(AnimatedColor(frames: [.red, faded(.green, 128)], step: 0), tracker: tracker)
         #expect(!drawn.animatedCells.isEmpty, "its frames are replayed")
         #expect(tracker.reads == 0, "the border asked to be rendered every tick")
+        // No region of its own: the opaque frame would be faded by any rectangle that
+        // described the translucent one, which is why this arm claims per frame instead.
+        let carried = drawn.opacityRegions.filter { $0.offsetY == 0 }
+        #expect(carried.isEmpty, "the border states no static claim here: \(carried)")
+
         let resolved = drawn.resolvingOpacity(surface: .blue, palette: EnvironmentValues().palette)
-        let top = resolved.animatedCells.first { $0.offsetY == 0 }
+        let top = try #require(resolved.animatedCells.first { $0.offsetY == 0 }, "the top rule")
         let blended = Color.green.opacity(128.0 / 255, over: .blue).foregroundCodes().joined(separator: ";")
-        withKnownIssue("frames at several alphas are not blended (§59.2)") {
-            #expect(
-                top?.frames[1].contains(blended) == true,
-                "\(top?.frames[1].debugDescription ?? "no top run")")
-        }
+        #expect(
+            top.frames[1].contains(blended),
+            "the faded frame is blended: \(top.frames[1].debugDescription)")
+        // And the opaque frame is untouched — the point of stating them separately.
+        let plainRed = Color.red.foregroundCodes().joined(separator: ";")
+        #expect(
+            top.frames[0].contains(plainRed),
+            "the opaque frame keeps its colour: \(top.frames[0].debugDescription)")
+        #expect(resolved.animatedCells.allSatisfy { $0.alpha == nil }, "every payload is spent")
     }
 
     /// A replayed frame is blended as the drawn line is: each against the backdrop, at

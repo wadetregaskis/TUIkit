@@ -104,6 +104,16 @@ public struct AnimatedColor: Sendable, Equatable {
         }
     }
 
+    /// Which frame of the cycle the render is drawing.
+    ///
+    /// ``AnimatedRunAlpha/drawnIndex`` must be exactly this for a payload built beside
+    /// `run(...)`'s frames, so it comes from here rather than being spelled again at the
+    /// call site — `step` is unbounded and wrapping it is where two spellings drift.
+    public var drawnIndex: Int {
+        guard case .cycle(let frames) = storage else { return 0 }
+        return step.modulo(frames.count)
+    }
+
     /// Whether this actually varies.
     ///
     /// False for a single frame, and false for several identical ones — a

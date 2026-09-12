@@ -1367,7 +1367,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             guard !run.frames.isEmpty else { return nil }
             return AnimatedCellRun(
                 offsetX: run.x, offsetY: y + topOffset, width: run.width,
-                frames: run.frames, frameDuration: run.frameDuration, clock: run.clock)
+                frames: run.frames, frameDuration: run.frameDuration, clock: run.clock,
+                alpha: run.alpha)
         }
     }
 
@@ -2983,19 +2984,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// A dropped run is not a frozen animation: nothing yet relies on this
         /// path to move, and everything that animates inside a row still asks
         /// the run loop to re-render it. It is a missed saving, not a bug.
-        var childRuns: [RowRun] = []
-        for run in row.buffer.animatedCells where run.offsetY < row.buffer.lines.count {
-            // `isAnimating` for the same reason `RenderLoop` filters on it
-            // before keeping a frame's runs: a still run holds the animation
-            // clock open forever to repaint a picture that cannot change.
-            guard run.isAnimating, !(shouldRenderBadge && run.offsetY == 0),
-                run.width > 0, 1 + run.offsetX + run.width <= rowWidth
-            else { continue }
-            childRuns.append(
-                RowRun(
-                    y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
-                    frameDuration: run.frameDuration, clock: run.clock))
-        }
+        let carried = Self.carriedChildRuns(
+            of: row.buffer, rowWidth: rowWidth, skippingBadgeLine: shouldRenderBadge)
+        let childRuns = carried.runs
+        let droppedRunClaims = carried.droppedClaims
 
         // A row whose picture is still walking back to it keeps its space and
         // draws nothing in it — see ``ItemListHandler/returningRows``. Blanked
@@ -3012,7 +3004,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let fill = background.claimableFill
             return RenderedRow(
                 lines: lines(over: fill?.opaqueSpelling ?? background.colorNow),
-                pulseFrames: nil, childRuns: childRuns, claims: claims(over: fill))
+                pulseFrames: nil, childRuns: childRuns,
+                claims: claims(over: fill) + droppedRunClaims)
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
         // on the same line would be overwritten by it — two animations claiming
@@ -3042,7 +3035,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return RenderedRow(
             lines: perStep[step],
             pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } },
-            claims: claims(over: nil))
+            claims: claims(over: nil) + droppedRunClaims)
     }
 
     /// A row's rendered lines, plus — when its background breathes — every frame
@@ -3075,6 +3068,37 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// the row's width) and a row's own narrow run — because every clip, the
     /// reorder overrun and the overscroll slide all key on `y` alone. One
     /// pipeline rather than two that have to be kept in step.
+    /// A child buffer's runs as this row can carry them, and what the ones it cannot
+    /// leave behind.
+    ///
+    /// A run is dropped for two different reasons and they want different answers. Not
+    /// ANIMATING is the same filter `RenderLoop` applies before keeping a frame's runs:
+    /// a still run holds the animation clock open forever to repaint a picture that
+    /// cannot change, and it has nothing to leave. Not FITTING is geometry, and the row's
+    /// claims are carried through where its runs are not — so a run stating its alpha per
+    /// frame would take the only statement about those cells with it, and they would
+    /// render at full strength. That one degrades to what a static claim would have said:
+    /// right at the frame the render drew, frozen after (§69.4).
+    private static func carriedChildRuns(
+        of buffer: FrameBuffer, rowWidth: Int, skippingBadgeLine: Bool
+    ) -> (runs: [RowRun], droppedClaims: [OpacityRegion]) {
+        var runs: [RowRun] = []
+        var droppedClaims: [OpacityRegion] = []
+        for run in buffer.animatedCells where run.offsetY < buffer.lines.count {
+            guard run.isAnimating, !(skippingBadgeLine && run.offsetY == 0) else { continue }
+            guard run.width > 0, 1 + run.offsetX + run.width <= rowWidth else {
+                droppedClaims += run.alpha?
+                    .drawnRegions(forRunAt: 1 + run.offsetX, offsetY: run.offsetY) ?? []
+                continue
+            }
+            runs.append(
+                RowRun(
+                    y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
+                    frameDuration: run.frameDuration, clock: run.clock, alpha: run.alpha))
+        }
+        return (runs, droppedClaims)
+    }
+
     private struct RowRun {
         var y: Int
         var x: Int
@@ -3088,6 +3112,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// 2.2x too fast — and looked, in a screenshot, exactly right.
         var frameDuration: Double
         var clock: AnimationClock
+
+        /// What the run's cells owe per frame, carried for the same reason
+        /// `frameDuration` is: rebuilding a child's run without it silently drops the
+        /// alpha, so a `TextField`'s caret over a faded well inside a List row would
+        /// render at full strength while the same field outside one did not.
+        var alpha: AnimatedRunAlpha?
 
         /// The same run on line `y`. Every clip and slide moves runs vertically
         /// and nothing else, so this is the only motion any of them needs.

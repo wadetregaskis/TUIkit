@@ -326,6 +326,22 @@ extension FrameBuffer {
         }
         guard !covering.isEmpty || run.alpha?.isTranslucent == true else { return run }
         guard covering.allSatisfy({ $0.cycle == nil }) else { return nil }
+        // A producer states a static claim for a run's cells OR a per-frame payload,
+        // never both — the two would fold together and fade the run twice. That is the
+        // one rule this pairing asks a producer to hold, so it is checked here rather
+        // than remembered: a debug build fails loudly at the cell, instead of a
+        // half-strength colour nobody can trace back.
+        //
+        // Only the run's OWN cells, and only ink/field: an enclosing `.opacity(_:)`
+        // legitimately covers them and multiplies in, which is what the layer channel is.
+        assert(
+            run.alpha?.isTranslucent != true
+                || !covering.contains { region in
+                    (region.inkOpacity < 1 || region.fieldOpacity < 1)
+                        && region.offsetX < run.offsetX + run.width
+                        && run.offsetX < region.offsetX + region.width
+                },
+            "a run states per-frame alpha AND a static claim covers its cells (§69.1)")
         let destinationRow = run.offsetY + position.y
         let behindLine =
             destination.lines.indices.contains(destinationRow)
