@@ -536,6 +536,35 @@ extension String {
         return (String(scalars[scalars.startIndex..<index]), String(scalars[index...]))
     }
 
+    /// This line with its first `columns` visible cells cut away, the styling in force at
+    /// the cut carried onto what remains.
+    ///
+    /// Lifted out of `OverlayLayer`'s leading cut when the compositor turned out to need
+    /// the same cut for an overlay placed at a negative column — one primitive rather than
+    /// a second copy of three decisions, each of which is a bug someone shipped by doing
+    /// the obvious thing instead:
+    ///
+    /// - A SLICE, not ``ansiAwareSuffix(droppingVisible:)``. The suffix throws away every
+    ///   SGR before the cut, so a preview clipped at the left edge arrived unstyled and
+    ///   rendered in the terminal's raw defaults. The slice replays the style it cut
+    ///   through.
+    /// - A wide glyph straddling the cut cannot be half-drawn, so it is dropped whole and
+    ///   the line comes back a cell short — which slid everything after it one column
+    ///   left, off the cell a pointer grabbed. The shortfall is padded, after the carried
+    ///   style so the gap keeps the background.
+    /// - The pad goes in at the SCALAR-exact split (``leadingANSISplit()``), not after
+    ///   `leadingANSISequences()` + `dropFirst(count)`: a combining mark opening the
+    ///   visible text fuses with the last sequence's terminator into one `Character`, and
+    ///   the character-counted drop severed it.
+    func ansiAwareCuttingLeadingColumns(_ columns: Int) -> String {
+        let owed = max(0, strippedLength - columns)
+        let slice = ansiAwareSlice(visibleStart: columns, visibleCount: owed)
+        let shortfall = owed - slice.strippedLength
+        guard shortfall > 0 else { return slice }
+        let (carried, remainder) = slice.leadingANSISplit()
+        return carried + String(repeating: " ", count: shortfall) + remainder
+    }
+
     /// The net SGR styling active just before visible column `column` — every SGR
     /// escape that appears strictly before that column, concatenated (the terminal
     /// nets them, so an opening sequence followed by a reset leaves no styling).

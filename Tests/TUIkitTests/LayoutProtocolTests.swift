@@ -226,6 +226,40 @@ struct LayoutProtocolTests {
         #expect(indents(oversized) == [0])
     }
 
+    /// Placing a subview's CENTRE at column 0 puts its leading edge at a negative column,
+    /// and `place(at:anchor:)` — unlike `place(in:anchor:)` — does not clamp. What falls
+    /// left of the canvas is cut. It used to draw the whole subview at column 0, push the
+    /// canvas's own cells right, and report a width two cells short of the row it drew.
+    @Test("place(at:anchor:) at column 0 cuts what falls left of the canvas")
+    func placeAtColumnZeroCuts() {
+        struct AtOrigin: Layout {
+            let anchor: UnitPoint
+            func sizeThatFits(
+                proposal: ProposedSize, subviews: Subviews, cache: inout ()
+            ) -> ViewSize {
+                ViewSize(width: 12, height: 1)
+            }
+            func placeSubviews(
+                in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()
+            ) {
+                for subview in subviews {
+                    subview.place(at: (x: 0, y: 0), anchor: anchor, proposal: .unspecified)
+                }
+            }
+        }
+
+        // .top puts the centre of "abc" at 0: floor(0 - 0.5 * 3) == -2.
+        let buffer = renderToBuffer(
+            AtOrigin(anchor: .top) { Text("abc") },
+            context: makeRenderContext(width: 20, height: 4))
+        let rows = buffer.lines.map(\.stripped)
+        let startsWithC = rows.first?.hasPrefix("c") == true
+        #expect(startsWithC, "only 'c' is on the canvas: \(rows)")
+        let widths = buffer.lines.map(\.strippedLength)
+        let honest = widths.allSatisfy { $0 <= buffer.width }
+        #expect(honest, "no row is wider than the buffer claims: \(widths) vs \(buffer.width)")
+    }
+
     @Test("place(at:anchor:) subtracts the anchor from the position")
     func placeAtHonoursTheAnchor() {
         struct AtColumn: Layout {

@@ -1326,6 +1326,26 @@ extension FrameBuffer {
         overlay: String,
         atColumn column: Int
     ) -> String {
+        // An overlay starting LEFT of the base is cut to the part that is on it and
+        // inserted at column 0 — the answer both composite twins already give a negative
+        // ROW, which they skip. It used to pass straight through: the split has no prefix
+        // before a negative column and drops only `column + width` cells of the base, so
+        // the WHOLE overlay went in at column 0 and the base's own cells slid right behind
+        // it. The row came out `-column` cells wider than the canvas, and the in-place
+        // twin then stamped the canvas's width and `linesAreUniformWidth = true` over it —
+        // a lie every consumer that trusts the hint mis-pads on: a parent `HStack` starts
+        // its next child inside the row, and a row past the terminal edge wraps onto the
+        // next. The public route is a custom `Layout` placing a subview's centre at x: 0
+        // with `place(at:anchor:)`, which does not clamp (its `place(in:)` sibling does).
+        //
+        // Here, and not at the two twins' call sites, because this is the function only
+        // they call: the run splice and the opacity splice share the split-taking overload
+        // below, and every column reaching them is already clamped non-negative.
+        guard column >= 0 else {
+            guard column + overlay.strippedLength > 0 else { return base }
+            return insertOverlay(
+                base: base, overlay: overlay.ansiAwareCuttingLeadingColumns(-column), atColumn: 0)
+        }
         let overlayVisibleWidth = overlay.strippedLength
 
         // Split the base into prefix (before overlay) and suffix (after overlay),

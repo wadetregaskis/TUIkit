@@ -366,32 +366,12 @@ public struct OverlayLayer: Sendable, Equatable {
 
     /// `lines` with `columns` cells cut from the left of each.
     ///
-    /// The line half of `cutting(_:leadingColumns:rows:)`, which is now its
-    /// only caller, because each of the three things it does is a bug someone
-    /// shipped by doing the obvious thing instead.
+    /// The line half of `cutting(_:leadingColumns:rows:)`. The cut itself is
+    /// `String.ansiAwareCuttingLeadingColumns(_:)`, which carries the three decisions
+    /// that used to be spelled out here — it moved when `FrameBuffer`'s compositor needed
+    /// the identical cut for an overlay at a negative column.
     private static func cutting(_ lines: [String], leadingColumns columns: Int) -> [String] {
-        lines.map { line in
-            // `ansiAwareSlice`, not `ansiAwareSuffix`: the suffix throws away
-            // every SGR that occurred before the cut, so a preview clipped at
-            // the left edge arrived unstyled and rendered in the terminal's raw
-            // defaults — which reads as "just the background". The slice
-            // replays the style it cut through.
-            let owed = max(0, line.strippedLength - columns)
-            let slice = line.ansiAwareSlice(visibleStart: columns, visibleCount: owed)
-            // A wide glyph straddling the cut cannot be half-drawn, so it is
-            // dropped whole and the line comes back a cell short — which would
-            // slide the whole preview one column left, off the cell the pointer
-            // grabbed. Pad that shortfall, after the carried style so the gap
-            // keeps the run's background.
-            let shortfall = owed - slice.strippedLength
-            guard shortfall > 0 else { return slice }
-            // The scalar-exact split, not `leadingANSISequences()` +
-            // `dropFirst(count)`: a combining mark opening the visible text
-            // fuses with the last sequence's terminator into one `Character`,
-            // and the character-counted drop severed it.
-            let (carried, remainder) = slice.leadingANSISplit()
-            return carried + String(repeating: " ", count: shortfall) + remainder
-        }
+        lines.map { $0.ansiAwareCuttingLeadingColumns(columns) }
     }
 
     /// The part of this layer that falls inside a `width` × `height`

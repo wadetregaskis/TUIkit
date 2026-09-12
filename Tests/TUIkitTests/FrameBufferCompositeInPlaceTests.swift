@@ -105,6 +105,34 @@ struct FrameBufferCompositeInPlaceTests {
         }
     }
 
+    /// A NEGATIVE column: an overlay starting left of the canvas, as a custom `Layout`
+    /// places one when it puts a subview's centre at x: 0. Both twins inserted the whole
+    /// overlay at column 0 and slid the base's cells right behind it; the in-place one
+    /// then claimed the canvas's width and uniformity over a row wider than both. The
+    /// header above always said "negative positions" — no case here had a negative x.
+    @Test("A negative column cuts the overlay instead of widening the row")
+    func negativeColumn() {
+        let base = FrameBuffer(lines: Array(repeating: String(repeating: ".", count: 12), count: 2))
+        for x in -4...(-1) {
+            assertMatchesCopying(base, FrameBuffer(lines: ["abc"]), at: (x: x, y: 0), "plain at \(x)")
+            assertMatchesCopying(
+                base, FrameBuffer(lines: ["\u{1B}[31mabc\u{1B}[0m"]), at: (x: x, y: 1),
+                "styled at \(x)")
+            assertMatchesCopying(base, FrameBuffer(lines: ["😀cd"]), at: (x: x, y: 0), "wide at \(x)")
+        }
+
+        let placed = base.composited(with: FrameBuffer(lines: ["abc"]), at: (x: -2, y: 0))
+        let visible = placed.lines.map(\.stripped)
+        #expect(visible == ["c...........", "............"], "only 'c' lands on the canvas: \(visible)")
+        #expect(placed.width == 12)
+
+        // A wide glyph straddling column 0 cannot be half-drawn: it goes, and the cell it
+        // would have covered stays a space so everything after it keeps its column.
+        let straddling = base.composited(with: FrameBuffer(lines: ["😀cd"]), at: (x: -1, y: 0))
+        let straddlingVisible = straddling.lines.map(\.stripped)
+        #expect(straddlingVisible.first == " cd.........", "\(straddlingVisible)")
+    }
+
     /// Ragged lines are the documented bail-out: the incremental width
     /// bookkeeping is only valid on a uniform canvas, so the method must hand
     /// off to the copying path rather than quietly claim a width it did not
