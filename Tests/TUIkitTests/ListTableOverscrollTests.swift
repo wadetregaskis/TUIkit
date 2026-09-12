@@ -42,12 +42,14 @@ struct ListTableOverscrollTests {
     /// indicators take out of the content area. The bar cases name themselves.
     private func context(
         width: Int = 28, height: Int = 8, top: ScrollOverscroll = .none,
+        bottom: ScrollOverscroll = .none,
         bar: ScrollIndicatorVisibility = .automatic,
         style: ScrollIndicatorStyle = .text
     ) -> RenderContext {
         makeRenderContext(width: width, height: height) { environment, tui in
             environment.mouseEventDispatcher = tui.mouseEventDispatcher
             environment.scrollOverscrollTop = top
+            environment.scrollOverscrollBottom = bottom
             environment.verticalScrollIndicatorVisibility = bar
             environment.horizontalScrollIndicatorVisibility = bar
             environment.scrollIndicatorStyle = style
@@ -328,6 +330,71 @@ struct ListTableOverscrollTests {
             got \(selected.value.map(String.init) ?? "nil"):
             \(screen.joined(separator: "\n"))
             """)
+    }
+
+    @Test("A multi-line Table pushed past its BOTTOM keeps its cut row clickable")
+    func multiLineTableBottomPushKeepsCutRowClickable() {
+        final class Box { var value: Int? }
+        let selected = Box()
+        // Pushed past the bottom the rows slide UP, so it is the row at the TOP
+        // of the window that the excursion cuts — through its middle, with
+        // 3-line rows and a 2-line allowance. Its last line is still drawn, and
+        // was answering no click at all: the band builder DROPPED a band whose
+        // start went negative, which is right for a row slid wholly off the top
+        // and wrong for one that kept a line.
+        let ctx = context(width: 24, height: 10, bottom: .rows(2))
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        let view = Table(
+            Self.items,
+            selection: Binding(get: { selected.value }, set: { selected.value = $0 })
+        ) {
+            TableColumn("Detail", value: \Item.detail).lineLimit(3)
+        }
+
+        // Down to the bottom — the push only engages once there is nowhere left
+        // to scroll — then the tick that spends the allowance.
+        var latest = renderToBuffer(view, context: ctx)
+        for _ in 0..<(Self.items.count * 3 + 2) {
+            dispatcher.setRegions(latest.hitTestRegions)
+            _ = dispatcher.dispatch(MouseEvent(button: .scrollDown, phase: .scrolled, x: 2, y: 2))
+            latest = renderToBuffer(view, context: ctx)
+        }
+        dispatcher.setRegions(latest.hitTestRegions)
+        let screen = latest.lines.map(\.stripped)
+        let handler = ctx.environment.focusManager?.currentFocused as? ItemListHandler<Int>
+        #expect(
+            handler?.overscrollState.excursion == 2,
+            "the push engaged and cut two lines off the top row:\n\(screen.joined(separator: "\n"))")
+
+        // The cut row's surviving line is its THIRD ("line c"), and the row above
+        // the rows is the "N more above" indicator, which must keep answering
+        // nothing — trimming the band to the interior's top rather than the row
+        // block's would hand the indicator's line to the row.
+        guard let kept = screen.firstIndex(where: { $0.contains("line c") }) else {
+            Issue.record("the cut row kept a line:\n\(screen.joined(separator: "\n"))")
+            return
+        }
+        #expect(
+            screen[kept - 1].contains("rows above"),
+            "the cut row's line sits straight under the indicator:\n\(screen.joined(separator: "\n"))")
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: kept))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: kept))
+        let cutRow = Self.items.count - 2
+        #expect(
+            selected.value == cutRow,
+            """
+            clicking the line the cut row kept selects row \(cutRow), \
+            got \(selected.value.map(String.init) ?? "nil"):
+            \(screen.joined(separator: "\n"))
+            """)
+
+        selected.value = nil
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: kept - 1))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: kept - 1))
+        #expect(
+            selected.value == nil,
+            "the indicator's line is not the cut row's: got \(selected.value.map(String.init) ?? "nil")")
     }
 
     @Test("A scrolled Table with indicators HIDDEN maps clicks to the drawn rows")

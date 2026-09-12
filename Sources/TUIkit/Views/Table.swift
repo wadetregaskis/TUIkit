@@ -2519,8 +2519,10 @@ where Value.ID: Hashable {
     /// the drop slot, and reports how far the survivors shifted (negative when
     /// the front was dropped) so the published bands move with them.
     ///
-    /// `publishRowBands` discards bands whose `yStart` goes negative — "slid off
-    /// the top" — which is exactly right for rows dropped from the front.
+    /// A front clip is reported as a NEGATIVE shift, which `drawnBands` trims
+    /// the bands against: a row the clip took entirely is dropped, and one it
+    /// cut through keeps a band for the lines it still has. It used to drop both,
+    /// which left a partly-clipped row answering no click.
     ///
     /// Reunited with its function; see `publishRowBands` on why that is worth a
     /// commit. WHICH end gives way, and by how much, is
@@ -2572,8 +2574,7 @@ where Value.ID: Hashable {
                 case .slot: return (.slot, height)
                 }
             },
-            offset: slide + indicatorLines,
-            lineCount: lineCount)
+            slide: slide, rowsTop: indicatorLines, lineCount: lineCount)
         handler.publishRowBands(bands)
         // Handed back as well as published: the frame keeps them on its render
         // state so the click map and the cursor marker read the same geometry
@@ -2699,7 +2700,8 @@ where Value.ID: Hashable {
             // overscroll excursion, so a scrolled or overscrolling multi-line
             // table hit-tested a drag against geometry its rows were not drawn
             // at.
-            offset: indicatorLines - handler.overscrollState.excursion,
+            slide: -handler.overscrollState.excursion,
+            rowsTop: indicatorLines,
             lineCount: lineCount)
     }
 

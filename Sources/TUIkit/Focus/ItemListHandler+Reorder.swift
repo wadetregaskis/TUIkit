@@ -800,40 +800,55 @@ extension ItemListHandler {
     ///   - drawn: what occupies each drawn entry, top to bottom, with the number
     ///     of lines it takes. Chrome interleaves with rows, which is why this is
     ///     a list of entries rather than a range.
-    ///   - offset: everything that moves the rows as a block, added to every
-    ///     `yStart` before clipping. The caller sums its own terms — any rows a
-    ///     clip took off the front, and MINUS the overscroll excursion, because
-    ///     `slid()` draws unslid line `y` at `y − excursion` and the bands have
-    ///     to travel with the rows rather than mirror them.
+    ///   - slide: what moves the ROWS as a block within the interior, and only
+    ///     them — the lines a reorder overrun took off their front, and MINUS
+    ///     the overscroll excursion, because `slid()` draws unslid line `y` at
+    ///     `y − excursion` and the bands have to travel with the rows rather
+    ///     than mirror them.
+    ///   - rowsTop: where the row block begins, in `yStart`'s space: the chrome
+    ///     already drawn above the rows, which the slide does NOT move. It is
+    ///     both added to every `yStart` and the floor a slid band is trimmed to.
+    ///     Kept separate from `slide` because summing them loses the floor, and
+    ///     the floor is the whole difference between trimming a slid row and
+    ///     putting it on the indicator's line.
     ///
-    ///     Both views now sum the same two terms into it. `Table` measured
-    ///     `yStart` from the first ROW line until 2026-08-22, subtracting the
-    ///     indicator out in its mouse closure instead; that was self-consistent
-    ///     within a frame and wrong across frames, because it put the origin on
-    ///     a line the scroll moves. What survives a scroll is the interior's
-    ///     first CONTENT line, and holding a pointer position across frames
-    ///     (``ItemListHandler/lastReorderContentY``) needs an origin that does.
+    ///     `Table` measured `yStart` from the first ROW line until 2026-08-22,
+    ///     subtracting the indicator out in its mouse closure instead; that was
+    ///     self-consistent within a frame and wrong across frames, because it
+    ///     put the origin on a line the scroll moves. What survives a scroll is
+    ///     the interior's first CONTENT line, and holding a pointer position
+    ///     across frames (``ItemListHandler/lastReorderContentY``) needs an
+    ///     origin that does.
     ///   - lineCount: how many lines the row area actually has, so a band slid
     ///     or clipped past either edge is trimmed to what is on screen and
     ///     dropped when nothing of it is.
     static func drawnBands(
         _ drawn: [(entry: DrawnBand.Content, height: Int)],
-        offset: Int,
+        slide: Int,
+        rowsTop: Int,
         lineCount: Int
     ) -> [DrawnBand] {
-        var line = 0
+        var line = rowsTop
         return drawn.compactMap { entry, height in
-            let yStart = line + offset
+            let yStart = line + slide
             line += height
-            // DROPPED on a negative start, not trimmed. A row slid off the top
-            // is gone as far as the pointer is concerned, and trimming it to
-            // `yStart = 0` instead leaves it competing for line 0 with the row
-            // that is actually drawn there — which is what a first attempt at
-            // this did, and three reorder-drag tests caught it.
-            guard yStart >= 0 else { return nil }
+            // TRIMMED to the row block's own top — `rowsTop`, not zero, because
+            // the slide cuts lines off the front of the ROWS and the chrome above
+            // them does not move. A row the slide cut THROUGH is still partly
+            // drawn, and has to answer a click on the lines it kept: dropped
+            // instead, a multi-line table pushed two lines past its bottom left
+            // its top row's last line on screen selecting nothing.
+            //
+            // The guard compares against the CLAMPED start, which is what makes
+            // clamping safe at all: a row slid entirely off the top ends at or
+            // above `rowsTop` and still goes. Comparing against the raw `yStart`
+            // is what a first attempt got wrong — a row wholly above the window
+            // kept a full-height band on the first line and competed there with
+            // the row really drawn on it, which three reorder-drag tests caught.
+            let start = max(rowsTop, yStart)
             let end = min(lineCount, yStart + height)
-            guard end > yStart else { return nil }
-            return DrawnBand(entry: entry, yStart: yStart, height: end - yStart)
+            guard end > start else { return nil }
+            return DrawnBand(entry: entry, yStart: start, height: end - start)
         }
     }
 

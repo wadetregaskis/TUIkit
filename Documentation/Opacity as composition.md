@@ -3823,8 +3823,21 @@ push also engages only where the resting bottom is row-aligned — a push IS a s
 blocked, and off that lattice every tick still has a line of the top row to give — so the
 fixture picks a row height and indicator style that land there, and asserts it.
 
-The `Table` is unaffected: it carries no per-row payload at all, its cells being drawn by
-the table itself, so nothing sits in a row's own coordinates to misplace. Its bands do
-differ from the List's — `drawnBands` drops a band whose start goes negative, where the
-List trims it to the viewport's first line — which is a separate divergence, recorded
-there and not touched here.
+The `Table` carries no per-row payload at all, its cells being drawn by the table itself,
+so nothing sits in a row's own coordinates to misplace. Its bands did diverge, though, and
+chasing that down found the same bug wearing different clothes: `drawnBands` DROPPED a
+band whose start went negative, where the List trims it. Right for a row slid wholly off
+the top, wrong for one the slide cut THROUGH — pushed two lines past its bottom, a
+multi-line table left its top row's last line on screen answering no click at all, since
+the click map (`rowAt(y:)`) walks those same bands. Fixed by trimming instead, with two
+corrections to the obvious form of it. The floor is the top of the ROW BLOCK, not of the
+interior: the slide moves the rows and not the "N more above" line above them, so
+trimming to zero would hand the indicator's line to the row. And the drop guard has to
+compare against the CLAMPED start — comparing against the raw one is what made an earlier
+attempt at this leave a fully-slid row competing for the first line. So `offset` split
+into `slide` and `rowsTop`, which is what keeps the two from being summed back together.
+
+The `topClip` path was never affected: it trims the row's lines before its height is
+recorded, so its bands were right all along. Only the two things applied AFTER the heights
+were taken — the overscroll excursion and the reorder overrun's front clip — could cut a
+row the bands still described at full height.
