@@ -4338,3 +4338,14 @@ ssh, how late), so it is left for a decision rather than built here.
 Proven across the app, not only at the sites read: the Example's
 `TUIKIT_EXAMPLE_GROUND_ALPHA` seam fades the four grounds and nothing else, and the faded-
 palette sweep, which passes its environment through, runs every page under it.
+
+**Seven claims became no-ops, and the tests that pinned them now say so.** A resize grip's
+field, a TabView's panel, mouth and lifted surface (`liftedBackground` derives from
+`background` and `appHeaderBackground`, both roots), a coloured switch's knob drawn in the
+page's colour, and a mono image's paper all paint a root ground in order to look like the
+page. The page now draws opaque, so they match it opaquely — which, over the page, is
+visually identical to the claim they used to make. Their tests computed the expected alpha
+from the raw `FadedAll` palette while the views read the grounded one through the
+environment; they now take it from `GroundedPalette.grounding(_:)`, with the environment
+assignment left raw so the boundary is what they exercise. The ground's own commit should
+have carried these. Its targeted test run did not include those suites; the full suite did.

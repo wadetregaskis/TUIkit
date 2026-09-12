@@ -219,11 +219,14 @@ struct ControlIndicatorAlphaTests {
     func focusedSwitchClaimsItsKnob() throws {
         let palette = FadedAll()
         let drawn = focused(Toggle("Enable", isOn: .constant(true)).toggleStyle(.switch), palette: palette)
+        // The knob is drawn in the page's colour, which reaches the view already spent (§70.4).
+        let seen = GroundedPalette.grounding(palette)
+
         let run = try #require(drawn.animatedCells.first, "the track breathes")
         for column in run.offsetX..<(run.offsetX + run.width) {
             let owes = owed(atColumn: column, row: run.offsetY, in: drawn)
             #expect(
-                owes.ink == owed(palette.background) && owes.field == 1,
+                owes.ink == owed(seen.background) && owes.field == 1,
                 "the track's (\(column), \(run.offsetY)) owes \(owes)")
         }
     }

@@ -24,7 +24,10 @@ struct TabViewPanelClaimTests {
     @Test("Every cell of a compact TabView's panel owes the surface's alpha exactly once")
     func compactPanelOwesItsSurfaceOnce() throws {
         let palette = FadedAll()
-        let surface = palette.liftedBackground.resolve(with: palette)
+        // The palette the view is handed: a translucent ROOT ground is spent where a
+        // palette enters the environment (§70.4), and the lifted surface derives from it.
+        let seen = GroundedPalette.grounding(palette)
+        let surface = seen.liftedBackground.resolve(with: seen)
         let want = owed(surface)
         // A one-cell tab under a wider, taller one: its line is padded on both sides,
         // and the rows the taller one needs are filled beneath it.

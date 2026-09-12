@@ -56,33 +56,40 @@ struct ResizeGripAlphaTests {
     }
 
     /// At rest the grips are the border's colour, floored against the page and keeping
-    /// its alpha, on the page's own background: each owes both.
+    /// its alpha, on the page's own background: each owes both — the field as the page's
+    /// ground reaches the view, which is spent (§70.4).
     @Test("Resting grips under a faded palette owe the border's ink and the page's field")
     func restingGripsClaim() throws {
         let palette = FadedAll()
         let (drawn, cells) = grips(palette: palette, focused: false)
+        // What the view is handed: `\.palette` spends a translucent ROOT ground at the
+        // setter (§70.4), so the page's field is expected from this, not the raw palette.
+        let seen = GroundedPalette.grounding(palette)
         try #require(!cells.isEmpty, "no grip was drawn: \(drawn.lines.map(\.stripped))")
         for (column, row) in cells {
             let owes = owed(atColumn: column, row: row, in: drawn)
             #expect(
-                owes.ink == owed(palette.border) && owes.field == owed(palette.background),
+                owes.ink == owed(seen.border) && owes.field == owed(seen.background),
                 "grip (\(column), \(row)) owes \(owes)")
         }
     }
 
     /// Focused, the grips breathe through `activeSection`, whose ends are both spent:
-    /// the ink owes nothing in any frame, the field still owes the page's alpha, and
+    /// the ink owes nothing in any frame, the field owes the page's ground as the view is
+    /// handed it (spent, §70.4), and
     /// every run replays onto the cells the render drew.
     @Test("Focused grips under a faded palette breathe opaque ink over the page's field")
     func focusedGripsClaim() throws {
         let palette = FadedAll()
         let (drawn, cells) = grips(palette: palette, focused: true)
+        // As above: the page's field as the view sees it (§70.4).
+        let seen = GroundedPalette.grounding(palette)
         try #require(!cells.isEmpty, "no grip was drawn: \(drawn.lines.map(\.stripped))")
         #expect(!drawn.animatedCells.isEmpty, "focused grips breathe")
         expectReplayIsIdentity(drawn, "a grip's run moved the cells")
         for (column, row) in cells {
             let owes = owed(atColumn: column, row: row, in: drawn)
-            #expect(owes.ink == 1 && owes.field == owed(palette.background), "grip (\(column), \(row)) owes \(owes)")
+            #expect(owes.ink == 1 && owes.field == owed(seen.background), "grip (\(column), \(row)) owes \(owes)")
         }
     }
 

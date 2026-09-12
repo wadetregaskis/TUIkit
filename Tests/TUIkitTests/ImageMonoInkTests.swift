@@ -126,14 +126,16 @@ struct ImageMonoInkTests {
         #expect(painted.contains(opaqueInk), "\(painted.debugDescription)")
         #expect(painted.contains(opaquePaper), "\(painted.debugDescription)")
 
-        // And the claim, on every line that drew: both channels at the palette's
-        // own alpha, which is the half that makes the picture follow its page.
+        // And the claim, on every line that drew: the ink at the palette's own alpha,
+        // which is the half that makes the picture follow its page.
         let claims = drawn.opacityRegions.filter { $0.offsetY == 0 }
         let claim = try #require(
             claims.first { $0.inkOpacity < 1 || $0.fieldOpacity < 1 },
             "no claim for the theme's colours: \(drawn.opacityRegions)")
         #expect(claim.inkOpacity < 1)
-        #expect(claim.fieldOpacity < 1)
+        // The paper is the page's background — a root ground, which reaches the view
+        // already spent (§70.4) — so only the ink is still owed.
+        #expect(claim.fieldOpacity == 1)
         #expect(claim.offsetX == 0)
         #expect(claim.width > 0)
     }

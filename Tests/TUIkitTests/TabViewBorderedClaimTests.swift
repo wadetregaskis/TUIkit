@@ -39,7 +39,10 @@ struct TabViewBorderedClaimTests {
     @Test("A still bordered TabView's chrome, labels, mouth and panel owe what they painted")
     func stillBoxClaims() throws {
         let palette = FadedAll()
-        let surface = palette.liftedBackground.resolve(with: palette)
+        // The palette the view is handed: a translucent ROOT ground is spent where a
+        // palette enters the environment (§70.4), and the lifted surface derives from it.
+        let seen = GroundedPalette.grounding(palette)
+        let surface = seen.liftedBackground.resolve(with: seen)
         let context = makeRenderContext(width: 40, height: 14) { environment, _ in
             environment.palette = palette
         }
@@ -86,7 +89,7 @@ struct TabViewBorderedClaimTests {
         let inactive = try #require(cells(of: "w", in: drawn).first, "no \"two\": \(screen)")
         for column in (inactive.column - 1)...(inactive.column + 1) {
             expect(
-                column, inactive.row, ink: owed(palette.foregroundSecondary), field: owed(palette.background),
+                column, inactive.row, ink: owed(seen.foregroundSecondary), field: owed(seen.background),
                 "inactive label")
         }
         #expect(
@@ -102,7 +105,10 @@ struct TabViewBorderedClaimTests {
     @Test("A focused bordered TabView's breathing chip owes its surface and no ink")
     func breathingChipClaims() throws {
         let palette = FadedAll()
-        let surface = palette.liftedBackground.resolve(with: palette)
+        // The palette the view is handed: a translucent ROOT ground is spent where a
+        // palette enters the environment (§70.4), and the lifted surface derives from it.
+        let seen = GroundedPalette.grounding(palette)
+        let surface = seen.liftedBackground.resolve(with: seen)
         let context = makeRenderContext(width: 40, height: 14) { environment, _ in
             environment.palette = palette
         }
