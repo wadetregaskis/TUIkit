@@ -208,6 +208,21 @@ struct _UserResizableCore<Content: View>: View, Renderable {
 
         let childContext = offering(context, handler: handler)
 
+        // The content FIRST, and the registration after it. The Tab ring is
+        // registration order — `FocusSection.register` appends, and nothing sorts by
+        // position — while a resize handle sits on the bottom and trailing edges of
+        // what it resizes, visually after everything the content draws. Registered
+        // before the content rendered, the handle led the ring: on the Example's Scroll
+        // View page Tab reached the grip before the buttons inside the box and before
+        // the ScrollView's own stop. It is the same single render as before, moved;
+        // nothing draws twice. `persistFocusID` and the handler fetch stay above, so a
+        // `.focused(_:equals:)` claim is still this view's to take.
+        //
+        // Arrow keys follow the same order, because they fall back to the ring: Up from
+        // the control below the box now stops on the grip first, and Down from above
+        // enters the content first.
+        var buffer = TUIkitView.renderToBuffer(content, context: childContext)
+
         // Registered whether or not it can be focused, with `canBeFocused`
         // carrying the answer — the convention every other interactive view
         // follows, and the one `FocusManager.hasFocusableElement` is written
@@ -233,12 +248,9 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // Both still get the offer above: the bounds are the caller's, not the
         // user's, and a `.disabled` box that forgot its ceiling would jump the
         // moment it was disabled.
-        guard handler.canBeFocused else {
-            return TUIkitView.renderToBuffer(content, context: childContext)
-        }
+        guard handler.canBeFocused else { return buffer }
         let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
 
-        var buffer = TUIkitView.renderToBuffer(content, context: childContext)
         handler.currentWidth = buffer.width
         handler.currentHeight = buffer.height
         guard buffer.width > 0, buffer.height > 0 else { return buffer }

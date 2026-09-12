@@ -177,8 +177,15 @@ Identical to the split divider's, because it is the same gesture:
 | Home / End | narrowest / widest the layout allows |
 | Escape | back to the layout's own size (the reset token, applied locally) |
 
-The handler sits in its own focus section, interleaved after the view it
-resizes, exactly as a divider does today.
+The handler registers in the surrounding focus section, AFTER everything the
+view it resizes contains, so Tab reaches it after the content — as a divider
+comes after the column it follows. (Shipped 2026-09-12; before that it
+registered first and led the ring.)
+
+This note originally said the handler "sits in its own focus section". That was
+not what shipped, and deliberately stays unshipped: a section per resizable
+would turn Tab into section hops, with per-section focus memory, for every
+resizable view on a page.
 
 ## Persistence, and what it should not do
 

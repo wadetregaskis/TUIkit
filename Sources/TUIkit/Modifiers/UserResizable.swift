@@ -128,7 +128,9 @@ extension View {
     ///
     /// ## Reaching it
     ///
-    /// The view takes a place in the Tab order. Focused, ←/→ and ↑/↓ resize by
+    /// The view takes a place in the Tab order, after everything inside it: the handle
+    /// is on the bottom and trailing edges, which is where reading order reaches it.
+    /// Arrow keys that move focus follow the same order. Focused, ←/→ and ↑/↓ resize by
     /// one cell (Shift by five), Home and End go to the smallest and largest
     /// allowed, and Escape returns the view to the size the layout wanted.
     ///

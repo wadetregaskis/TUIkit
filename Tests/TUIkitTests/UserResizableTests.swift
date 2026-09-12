@@ -400,6 +400,67 @@ struct UserResizableTests {
         #expect(buffer.hitTestRegions.first?.width == 1, "expected the right edge only")
     }
 
+    // MARK: - Where the handle sits in the Tab order
+
+    /// The focus ring after one render pass of `view`, in the order Tab walks it.
+    private func ringOrder(_ view: some View, width: Int = 40, height: Int = 14) -> [String] {
+        let tui = TUIContext()
+        let focus = FocusManager()
+        var environment = EnvironmentValues()
+        environment.focusManager = focus
+        environment.applyRuntimeServices(from: tui)
+        environment.statusBar = StatusBarState()
+        let context = RenderContext(
+            availableWidth: width, availableHeight: height, environment: environment,
+            tuiContext: tui
+        ).isolatingRenderCache()
+        tui.mouseEventDispatcher.beginRenderPass()
+        tui.stateStorage.beginRenderPass()
+        focus.beginRenderPass()
+        _ = renderToBuffer(view, context: context)
+        return focus.registeredFocusIDsInActiveSection()
+    }
+
+    /// The handle is on the bottom and trailing edges of what it resizes, so reading
+    /// order puts it after everything the content holds.
+    ///
+    /// The ring is registration order, and the handle used to register before its
+    /// content rendered: on the Example's Scroll View page Tab reached the grip before
+    /// the buttons inside the box and before the ScrollView's own stop.
+    @Test("A resize handle comes after everything inside it in the Tab order")
+    func handleFollowsItsContent() throws {
+        let ids = ringOrder(
+            VStack(spacing: 0) {
+                Button("inside") {}
+            }
+            .frame(width: 20, height: 4)
+            .border()
+            .userResizable(height: 3...10))
+        let button = try #require(ids.firstIndex { $0.hasPrefix("button") }, "\(ids)")
+        let handle = try #require(ids.firstIndex { $0.hasPrefix("resizable") }, "\(ids)")
+        #expect(button < handle, "the handle came before its content: \(ids)")
+    }
+
+    /// The owner's case exactly: a resizable ScrollView. Its buttons, then the scroll
+    /// view's own stop, then the handle — left to right, top to bottom.
+    @Test("A resizable ScrollView's order is its content, the scroller, then the handle")
+    func resizableScrollViewOrder() throws {
+        let ids = ringOrder(
+            ScrollView {
+                VStack(spacing: 0) {
+                    Button("one") {}
+                    Button("two") {}
+                }
+            }
+            .border()
+            .userResizable(height: 4...12))
+        let lastButton = try #require(ids.lastIndex { $0.hasPrefix("button") }, "\(ids)")
+        let scroller = try #require(ids.firstIndex { $0.hasPrefix("scrollview") }, "\(ids)")
+        let handle = try #require(ids.firstIndex { $0.hasPrefix("resizable") }, "\(ids)")
+        #expect(lastButton < scroller, "\(ids)")
+        #expect(scroller < handle, "the handle is last: \(ids)")
+    }
+
     // MARK: - The edge handles
 
     private enum FocusPick { case none, first, resizable }
