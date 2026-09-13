@@ -184,10 +184,13 @@ struct SplitViewPage: View {
         .padding(.horizontal, 1)
     }
 
-    /// Switch the split style live. `.balanced` shrinks the detail to make room
-    /// for the leading columns; `.prominentDetail` keeps the detail's size and
-    /// overlays/hides the leading columns instead; `.automatic` resolves a
-    /// sensible default for the context.
+    /// Switch the split style live. The first three divide the width by fixed
+    /// shares, and differ only in how big the leading columns' shares are:
+    /// `.balanced` gives them the largest, so the detail shrinks to make room;
+    /// `.prominentDetail` the smallest, so the detail is widest; `.automatic`
+    /// sits between the two. None of them hides or overlays a column: which
+    /// columns show is the visibility group's job. Size to fit fits each column
+    /// to its content instead.
     private var stylePicker: some View {
         Picker("page.splitView.style", selection: $styleName) {
             Text("page.splitView.styleAutomatic").tag("automatic")
@@ -198,9 +201,10 @@ struct SplitViewPage: View {
         .pickerStyle(.radioGroup)
     }
 
-    /// Which leading columns are showing — the `columnVisibility` binding, which
-    /// is two-way: the split view writes back to it, so this group also REPORTS
-    /// what it resolved (`.automatic` comes back as all three columns).
+    /// Which leading columns are showing — the `columnVisibility` binding. The
+    /// split view only reads it and never writes it back, so this group shows
+    /// what was picked, not what was drawn: Auto stays selected while all three
+    /// columns show, because the split view draws `.automatic` as `.all`.
     ///
     /// Tagged with the visibility values themselves rather than with strings, as
     /// the style picker above has to be: `NavigationSplitViewVisibility` is
