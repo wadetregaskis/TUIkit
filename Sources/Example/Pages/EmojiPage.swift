@@ -354,20 +354,41 @@ struct EmojiPage: View {
 /// example clusters, then a description.  The clusters are wrapped in
 /// square brackets so any extra/missing cells from a Terminal.app bug
 /// are obvious — well-aligned brackets means the row rendered cleanly.
+///
+/// The description is dropped from a row it does not fit on. Squeezed into
+/// the width the label and strip leave, it wrapped into a column several lines
+/// tall, and every line it took came out of the browse tables below: at 80
+/// columns the section took 18 rows and left the tables none. The label and
+/// strip are what the row exists to show, so they stay.
+///
+/// Decided per row by `ViewThatFits` rather than at one terminal width,
+/// because the rows differ in length and every language lengthens them
+/// differently. Unlike the tables (see `EmojiPage.terminalWidth`) these rows
+/// are plain `Text`, whose ideal width does not follow the width it is
+/// offered, so `ViewThatFits` can tell a row that fits from one that doesn't.
 private struct BugCaseRow: View {
     let label: LocalizedStringKey
     let description: LocalizedStringKey
     let clusters: [String]
 
     var body: some View {
-        HStack(spacing: 2) {
-            Text(label)
-                .foregroundStyle(.palette.accent)
-            Text(clusters.map { "[\($0)]" }.joined(separator: " "))
-            Text("— \(description.localized)")
-                .foregroundStyle(.palette.foregroundSecondary)
-                .dim()
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 2) {
+                labelAndStrip
+                Text("— \(description.localized)")
+                    .foregroundStyle(.palette.foregroundSecondary)
+                    .dim()
+            }
+            HStack(spacing: 2) {
+                labelAndStrip
+            }
         }
+    }
+
+    @ViewBuilder private var labelAndStrip: some View {
+        Text(label)
+            .foregroundStyle(.palette.accent)
+        Text(clusters.map { "[\($0)]" }.joined(separator: " "))
     }
 }
 
