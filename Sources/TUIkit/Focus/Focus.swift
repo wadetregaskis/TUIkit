@@ -416,19 +416,27 @@ extension FocusManager {
         // pass, which is exactly when an app calls this.
         let wasFocused = focusedID == element.focusID
         if wasFocused { notifyFocusLost() }
+        // Chosen while the element is still in the ring, because the ring is what
+        // says where it WAS. Choosing afterwards, with the focus already cleared,
+        // could only ever start from the top: the comment below always promised
+        // "the next available", and the walk it called fell back to the first.
+        let successor = wasFocused ? recoveryTarget(after: element.focusID) : nil
 
         for section in sections {
             section.unregister(element)
         }
 
-        // If the removed element was focused, focus the next available
         if wasFocused {
             focusedID = nil
-            // The move announces itself. A section with nothing left to focus
-            // does not move, and a focus that just went nil is as invisible as
-            // one that moved — the frame on screen still draws the departed
-            // element's indicator — so that case owes the repaint itself.
-            if !moveFocusInSection(direction: .forward, wrap: false) { onFocusChange?() }
+            if let successor {
+                focus(successor)
+            } else {
+                // Nothing left to focus. A focus that just went nil is as
+                // invisible as one that moved — the frame on screen still draws
+                // the departed element's indicator — so this case owes the
+                // repaint itself.
+                onFocusChange?()
+            }
         }
     }
 
@@ -1213,9 +1221,21 @@ extension FocusManager {
         // has not announced yet (a modal dismissal's restore): there is no
         // session to end, and `notifyFocusLost` stays silent — see
         // ``pendingRestoreNotificationID``.
+        //
+        // Where it goes next depends on which. A control that is STILL HERE but can
+        // no longer hold focus — a button that just disabled itself — hands it to its
+        // nearest neighbour in the ring: the next focusable, else the previous. That
+        // is what `unregister` promises, and what Qt's `setEnabled(false)` does. It
+        // used to fall through to the section's FIRST focusable, so a gradient
+        // editor's ▶, pressed until its stop reached the end and disabled itself,
+        // sent the keyboard back to the toggle at the top of the dialog. A control
+        // that has LEFT the tree has no position in this pass's ring to be a
+        // neighbour of, and keeps the first-focusable fallback below.
+        var recovery: Focusable?
         if let focusID = focusedID, let section = activeSection {
             let focused = section.focusables.first { $0.focusID == focusID }
             if focused == nil || focused?.canBeFocused == false {
+                if focused != nil { recovery = recoveryTarget(after: focusID) }
                 notifyFocusLost()
                 self.focusedID = nil
             }
@@ -1230,13 +1250,13 @@ extension FocusManager {
         // still nil here on that first frame.
         resolvePendingDefaultFocus()
 
-        // Auto-focus the first focusable if, after validation and any default,
-        // nothing holds focus.
+        // Auto-focus if, after validation and any default, nothing holds focus: the
+        // dropped control's neighbour when it had one, the first focusable otherwise.
         if focusedID == nil, let section = activeSection,
             !optionalFocusSectionIDs.contains(section.id),
-            let firstFocusable = section.focusables.first(where: { $0.canBeFocused })
+            let target = recovery ?? section.focusables.first(where: { $0.canBeFocused })
         {
-            focusPreservingPendingIntent(firstFocusable)
+            focusPreservingPendingIntent(target)
         }
 
         // A restore that was assigned directly from section memory (a modal
@@ -1344,37 +1364,22 @@ extension FocusManager {
     @discardableResult
     fileprivate func moveFocusInSection(direction: FocusDirection, wrap: Bool = true) -> Bool {
         guard let section = activeSection else { return false }
+        let ring = section.focusables
+        guard ring.contains(where: \.canBeFocused) else { return false }
 
-        let available = section.focusables.filter { $0.canBeFocused }
-        guard !available.isEmpty else { return false }
-
+        // The walk is `nearestFocusable(in:from:_:wrap:)`, shared with recovery.
         if let currentID = focusedID,
-            let currentIndex = available.firstIndex(where: { $0.focusID == currentID })
+            let anchor = ring.firstIndex(where: { $0.focusID == currentID && $0.canBeFocused })
         {
-            let targetIndex: Int
-            switch direction {
-            case .forward:
-                if currentIndex == available.count - 1 {
-                    guard wrap else { return false }
-                    targetIndex = 0
-                } else {
-                    targetIndex = currentIndex + 1
-                }
-            case .backward:
-                if currentIndex == 0 {
-                    guard wrap else { return false }
-                    targetIndex = available.count - 1
-                } else {
-                    targetIndex = currentIndex - 1
-                }
-            }
-            focus(available[targetIndex])
-            return true
-        } else {
-            let fallbackIndex = direction == .forward ? 0 : available.count - 1
-            focus(available[fallbackIndex])
+            guard let target = Self.nearestFocusable(in: ring, from: anchor, direction, wrap: wrap)
+            else { return false }
+            focus(target)
             return true
         }
+        let edge = direction == .forward ? ring.first(where: \.canBeFocused) : ring.last(where: \.canBeFocused)
+        guard let edge else { return false }
+        focus(edge)
+        return true
     }
 
     /// Moves the focus among the stops of ONE subtree — a menu's own rows —
