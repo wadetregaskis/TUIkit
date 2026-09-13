@@ -325,8 +325,18 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// there IS content above or below, so what is being decided here is which
     /// indicator this view uses — and deciding it must not trigger the content
     /// measure `.automatic` would otherwise need.
-    private func drawsTextIndicators(_ context: RenderContext) -> Bool {
-        context.environment.verticalScrollIndicators(overflowing: true).text
+    ///
+    /// `contentHeight` is the area the pair would be drawn in: the viewport less
+    /// a horizontal bar's row, and NOT less the two lines `.visible` reserves.
+    /// That reservation is what this answer decides, so it cannot also be an
+    /// input to it. Under `ResolvedScrollIndicators.minimumTextHeight` the answer
+    /// is no, through the `fitting(contentHeight:)` `List` and `Table` resolve
+    /// theirs with. Asked once, in `resolveChrome`; everything after reads
+    /// `ScrollChrome.textIndicators`, because the environment alone cannot know
+    /// the viewport is too short.
+    private func drawsTextIndicators(_ context: RenderContext, contentHeight: Int) -> Bool {
+        context.environment.verticalScrollIndicators(overflowing: true)
+            .fitting(contentHeight: contentHeight).text
     }
 
     /// One line per edge when the "N more" indicators are what occupies the
@@ -371,13 +381,9 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // the "N more below" hint never flashes a frame without its bar. See
         // `resolveScrollbars` for the monotonic fixpoint (which also prevents the
         // reserve-bar → content-fits → drop-bar → overflows → … oscillation).
-        let textIndicators = drawsTextIndicators(context)
         let (chrome, contentWidth, contentViewportHeight, settledExtents) = resolveChrome(
             viewportWidth: viewportWidth, viewportHeight: viewportHeight,
             wantsHorizontal: wantsHorizontal, handler: handler, context: context)
-        let wantsScrollbar = chrome.verticalBar
-        let wantsHorizontalBar = chrome.horizontalBar
-        let reservesIndicatorLines = chrome.reservesIndicatorLines
         // §1.5: how far past its edges this view may be pushed. Re-resolved every
         // frame because a `.viewport`-relative allowance moves with the terminal,
         // and an existing excursion is pulled back inside a shrunken one.
@@ -405,11 +411,16 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // anchor governs. Render passes only — a measure must not consume it.
         if !context.isMeasuring { handler.hasOpened = true }
 
-        let pendingSeek = consumedSeek(handler: handler, drawsTextIndicators: textIndicators, context: context)
+        // The chrome's indicator answer, here and below, and never the
+        // environment's: only the chrome knows the viewport is too short for the
+        // pair, and a seek that charged a line for an indicator the frame does not
+        // draw landed its row one line down.
+        let pendingSeek = consumedSeek(
+            handler: handler, drawsTextIndicators: chrome.textIndicators, context: context)
         var (fullBuffer, contentSlice, seekOffset) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
-            seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: textIndicators),
+            seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: chrome.textIndicators),
             handler: handler, context: context, settledExtents: settledExtents)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
@@ -455,7 +466,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
             regionOriginY: contentSlice?.originY ?? 0,
-            indicatorsActive: drawsTextIndicators(context),
+            indicatorsActive: chrome.textIndicators,
             suppressed: seekOffset != nil,
             context: context)
         coverSnappedViewport(
@@ -511,10 +522,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         applyScrollChrome(
             to: &visibleBuffer, handler: handler, contentWidth: contentWidth,
-            chrome: ScrollChrome(
-                verticalBar: wantsScrollbar, horizontalBar: wantsHorizontalBar,
-                reservesIndicatorLines: reservesIndicatorLines),
-            isFocused: isFocused, focusID: persistedFocusID, context: context)
+            chrome: chrome, isFocused: isFocused, focusID: persistedFocusID,
+            context: context)
 
         attachViewportMouseHandler(
             to: &visibleBuffer, context: context, handler: handler,
@@ -584,7 +593,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let bars = resolveScrollbars(
             viewportWidth: viewportWidth, viewportHeight: viewportHeight,
             horizontal: wantsHorizontal, context: context)
-        let textIndicators = drawsTextIndicators(context)
+        // Fitted to the viewport BEFORE the reservation below takes anything out
+        // of it. The floor used to be applied afterwards, at the draw site, to the
+        // content window, which under `.visible` the reservation had already made
+        // two lines shorter. A four-line view reserved two lines, found two left,
+        // declined to draw the pair, and never gave the two lines back.
+        let textIndicators = drawsTextIndicators(
+            context, contentHeight: viewportHeight - (bars.horizontal ? 1 : 0))
         // Under `.visible` both "N more" lines are drawn at EVERY offset, so
         // they are chrome and come out of the viewport once — the way a
         // horizontal bar's row does, and the way `List` and `Table` take them
@@ -605,19 +620,24 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         return (
             ScrollChrome(
                 verticalBar: bars.vertical, horizontalBar: bars.horizontal,
-                reservesIndicatorLines: reserves),
+                textIndicators: textIndicators, reservesIndicatorLines: reserves),
             max(1, viewportWidth - (bars.vertical ? 1 : 0)),
             contentViewportHeight,
             bars.settled)
     }
 
-    /// What chrome a frame draws around its content: the two bars, and whether
-    /// the "N more" lines are reserved out of the viewport rather than written
-    /// over its edges. One value because they are one decision, taken together
-    /// at the top of the render and consumed together at the bottom.
+    /// What chrome a frame draws around its content: the two bars, whether the
+    /// "N more" lines are drawn, and whether they are reserved out of the
+    /// viewport rather than written over its edges. One value because they are
+    /// one decision, taken together at the top of the render and consumed
+    /// together at the bottom.
     struct ScrollChrome {
         let verticalBar: Bool
         let horizontalBar: Bool
+        /// Whether the "N more" lines are drawn at all. Already fitted to the
+        /// viewport, so no consumer downstream re-applies the three-line floor
+        /// to a height of its own.
+        let textIndicators: Bool
         let reservesIndicatorLines: Bool
     }
 
@@ -633,9 +653,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // may show and at least one content line survives). Reserved, they are
         // not competing with the content for lines at all, but the floor still
         // holds: two of three lines as chrome is the same bad picture.
-        if drawsTextIndicators(context),
-            visibleBuffer.height >= ResolvedScrollIndicators.minimumTextHeight
-        {
+        //
+        // The floor is `chrome.textIndicators`, applied to the viewport in
+        // `resolveChrome`. It is NOT `visibleBuffer.height` tested here: that is
+        // the content window, which under `.visible` is already two lines short
+        // of the viewport the floor is about, so testing it declined to draw the
+        // pair into the very lines reserved for it. Unreserved, the two heights
+        // are one number, which is why `.automatic` draws exactly what it did.
+        if chrome.textIndicators {
             visibleBuffer = applyScrollIndicators(
                 to: visibleBuffer,
                 handler: handler,

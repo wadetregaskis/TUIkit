@@ -136,8 +136,9 @@ struct ResolvedScrollIndicators {
     /// them.
     ///
     /// A hard floor rather than a tolerance. The text indicators are LINES of
-    /// the content area — `ScrollView` writes them over its first and last,
-    /// `List` and `Table` reserve them out of the rows' budget — so a one- or
+    /// the content area — `ScrollView` writes them over its first and last (or,
+    /// under `.visible`, reserves them), `List` and `Table` reserve them out of
+    /// the rows' budget — so a one- or
     /// two-line view scrolled away from the top is 100% chrome: "▲ N more rows
     /// above" as the entire view, advertising content that is then unreachable
     /// at every offset.
@@ -154,6 +155,11 @@ struct ResolvedScrollIndicators {
     /// content beats showing none, and three views agreeing beats cleverness
     /// in two of them. The resulting state is exactly `.scrollIndicators
     /// (.hidden)`, which every consumer downstream already handles.
+    ///
+    /// Ask it of the area BEFORE anything is reserved out of it. Asked of what
+    /// is left afterwards, a `.visible` view's own two lines push it under the
+    /// floor they were reserved for. `ScrollView` did exactly that: a four-line
+    /// view kept the reservation, dropped the indicators and drew two lines.
     func fitting(contentHeight: Int) -> Self {
         guard text, contentHeight < Self.minimumTextHeight else { return self }
         return Self(bar: bar, text: false)
