@@ -173,7 +173,23 @@ extension ASCIIPalette {
             image.pixels.withUnsafeBufferPointer { pixels in
                 ASCIIPalette.quantisationBucket.withUnsafeBufferPointer { channelBucket in
                     totals.withUnsafeMutableBufferPointer { totals in
-                        for pixel in pixels {
+                        // Covered pixels only. The picture arrives carrying its alpha —
+                        // the glyph path stopped flattening it over black in §42, and the
+                        // pixel path never did — and both resamplers write every uncovered
+                        // pixel as `(0, 0, 0, 0)`. Counted, a logo's transparent surround
+                        // was the heaviest cell in the picture: an entry spent on a black
+                        // that nothing draws, and at two colours a blue mark drawn red
+                        // because black had taken the second slot.
+                        //
+                        // ANY coverage counts, at full weight. Not the ½ rule the glyph
+                        // decisions use: this chooses colours, and a partly covered pixel
+                        // is drawn in its own colour on both paths. Not weighted by
+                        // coverage either: every weight would scale by 255, `medianCut`'s
+                        // `box.weight / 2` would stop cancelling on an odd total, and an
+                        // opaque picture's palette could move. Skipping is what leaves an
+                        // opaque picture's buckets exactly as they were. See "Opacity as
+                        // composition" §72.1.
+                        for pixel in pixels where pixel.a != 0 {
                             let cell = (Int(channelBucket[Int(pixel.r)]) << (2 * bits))
                                 | (Int(channelBucket[Int(pixel.g)]) << bits)
                                 | Int(channelBucket[Int(pixel.b)])

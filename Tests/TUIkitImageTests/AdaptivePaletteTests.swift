@@ -252,4 +252,34 @@ struct AdaptivePaletteTests {
         let drawnColours = Set(drawn.pixels.map { Int($0.r) << 16 | Int($0.g) << 8 | Int($0.b) })
         #expect(drawnColours.isSubset(of: expected), "drew a colour the palette does not hold")
     }
+
+    // MARK: - Only what is drawn is counted
+
+    /// A logo's shape: 60% transparent surround, 30% red, 10% blue. The surround
+    /// is `(0, 0, 0, 0)`, which is what both resamplers write wherever there is no
+    /// coverage, whatever the file held.
+    private static func logo(blueCoverage: UInt8) -> RGBAImage {
+        var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0, a: 0), count: 60)
+        pixels += [RGBA](repeating: RGBA(r: 255, g: 0, b: 0), count: 30)
+        pixels += [RGBA](repeating: RGBA(r: 0, g: 0, b: 255, a: blueCoverage), count: 10)
+        return RGBAImage(width: 10, height: 10, pixels: pixels)
+    }
+
+    /// At two colours the surround used to take one of them — the top-ranked cell by
+    /// popularity, and a box of its own at least error's first median cut — and the
+    /// blue mark drew red, because red is nearer blue in OKLab than black is. A mark
+    /// at a quarter coverage is still drawn in its own colour, so it still earns its
+    /// entry: that argument pins the rule as "any coverage", not the glyphs' ½.
+    @Test("A transparent surround spends no entry, and a partly covered mark keeps one", arguments: [UInt8.max, 64])
+    func transparentPixelsAreNotBlack(blueCoverage: UInt8) {
+        let image = Self.logo(blueCoverage: blueCoverage)
+        for method in ASCIIPalette.Adaptation.allCases {
+            let palette = ASCIIPalette.adaptive(2, by: method).derived(from: image, depth: .truecolor)
+            let colours = palette.colors.compactMap(\.rgbComponents)
+            let blacks = colours.filter { $0.red < 40 && $0.green < 40 && $0.blue < 40 }
+            #expect(blacks.isEmpty, "\(method) spent an entry on the surround: \(colours)")
+            let blue = palette.rgba(at: palette.nearestIndex(to: RGBA(r: 0, g: 0, b: 255)))
+            #expect(blue.b > blue.r, "\(method) draws the blue mark as \(blue)")
+        }
+    }
 }

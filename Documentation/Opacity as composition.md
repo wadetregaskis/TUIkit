@@ -2953,7 +2953,8 @@ declining it.
 
 And the **pixel** path was already correct (§17): alpha survives the tone curve,
 sharpening, dithering, quantisation and the mono recolouring, and is transmitted as
-`f=32`. Nothing there changed.
+`f=32`. Nothing there changed. (True of alpha SURVIVING that path; not of what the path
+measures from the picture on the way through, which did not read it — §72.)
 
 With this, **§16.1's ledger has no open entry points at all.**
 
@@ -4276,6 +4277,50 @@ to the screen and loses its overhang out of its content instead — cuts the sam
 run carrying a translucent `AnimatedRunAlpha` satisfies the resolver's entry guard on its
 own (§69.1). A dragged preview holding a focused `TextField`, or an animated border, needed
 nothing else in the tree to reach it.
+
+
+## 72. What the picture is measured from (2026-09-12)
+
+§42 took the flatten out of the glyph path, and §42.4 lists the four renderers that now
+ask coverage before they draw. Two things read the picture before any renderer does, to
+decide something ABOUT it rather than a glyph — a set of colours and a threshold — and
+neither was on that list, so a sweep of the glyph decisions walked past both. Both counted
+every pixel, and both resamplers write every uncovered pixel as `(0, 0, 0, 0)`, so both
+counted a transparent surround as black.
+
+### 72.1 The adaptive palette's histogram
+
+`ASCIIPalette.Histogram.init(of:)` bucketed every pixel at weight 1 and never read its
+alpha. A logo that is 60% transparent, 30% red and 10% blue built `{black: 60, red: 30,
+blue: 10}`, so `.adaptive(2, by: .popularity)` answered `[black, red]`: one entry nothing
+draws, and the blue mark drawn red, blue being nearer red than black in OKLab (0.288
+against 0.302). `.leastError` cut black off into a box of its own at the first median cut
+and kept it there. A logo with more colours than the Example's default of eight, whose
+surround outweighed every colour in it, drew in seven.
+
+Not only since §42: `recoloured` never flattened, so the pixel path has derived palettes
+from transparent pixels since adaptive palettes shipped. §42.6's "already correct" was
+about alpha surviving that path, which it did.
+
+An uncovered pixel is now skipped, and a covered one counts at full weight. Both halves
+are decisions:
+
+- **Any coverage, not the ½ rule.** The ½ rule decides glyphs. This chooses colours, and a
+  partly covered pixel is drawn in its own colour on both paths —
+  `CellColours.color(for:)` states one for every `a > 0`, and `PixelQuantiser` sends it
+  quantised to this very palette at its own alpha — so its colour is in the picture.
+- **Full weight, not weighted by coverage** as §41.1 weighted the resamplers. Their
+  weights cancel on an opaque picture and these would not: every weight scales by 255, and
+  `medianCut`'s weighted median `box.weight / 2` stops cancelling on an odd total, so an
+  opaque picture's palette could move. Skipping leaves an opaque picture's buckets
+  exactly as they were. The price is that a one-pixel antialiased fringe votes as much as
+  the mark it fringes — in the mark's own colour, since the resamplers un-premultiply.
+
+A wholly transparent picture now finds no buckets and keeps its stand-in greys, where it
+used to answer black; nothing in it is covered, so neither was ever drawn.
+
+`AdaptivePaletteTests.transparentPixelsAreNotBlack` pins both methods, and a mark at a
+quarter coverage that must still earn its entry.
 
 
 ## 71. A lightness step on a faded colour came back solid (2026-09-12)
