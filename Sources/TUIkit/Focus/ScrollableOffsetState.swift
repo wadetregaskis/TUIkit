@@ -599,7 +599,10 @@ extension ScrollableOffsetState {
     /// edges.
     ///
     /// Called wherever the viewport is moved *programmatically* — a `scrollTo`
-    /// seek, an anchor hold, the reveal that keeps a focused control on screen.
+    /// seek, a `.scrollPosition` request, the reveal that keeps a focused
+    /// control on screen (when the excursion would hide it). Not by a written
+    /// edge anchor: a push past an edge writes that binding itself, so adopting
+    /// the write would cancel the push that made it.
     /// Those position the content precisely; leaving a leftover excursion under
     /// them would offset the very row they just aimed at.
     func clearOverscroll() {

@@ -423,10 +423,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
         handler.contentHeightIsEstimate = contentSlice?.totalIsEstimate ?? false
         if let seekOffset {
-            // The content rendered AT the request's offset; adopt it. (The
-            // bottom re-glue below must not fight it — scrolling away IS
-            // the release, expressed programmatically.)
-            handler.scrollOffset = seekOffset
+            // The content rendered AT the request's offset; adopt it, dropping
+            // any overscroll excursion with it — the slide drawn later would
+            // otherwise move the row the seek aimed at. (The bottom re-glue
+            // below must not fight it — scrolling away IS the release,
+            // expressed programmatically.)
+            handler.jumpProgrammatically(to: seekOffset)
         } else if wasGluedToBottom {
             // Re-glue against the REAL rendered height (the pre-render
             // number was an estimate); the band's margin absorbs small

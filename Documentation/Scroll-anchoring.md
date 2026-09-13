@@ -437,6 +437,14 @@ control the push leaves on screen, is no reason to cancel a push the user still
 holds. `List` and `Table` drop it on every cursor move in
 `ensureFocusedItemVisible`, where the cursor move is itself the signal.
 
+**So do `scrollTo` and `.scrollPosition`.** A seek, an edge request and an offset
+request each aim at an exact line, and each left the excursion under it, landing
+short by exactly the push (fixed 2026-09-12). They now write their offset through
+`ScrollViewHandler.jumpProgrammatically(to:)`, which drops it. A written
+`.anchorPosition` edge still keeps it, deliberately: a push past an edge writes
+that same binding itself (`engageEdgeAnchor`), so adopting the write would cancel
+the push that made it.
+
 **`List` and `Table` now covered too.** They could not reuse the `ScrollView`
 technique: that one slides the finished viewport buffer, which works only
 because the bar is appended as a whole column afterwards. `_ListCore` and

@@ -191,9 +191,11 @@ extension View {
     /// content has actually reached the edge: a wheel tick that merely lands on
     /// the edge is spent getting there, and the next one pushes past. That is
     /// what makes a deliberate push distinguishable from a graze. Programmatic
-    /// movement (`scrollTo`, an anchor, a reveal) never overscrolls, and never
-    /// leaves an excursion behind. A reveal with nothing to move keeps the push,
-    /// unless the push is what hides the control being revealed.
+    /// movement (`scrollTo`, a bound `ScrollPosition`, a reveal) never
+    /// overscrolls, and never leaves an excursion behind. A reveal with nothing to
+    /// move keeps the push, unless the push is what hides the control being
+    /// revealed; a written `anchorPosition` edge keeps it too, because a push
+    /// past an edge writes that binding itself.
     ///
     /// A view whose content already fits its viewport can still be pushed — the
     /// allowance is not conditional on there being anything to scroll.

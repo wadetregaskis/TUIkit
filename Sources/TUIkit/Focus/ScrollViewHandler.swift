@@ -277,6 +277,19 @@ extension ScrollViewHandler {
         clearOverscroll()
     }
 
+    /// Lands the viewport on `offset` for a programmatic request — a `scrollTo`
+    /// seek's resolved offset, or a bound `ScrollPosition`'s edge or row offset —
+    /// written as given, since the caller has already resolved or clamped it.
+    ///
+    /// Like ``scrollToTop()`` and ``scrollToBottom()``, and for the same reason,
+    /// it drops any overscroll excursion: a request aims a row at an exact line,
+    /// and the slide drawn afterwards would move that row by the push, landing
+    /// the request short by exactly that much.
+    func jumpProgrammatically(to offset: Int) {
+        scrollOffset = offset
+        clearOverscroll()
+    }
+
     /// The protocol's user End jump, interposed to keep `seekingTail`: an End
     /// pressed while content is still streaming in must pin to the tail, not
     /// to the offset the tail happened to be at.

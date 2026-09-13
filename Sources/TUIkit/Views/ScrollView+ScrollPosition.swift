@@ -47,6 +47,10 @@ extension _ScrollViewCore {
 
     /// Applies an offset-shaped ``ScrollPosition`` target (an edge or a row
     /// offset), which needs no key seek — the destination is arithmetic.
+    ///
+    /// Every write goes through `ScrollViewHandler.jumpProgrammatically(to:)`,
+    /// which drops any overscroll excursion: the request aims at an exact line,
+    /// and a push left standing under it would land it short by the push.
     func applyPositionOffset(handler: ScrollViewHandler, context: RenderContext) {
         guard let box = context.environment.scrollPositionBinding else { return }
         let position = box.binding.wrappedValue
@@ -60,9 +64,9 @@ extension _ScrollViewCore {
             // them as top/bottom would be inventing behaviour, so they are
             // ignored rather than guessed at.
             switch edge {
-            case .top: handler.scrollOffset = 0
+            case .top: handler.jumpProgrammatically(to: 0)
             case .bottom:
-                handler.scrollOffset = handler.maxOffset
+                handler.jumpProgrammatically(to: handler.maxOffset)
                 // The height this used is last frame's; the tail seek re-pins
                 // against the height actually rendered.
                 handler.seekingTail = true
@@ -70,7 +74,7 @@ extension _ScrollViewCore {
             }
         case .offset(let y):
             handler.lastAppliedPositionToken = position.requestToken
-            handler.scrollOffset = max(0, min(y, handler.maxOffset))
+            handler.jumpProgrammatically(to: max(0, min(y, handler.maxOffset)))
         case .id:
             break  // Handled by the key seek — see `positionSeek`.
         }
