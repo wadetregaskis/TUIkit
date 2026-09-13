@@ -1608,7 +1608,8 @@ alphas.
 All three bar styles now go through one `finished(buffer:…)` rather than each calling
 `applyHitTestRegions` directly. Not tidiness: a style added later must not be able to
 remember the hit regions and forget the claims. That exact omission happened twice to
-the app header's side payloads.
+the app header's side payloads. The tooltip row the bar grew later is claimed there too,
+for the same reason — but only since §73.
 
 ### 24.1 The sink was built before there was anything to put in it
 
@@ -4318,6 +4319,34 @@ to the screen and loses its overhang out of its content instead — cuts the sam
 run carrying a translucent `AnimatedRunAlpha` satisfies the resolver's entry guard on its
 own (§69.1). A dragged preview holding a focused `TextField`, or an animated border, needed
 nothing else in the tree to reach it.
+
+## 73. The status bar's tooltip row (2026-09-12)
+
+The status-bar presentation of a tooltip — the default one, `Documentation/Tooltips.md` §4
+— draws its text in `palette.foregroundSecondary`, and `_StatusBarCore.tooltipContent`
+handed that slot to `colorize` raw. Nothing claimed the rows. §24's `finished(buffer:…)`
+claimed the items' two configurable colours, and the chrome claims its rule or its frame,
+which (§18.1) is a frame and not the interior. So a palette fading the slot tripped the
+emitter's `isOpaque` assertion in debug, and in release drew the row at full strength in a
+bar whose every other paint was faded. The slot needs no naming to be reached: `Palette`
+defaults `foregroundSecondary` to `foreground`, so a conformance that fades only
+`foreground` is enough — which is exactly `FadedAll`, and what the test uses.
+
+The two presentations of one tooltip disagreed, and the default one was the wrong one:
+`TooltipPopover.panel` already spelled its text opaque and claimed it, with a comment
+saying a theme's own translucency arrives there. §68's sweep could not have seen the row: it
+drives neither the pointer nor the help key, and the Example has no `.help(_:)` to reveal.
+
+Fixed as the items are, and in the same function, for §24's reason — a style added later
+must not be able to claim the items and forget the row. The opaque spelling in the bytes,
+and one claim over the rows. They sit directly above the items
+(`rowOffset - tooltipLines.count`), are inset exactly as the items are (flush in `.compact`
+and `.rule`, past the wall and a space of padding in `.bordered`), and are
+`ChromeStyle.barContentWidth` wide, the width the text is padded to. They resolve where the
+items do, against `palette.statusBarBackground` (§24.1). The claim is asked of
+`tooltipLines` before the palette is read, so a frame showing no tooltip pays one
+comparison, and `OpacityRegion.claim` answers `nil` for an opaque slot, so an ordinary
+palette adds no region and keeps the resolver's fast path.
 
 ### 70.5 The same pass papered over a transparent surround
 

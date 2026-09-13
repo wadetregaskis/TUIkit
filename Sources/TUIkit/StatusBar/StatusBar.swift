@@ -328,7 +328,9 @@ private struct _StatusBarCore: View, Renderable {
     /// the previous frame drew show through to its right.
     private func tooltipContent(width: Int, context: RenderContext) -> [String] {
         guard !tooltipLines.isEmpty else { return [] }
-        let colour = context.environment.palette.foregroundSecondary
+        // Opaque in the bytes. The slot's own alpha is claimed over these rows by
+        // `finished(buffer:…)`, the one place that knows where they sit.
+        let colour = context.environment.palette.foregroundSecondary.opaqueSpelling
         return tooltipLines.map {
             ANSIRenderer.colorize($0.padToVisibleWidth(width), foreground: colour)
         }
@@ -434,7 +436,8 @@ private struct _StatusBarCore: View, Renderable {
     /// the mouse dispatcher isn't available (measure pass etc.)
     /// or when none of the items are clickable.
     /// Everything a laid-out bar owes its items, in one call: the claims for their
-    /// two configurable colours, then the hit regions that make them clickable.
+    /// two configurable colours and for the tooltip row above them, then the hit
+    /// regions that make them clickable.
     ///
     /// One function because all three styles want both, with the same arguments —
     /// they differ only in the offsets — and because a style added later must not be
@@ -448,11 +451,27 @@ private struct _StatusBarCore: View, Renderable {
         rowOffset: Int,
         context: RenderContext
     ) -> FrameBuffer {
-        applyHitTestRegions(
-            buffer: applyOpacityClaims(
-                buffer: buffer, layouts: layouts, columns: columns,
-                columnOffset: columnOffset, rowOffset: rowOffset),
-            layouts: layouts, columns: columns, columnOffset: columnOffset,
+        var claimed = applyOpacityClaims(
+            buffer: buffer, layouts: layouts, columns: columns,
+            columnOffset: columnOffset, rowOffset: rowOffset)
+        // The tooltip's rows, when the palette slot they paint is faded. They sit
+        // directly above the items and are inset exactly as the items are — flush
+        // for `.compact` and `.rule`, past the wall and a space of padding for
+        // `.bordered` — and padded to `barContentWidth`, so the items' own offsets
+        // place them in every style. Here and not in each arm for the reason this
+        // function exists. Asked of the lines first: a frame with no tooltip, which
+        // is nearly every frame, does not read the palette.
+        if !tooltipLines.isEmpty,
+            let claim = OpacityRegion.claim(
+                offsetX: columnOffset, offsetY: rowOffset - tooltipLines.count,
+                width: style.barContentWidth(context.availableWidth),
+                height: tooltipLines.count,
+                ink: context.environment.palette.foregroundSecondary)
+        {
+            claimed.opacityRegions.append(claim)
+        }
+        return applyHitTestRegions(
+            buffer: claimed, layouts: layouts, columns: columns, columnOffset: columnOffset,
             rowOffset: rowOffset, context: context)
     }
 
