@@ -401,9 +401,14 @@ extension KeyEvent {
             numberBytes = params.dropLast()
         }
 
-        guard let string = String(bytes: numberBytes, encoding: .ascii),
-            let number = Int(string)
-        else {
+        // `ASCIIDecimal`, the reader `extractModifiers` uses above and for the
+        // same reason: `Int(_: String)` accepts a SIGN. Here it cannot trap —
+        // nothing is computed from `number`, and `-3` falls to `default` — but
+        // a LEADING `+` read as the bare digits, so `ESC [ + 3 ~` arrived as a
+        // Delete keypress: a character gone from a focused TextField, a row
+        // gone from a List with `.onDelete`. No terminal signs a key number;
+        // like every other malformed shape, it is dropped.
+        guard let number = ASCIIDecimal.value(of: numberBytes) else {
             return nil
         }
 

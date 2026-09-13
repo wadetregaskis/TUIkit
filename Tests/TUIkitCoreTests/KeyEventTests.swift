@@ -142,6 +142,32 @@ struct KeyEventParseTests {
         #expect(event?.ctrl != true)
     }
 
+    /// The same hole, one reader over. The VT key number in `ESC [ n ~` was
+    /// still read with `Int(_: String)` after the modifier moved to
+    /// `ASCIIDecimal`. It cannot trap there — nothing is computed from the
+    /// number — but a LEADING `+` read as the bare digits, so a malformed
+    /// sequence became a real keystroke: `ESC [ + 3 ~` deleted a character
+    /// from a focused TextField, or a whole row from a List with `.onDelete`.
+    /// The number sits before the `;`, so the already-hardened modifier reader
+    /// never saw it: `ESC [ + 3 2 ; 2 ~` was Shift+F18.
+    @Test(
+        "A signed VT key number is dropped rather than read as its digits",
+        arguments: [
+            "\u{1B}[+3~",  // Delete
+            "\u{1B}[+5~",  // Page Up
+            "\u{1B}[+11~",  // F1
+            "\u{1B}[+3;2~",  // Shift+Delete
+            "\u{1B}[+32;2~",  // Shift+F18
+        ])
+    func signedExtendedKeyNumberIsDropped(sequence: String) {
+        let signed = Array(sequence.utf8)
+        #expect(KeyEvent.parse(signed) == nil)
+        // …and it is the sign alone that is refused: the same bytes without it
+        // are a real key, so the row above is not passing by accident.
+        let unsigned = signed.filter { $0 != UInt8(ascii: "+") }
+        #expect(KeyEvent.parse(unsigned) != nil)
+    }
+
     @Test("Parse enter (carriage return)")
     func parseEnter() {
         let event = KeyEvent.parse([0x0D])
