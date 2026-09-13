@@ -377,9 +377,13 @@ extension Section: ListRowExtractor {
         // Static children (a TupleView of rows): one row per child, each
         // carrying the badge of its `.badge(_:)` wrapper, if any — matching
         // the flat List's child extraction.
-        if let provider = content as? ChildViewProvider {
+        if content is ChildViewProvider {
+            // Through `resolveChildViews`, not the provider's `childViews`
+            // directly: a lone `if`/`else` gets its branch step there and
+            // nowhere else, and without it both branches' rows rendered at the
+            // list's identity and shared their `@State`.
             var rows: [ListRow<RowID>] = []
-            for child in provider.childViews(context: context) where !child.isSpacer {
+            for child in resolveChildViews(from: content, context: context) where !child.isSpacer {
                 // `nil` when an index cannot be cast into the selection type:
                 // the row draws and is simply not selectable. See `ListRow.id`.
                 let indexID = rows.count as? RowID

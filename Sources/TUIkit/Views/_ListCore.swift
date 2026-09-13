@@ -2688,8 +2688,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // provider, not the buffer-only ChildInfoProvider: each row's original
         // view is needed to peel off its `.badge(_:)`, and a `ForEach` spliced
         // between static rows only flattens on this path.
-        if let provider = content as? ChildViewProvider {
-            return .eager(extractFromChildren(provider: provider, context: context))
+        if content is ChildViewProvider {
+            return .eager(extractFromChildren(of: content, context: context))
         }
 
         // Fallback: render as a single content row, carrying its badge
@@ -2727,8 +2727,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     /// Extracts one row per flattened child (TupleView content), each carrying
     /// the badge of its `.badge(_:)` wrapper, if any.
+    ///
+    /// Takes the content rather than the provider cast out of it, so the
+    /// children come from `resolveChildViews` — the one place a lone
+    /// `if`/`else` gets its branch step. Asking the provider directly skipped
+    /// it, and `List { if a { Row("1") } else { Row("2") } }` drew both
+    /// branches' rows at the list's own identity, one `@State` between them.
     private func extractFromChildren(
-        provider: ChildViewProvider,
+        of content: Content,
         context: RenderContext
     ) -> [SelectableListRow<SelectionValue>] {
         var result: [SelectableListRow<SelectionValue>] = []
@@ -2737,7 +2743,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // a handful and none is deferred, so unlike the windowed path this can
         // measure them all and place every row exactly — no pitch, no estimate.
         // Measured only when a ramp is in force.
-        let children = provider.childViews(context: context).filter { !$0.isSpacer }
+        let children = resolveChildViews(from: content, context: context).filter { !$0.isSpacer }
         var gradientFrame: GradientFrame?
         var gradientTops: [Int] = []
         if context.gradientFrame != nil {

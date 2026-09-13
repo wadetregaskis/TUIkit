@@ -67,6 +67,94 @@ private struct StackedSameTypeHost: View {
     }
 }
 
+/// The same branches as the stack's ONLY content. No header, so no tuple:
+/// `buildBlock` hands the conditional over bare and the stack resolves it
+/// through `resolveChildViews` — a different site from the splice
+/// `StackedSameTypeHost` reaches, and one that applied no branch step at all.
+private struct LoneSameTypeHost: View {
+    let showA: Bool
+    var body: some View {
+        VStack {
+            if showA { Tagged("A") } else { Tagged("B") }
+        }
+    }
+}
+
+/// Different types, lone. With no step of any kind applied, not even the
+/// type-keyed one that separates `DirectHost`'s branches ran, so two unrelated
+/// views whose `@State` lined up by declaration order and value type collided.
+private struct LoneDifferentTypeHost: View {
+    let showA: Bool
+    var body: some View {
+        VStack {
+            if showA { StatefulA() } else { StatefulB() }
+        }
+    }
+}
+
+/// A lone conditional whose branches are several views each. The children do
+/// carry positional steps, but derived from the STACK's context, so `Tagged` at
+/// position 1 was one identity in both branches.
+private struct LoneTupleBranchHost: View {
+    let showA: Bool
+    var body: some View {
+        VStack {
+            if showA {
+                Text("first")
+                Tagged("A")
+            } else {
+                Text("first")
+                Tagged("B")
+            }
+        }
+    }
+}
+
+/// `Tagged` with its telling `@State` at declaration index 2, for `List`.
+///
+/// A `List` renders a lone row at its OWN identity, where `_ListCore` keeps two
+/// slots of its own: its handler at index 0, its focus id at 1. A row whose
+/// state sat at 0 would lose its box to the list's on every frame (a type
+/// mismatch replaces it) and read a fresh initial value whether or not the
+/// branches were told apart — the test would pass for the wrong reason. Index 2
+/// is nobody's but the row's.
+private struct ListTagged: View {
+    @State private var handlerSlot = 0
+    @State private var focusIDSlot = 0
+    @State private var text: String
+
+    init(_ initial: String) {
+        _text = State(initialValue: initial)
+    }
+
+    var body: some View { Text("T=\(text)") }
+}
+
+/// A lone conditional as a `List`'s content: `_ListCore` extracts the rows
+/// itself, not through a stack.
+private struct LoneListHost: View {
+    let showA: Bool
+    var body: some View {
+        List {
+            if showA { ListTagged("A") } else { ListTagged("B") }
+        }
+    }
+}
+
+/// The same inside a `Section`, which extracts its rows through its own copy.
+private struct LoneSectionHost: View {
+    let showA: Bool
+    var body: some View {
+        List {
+            Section {
+                if showA { ListTagged("A") } else { ListTagged("B") }
+            } header: {
+                Text("S")
+            }
+        }
+    }
+}
+
 /// Swaps two stateful views directly in the body.
 private struct DirectHost: View {
     let showA: Bool
@@ -93,6 +181,16 @@ struct ConditionalStateIdentityTests {
 
     private func text(_ buffer: FrameBuffer) -> String {
         buffer.lines.joined(separator: "\n")
+    }
+
+    /// Renders `host(true)` then `host(false)` through ONE context (two frames
+    /// sharing a state store) and returns both frames' text with the styling
+    /// stripped, so a row highlight cannot split the text asserted on.
+    private func flipped<Host: View>(_ host: (Bool) -> Host) -> (before: String, after: String) {
+        let ctx = makeRenderContext()
+        let before = renderToBuffer(host(true), context: ctx).lines.map(\.stripped)
+        let after = renderToBuffer(host(false), context: ctx).lines.map(\.stripped)
+        return (before.joined(separator: "\n"), after.joined(separator: "\n"))
     }
 
     @Test("Directly-swapped conditional branches keep independent @State")
@@ -126,6 +224,48 @@ struct ConditionalStateIdentityTests {
         #expect(
             b.contains("T=B"),
             "the false branch read the true branch's state out of a shared box: \(b)")
+    }
+
+    /// The conditional as a container's ONLY content, which the test above does
+    /// not reach: `buildBlock` hands a lone `if`/`else` over bare, no tuple is
+    /// built, and the stack resolves it through `resolveChildViews`, which
+    /// applied no branch step at all. One shape per half of the fix: a branch
+    /// that is one plain view (transparent, so it must be pinned to its
+    /// branch), the same with two DIFFERENT types (no type step ran either),
+    /// and a branch of several views (positional steps, taken under the branch).
+    @Test("A conditional that is a stack's only content keeps each branch's @State")
+    func loneConditionalInAStackIsolatesState() {
+        let sameType = flipped { LoneSameTypeHost(showA: $0) }
+        #expect(sameType.before.contains("T=A"))
+        #expect(
+            sameType.after.contains("T=B"),
+            "one view per branch — the false branch read the true one's box: \(sameType.after)")
+
+        let differentTypes = flipped { LoneDifferentTypeHost(showA: $0) }
+        #expect(differentTypes.before.contains("A=A"))
+        #expect(
+            differentTypes.after.contains("B=B"),
+            "one view per branch, different types: \(differentTypes.after)")
+
+        let tupleBranches = flipped { LoneTupleBranchHost(showA: $0) }
+        #expect(tupleBranches.before.contains("T=A"))
+        #expect(
+            tupleBranches.after.contains("T=B"),
+            "several views per branch: \(tupleBranches.after)")
+    }
+
+    /// `List` and `Section` extract their static rows themselves, and both asked
+    /// the provider for `childViews(context:)` directly — past the one site that
+    /// applies the branch step to a lone conditional.
+    @Test("A conditional that is a List's or a Section's only content keeps each branch's @State")
+    func loneConditionalInAListIsolatesState() {
+        let list = flipped { LoneListHost(showA: $0) }
+        #expect(list.before.contains("T=A"))
+        #expect(list.after.contains("T=B"), "a List's rows: \(list.after)")
+
+        let section = flipped { LoneSectionHost(showA: $0) }
+        #expect(section.before.contains("T=A"))
+        #expect(section.after.contains("T=B"), "a Section's rows: \(section.after)")
     }
 
     @Test("Deferred construction also keeps independent @State")

@@ -206,6 +206,29 @@ public struct ChildView {
             resolvedIdentity: resolved)
     }
 
+    /// This child as the content of a conditional's branch whose identity is
+    /// `branch` — the identity `ConditionalView.renderToBuffer` renders that
+    /// branch's content at, so the flattened and whole-view paths agree.
+    ///
+    /// ``resolvingIdentity(under:)``, except for a TRANSPARENT child (no step
+    /// of its own: the branch was one plain view). That one is not left
+    /// untouched but pinned to `branch` itself. Left untouched it derives its
+    /// identity later from the context the container renders it in, which is
+    /// the container's own whichever branch it came from — and two branches at
+    /// one identity share a `@State` box. A child that already carries a
+    /// resolved identity keeps it: it was resolved under this branch, or under
+    /// a deeper one (a nested conditional, a memoised `ForEach`).
+    func resolvingIdentity(inBranch branch: ViewIdentity) -> Self {
+        guard identityType == nil else { return resolvingIdentity(under: branch) }
+        guard resolvedIdentity == nil else { return self }
+        return Self(
+            view: view, identityType: nil, childIndex: childIndex,
+            identityKey: identityKey, providerSlot: providerSlot, isSpacer: isSpacer,
+            spacerMinLength: spacerMinLength, zIndex: zIndex,
+            providesAlignmentGuide: providesAlignmentGuide,
+            resolvedIdentity: branch)
+    }
+
     /// A copy whose positional identity is rebased to `index`, and whose
     /// keyed identity is namespaced by the provider's static slot.
     ///
@@ -345,16 +368,25 @@ public struct ChildView {
         renderChild(view, width: width, height: height, context: childContext(context))
     }
 
-    /// The context to measure / render the child in: the parent context with
-    /// this child's identity appended, or the parent context unchanged when
+    /// The context to measure / render the child in: the identity resolved
+    /// ahead of use when there is one, else the parent context with this
+    /// child's identity appended, or the parent context unchanged when
     /// `identityType` is `nil` (the no-disambiguation initializer).
+    ///
+    /// The resolved identity is asked for FIRST, before the transparent early
+    /// return, because a transparent child can carry one: the single view of a
+    /// lone `if`/`else` branch is pinned to its branch while adding no step of
+    /// its own (``resolvingIdentity(inBranch:)``). Asked second, the pin was
+    /// never read. Every other child with a resolved identity also has an
+    /// identity type, so the order changes nothing for them; an unresolved
+    /// typed child still pays two checks, a transparent one pays one more.
     private func childContext(_ context: RenderContext) -> RenderContext {
-        guard let identityType else { return context }
         if let resolvedIdentity {
             var copy = context
             copy.identity = resolvedIdentity
             return copy
         }
+        guard let identityType else { return context }
         if let identityKey {
             // The slot prefix is injective: the slot is the digits before the
             // first "#", so no two (slot, key) pairs concatenate to one
@@ -459,6 +491,15 @@ public protocol ChildViewProvider {
     /// branches against the same context. Two same-typed branches then landed
     /// on one identity and shared a `@State` box, so flipping the condition
     /// carried the old branch's state into the new one.
+    ///
+    /// Honoured in exactly two places, and a caller must go through one of
+    /// them: the tuple splice (`TupleView.appendChildViews`, a conditional with
+    /// siblings) and ``resolveChildViews(from:context:)`` (a conditional that
+    /// is a container's ONLY content, which `buildBlock` hands over bare). The
+    /// second was missing, so `VStack { if a { Row("1") } else { Row("2") } }`
+    /// kept both branches at the stack's own identity. Asking a provider for
+    /// `childViews(context:)` directly bypasses both — `List` and `Section`
+    /// did, and had the same hole.
     ///
     /// A label on the provider rather than a field on `ChildView`, because
     /// `ChildView` is built and copied per child per pass and its size is
@@ -905,6 +946,30 @@ public func resolveChildInfos<V: View>(from content: V, context: RenderContext) 
 @MainActor
 public func resolveChildViews<V: View>(from content: V, context: RenderContext) -> [ChildView] {
     guard let provider = content as? ChildViewProvider else { return [ChildView(content)] }
+    // An `if`/`else` handed over WHOLE: a container's only content, which
+    // `buildBlock` passes through bare, so no tuple splice ran to apply the
+    // branch step (``ChildViewProvider/identityBranchLabel``). Without it both
+    // branches resolved against the container's context — and a branch that
+    // is one plain view came back transparent, rendering at the container's
+    // own identity whichever branch it was: `VStack { if a { Row("1") } else
+    // { Row("2") } }` handed the second row the first one's `@State`.
+    //
+    // Written INTO each child, not merely used to build them: a `ChildView`
+    // does not remember the context it was built in, it derives its identity
+    // from the context the container later measures and renders it in, which
+    // is the container's. Keyed `ForEach` rows take the step as well, unlike
+    // in the tuple splice, which leaves keyed rows unstepped for speed — here
+    // there is no sibling slot to namespace them by, and without the step two
+    // branches looping over the same ids alias exactly as plain views do.
+    // Ahead of the memo and never through it: its key knows nothing of
+    // branches, and no conditional opts into memoising.
+    if let branch = provider.identityBranchLabel {
+        let branchContext = context.withBranchIdentity(branch)
+        let branchIdentity = branchContext.identity
+        return provider.childViews(context: branchContext).map {
+            $0.resolvingIdentity(inBranch: branchIdentity)
+        }
+    }
     // Once per PASS, not once per walk. A stack resolves its children in
     // `sizeThatFits` and again in `renderToBuffer`, and a stack inside a
     // `ScrollView` is measured for the enclosing stack's natural-size ask,
