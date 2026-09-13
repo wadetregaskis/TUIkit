@@ -62,6 +62,12 @@ extension ASCIIConverter {
     /// and background, which is what `inked` puts on the character rendering
     /// of the same picture.
     ///
+    /// Only a `.mono` conversion reads the pair: the recolouring at the end of
+    /// this function tests the requested `colorMode` for `.mono` before it
+    /// paints. A caller that keys a transmitted picture on the pair must make
+    /// the same test and pass the defaults otherwise, as ``Image`` does, or a
+    /// change to the pair re-sends pictures this function draws identically.
+    ///
     /// - Parameters:
     ///   - image: The decoded picture.
     ///   - width: Target width in pixels.

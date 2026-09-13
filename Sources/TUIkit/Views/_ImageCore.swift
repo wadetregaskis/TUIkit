@@ -919,11 +919,21 @@ extension _ImageCore {
         // after the render cache so a theme change re-colours a cached
         // conversion — and pixels have nothing to state them onto: a pixel is a
         // colour or it is nothing. So they are baked in, and therefore they are
-        // in the signature: change the theme and the picture is genuinely a
+        // in the signature: change the theme and a mono picture is genuinely a
         // different picture.
-        let palette = context.environment.palette
-        let ink = Self.rgba(palette.foreground, in: palette) ?? RGBA(r: 255, g: 255, b: 255)
-        let paper = Self.rgba(palette.background, in: palette) ?? RGBA(r: 0, g: 0, b: 0)
+        //
+        // A MONO picture. `recoloured` paints the pair for `.mono` and for no
+        // other mode, so everywhere else it is pinned to that function's
+        // defaults, by the same test on the same requested mode. Read from the
+        // palette whatever the mode, a theme change re-sent every true-colour
+        // photograph on screen to draw exactly the pixels the terminal held.
+        var ink = RGBA(r: 255, g: 255, b: 255)
+        var paper = RGBA(r: 0, g: 0, b: 0)
+        if colorMode == .mono {
+            let palette = context.environment.palette
+            ink = Self.rgba(palette.foreground, in: palette) ?? ink
+            paper = Self.rgba(palette.background, in: palette) ?? paper
+        }
 
         // The transmitted resolution, not the cell box: two boxes that resample
         // to the same pixels are the same picture, and the store answers the

@@ -56,9 +56,16 @@ struct TerminalImageSignature: Equatable {
     /// The two colours ``ASCIIColorMode/mono`` is painted in, which for pixels
     /// are baked into the picture rather than stated around it — so a theme
     /// change makes a mono image a genuinely different picture, and has to
-    /// re-transmit. Ignored by every other mode, and carried anyway: a field
-    /// that is sometimes irrelevant costs a comparison, and a field that is
-    /// sometimes MISSING costs a picture that will not update.
+    /// re-transmit.
+    ///
+    /// Ignored by every other mode, so there they are PINNED to
+    /// `recoloured`'s defaults (white ink, black paper) rather than omitted:
+    /// `_ImageCore` makes the same test on the same requested mode that
+    /// `recoloured` makes before painting them. A field that is sometimes
+    /// MISSING costs a picture that will not update. A field that carries a
+    /// value nothing reads costs a re-transmission for nothing: read from the
+    /// palette whatever the mode, these re-sent every true-colour picture on a
+    /// theme change.
     var monoInk: RGBA
     var monoPaper: RGBA
 }

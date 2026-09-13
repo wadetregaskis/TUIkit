@@ -343,4 +343,29 @@ struct ImageGraphicsSettingsTests {
     func unchangedSendsNothing() throws {
         #expect(try !retransmits({ _ in }, { _ in }))
     }
+
+    /// A theme reaches a picture's pixels only through mono's two colours, so a
+    /// theme change re-sends a mono picture and nothing else.
+    ///
+    /// The signature carried the palette's ink and paper whatever the mode, while
+    /// `recoloured` paints them only for `.mono`: switching theme re-sent every
+    /// true-colour photograph on screen, megabytes each, to draw exactly the
+    /// pixels the terminal already held.
+    @Test("A theme change re-sends a mono picture and no other")
+    func themeChangeRetransmitsOnlyMono() throws {
+        #expect(
+            try retransmits(
+                {
+                    $0.imageColorMode = .mono
+                    $0.palette = SystemPalette(.green)
+                },
+                {
+                    $0.imageColorMode = .mono
+                    $0.palette = SystemPalette(.amber)
+                }), "mono")
+        #expect(
+            try !retransmits(
+                { $0.palette = SystemPalette(.green) },
+                { $0.palette = SystemPalette(.amber) }), "true colour")
+    }
 }
