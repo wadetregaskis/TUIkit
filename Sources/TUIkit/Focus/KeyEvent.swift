@@ -59,8 +59,33 @@ extension KeyEventDispatcher {
         handlers.append(Entry(sectionID: sectionID, handler: handler))
     }
 
+    /// Registers a key handler at `position` in the registration order, rather
+    /// than after everything registered so far.
+    ///
+    /// For a container that must render its content before it knows whether to
+    /// claim a key, yet must still be asked AFTER that content: read
+    /// ``handlerCount`` before the content renders and pass it here. Dispatch
+    /// asks the most recent registration first, so a plain
+    /// ``addHandler(sectionID:_:)`` at that point is not the container waiting
+    /// its turn — it outranks every handler the content just registered.
+    /// `NavigationStack`'s Escape-to-pop is the case.
+    ///
+    /// - Parameters:
+    ///   - position: A ``handlerCount`` read earlier this frame. Clamped to the
+    ///     handlers present, so a count read before ``clearHandlers()`` cannot
+    ///     trap.
+    ///   - sectionID: As for ``addHandler(sectionID:_:)``.
+    ///   - handler: A closure that returns true if the key was handled.
+    func insertHandler(
+        at position: Int, sectionID: String? = nil, _ handler: @escaping (KeyEvent) -> Bool
+    ) {
+        let index = min(max(0, position), handlers.count)
+        handlers.insert(Entry(sectionID: sectionID, handler: handler), at: index)
+    }
+
     /// The number of currently-registered handlers. Used by tests to assert
-    /// that measure passes register nothing.
+    /// that measure passes register nothing, and as the slot
+    /// ``insertHandler(at:sectionID:_:)`` files a handler at.
     var handlerCount: Int { handlers.count }
 
     /// Declares that `id` owns the keyboard for the rest of this frame — see

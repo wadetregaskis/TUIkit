@@ -330,6 +330,12 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         let coordinator = coordinator
         screenContext.environment.dismiss = DismissAction { coordinator.pop() }
 
+        // Where the stack's Escape handler goes: BEHIND everything the screen is
+        // about to register, although whether to register it at all is only
+        // known once the screen has rendered (see `renderBar`). Read now, before
+        // the first of the screen's handlers lands.
+        let escapeHandlerSlot = context.environment.keyEventDispatcher?.handlerCount ?? 0
+
         // Collect the screen's own preferences so the bar can read the title it
         // set — and only the title IT set, not one an ancestor published.
         let preferences = screenContext.environment.preferenceStorage
@@ -346,14 +352,18 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         content = padded(content, toWidth: width, height: contentHeight)
 
         var buffer = renderBar(
-            title: title, hidesBack: hidesBack, width: width, context: context)
+            title: title, hidesBack: hidesBack, width: width,
+            escapeHandlerSlot: escapeHandlerSlot, context: context)
         buffer.appendVertically(content)
         return buffer
     }
 
     /// The navigation bar, pinned to `ChromeStyle.barHeight(contentRows:)` rows.
+    /// `escapeHandlerSlot` is the key dispatcher's handler count from before the
+    /// screen rendered: where the stack's Escape handler is filed.
     private func renderBar(
-        title: String, hidesBack: Bool, width: Int, context: RenderContext
+        title: String, hidesBack: Bool, width: Int, escapeHandlerSlot: Int,
+        context: RenderContext
     ) -> FrameBuffer {
         let coordinator = coordinator
         // The Back button is a real `Button`: a Tab stop, clickable, and
@@ -375,7 +385,23 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
             barContext.environment.statusBar?.escapeLabelOverride =
                 LocalizationService.shared.string(for: LocalizationKey.StatusBar.goBack)
             barContext.environment.statusBar?.escapeClaimGrabsInput = false
-            barContext.environment.keyEventDispatcher?.addHandler(
+            // Filed at the slot taken before the screen rendered, not appended.
+            // The dispatcher asks the most recent registration first, so an
+            // appended pop outranked every handler the screen had just
+            // registered: a screen's `.onKeyPress(keys: [.escape])` never ran,
+            // and a screen that must not be left (the remedy
+            // `navigationBarBackButtonHidden(_:)` documents) could not say so.
+            // Filed ahead of the screen, going back is what ESC does when
+            // nothing ON the screen wants it; a handler AROUND the stack (a
+            // page returning to its menu on ESC) registered before the slot,
+            // and still loses to going back.
+            //
+            // Only the handler moves. The label claim above stays after the
+            // screen, because it has to see whether something inside claimed
+            // ESC first; hoisted, it would also lower the grabs-input flag
+            // under a drop-down that has yet to post its own claim.
+            barContext.environment.keyEventDispatcher?.insertHandler(
+                at: escapeHandlerSlot,
                 sectionID: barContext.environment.activeFocusSectionID
             ) { event in
                 guard event.key == .escape else { return false }

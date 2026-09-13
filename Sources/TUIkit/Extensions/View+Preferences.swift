@@ -118,7 +118,9 @@ extension View {
     /// **Escape still goes back.** SwiftUI hides the button without disabling
     /// the swipe-back gesture, and Escape is this framework's counterpart to
     /// that gesture rather than to the button. A screen that must not be left
-    /// at all wants this *and* something that consumes Escape.
+    /// at all wants this *and* something that consumes Escape — an
+    /// `.onKeyPress(keys: [.escape])` on the screen, which the stack asks
+    /// before it pops.
     ///
     /// - Parameter hidesBackButton: Whether to hide the control. Default `true`.
     /// - Returns: A view that publishes the preference.
