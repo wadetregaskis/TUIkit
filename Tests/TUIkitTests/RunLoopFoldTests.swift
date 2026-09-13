@@ -7,6 +7,10 @@
 //  line inside `AppRunner`, each is the difference between a demand-driven
 //  loop and an idle render storm, and none of them was asserted anywhere.
 //
+//  Under all three, a fourth: a tick the app header animates on is owed a
+//  render, however much of the page could be replayed, because no replay
+//  reaches the header's rows.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -36,6 +40,20 @@ private struct SpinningProbeApp: App {
     var body: some Scene {
         WindowGroup {
             Spinner()
+        }
+    }
+}
+
+/// The same spinner under a second one in the app header. Both leave runs on
+/// ``AnimationClock/content``, but only the page's can be replayed — the header
+/// is written by its own pass, which only a render runs.
+private struct HeaderSpinningProbeApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            Spinner()
+                .appHeader { Spinner() }
         }
     }
 }
@@ -174,6 +192,41 @@ struct RunLoopFoldTests {
         // is served by replay and the fallback render is not taken. (What the
         // replay writes is `RenderLoopReplayTests`' subject, not this one's.)
         #expect(runner.serveAnimationTicks(renderer: loop, cursorTimer: timer))
+    }
+
+    // MARK: - The chrome is served by a render
+
+    /// The page's run is no licence to skip the header's render.
+    ///
+    /// A run in the app header can only be advanced by a render: the replay patches
+    /// the content's lines at the content's start row. On a page with no run of its
+    /// own the replay found nothing and the loop rendered — but give the page any
+    /// run (this spinner, a focused control's breath, a caret) and the tick was
+    /// replayed on the strength of THAT run and reported served, so the header's
+    /// spinner held the glyph the last render drew until a key press forced a frame.
+    @Test("A tick the app header animates on is rendered, even when the page's own run could be replayed")
+    func chromeRunTickFallsBack() {
+        let runner = freshRunner(HeaderSpinningProbeApp())
+        let harness = Harness()
+        let loop = harness.loop(HeaderSpinningProbeApp())
+        let timer = CursorTimer(renderNotifier: AppState.shared)
+        _ = loop.render(cursorTimer: timer)
+        let headerRuns = harness.appHeader.contentBuffer?.animatedCells ?? []
+        let pageRuns = loop.replayable?.runs ?? []
+        #expect(!headerRuns.isEmpty, "pre-condition: the header's spinner must leave a run")
+        #expect(!pageRuns.isEmpty, "pre-condition: the page's spinner must leave a replayable run")
+
+        // Sleeping to the page's run would step the header at the page's rate, which
+        // is right only while the two happen to agree.
+        #expect(
+            loop.timeUntilNextChange(elapsed: timer.elapsed) == AnimationClock.cursor.tickInterval,
+            "the header's run is not the page's to schedule")
+
+        AppState.shared.setNeedsAnimationTick(.content)
+        AppState.shared.setNeedsAnimationTick(.cursor)
+        #expect(
+            !runner.serveAnimationTicks(renderer: loop, cursorTimer: timer),
+            "the header's spinner is owed a render; a replay of the page's cannot draw it")
     }
 
     // MARK: - A served replay re-bases the sleep

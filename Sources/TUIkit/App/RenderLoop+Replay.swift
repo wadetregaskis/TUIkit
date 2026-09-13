@@ -10,6 +10,47 @@
 //
 //  Created by Wade Tregaskis
 //  License: MIT
+// MARK: - Which clocks a replay can serve
+
+/// The replay's half of ``RenderActivity``: whether the frame on screen can be
+/// patched forward for a clock that ticked, or only a render can serve it. Kept
+/// beside the replay it gates rather than beside the struct's properties, which
+/// also keeps `RenderLoop.swift` inside its file-length limit.
+extension RenderActivity {
+    /// Whether `clock` can be advanced without walking the view tree.
+    func canReplay(_ clock: AnimationClock) -> Bool {
+        animatedClocks.contains(clock) && !chromeClocks.contains(clock) && !usesPulse && !usesCursor
+    }
+
+    /// Which of the clocks that just ticked can be advanced by replaying the
+    /// frame on screen. Empty means the tick has to be served by a render.
+    ///
+    /// A ticked clock this frame left no runs for is NOT a reason to render:
+    /// nothing on screen moves with it, so advancing it owes no frame at all.
+    /// That distinction is the whole point of asking per clock, because the
+    /// timer posts EVERY clock on every wake (see `CursorTimer.start`) — so
+    /// demanding that all of them be replayable meant a page whose only
+    /// animation was the caret (`animatedClocks == [.cursor]`) failed the test
+    /// on `.content` and walked the entire view tree twenty times a second to
+    /// blink one cell.
+    ///
+    /// A view that read a phase WHILE rendering is the other case, and it is
+    /// unchanged: `canReplay` refuses every clock while `usesPulse` or
+    /// `usesCursor` is set, so this comes back empty and the caller renders.
+    ///
+    /// So is a ticked clock the chrome animates on — and that one empties the
+    /// whole answer, not just its own entry. The chrome is advanced only by a
+    /// render, and a render serves every clock, so replaying the page's clocks
+    /// first would patch a frame about to be redrawn; worse, it would report the
+    /// tick served, which is exactly how the header's half went undrawn. See
+    /// ``chromeClocks``.
+    func replayableClocks(among ticked: some Sequence<AnimationClock>) -> Set<AnimationClock> {
+        let clocks = Set(ticked)
+        guard clocks.isDisjoint(with: chromeClocks) else { return [] }
+        return clocks.filter(canReplay)
+    }
+}
+
 /// The last frame written, kept so an animation tick can be served by patching
 /// it instead of by rendering again. See ``AnimatedCellRun``.
 @MainActor
@@ -76,7 +117,14 @@ extension RenderLoop {
     ///   clock's time would wake a progress bar on the focus's schedule.
     func timeUntilNextChange(elapsed: (AnimationClock) -> Double) -> Double {
         let interval = AnimationClock.cursor.tickInterval
-        guard !lastActivity.usesPulse, !lastActivity.usesCursor else { return interval }
+        // A run in the chrome is advanced only by a render, and the chrome's runs
+        // are not kept here to ask — so, like a reader, it keeps the clock's own
+        // interval, which is what a page animating only in its header always had.
+        // Asking the page's runs alone would sleep to THEIR next change: a header
+        // spinner over a blinking caret would step at the blink's rate.
+        guard !lastActivity.usesPulse, !lastActivity.usesCursor, lastActivity.chromeClocks.isEmpty else {
+            return interval
+        }
         let runs = replayable?.runs ?? []
         guard !runs.isEmpty else { return interval }
         return runs.map { $0.timeUntilChange(afterElapsed: elapsed($0.clock)) }.min() ?? interval

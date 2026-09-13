@@ -458,7 +458,8 @@ extension AppRunner {
     ///
     /// - Returns: `false` if a full render is needed instead — some view still
     ///   builds its appearance from a phase as it renders, there is no frame to
-    ///   patch yet, or nothing on screen animates on any clock that ticked.
+    ///   patch yet, nothing on screen animates on any clock that ticked, or the
+    ///   chrome animates on one that did, which only a render can advance.
     ///   That is the behaviour this replaces, so falling back is always safe.
     /// Internal rather than `fileprivate` for the same reason as
     /// ``foldPendingWork(alreadyPending:renderer:cursorTimer:)``.

@@ -167,29 +167,20 @@ struct RenderActivity {
     /// a frozen indicator is worse than a wasted frame.
     let animatedClocks: Set<AnimationClock>
 
-    /// Whether `clock` can be advanced without walking the view tree.
-    func canReplay(_ clock: AnimationClock) -> Bool {
-        animatedClocks.contains(clock) && !usesPulse && !usesCursor
-    }
-
-    /// Which of the clocks that just ticked can be advanced by replaying the
-    /// frame on screen. Empty means the tick has to be served by a render.
+    /// The clocks among ``animatedClocks`` that the CHROME — the app header, the
+    /// status bar — left runs for.
     ///
-    /// A ticked clock this frame left no runs for is NOT a reason to render:
-    /// nothing on screen moves with it, so advancing it owes no frame at all.
-    /// That distinction is the whole point of asking per clock, because the
-    /// timer posts EVERY clock on every wake (see `CursorTimer.start`) — so
-    /// demanding that all of them be replayable meant a page whose only
-    /// animation was the caret (`animatedClocks == [.cursor]`) failed the test
-    /// on `.content` and walked the entire view tree twenty times a second to
-    /// blink one cell.
+    /// Those keep the clock live but can never be replayed: the replay patches the
+    /// content's lines at the content's start row, and the chrome is written by its
+    /// own passes at its own rows, so only a render advances a run up there. With
+    /// nothing to tell the two halves apart, a `Spinner` in the header froze the
+    /// moment the page ALSO left a run — any run, on any clock: a second spinner, a
+    /// focused control's breath, a caret — because the tick was replayed on the
+    /// strength of the page's run alone, reported served, and so never rendered.
     ///
-    /// A view that read a phase WHILE rendering is the other case, and it is
-    /// unchanged: `canReplay` refuses every clock while `usesPulse` or
-    /// `usesCursor` is set, so this comes back empty and the caller renders.
-    func replayableClocks(among ticked: some Sequence<AnimationClock>) -> Set<AnimationClock> {
-        Set(ticked.lazy.filter(canReplay))
-    }
+    /// A `var` only so the memberwise initialiser defaults it: a frame whose chrome
+    /// animates nothing need not say so.
+    var chromeClocks: Set<AnimationClock> = []
 }
 
 /// The height of the content area: whatever the terminal has left after the
@@ -1232,15 +1223,22 @@ extension RenderLoop {
     /// `Spinner` in `.appHeader { … }` over a still page reported no live clock,
     /// so the loop stopped waking and the spinner was frozen at frame 0 while
     /// looking, for all the world, like a spinner that simply was not spinning.
+    ///
+    /// Counted towards liveness ALONE, though, they were indistinguishable from
+    /// the content's, and the same spinner froze again the moment the page left a
+    /// run of its own: the tick replayed the page's run and was reported served.
+    /// So they are recorded twice — in the union, for liveness, and apart, so the
+    /// replay can refuse them. See `RenderActivity.chromeClocks`.
     private func recordActivity(
         usesPulse: Bool, usesCursor: Bool, chromeRuns: [AnimatedCellRun] = []
     ) -> RenderActivity {
         let content = (replayable?.runs ?? []).lazy.map(\.clock)
-        let chrome = chromeRuns.lazy.filter(\.isAnimating).map(\.clock)
+        let chrome = Set(chromeRuns.lazy.filter(\.isAnimating).map(\.clock))
         lastActivity = RenderActivity(
             usesPulse: usesPulse,
             usesCursor: usesCursor,
-            animatedClocks: Set(content).union(chrome))
+            animatedClocks: chrome.union(content),
+            chromeClocks: chrome)
         return lastActivity
     }
 
