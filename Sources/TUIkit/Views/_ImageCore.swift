@@ -297,7 +297,7 @@ struct _ImageCore: View, Renderable, Layoutable {
                 contentMode: contentMode,
                 aspectRatioOverride: aspectRatioOverride,
                 cellAspect: context.environment.imageCellAspect,
-                palette: context.environment.palette,
+                monoColours: ImageMonoColours(for: colorMode, in: context.environment),
                 stateStorage: stateStorage,
                 identity: identity
             )
@@ -460,7 +460,7 @@ extension _ImageCore {
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
         cellAspect: Double,
-        palette: any Palette,
+        monoColours: ImageMonoColours?,
         stateStorage: StateStorage,
         identity: ViewIdentity
     ) -> FrameBuffer {
@@ -500,7 +500,7 @@ extension _ImageCore {
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect
         ) {
-            return Self.buffer(for: cache.art, mode: colorMode, palette: palette)
+            return Self.buffer(for: cache.art, monoColours: monoColours)
         }
 
         let converter = ASCIIConverter(
@@ -535,11 +535,11 @@ extension _ImageCore {
             art: art
         )
 
-        return Self.buffer(for: art, mode: colorMode, palette: palette)
+        return Self.buffer(for: art, monoColours: monoColours)
     }
 
-    /// The buffer a converted picture becomes: its lines, inked if the mode needs it,
-    /// and its coverage as claims.
+    /// The buffer a converted picture becomes: its lines, inked if it is mono (a
+    /// `monoColours` to ink it in), and its coverage as claims.
     ///
     /// **The claims are the glyph path's half of the claim/bytes pairing.** Every cell
     /// the converter drew at less than full coverage states its colour at full strength
@@ -550,9 +550,9 @@ extension _ImageCore {
     /// A fully opaque picture's `coverage` is empty, so this is one `isEmpty` for the
     /// overwhelming majority of images and no allocation at all.
     private static func buffer(
-        for art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
+        for art: ASCIIArt, monoColours: ImageMonoColours?
     ) -> FrameBuffer {
-        var buffer = FrameBuffer(lines: inked(art, mode: mode, palette: palette))
+        var buffer = FrameBuffer(lines: inked(art, monoColours: monoColours))
         buffer.opacityRegions += art.claims
         // The other half of `inked`'s claim/bytes pairing. `art.claims` says what the
         // SOURCE PICTURE owes — its own per-pixel transparency — and is empty for the
@@ -567,22 +567,20 @@ extension _ImageCore {
         // runs, which for an opaque picture is the whole line. The resolver multiplies ink
         // and field across every region covering a cell, so these compose with the
         // coverage claims above rather than contradicting them.
-        buffer.opacityRegions += Self.inkClaims(for: art, mode: mode, palette: palette)
+        buffer.opacityRegions += Self.inkClaims(for: art, monoColours: monoColours)
         return buffer
     }
 
-    /// What ``inked(_:mode:palette:)``'s two colours owe, one region per span it paints —
+    /// What ``inked(_:monoColours:)``'s two colours owe, one region per span it paints —
     /// one per line, for a picture with no uncovered cell.
     ///
     /// `nil`-free by construction: `OpacityRegion.claim` answers `nil` for an opaque
     /// pair, so an ordinary palette adds nothing and allocates nothing past the
     /// `guard`.
     private static func inkClaims(
-        for art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
+        for art: ASCIIArt, monoColours: ImageMonoColours?
     ) -> [OpacityRegion] {
-        guard mode == .mono,
-            !palette.foreground.isOpaque || !palette.background.isOpaque
-        else { return [] }
+        guard let monoColours, !monoColours.isOpaque else { return [] }
         // Only where `inked` painted. A claim left over an uncovered cell is not merely
         // wasted: that cell shows whatever is behind the picture — a `.background(_:)`
         // fill or a row's highlight, written into these same bytes — and the resolver
@@ -593,7 +591,7 @@ extension _ImageCore {
             forEachInkedSpan(ofLine: index, width: line.strippedLength, uncovered: &uncovered) { span in
                 if let claim = OpacityRegion.claim(
                     offsetX: span.lowerBound, offsetY: index, width: span.count, height: 1,
-                    ink: palette.foreground, field: palette.background)
+                    ink: monoColours.ink, field: monoColours.paper)
                 {
                     claims.append(claim)
                 }
@@ -632,16 +630,16 @@ extension _ImageCore {
     /// column 0 has already overridden it. The surround would resolve to the ambient
     /// surface, not to the fill it sits on (§70.5).
     private static func inked(
-        _ art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
+        _ art: ASCIIArt, monoColours: ImageMonoColours?
     ) -> [String] {
-        guard mode == .mono else { return art.lines }
+        guard let monoColours else { return art.lines }
         // The opaque spelling, with the alpha claimed beside it by `inkClaims` — the
         // pairing every other painted colour in the framework uses (§16). Handing
         // `palette.foreground`/`palette.background` to `colorize` raw trapped the
         // emitter's `isOpaque` assertion on a faded palette, and in release drew the
         // picture at full strength over a page it was supposed to follow.
-        let ink = palette.foreground.opaqueSpelling
-        let paper = palette.background.opaqueSpelling
+        let ink = monoColours.ink.opaqueSpelling
+        let paper = monoColours.paper.opaqueSpelling
         // An opaque picture — nearly every picture — has no uncovered cell and keeps the
         // one wrapper per line it always had.
         guard !art.uncovered.isEmpty else {
@@ -668,7 +666,7 @@ extension _ImageCore {
         }
     }
 
-    /// Calls `body` with each span of line `line` that ``inked(_:mode:palette:)`` paints —
+    /// Calls `body` with each span of line `line` that ``inked(_:monoColours:)`` paints —
     /// all `width` of its columns less the picture's uncovered runs on it — consuming
     /// those runs from the front of `uncovered`, which is in reading order.
     ///
@@ -915,7 +913,7 @@ extension _ImageCore {
         let edgeContrast = context.environment.imageEdgeContrast
         let dithering = context.environment.imageDithering
         // Mono's two colours, which pixels have to be TOLD. The character
-        // renderer states them after the fact — `inked(_:mode:palette:)`, run
+        // renderer states them after the fact — `inked(_:monoColours:)`, run
         // after the render cache so a theme change re-colours a cached
         // conversion — and pixels have nothing to state them onto: a pixel is a
         // colour or it is nothing. So they are baked in, and therefore they are
@@ -927,13 +925,8 @@ extension _ImageCore {
         // defaults, by the same test on the same requested mode. Read from the
         // palette whatever the mode, a theme change re-sent every true-colour
         // photograph on screen to draw exactly the pixels the terminal held.
-        var ink = RGBA(r: 255, g: 255, b: 255)
-        var paper = RGBA(r: 0, g: 0, b: 0)
-        if colorMode == .mono {
-            let palette = context.environment.palette
-            ink = Self.rgba(palette.foreground, in: palette) ?? ink
-            paper = Self.rgba(palette.background, in: palette) ?? paper
-        }
+        // Both halves are `ImageMonoColours`, the derivation `inked` reads.
+        let mono = ImageMonoColours.pixels(for: colorMode, in: context.environment)
 
         // The transmitted resolution, not the cell box: two boxes that resample
         // to the same pixels are the same picture, and the store answers the
@@ -944,7 +937,7 @@ extension _ImageCore {
             pixelWidth: pixelWidth, pixelHeight: pixelHeight,
             colorMode: colorMode, toneCurve: toneCurve,
             edgeContrast: edgeContrast, dithering: dithering,
-            monoInk: ink, monoPaper: paper)
+            monoInk: mono.ink, monoPaper: mono.paper)
 
         guard
             let lines = store.placeholderRows(
@@ -960,7 +953,7 @@ extension _ImageCore {
                     let packed = Self.pixelBytes(
                         converter.recoloured(
                             rawImage, width: pixelWidth, height: pixelHeight,
-                            monoInk: ink, monoPaper: paper))
+                            monoInk: mono.ink, monoPaper: mono.paper))
                     return (packed.bytes, packed.format, pixelWidth, pixelHeight)
                 })
         else { return nil }
@@ -974,17 +967,6 @@ extension _ImageCore {
         return FrameBuffer(
             lines: lines, width: target.width, uniformWidth: true,
             lineWidths: [Int](repeating: target.width, count: lines.count))
-    }
-
-    /// A palette colour as pixels, or `nil` for a semantic colour that has no
-    /// RGB even after resolution.
-    fileprivate static func rgba(_ color: Color, in palette: any Palette) -> RGBA? {
-        // Alpha is not carried, for the reason `ASCIIPalette.init` states: this is
-        // a colour being handed to the image pipeline as a MATCHING candidate or a
-        // recolouring target, and transparency is not an axis of either. An
-        // image's own transparency comes from its alpha channel instead.
-        guard let components = color.resolve(with: palette).rgbComponents else { return nil }
-        return RGBA(r: components.red, g: components.green, b: components.blue)
     }
 
     /// An ``RGBAImage`` as the flat byte run the protocol wants, in the

@@ -51,7 +51,7 @@ extension ASCIIConverter {
     ///
     /// ``ASCIIColorMode/mono`` emits no colour at all — that is the point of
     /// it — and the character renderer relies on that: its cells take whatever
-    /// the page is already painted in, and `_ImageCore.inked(_:mode:palette:)`
+    /// the page is already painted in, and `_ImageCore.inked(_:monoColours:)`
     /// states the theme's ink and paper *after* the render cache, so a theme
     /// change re-colours a cached conversion for free.
     ///
