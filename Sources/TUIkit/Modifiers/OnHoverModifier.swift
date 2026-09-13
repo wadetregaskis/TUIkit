@@ -64,7 +64,13 @@ extension OnHoverModifier: Renderable {
         dispatcher.requestFeature(.motion)
 
         let capturedAction = action
-        let handlerID = dispatcher.register { event in
+        // An OBSERVER, not an ordinary region. This region goes on after the
+        // content's, so on every cell it is the innermost match, and as an
+        // ordinary region it took the `.entered` / `.exited` the wrapped
+        // control needs for its own hover face — `Button("Save") {}.onHover { … }`
+        // never lit up, where SwiftUI keeps both. See
+        // `MouseEventDispatcher.registerHoverObserver(_:)`.
+        let handlerID = dispatcher.registerHoverObserver { event in
             switch event.phase {
             case .entered:
                 capturedAction(true)

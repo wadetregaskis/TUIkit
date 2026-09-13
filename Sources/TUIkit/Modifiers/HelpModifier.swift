@@ -98,7 +98,12 @@ extension HelpModifier: Renderable {
         // the smallest thing that closes the loop; the id is written before any
         // event can arrive, because events are dispatched between frames.
         let idBox = HandlerIDBox()
-        let handlerID = dispatcher.register { event in
+        // An OBSERVER, as `.onHover` is. This region goes on after the
+        // content's, so as an ordinary region it took the `.entered` /
+        // `.exited` the control it explains needs for its own hover face —
+        // `Button("Save") {}.help("…")` never lit up under the pointer. See
+        // `MouseEventDispatcher.registerHoverObserver(_:)`.
+        let handlerID = dispatcher.registerHoverObserver { event in
             switch event.phase {
             case .entered:
                 // The event's own arrival time, not this frame's clock: the
