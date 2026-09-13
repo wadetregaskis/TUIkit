@@ -325,34 +325,74 @@ extension IndeterminateRenderer {
 // MARK: - Knight Rider
 
 extension IndeterminateRenderer {
-    /// A single bright block bounces left-to-right and back, with a short
-    /// fading trail behind the head.
+    /// A lead cell bouncing between the two ends at a constant speed, with a tail
+    /// that fades behind it by TIME: each cell glows by how many steps ago the lead
+    /// last stood on it. So when the lead turns at an end it runs back over its own
+    /// tail, and the cells it passes light up again from the start of their fade.
+    ///
+    /// The trail used to be laid out by DIRECTION instead — the `segment` cells
+    /// opposite the way the head was moving, shaded by distance. That model has no
+    /// memory, and it showed at both ends: on the frame the direction flipped, the
+    /// lead stood alone (its trail now pointing off the track), and on the next the
+    /// trail appeared fully formed on the other side, lighting cells the lead had
+    /// not stood on. And the head was `Int(triangle × (W − 1))`, a truncation, so
+    /// its steps were uneven and it reached the far end for barely a frame.
+    ///
+    /// The lead now walks 0 … W−1 … 1, one step per `period / (2(W − 1))` seconds,
+    /// standing on each end once — what a one-cell block hitting a wall does, and
+    /// what `Spinner`'s bounce does. The "freshest visit wins" age is the same rule
+    /// `Spinner.renderBouncingFrame` applies to its trail. Frames still sample the
+    /// phase at the cycle's own rate, so the documented `period` holds whatever the
+    /// width.
     private static func renderKnightRider(
         width: Int, configuration: IndeterminateConfiguration,
         empty: Color, accent: Color, elapsed: Double
     ) -> ClaimingRow {
-        let segment = segment(of: configuration, across: width)
-        // Bounce with a triangle wave: phase goes 0 → 1 → 0, mapped to
-        // head position 0 → (width − 1) → 0.
-        let raw = phase(elapsed: elapsed, period: configuration.period)
-        let triangle = raw < 0.5 ? raw * 2.0 : (1.0 - raw) * 2.0
-        let head = Int(triangle * Double(max(0, width - 1)))
-        let direction = raw < 0.5 ? 1 : -1
+        // At least one tail cell behind the lead wherever the track has room for
+        // one: the preset's eighth of a track is under two cells below 16 columns,
+        // and a lead with no tail is a different animation.
+        let length = min(width, max(2, segment(of: configuration, across: width)))
+        let steps = bounceSteps(width: width)
+        let step = min(
+            steps - 1,
+            Int(phase(elapsed: elapsed, period: configuration.period) * Double(steps)))
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.empty)
         // The ramp, quantised as one — see `renderSweep`.
         let trail = Color.quantisedRamp(
-            ramp(configuration, dim: empty, bright: accent), count: segment + 1, depth: ColorDepth.current)
+            ramp(configuration, dim: empty, bright: accent), count: length + 1, depth: ColorDepth.current)
         return laid(width: width) { column in
-            // The trail extends *behind* the head — i.e. in the
-            // opposite direction of motion — so the leading edge stays
-            // visually sharp.
-            let offset = (column - head) * -direction
-            guard offset >= 0, offset < segment else {
+            guard let age = age(ofColumn: column, atStep: step, width: width, memory: length) else {
                 return (glyph(unlit, at: column), empty)
             }
-            return (glyph(fill, at: column), trail[segment - offset])
+            return (glyph(fill, at: column), trail[length - age])
         }
+    }
+
+    /// Steps in one out-and-back bounce across `width` cells: 2(W − 1), each end
+    /// stood on once. At least one, so a one-cell track still has a cycle.
+    static func bounceSteps(width: Int) -> Int {
+        max(1, 2 * (width - 1))
+    }
+
+    /// Where the lead stands at `step` of a bounce across `width` cells: out along
+    /// 0 … W−1, back along W−2 … 1. Any integer step, negative included, wraps.
+    static func leadColumn(atStep step: Int, width: Int) -> Int {
+        guard width > 1 else { return 0 }
+        let span = width - 1
+        let cycle = 2 * span
+        let wrapped = ((step % cycle) + cycle) % cycle
+        return wrapped <= span ? wrapped : cycle - wrapped
+    }
+
+    /// How many steps ago the lead last stood on `column`, when that is fewer than
+    /// `memory` — the FRESHEST visit, so a cell the lead has just passed back over
+    /// glows from the start of its fade again.
+    static func age(ofColumn column: Int, atStep step: Int, width: Int, memory: Int) -> Int? {
+        for back in 0..<max(0, memory) where leadColumn(atStep: step - back, width: width) == column {
+            return back
+        }
+        return nil
     }
 }
 
