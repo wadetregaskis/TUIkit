@@ -234,6 +234,55 @@ struct ListRowMouseRegionTests {
         }
     }
 
+    @Test("A titled .plain list maps each click to its own row, past the title line")
+    func titledPlainListRowHitAlignment() {
+        // The titled twin of the test above, whose untitled list hid this. A
+        // borderless list draws its title on a line of its own ABOVE the rows (a
+        // bordered one draws it in the top border). The click mapping counted the
+        // border and the padding but never that line, so every click landed on
+        // the row BELOW the pointer, a click on the title selected the first row,
+        // and the last row could not be clicked at all.
+        var selection: String?
+        let items = ["alpha", "bravo", "charlie"]
+        let view = List("Files", selection: Binding(get: { selection }, set: { selection = $0 })) {
+            ForEach(items, id: \.self) { Text($0) }
+        }
+        .listStyle(.plain)
+        .frame(height: 5)
+
+        let tui = TUIContext()
+        let dispatcher = tui.mouseEventDispatcher
+        dispatcher.setActiveSupport(.full)
+        dispatcher.beginRenderPass()
+        var env = EnvironmentValues()
+        env.mouseEventDispatcher = dispatcher
+        env.focusManager = FocusManager()
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: 8, environment: env, tuiContext: tui)
+        let buffer = renderToBuffer(view, context: context)
+        dispatcher.setRegions(buffer.hitTestRegions)
+        let drawn = buffer.lines.map(\.stripped)
+
+        func click(atY y: Int) {
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: y))
+            _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: y))
+        }
+
+        let titleRow = drawn.firstIndex(where: { $0.hasPrefix("Files") })
+        #expect(titleRow == 0, "the title is a line of its own, above the rows: \(drawn)")
+        click(atY: 0)
+        #expect(selection == nil, "a click on the title line selects nothing, got \(String(describing: selection))")
+
+        for item in items {
+            guard let y = drawn.firstIndex(where: { $0.contains(item) }) else {
+                Issue.record("\(item) not rendered: \(drawn)")
+                continue
+            }
+            click(atY: y)
+            #expect(selection == item, "clicking the '\(item)' row (y=\(y)) selects it, not a neighbour")
+        }
+    }
+
     @Test("A .plain list's scrollbar hit region sits on the drawn bar")
     func plainScrollbarRegionAlignment() {
         let view = List(selection: .constant(String?.none)) {

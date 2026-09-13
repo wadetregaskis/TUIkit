@@ -461,8 +461,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // anyway showed a titled list one row fewer than fits, with a stray
         // blank line at the bottom of the slot. Borderless (`.plain`) does
         // render the title as its own row (`renderBorderless`), so there the
-        // line is real. `_ListCore`'s own click mapping already agreed: its
-        // `topInset` counts the border and the padding, never a title.
+        // line is real — and every mapping from the finished buffer back to content
+        // lines has to step over it too (`contentTop`, below).
         let titleOverhead = (title != nil && !style.showsBorder) ? 1 : 0
         let targetContentHeight = max(
             1,
@@ -520,11 +520,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         )
 
         if let state = renderState {
+            // Where content line 0 sits in the finished buffer: below the top
+            // border row when there is one, below a borderless title's own row
+            // (`renderBorderless` draws it above the body and shifts the body's
+            // payloads down by it), and past the top padding. ONE value for every
+            // pass that maps content lines to buffer rows — clicks, drags, drops,
+            // the rows' hit regions, overlays and opacity. Each used to derive it
+            // for itself from the border and the padding, and none counted the
+            // title, so a titled `.plain` list put every click on the row below
+            // the pointer: the title line selected the first row, and the last row
+            // could not be clicked at all.
+            let contentTop = (style.showsBorder ? 1 : 0) + titleOverhead + style.rowPadding.top
             attachMouseHandlers(
                 to: &buffer,
                 context: context,
                 state: state,
-                paddingTop: style.rowPadding.top
+                topInset: contentTop
             )
             // Compositing, not click handling — so it runs even when the list
             // is disabled or has no mouse dispatcher. See `attachRowOverlays`.
@@ -532,13 +543,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 to: &buffer,
                 context: context,
                 state: state,
-                paddingTop: style.rowPadding.top
+                topInset: contentTop
             )
             attachRowOpacity(
                 to: &buffer,
                 context: context,
                 state: state,
-                paddingTop: style.rowPadding.top
+                topInset: contentTop
             )
         }
         return buffer
@@ -1795,20 +1806,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         to buffer: inout FrameBuffer,
         context: RenderContext,
         state: PopulatedRenderState,
-        paddingTop: Int
+        topInset: Int
     ) {
         guard !isDisabled(in: context), !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
         let focusManager = context.environment.focusManager
-        // A bordered container places content at y = 1 (below the top border);
-        // a borderless (`.plain`) list has NO top border row, so its content
-        // starts at y = 0. Add the configured top padding. The captured row
-        // y-ranges are already relative to the content (they include the
-        // scroll-indicator's own row when present), so this inset is the
-        // entire translation needed. (Hardcoding `1` here shifted every
-        // borderless click up a row — clicking row 2 selected row 1.)
-        let topInset = (context.environment.listStyle.showsBorder ? 1 : 0) + paddingTop
+        // `topInset` is the buffer row of content line 0 — border, borderless
+        // title and top padding, settled once in `renderToBuffer`. The captured
+        // row y-ranges are already relative to the content (they include the
+        // scroll-indicator's own row when present), so this inset is the entire
+        // translation needed. (Hardcoding `1` here once shifted every borderless
+        // click up a row — clicking row 2 selected row 1 — and leaving out a
+        // borderless title shifted every titled one down a row.)
 
         publishRowBands(state: state)
 
@@ -2022,11 +2032,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         to buffer: inout FrameBuffer,
         context: RenderContext,
         state: PopulatedRenderState,
-        paddingTop: Int
+        topInset: Int
     ) {
         guard !context.isMeasuring else { return }
         let style = context.environment.listStyle
-        let topInset = (style.showsBorder ? 1 : 0) + paddingTop
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
         let bounds = (width: buffer.width, height: buffer.height)
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
@@ -2077,11 +2086,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         to buffer: inout FrameBuffer,
         context: RenderContext,
         state: PopulatedRenderState,
-        paddingTop: Int
+        topInset: Int
     ) {
         guard !context.isMeasuring else { return }
         let style = context.environment.listStyle
-        let topInset = (style.showsBorder ? 1 : 0) + paddingTop
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
         for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
             let clip =
