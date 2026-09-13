@@ -41,8 +41,11 @@ public protocol ListStyle: Sendable {
     /// The style says *whether*, and the palette says *which*: when this is
     /// true, `_ListCore` tints every even-indexed row within a section with
     /// the palette's accent at low opacity and leaves the odd rows untinted,
-    /// so an app's theme keeps control of the colour. A focused or selected
-    /// row keeps its own highlight either way. Both built-in styles return
+    /// so an app's theme keeps control of the colour. The index belongs to
+    /// the row, not to where it happens to be drawn: it counts from the
+    /// section's first row however far the list has scrolled, so the stripes
+    /// stay on their rows. A focused or selected row keeps its own highlight
+    /// either way. Both built-in styles return
     /// false, so this is a hook for a conforming style rather than something
     /// TUIkit's own styles turn on.
     var alternatingRowColors: Bool { get }

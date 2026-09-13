@@ -106,6 +106,33 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// The row's type/id at `index` — cheap, builds no content.
     func type(at index: Int) -> ListRowType<SelectionValue> { typeAt(index) }
 
+    /// Where the row at `index` stands among its section's content rows — the
+    /// index `ListStyle.alternatingRowColors` stripes by — counted exactly as the
+    /// composers count: `.content` rows only, restarting after a `.header`.
+    ///
+    /// The composers walk only the visible window, so on their own they know a
+    /// row's place in the WINDOW and nothing else. Their count used to start at
+    /// 0 on the first drawn row, which is the row's real index only while the
+    /// list sits at the top. Scrolled to an odd row, every stripe moved onto the
+    /// row beside it, and each scroll step moved them all again. This is the
+    /// seed that makes the count the row's own.
+    ///
+    /// O(1) where the length is: an all-content source (the windowed `ForEach`
+    /// path, however long) has no header to find, and every row before this one
+    /// counts, so the index IS the answer. Only an eager source walks back, and
+    /// its row set is small — `resolvePopulatedHandler` already walks all of it
+    /// every frame.
+    func sectionContentIndex(at index: Int) -> Int {
+        guard !allContent else { return index }
+        var contentRows = 0
+        for earlier in stride(from: index - 1, through: 0, by: -1) {
+            let type = typeAt(earlier)
+            if case .header = type { break }
+            if case .content = type { contentRows += 1 }
+        }
+        return contentRows
+    }
+
     /// The fully-formed row at `index`, materialising (and memoising) its content
     /// box on first access. Reading the row's `.buffer` renders it once (cached).
     func row(at index: Int) -> SelectableListRow<SelectionValue> {
@@ -732,10 +759,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 visibleRows: visibleRows,
                 handler: handler,
                 origin: origin,
+                firstSectionContentIndex: source.sectionContentIndex(at: origin.offset),
                 listHasFocus: listHasFocus,
                 contentRowWidth: contentRowWidth,
                 bar: bar,
-                style: style,
                 context: context
             )
             // The bar is the last interior column: the border's cell when the
@@ -751,11 +778,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             (lines, visibleRowYRanges, animatedRuns, listRowClaims) = composeRowLines(
                 handler: handler,
                 origin: origin,
+                firstSectionContentIndex: source.sectionContentIndex(at: origin.offset),
                 visibleRows: visibleRows,
                 listHasFocus: listHasFocus,
                 rowWidth: rowWidth,
                 contentHeight: targetContentHeight,
-                style: style,
                 context: context
             )
             rowContentWidth = max(0, rowWidth - 1)
@@ -1141,17 +1168,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func composeRowLines(
         handler: ItemListHandler<SelectionValue>,
         origin: WindowOrigin,
+        firstSectionContentIndex: Int,
         visibleRows: [(Int, SelectableListRow<SelectionValue>)],
         listHasFocus: Bool,
         rowWidth: Int,
         contentHeight: Int,
-        style: any ListStyle,
         context: RenderContext
     ) -> (
         lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
         claims: [OpacityRegion]
     ) {
         let palette = context.environment.palette
+        // Read here rather than passed in: a ninth parameter trips
+        // function_parameter_count, and this is the same style `renderToBuffer`
+        // read from the same context.
+        let style = context.environment.listStyle
         // The indicator lines are chrome — they describe where the content sits —
         // so the rows are collected separately and an overscroll slide moves only
         // them (§1.5). `lines` is assembled from the three parts at the end.
@@ -1219,7 +1250,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let rowLineBudget = max(1, contentHeight - indicatorLines)
         var rowLinesEmitted = 0
 
-        var sectionContentIndex = 0
+        // Seeded with the content rows scrolled away above the window, NOT 0.
+        // `visibleRows` starts at the drawn origin, so a count started at 0
+        // numbered rows by their place in the window, and every odd offset moved
+        // `alternatingRowColors`' stripes onto the neighbouring rows. The seed is
+        // taken at the DRAWN origin (`origin.offset`), not `scrollOffset`, for the
+        // reason every other consumer of the origin does. See
+        // `RowSource.sectionContentIndex(at:)`.
+        var sectionContentIndex = firstSectionContentIndex
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
             let isFocused = handler.isCursorRow(rowIndex) && listHasFocus
@@ -1475,16 +1513,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         visibleRows: [(index: Int, row: SelectableListRow<SelectionValue>)],
         handler: ItemListHandler<SelectionValue>,
         origin: WindowOrigin,
+        firstSectionContentIndex: Int,
         listHasFocus: Bool,
         contentRowWidth: Int,
         bar: ClaimingColumn,
-        style: any ListStyle,
         context: RenderContext
     ) -> (
         lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
         claims: [OpacityRegion]
     ) {
         let palette = context.environment.palette
+        let style = context.environment.listStyle
         let contentHeight = bar.count
 
         // Content-only row lines. The bar cell is merged in at the END, keyed by
@@ -1500,7 +1539,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// selection marks and the still backgrounds — travelling beside the runs
         /// because both are positioned by LINE and both take the same slide.
         var rowClaims: [OpacityRegion] = []
-        var sectionContentIndex = 0
+        // Seeded, not 0, or the stripes follow the window instead of the rows —
+        // see `composeRowLines`.
+        var sectionContentIndex = firstSectionContentIndex
         for (rowIndex, row) in visibleRows {
             if case .header = row.type { sectionContentIndex = 0 }
             let isFocused = handler.isCursorRow(rowIndex) && listHasFocus
