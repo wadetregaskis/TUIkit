@@ -9,13 +9,14 @@ import TUIkit
 /// The scroll-anchoring demos on the ScrollView page, in three parts:
 ///
 ///   1. **Anchor a chosen row** — pick any row, anchor it, then insert or
-///      remove rows around it; it keeps its place on screen while the scroll
+///      remove rows above or below it; it keeps its place on screen while the scroll
 ///      position moves. Arrow keys (or the wheel) break the anchor and scroll
 ///      normally, and once the anchor is forced off its line (e.g. rows above
 ///      it are deleted) it stays where it landed rather than springing back.
 ///   2. **Selection becomes the anchor** — a List that follows the bottom (like
 ///      a log) until you select a row, which shadow-switches the anchor onto
-///      that row so newly appended rows no longer pull the view off it.
+///      that row so newly appended rows no longer pull the view off it. Rows can be
+///      inserted or removed on either side of the selection.
 ///   3. **Anchor at the top or bottom** — the two edge anchors: `.top` keeps the
 ///      view at the start as rows are appended; `.bottom` follows the tail.
 struct ScrollAnchoringDemo: View {
@@ -74,9 +75,16 @@ struct ScrollAnchoringDemo: View {
                     Button("page.scrollView.anchorHold") { rowAnchor = .row(pickedRow) }
                     Button("page.scrollView.anchorRelease") { rowAnchor = .window }
                 }
+                // Both sides, in two rows: an edit below the held row is the half
+                // that shows the hold does NOT move the view, and five buttons do not
+                // fit one row at 80 columns.
                 HStack(spacing: 1) {
                     Button("page.scrollView.anchorInsert") { insertAboveTarget() }
                     Button("page.scrollView.anchorRemove") { removeAboveTarget() }
+                }
+                HStack(spacing: 1) {
+                    Button("page.scrollView.anchorInsertBelow") { insertBelowTarget() }
+                    Button("page.scrollView.anchorRemoveBelow") { removeBelowTarget() }
                     Button("page.scrollView.anchorReset") { resetRows() }
                 }
                 ValueDisplayRow("page.scrollView.anchorState", describe(rowAnchor))
@@ -122,6 +130,22 @@ struct ScrollAnchoringDemo: View {
         rows.removeSubrange(max(0, index - 5)..<index)
     }
 
+    /// Inserts rows just below the held (or picked) row — two rows clear of it, the
+    /// same gap `insertAboveTarget` leaves on its side.
+    private func insertBelowTarget() {
+        let target = anchoredValue ?? pickedRow
+        guard let index = rows.firstIndex(of: target) else { return }
+        let inserted = (0..<5).map { nextRow + $0 }
+        nextRow += 5
+        rows.insert(contentsOf: inserted, at: min(rows.count, index + 3))
+    }
+
+    private func removeBelowTarget() {
+        let target = anchoredValue ?? pickedRow
+        guard let index = rows.firstIndex(of: target), index + 1 < rows.count else { return }
+        rows.removeSubrange((index + 1)..<min(rows.count, index + 6))
+    }
+
     private func resetRows() {
         rows = Array(1...40)
         nextRow = 100
@@ -153,8 +177,14 @@ struct ScrollAnchoringDemo: View {
                 .defaultScrollAnchor(.bottom)
                 .anchorPosition($selAnchor)
 
+                // The same four edits as the section above, so the two can be compared.
                 HStack(spacing: 1) {
                     Button("page.scrollView.anchorInsert") { insertAboveSelection() }
+                    Button("page.scrollView.anchorRemove") { removeAboveSelection() }
+                }
+                HStack(spacing: 1) {
+                    Button("page.scrollView.anchorInsertBelow") { insertBelowSelection() }
+                    Button("page.scrollView.anchorRemoveBelow") { removeBelowSelection() }
                     Button("page.scrollView.anchorReset") { resetSelection() }
                 }
                 ValueDisplayRow(
@@ -173,6 +203,29 @@ struct ScrollAnchoringDemo: View {
         let inserted = (0..<5).map { nextLogRow + $0 }
         nextLogRow += 5
         logRows.insert(contentsOf: inserted, at: index)
+    }
+
+    private func removeAboveSelection() {
+        let target = selection ?? logRows.first
+        guard let value = target, let index = logRows.firstIndex(of: value), index > 0 else { return }
+        logRows.removeSubrange(max(0, index - 5)..<index)
+    }
+
+    /// Inserts rows directly below the selected row — or, with nothing selected, after
+    /// the last row, which is where a log's next lines arrive and what the Bottom
+    /// anchor follows.
+    private func insertBelowSelection() {
+        let index = selection.flatMap { logRows.firstIndex(of: $0) } ?? (logRows.count - 1)
+        let inserted = (0..<5).map { nextLogRow + $0 }
+        nextLogRow += 5
+        logRows.insert(contentsOf: inserted, at: min(logRows.count, index + 1))
+    }
+
+    private func removeBelowSelection() {
+        guard let value = selection, let index = logRows.firstIndex(of: value),
+            index + 1 < logRows.count
+        else { return }
+        logRows.removeSubrange((index + 1)..<min(logRows.count, index + 6))
     }
 
     private func resetSelection() {
