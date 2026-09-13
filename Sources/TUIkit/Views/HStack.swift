@@ -340,8 +340,10 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
 
         var width = 0
         var height = 1
-        for (index, size) in sizes.enumerated() {
-            let next = width + (index > 0 ? spacing : 0) + size.width
+        for size in sizes {
+            // A gap only between columns that occupy cells, as `renderWindow`
+            // assembles them: see `linearSpacing(before:placedExtent:spacing:)`.
+            let next = width + linearSpacing(before: size.width, placedExtent: width, spacing: spacing) + size.width
             if next > widthLimit {
                 // Saturated: content extends past the limit. Report the LIMIT
                 // — see the identical break in _VStackCore.windowSizeThatFits:
@@ -559,7 +561,11 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                         context: columnContext(index))
             }
             let fixedWidth = eagerBuffers.compactMap { $0?.width }.reduce(0, +)
-            let totalSpacing = max(0, children.count - 1) * spacing
+            // Gaps between the columns that will occupy cells — every spacer and
+            // every column that drew some — the count `distributeLinearSpace`
+            // reserves for the eager row. One per child left a Spacer beside an
+            // `EmptyView` a `spacing` short of flush.
+            let totalSpacing = totalLinearSpacing(occupiedChildren: spacerCount + eagerBuffers.count { ($0?.width ?? 0) > 0 }, spacing: spacing)
             let availableForSpacers = max(0, availableWidth - fixedWidth - totalSpacing)
             spacerWidth = availableForSpacers / spacerCount
             spacerRemainder = availableForSpacers % spacerCount
@@ -574,12 +580,15 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         var currentWidth = 0
         var spacerIndex = 0
 
+        // Every gap below is `linearSpacing(before:placedExtent:spacing:)`, the
+        // rule PASS 2's `appendHorizontally` applies: a column of no cells earns
+        // none. Charged per index, the fit-check spent a gap per `EmptyView` that
+        // PASS 2 never drew, and stopped before a column that fitted.
         for (index, child) in children.enumerated() {
-            let spacingToApply = index > 0 ? spacing : 0
-
             if child.isSpacer {
                 let extraWidth = spacerIndex < spacerRemainder ? 1 : 0
                 let width = max(child.spacerMinLength ?? 0, spacerWidth + extraWidth)
+                let spacingToApply = linearSpacing(before: width, placedExtent: currentWidth, spacing: spacing)
                 if currentWidth + spacingToApply + width > availableWidth { break }
                 // Spacer height is set to maxHeight in pass 2
                 collected.append((FrameBuffer(emptyWithWidth: width, height: 1), spacingToApply, nil))
@@ -587,6 +596,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 spacerIndex += 1
             } else if spacerCount > 0 {
                 let buffer = eagerBuffers[index]!
+                let spacingToApply = linearSpacing(before: buffer.width, placedExtent: currentWidth, spacing: spacing)
                 if currentWidth + spacingToApply + buffer.width > availableWidth { break }
                 maxHeight = max(maxHeight, buffer.height)
                 collected.append((buffer, spacingToApply, child))
@@ -596,6 +606,7 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 // see renderWindow in VStack.swift: rendering-to-check fired
                 // the first overflowing child's lifecycle every frame.
                 let measured = child.measure(proposal: .unspecified, context: context)
+                let spacingToApply = linearSpacing(before: measured.width, placedExtent: currentWidth, spacing: spacing)
                 if currentWidth + spacingToApply + measured.width > availableWidth {
                     // Saturated: the column does not fit whole. Render what
                     // shows, clipped at the cell, so the row fills the limit
@@ -625,10 +636,11 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 let buffer = child.render(
                     width: availableWidth, height: context.availableHeight,
                     context: columnContext(index))
-                if currentWidth + spacingToApply + buffer.width > availableWidth { break }
+                let renderedGap = linearSpacing(before: buffer.width, placedExtent: currentWidth, spacing: spacing)
+                if currentWidth + renderedGap + buffer.width > availableWidth { break }
                 maxHeight = max(maxHeight, buffer.height)
-                collected.append((buffer, spacingToApply, child))
-                currentWidth += spacingToApply + buffer.width
+                collected.append((buffer, renderedGap, child))
+                currentWidth += renderedGap + buffer.width
             }
         }
 

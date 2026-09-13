@@ -524,7 +524,10 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                         context: rowContext(index))
             }
             let fixedHeight = eagerBuffers.compactMap { $0?.height }.reduce(0, +)
-            let totalSpacing = max(0, children.count - 1) * spacing
+            // Gaps between the rows that will occupy lines — every spacer and
+            // every row that drew some — the count `distributeLinearSpace`
+            // reserves for the eager column. See HStack's `renderWindow`.
+            let totalSpacing = totalLinearSpacing(occupiedChildren: spacerCount + eagerBuffers.count { ($0?.height ?? 0) > 0 }, spacing: spacing)
             let availableForSpacers = max(0, availableHeight - fixedHeight - totalSpacing)
             spacerHeight = availableForSpacers / spacerCount
             spacerRemainder = availableForSpacers % spacerCount
@@ -535,12 +538,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)] = []
         var currentHeight = 0
         var spacerIndex = 0
+        // Every gap below is `linearSpacing(before:placedExtent:spacing:)`, the
+        // rule `assembleWindow`'s `appendVertically` applies: a row of no lines
+        // earns none. Charged per index, the fit-check spent a gap per
+        // `EmptyView` that was never drawn, and stopped before a row that fitted.
         for (index, child) in children.enumerated() {
-            let spacingToApply = index > 0 ? spacing : 0
-
             if child.isSpacer {
                 let extraHeight = spacerIndex < spacerRemainder ? 1 : 0
                 let height = max(child.spacerMinLength ?? 0, spacerHeight + extraHeight)
+                let spacingToApply = linearSpacing(before: height, placedExtent: currentHeight, spacing: spacing)
                 if currentHeight + spacingToApply + height > availableHeight {
                     break
                 }
@@ -549,6 +555,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 spacerIndex += 1
             } else if spacerCount > 0 {
                 let buffer = eagerBuffers[index]!
+                let spacingToApply = linearSpacing(before: buffer.height, placedExtent: currentHeight, spacing: spacing)
                 if currentHeight + spacingToApply + buffer.height > availableHeight {
                     break
                 }
@@ -560,6 +567,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 // render every frame without ever displaying it — firing its
                 // onAppear and keeping its .task alive for an invisible row.
                 let measured = child.measure(proposal: .unspecified, context: context)
+                let spacingToApply = linearSpacing(before: measured.height, placedExtent: currentHeight, spacing: spacing)
                 if currentHeight + spacingToApply + measured.height > availableHeight {
                     appendSaturatedTail(
                         child, measuredHeight: measured.height,
@@ -571,11 +579,12 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 let buffer = child.render(
                     width: context.availableWidth, height: availableHeight,
                     context: rowContext(index))
-                if currentHeight + spacingToApply + buffer.height > availableHeight {
+                let renderedGap = linearSpacing(before: buffer.height, placedExtent: currentHeight, spacing: spacing)
+                if currentHeight + renderedGap + buffer.height > availableHeight {
                     break  // a child whose render exceeds its measure still can't overflow the window
                 }
-                collected.append((buffer, spacingToApply, child))
-                currentHeight += spacingToApply + buffer.height
+                collected.append((buffer, renderedGap, child))
+                currentHeight += renderedGap + buffer.height
             }
         }
 

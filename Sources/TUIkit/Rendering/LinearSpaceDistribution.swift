@@ -169,6 +169,31 @@ func totalLinearSpacing(occupiedChildren: Int, spacing: Int) -> Int {
     max(0, occupiedChildren - 1) * spacing
 }
 
+/// The gap a stack walk charges before ONE child, given how far along the
+/// layout axis the walk has already placed.
+///
+/// The per-child spelling of ``totalLinearSpacing(occupiedChildren:spacing:)``,
+/// for the walks that accumulate as they go — the lazy stacks' measure and
+/// fit-checks, `_VStackCore.naturalRowSlots`, the lazy ramp placement — rather
+/// than totalling at the end. It is the assemblers' own predicate:
+/// `appendHorizontally`'s `priorWidth > 0 && other.width > 0 ? spacing : 0`,
+/// and `appendVertically`'s with lines for columns. So there is no gap before a
+/// child of no extent, and none before the first child that has any.
+///
+/// Not `index > 0 ? spacing : 0`, which every one of those walks used to
+/// charge: `LazyHStack { Text("A"); EmptyView(); Text("B") }` measured 4 and
+/// drew "A B" (3), and at a width of exactly 3 the render walk spent a phantom
+/// gap on the `EmptyView` and stopped before "B", which fitted.
+///
+/// - Parameters:
+///   - extent: The child's extent along the layout axis.
+///   - placedExtent: The extent the walk has placed so far, gaps included.
+///   - spacing: The stack's inter-child spacing.
+/// - Returns: `spacing` when both extents are positive, otherwise `0`.
+func linearSpacing(before extent: Int, placedExtent: Int, spacing: Int) -> Int {
+    placedExtent > 0 && extent > 0 ? spacing : 0
+}
+
 /// Adds `amount` cells across `indices`, either evenly or proportionally to
 /// `weights`, handing out any rounding remainder one cell at a time.
 private func addLinearSpace(_ amount: Int, to indices: [Int], of result: inout [Int], weights: [Int]?) {

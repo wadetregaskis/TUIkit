@@ -90,7 +90,9 @@ extension _VStackCore {
         if spacerCount > 0 {
             let fixedHeight = zip(children, sizes)
                 .reduce(0) { $0 + ($1.0.isSpacer ? 0 : $1.1.height) }
-            let totalSpacing = max(0, children.count - 1) * spacing
+            // The rows that will occupy lines, counted as `renderWindow` counts them.
+            let occupied = spacerCount + zip(children, sizes).count { !$0.0.isSpacer && $0.1.height > 0 }
+            let totalSpacing = totalLinearSpacing(occupiedChildren: occupied, spacing: spacing)
             let forSpacers = max(0, context.availableHeight - fixedHeight - totalSpacing)
             spacerHeight = forSpacers / spacerCount
             spacerRemainder = forSpacers % spacerCount
@@ -101,7 +103,6 @@ extension _VStackCore {
         var running = 0
         var spacerIndex = 0
         for (index, child) in children.enumerated() {
-            let spacingBefore = index > 0 ? spacing : 0
             let height: Int
             if child.isSpacer {
                 height = max(
@@ -111,6 +112,9 @@ extension _VStackCore {
             } else {
                 height = sizes[index].height
             }
+            // `renderWindow`'s gap rule, so the fold lands where its walk stops
+            // and the ramp spans the rows the column draws.
+            let spacingBefore = linearSpacing(before: height, placedExtent: running, spacing: spacing)
             guard running + spacingBefore + height <= context.availableHeight else { break }
             running += spacingBefore + height
             heights.append(height)
@@ -167,7 +171,9 @@ extension _HStackCore {
         if spacerCount > 0 {
             let fixedWidth = zip(children, sizes)
                 .reduce(0) { $0 + ($1.0.isSpacer ? 0 : $1.1.width) }
-            let totalSpacing = max(0, children.count - 1) * spacing
+            // The columns that will occupy cells, counted as `renderWindow` counts them.
+            let occupied = spacerCount + zip(children, sizes).count { !$0.0.isSpacer && $0.1.width > 0 }
+            let totalSpacing = totalLinearSpacing(occupiedChildren: occupied, spacing: spacing)
             let forSpacers = max(0, context.availableWidth - fixedWidth - totalSpacing)
             spacerWidth = forSpacers / spacerCount
             spacerRemainder = forSpacers % spacerCount
@@ -177,7 +183,6 @@ extension _HStackCore {
         var running = 0
         var spacerIndex = 0
         for (index, child) in children.enumerated() {
-            let spacingBefore = index > 0 ? spacing : 0
             let width: Int
             if child.isSpacer {
                 width = max(
@@ -187,6 +192,9 @@ extension _HStackCore {
             } else {
                 width = sizes[index].width
             }
+            // `renderWindow`'s gap rule, so the fold lands where its walk stops
+            // and the ramp spans the columns the row draws.
+            let spacingBefore = linearSpacing(before: width, placedExtent: running, spacing: spacing)
             guard running + spacingBefore + width <= context.availableWidth else { break }
             running += spacingBefore
             placed.append((child, sizes[index], running))

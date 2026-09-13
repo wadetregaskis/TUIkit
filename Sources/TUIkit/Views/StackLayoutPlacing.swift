@@ -28,7 +28,8 @@ extension _VStackCore {
 
     /// Every child's natural-height slot, top to bottom, measured at the
     /// given width (unconstrained when `nil`) with inter-row spacing charged
-    /// between consecutive children.
+    /// between consecutive rows that occupy a line — the gaps `appendVertically`
+    /// draws, not one per child.
     ///
     /// Pass the width the rows will actually render at: a wrapping `Text`
     /// measures taller at the real width than unconstrained, and the slot
@@ -44,9 +45,17 @@ extension _VStackCore {
         var slots: [RowSlot] = []
         slots.reserveCapacity(children.count)
         var runningY = 0
-        for (index, child) in children.enumerated() {
-            let spacingBefore = index > 0 ? spacing : 0
+        for child in children {
+            // Measured before the gap is decided, because the gap depends on it:
+            // a row of no lines earns none (see `linearSpacing(before:…)`).
+            // Charged per index, every row below an `EmptyView` sat one line
+            // lower here than either stack draws it — the lazy measure claimed
+            // the line, the viewport window painted it as a blank row the plain
+            // window never drew, and placement queries and `scrollTo` (the eager
+            // stack's seek reads these slots too) aimed one line past their row
+            // per empty row above.
             let size = child.measure(proposal: proposal, context: context)
+            let spacingBefore = linearSpacing(before: size.height, placedExtent: runningY, spacing: spacing)
             let y = runningY + spacingBefore
             slots.append(RowSlot(child: child, y: y, size: size, spacingBefore: spacingBefore))
             runningY = y + size.height
