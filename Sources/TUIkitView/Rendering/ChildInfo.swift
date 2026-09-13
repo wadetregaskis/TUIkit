@@ -42,6 +42,13 @@ public struct ChildView {
     /// Folded into the identity only, never into ``identityChildKey``, which
     /// scroll seeking matches against the raw user id.
     ///
+    /// A keyed child a splice RESOLVED — one a deeper splice had already
+    /// namespaced, or one under an `if`/`else` branch — is stamped with a slot
+    /// too, but that stamp is never read into a key again (the resolved
+    /// identity wins): it marks the row as addressed, so the next splice out
+    /// keeps its identity instead of flattening it back to a slot-prefixed key.
+    /// See `spliced(fromSlot:under:branched:)`.
+    ///
     /// An `Int32` with a `-1` sentinel rather than `Optional<Int>`, and it is
     /// load-bearing: the optional grew the struct from 97 to 105 bytes (a
     /// 96→112 stride step), and this struct is built and copied per child per
@@ -287,6 +294,65 @@ public struct ChildView {
             zIndex: zIndex,
             providesAlignmentGuide: providesAlignmentGuide,
             resolvedIdentity: parent.map { $0.child(erasedType: resolvedType, index: index) })
+    }
+
+    /// This child as it leaves a provider that a `TupleView` is splicing in at
+    /// static slot `slot` — the whole splice decision, in one place. `parent` is
+    /// the provider's own identity step, carrying its branch when `branched`.
+    ///
+    /// Exactly one kind of entry is addressed from this level's slot alone. Every
+    /// other kind keeps what the level below worked out, because only that level
+    /// knew what told its children apart, and nothing handed up can rebuild it:
+    ///
+    /// - A keyed row nothing has namespaced yet, under no branch — a `ForEach`
+    ///   that is itself the tuple element, or a `Group` or an `if` without `else`
+    ///   holding one — takes the flat slot-prefixed key beside its parent's other
+    ///   children. That is the hot shape, and it is injective: no other keyed row
+    ///   comes out of this slot.
+    /// - A keyed row that already carries a slot, or sits under a branch, keeps
+    ///   the identity it was resolved to, or is resolved under `parent` with its
+    ///   inner slot still in its key. Overwriting that slot with this one is what
+    ///   put both loops of `Group { ForEach(0..<2); ForEach(0..<2) }` — spliced,
+    ///   because a sibling sits beside the `Group` — on the same two identities,
+    ///   and the row memo, which keys on identity and element, drew the first
+    ///   loop's buffers where the second loop's rows belonged. A branch went the
+    ///   same way: both arms of an `if`/`else` over one row type met on one key.
+    /// - A positional child that is already resolved keeps its identity. It was
+    ///   resolved under an inner provider's step, and re-resolving it under
+    ///   `parent` at the index it had in there dropped that step: `Group { if a {
+    ///   Counter() }; if b { Counter() } }` put both counters on `Counter.0` under
+    ///   the `Group`, one `@State` box between them.
+    /// - Any other positional child is resolved under `parent` at that index.
+    ///
+    /// A keyed row resolved here is stamped with `slot`, so the next splice out
+    /// sees it as namespaced and keeps it. Keeping a resolved identity is as
+    /// sound as the one-level resolution this always did: every provider in the
+    /// framework builds its children in the context it is handed, so an identity
+    /// resolved below sits under a scope descended from `parent`.
+    func spliced(fromSlot slot: Int, under parent: ViewIdentity, branched: Bool) -> Self {
+        guard let identityKey else {
+            if resolvedIdentity != nil { return self }
+            return reindexed(to: identityChildIndex ?? 0, providerSlot: slot, under: parent)
+        }
+        if providerSlot < 0, !branched {
+            return reindexed(to: 0, providerSlot: slot, under: nil)
+        }
+        let resolved =
+            resolvedIdentity
+            ?? parent.child(
+                erasedType: identityType ?? type(of: view),
+                key: providerSlot >= 0 ? "\(providerSlot)#\(identityKey)" : identityKey)
+        return Self(
+            view: view,
+            identityType: identityType,
+            childIndex: childIndex,
+            identityKey: identityKey,
+            providerSlot: Int32(slot),
+            isSpacer: isSpacer,
+            spacerMinLength: spacerMinLength,
+            zIndex: zIndex,
+            providesAlignmentGuide: providesAlignmentGuide,
+            resolvedIdentity: resolved)
     }
 
     /// Creates a child wrapper that renders `view` but derives its per-child

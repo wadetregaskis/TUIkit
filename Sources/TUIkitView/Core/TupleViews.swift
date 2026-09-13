@@ -120,7 +120,7 @@ extension TupleView: ChildViewProvider {
     /// `slot` is the element's STATIC position in the tuple — one per pack
     /// element regardless of how many children it flattens to — which is what
     /// namespaces keyed rows spliced from sibling providers. See
-    /// ``ChildView/reindexed(to:providerSlot:)``.
+    /// `ChildView.spliced(fromSlot:under:branched:)`.
     @MainActor
     private static func appendChildViews<C: View>(
         from child: C,
@@ -153,11 +153,19 @@ extension TupleView: ChildViewProvider {
             // second child at index 1, same type, same parent, one `@State`
             // box between them.
             //
-            // A nested provider's own step is dropped by `reindexed` (which
-            // clears any identity resolved further in) and replaced by this
-            // one. That is sound rather than lossy: children are re-enumerated
-            // 0..<n under each provider they pass through, so the outermost
-            // enumeration is already unique among its siblings.
+            // What a nested provider's level already worked out is KEPT, not
+            // replaced by this one. Only that level knew what told its
+            // children apart — an inner tuple slot, an inner provider's step, a
+            // branch — and nothing handed up to this level can rebuild it. This
+            // used to re-address everything from its own slot, on the belief
+            // that each level re-enumerates its children 0..<n; it does not (a
+            // positional child keeps its INNER index, below), so two levels
+            // down distinct children met: `Group { if a { Counter() }; if b {
+            // Counter() } }` beside a sibling put both counters on one
+            // `@State` box, and `Group { ForEach(0..<2); ForEach(0..<2) }` put
+            // both loops' rows on the same two identities, so the row memo drew
+            // the first loop twice. See `ChildView.spliced(fromSlot:under:branched:)`.
+            //
             // The provider builds its children in its OWN scope, not the
             // stack's. It has to: `Optional.childViews` asks the departure
             // store whether anything is still leaving `directlyUnder:
@@ -171,35 +179,34 @@ extension TupleView: ChildViewProvider {
             // ``ChildViewProvider/identityBranchLabel``. The same step
             // `ConditionalView.renderToBuffer` applies, so the flattened path
             // and the whole-view path agree on where a branch's children live.
-            if let branch = provider.identityBranchLabel {
+            let branch = provider.identityBranchLabel
+            if let branch {
                 providerContext = providerContext.withBranchIdentity(branch)
             }
             for entry in provider.childViews(context: providerContext) {
-                if entry.identityChildKey != nil {
-                    // A KEYED row needs none of this and must not pay for it.
-                    // `"\(slot)#\(key)"` is already unique across sibling
-                    // providers and already follows its element across
-                    // insertions, so it was never the half that broke — and it
-                    // is the hot half. Putting `ForEach` rows under an extra
-                    // identity step deepened every chain in the tree that
-                    // matters most, and identity chains are hashed and walked
-                    // on the measure and state paths: it measured **menus
-                    // +6.2%**, against +2.6% once the rows were left where they
-                    // were.
-                    views.append(entry.reindexed(to: 0, providerSlot: slot, under: nil))
-                } else {
-                    // A POSITIONAL child is the half that broke, and it keeps
-                    // the index the level below already gave it — its static
-                    // slot there — rather than taking the enumeration position
-                    // here. Re-indexing to the enumeration would reintroduce
-                    // the bug one level down: in `Group { ForEach(rows); Text }`
-                    // the `Text` would count the rows before it and move every
-                    // time the collection grew.
-                    views.append(
-                        entry.reindexed(
-                            to: entry.identityChildIndex ?? 0, providerSlot: slot,
-                            under: providerContext.identity))
-                }
+                // A KEYED row needs none of this and must not pay for it.
+                // `"\(slot)#\(key)"` is already unique across sibling
+                // providers and already follows its element across
+                // insertions, so it was never the half that broke — and it
+                // is the hot half. Putting `ForEach` rows under an extra
+                // identity step deepened every chain in the tree that
+                // matters most, and identity chains are hashed and walked
+                // on the measure and state paths: it measured **menus
+                // +6.2%**, against +2.6% once the rows were left where they
+                // were. That is the row nothing below has namespaced and no
+                // branch separates. A row with either takes the step, since a
+                // flat key can carry neither, and only nested shapes make one.
+                //
+                // A POSITIONAL child is the half that broke, and it keeps
+                // the index the level below already gave it — its static
+                // slot there — rather than taking the enumeration position
+                // here. Re-indexing to the enumeration would reintroduce
+                // the bug one level down: in `Group { ForEach(rows); Text }`
+                // the `Text` would count the rows before it and move every
+                // time the collection grew.
+                views.append(
+                    entry.spliced(
+                        fromSlot: slot, under: providerContext.identity, branched: branch != nil))
             }
         } else {
             // The STATIC position, not the flattened one — see above.
