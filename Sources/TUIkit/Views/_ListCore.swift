@@ -2330,6 +2330,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // the hit regions, which would make a row in hand clickable, nor the
         // overlays, whose drawing the dim never reached.
         faint.opacityRegions = buffer.opacityRegions
+        // What the runs said about ALPHA does come, as regions, after the claims. The
+        // runs are the only statement a several-alpha border makes about its cells
+        // (§69.3), so leaving them behind whole drew a held row's border at full
+        // strength for as long as it was held (§69.4).
+        faint.opacityRegions += buffer.animatedCells.flatMap(Self.leftBehind(by:))
         return faint
     }
 
@@ -2347,6 +2352,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         for buffer in buffers {
             if !buffer.opacityRegions.isEmpty {
                 block.opacityRegions += buffer.opacityRegions.map { $0.shifted(byX: 0, y: top) }
+            }
+            // And, after them, what its runs said about alpha — for `dimmed(_:)`'s
+            // reasons. A dimmed buffer has no runs left, so nothing is counted twice.
+            if !buffer.animatedCells.isEmpty {
+                block.opacityRegions += buffer.animatedCells.flatMap(Self.leftBehind(by:))
+                    .map { $0.shifted(byX: 0, y: top) }
             }
             top += buffer.lines.count
         }

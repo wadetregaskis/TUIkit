@@ -3427,6 +3427,12 @@ claim still names the cells it did. The runs stay behind, because replaying the 
 frames would un-dim the copy on its first tick; so do the hit regions, because a row in
 hand is not a control; and so do the overlays, whose drawing the dim never reached.
 
+What the runs said about ALPHA was left behind with them, which this section did not see
+because nothing stated an alpha only on a run when it was written. Since §69 something does:
+a `.border(AnimatedColor)` at several alphas claims nothing and carries its alpha on its
+runs, so a held row with one drew its border at full strength in the slot. The copies now
+also carry each animating run's drawn-frame regions, after their claims (§69.4).
+
 The slot's claims reach the list's buffer through the row pairing §51 repaired, so this
 needed that first: a front-clipped hold would have put them on another row.
 
@@ -4251,6 +4257,12 @@ above faded walls: the shape the `ScrollView` bullet describes, with no `ScrollV
 anywhere. It now takes the geometry arm, and its regions are cut to the content the badge
 kept, by the derivation the line is drawn through, so none of them reaches the fill or the
 badge.
+
+A fifth builds the held slot of a reorder: `dimmed(_:)` and `stacked(_:)` rebuild the rows in
+hand from their lines and claims (§52), so their runs were gone before `renderRow` ever saw
+the slot. Both now append the runs' drawn-frame regions after each buffer's claims, in the
+buffer's coordinates, and the slot's buffer carries them to `attachRowOpacity` like any
+row's content regions.
 
 ## 70. A run left outside the buffer that carries it (2026-09-12)
 
