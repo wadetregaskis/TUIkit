@@ -589,8 +589,18 @@ extension Unicode.Scalar {
         if (0x1100...0x115F).contains(scalarValue) { return 2 }  // Hangul Jamo
         if (0x2329...0x232A).contains(scalarValue) { return 2 }  // angle brackets
         if (0x2E80...0x303E).contains(scalarValue) { return 2 }  // CJK radicals, Kangxi, ideographic
-        if (0x3041...0x33BF).contains(scalarValue) { return 2 }  // Hiragana, Katakana, Bopomofo, Hangul compat, Kanbun, CJK
-        if (0x33D0...0x33FF).contains(scalarValue) { return 2 }  // CJK compatibility
+        // One range where there were two that did not meet — `0x3041...0x33BF`
+        // and `0x33D0...0x33FF`, split without a word in this ladder's first
+        // draft. U+3300…U+33FF is East Asian Wide end to end, so the sixteen
+        // squared abbreviations between those two ranges, ㏀…㏏, fell through to
+        // the one-cell default while ㎿ and ㏐ either side of them were two:
+        // ㏂ SQUARE AM measured one cell and ㏘ SQUARE PM two, and a row carrying
+        // ㏂ or ㏄ painted a cell wider than it measured. This is NOT a host
+        // measurement — no terminal has been asked about these sixteen — but the
+        // ladder agreeing with its own neighbours in a block the UCD gives one
+        // answer. The kana voicing marks inside the range, U+3099 and U+309A,
+        // still take no cells: `isNonAdvancingMark` above answers them first.
+        if (0x3041...0x33FF).contains(scalarValue) { return 2 }  // Hiragana, Katakana, Bopomofo, Hangul compat, Kanbun, CJK, CJK compatibility
         if (0x3400...0x4DBF).contains(scalarValue) { return 2 }  // CJK unified ext A
         if (0x4E00...0x9FFF).contains(scalarValue) { return 2 }  // CJK unified
         if (0xA000...0xA4CF).contains(scalarValue) { return 2 }  // Yi

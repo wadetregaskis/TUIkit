@@ -232,6 +232,62 @@ struct PictographicPlaneWidthTests {
     }
 }
 
+// MARK: - CJK Compatibility block
+
+/// U+3300…U+33FF is East Asian Wide from end to end — the squared katakana
+/// words (㌀), the squared units (㎏ ㎞ ㏄) and the squared Latin abbreviations
+/// (㏂ ㏘) alike. Every codepoint in it is `East_Asian_Width=W` and `So`, so
+/// there is no mark and no ambiguous scalar in it for a narrower answer to be
+/// right about.
+///
+/// The width ladder claimed it in two ranges that did not meet —
+/// `0x3041...0x33BF` and `0x33D0...0x33FF` — so the sixteen scalars between
+/// them fell through to the one-cell default while the scalars either side were
+/// two: ㏂ SQUARE AM measured one cell and ㏘ SQUARE PM two, and a row carrying
+/// the first painted a cell wider than it measured.
+///
+/// The standard library exposes no East_Asian_Width, so this cannot sweep the
+/// property the way `CombiningMarkRangeTests` sweeps `generalCategory`. The
+/// block is the oracle instead, because the UCD gives the whole of it one
+/// answer. `matchesCharacterWidthEverywhere` could not have caught the gap: it
+/// compares this function with one that delegates to it.
+@Suite("CJK Compatibility width")
+struct CJKCompatibilityWidthTests {
+
+    @Test("every scalar in U+3300…U+33FF is two cells")
+    func wholeBlockIsWide() {
+        var narrow: [String] = []
+        var checked = 0
+        for value in UInt32(0x3300)...UInt32(0x33FF) {
+            guard let scalar = Unicode.Scalar(value),
+                scalar.properties.generalCategory != .unassigned
+            else { continue }
+            checked += 1
+            if scalar.loneTerminalWidth != 2 {
+                narrow.append("U+" + String(value, radix: 16, uppercase: true))
+            }
+        }
+        // The whole block has been assigned since Unicode 4.0; a runtime that
+        // skipped it would otherwise pass this vacuously.
+        #expect(checked == 256)
+        #expect(narrow.isEmpty, "measured narrower than two cells: \(narrow)")
+    }
+
+    /// The line-level consequence, through `strippedLength` — which takes the
+    /// scalar-run fast path for this block, since the allow-list admits it.
+    @Test(
+        "a squared abbreviation in a line is priced at two cells",
+        arguments: [
+            ("\u{33C2} 9:00", 7, "㏂ SQUARE AM — inside the old gap"),
+            ("\u{33D8} 9:00", 7, "㏘ SQUARE PM — beside the gap, always right"),
+            ("250\u{33C4}", 5, "㏄ SQUARE CC"),
+            ("\u{33BF}\u{33C0}\u{33CF}\u{33D0}", 8, "the gap's two ends and its two neighbours"),
+        ] as [(String, Int, String)])
+    func squaredAbbreviationsInALine(text: String, expected: Int, what: String) {
+        #expect(text.strippedLength == expected, "\(what)")
+    }
+}
+
 // MARK: - Zero-width format controls
 
 /// The bidi controls are `Default_Ignorable_Code_Point` with no advance: they
