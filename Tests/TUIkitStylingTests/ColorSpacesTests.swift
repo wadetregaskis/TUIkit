@@ -23,6 +23,34 @@ struct ColorSpacesTests {
         #expect(Color.hsl(0, 100, 100) == .rgb(255, 255, 255))
     }
 
+    @Test("An HSL hue off the 0..<360 circle draws the colour of its turn-equivalent")
+    func hslHueWrapsWholeTurns() {
+        // `hsl` handed each channel the hue a third of a turn either side and
+        // wrapped that with ONE `+= 1` / `-= 1`, so a hue far enough below 0 or
+        // above 360 fell into the wrong segment. `hslPrimaries` cannot show it:
+        // at saturation 100 / lightness 50 the `luminance` term is 0, and the
+        // wrong segment's ramp clamps to the same 0 the right one returns,
+        // hence bases whose lightness or saturation is away from that. Whole-
+        // number hues keep the wrap exact, so this compares for equality.
+        let bases: [(saturation: Double, lightness: Double)] = [(100, 75), (80, 40), (60, 50)]
+        let turns: [Double] = [-2, -1, 1, 2]
+        for base in bases {
+            for hue in stride(from: 0.0, to: 360, by: 15) {
+                let reference = Color.hsl(hue, base.saturation, base.lightness)
+                for turn in turns {
+                    let offCircle = hue + 360 * turn
+                    let wrapped = Color.hsl(offCircle, base.saturation, base.lightness)
+                    #expect(
+                        wrapped == reference,
+                        "hsl(\(offCircle), \(base.saturation), \(base.lightness)) = \(wrapped), want \(reference)")
+                }
+            }
+        }
+        // What `.hueRotation(.degrees(-300))` hands over for a hue-0 pale red:
+        // blue came out 0 instead of the lightness's 128.
+        #expect(Color.hsl(-300, 100, 75) == .rgb(255, 255, 128))
+    }
+
     // MARK: - HSB / HSV
 
     @Test("HSB primaries resolve to the expected RGB")

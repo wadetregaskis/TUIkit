@@ -28,7 +28,26 @@ extension Color {
     ///   - lightness: The lightness component (0-100).
     /// - Returns: The corresponding RGB color.
     public static func hsl(_ hue: Double, _ saturation: Double, _ lightness: Double) -> Self {
-        let normalizedHue = hue / 360.0
+        // Put the hue on the circle HERE, once, as `hsb` does, rather than
+        // trusting the two single-shot `if`s in `hueToRGB` below. Those are
+        // handed the hue a third of a turn either side, so they absorb one
+        // turn of overshoot and no more: sound for 0..<360, wrong outside it.
+        // `hueRotation` hands over `(hue + amount).truncatingRemainder(dividingBy: 360)`,
+        // which keeps the sign, so below -240 degrees the blue argument was
+        // still negative after its `+= 1`, took the first segment's ramp below
+        // `luminance` and clamped: `.degrees(-300)` on rgb(255, 128, 128) drew
+        // blue 1, not 128. Past 600 degrees the red argument stayed above 1
+        // after its `-= 1`, and `hsl(720, 100, 50)` came out black, not red.
+        //
+        // An in-range hue is untouched (`truncatingRemainder` of a value
+        // already in 0..<360 is exact), so no palette or picker colour moves.
+        // A non-finite hue is deliberately NOT folded to 0 the way `hsb` folds
+        // it: that guard is for `hsb`'s trapping `Int(...)`, which `hsl` has
+        // none of. NaN stays NaN, fails every comparison in `hueToRGB` and
+        // draws the grey it always drew.
+        var wrappedHue = hue.truncatingRemainder(dividingBy: 360)
+        if wrappedHue < 0 { wrappedHue += 360 }
+        let normalizedHue = wrappedHue / 360.0
         let normalizedSaturation = saturation / 100.0
         let normalizedLightness = lightness / 100.0
 

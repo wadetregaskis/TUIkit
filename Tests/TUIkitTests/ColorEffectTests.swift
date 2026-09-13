@@ -87,6 +87,22 @@ struct ColorEffectTests {
         #expect(drawn(base.hueRotation(.degrees(240))).contains("0;0;255"))
     }
 
+    @Test("A backwards hue rotation lands where the forwards one does")
+    func hueRotatesBackwards() {
+        // Not the pure red above: at saturation 100 / lightness 50 HSL's
+        // `luminance` term is 0, so a channel that fell into the wrong segment
+        // clamped to the same 0 the right one gives, and `hueRotates` stayed
+        // green while `.degrees(-300)` drew this pale red's blue as 1, not 128.
+        // Bytes are pinned rather than the two lines compared: `Angle` stores
+        // radians, so -300 comes back a ULP off, and every channel here sits
+        // well clear of a rounding boundary either way.
+        let base = Text("ab").foregroundStyle(Color.rgb(255, 128, 128))
+        let forwards = drawn(base.hueRotation(.degrees(60)))
+        let backwards = drawn(base.hueRotation(.degrees(-300)))
+        #expect(forwards.contains("255;255;128"), "\(forwards.debugDescription)")
+        #expect(backwards.contains("255;255;128"), "\(backwards.debugDescription)")
+    }
+
     @Test("An effect leaves the cells exactly where they were")
     func effectsAreSizeNeutral() {
         // Every one of these rewrites colours in place. A view that changed
