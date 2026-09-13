@@ -4297,6 +4297,24 @@ derivation looks like rather than where one lives. The framework's own caller,
 `TerminalProfilePalette`'s bar background, is only ever handed the opaque colours decoded
 from Terminal's profiles, so no bundled theme renders differently.
 
+### 71.1 `Color.gradient` took the same step, and a faded colour's ramp faded in
+
+`AnyGradient.derive(from:in:)` builds `Color.gradient`'s lighter stop the same way —
+`rgbToHSL`, then `Color.hsl(hue, saturation, lightness + 15)` — beside a bottom stop that
+is the resolved colour itself, alpha intact. So `Color.blue.opacity(0.5).gradient` was a
+ramp from alpha 255 to alpha 128, and a ramp interpolates alpha as a fourth channel: a
+vertical ramp's alpha varies per row, which `.background` has claimed since §15 and
+`Text`'s ink since §34.1. A block with the height to show the ramp was nearly solid at
+the top and half-faded at the bottom — an honoured claim of the wrong thing rather than
+a missing one — where the colour asked for half all the way down. A one-line `Text`
+samples the base stop (see `AnyGradient`'s note) and was already right.
+
+The lighter stop now carries `resolved`'s alpha. Carried and not composed, because
+`resolve(with:)` has already multiplied the reference's alpha into any faded palette
+slot's, so `resolved` holds the one alpha this ink has and the lighter end is that ink
+re-spelled. With both stops equal the ramp's `AlphaShape` is `uniform` rather than
+`perRow`, which is the cheaper claim as well as the right one.
+
 ### 70.3 The §69.1 assertion, which could not tell a producer from its ancestors
 
 `b9804700` added an assertion to the run walk: a run carrying a translucent per-frame

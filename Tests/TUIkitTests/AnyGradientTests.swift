@@ -79,6 +79,23 @@ struct AnyGradientTests {
         #expect(stops.last?.color == green.palette.accent.resolve(with: green.palette), "\(stops)")
     }
 
+    /// A faded colour's gradient is faded at BOTH ends. The lighter stop is rebuilt
+    /// through `Color.hsl`, which builds at alpha 255, beside a bottom stop that is
+    /// the colour itself — so without the carry `Color.blue.opacity(0.5).gradient`
+    /// ran from solid to half-faded, and text with the height to show the ramp
+    /// faded in down its rows. Asked of a concrete base and of a palette role,
+    /// because the role reaches the stop through `resolve(with:)`, which composes.
+    @Test("A faded colour's gradient carries the alpha to both stops")
+    func fadedBaseCarriesAlphaToBothStops() {
+        let concrete = Color.rgb(51, 102, 204).opacity(0.5).gradient.gradient(in: environment()).stops
+        let concreteAlphas = concrete.map(\.color.alpha)
+        #expect(concreteAlphas == [128, 128], "a faded concrete colour: \(concrete)")
+
+        let role = Color.palette.accent.opacity(0.5).gradient.gradient(in: environment()).stops
+        let roleAlphas = role.map(\.color.alpha)
+        #expect(roleAlphas == [128, 128], "a faded palette role: \(role)")
+    }
+
     /// `mix` is the same interpolation a gradient does — asked for one point
     /// rather than a whole ramp — once the two are told to use the same space.
     @Test("Color.mix in .device is a two-stop device gradient at the fraction")

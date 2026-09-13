@@ -122,8 +122,16 @@ public struct AnyGradient: ShapeStyle, Hashable, Sendable {
         guard let base = resolved.rgbComponents else { return Gradient(colors: [resolved]) }
         let (hue, saturation, lightness) = Color.rgbToHSL(
             red: base.red, green: base.green, blue: base.blue)
+        // The lighter stop carries `resolved`'s alpha rather than the 255 `Color.hsl`
+        // builds at. Built opaque, `Color.blue.opacity(0.5).gradient` was a ramp from
+        // a solid top to a half-faded bottom — alpha interpolates as a fourth channel
+        // and a vertical ramp's per-row alpha is claimed (§15, §34.1) — so text tall
+        // enough to show the ramp faded in down its rows instead of being half all
+        // the way. Carried, not composed: `resolved` has already composed the
+        // reference's alpha with any faded palette slot, and the lighter end is that
+        // same ink re-spelled.
         return Gradient(colors: [
-            Color.hsl(hue, saturation, min(100, lightness + 15)),
+            Color.hsl(hue, saturation, min(100, lightness + 15)).carryingAlpha(of: resolved),
             resolved,
         ])
     }
