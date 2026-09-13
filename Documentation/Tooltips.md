@@ -163,6 +163,15 @@ calculation rather than a different design.
 Wrapping is ordinary text wrapping at the bar's width, and the row is drawn
 above the shortcut items, in the bar's own chrome.
 
+Growing has one consequence below the layout. The bar grows *upwards*, so its
+top edge moves a row with every tooltip that comes or goes — and the frame
+diff compares a region's rows by index from wherever the region is written.
+The bar's top border, the same bytes either side of the move, compared equal
+and was skipped: a blank row where the border belonged as a tooltip appeared,
+and the tooltip's text left standing there as it went. The run loop therefore
+invalidates the diff whenever the bar's start row changes, not only when the
+bar appears or disappears (`RenderLoop.noteStatusBarPlacement(startRow:)`).
+
 ## 5. Presentation 2 — a popover
 
 Attached to the **control**, not the pointer. The placement rules, in order:

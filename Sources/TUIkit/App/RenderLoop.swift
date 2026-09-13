@@ -220,9 +220,10 @@ internal final class RenderLoop<A: App> {
     /// in `RenderLoop+Replay.swift`, can reach it.
     var replayable: ReplayableFrame?
 
-    /// Whether the previous frame drew a status bar, so its appearing or
-    /// disappearing can invalidate the diff — see where it is set.
-    private var lastFrameHadStatusBar = false
+    /// The row the previous frame drew the status bar from, or `nil` when it drew
+    /// none — so a bar appearing, disappearing or MOVING invalidates the diff. See
+    /// where it is set.
+    private var lastStatusBarStartRow: Int?
 
     /// What the last render reported, so the run loop can decide whether an
     /// animation tick can be replayed without rendering again.
@@ -547,7 +548,11 @@ extension RenderLoop {
         let statusBarBuffer: FrameBuffer? =
             statusBar.hasItems
             ? buildStatusBarBuffer(terminalWidth: terminalWidth, environment: environment) : nil
-        noteStatusBarPresence(statusBarBuffer != nil)
+        // The row `writeFrame` puts the bar at. The diff has to hear about that
+        // changing, not only about the bar coming and going — see
+        // `noteStatusBarPlacement(startRow:)`.
+        noteStatusBarPlacement(
+            startRow: statusBarBuffer == nil ? nil : terminalHeight - statusBarHeight + 1)
 
         var mergedRegions = buffer.hitTestRegions
         // The app header is drawn OUTSIDE the composited content area, so
@@ -1109,7 +1114,7 @@ extension RenderLoop {
         terminal.endFrame()
     }
 
-    /// Invalidates the diff when the status bar appears or disappears.
+    /// Invalidates the diff when the status bar appears, disappears, or moves.
     ///
     /// A bar that went away and came back is not "unchanged". While it is
     /// hidden the content area grows into its row and paints over it, but the
@@ -1118,9 +1123,21 @@ extension RenderLoop {
     /// leaving the bottom row blank with the shortcuts gone. The app header
     /// self-heals the same way when its height turns out different from the
     /// estimate.
-    private func noteStatusBarPresence(_ present: Bool) {
-        guard present != lastFrameHadStatusBar else { return }
-        lastFrameHadStatusBar = present
+    ///
+    /// Nor is a bar that MOVED, which is why this compares the start row rather
+    /// than a presence flag. The diff compares a region's rows by INDEX from
+    /// wherever the region is written, and the bar grows upwards: a status-bar
+    /// tooltip is a row above the items, so the bar's top edge moves up a row with
+    /// every tooltip that appears and back down with every one that goes. Its row
+    /// 0 — a border or a rule, the same bytes either side of the move — compared
+    /// equal and was skipped. Growing, that left blank the row the content pass
+    /// had just erased, so the bar stood open at the top; shrinking, the row the
+    /// top edge returned to kept the tooltip's text. A runtime chrome-style change
+    /// moves it the same way. The start row and not the height, because the start
+    /// row is exactly what an index-wise diff assumes has not changed.
+    private func noteStatusBarPlacement(startRow: Int?) {
+        guard startRow != lastStatusBarStartRow else { return }
+        lastStatusBarStartRow = startRow
         diffWriter.invalidate()
     }
 
