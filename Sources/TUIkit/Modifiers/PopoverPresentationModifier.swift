@@ -159,7 +159,11 @@ extension PopoverPresentationModifier: Renderable {
 
         let focusManager = context.environment.focusManager
         focusManager?.registerSection(id: sectionID)
-        focusManager?.activateSection(id: sectionID)
+        // As a PRESENTED section: a sheet or menu opened from a control in the
+        // popover holds the active section on top of it, and plain activation
+        // took it back from that surface on every frame — see
+        // `FocusManager.activatePresentedSection(id:)`.
+        focusManager?.activatePresentedSection(id: sectionID)
         // Input-grabbing, so the app's chrome hotkeys don't fire behind it.
         focusManager?.markSectionModal(id: sectionID)
         // A popover holds arbitrary content, which may be entirely

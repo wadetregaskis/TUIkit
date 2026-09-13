@@ -126,7 +126,10 @@ extension AlertPresentationModifier: Renderable {
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
-            focusManager?.activateSection(id: sectionID)
+            // As a PRESENTED section, the same rule every presenter follows:
+            // never taken back from a surface stacked on this one. See
+            // `FocusManager.activatePresentedSection(id:)`.
+            focusManager?.activatePresentedSection(id: sectionID)
             // Mark this section input-grabbing so the app's global default key
             // bindings (appearance/theme) don't fire behind the alert.
             focusManager?.markSectionModal(id: sectionID)

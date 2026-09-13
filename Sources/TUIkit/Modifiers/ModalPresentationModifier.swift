@@ -135,7 +135,11 @@ extension ModalPresentationModifier: Renderable {
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             let focusManager = context.environment.focusManager
             focusManager?.registerSection(id: sectionID)
-            focusManager?.activateSection(id: sectionID)
+            // As a PRESENTED section: an alert or popover opened from inside
+            // this modal holds the active section on top of it, and plain
+            // activation took it back from that surface on every frame — see
+            // `FocusManager.activatePresentedSection(id:)`.
+            focusManager?.activatePresentedSection(id: sectionID)
             // Mark this section input-grabbing so the app's global default key
             // bindings (appearance/theme) don't fire behind the modal.
             focusManager?.markSectionModal(id: sectionID)

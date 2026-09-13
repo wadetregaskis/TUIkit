@@ -89,6 +89,15 @@ public final class FocusManager: @unchecked Sendable {
     /// behind the modal; see `InputHandler` and ``activeSectionIsModal``.
     private var modalSectionIDs: Set<String> = []
 
+    /// ``modalSectionIDs`` as the previous frame left them, snapshotted by
+    /// ``beginRenderPass()`` before it clears them.
+    ///
+    /// For a presenter asking whether the active section belongs to a surface
+    /// presented on top of its own (`activatePresentedSection(id:)`): that
+    /// surface renders later in the pass than its presenter, so this frame's
+    /// marks do not exist yet when the question is asked.
+    private(set) var previousModalSectionIDs: Set<String> = []
+
     /// Which device drove the most recent input event.
     ///
     /// A control that behaves differently depending on how it was activated —
@@ -148,7 +157,10 @@ public final class FocusManager: @unchecked Sendable {
 
     /// For each section that was activated *over* another, the section to revert
     /// to when it is deactivated (e.g. a modal section reverts to the page's).
-    private var sectionRevertTarget: [String: String] = [:]
+    ///
+    /// Readable outside this file because `activatePresentedSection(id:)` walks
+    /// it to tell a surface stacked on a presentation from anything else.
+    private(set) var sectionRevertTarget: [String: String] = [:]
 
     /// A focus request whose target was not registered when it was made —
     /// durable focus intent ("Locating things without drawing them" §5d:
@@ -231,9 +243,7 @@ public final class FocusManager: @unchecked Sendable {
     }
 
     /// The ID of the currently active section, if any.
-    var activeSectionIdentifier: String? {
-        activeSectionID
-    }
+    var activeSectionIdentifier: String? { activeSectionID }
 
     /// Whether the active section belongs to a presented modal / alert — i.e. a
     /// surface that grabs input. The `InputHandler` consults this to suppress the
@@ -986,7 +996,9 @@ extension FocusManager {
     /// first focusable element. If the section is *already* the active one,
     /// the current `focusedID` is preserved across re-renders — overlay
     /// surfaces (`ModalPresentationModifier`, an open `Picker` drop-down)
-    /// call `registerSection` + `activateSection` on every frame, and
+    /// call `registerSection` + `activatePresentedSection(id:)` on every
+    /// frame — which lands here unless a surface presented ON TOP of theirs
+    /// holds the active section — and
     /// `beginRenderPass` has already cleared the section's focusables by
     /// the time activateSection runs. Resetting focus here would snap the
     /// user's focus back to the first child of the (still-empty) section.
@@ -1119,6 +1131,9 @@ extension FocusManager {
         // or a focused element that left the tree. The handler objects persist
         // in StateStorage regardless — this only preserves reachability.
         previousSections = sections
+        // Last frame's modal marks, likewise, before `beginSceneRender` clears
+        // them: see ``previousModalSectionIDs``.
+        previousModalSectionIDs = modalSectionIDs
         beginSceneRender()
         // A new generation so this pass's @FocusState registrations can be told
         // apart from prior ones (see `pruneFocusRegistry`). The registry itself

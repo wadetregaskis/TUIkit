@@ -463,7 +463,10 @@ func presentMenuPopover<Items: View>(
     context.environment.volatileReadTracker?.recordRenderSideEffect()
     let focusManager = context.environment.focusManager
     focusManager?.registerSection(id: sectionID)
-    focusManager?.activateSection(id: sectionID)
+    // As a PRESENTED section, the same rule every presenter follows: never
+    // taken back from a surface stacked on this one. See
+    // `FocusManager.activatePresentedSection(id:)`.
+    focusManager?.activatePresentedSection(id: sectionID)
     // Input-grabbing so global chrome hotkeys don't fire behind the menu.
     focusManager?.markSectionModal(id: sectionID)
     // The section deliberately holds NO focus: a pop-up's rows report to the
