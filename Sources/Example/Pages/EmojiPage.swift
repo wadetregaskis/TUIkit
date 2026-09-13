@@ -45,17 +45,13 @@ struct EmojiPage: View {
     /// two greedy lists evenly), so it's preferable down to quite narrow
     /// terminals; stacking is the last resort for the genuinely tiny.
     @Environment(\.terminalWidth) private var terminalWidth
-    @Environment(\.terminalHeight) private var terminalHeight
     private static let sideBySideMinWidth = 64
 
-    /// The lines the page spends above the browse tables — the app header, the
-    /// bug-case rows (whose wrapping depends on the width), the filter field and
-    /// the count line. What is left is the tables' height.
-    ///
-    /// An estimate, and it was one before this too. It can leave a line or two of
-    /// slack below the tables at some sizes; what it cannot do any more is let a
-    /// filter collapse them.
-    private static let fixedContentLines = 24
+    /// The fewest lines a browse table is worth drawing in: its count line, the
+    /// table's top border, its header row, one row of data and its bottom border.
+    /// Below that a box would show chrome with nothing in it, so the tables give way
+    /// to their count lines instead.
+    private static let minimumBrowseLines = 5
 
     // The corpus is small (~1.9k entries) and immutable, so building it
     // once at page load and filtering inline is fine — no need for a
@@ -117,35 +113,28 @@ struct EmojiPage: View {
             // Emoji on the left, SF Symbols on the right — both filtered by the
             // one field above, each scrolled independently. Side by side when
             // there is room, otherwise stacked.
-            // A held height in BOTH arms. A `Table` whose rows all fit hugs them
-            // — correct in general, and wrong here: filtering 1,212 emoji down to
-            // one collapsed both tables from twenty lines to three and jumped the
-            // whole page up under the cursor, on every keystroke of the filter.
-            // The browse tables are a fixed frame you look through, not content
-            // that resizes.
-            // Held at an explicit height in BOTH arms, rather than greedy: a
-            // `.frame(maxHeight: .infinity)` fills only a height that was actually
-            // PROPOSED (see `FlexibleFrameView.contentTargetHeight`), and inside
-            // this page's stack these are not — so greedy left them hugging, which
-            // is the very thing being fixed.
-            let available = max(5, terminalHeight - Self.fixedContentLines)
-            if terminalWidth >= Self.sideBySideMinWidth {
-                HStack(alignment: .top, spacing: 2) {
-                    emojiTable(height: available)
-                    symbolTable(height: available)
-                }
-            } else {
-                // Stacked, each takes half: two GREEDY tables in a `VStack` would
-                // let the first take all the height, so the share is explicit.
-                VStack(alignment: .leading, spacing: 1) {
-                    emojiTable(height: max(4, available / 2))
-                    symbolTable(height: max(4, available / 2))
-                }
+            //
+            // In exactly the rows the layout has LEFT once everything above has
+            // wrapped at the real width: a `GeometryReader` is greedy, so this stack
+            // hands it the remainder, and it pads to that remainder even where the
+            // tables stop short. This used to be a guess, `terminalHeight - 24`,
+            // which counted the whole terminal where the page is laid out in the
+            // content area and assumed the bug-case rows never wrap. At 140x42 it came
+            // out 7 rows short; a short page is centred, so those showed as 3 blank
+            // lines under the header and 4 above the status bar. At 80 columns the
+            // rows wrap and the same guess ran the tables off the bottom.
+            //
+            // Held at a height rather than left to hug, still, and for the reason it
+            // always was: a `Table` whose rows all fit hugs them, and filtering 1,212
+            // emoji to one would collapse the box and jump the page on every
+            // keystroke.
+            GeometryReader { proxy in
+                browseTables(height: proxy.size.height)
             }
         }
-        // Not wrapped in a page ScrollView: the List below is the scrollable
-        // content and is greedy in height (it fills the viewport and scrolls
-        // itself). Nesting it in a page ScrollView would defeat both.
+        // Not wrapped in a page ScrollView: the tables are the scrollable content,
+        // each scrolling itself inside the rows the reader above hands it. Inside a
+        // page ScrollView the reader would be offered the whole viewport again.
         .appHeader {
             DemoAppHeader("menu.item.emoji",
                           subtitle: "page.emoji.subtitle")
@@ -154,6 +143,54 @@ struct EmojiPage: View {
 
     // MARK: - Tables
 
+    /// The browse tables, filling exactly `height` lines.
+    ///
+    /// Side by side, both take the whole height. Stacked, they share it with the
+    /// one line between them — two tables in a `VStack` cannot split a height on
+    /// their own. Where there is room for one box and not two, the emoji table,
+    /// which the page is about, keeps it; where there is not room for any, the
+    /// count lines stand in, rather than boxes with nothing in them.
+    @ViewBuilder private func browseTables(height: Int) -> some View {
+        if terminalWidth >= Self.sideBySideMinWidth {
+            if height >= Self.minimumBrowseLines {
+                HStack(alignment: .top, spacing: 2) {
+                    emojiTable(height: height)
+                    symbolTable(height: height)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 2) {
+                    emojiCountLine
+                    if SFSymbol.isFontAvailable { symbolCountLine }
+                }
+            }
+        } else if height >= 2 * Self.minimumBrowseLines + 1 {
+            let first = (height - 1) / 2
+            VStack(alignment: .leading, spacing: 1) {
+                emojiTable(height: first)
+                symbolTable(height: height - 1 - first)
+            }
+        } else if height >= Self.minimumBrowseLines {
+            emojiTable(height: height)
+        } else {
+            emojiCountLine
+        }
+    }
+
+    /// How many emoji the filter kept, of how many there are.
+    ///
+    /// Both counts sit inside one phrase, as `%1$@`/`%2$@`, so a language can order
+    /// them its own way (zh and ja put the total first).
+    private var emojiCountLine: some View {
+        Text("page.emoji.emojiCount \(filteredEmoji.count) \(Self.allEmoji.count)")
+            .foregroundStyle(.palette.foregroundSecondary)
+    }
+
+    /// As ``emojiCountLine``, for the symbols.
+    private var symbolCountLine: some View {
+        Text("page.emoji.sfSymbolsCount \(filteredSymbols.count) \(Self.allSymbols.count)")
+            .foregroundStyle(.palette.foregroundSecondary)
+    }
+
     /// The emoji browse table — its own selection, sort and scroll position.
     ///
     /// A `Table` rather than a `List` of hand-built rows: the three fields
@@ -161,16 +198,13 @@ struct EmojiPage: View {
     /// columns itself can also sort itself. The count line moves above it,
     /// `Table` having no title of its own.
     ///
-    /// - Parameter height: The lines the TABLE itself takes, or `nil` to fill
-    ///   whatever it is offered. On the TABLE and not on the wrapper: the wrapper
-    ///   also holds the count line, and framing IT leaves the table hugging its
-    ///   rows inside a taller box, which is the shrink this is here to stop.
-    private func emojiTable(height: Int?) -> some View {
+    /// - Parameter height: The lines this takes, its count line included. Held on
+    ///   the TABLE and not on the wrapper: the wrapper also holds the count line,
+    ///   and framing IT leaves the table hugging its rows inside a taller box, which
+    ///   is the shrink this is here to stop.
+    private func emojiTable(height: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Both counts sit inside one phrase, as `%1$@`/`%2$@`, so a language
-            // can order them its own way (zh and ja put the total first).
-            Text("page.emoji.emojiCount \(filteredEmoji.count) \(Self.allEmoji.count)")
-                .foregroundStyle(.palette.foregroundSecondary)
+            emojiCountLine
             Table(sortedEmoji, selection: $selectedID, sortOrder: $emojiSort) {
                 // Two cells: every entry here has emoji presentation, which is
                 // what makes it wide, and the page exists to show that.
@@ -204,11 +238,10 @@ struct EmojiPage: View {
     /// resolve at all) from an Apple system that just lacks the font.
     ///
     /// - Parameter height: As ``emojiTable(height:)``'s.
-    @ViewBuilder private func symbolTable(height: Int?) -> some View {
+    @ViewBuilder private func symbolTable(height: Int) -> some View {
         if SFSymbol.isFontAvailable {
             VStack(alignment: .leading, spacing: 0) {
-                Text("page.emoji.sfSymbolsCount \(filteredSymbols.count) \(Self.allSymbols.count)")
-                    .foregroundStyle(.palette.foregroundSecondary)
+                symbolCountLine
                 Table(
                     sortedSymbols, selection: $selectedSymbolID, sortOrder: $symbolSort,
                     emptyPlaceholder: L("page.emoji.sfSymbolsEmpty")
@@ -228,11 +261,14 @@ struct EmojiPage: View {
                 .heldOpen(to: height)
             }
         } else {
+            // Held to its share like the table it stands in for, or a stacked
+            // pair would run past the rows it was handed.
             ContentUnavailableView(
                 "page.emoji.sfSymbolsUnavailableTitle",
                 description: Self.allSymbols.isEmpty
                     ? L("page.emoji.sfSymbolsUnavailablePlatform")
                     : L("page.emoji.sfSymbolsUnavailableFont"))
+                .frame(height: height, alignment: .top)
         }
     }
 
@@ -379,20 +415,17 @@ extension String {
 // MARK: - Holding a box open
 
 extension View {
-    /// Holds this view at `height` lines, or lets it fill what it is offered when
-    /// `height` is nil — one cell of the caller's height going to the count line
-    /// above it.
+    /// Holds this view at `height` lines, one of the caller's lines going to the
+    /// count line above it.
     ///
     /// A `Table` whose rows all fit hugs them, which is right for a table in a
     /// `VStack` and wrong for a browse table you filter: narrowing 1,212 rows to
     /// one collapsed the box from twenty lines to three and jumped the page under
     /// the cursor, on every keystroke.
-    @ViewBuilder
-    fileprivate func heldOpen(to height: Int?) -> some View {
-        if let height {
-            frame(height: max(2, height - 1))
-        } else {
-            frame(maxHeight: .infinity)
-        }
+    fileprivate func heldOpen(to height: Int) -> some View {
+        // No floor: the caller already gave way to count lines below the smallest
+        // useful box, and a floor here is what used to run a table past the rows it
+        // had.
+        frame(height: max(0, height - 1))
     }
 }
