@@ -98,4 +98,34 @@ struct ColorMultiplyAlphaTests {
             drawn.opacityRegions.contains { $0.inkOpacity < 1 },
             "the text's ink claim: \(drawn.opacityRegions)")
     }
+
+    @Test("A tint nests with an inner fade, the way a second fade would")
+    func tintNestsWithInnerFade() {
+        // The resolution takes the LAYER from the first region covering a cell, so
+        // that region has to hold the product already — the rule `.opacity(_:)`
+        // follows. Appended bare, the tint's rectangle came second and lost: the
+        // pair resolved at the inner 0.5 and the tint's half went nowhere, where
+        // SwiftUI (and `.opacity(0.5).opacity(0.5)` here) gives a quarter.
+        let drawn = buffer(Text("hi").opacity(0.5).colorMultiply(Color.white.opacity(0.5)))
+        let layers = drawn.opacityRegions.map(\.opacity)
+        let tint = 128.0 / 255
+        #expect(layers == [0.5 * tint, tint], "the first region is the layer: \(layers)")
+    }
+
+    @Test("A clear tint hides a subtree that claims an alpha of its own")
+    func clearTintHidesAClaimingSubtree() {
+        // The sharpest form of the ordering bug needs no `.opacity(_:)` at all. A
+        // translucent foreground claims its ink at layer 1; that claim came first,
+        // so the layer resolved at 1 and the text drew. `clearTint` above passes
+        // only because its text claims nothing.
+        let drawn = buffer(
+            Text("hi").foregroundStyle(Color.red.opacity(0.5)).colorMultiply(.clear))
+        let context = makeRenderContext(width: 10, height: 1)
+        let resolved = drawn.resolvingOpacity(
+            surface: .blue, palette: context.environment.palette)
+        let visible = resolved.lines[0].stripped
+        #expect(
+            !visible.contains("hi"),
+            "hidden, not merely recoloured: \(visible.debugDescription)")
+    }
 }

@@ -200,10 +200,19 @@ extension _ColorEffectView: Renderable {
                 })
             : buffer
         if let layerFade {
-            result.opacityRegions.append(
-                OpacityRegion(
-                    offsetX: 0, offsetY: 0, width: result.width,
-                    height: result.height, opacity: layerFade))
+            // Through `_OpacityView.fading` rather than a bare append, and the order
+            // is the point. The resolution takes the LAYER from the FIRST region
+            // covering a cell and multiplies only ink and field across the rest, so
+            // whatever the content claimed — an inner `.opacity(_:)`, another
+            // translucent tint, even a translucent foreground's ink claim, which
+            // sits at layer 1 — came first, won the cell, and this tint's alpha went
+            // nowhere: `Text("hi").foregroundStyle(.red.opacity(0.5))
+            // .colorMultiply(.clear)` drew the text instead of hiding it. Scaling the
+            // inner regions before stamping this rectangle last is what `.opacity(_:)`
+            // does, and §25 says the two must nest alike.
+            result.opacityRegions = _OpacityView<Content>.fading(
+                result.opacityRegions, by: layerFade, cycle: nil,
+                wholeOf: result, appendingRectangle: !result.isEmpty)
         }
         return result
     }

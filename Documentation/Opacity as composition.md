@@ -1654,6 +1654,26 @@ independently, and either can happen without the other.
 That is also why the test asserts the *bytes* are byte-identical to an unmultiplied
 render. It is how the bug was found rather than a restatement of the fix.
 
+### 25.2 A tint nests, and that is a question of order (2026-09-12)
+
+The tint's layer region was appended bare, after whatever the content had already
+claimed. The resolution takes the LAYER from the **first** region covering a cell and
+multiplies only ink and field across the rest (`foldedAlphas`) — which is right only
+because `.opacity(_:)` scales every inner region by its own factor *before* stamping its
+rectangle last, so the inner region already holds the product. The tint did the stamping
+and not the scaling, so any inner region won the layer and the tint's alpha went nowhere:
+
+- `Text("hi").opacity(0.5).colorMultiply(.white.opacity(0.5))` resolved at the inner
+  0.5 rather than a quarter — the difference between winning and losing the ½ contest
+  against a sibling behind it;
+- `Text("hi").foregroundStyle(.red.opacity(0.5)).colorMultiply(.clear)` needed no
+  `.opacity(_:)` at all: a translucent foreground claims its ink at layer 1, that claim
+  came first, and the text §25 promises to hide was drawn.
+
+The tint now goes through `_OpacityView.fading`, the same scale-then-stamp with inner
+cycles scaled alongside, so `.opacity(x)` and `.colorMultiply(.white.opacity(x))` nest
+identically in either order.
+
 
 ## 26. `ColorPicker`: the swatch was already right, and a refusal expired (2026-09-09)
 
