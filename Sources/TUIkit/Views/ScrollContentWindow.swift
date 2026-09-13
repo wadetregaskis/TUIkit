@@ -78,6 +78,11 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// are looking at" would name a row nobody can see — which is exactly the
     /// row a `.top` seek deliberately steps past.
     ///
+    /// Only where they DO overwrite, which is what `edgeInset` says. Under
+    /// `.visible` the pair is reserved outside this window, whose
+    /// `viewportHeight` is then just the lines between them; under three lines
+    /// neither is drawn. Either way the inset is `0` and nothing is charged here.
+    ///
     /// Each indicator is charged only when it actually SHOWS: the top one
     /// when scrolled down, the bottom one when the caller says content
     /// remains below. At the very bottom the last viewport line is readable
@@ -150,7 +155,8 @@ struct ScrollToRequest: Sendable, Hashable {
 
     /// One row of headroom per edge when the ScrollView's "N more
     /// above/below" indicators can replace the viewport's first/last line
-    /// (indicators active, no scrollbar) — without it, a `.top` seek lands
+    /// (drawn, and drawn OVER the content: not a scrollbar, and not the pair
+    /// `.visible` reserves outside it) — without it, a `.top` seek lands
     /// the target exactly under the indicator. Stamped by the ScrollView;
     /// the reveal snap applies the same reservation.
     var topInset = 0

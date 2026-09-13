@@ -298,10 +298,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     /// The parked scrollTo request to carry down this frame — render passes
     /// only (a measure pass must neither resolve nor clear it). When the
-    /// edge indicators are active they replace the viewport's first/last
-    /// line, so the request is stamped with one row of headroom per edge.
+    /// edge indicators replace the viewport's first/last line, the request is
+    /// stamped with one row of headroom per edge: `ScrollChrome.edgeInset`.
     private func consumedSeek(
-        handler: ScrollViewHandler, drawsTextIndicators: Bool, context: RenderContext
+        handler: ScrollViewHandler, edgeInset: Int, context: RenderContext
     ) -> ScrollToRequest? {
         guard !context.isMeasuring else { return nil }
         // A `.scrollPosition` write is the same request a `scrollTo` makes; it
@@ -311,8 +311,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         else {
             return nil
         }
-        seek.topInset = edgeInset(drawsTextIndicators: drawsTextIndicators)
-        seek.bottomInset = seek.topInset
+        seek.topInset = edgeInset
+        seek.bottomInset = edgeInset
         return seek
     }
 
@@ -337,14 +337,6 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     private func drawsTextIndicators(_ context: RenderContext, contentHeight: Int) -> Bool {
         context.environment.verticalScrollIndicators(overflowing: true)
             .fitting(contentHeight: contentHeight).text
-    }
-
-    /// One line per edge when the "N more" indicators are what occupies the
-    /// viewport's first and last line. Shared by the seek path and the
-    /// designated-anchor reveal so a row cannot be placed under an indicator
-    /// by one and not the other.
-    private func edgeInset(drawsTextIndicators: Bool) -> Int {
-        drawsTextIndicators ? 1 : 0
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -416,11 +408,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // pair, and a seek that charged a line for an indicator the frame does not
         // draw landed its row one line down.
         let pendingSeek = consumedSeek(
-            handler: handler, drawsTextIndicators: chrome.textIndicators, context: context)
+            handler: handler, edgeInset: chrome.edgeInset, context: context)
         var (fullBuffer, contentSlice, seekOffset) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
-            seek: pendingSeek, edgeInset: edgeInset(drawsTextIndicators: chrome.textIndicators),
+            seek: pendingSeek, edgeInset: chrome.edgeInset,
             handler: handler, context: context, settledExtents: settledExtents)
         if !context.isMeasuring { handler.pendingScrollTo = nil }
         // A sliced reply (Stage 6): the buffer holds only the rendered band;
@@ -466,7 +458,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             fullBuffer: fullBuffer,
             viewportHeight: contentViewportHeight,
             regionOriginY: contentSlice?.originY ?? 0,
-            indicatorsActive: chrome.textIndicators,
+            // Drawn OVER the content, not merely drawn. Reserved, the pair is
+            // outside the viewport this reveal reasons about, and treating the
+            // last content line as covered scrolled a control already on screen.
+            indicatorsActive: chrome.overwritesEdgeLines,
             suppressed: seekOffset != nil,
             context: context)
         coverSnappedViewport(
@@ -612,15 +607,16 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let contentViewportHeight = max(
             1, viewportHeight - (bars.horizontal ? 1 : 0) - (reserves ? 2 : 0))
         handler.viewportHeight = contentViewportHeight
-        // …and NOT counted twice: the inset is what tells `pageDistance` and the
-        // reveal that an indicator eats into the viewport they can see. Reserved,
-        // the lines are already outside it.
-        handler.textIndicatorInset =
-            reserves ? 0 : edgeInset(drawsTextIndicators: textIndicators)
+        let chrome = ScrollChrome(
+            verticalBar: bars.vertical, horizontalBar: bars.horizontal,
+            textIndicators: textIndicators, reservesIndicatorLines: reserves)
+        // …and NOT counted twice: the inset is what tells `pageDistance` that an
+        // indicator eats into the viewport it can see. Reserved, the lines are
+        // already outside it. That is the whole of `ScrollChrome.edgeInset`'s
+        // answer, and the seek, the content window and the reveal read it too.
+        handler.textIndicatorInset = chrome.edgeInset
         return (
-            ScrollChrome(
-                verticalBar: bars.vertical, horizontalBar: bars.horizontal,
-                textIndicators: textIndicators, reservesIndicatorLines: reserves),
+            chrome,
             max(1, viewportWidth - (bars.vertical ? 1 : 0)),
             contentViewportHeight,
             bars.settled)
@@ -639,6 +635,25 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         /// to a height of its own.
         let textIndicators: Bool
         let reservesIndicatorLines: Bool
+
+        /// Whether the "N more" lines are drawn OVER the viewport's first and
+        /// last content line: the one arrangement in which those lines are on
+        /// the canvas but not on the screen. `textIndicators` alone is not
+        /// enough: reserved, the pair sits outside the content window, and every
+        /// line of that window is readable.
+        var overwritesEdgeLines: Bool { textIndicators && !reservesIndicatorLines }
+
+        /// One line of headroom per edge while `overwritesEdgeLines`, else `0`.
+        ///
+        /// This is the single statement of it. The seek stamps it, the content
+        /// window carries it to the `.scrollPosition` sample and to a designated
+        /// anchor's clamp, and `pageDistance` reads it, so no one of them can keep
+        /// a row out from under an indicator while another does not. It used to
+        /// mean "the text indicators are drawn", which under `.visible` charged a
+        /// line the reservation had already taken out: a `.top` seek landed its
+        /// row on the second content line, and a bound position reported the
+        /// row below the one at the top.
+        var edgeInset: Int { overwritesEdgeLines ? 1 : 0 }
     }
 
     private func applyScrollChrome(
