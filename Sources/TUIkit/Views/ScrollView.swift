@@ -542,7 +542,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     ///
     /// `replacingLines` carries the hit-test regions and overlays along by the
     /// same shift, so a control pushed down the screen is still clickable where
-    /// it is drawn — and one pushed off it stops being clickable at all.
+    /// it is drawn — and the clip after it is what makes one pushed off the
+    /// viewport stop being clickable at all (see there).
     private func applyOverscroll(
         to buffer: FrameBuffer, handler: ScrollViewHandler, width: Int
     ) -> FrameBuffer {
@@ -563,6 +564,30 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // applies.
         slid.animatedCells = slid.animatedCells.filter {
             $0.offsetY >= 0 && $0.offsetY < lines.count
+        }
+        // The rest of what `replacingLines` moved is CLIPPED to the viewport, by
+        // the rules the window itself applies (`windowedBuffer`): regions and
+        // fade claims through their shared two-axis clip, layers culled and
+        // clipped through `viewportOverlay`. A translation trims nothing, and
+        // nothing above trims it either — `clamped`'s fast path hands back a
+        // buffer that fits untouched, and stacks only translate. So a push past
+        // the top left the rows it slid off the BOTTOM with their regions on the
+        // lines below the scroll view (a push past the bottom, above it): a
+        // click on whatever was drawn there pressed a control no longer drawn,
+        // and its fade claim faded that neighbour. `List` and `Table` get this
+        // from `ScrollOverscrollState.slidRange`, which drops a row pushed off.
+        // Clipped rather than dropped, like the window's, so a control half
+        // pushed off stays clickable over the half still drawn.
+        let viewportRows = 0..<lines.count
+        let viewportColumns = 0..<max(0, width)
+        slid.hitTestRegions = slid.hitTestRegions.compactMap {
+            $0.clipped(toColumns: viewportColumns, rows: viewportRows)
+        }
+        slid.opacityRegions = slid.opacityRegions.compactMap {
+            $0.clipped(toColumns: viewportColumns, rows: viewportRows)
+        }
+        slid.overlays = slid.overlays.compactMap {
+            viewportOverlay($0, shiftedByX: 0, y: 0, width: max(0, width), height: lines.count)
         }
         return slid
     }

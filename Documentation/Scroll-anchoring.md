@@ -421,7 +421,14 @@ Rendering is a post-hoc slide of the finished viewport buffer
 (`_ScrollViewCore.applyOverscroll`), applied to the content *before* the chrome
 so the scrollbar and indicators stay put — and via `replacingLines`, so hit
 regions and overlays travel with the content and a control pushed down the
-screen is still clickable where it is drawn.
+screen is still clickable where it is drawn. `replacingLines` translates without
+clipping, so the slide then clips what it moved to the viewport by the window's
+own rules (`windowedBuffer`'s region clip, and `viewportOverlay` for layers).
+Until it did, a push past the top left the regions and fade claims of the rows it
+pushed off sitting on the lines below the scroll view, where a click on a sibling
+pressed a Button no longer drawn and the sibling came out faded (fixed
+2026-09-12). `List` and `Table` had it right from the start, through
+`ScrollOverscrollState.slidRange`.
 
 Verified live: with `top: .rows(2)`, a wheel tick at the top opens exactly two
 blank rows above `Line 1`, and a second tick adds nothing.

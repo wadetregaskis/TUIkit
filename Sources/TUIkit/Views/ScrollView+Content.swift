@@ -210,34 +210,9 @@ extension _ScrollViewCore {
         let viewportTop = scrollOffset
         let viewportBottom = scrollOffset + viewportHeight
         let dx = horizontalEnabled ? -horizontalOffset : 0
-        let visibleOverlays = full.overlays.compactMap { overlay -> OverlayLayer? in
-            guard !overlay.centered else { return overlay }
-            // The overlay's extent includes its ANCHOR (the control spanning
-            // `anchorHeight` rows immediately above `offsetY`): a drop-down
-            // attached to a control on the LAST visible row starts exactly at
-            // `viewportBottom`, and culling it by the popup's own span alone
-            // silently discarded it — the root compositor (whose job the
-            // flip-above-the-anchor placement is) never saw it, so opening
-            // such a picker showed nothing. With no anchor this reduces to
-            // the popup's own span, exactly the old test.
-            let topY = overlay.offsetY - overlay.anchorHeight
-            let bottomY = overlay.offsetY + overlay.content.height
-            guard bottomY > viewportTop, topY < viewportBottom else { return nil }
-            let shifted = overlay.shifted(byX: dx, y: -scrollOffset)
-            // A scroll view clips its CONTENT to its bounds, as SwiftUI's does
-            // — `View.scrollClipDisabled(_:)` is the modifier that turns that
-            // off, and it documents the default. Until now nothing here clipped
-            // a layer at all, so `.offset(x: 7)` on a row of a 12-wide scroller
-            // painted three columns of the page beside it.
-            //
-            // Only the layers that ARE content: a layer that is a surface
-            // (`isOpaque`) is a window over the page — a drop-down, a menu, a
-            // toast — and SwiftUI does not clip a presentation to the scroller
-            // its trigger sits in either. The culling above already lets those
-            // through whole, including the flip-above-the-anchor case that
-            // needs `anchorHeight`.
-            guard !shifted.isOpaque else { return shifted }
-            return shifted.clipped(toWidth: viewportWidth, height: viewportHeight)
+        let visibleOverlays = full.overlays.compactMap {
+            viewportOverlay(
+                $0, shiftedByX: dx, y: -scrollOffset, width: viewportWidth, height: viewportHeight)
         }
 
         // The same filter-and-shift the overlays got, and the same trim — which
@@ -361,6 +336,49 @@ extension _ScrollViewCore {
         result.animatedCells = visibleRuns
         result.opacityRegions = visibleOpacity
         return result
+    }
+
+    /// A content layer as this viewport shows it: moved by `(dx, dy)` into the
+    /// viewport's coordinates, then culled and clipped to its `width` × `height`
+    /// — or `nil` when nothing of it belongs there.
+    ///
+    /// One rule for both of the things that move content inside the viewport:
+    /// the window (`windowedBuffer`) and the overscroll slide drawn after it
+    /// (`applyOverscroll`). The slide carried its layers by `replacingLines`
+    /// alone, a translation that culls and clips nothing, so a layer it pushed
+    /// out of the viewport kept painting beside it.
+    func viewportOverlay(
+        _ overlay: OverlayLayer, shiftedByX dx: Int, y dy: Int, width: Int, height: Int
+    ) -> OverlayLayer? {
+        guard !overlay.centered else { return overlay }
+        // The overlay's extent includes its ANCHOR (the control spanning
+        // `anchorHeight` rows immediately above `offsetY`): a drop-down
+        // attached to a control on the LAST visible row starts exactly at the
+        // viewport's bottom edge, and culling it by the popup's own span alone
+        // silently discarded it — the root compositor (whose job the
+        // flip-above-the-anchor placement is) never saw it, so opening
+        // such a picker showed nothing. With no anchor this reduces to
+        // the popup's own span, exactly the old test. Culled in viewport
+        // coordinates, which is the same test the window used to write in
+        // content ones: `offsetY + dy + h > 0` is `offsetY + h > scrollOffset`.
+        let topY = overlay.offsetY + dy - overlay.anchorHeight
+        let bottomY = overlay.offsetY + dy + overlay.content.height
+        guard bottomY > 0, topY < height else { return nil }
+        let shifted = overlay.shifted(byX: dx, y: dy)
+        // A scroll view clips its CONTENT to its bounds, as SwiftUI's does
+        // — `View.scrollClipDisabled(_:)` is the modifier that turns that
+        // off, and it documents the default. Until now nothing here clipped
+        // a layer at all, so `.offset(x: 7)` on a row of a 12-wide scroller
+        // painted three columns of the page beside it.
+        //
+        // Only the layers that ARE content: a layer that is a surface
+        // (`isOpaque`) is a window over the page — a drop-down, a menu, a
+        // toast — and SwiftUI does not clip a presentation to the scroller
+        // its trigger sits in either. The culling above already lets those
+        // through whole, including the flip-above-the-anchor case that
+        // needs `anchorHeight`.
+        guard !shifted.isOpaque else { return shifted }
+        return shifted.clipped(toWidth: width, height: height)
     }
 
     // MARK: Indicators

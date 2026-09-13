@@ -273,6 +273,59 @@ struct ScrollOverscrollTests {
             "its hit region came with it — a control must be clickable where it is drawn")
     }
 
+    @Test("A control pushed off the screen leaves no click target or fade beside it")
+    func slidOffContentLeavesNothingBehind() throws {
+        let ctx = makeRenderContext(width: 24, height: 10) { environment, tui in
+            environment.mouseEventDispatcher = tui.mouseEventDispatcher
+            environment.scrollOverscrollTop = .rows(3)
+        }
+        let dispatcher = ctx.environment.mouseEventDispatcher!
+        let fired = Flag()
+        // A six-line scroll view of faded Buttons over a line of plain text. A
+        // push past the top slides `row 3`…`row 5` off the bottom, the first of
+        // them onto the text's line. `Text` emits no region and no fade, so
+        // anything answering there is something that escaped the viewport.
+        let view = VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<20, id: \.self) { index in
+                        Button("row \(index)") { fired.value = true }
+                            .opacity(0.5)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .frame(height: 6)
+            Text("below")
+        }
+
+        let first = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(first.hitTestRegions)
+        _ = dispatcher.dispatch(MouseEvent(button: .scrollUp, phase: .scrolled, x: 2, y: 2))
+
+        let pushed = renderToBuffer(view, context: ctx)
+        dispatcher.setRegions(pushed.hitTestRegions)
+        let screen = pushed.lines.map(\.stripped)
+        let slidRow = screen.firstIndex { $0.contains("row 0") }
+        let belowRow = screen.firstIndex { $0.contains("below") }
+        try #require(
+            slidRow == 3 && belowRow == 6,
+            "sanity: the content slid three lines down a six-line viewport:\n\(screen.joined(separator: "\n"))")
+
+        let strayFades = pushed.opacityRegions.filter { $0.offsetY + $0.height > 6 }
+        #expect(strayFades.isEmpty, "a row pushed off the viewport still fades the line below it: \(strayFades)")
+
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 6))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 6))
+        #expect(!fired.value, "a click on the text below pressed a Button the push slid off the viewport")
+
+        // …while a Button still drawn keeps its click: the slide clips to the
+        // viewport, it does not drop everything it moved.
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: 3, y: 3))
+        _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: 3, y: 3))
+        #expect(fired.value, "row 0, slid to line 3, is still clickable where it is drawn")
+    }
+
     @Test("Overscrolling does not invent content for the indicators to count")
     func indicatorsIgnoreTheExcursion() {
         let sv = handler(bottom: 5)
