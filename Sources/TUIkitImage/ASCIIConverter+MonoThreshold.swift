@@ -50,7 +50,24 @@ extension ASCIIConverter {
     static func monoInkThreshold(for image: RGBAImage) -> Double {
         var histogram = [Int](repeating: 0, count: 256)
         var total = 0
-        for pixel in image.pixels {
+        // Only the pixels the split decides. Every consumer asks coverage first —
+        // `isMonoInk` is `pixel.a >= 128 && …`, braille's dot gate is
+        // `coverage >= 128, …`, and the pixel path's mono quantiser and the dither
+        // go through `isMonoInk` — so a pixel below half coverage is never ink
+        // whatever this returns, and must not move where the line falls. It did:
+        // the picture is no longer flattened over black (§42), both resamplers
+        // write an uncovered pixel as `(0, 0, 0, 0)`, and a logo's transparent
+        // surround was a spike at level 0 that Otsu split against instead of
+        // splitting the subject. Tones of 110 and 190 behind a surround nine times
+        // their size split at 0.5, not 110.5 — every covered pixel ink, the mark a
+        // solid silhouette.
+        //
+        // The ½ rule and not `a > 0`, because that is the rule the consumers apply;
+        // and not a coverage-weighted vote, which would re-admit exactly the pixels
+        // no consumer will draw. An opaque picture's histogram is unchanged, and a
+        // wholly transparent one falls to the `total > 0` guard below. See
+        // "Opacity as composition" §72.2.
+        for pixel in image.pixels where pixel.a >= 128 {
             // The same BT.601 luminance every renderer thresholds on, bucketed
             // to whole levels — the histogram's resolution IS the output's.
             histogram[min(255, max(0, Int(pixel.luminance)))] += 1

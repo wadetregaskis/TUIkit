@@ -136,4 +136,31 @@ struct MonoThresholdTests {
         let above = source.pixels.filter { $0.luminance >= ASCIIConverter.midLuminance }
         #expect(above.isEmpty, "\(above.count) pixels reach mid-luminance; the premise has changed")
     }
+
+    // MARK: - Only the pixels it decides
+
+    /// A logo's shape: a subject in two tones, 110 and 190, behind a surround
+    /// nine times its size, the surround black at `surroundCoverage` — at 0 that
+    /// is `(0, 0, 0, 0)`, what both resamplers write wherever there is no coverage.
+    private func logo(surroundCoverage: UInt8) -> RGBAImage {
+        var pixels = [RGBA](repeating: RGBA(r: 0, g: 0, b: 0, a: surroundCoverage), count: 3_600)
+        for level: UInt8 in [110, 190] {
+            pixels += [RGBA](repeating: RGBA(r: level, g: level, b: level), count: 200)
+        }
+        return RGBAImage(width: 100, height: 40, pixels: pixels)
+    }
+
+    /// Coverage 0 is a transparent surround. 127 is a shadow just under half
+    /// coverage, and it pins the RULE: no renderer will ever draw either as ink, so
+    /// neither may vote — and `a > 0` would have let this one.
+    @Test("A surround no renderer draws as ink does not move the split", arguments: [UInt8(0), 127])
+    func uncoveredPixelsDoNotVote(surroundCoverage: UInt8) {
+        let threshold = ASCIIConverter.monoInkThreshold(for: logo(surroundCoverage: surroundCoverage))
+        let subjectOnly = ASCIIConverter.monoInkThreshold(for: image(levels: [110, 190], repeatEach: 200))
+        #expect(threshold == subjectOnly, "the surround moved the split from \(subjectOnly) to \(threshold)")
+        // What that did to a render: the darker tone crossed too, so every covered
+        // pixel was ink and the mark drew as a solid silhouette.
+        #expect(!ASCIIConverter.isMonoInk(RGBA(r: 110, g: 110, b: 110), threshold: threshold))
+        #expect(ASCIIConverter.isMonoInk(RGBA(r: 190, g: 190, b: 190), threshold: threshold))
+    }
 }

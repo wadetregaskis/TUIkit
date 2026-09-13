@@ -2922,7 +2922,8 @@ glyphs, at the ½ threshold. Four renderers make glyph decisions and all four no
 
 - **braille** lights a dot only at coverage ≥ ½ (a transparent dot used to light itself
   from whatever colour the encoder left in it);
-- **mono** — `isMonoInk` — the same, and it is the *only* way coverage reaches mono, which
+- **mono** — `isMonoInk` — the same, and it is the *only* glyph gate coverage reaches in mono (the split that gate compares against
+  read no coverage at all until §72.2), which
   paints no colours at all and therefore has no claim to make (true of the CONVERTER, and
   read for two months as though it were true of mono as a whole: `_ImageCore.inked` stamps
   the theme's two colours over the converter's output afterwards, and had a claim to make.
@@ -4321,6 +4322,38 @@ used to answer black; nothing in it is covered, so neither was ever drawn.
 
 `AdaptivePaletteTests.transparentPixelsAreNotBlack` pins both methods, and a mark at a
 quarter coverage that must still earn its entry.
+
+### 72.2 The mono split
+
+`monoInkThreshold(for:)` — Otsu over a 256-bin luminance histogram — counted every pixel
+too, so a transparent surround was a spike at level 0, and the between-class variance
+could split that spike from the subject instead of splitting the subject. Tones of 110 and
+190 behind a surround nine times their size split at **0.5** rather than **110.5**: every
+covered pixel ink, braille's U+28FF and `.blocks(.fine)` mono's `█` across the whole mark,
+its interior gone. The surround itself still drew nothing, because the coverage gates
+held — which is why a sweep of the gates found nothing wrong.
+
+It depends on the input; it is not universal. That same two-tone subject flips somewhere
+between 15% and 17% of the frame transparent, and not below. A mark whose darker tone is
+near black already sits on the spike's side and splits where it should: 60 and 200 behind
+a 90% surround still give 60.5. A subject cut out of a photograph, all mid-tones, is the
+case that bites.
+
+The histogram now counts `a >= 128` — **the ½ rule, and deliberately not `a > 0`**, which
+the finding proposed. Every consumer asks coverage first: `isMonoInk` is
+`pixel.a >= 128 && …`, braille's dot gate is `coverage >= 128, …`, and the pixel path's
+`PixelQuantiser.mono` and the dither go through `isMonoInk`. A pixel under half coverage
+is never ink whatever the split, so it has no business moving the split. Weighting by
+coverage would be worse than either: it re-admits exactly those pixels as a fractional
+vote. So this is the opposite call from §72.1, for the reason §72.1 gives — that one
+chooses colours, this one feeds a glyph decision. An opaque picture's histogram is
+unchanged; a wholly transparent one falls to the existing `total > 0` guard and keeps
+`midLuminance`, as it did before.
+
+§42.4 called `isMonoInk` the only way coverage reaches mono. It was the only glyph gate;
+the number the gate compares against is the other way, and that record now says so. Both
+paths call the one function, so `recoloured`'s `.mono` is fixed by the same line.
+`MonoThresholdTests.uncoveredPixelsDoNotVote` pins it at coverage 0 and at 127.
 
 
 ## 71. A lightness step on a faded colour came back solid (2026-09-12)
