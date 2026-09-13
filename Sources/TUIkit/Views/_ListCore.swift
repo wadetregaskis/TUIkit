@@ -437,12 +437,27 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let source = extractRows(from: content, context: rowContext)
         settleRowRamp(source, context: rowContext)
 
-        // Vertical chrome around the scrollable content; reserve
-        // only what is actually present.
-        let footerHeight = footer != nil ? 2 : 0  // footer line + separator
+        // Vertical chrome around the scrollable content, as the container that
+        // draws it charges for it — ASKED of the container (`containerBodyHeight`),
+        // never re-derived here. The container clips the body from the bottom to
+        // what it offers, and the rows fill exactly the budget they are given, so
+        // a budget one line over loses the last content line (the bottom row, the
+        // scrollbar's last cell, the "N more below" line) and one line under
+        // leaves the box a line short of its slot. The flat "footer line +
+        // separator" of 2 this used to charge was both: a footer that wraps, or a
+        // column of two views, is taller than a line, and
+        // `.listFooterSeparator(false)` draws no rule.
+        let containerConfig = ContainerConfig(
+            borderStyle: context.environment.appearance.borderStyle,
+            borderColor: palette.border,
+            titleColor: nil,
+            padding: style.rowPadding,
+            showFooterSeparator: showFooterSeparator,
+            hasBorder: style.showsBorder
+        )
         // A BORDERED container draws the title inside its top border row
-        // (`ContainerView.chromeHeight` counts borders and the footer separator
-        // and nothing else), so it costs no line of its own — charging one
+        // (the container's chrome is its borders and the footer separator, and
+        // nothing else), so it costs no line of its own — charging one
         // anyway showed a titled list one row fewer than fits, with a stray
         // blank line at the bottom of the slot. Borderless (`.plain`) does
         // render the title as its own row (`renderBorderless`), so there the
@@ -451,7 +466,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let titleOverhead = (title != nil && !style.showsBorder) ? 1 : 0
         let targetContentHeight = max(
             1,
-            context.availableHeight - borderOverhead - titleOverhead - footerHeight
+            containerBodyHeight(
+                title: title, config: containerConfig, content: _ListContentView(lines: []),
+                footer: footer, context: context) - titleOverhead
         )
 
         let contentLines: [String]
@@ -495,14 +512,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         var buffer = renderContainer(
             title: title,
-            config: ContainerConfig(
-                borderStyle: context.environment.appearance.borderStyle,
-                borderColor: palette.border,
-                titleColor: nil,
-                padding: style.rowPadding,
-                showFooterSeparator: showFooterSeparator,
-                hasBorder: style.showsBorder
-            ),
+            config: containerConfig,
             content: _ListContentView(
                 lines: paddedContentLines, runs: contentRuns, claims: contentClaims),
             footer: footer,

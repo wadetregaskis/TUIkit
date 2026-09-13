@@ -197,30 +197,8 @@ internal func renderContainer<Content: View, Footer: View>(
     footer: Footer?,
     context: RenderContext
 ) -> FrameBuffer {
-    let hasFooter = footer != nil
-    let style = ContainerStyle(
-        showHeaderSeparator: true,
-        showFooterSeparator: hasFooter && config.showFooterSeparator,
-        borderStyle: config.borderStyle,
-        borderColor: config.borderColor.map(AnimatedColor.init),
-        footerAlignment: config.footerAlignment,
-        hasBorder: config.hasBorder,
-        scrollsOverflowingBody: config.scrollsOverflowingBody
-    )
-
-    let container = ContainerView(
-        title: title,
-        titleColor: config.titleColor,
-        style: style,
-        padding: config.padding
-    ) {
-        content
-    } footer: {
-        if let footerView = footer {
-            footerView
-        }
-    }
-    return TUIkit.renderToBuffer(container, context: context)
+    TUIkit.renderToBuffer(
+        makeContainer(title: title, config: config, content: content, footer: footer), context: context)
 }
 
 /// Measures a `ContainerView` from a `ContainerConfig` and content/footer views.
@@ -251,6 +229,60 @@ internal func measureContainer<Content: View, Footer: View>(
     proposal: ProposedSize,
     context: RenderContext
 ) -> ViewSize {
+    measureChild(
+        makeContainer(title: title, config: config, content: content, footer: footer),
+        proposal: proposal, context: context)
+}
+
+/// The height a container built by `renderContainer` offers its body.
+///
+/// For a view that decides how much content to make before handing it over. A
+/// `List` fills its body with exactly as many row lines as fit, and the
+/// container clips a taller body from the bottom — so the list asks, rather than
+/// repeating the container's arithmetic. Its own copy charged a flat two lines
+/// for "footer + separator", which hid the last row under a footer that wrapped
+/// and left the box a line short under `.listFooterSeparator(false)`.
+///
+/// Built by `makeContainer`, like the render, so the footer is measured at the
+/// identity and in the environment it is drawn in. That costs one
+/// side-effect-free render of the footer; without a footer it is arithmetic.
+///
+/// - Parameters:
+///   - title: The container title (optional).
+///   - config: The shared visual configuration.
+///   - content: A body of the type that will be rendered. Its TYPE is part of
+///     the footer's identity; its value is never read.
+///   - footer: The footer view (optional).
+///   - context: The context the container will be rendered in.
+/// - Returns: The height the container will offer its body.
+@MainActor
+internal func containerBodyHeight<Content: View, Footer: View>(
+    title: String?,
+    config: ContainerConfig,
+    content: Content,
+    footer: Footer?,
+    context: RenderContext
+) -> Int {
+    // No footer to measure, and `makeContainer` draws no separator without one,
+    // so the chrome is the border alone — `verticalBudget`'s answer, without
+    // rendering an empty footer to learn that it is empty.
+    guard footer != nil else {
+        return RenderContext.extent(context.availableHeight, insideChrome: config.hasBorder ? 2 : 0)
+    }
+    return makeContainer(title: title, config: config, content: content, footer: footer)
+        .bodyHeight(in: context)
+}
+
+/// The one `ContainerView` that `renderContainer`, `measureContainer` and
+/// `containerBodyHeight` build, so they cannot disagree about its style — or
+/// about its type, which every identity inside it descends from.
+@MainActor
+private func makeContainer<Content: View, Footer: View>(
+    title: String?,
+    config: ContainerConfig,
+    content: Content,
+    footer: Footer?
+) -> ContainerView<Content, Footer?> {
     let hasFooter = footer != nil
     let style = ContainerStyle(
         showHeaderSeparator: true,
@@ -262,7 +294,7 @@ internal func measureContainer<Content: View, Footer: View>(
         scrollsOverflowingBody: config.scrollsOverflowingBody
     )
 
-    let container = ContainerView(
+    return ContainerView(
         title: title,
         titleColor: config.titleColor,
         style: style,
@@ -274,7 +306,6 @@ internal func measureContainer<Content: View, Footer: View>(
             footerView
         }
     }
-    return measureChild(container, proposal: proposal, context: context)
 }
 
 // MARK: - Container View
@@ -351,6 +382,12 @@ struct ContainerView<Content: View, Footer: View>: View {
     }
 
     var body: some View {
+        core
+    }
+
+    /// What `body` returns — named so `bodyHeight(in:)` asks the very value the
+    /// render walk descends into, not a second construction of it.
+    private var core: _ContainerViewCore<Content, Footer> {
         _ContainerViewCore(
             title: title,
             titleColor: titleColor,
@@ -359,6 +396,79 @@ struct ContainerView<Content: View, Footer: View>: View {
             style: style,
             padding: padding
         )
+    }
+
+    /// The height this container offers its body in `context` — see the core's
+    /// `bodyHeight(in:)`.
+    ///
+    /// Descends to the core at the identity the render walk gives a composite
+    /// view's `body` (`withChildIdentity(type: Body.self)`, exactly as
+    /// `renderToBuffer` does), because the footer's identity hangs off it — and
+    /// with it any `@State` the footer's height depends on.
+    func bodyHeight(in context: RenderContext) -> Int {
+        core.bodyHeight(in: context.withChildIdentity(type: Body.self))
+    }
+}
+
+// MARK: - Body Budget
+
+// The core's own arithmetic, kept beside the view only because
+// `ContainerViewCore.swift` is at its file-length budget. The core's
+// `renderToBuffer(context:)` renders by `verticalBudget`; `bodyHeight(in:)`
+// answers from it.
+extension _ContainerViewCore {
+    /// How the height this container is offered divides between its chrome,
+    /// its footer and its body.
+    ///
+    /// The footer is MEASURED — rendered with `isMeasuring` set, so nothing
+    /// registers — never assumed to be a line: text wraps, and a column of views
+    /// is as tall as it is. It is settled before the body, which gets what is
+    /// left and is clipped from the bottom to it.
+    ///
+    /// - Parameters:
+    ///   - availableHeight: The height the container itself was offered.
+    ///   - innerWidth: The width between the side borders.
+    ///   - footerContext: The footer's context, derived as `renderToBuffer` derives it.
+    /// - Returns: The chrome's rows (borders and footer separator), the height
+    ///   inside them, the measured footer, and the height left for the body.
+    func verticalBudget(availableHeight: Int, innerWidth: Int, footerContext: RenderContext) -> (
+        chromeHeight: Int, innerAvailableHeight: Int, measuredFooter: FrameBuffer?, bodyAvailableHeight: Int
+    ) {
+        let chromeHeight = (style.hasBorder ? 2 : 0) + ((footer != nil && style.showFooterSeparator) ? 1 : 0)
+        let innerAvailableHeight = RenderContext.extent(availableHeight, insideChrome: chromeHeight)
+        var measuredFooter: FrameBuffer?
+        if let footerView = footer {
+            var measureContext = footerContext
+            measureContext.isMeasuring = true
+            measureContext.availableHeight = innerAvailableHeight
+            measuredFooter = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: measureContext)
+                .clamped(toWidth: innerWidth, height: innerAvailableHeight)
+        }
+        let bodyAvailableHeight = RenderContext.extent(
+            innerAvailableHeight, insideChrome: measuredFooter?.height ?? 0)
+        return (chromeHeight, innerAvailableHeight, measuredFooter, bodyAvailableHeight)
+    }
+
+    /// The height `renderToBuffer(context:)` offers this container's body in
+    /// `context`.
+    ///
+    /// Not a copy of the arithmetic: it derives the footer's context by the
+    /// render's own steps — the width between the borders, the focus indicator
+    /// and sheet detent this box consumes rather than passes down, the footer's
+    /// identity and published stack axis — and answers from `verticalBudget`.
+    /// A footer measured any other way can come out a different height from the
+    /// one drawn: inside an `HStack`, a `Divider` between two footer views is a
+    /// full-height vertical rule unless the stack axis is published.
+    func bodyHeight(in context: RenderContext) -> Int {
+        var innerContext = context.forBorderedContent(hasBorder: style.hasBorder)
+        innerContext.environment.focusIndicator = nil
+        innerContext.environment.sheetDetentHeight = nil
+        let footerContext = publishingStackAxis(
+            innerContext.withChildIdentity(type: Footer.self, index: 1), stacking: footer)
+        return verticalBudget(
+            availableHeight: context.availableHeight, innerWidth: innerContext.availableWidth,
+            footerContext: footerContext
+        ).bodyAvailableHeight
     }
 }
 

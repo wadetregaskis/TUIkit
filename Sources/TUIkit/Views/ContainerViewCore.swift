@@ -37,9 +37,10 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
     let padding: EdgeInsets
 
     /// Padding applied around the footer. A single source of truth shared by
-    /// `renderToBuffer` and `sizeThatFits` so the two cannot disagree about the
-    /// footer's width budget.
-    private var footerPadding: EdgeInsets { EdgeInsets(horizontal: 1, vertical: 0) }
+    /// `renderToBuffer`, `sizeThatFits` and `verticalBudget` (in
+    /// `ContainerView.swift`) so they cannot disagree about the footer's width
+    /// budget.
+    var footerPadding: EdgeInsets { EdgeInsets(horizontal: 1, vertical: 0) }
 
     /// Pads `buffer` to `width` cells, offsetting its content — and its hit
     /// regions/overlays — per `alignment`. A no-op for `.leading` (offset 0) or
@@ -98,7 +99,7 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
     /// around one view is a modifier (`.border()` is spelled as one), so it
     /// stays transparent to the axis and `Divider().border()` in a row remains
     /// the vertical rule it is in SwiftUI.
-    private func publishingStackAxis(
+    func publishingStackAxis(
         _ context: RenderContext, stacking child: (any View)?
     ) -> RenderContext {
         guard let child, child is any ChildInfoProvider else { return context }
@@ -291,30 +292,17 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // Vertical chrome: top + bottom border (only when bordered), plus the
         // optional footer separator. The body and footer must share whatever is
         // left so the assembled container never grows taller than `availableHeight`.
-        let hasFooter = footer != nil
-        let borderRows = hasBorder ? 2 : 0
-        let chromeHeight = borderRows + ((hasFooter && style.showFooterSeparator) ? 1 : 0)
-        let innerAvailableHeight = RenderContext.extent(
-            context.availableHeight, insideChrome: chromeHeight)
-
-        // Measure the footer first (without side-effects) so the body knows
+        // The footer is measured first (without side-effects) so the body knows
         // how much vertical space is left. Real focus registration happens in
         // the constrained re-render below, after the body — preserving Tab order.
-        let measuredFooter: FrameBuffer?
-        if let footerView = footer {
-            var measureContext = footerInner
-            measureContext.isMeasuring = true
-            measureContext.availableHeight = innerAvailableHeight
-            measuredFooter = TUIkit.renderToBuffer(footerView.padding(footerPadding), context: measureContext)
-                .clamped(toWidth: innerContext.availableWidth, height: innerAvailableHeight)
-        } else {
-            measuredFooter = nil
-        }
+        // `verticalBudget` is shared with `bodyHeight(in:)`, which a `List` sizes
+        // its rows by before it hands them over, so the two cannot disagree.
+        let (chromeHeight, innerAvailableHeight, measuredFooter, bodyAvailableHeight) = verticalBudget(
+            availableHeight: context.availableHeight, innerWidth: innerContext.availableWidth,
+            footerContext: footerInner)
         let footerHeight = measuredFooter?.height ?? 0
 
         // Render the body into the space the chrome and footer leave.
-        let bodyAvailableHeight = RenderContext.extent(
-            innerAvailableHeight, insideChrome: footerHeight)
         var bodyContext = bodyInner
         bodyContext.availableHeight = bodyAvailableHeight
         var bodyBuffer =
