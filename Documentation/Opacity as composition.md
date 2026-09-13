@@ -2927,7 +2927,8 @@ glyphs, at the ½ threshold. Four renderers make glyph decisions and all four no
   paints no colours at all and therefore has no claim to make (true of the CONVERTER, and
   read for two months as though it were true of mono as a whole: `_ImageCore.inked` stamps
   the theme's two colours over the converter's output afterwards, and had a claim to make.
-  See §70.2);
+  See §70.2 — and over the cells nothing of the picture reaches, it had paper to
+  withhold: §70.5);
 - **the ramp charsets** draw a space in no colour where there is no coverage, rather than
   whichever glyph the straight colour's luminance names;
 - **the shape matcher** weights its darkness samples by coverage: an uncovered sample is
@@ -4278,6 +4279,48 @@ to the screen and loses its overhang out of its content instead — cuts the sam
 run carrying a translucent `AnimatedRunAlpha` satisfies the resolver's entry guard on its
 own (§69.1). A dragged preview holding a focused `TextField`, or an animated border, needed
 nothing else in the tree to reach it.
+
+### 70.5 The same pass papered over a transparent surround
+
+`inked` wrapped each line whole, so the paper went over every cell of it, including the
+cells the converter had left blank because nothing of the picture reaches them. §42 took
+the flatten out so that a logo's transparent surround shows what the logo sits on, and in
+every colour mode it does: those cells are a space stating no colour (§42.2's table). In
+mono they came out in the theme's background. `Image(…).imageColorMode(.mono)
+.background(.blue)` hid the blue entirely where `.trueColor` showed it round the logo.
+On the page itself this was invisible, because the page's background *is* the paper. Over
+any other surface it was plain: a `.background(_:)`, a selected row, a dialog.
+
+**Not a claim.** A zero-field claim over the papered surround was the obvious repair, and
+it resolves against the wrong thing: against what the compositor sees *behind* the
+picture. A `.background(_:)` fill or a row's highlight is not behind it at all:
+`applyPersistentBackground` writes it into the picture's own bytes and restates it only
+after a reset, and the paper stated at column 0 had already overridden it. The surround
+would have resolved to the ambient surface. So the fix is in the bytes, where the colour
+modes already put it: an uncovered span is left out of the wrapper and states no colour.
+
+A mono line cannot say "absent" by itself — the space where a pixel is transparent and
+the space where it is dark are the same byte — so the converter says it beside the lines,
+in `ASCIIArt.uncovered`: runs, collected by the same `CoverageMap` as `coverage`, and kept
+out of `coverage` because that list becomes claims and a cell stating nothing needs none.
+Every renderer records it, in every mode — the ramps, `.solid`, `.fine`, braille and the
+shape matcher — because `inked` wraps all five, and a fact about the picture that held in
+one mode only would be a trap for its next reader. "Uncovered" means every pixel the cell
+is drawn from is at alpha 0, the same test that makes a colour arm's cell a space in no
+colour.
+
+`inkClaims` walks the same spans (`forEachInkedSpan`, shared so the bytes and their claim
+cannot disagree), so §70.2's region per line is now a region per painted span. Left whole,
+it would have faded whatever shows through the surround toward the surface by the
+palette's alpha.
+
+What it does not do: a cell only PART-covered keeps its paper whole (a half-block with
+one half absent, braille with some dots absent, a partly transparent unlit pixel), so a
+logo's edge can still carry up to half a cell of paper where a colour mode shows the
+backdrop. Fixing that needs a claim on the paper's coverage, which colour cells make and
+mono cells do not yet. An opaque picture has no uncovered cell: `uncovered` is empty,
+`inked` takes the path it always had, and nothing is allocated. The conversion is cached,
+so the added per-cell test runs only on a cache miss.
 
 
 ## 72. What the picture is measured from (2026-09-12)

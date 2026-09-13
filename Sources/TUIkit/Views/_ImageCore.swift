@@ -552,8 +552,7 @@ extension _ImageCore {
     private static func buffer(
         for art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
     ) -> FrameBuffer {
-        let inkedLines = inked(art.lines, mode: mode, palette: palette)
-        var buffer = FrameBuffer(lines: inkedLines)
+        var buffer = FrameBuffer(lines: inked(art, mode: mode, palette: palette))
         buffer.opacityRegions += art.claims
         // The other half of `inked`'s claim/bytes pairing. `art.claims` says what the
         // SOURCE PICTURE owes — its own per-pixel transparency — and is empty for the
@@ -564,31 +563,43 @@ extension _ImageCore {
         // place (§42.4 is right that the mono CONVERTER paints no colours and has no
         // claim to make; this post-pass is not the converter).
         //
-        // Per line, over the whole line, because that is exactly what `inked` colours:
-        // `colorize` puts both codes in force for the row. The resolver multiplies ink
+        // Over exactly the spans `inked` colours: each line less the picture's uncovered
+        // runs, which for an opaque picture is the whole line. The resolver multiplies ink
         // and field across every region covering a cell, so these compose with the
         // coverage claims above rather than contradicting them.
-        buffer.opacityRegions += Self.inkClaims(
-            forLines: inkedLines, mode: mode, palette: palette)
+        buffer.opacityRegions += Self.inkClaims(for: art, mode: mode, palette: palette)
         return buffer
     }
 
-    /// What ``inked(_:mode:palette:)``'s two colours owe, one region per line.
+    /// What ``inked(_:mode:palette:)``'s two colours owe, one region per span it paints —
+    /// one per line, for a picture with no uncovered cell.
     ///
     /// `nil`-free by construction: `OpacityRegion.claim` answers `nil` for an opaque
     /// pair, so an ordinary palette adds nothing and allocates nothing past the
     /// `guard`.
     private static func inkClaims(
-        forLines lines: [String], mode: ASCIIColorMode, palette: any Palette
+        for art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
     ) -> [OpacityRegion] {
         guard mode == .mono,
             !palette.foreground.isOpaque || !palette.background.isOpaque
         else { return [] }
-        return lines.enumerated().compactMap { index, line in
-            OpacityRegion.claim(
-                offsetX: 0, offsetY: index, width: line.strippedLength, height: 1,
-                ink: palette.foreground, field: palette.background)
+        // Only where `inked` painted. A claim left over an uncovered cell is not merely
+        // wasted: that cell shows whatever is behind the picture — a `.background(_:)`
+        // fill or a row's highlight, written into these same bytes — and the resolver
+        // would fade THAT toward the surface by the palette's alpha.
+        var uncovered = art.uncovered[...]
+        var claims: [OpacityRegion] = []
+        for (index, line) in art.lines.enumerated() {
+            forEachInkedSpan(ofLine: index, width: line.strippedLength, uncovered: &uncovered) { span in
+                if let claim = OpacityRegion.claim(
+                    offsetX: span.lowerBound, offsetY: index, width: span.count, height: 1,
+                    ink: palette.foreground, field: palette.background)
+                {
+                    claims.append(claim)
+                }
+            }
         }
+        return claims
     }
 
     /// Mono output, given the theme's ink and paper.
@@ -604,20 +615,79 @@ extension _ImageCore {
     /// because the cache is not keyed on the palette: baking the colours into
     /// the cached lines would serve the old theme's ink forever. Same reason
     /// ``ASCIIColorMode/resolved(with:)`` is applied before it.
+    ///
+    /// **Never over a cell nothing of the picture reaches.** A mono line cannot say a
+    /// cell is absent — the space where a pixel is transparent and the space where it is
+    /// dark are the same byte — so the converter says it beside the lines, in
+    /// ``ASCIIArt/uncovered``, and those spans go out stating no colour at all: exactly
+    /// what every colour mode emits for the same cells (§42.2). Wrapped whole, the
+    /// paper covered a logo's transparent surround in the theme's background and hid
+    /// the `.background(_:)`, selected row or dialog surface behind it — §42's black
+    /// rectangle, back in one mode.
+    ///
+    /// NOT a zero-field claim over papered cells, the other way to say it. A claim
+    /// resolves against what the compositor sees behind the picture, and a
+    /// `.background(_:)` fill is not behind it: `applyPersistentBackground` writes it
+    /// into these very bytes, restating it only after a reset, and the paper stated at
+    /// column 0 has already overridden it. The surround would resolve to the ambient
+    /// surface, not to the fill it sits on (§70.5).
     private static func inked(
-        _ lines: [String], mode: ASCIIColorMode, palette: any Palette
+        _ art: ASCIIArt, mode: ASCIIColorMode, palette: any Palette
     ) -> [String] {
-        guard mode == .mono else { return lines }
+        guard mode == .mono else { return art.lines }
         // The opaque spelling, with the alpha claimed beside it by `inkClaims` — the
         // pairing every other painted colour in the framework uses (§16). Handing
         // `palette.foreground`/`palette.background` to `colorize` raw trapped the
         // emitter's `isOpaque` assertion on a faded palette, and in release drew the
         // picture at full strength over a page it was supposed to follow.
-        return lines.map {
-            ANSIRenderer.colorize(
-                $0, foreground: palette.foreground.opaqueSpelling,
-                background: palette.background.opaqueSpelling)
+        let ink = palette.foreground.opaqueSpelling
+        let paper = palette.background.opaqueSpelling
+        // An opaque picture — nearly every picture — has no uncovered cell and keeps the
+        // one wrapper per line it always had.
+        guard !art.uncovered.isEmpty else {
+            return art.lines.map { ANSIRenderer.colorize($0, foreground: ink, background: paper) }
         }
+        var uncovered = art.uncovered[...]
+        return art.lines.enumerated().map { index, line in
+            // Columns are CHARACTERS, as the converter counted them: a mono line carries
+            // no escapes, so the two cannot drift.
+            var drawn = ""
+            var cursor = line.startIndex
+            var column = 0
+            forEachInkedSpan(ofLine: index, width: line.count, uncovered: &uncovered) { span in
+                let start = line.index(cursor, offsetBy: span.lowerBound - column)
+                let end = line.index(start, offsetBy: span.count)
+                drawn.append(contentsOf: line[cursor..<start])
+                drawn += ANSIRenderer.colorize(
+                    String(line[start..<end]), foreground: ink, background: paper)
+                cursor = end
+                column = span.upperBound
+            }
+            drawn.append(contentsOf: line[cursor...])
+            return drawn
+        }
+    }
+
+    /// Calls `body` with each span of line `line` that ``inked(_:mode:palette:)`` paints —
+    /// all `width` of its columns less the picture's uncovered runs on it — consuming
+    /// those runs from the front of `uncovered`, which is in reading order.
+    ///
+    /// One walk for the bytes and for their claim, so the two cannot disagree about which
+    /// cells carry the theme's colours. Clamped to `width` rather than trusted, because a
+    /// run naming a column past the line would otherwise index off its end.
+    private static func forEachInkedSpan(
+        ofLine line: Int, width: Int, uncovered: inout ArraySlice<ASCIIArt.CoverageRun>,
+        _ body: (Range<Int>) -> Void
+    ) {
+        var column = 0
+        while let run = uncovered.first, run.line <= line {
+            uncovered.removeFirst()
+            guard run.line == line else { continue }
+            let gap = min(run.columns.lowerBound, width)
+            if gap > column { body(column..<gap) }
+            column = max(column, min(run.columns.upperBound, width))
+        }
+        if width > column { body(column..<width) }
     }
 }
 

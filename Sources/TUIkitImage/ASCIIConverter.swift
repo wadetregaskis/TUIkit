@@ -779,6 +779,7 @@ extension ASCIIConverter {
 
         var lines = [String]()
         var coverage = CoverageMap()
+        var uncovered = CoverageMap()
         lines.reserveCapacity(height)
 
         image.pixels.withUnsafeBufferPointer { pixels in
@@ -821,6 +822,9 @@ extension ASCIIConverter {
                     guard pixel.a > 0 else {
                         row.setColors(foreground: nil, background: nil)
                         row.append(ascii: 0x20)
+                        // Said beside the line too, for the mode whose bytes cannot say
+                        // it — see `ASCIIArt.uncovered`.
+                        uncovered.note(line: y, column: x, ink: 0, field: 0)
                         continue
                     }
                     row.setColors(foreground: colours.color(for: pixel), background: nil)
@@ -831,7 +835,7 @@ extension ASCIIConverter {
             }
         }
 
-        return ASCIIArt(lines: lines, coverage: coverage.runs)
+        return ASCIIArt(lines: lines, coverage: coverage.runs, uncovered: uncovered.runs)
     }
 
     /// Converts each pixel to a full-cell background fill: a space whose cell
@@ -855,6 +859,7 @@ extension ASCIIConverter {
         let colours = CellColours(mode: mode)
         var lines = [String]()
         var coverage = CoverageMap()
+        var uncovered = CoverageMap()
         lines.reserveCapacity(height)
         image.pixels.withUnsafeBufferPointer { pixels in
             for y in 0..<height {
@@ -862,6 +867,9 @@ extension ASCIIConverter {
                 let base = y * image.width
                 for x in 0..<width {
                     let pixel = pixels[base + x]
+                    // A cell nothing of the picture reaches, in either arm: the colour
+                    // arm's bytes say so as well, mono's cannot (`ASCIIArt.uncovered`).
+                    if pixel.a == 0 { uncovered.note(line: y, column: x, ink: 0, field: 0) }
                     if mode == .mono {
                         row.append(Self.isMonoInk(pixel, threshold: monoThreshold) ? "█" : " ")
                         continue
@@ -876,7 +884,7 @@ extension ASCIIConverter {
                 lines.append(row.finish())
             }
         }
-        return ASCIIArt(lines: lines, coverage: coverage.runs)
+        return ASCIIArt(lines: lines, coverage: coverage.runs, uncovered: uncovered.runs)
     }
 
     /// The luminance ramp for the current charset, ordered dark pixel →

@@ -99,6 +99,7 @@ extension ASCIIConverter {
 
         var lines = [String]()
         var coverage = CoverageMap()
+        var uncovered = CoverageMap()
         lines.reserveCapacity(height)
 
         // Straight off the pixel buffer: `pixel(at:)` is three retains and
@@ -126,6 +127,7 @@ extension ASCIIConverter {
                         // used to be an explicit black rectangle — §17's logo surround.
                         row.setColors(foreground: nil, background: nil, resetFirst: true)
                         row.append(ascii: 0x20)
+                        uncovered.note(line: cellY, column: cellX, ink: 0, field: 0)
                     case (false, true):
                         // Only the lower half. `▄` in its colour with NO background, so
                         // the upper half of the cell shows what is behind it.
@@ -170,7 +172,7 @@ extension ASCIIConverter {
                 lines.append(row.finish())
             }
         }
-        return ASCIIArt(lines: lines, coverage: coverage.runs)
+        return ASCIIArt(lines: lines, coverage: coverage.runs, uncovered: uncovered.runs)
     }
 
     /// Monochrome variant: threshold both pixels and pick the block glyph that
@@ -182,18 +184,25 @@ extension ASCIIConverter {
         monoThreshold: Double
     ) -> ASCIIArt {
         var lines = [String]()
+        var uncovered = CoverageMap()
         lines.reserveCapacity(height)
 
         for cellY in 0..<height {
             var line = ""
             line.reserveCapacity(width)
             for cellX in 0..<width {
-                let topLit = ASCIIConverter.isMonoInk(
-                    image.pixel(at: cellX, 2 * cellY), threshold: monoThreshold)
-                let bottomLit = ASCIIConverter.isMonoInk(
-                    image.pixel(at: cellX, 2 * cellY + 1), threshold: monoThreshold)
+                let upper = image.pixel(at: cellX, 2 * cellY)
+                let lower = image.pixel(at: cellX, 2 * cellY + 1)
+                let topLit = ASCIIConverter.isMonoInk(upper, threshold: monoThreshold)
+                let bottomLit = ASCIIConverter.isMonoInk(lower, threshold: monoThreshold)
                 switch (topLit, bottomLit) {
                 case (false, false):
+                    // Unlit is two different cells — a dark picture, and no picture — and
+                    // the line spells both as a space. Only the second is uncovered, and
+                    // only beside the line can it say so (`ASCIIArt.uncovered`).
+                    if upper.a == 0, lower.a == 0 {
+                        uncovered.note(line: cellY, column: cellX, ink: 0, field: 0)
+                    }
                     line.append(" ")
                 case (true, false):
                     line.append("▀")
@@ -207,8 +216,9 @@ extension ASCIIConverter {
         }
         // No coverage runs: mono paints no colours at all — the four glyphs carry the
         // whole picture — so there is no alpha to state. What coverage decides here is
-        // whether a half is LIT, which `isMonoInk` answers.
-        return ASCIIArt(lines: lines)
+        // whether a half is LIT, which `isMonoInk` answers — and, beside the lines, which
+        // cells are not there at all, the one thing a colourless line has no byte for.
+        return ASCIIArt(lines: lines, uncovered: uncovered.runs)
     }
 }
 
@@ -240,8 +250,9 @@ extension ASCIIConverter {
         // colour the encoder left in it, and "there" is the ½ rule §6a states for every
         // glyph decision — at or above half coverage the source's mark is drawn, below
         // it the destination keeps its cell. Mono paints no colours at all, so this is
-        // the ONLY way coverage reaches it: there is no claim to make, only a glyph to
-        // withhold.
+        // the only way coverage reaches its GLYPHS: there is no claim to make, only a
+        // glyph to withhold. (Whether a cell is there at all travels beside the lines,
+        // in `ASCIIArt.uncovered`, for whoever paints mono afterwards.)
         pixel.a >= 128 && pixel.luminance >= threshold
     }
 }

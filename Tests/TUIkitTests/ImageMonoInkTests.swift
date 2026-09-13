@@ -34,13 +34,30 @@ struct ImageMonoInkTests {
         return RGBAImage(width: width, height: height, pixels: pixels)
     }
 
+    /// Nothing of the picture on the left, white on the right: a transparent surround
+    /// beside a subject, laid out so that every renderer sees both at any size it draws.
+    private func halfTransparent(width: Int, height: Int) -> RGBAImage {
+        var pixels: [RGBA] = []
+        pixels.reserveCapacity(width * height)
+        for _ in 0..<height {
+            for x in 0..<width {
+                pixels.append(
+                    x < width / 2 ? RGBA(r: 0, g: 0, b: 0, a: 0) : RGBA(r: 255, g: 255, b: 255))
+            }
+        }
+        return RGBAImage(width: width, height: height, pixels: pixels)
+    }
+
     /// Renders a loaded image at `mode`, and returns the drawn lines.
     private func lines(mode: ASCIIColorMode, palette: any Palette) -> [String] {
         buffer(mode: mode, palette: palette).lines
     }
 
     /// The same render, whole: the claims matter as much as the bytes.
-    private func buffer(mode: ASCIIColorMode, palette: any Palette) -> FrameBuffer {
+    private func buffer(
+        mode: ASCIIColorMode, palette: any Palette, image: RGBAImage? = nil,
+        characterSet: ASCIICharacterSet = .blocks(.fine), shapeAware: Bool = false
+    ) -> FrameBuffer {
         let tui = TUIContext(
             lifecycle: LifecycleManager(firesEffects: false),
             keyEventDispatcher: KeyEventDispatcher(),
@@ -49,6 +66,8 @@ struct ImageMonoInkTests {
         environment.focusManager = FocusManager()
         environment.palette = palette
         environment.imageColorMode = mode
+        environment.imageCharacterSet = characterSet
+        environment.imageShapeAware = shapeAware
         var context = RenderContext(
             availableWidth: 24, availableHeight: 8, environment: environment, tuiContext: tui)
         // Reads the phase, runs no lifecycle — see the file note.
@@ -57,7 +76,7 @@ struct ImageMonoInkTests {
         let box: StateBox<ImageLoadingPhase> = tui.stateStorage.storage(
             for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
             default: .loading)
-        box.value = .success(ramp(width: 48, height: 32))
+        box.value = .success(image ?? ramp(width: 48, height: 32))
 
         return renderToBuffer(_ImageCore(source: .file("unused")), context: context)
     }
@@ -146,5 +165,58 @@ struct ImageMonoInkTests {
     func anOpaquePaletteClaimsNothing() {
         let drawn = buffer(mode: .mono, palette: SystemPalette(.green))
         #expect(drawn.opacityRegions.allSatisfy { $0.inkOpacity == 1 && $0.fieldOpacity == 1 })
+    }
+
+    /// A transparent surround keeps what is behind it, in every mono renderer.
+    ///
+    /// `inked` wrapped each line whole, so the paper covered the cells the converter had
+    /// left blank for want of any picture: `.imageColorMode(.mono).background(.blue)` hid
+    /// the blue completely round a logo that `.trueColor` let it show round. A mono line
+    /// cannot say "absent" — that space and a dark pixel's are the same byte — so the
+    /// converter says it in `ASCIIArt.uncovered`, and the paper stops there.
+    ///
+    /// Asserted on the BYTES, not on a claim, because the bytes are what a `.background`
+    /// fill reads: it restates its colour after every reset, and a paper stated at column
+    /// 0 is not a reset. Every renderer, because `inked` wraps them all.
+    @Test(
+        "A mono image states no colour over a transparent surround",
+        arguments: [ASCIICharacterSet.blocks(.fine), .blocks(.solid), .blocks(.braille), .ascii],
+        [false, true])
+    func monoLeavesAnUncoveredSurroundUnpainted(
+        characterSet: ASCIICharacterSet, shapeAware: Bool
+    ) throws {
+        let palette = SystemPalette(.green)
+        let drawn = buffer(
+            mode: .mono, palette: palette, image: halfTransparent(width: 16, height: 8),
+            characterSet: characterSet, shapeAware: shapeAware)
+        let top = try #require(drawn.lines.first, "the image drew nothing")
+        // The left half is not there, so nothing is stated before it…
+        #expect(!top.hasPrefix("\u{1B}["), "the surround was painted: \(top.debugDescription)")
+        // …and the right half, which is, still wears the theme's paper.
+        let paper = palette.background.opaqueSpelling.backgroundCodes().joined(separator: ";")
+        #expect(top.contains(paper), "the picture lost its paper: \(top.debugDescription)")
+    }
+
+    /// A faded theme's alpha is claimed only where its colours were painted.
+    ///
+    /// A claim left over an uncovered cell is not merely wasted: that cell shows whatever
+    /// is behind the picture, and the resolver would fade THAT toward the surface by the
+    /// palette's alpha.
+    @Test("A faded palette claims nothing over a transparent surround")
+    func aFadedPaletteClaimsNothingOverTheSurround() throws {
+        let drawn = buffer(
+            mode: .mono, palette: FadedAll(), image: halfTransparent(width: 16, height: 8))
+        let overSurround = drawn.opacityRegions.filter {
+            $0.contains(column: 0, row: 0) && ($0.inkOpacity < 1 || $0.fieldOpacity < 1)
+        }
+        #expect(overSurround.isEmpty, "\(drawn.opacityRegions)")
+        // A narrower claim, not none: the covered half still owes the palette's alpha —
+        // the ink's, since the paper is a root ground and reaches the view spent (§70.4).
+        let top = try #require(drawn.lines.first, "the image drew nothing")
+        let lastColumn = top.strippedLength - 1
+        let overPicture = drawn.opacityRegions.filter {
+            $0.contains(column: lastColumn, row: 0) && $0.inkOpacity < 1
+        }
+        #expect(!overPicture.isEmpty, "\(drawn.opacityRegions)")
     }
 }

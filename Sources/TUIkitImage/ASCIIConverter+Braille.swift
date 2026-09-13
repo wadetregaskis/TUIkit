@@ -69,6 +69,7 @@ extension ASCIIConverter {
         return image.pixels.withUnsafeBufferPointer { buffer -> ASCIIArt in
             var lines = [String]()
             var coverage = CoverageMap()
+            var uncovered = CoverageMap()
             lines.reserveCapacity(height)
 
             for charY in 0..<height {
@@ -144,6 +145,9 @@ extension ASCIIConverter {
                         avgPixel = RGBA(r: 0, g: 0, b: 0, a: 0)
                     }
 
+                    // Every dot absent: the cell nothing of the picture reaches, which a
+                    // mono line has no byte for (`ASCIIArt.uncovered`).
+                    if totalA == 0 { uncovered.note(line: charY, column: charX, ink: 0, field: 0) }
                     coverage.note(line: charY, column: charX, ink: avgPixel.a, field: .max)
                     row.setColors(foreground: colours.color(for: avgPixel), background: nil)
                     row.append(brailleChar)
@@ -151,7 +155,7 @@ extension ASCIIConverter {
                 lines.append(row.finish())
             }
 
-            return ASCIIArt(lines: lines, coverage: coverage.runs)
+            return ASCIIArt(lines: lines, coverage: coverage.runs, uncovered: uncovered.runs)
         }
     }
 }

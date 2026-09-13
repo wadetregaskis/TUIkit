@@ -30,9 +30,30 @@ public struct ASCIIArt: Sendable, Equatable {
     /// at all.
     public var coverage: [CoverageRun]
 
-    public init(lines: [String], coverage: [CoverageRun] = []) {
+    /// The cells nothing of the picture reaches: every pixel each one was drawn from is
+    /// fully transparent. Runs in reading order, at `ink` and `field` 0 — which is what
+    /// those cells were drawn at.
+    ///
+    /// **Not part of ``coverage``, and not redundant with the lines.** A colour renderer
+    /// already spells such a cell in its bytes — a space stating no colour — and
+    /// `coverage` becomes compositor claims, which a cell stating nothing does not need.
+    /// But a ``ASCIIColorMode/mono`` line has no colours to leave out: the space where a
+    /// pixel is transparent and the space where it is dark are the same byte. A caller
+    /// that draws mono in a theme's ink and paper — `Image` does — needs this to leave
+    /// the paper off a transparent surround, rather than papering over whatever the
+    /// picture sits on.
+    ///
+    /// Recorded by every renderer in every mode, so it is a fact about the picture and
+    /// not about one caller's mode. Empty for a picture with no fully transparent cell,
+    /// which is nearly every picture: nothing is recorded and nothing allocated.
+    ///
+    /// See `Documentation/Opacity as composition.md` §70.5.
+    public var uncovered: [CoverageRun]
+
+    public init(lines: [String], coverage: [CoverageRun] = [], uncovered: [CoverageRun] = []) {
         self.lines = lines
         self.coverage = coverage
+        self.uncovered = uncovered
     }
 
     /// A run of adjacent cells on one line whose ink and field share a coverage.

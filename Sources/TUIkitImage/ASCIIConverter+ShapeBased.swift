@@ -129,6 +129,7 @@ extension ASCIIConverter {
         return image.pixels.withUnsafeBufferPointer { pixelBuffer -> ASCIIArt in
             var lines = [String]()
             var coverage = CoverageMap()
+            var uncovered = CoverageMap()
             lines.reserveCapacity(height)
 
             // Scratch storage reused per cell.
@@ -203,13 +204,16 @@ extension ASCIIConverter {
                             b: UInt8(clamping: sumB / sumA),
                             a: UInt8(clamping: Int((Double(sumA) * inverseAllSamples).rounded())))
                         : RGBA(r: 0, g: 0, b: 0, a: 0)
+                    // Every sample absent: the cell nothing of the picture reaches, which
+                    // a mono line has no byte for (`ASCIIArt.uncovered`).
+                    if sumA == 0 { uncovered.note(line: cellY, column: cellX, ink: 0, field: 0) }
                     coverage.note(line: cellY, column: cellX, ink: averageColor.a, field: .max)
                     row.setColors(foreground: colours.color(for: averageColor), background: nil)
                     row.append(character)
                 }
                 lines.append(row.finish())
             }
-            return ASCIIArt(lines: lines, coverage: coverage.runs)
+            return ASCIIArt(lines: lines, coverage: coverage.runs, uncovered: uncovered.runs)
         }
     }
 
