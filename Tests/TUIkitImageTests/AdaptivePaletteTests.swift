@@ -227,6 +227,125 @@ struct AdaptivePaletteTests {
         }
     }
 
+    // MARK: - An entry that draws nothing is not taking a useful colour's place
+
+    /// `image`'s distinct colours in OKLab, each with how many pixels are it.
+    ///
+    /// Not the derivation's `Histogram`: its buckets are 5-bit cell MEANS, and
+    /// this is the error the pixels themselves see. Summed once per distinct
+    /// colour rather than once per pixel, which is the same sum over a fraction
+    /// of the walk.
+    private static func distinctColours(
+        of image: RGBAImage
+    ) -> [(lab: (l: Double, a: Double, b: Double), weight: Double)] {
+        var weights: [Int: Int] = [:]
+        for pixel in image.pixels where pixel.a != 0 {
+            weights[Int(pixel.r) << 16 | Int(pixel.g) << 8 | Int(pixel.b), default: 0] += 1
+        }
+        return weights.sorted { $0.key < $1.key }.map { key, weight in
+            (
+                Color.oklab(
+                    red: UInt8(truncatingIfNeeded: key >> 16), green: UInt8(truncatingIfNeeded: key >> 8),
+                    blue: UInt8(truncatingIfNeeded: key)),
+                Double(weight)
+            )
+        }
+    }
+
+    /// The counts in `counts` whose `.leastError` palette at `depth` holds an
+    /// entry no pixel of `image` is nearest to while a colour of the target's
+    /// lattice that the palette does NOT hold would still lower the pixel error.
+    ///
+    /// An entry that draws nothing is not the fault on its own. Once every lattice
+    /// colour some pixel is nearest to is in the palette, the error is as low as
+    /// that lattice allows and a larger count has nothing left to draw; those
+    /// entries are kept. The fault is an entry drawing nothing while a colour
+    /// that would draw something is left out.
+    ///
+    /// An invariant rather than "each count draws a picture the count below did
+    /// not", because WHERE the repeats fall moves with the picture and its size,
+    /// and past the ceiling a repeat is the right answer.
+    private static func wastedCounts(
+        _ image: RGBAImage, depth: ColorDepth, counts: ClosedRange<Int>
+    ) -> [String] {
+        guard let lattice = ASCIIPalette.representable(at: depth) else {
+            Issue.record("\(depth) has no lattice to choose from")
+            return []
+        }
+        let colours = distinctColours(of: image)
+        let labs = lattice.entries.indices.map { lattice.labOfEntry($0) }
+        var wasted: [String] = []
+        for count in counts {
+            let palette = ASCIIPalette.adaptive(count, by: .leastError).derived(from: image, depth: depth)
+            let chosen = palette.colors.compactMap { lattice.colors.firstIndex(of: $0) }
+            guard !chosen.isEmpty, chosen.count == palette.colors.count else {
+                Issue.record("\(count): the palette holds a colour the lattice does not")
+                continue
+            }
+            // Each colour's squared distance to the entry it is drawn in, and the
+            // entries that draw anything at all.
+            var nearest = [Double](repeating: .infinity, count: colours.count)
+            var drawing: Set<Int> = []
+            for (index, colour) in colours.enumerated() {
+                var best = chosen[0]
+                for entry in chosen {
+                    let distance = ASCIIPalette.distanceSquared(colour.lab, labs[entry])
+                    if distance < nearest[index] {
+                        nearest[index] = distance
+                        best = entry
+                    }
+                }
+                drawing.insert(best)
+            }
+            let idle = chosen.count - drawing.count
+            guard idle > 0 else { continue }
+            let held = Set(chosen)
+            for candidate in labs.indices where !held.contains(candidate) {
+                var gain = 0.0
+                for (index, colour) in colours.enumerated() {
+                    let distance = ASCIIPalette.distanceSquared(colour.lab, labs[candidate])
+                    gain += colour.weight * max(0, nearest[index] - distance)
+                }
+                if gain > 1e-9 {
+                    wasted.append("\(count): \(idle) drawing nothing, while \(lattice.colors[candidate].value) gains \(gain)")
+                    break
+                }
+            }
+        }
+        return wasted
+    }
+
+    /// Reported by the owner at 256 colours: counts that drew the identical
+    /// picture, although every step bought a distinct entry
+    /// (`AdaptationTargetTests.everyStepBuysAColour`). The extra entries were
+    /// colours no pixel is nearest to.
+    @Test("At 256 colours a least-error entry draws nothing only when no unused colour would help")
+    func noEntryIsWastedAtTwoFiftySix() {
+        let wasted = Self.wastedCounts(Self.subject(), depth: .palette256, counts: 10...40)
+        #expect(wasted.isEmpty, "\(wasted)")
+    }
+
+    @Test("At 16 colours a least-error entry draws nothing only when no unused colour would help")
+    func noEntryIsWastedAtSixteen() {
+        let wasted = Self.wastedCounts(Self.subject(), depth: .basic16, counts: 3...12)
+        #expect(wasted.isEmpty, "\(wasted)")
+    }
+
+    /// The owner's own picture, at the size fine blocks sample it for 96×47 cells
+    /// (one pixel per half cell). Found by `#filePath`, which the package's other
+    /// tests already rely on: the tests run from the checkout.
+    @Test("On the Example's demo picture a least-error entry draws nothing only when no unused colour would help")
+    func noEntryIsWastedOnTheDemoPicture() throws {
+        let path = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // TUIkitImageTests
+            .deletingLastPathComponent()  // Tests
+            .deletingLastPathComponent()  // the package
+            .appendingPathComponent("Sources/Example/Resources/demo-image.jpg").path
+        let image = try PlatformImageLoader().loadImage(from: path).scaledBilinear(to: 96, 94)
+        let wasted = Self.wastedCounts(image, depth: .palette256, counts: 20...64)
+        #expect(wasted.isEmpty, "\(wasted)")
+    }
+
     @Test("The converter derives from the picture it will draw, curve and all")
     func theConverterDerivesAfterTheToneCurve() {
         // A negative moves every colour in the picture. Deriving before it would

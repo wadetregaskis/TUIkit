@@ -304,6 +304,10 @@ extension ASCIIPalette {
                 centres = chosen.map { lattice.labOfEntry($0) }
                 if chosen == previous { break }
             }
+            if let lattice {
+                chosen = reseedingDeadEntries(chosen, within: lattice)
+                centres = chosen.map { lattice.labOfEntry($0) }
+            }
             return Self.colours(centres, chosen: chosen, within: lattice)
         }
 
@@ -382,10 +386,16 @@ extension ASCIIPalette {
                 if ASCIIPalette.distanceSquared(next, centres[index]) > 1e-12 { moved = true }
                 centres[index] = next
             }
-            // An entry nothing maps to is left where it is rather than dropped:
-            // the caller asked for `count` colours, and a palette that quietly
-            // returned fewer would make the slider's steps do nothing, which is
-            // the very complaint this whole feature answers.
+            // A centre nothing maps to is kept rather than dropped: the caller
+            // asked for `count` colours, and a palette that quietly returned
+            // fewer would make the slider's steps do nothing, which is the very
+            // complaint this whole feature answers. It cannot MOVE here either,
+            // because a centre with no weight has no mean. On a lattice that is
+            // how an entry comes to draw nothing: `snapping(_:)` hands a
+            // colliding centre a colour far from every pixel, and every pass
+            // leaves it there. So `leastError` exchanges such entries once the
+            // loop settles, wherever an unused colour would lower the error:
+            // see `reseedingDeadEntries(_:within:)`.
             return moved
         }
 

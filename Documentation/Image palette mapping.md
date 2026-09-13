@@ -572,6 +572,24 @@ comparable rather than merely near each other.
   a centre already sitting on its colour keeps it, and the one that collided with
   it takes its own next best. First-come-first-served would hand the entry to
   whichever centre happened to be earlier in the array.
+- **An entry that draws nothing is exchanged, once, where that helps.**
+  Distinctness has a price: the colour `snapping(_:)` hands a centre that
+  collided with another can be far from every pixel. Nothing maps to it, so the
+  next pass has no mean to move it to, re-snapping puts it back, and the loop
+  settles on an entry that draws nothing while a colour some pixels would be
+  drawn in is left out. Reported on the Images page as "Least error" counts that
+  drew the identical picture: 25, 26 and 27, then 30 and 31, at 256 colours, and
+  6 to 9 at 16. So once the loop settles, `reseedingDeadEntries(_:within:)`
+  exchanges each such entry for the unclaimed lattice colour that lowers the
+  error the most. Where none lowers it at all, the palette is past its
+  **ceiling** (every lattice colour some pixel is nearest to is already in it,
+  so the error is as low as the lattice allows) and the entry is kept: the
+  count asked for is the count answered. `AdaptivePaletteTests` pins that
+  property rather than the counts, because where the repeats fall moves with
+  the picture and its size. It is not a guarantee: the exchange runs once, and
+  the property was checked only on those tests' three fixtures and on the demo
+  picture at six more sizes, with and without noise. The unconstrained
+  derivation is untouched.
 - **`.popularity` skips instead.** It walks its ranking past cells whose colour
   the output has already spent — two popular cells a third of a cube step apart
   *are* one colour there — rather than offering the second one a different
