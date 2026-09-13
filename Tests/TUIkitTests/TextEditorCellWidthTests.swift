@@ -170,6 +170,24 @@ struct TextEditorCellWidthTests {
         #expect(handler.cursorColumn == 4, "round-trips, got char \(handler.cursorColumn)")
     }
 
+    @Test("Deleting a selection keeps the VISUAL column across wide characters")
+    func deletingSelectionKeepsVisualColumn() {
+        // "中文中文" minus its third character leaves the caret before the last 文:
+        // char 2, display column 4. The stored column was the raw index 2, so Down
+        // landed on 'c' instead of 'e'. No tab involved — any cell width other than
+        // one separates character space from display space.
+        let sink = StringSink("中文中文\nabcdefghij")
+        let handler = TextEditorHandler(focusID: "e", text: sink.binding)
+        handler.moveCursor(toLine: 0, column: 2)
+        handler.startOrExtendSelection()
+        handler.moveCursor(toLine: 0, column: 3)
+        _ = handler.handleKeyEvent(KeyEvent(key: .backspace))
+        #expect(sink.value == "中文文\nabcdefghij")
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        #expect(handler.cursorLine == 1)
+        #expect(handler.cursorColumn == 4, "same visual column, got char \(handler.cursorColumn)")
+    }
+
     // MARK: - Click mapping
 
     @Test(

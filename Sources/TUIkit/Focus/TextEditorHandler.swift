@@ -668,7 +668,14 @@ extension TextEditorHandler {
         }
         cursorLine = startLine
         cursorColumn = startColumn
-        desiredColumn = startColumn
+        // NOT `desiredColumn = startColumn`: that is a character index, and
+        // the field is DISPLAY space. On a prefix holding a tab or a wide
+        // character the two differ, so Backspace over a drag selection and
+        // then Down / Page Down read the index as a screen column — "\tabc"
+        // minus "ab" left the caret on screen column 4 and sent Down to
+        // column 1. `lines` is already the post-delete array, and `startLine`
+        // indexes it in both branches, so no re-read.
+        syncDesiredColumn(lines)
         selectionAnchor = nil
         writeLines(lines)
     }

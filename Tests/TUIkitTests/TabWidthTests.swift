@@ -131,6 +131,36 @@ struct TextEditorTabTests {
         #expect(handler.cursorColumn == 1, "returns to the X, not mid-tab")
     }
 
+    /// Deleting a selection stored the caret's CHARACTER index as the display column
+    /// vertical motion preserves. On "\tabc" minus "ab" the caret sits on the c, at
+    /// screen column 4, but the stored column read 1 — so the next Down (or Page Down,
+    /// one line at the default one-row viewport) landed on the y. Only Backspace and
+    /// Delete expose it: the other replacing keys insert afterwards, which re-syncs.
+    @Test("Deleting a selection keeps the VISUAL column for the next vertical move")
+    func deletingSelectionKeepsVisualColumn() {
+        for deleteKey in [Key.backspace, .delete] {
+            for motion in [Key.down, .pageDown] {
+                var text = "\tabc\nxyzw"
+                let handler = TextEditorHandler(
+                    focusID: "t", text: Binding(get: { text }, set: { text = $0 }))
+                handler.tabWidth = .periodic(4)
+                // A drag as the view's mouse handler drives it: press on the a
+                // (char 1), anchor on the first movement, drag to char 3.
+                handler.moveCursor(toLine: 0, column: 1)
+                handler.startOrExtendSelection()
+                handler.moveCursor(toLine: 0, column: 3)
+                _ = handler.handleKeyEvent(KeyEvent(key: deleteKey))
+                #expect(text == "\tc\nxyzw")
+                #expect(handler.cursorColumn == 1)
+                _ = handler.handleKeyEvent(KeyEvent(key: motion))
+                #expect(handler.cursorLine == 1)
+                #expect(
+                    handler.cursorColumn == 4,
+                    "\(deleteKey) then \(motion): got char \(handler.cursorColumn)")
+            }
+        }
+    }
+
     @Test("Option-Tab inserts a tab that renders at the next stop")
     func optionTabInsertsRealTab() {
         var text = "ab"
