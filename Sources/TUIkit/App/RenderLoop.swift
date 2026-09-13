@@ -545,8 +545,11 @@ extension RenderLoop {
             appHeader.hasContent
             ? buildAppHeaderBuffer(terminalWidth: terminalWidth, environment: environment) : nil
 
+        // `hasContent`, not `hasItems`: the question `statusBar.height` answered
+        // when it took the rows, so a tooltip on a bar with no items is built into
+        // the rows it reserved rather than leaving them blank.
         let statusBarBuffer: FrameBuffer? =
-            statusBar.hasItems
+            statusBar.hasContent
             ? buildStatusBarBuffer(terminalWidth: terminalWidth, environment: environment) : nil
         // The row `writeFrame` puts the bar at. The diff has to hear about that
         // changing, not only about the bar coming and going — see

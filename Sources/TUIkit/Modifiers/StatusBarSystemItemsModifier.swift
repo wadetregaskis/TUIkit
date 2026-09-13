@@ -89,7 +89,8 @@ extension View {
     /// ```
     ///
     /// To hide the status bar completely, combine this with no registered
-    /// user items and set ``StatusBarState/showSystemItems`` to `false`.
+    /// user items and set ``StatusBarState/showSystemItems`` to `false`. A
+    /// status-bar tooltip still brings the bar back for as long as it shows.
     ///
     /// - Parameters:
     ///   - theme: Whether to show the theme switcher (`t theme`). Default is `false`.

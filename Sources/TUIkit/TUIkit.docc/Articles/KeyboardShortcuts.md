@@ -373,7 +373,7 @@ statusBar.showThemeItem = true          // Show theme cycling (also enables the 
 statusBar.showAppearanceItem = true     // Show appearance cycling
 ```
 
-When all system items are hidden and there are no active user items, the status bar is hidden completely.
+When all system items are hidden and there are no active user items, the status bar is hidden completely — until a status-bar tooltip shows, which it still makes room for and draws.
 
 ## Topics
 

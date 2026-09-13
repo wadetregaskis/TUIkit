@@ -151,7 +151,7 @@ ContentView()
 statusBar.showSystemItems = false
 ```
 
-When there are no active items left, the status bar height becomes zero and it is not rendered.
+When there are no active items left, the status bar height becomes zero and it is not rendered — except while a tooltip is showing in it, which is the default presentation of `.help(_:)`: the bar then takes the rows the tooltip needs and draws only the tooltip.
 
 ## Status Bar Styles
 

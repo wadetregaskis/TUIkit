@@ -102,4 +102,31 @@ struct StatusBarFrameDiffTests {
             #expect(isInked(hidden[row]), "row \(row) of the shrunk bar: \(hidden[row].debugDescription)")
         }
     }
+
+    /// A bar with no items still draws a tooltip in the rows it made room for.
+    ///
+    /// `StatusBarState.height` counts a tooltip row on a bar with no items, so the
+    /// page was shortened for it — but the loop built the bar only when it had
+    /// items, so the content pass erased those rows and nothing was drawn in them.
+    /// No items and no system items is the documented way to hide the bar.
+    @Test("A tooltip on a bar with no items is drawn in the rows it reserves")
+    func tooltipOnAnItemlessBarIsDrawn() {
+        let harness = RenderLoopHarness()
+        harness.statusBar.showSystemItems = false
+        let loop = harness.loop(StatusBarProbeApp())
+        _ = loop.render()
+        #expect(harness.statusBar.height == 0, "pre-condition: no items, no bar")
+
+        // A bordered bar round one tooltip row: rows 22...24 of 24.
+        harness.tuiContext.tooltipState.hovering("Copy to clipboard", handlerID: nil, nowNanos: 0)
+        harness.terminal.reset()
+        _ = loop.render()
+        #expect(harness.statusBar.height == 3, "pre-condition: the tooltip must take its rows")
+        let drawn = paints(harness.terminal)
+        for row in 22...24 {
+            #expect(isInked(drawn[row]), "row \(row) of the tooltip's bar: \(drawn[row].debugDescription)")
+        }
+        let tooltipRow = drawn[23] ?? ""
+        #expect(tooltipRow.contains("Copy to clipboard"), "\(drawn)")
+    }
 }

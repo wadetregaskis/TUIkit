@@ -328,13 +328,23 @@ public final class StatusBarState: @unchecked Sendable {
     /// Whether there are any user items (ignoring system items).
     public var hasUserItems: Bool { !currentUserItems.isEmpty }
 
+    /// Whether the bar has anything to draw this frame: an item, or a tooltip row.
+    ///
+    /// The one question `height` and the run loop's decision to build the bar
+    /// both ask, so it is asked in one place. It used to be spelled twice, and
+    /// only one spelling learned about the tooltip: an item-less bar showing one
+    /// took its rows from the page and was never built to draw in them, so they
+    /// were erased to the terminal's own background and the tooltip showed
+    /// nowhere.
+    var hasContent: Bool { hasItems || !tooltipLines.isEmpty }
+
     /// The height of the status bar in lines, or 0 when it has nothing to show.
     ///
     /// A tooltip row counts, and counts even with no items: a bar that is
     /// otherwise empty still has to make room for one, or the tooltip is
     /// computed and then drawn nowhere.
     public var height: Int {
-        guard hasItems || !tooltipLines.isEmpty else { return 0 }
+        guard hasContent else { return 0 }
         return style.barHeight(contentRows: (hasItems ? 1 : 0) + tooltipLines.count)
     }
 
