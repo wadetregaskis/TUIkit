@@ -13,6 +13,10 @@
 //  single-line paths cannot have a top clip, and row-granularity scrolling
 //  moves both conditions together.
 //
+//  And the bottom edge, unscrolled: the row straddling the line budget is drawn
+//  short so that the "▼ N more rows below" line fits under it, and its band has
+//  to stop where its lines do, not at the end of the content area.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -189,5 +193,57 @@ struct TableMultiLineDragGeometryTests {
         fixture.render()
 
         #expect(fixture.selection == pointed, "clicked \(pointed), selected \(fixture.selection ?? "nothing")")
+    }
+
+    /// Unscrolled, the second row straddles the line budget: the table draws row
+    /// a's four lines, three of row b's, and "▼ 4 more rows below" on the last
+    /// content line. A click on that line selects no row; a click on the line
+    /// above it selects row b.
+    ///
+    /// The first half failed for as long as the bands were built from whole row
+    /// heights and trimmed only at the content area, which counts the
+    /// indicator's line: row b's band ran one line past its drawing, so the
+    /// indicator selected it — and in this `.onMove` table a press there grabbed
+    /// it for a `.live` reorder. The second half is what fails a "fix" that just
+    /// drops the cut row's band.
+    @Test("A click on a multi-line table's below indicator selects no row")
+    func belowIndicatorClickSelectsNoRow() {
+        let names = "abcdef".map(String.init)
+        let fixture = Fixture(rows: names)
+
+        let buffer = fixture.render()
+        let screen = buffer.lines.map(\.stripped)
+        guard
+            let indicatorLine = screen.firstIndex(where: { $0.contains("▼") && $0.contains("below") }),
+            indicatorLine > 0,
+            let cut = fixture.label(buffer, onLine: indicatorLine - 1)
+        else {
+            Issue.record("a row line sits straight above the below indicator: \(screen)")
+            return
+        }
+        // Drawn SHORT, or there is no cut tail for a band to overrun and the case
+        // proves nothing.
+        let cutLineCount = (0..<indicatorLine).filter {
+            fixture.label(buffer, onLine: $0) == cut
+        }.count
+        #expect(cutLineCount < 4, "\(cut) is cut at the budget: \(screen)")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 3, y: indicatorLine))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 3, y: indicatorLine))
+        fixture.render()
+        #expect(
+            fixture.selection == nil,
+            "clicked \"\(screen[indicatorLine])\", selected \(fixture.selection ?? "nothing")")
+
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .pressed, x: 3, y: indicatorLine - 1))
+        fixture.dispatcher.dispatch(
+            MouseEvent(button: .left, phase: .released, x: 3, y: indicatorLine - 1))
+        fixture.render()
+        #expect(
+            fixture.selection == cut,
+            "clicked \(cut)'s last drawn line, selected \(fixture.selection ?? "nothing")")
     }
 }

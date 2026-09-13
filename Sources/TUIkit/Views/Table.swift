@@ -1378,7 +1378,17 @@ where Value.ID: Hashable {
         let bands = multiLineRowBands(
             handler: handler, range: window.range,
             heights: onScreenRowHeights(window.range, height: heightOf, topClip: topClip),
-            indicatorLines: indicatorLines, lineCount: contentHeight)
+            // The row block's DRAWN end, not the content area's. The heights are
+            // whole rows below the top clip, and the row straddling the budget is
+            // drawn short — `ScrollRowWindow.fill` admits it so the viewport fills
+            // exactly — so a band trimmed only at `contentHeight` ran on over the
+            // "▼ N more rows below" line: a click there selected the cut row, and
+            // with `.onMove` a press grabbed it for a `.live` reorder. A push past
+            // the top did the same with the rows' slid-off tail. A ceiling rather
+            // than per-row drawn heights, because a cut at the bottom moves no row
+            // below it; and the ceiling `_ListCore` (`slidRows.count`) and the
+            // single-line path (`lines.count + rowLines.count`) already pass.
+            indicatorLines: indicatorLines, lineCount: composed.rowsEnd)
         // Built either way — the render state below carries them, and a measure
         // pass's state is thrown away — but PUBLISHED only by the render, for
         // the reason the gate above gives and one more: publishing runs
@@ -1597,6 +1607,11 @@ where Value.ID: Hashable {
     /// this table's indicator, and nothing at all when they are hidden. Never
     /// both — the bar says everything the indicators would, and takes no line
     /// to say it.
+    ///
+    /// `rowsEnd` is where the row block's DRAWN lines stop, in the band space —
+    /// the "N more above" line counted in, the "▼ N more below" line and any
+    /// padding after it not. It is the ceiling the hit bands are trimmed to; see
+    /// its one caller.
     private func composeMultiLineRows(
         window: ScrollRowWindow,
         handler: ItemListHandler<Value.ID>,
@@ -1606,7 +1621,7 @@ where Value.ID: Hashable {
         contentHeight: Int,
         bar: ClaimingColumn,
         context: RenderContext
-    ) -> (lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion]) {
+    ) -> (lines: [String], runs: [AnimatedCellRun], claims: [OpacityRegion], rowsEnd: Int) {
         let palette = context.environment.palette
         let gutter = selectionGutter(context.environment)
         // Every line — focused-row backgrounds and indicators included — is padded
@@ -1722,12 +1737,16 @@ where Value.ID: Hashable {
         let rowsTop = lines.count
         lines.append(contentsOf: handler.overscrollState.slid(
             slidableRows, blank: String(repeating: " ", count: max(0, contentWidth))))
+        // `slid` keeps the count, so this is the block's end whatever the
+        // excursion — short of `contentHeight` by the "▼ N more below" line
+        // appended next and by any padding after that.
+        let rowsEnd = rowsTop + slidableRows.count
         let runs = rowRuns(
             pulseRuns, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
-            lineCount: rowsTop + slidableRows.count)
+            lineCount: rowsEnd)
         let claims = rowClaims(
             rowOpacity, slide: -handler.overscrollState.excursion, topOffset: rowsTop,
-            lineCount: rowsTop + slidableRows.count)
+            lineCount: rowsEnd)
         if window.reservesBelow {
             let indicator = renderScrollIndicator(
                 direction: .down, count: data.count - window.range.upperBound,
@@ -1749,7 +1768,7 @@ where Value.ID: Hashable {
                 lines.append(String(repeating: " ", count: contentWidth))
             }
         }
-        guard showsBar else { return (lines, runs + chromeRuns, claims + chromeClaims) }
+        guard showsBar else { return (lines, runs + chromeRuns, claims + chromeClaims, rowsEnd) }
         // The bar is the rightmost interior column, merged in by absolute line
         // index so an overscroll slide moves the rows and leaves it where it
         // is (§1.5) — the same composition the single-line path uses, claims
@@ -1762,7 +1781,7 @@ where Value.ID: Hashable {
         bar.fit(toCount: lines.count, field: ScrollbarColors.track(in: palette))
         return (
             zip(lines, bar.lines).map { $0 + $1 },
-            runs + chromeRuns, claims + chromeClaims + bar.claims(atColumn: contentWidth))
+            runs + chromeRuns, claims + chromeClaims + bar.claims(atColumn: contentWidth), rowsEnd)
     }
 
     /// Renders one (possibly multi-line) row: the selection indicator on the first
@@ -2619,10 +2638,17 @@ where Value.ID: Hashable {
             grabX: grabX, grabY: handler.reorderHeldRowsAboveGrab.count)
     }
 
-    /// The visible rows' heights AS RENDERED — the first row's is net of the
-    /// line-granularity top clip, because the mouse row-mapping walks these
-    /// from the first visible line and a full-height first row would put every
-    /// row below it off its hit band.
+    /// The visible rows' heights with the TOP clip taken off — the first row's
+    /// is net of the line-granularity top clip, because the mouse row-mapping
+    /// walks these from the first visible line and a full-height first row
+    /// would put every row below it off its hit band.
+    ///
+    /// NOT net of the bottom clip. The last row keeps its whole height where
+    /// `composeMultiLineRows` cut its tail at the line budget; that cut moves no
+    /// row below it, so the bands are capped instead, by the row block's drawn
+    /// end passed to `multiLineRowBands` as `lineCount`. Read as "as rendered"
+    /// all the way down, which it is not there, the last band ran on over the
+    /// "▼ N more rows below" line.
     private func onScreenRowHeights(
         _ range: Range<Int>, height: (Int) -> Int, topClip: Int
     ) -> [Int] {

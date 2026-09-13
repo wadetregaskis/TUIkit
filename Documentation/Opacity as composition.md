@@ -3859,6 +3859,16 @@ recorded, so its bands were right all along. Only the two things applied AFTER t
 were taken — the overscroll excursion and the reorder overrun's front clip — could cut a
 row the bands still described at full height.
 
+Not quite only two, as it turned out the same day. The multi-line `Table` also cuts its
+BOTTOM row after the heights are taken — the row `ScrollRowWindow` admits across the line
+budget, drawn short so the "▼ N more rows below" line fits under it — and it trimmed its
+bands at the content area, which includes that line. The cut row's band ran on over the
+indicator, so a click on "▼ 4 more rows below" selected the row above it, and in a
+reorderable table a press there grabbed it (review batch 2026-09-12, #26). A cut at the
+bottom moves nothing below it, so the fix is a ceiling rather than drawn heights: the bands
+are trimmed at the row block's drawn end, which `_ListCore` and the single-line path
+already passed.
+
 ## 68. Six sites the ledger never had: the faded-palette live sweep (2026-09-12)
 
 Every count of "the sites that must honour alpha" in this document was arrived at by
