@@ -121,10 +121,12 @@ extension _VStackCore {
             placed.append(sizes[index])
         }
 
-        // A flexible child (or a Spacer, which makes the column fill) stretches
-        // the stack to the width it was offered; otherwise the ramp spans only
-        // as far as the widest row, which is what the stack itself will be.
-        let fillsWidth = spacerCount > 0 || placed.contains { $0.isWidthFlexible }
+        // A width-flexible child stretches the stack to the width it was
+        // offered; otherwise the ramp spans only as far as the widest row, which
+        // is what the stack itself will be. A Spacer is not such a child — it
+        // fills a column's height, never its width, and `assembleWindow` hugs
+        // around it — and its entry in `placed` is the zero size given above.
+        let fillsWidth = placed.contains { $0.isWidthFlexible }
         let width = fillsWidth ? context.availableWidth : (placed.map(\.width).max() ?? 0)
         return (
             context.gradientContentFrame(width: width, height: running),

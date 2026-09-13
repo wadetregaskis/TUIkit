@@ -120,6 +120,10 @@ struct MeasureRenderEquivalenceTests {
         check(VStack { Text("a"); Text("bb"); Text("ccc") }, "VStack(plain)")
         check(VStack(alignment: .leading) { Text("First"); Text("A longer second line that can wrap") }, "VStack(wrapping)")
         check(VStack { Text("x").frame(maxWidth: .infinity) }, "VStack(flexChild)")
+        // A Spacer fills a column's HEIGHT only: the width is the widest child's,
+        // measured and painted alike, on both overflow policies.
+        check(VStack { Text("hi"); Spacer() }, "VStack(spacer)")
+        check(LazyVStack { Text("hi"); Spacer() }, "LazyVStack(spacer)")
         check(HStack { Text("a"); Text("bb") }, "HStack(plain)")
         check(HStack { Text("a"); Spacer(); Text("z") }, "HStack(spacer)")
         check(HStack(spacing: 2) { Text("A"); EmptyView(); Text("B") }, "HStack(emptyChild)")

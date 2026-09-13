@@ -205,8 +205,9 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// append-while-fits exactly — children accumulate top-down and the size
     /// stops at the first child that would overflow `availableHeight`, so the
     /// height ends on a child boundary just as the render does. Flexibility
-    /// mirrors the fill rules: a (vertical) spacer makes the stack fill both
-    /// axes, and any width/height-flexible child fills its axis.
+    /// mirrors the fill rules: a (vertical) spacer makes the stack fill its
+    /// height and nothing else, and any width/height-flexible child fills its
+    /// axis.
     ///
     /// A stack WITH a spacer keeps the render-based measure: spacer heights
     /// come from distributing the leftover after every sibling has rendered,
@@ -249,8 +250,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         for slot in slots {
             if slot.child.isSpacer {
                 hasSpacer = true
-                // Vertical only, as in the eager path above.
+                // Vertical only, as in the eager path above — and that has to
+                // hold for the spacer's OWN report too, so its slot skips the
+                // tests below. `Spacer` answers both axes flexible (it cannot
+                // know which stack it is in); let through the width test, that
+                // undid this branch, and `LazyVStack { Text("hi"); Spacer() }`
+                // claimed and painted the whole offer while `VStack` of the same
+                // content hugged "hi". `_HStackCore` skips its spacers the same way.
                 heightFlexible = true
+                continue
             }
             if slot.size.isWidthFlexible { widthFlexible = true }
             if slot.size.isHeightFlexible { heightFlexible = true }
@@ -328,6 +336,17 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         var naturalHeight = [Int](repeating: 0, count: children.count)
         var isFlexible = [Bool](repeating: false, count: children.count)
+        // Whether the column fills its WIDTH — a separate question from
+        // `isFlexible`, which is the vertical distribution's and nothing else.
+        // A Spacer fills a column's height, never its width (`clipSizeThatFits`
+        // leaves it out of the width vote for that reason), and a child that
+        // only wants more rows says nothing about columns. The four width
+        // decisions below used to read `isFlexible.contains(true)`, which every
+        // Spacer sets: `VStack { Text("hi"); Spacer() }` measured 2 cells and
+        // painted the whole offer with "hi" centred in it, so a parent that
+        // renders at its full width (a column, a ZStack, a `.border()`, the
+        // root) got a terminal-wide buffer from a child that said it was 2.
+        var fillsWidth = false
         for (index, child) in children.enumerated() {
             if child.isSpacer {
                 naturalHeight[index] = child.spacerMinLength ?? 0
@@ -335,6 +354,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             } else {
                 naturalHeight[index] = childSizes[index].height
                 isFlexible[index] = childSizes[index].isHeightFlexible
+                if childSizes[index].isWidthFlexible { fillsWidth = true }
             }
         }
 
@@ -349,7 +369,6 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             available: context.availableHeight,
             spacing: spacing
         )
-        let hasFlexible = isFlexible.contains(true)
 
         // === PASS 2: Render each child into its allocated height ===
         //
@@ -361,7 +380,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // The stack's own content size, from PASS 1 — which is what an enclosing
         // `.gradientExtent(.subtree)` needs and what it would otherwise have
         // paid a second measure pass to learn.
-        let contentWidth = hasFlexible ? context.availableWidth : (childSizes.map(\.width).max() ?? 0)
+        let contentWidth = fillsWidth ? context.availableWidth : (childSizes.map(\.width).max() ?? 0)
         // The gaps PASS 3 will actually insert: a child allocated no rows is
         // appended through `appendVertically`'s contributes-nothing branch and
         // gets none, so the ramp's rectangle must not reserve one for it either.
@@ -376,7 +395,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             Self.gradientOffsets(
                 heights: finalHeights, spacing: spacing, sizes: childSizes,
                 alignment: alignment,
-                extentWidth: hasFlexible ? context.availableWidth : nil)
+                extentWidth: fillsWidth ? context.availableWidth : nil)
         }
         var buffers: [FrameBuffer?] = []
         buffers.reserveCapacity(children.count)
@@ -398,9 +417,10 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
-        // With a flexible child present the stack fills the available width;
-        // otherwise it shrinks to its widest child.
-        let alignmentWidth = hasFlexible ? context.availableWidth : maxChildWidth
+        // With a width-flexible child present the stack fills the available
+        // width; otherwise it shrinks to its widest child — Spacer or not (see
+        // `fillsWidth`).
+        let alignmentWidth = fillsWidth ? context.availableWidth : maxChildWidth
 
         // Explicit guides, when any child set one: the run's placement replaces
         // the per-child centring below, and can make the column WIDER than its
@@ -413,7 +433,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 children,
                 sizes: buffers.map { (width: $0?.width ?? 0, height: $0?.height ?? 0) },
                 alignment: alignment,
-                fixedExtent: hasFlexible ? context.availableWidth : nil,
+                fixedExtent: fillsWidth ? context.availableWidth : nil,
                 minimumExtent: maxChildWidth)
         }
 
@@ -588,7 +608,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             }
         }
 
-        return assembleWindow(collected, fillsWidth: spacerCount > 0, context: context)
+        return assembleWindow(collected)
     }
 
     /// The saturated tail of the classic append-while-fits walk: the first
@@ -621,9 +641,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
     /// `.window` PASS 2: align the collected children and stack them.
     ///
-    /// With a Spacer the column fills the available width (as the eager stack
-    /// does); otherwise it hugs its widest *placed* child. A `nil` child marks a
-    /// spacer's blank slot, which is never aligned.
+    /// The column hugs its widest *placed* child, Spacer or not: a Spacer fills
+    /// a column's height, never its width (as in the eager stack), and a
+    /// width-flexible child has already rendered at the full width, so when one
+    /// is present the widest buffer IS the fill. A `nil` child marks a spacer's
+    /// blank slot, which is never aligned.
     /// The explicit-guide run over the rows a lazy column actually placed, or
     /// `nil` — the common answer, which is why the question is asked before the
     /// three arrays that would carry it are built. See ``anyAlignmentGuide(in:)``.
@@ -642,20 +664,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     }
 
     private func assembleWindow(
-        _ collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)],
-        fillsWidth: Bool,
-        context: RenderContext
+        _ collected: [(buffer: FrameBuffer, spacingBefore: Int, child: ChildView?)]
     ) -> FrameBuffer {
-        let maxWidth =
-            fillsWidth ? context.availableWidth : collected.map(\.buffer.width).max() ?? 0
+        let maxWidth = collected.map(\.buffer.width).max() ?? 0
 
         // Explicit guides resolve over the children this stack actually PLACED.
         // A lazy stack stops at the first row that will not fit, so the run is
         // the realized rows — the same limit SwiftUI has, and the reason a guide
         // is best used on content whose realized set is stable.
-        let guideRun = placedGuideRun(
-            collected, fixedExtent: fillsWidth ? context.availableWidth : nil,
-            minimumExtent: maxWidth)
+        let guideRun = placedGuideRun(collected, fixedExtent: nil, minimumExtent: maxWidth)
 
         var result = FrameBuffer()
         var placedIndex = 0

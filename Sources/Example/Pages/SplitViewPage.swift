@@ -282,9 +282,17 @@ extension SplitViewPage {
     fileprivate var messageListContent: some View {
         let messages = Message.samples(for: selectedFolder ?? "inbox")
         if messages.isEmpty {
+            // Centred on BOTH axes by its own content. A column of spacers used to paint
+            // the whole offered width, which centred this line by accident; it now hugs
+            // its widest child, as it always measured, and a split view places a
+            // narrower column at its leading edge.
             VStack {
                 Spacer()
-                Text("page.splitView.noMessages").dim()
+                HStack {
+                    Spacer()
+                    Text("page.splitView.noMessages").dim()
+                    Spacer()
+                }
                 Spacer()
             }
         } else {
