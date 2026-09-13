@@ -194,6 +194,59 @@ enum FocusRegistration {
         context.isMeasuring ? false : (context.environment.focusManager?.isFocused(id: focusID) ?? false)
     }
 
+    /// Tells a focus stop's content whether the stop holds the focus, as
+    /// ``EnvironmentValues/isFocused`` — and tells the render memo as well,
+    /// which the assignment alone does not.
+    ///
+    /// A memo below keys on identity, view value and size and carries no
+    /// environment, so a bare `contentContext.environment.isFocused = x` is a
+    /// change nothing compares. That is how `Card().equatable().focusable()`
+    /// took the focus and went on drawing the frame from before it arrived —
+    /// and so did every row of `VStack { ForEach(items) { Row($0) } }.focusable()`
+    /// with no memo asked for, since `ForEach` wraps each `Equatable` row in
+    /// `_MemoizedRow`. Declaring a render side effect here instead does NOT
+    /// work: it lands on the ancestor's tracker before the memo below takes its
+    /// snapshot, so it declines a memo ABOVE this stop (which registration
+    /// already does) and none below it.
+    ///
+    /// So the value is noted where it is applied, exactly as `TintModifier`
+    /// notes a tint: one comparison per stop per pass, rather than one more
+    /// environment probe on every memo lookup in the tree. Unlike a tint, a
+    /// change clears the SIZES below too: a view is free to lay itself out
+    /// differently while it holds the focus.
+    ///
+    /// Noted on the render walk only. A measuring stop registers nothing and
+    /// has no answer, and a note from the measure walk would record the
+    /// INHERITED value first each pass — the render walk's note would then hit
+    /// `noteAppliedEnvironment`'s once-per-pass short circuit and never be
+    /// compared. The depth bump is on both walks, because an
+    /// `EnvironmentModifier` below notes on both and must find the same slot.
+    ///
+    /// - Parameters:
+    ///   - isFocused: The stop's answer, or `nil` when no stop was registered
+    ///     this pass — not focusable, disabled, an open menu's backdrop. The
+    ///     content then sees what it inherits, and THAT is noted, so a stop
+    ///     that goes from focused to unregistered still clears what was drawn
+    ///     focused below it.
+    ///   - context: The publishing modifier's own context; its identity and
+    ///     depth name the slot.
+    ///   - contentContext: The context the content renders with.
+    static func publishIsFocused(
+        _ isFocused: Bool?, context: RenderContext, into contentContext: inout RenderContext
+    ) {
+        contentContext.environmentApplicationDepth += 1
+        guard !context.isMeasuring else { return }
+        let published = isFocused ?? contentContext.environment.isFocused
+        if let isFocused { contentContext.environment.isFocused = isFocused }
+        if let cache = context.renderCache,
+            case .changed = cache.noteAppliedEnvironment(
+                published, identity: context.identity,
+                keyPath: \EnvironmentValues.isFocused, depth: context.environmentApplicationDepth)
+        {
+            cache.clearAffected(by: context.identity)
+        }
+    }
+
     /// Says what Return would do to this control, while it holds the focus.
     ///
     /// The status bar renames its Return item to this, so one declared item

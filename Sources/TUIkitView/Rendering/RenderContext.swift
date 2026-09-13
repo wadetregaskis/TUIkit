@@ -213,8 +213,9 @@ public struct RenderContext {
     /// depth is structural, so it is the same on the measure and render walks
     /// and stable across frames. Bumped by whoever injects an environment
     /// value AND notes it (`EnvironmentModifier`, `_StyleEnvironmentView`,
-    /// `TintModifier`); plain `setting()` writes do not note, so they have
-    /// no slot to disambiguate.
+    /// `TintModifier`, and `.focusable()` / `.contextMenu` for the
+    /// `\.isFocused` they publish); plain `setting()` writes do not note, so
+    /// they have no slot to disambiguate.
     public var environmentApplicationDepth: Int = 0
 
     /// This context, with every measurement taken so far out of the memo's

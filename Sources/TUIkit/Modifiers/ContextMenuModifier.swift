@@ -84,12 +84,16 @@ extension ContextMenuModifier: Renderable {
             // caller can decide what part of it shows the focus (see
             // `EnvironmentValues.isFocused`).
             var contentContext = contentContext
+            var isFocused: Bool?
             if !context.isMeasuring {
                 context.environment.volatileReadTracker?.recordRenderSideEffect()
                 context.environment.focusManager?.deactivateSection(id: sectionID)
-                contentContext.environment.isFocused = attachKeyboardTrigger(
-                    state: state, context: context)
+                isFocused = attachKeyboardTrigger(state: state, context: context)
             }
+            // Published the way `.focusable()` publishes it, so a memo inside
+            // the content sees the change; the bare assignment this replaced
+            // served the unfocused frame after Tab arrived.
+            FocusRegistration.publishIsFocused(isFocused, context: context, into: &contentContext)
             var buffer = TUIkit.renderToBuffer(content, context: contentContext)
             if !context.isMeasuring {
                 attachTrigger(to: &buffer, state: state, context: context)
@@ -100,8 +104,14 @@ extension ContextMenuModifier: Renderable {
         // OPEN: render the content beneath as an inert backdrop (isolated from
         // focus / key / state) so its controls can't steal the menu's focus. NOT
         // dimmed — a context menu is a popover, not a modal.
+        // Noted here too, though nothing is published: the backdrop inherits
+        // its `\.isFocused`, and a slot left unvisited while the menu is up is
+        // pruned — so it would come back `.first` when the menu closes and the
+        // stop takes the focus back, a change nothing would clear.
+        var backdropContext = contentContext
+        FocusRegistration.publishIsFocused(nil, context: context, into: &backdropContext)
         var baseBuffer = TUIkit.renderToBuffer(
-            content, context: contentContext.isolatedForBackground())
+            content, context: backdropContext.isolatedForBackground())
         // The presentation itself is shared with the pop-up `Menu`: same
         // bordered column of Buttons, same focus/keyboard grab, same dismiss
         // backdrop. Only the trigger and the anchor differ — here, the cell the
@@ -286,9 +296,11 @@ extension ContextMenuModifier: Layoutable {
     /// the content — and forwarding keeps the focus-section / trigger side effects
     /// on the render pass, never a measure.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(
-            content, proposal: proposal,
-            context: context.withChildIdentity(type: Content.self, index: 0))
+        // One environment application deeper, as `publishIsFocused` makes the
+        // render walk's — by hand, because a measure must not note.
+        var contentContext = context.withChildIdentity(type: Content.self, index: 0)
+        contentContext.environmentApplicationDepth += 1
+        return measureChild(content, proposal: proposal, context: contentContext)
     }
 }
 

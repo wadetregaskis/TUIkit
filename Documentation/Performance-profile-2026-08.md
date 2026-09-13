@@ -970,6 +970,19 @@ That is a pre-existing hole in `EquatableView` too; it has simply never been hit
 because `.equatable()` is opt-in and is not applied to focus-dependent views.
 Making the memo automatic exposes it everywhere at once.
 
+> **2026-09-12:** "never been hit" did not survive `.focusable()` publishing
+> `\.isFocused` to an app's own view. `Card().equatable().focusable()` served
+> the unfocused frame after Tab arrived, and so did every row of
+> `VStack { ForEach(items) { Row($0) } }.focusable()` with no opt-in anywhere,
+> because `ForEach` wraps each `Equatable` row in `_MemoizedRow`. Both
+> publishers of `\.isFocused` — `.focusable()` and `.contextMenu` — now go
+> through `FocusRegistration.publishIsFocused`, which notes the value with
+> `noteAppliedEnvironment` and clears below on a change, as `TintModifier`
+> does (Review-batch-2026-09-12 #44). The built-in controls are a different
+> channel: they ask the focus manager inside their own cores, and their
+> registration declines any memo around them. The general hole — a value
+> published by bare assignment — stands for everything else.
+
 **The automatic memo was therefore reverted, not shipped.** It is not merely
 unprofitable — it is incorrect.
 

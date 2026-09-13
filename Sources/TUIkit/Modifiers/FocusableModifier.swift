@@ -84,11 +84,12 @@ extension FocusableModifier: Renderable {
         // while drawing exactly as it does when it is not. `.contextMenu` had
         // been publishing it for its own content all along; this is the same
         // thing, from the modifier that actually owns the focus stop.
+        // Published, not assigned: a bare assignment is invisible to a memo
+        // inside the content, which then served the unfocused frame after Tab
+        // arrived (see `FocusRegistration.publishIsFocused`).
         var contentContext = context
-        if let focusID {
-            contentContext.environment.isFocused = FocusRegistration.isFocused(
-                context: context, focusID: focusID)
-        }
+        let isFocused = focusID.map { FocusRegistration.isFocused(context: context, focusID: $0) }
+        FocusRegistration.publishIsFocused(isFocused, context: context, into: &contentContext)
 
         var buffer = TUIkit.renderToBuffer(content, context: contentContext)
 
@@ -154,6 +155,11 @@ extension FocusableModifier: Renderable {
 
 extension FocusableModifier: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(content, proposal: proposal, context: context)
+        // One environment application deeper, as the render walk hands its
+        // content — bumped by hand, never through `publishIsFocused`, which
+        // must not note from a measure (see there).
+        var contentContext = context
+        contentContext.environmentApplicationDepth += 1
+        return measureChild(content, proposal: proposal, context: contentContext)
     }
 }
