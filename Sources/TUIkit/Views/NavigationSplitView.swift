@@ -335,6 +335,12 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
             }
         }
 
+        // The columns are one row, for the arrow keys: Left and Right move between
+        // them. The dividers are not members — Tab and the mouse reach those.
+        if !context.isMeasuring {
+            focusManager?.registerSectionGroup(visibleColumns.map { focusSectionID(for: $0) })
+        }
+
         // Ask for the cycle ONLY when a divider is focused/dragged or hovered,
         // so the demand-driven loop keeps the pulse animating just for those
         // cases (a static split with no active/hovered divider stays idle) —

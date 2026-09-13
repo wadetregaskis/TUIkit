@@ -51,6 +51,12 @@ public final class FocusManager: @unchecked Sendable {
     /// Registered focus sections in render order.
     private var sections: [FocusSection] = []
 
+    /// Sections that sit side by side as one row of columns, keyed by each member's
+    /// id, in left-to-right order — so Left and Right can move between them. Posted
+    /// every frame by the container that lays them out, through
+    /// `registerSectionGroup(_:)`, and cleared with the sections themselves.
+    var sectionGroups: [String: [String]] = [:]
+
     /// Last frame's sections — see ``beginRenderPass()``. Read only by
     /// ``notifyFocusLost()``, as the fallback when the focused element is not
     /// registered in the CURRENT frame's ring.
@@ -839,6 +845,10 @@ extension FocusManager {
             return true
         }
 
+        // Left and Right move between COLUMNS where the active section is one — see
+        // `moveBetweenColumns(for:)`. Content that uses them had the key first.
+        if let handled = moveBetweenColumns(for: event) { return handled }
+
         // Arrow keys: navigate within the active section (fallback if element didn't handle)
         // Up/Left go to previous, Down/Right go to next
         switch event.key {
@@ -1174,6 +1184,8 @@ extension FocusManager {
         // clearing here means a dismissed modal (which no longer renders, so no
         // longer re-marks) stops grabbing input on the very next frame.
         modalSectionIDs.removeAll()
+        // Re-posted each render by whatever lays the columns out, for the same reason.
+        sectionGroups.removeAll()
         optionalFocusSectionIDs.removeAll()
     }
 

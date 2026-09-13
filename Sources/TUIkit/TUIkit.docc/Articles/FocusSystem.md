@@ -113,6 +113,11 @@ The `FocusManager` responds to these keys during dispatch:
 | Arrow Down / Right | Move focus to the next element |
 | Arrow Up / Left | Move focus to the previous element |
 
+Inside a `NavigationSplitView`, Arrow Left and Right move focus to the
+neighbouring column instead — landing on what was last focused there — while Up
+and Down keep stepping within the column. A focused control that uses Left and
+Right itself, such as an outline's disclosure or a slider, still gets them first.
+
 ## FocusRegistration Helper
 
 Built-in interactive views use the internal `FocusRegistration` helper to avoid boilerplate. It handles three tasks in one call:
