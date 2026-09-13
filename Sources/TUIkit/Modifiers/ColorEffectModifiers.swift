@@ -158,7 +158,13 @@ extension _ColorEffectView: Animatable {
 extension _ColorEffectView: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let buffer = TUIkit.renderToBuffer(content, context: context)
-        guard !buffer.isEmpty else { return buffer }
+        // `isEmpty` asks about the LINES, and a subtree can draw nothing in flow
+        // while drawing plenty in an overlay: `.offset`, `.position` and a moving
+        // transition's slot return a placeholder of empty lines and put the drawing
+        // in a layer. Short-circuiting on that made every effect here a complete
+        // no-op on displaced content — the guard `_OpacityView` had to relax for
+        // the same reason, which this twin never was.
+        guard !buffer.isEmpty || !buffer.overlays.isEmpty else { return buffer }
 
         // A translucent multiply tint fades the LAYER, and that is not a stylistic
         // reading: `colorMultiply` multiplies RGBA, so an alpha of 0.5 in the tint
@@ -187,17 +193,45 @@ extension _ColorEffectView: Renderable {
         let palette = context.environment.palette
         let surface = palette.background.resolve(with: palette)
         let foreground = palette.foreground.resolve(with: palette)
+        return effected(
+            buffer, rewrites: rewrites, layerFade: layerFade,
+            foreground: foreground, surface: surface)
+    }
+}
+
+extension _ColorEffectView {
+    /// `buffer` with this effect applied to its lines — and to every overlay this
+    /// subtree actually DREW.
+    ///
+    /// The overlay half is `_OpacityView.fadingOverlays`'s rule, for its reasons.
+    /// An **anchored** layer (an `.offset`/`.position` child, a transition's
+    /// moving slot) is this subtree's own drawing, displaced: walking `lines`
+    /// alone drew `VStack { a; b.offset(x: 1) }.grayscale(1)` with `a` grey and
+    /// `b` in colour. A **centred** layer is a `.sheet`/`.alert` over the whole
+    /// screen, which a modifier on its presenter recolours no more than it fades.
+    /// Recursive, because a layer's content can carry layers.
+    private func effected(
+        _ buffer: FrameBuffer, rewrites: Bool, layerFade: Double?,
+        foreground: Color, surface: Color
+    ) -> FrameBuffer {
         let effect = self.effect
         let amount = self.amount
-
+        // Lines that are all empty are not rebuilt, and not as a shortcut: there is
+        // nothing in them to rewrite, and rebuilding a placeholder from its lines
+        // re-measures it at zero and throws away the width its slot declares. The
+        // width is carried rather than re-measured in the other case too — a
+        // rewrite changes escapes and never a visible character, so the buffer's
+        // own width claims stay true, including a width a displaced child set.
         var result =
-            rewrites
+            rewrites && !buffer.isEmpty
             ? buffer.replacingLines(
                 buffer.lines.map { line in
                     SGRColorRewrite.rewriting(
                         line, defaultForeground: foreground, defaultBackground: surface
                     ) { effect.applied(to: $0, amount: amount) }
-                })
+                },
+                width: buffer.width, uniformWidth: buffer.linesAreUniformWidth,
+                lineWidths: buffer.lineWidths)
             : buffer
         if let layerFade {
             // Through `_OpacityView.fading` rather than a bare append, and the order
@@ -213,6 +247,17 @@ extension _ColorEffectView: Renderable {
             result.opacityRegions = _OpacityView<Content>.fading(
                 result.opacityRegions, by: layerFade, cycle: nil,
                 wholeOf: result, appendingRectangle: !result.isEmpty)
+        }
+        // Answered first because it is the common case: most subtrees float
+        // nothing, and those pay one emptiness test and no copy.
+        guard !result.overlays.isEmpty else { return result }
+        result.overlays = result.overlays.map { layer in
+            guard !layer.isScreenLevel else { return layer }
+            var drawn = layer
+            drawn.content = effected(
+                layer.content, rewrites: rewrites, layerFade: layerFade,
+                foreground: foreground, surface: surface)
+            return drawn
         }
         return result
     }

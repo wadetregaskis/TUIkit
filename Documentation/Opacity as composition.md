@@ -1674,6 +1674,25 @@ The tint now goes through `_OpacityView.fading`, the same scale-then-stamp with 
 cycles scaled alongside, so `.opacity(x)` and `.colorMultiply(.white.opacity(x))` nest
 identically in either order.
 
+### 25.3 Displaced drawing: §9.4's L4, in the colour effects (2026-09-12)
+
+All seven colour effects opened with `guard !buffer.isEmpty`, and `isEmpty` asks about
+the LINES. `.offset`, `.position` and a moving transition's slot draw nothing in flow and
+put the drawing in an anchored overlay, so over a wholly displaced subtree every effect
+was a complete no-op. Over a mixed one it was half applied, because the rewrite walked
+`lines` and never `overlays`: `VStack { a; b.offset(x: 1) }.grayscale(1)` drew `a` grey
+and `b` in colour, and `.colorMultiply(.clear)` left an offset child fully visible.
+`.opacity(_:)` had exactly this shape fixed in d4399a9d (".opacity() over an offset child
+did nothing at all"); its twin in the next file was never touched.
+
+The effects now take both of `_OpacityView`'s halves: the guard asks about overlays too,
+and the rewrite and the tint's layer fade recurse into every layer that is not
+`isScreenLevel`. A presented `.sheet` or `.alert` is still left alone, as it is by
+`.opacity(_:)`, `.hidden()` and `.allowsHitTesting(false)`. A placeholder's empty lines
+are not rebuilt, since rebuilding re-measures them at zero and loses the width the slot
+declares. And a rewritten buffer now keeps its declared width rather than re-measuring,
+because a rewrite changes escapes and never a visible character.
+
 
 ## 26. `ColorPicker`: the swatch was already right, and a refusal expired (2026-09-09)
 
