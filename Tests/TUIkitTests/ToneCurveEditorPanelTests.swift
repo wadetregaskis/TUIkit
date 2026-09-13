@@ -116,6 +116,31 @@ struct ToneCurveEditorPanelTests {
         return renderToBuffer(panel, context: context).lines.map(\.stripped)
     }
 
+    /// A tone curve keeps each pixel's own alpha and ignores its stops', so the editor
+    /// offers no opacity row — an edit that changes nothing in the picture.
+    @Test("The tone-curve editor offers no opacity row")
+    func noOpacityRow() {
+        let lines = rendered(stops)
+        let offersOpacity = lines.contains { $0.contains("Opacity") }
+        #expect(!offersOpacity, "\(lines)")
+    }
+
+    /// For the same reason a translucent stop's chip is drawn opaque: a chip that faded
+    /// would show a picture the curve does not make.
+    @Test("A translucent stop's chip claims no alpha")
+    func translucentStopChipIsOpaque() {
+        var list = stops
+        // Not the selected stop: the colour editor below shows that one.
+        list[1] = Stop(at: 0.3, to: Color.rgb(180, 40, 70).opacity(0.5))
+        let context = makeRenderContext(width: 100, height: 60)
+        let panel = ToneCurveEditorPanel(
+            "Tone curve", stops: .constant(list), isPresented: .constant(true))
+        _ = renderToBuffer(panel, context: context)
+        let buffer = renderToBuffer(panel, context: context)
+        let claimed = buffer.opacityRegions.filter { $0.inkOpacity < 1 || $0.fieldOpacity < 1 }
+        #expect(claimed.isEmpty, "\(claimed)")
+    }
+
     @Test("There is one marker per stop, at that stop's own column")
     func markersSitWhereTheStopsAre() {
         let lines = rendered(stops)

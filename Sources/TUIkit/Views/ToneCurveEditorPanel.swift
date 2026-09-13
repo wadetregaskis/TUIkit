@@ -173,7 +173,12 @@ public struct ToneCurveEditorPanel: View {
                 // width-flexible, which would stretch this content-hugging
                 // dialog to the whole screen.
                 Divider().frame(width: Self.stripWidth + Self.gutter)
-                _ColorPickerBody(selection: selectedColorBinding)
+                // No opacity row. A tone curve maps a pixel's TONE to a colour and
+                // keeps the pixel's own alpha (`ASCIIToneCurve.apply` encodes with
+                // `pixel.a`, and a knot holds no alpha to encode), so a stop's alpha
+                // changes nothing in the picture — and an editor offering it is an
+                // editor that visibly does nothing.
+                _ColorPickerBody(selection: selectedColorBinding, supportsOpacity: false)
             }
         }
     }
@@ -286,7 +291,11 @@ public struct ToneCurveEditorPanel: View {
                         Button("") { selectedStop = index }
                             .buttonStyle(
                                 _ColorSwatchButtonStyle(
-                                    color: list[index].to, isSelected: index == selection))
+                                    // Opaque, like the editor below withholding the row:
+                                    // the curve ignores a stop's alpha, so a chip drawn
+                                    // translucent would show a picture that is not the one
+                                    // it makes.
+                                    color: list[index].to.opaqueSpelling, isSelected: index == selection))
                     }
                 }
             }

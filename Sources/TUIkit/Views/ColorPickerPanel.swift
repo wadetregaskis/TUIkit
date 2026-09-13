@@ -176,10 +176,11 @@ public struct ColorPickerPanel: View {
 struct _ColorPickerBody: View {
     let selection: Binding<Color>
 
-    /// Whether the opacity row is offered. Defaulted so the two editors that
-    /// embed this body — the gradient stop editor and the tone-curve one — read
-    /// unchanged; a gradient stop is exactly the place a translucent colour is
-    /// worth editing (see `Documentation/Opacity as composition.md` §15).
+    /// Whether the opacity row is offered. Defaulted on, because a gradient stop —
+    /// the other editor that embeds this body — is exactly the place a translucent
+    /// colour is worth editing (see `Documentation/Opacity as composition.md` §15).
+    /// The tone-curve editor turns it off: a tone curve keeps each pixel's own alpha
+    /// and ignores its stops'.
     var supportsOpacity: Bool = true
 
     private typealias Mode = ColorPickerPanel.Mode

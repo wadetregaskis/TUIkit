@@ -360,14 +360,18 @@ struct ImageRenderingControls: View {
                 ) {
                     // Duotone's two ends.
                     VStack(alignment: .leading, spacing: 0) {
+                        // No opacity: duotone's two ends feed a tone curve, which
+                        // keeps each pixel's own alpha and ignores theirs.
                         ColorPicker(
-                            "component.imageControls.shadows", selection: $settings.duotoneShadow
+                            "component.imageControls.shadows", selection: $settings.duotoneShadow,
+                            supportsOpacity: false
                         )
                         .colorPickerChannels(.hidden)
                         .colorPickerLabelWidth(10)
                         ColorPicker(
                             "component.imageControls.highlights",
-                            selection: $settings.duotoneHighlight
+                            selection: $settings.duotoneHighlight,
+                            supportsOpacity: false
                         )
                         .colorPickerChannels(.hidden)
                         .colorPickerLabelWidth(10)
