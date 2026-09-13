@@ -786,7 +786,8 @@ extension Color {
     /// of the starting lightness. Hue and saturation are preserved.
     ///
     /// - Parameter percentage: The relative adjustment (−1 to 1).
-    /// - Returns: The adjusted color as HSL, or self if semantic (unresolved).
+    /// - Returns: The adjusted color as HSL at this colour's alpha, or self if
+    ///   semantic (unresolved).
     fileprivate func adjusted(by percentage: Double) -> Self {
         guard let (red, green, blue) = rgbComponents else {
             return self
@@ -804,6 +805,13 @@ extension Color {
             newLightness = lightness * (1.0 + clamped)
         }
 
-        return .hsl(hue, saturation, min(100, max(0, newLightness)))
+        // Carried, not composed: a lightness step is the same ink re-spelled, so
+        // `Color.red.opacity(0.5).lighter()` is as faded as what it started from.
+        // `Self.hsl` is a factory that never sees `self` and builds at 255, so
+        // without this the alpha was not decided away but unreachable — and an
+        // opaque result trips no emitter assertion, so the fade vanished silently.
+        // §39 answered this same step for `Palette.scaled(_:by:)`. A semantic
+        // colour never gets here: the guard above hands it back whole.
+        return Self.hsl(hue, saturation, min(100, max(0, newLightness))).carryingAlpha(of: self)
     }
 }

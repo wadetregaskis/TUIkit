@@ -80,8 +80,12 @@ struct ColourAlphaStorageTests {
     /// Written as one test over a list rather than one test per function on
     /// purpose: the failure mode this guards against is a NEW derivation that
     /// forgets, and a per-function suite cannot fail for a function nobody added
-    /// to it. Anything added below `// MARK: - Color Derivations` should get a row
-    /// here.
+    /// to it. There is no one place a derivation lives, so this names a shape
+    /// rather than a mark: a colour rebuilt from `self`'s channels through a
+    /// factory (`.rgb`, `.hsl`, `.palette`) starts at 255, and must end in
+    /// `carryingAlpha(of:)` and get a row here. (This comment used to name a
+    /// `// MARK: - Color Derivations` that never existed, which is how
+    /// `lighter(by:)` and `darker(by:)` went without one.)
     @Test("Every derivation carries the alpha")
     func derivationsCarryAlpha() {
         let faded = translucent()
@@ -95,6 +99,11 @@ struct ColourAlphaStorageTests {
             ("lerp(_:_:phase:)", Color.lerp(faded, faded, phase: 0.5)),
             ("mix(with:by:)", faded.mix(with: faded, by: 0.5)),
             ("ensuringContrast", faded.ensuringContrast(atLeast: 3, against: .black)),
+            // A lightness step, rebuilt through `Color.hsl`, which builds at 255. The
+            // base must be concrete: a semantic one leaves `adjusted(by:)` by its guard
+            // as `self`, and would pass with the carry deleted.
+            ("lighter(by:)", faded.lighter(by: 0.2)),
+            ("darker(by:)", faded.darker(by: 0.2)),
         ]
         for (name, derived) in derivations {
             #expect(derived.alpha == 128, "\(name) dropped the alpha: got \(derived.alpha)")

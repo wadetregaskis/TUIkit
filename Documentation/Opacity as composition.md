@@ -4267,6 +4267,36 @@ run carrying a translucent `AnimatedRunAlpha` satisfies the resolver's entry gua
 own (§69.1). A dragged preview holding a focused `TextField`, or an animated border, needed
 nothing else in the tree to reach it.
 
+
+## 71. A lightness step on a faded colour came back solid (2026-09-12)
+
+`Color.lighter(by:)` and `Color.darker(by:)` both go through one private helper,
+`adjusted(by:)`, whose only exit past its semantic guard rebuilt the colour with
+`Color.hsl(…)` — a factory that never sees `self`, so it starts at alpha 255. That is
+§37.1's shape exactly (the alpha is not decided away, it is structurally absent), and it
+is the lightness step §39 answered for `Palette.scaled(_:by:)`, one layer down.
+`Color.red.opacity(0.5).lighter()` came back opaque; used as a paint,
+`OpacityRegion.claim` read 255 and stated no region, so the text drew at full strength
+with no assertion, because an opaque colour never trips one.
+
+It now ends in `carryingAlpha(of: self)`, the exit every other `Color` → `Color`
+derivation already ends in. Carried rather than composed: a lighter ink is the same ink
+re-spelled, there is one alpha in play, and nothing here knows a ground to spend it
+against.
+
+A semantic base was never affected, although the finding's first repro used one:
+`Color.palette.accent.opacity(0.5).lighter()` leaves by the guard as `self`, alpha and
+all — it does not lighten, which the helper documents. The failing input is a concrete
+colour: `.rgb`, `.standard`, `.bright` or `.palette256`.
+
+`ColourAlphaStorageTests.derivationsCarryAlpha`, the table that exists to catch exactly
+this, had no row for either. Its doc comment said to add one for anything below
+`// MARK: - Color Derivations`, and `Color.swift` has no such mark; `adjusted(by:)` sits
+under "Private Helpers". The rows are added, and the comment now describes what a
+derivation looks like rather than where one lives. The framework's own caller,
+`TerminalProfilePalette`'s bar background, is only ever handed the opaque colours decoded
+from Terminal's profiles, so no bundled theme renders differently.
+
 ### 70.3 The §69.1 assertion, which could not tell a producer from its ancestors
 
 `b9804700` added an assertion to the run walk: a run carrying a translucent per-frame
