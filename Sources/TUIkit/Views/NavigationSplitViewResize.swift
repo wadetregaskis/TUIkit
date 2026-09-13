@@ -100,10 +100,17 @@ extension View {
 // MARK: - Persistent Column Widths
 
 /// The width of each resizable (non-trailing) column of a
-/// ``NavigationSplitView``, keyed by column index. Persisted in
+/// ``NavigationSplitView``, keyed by the column. Persisted in
 /// `StateStorage` so a drag / keyboard resize survives across renders. The
 /// trailing column is always flexible and absorbs the remaining width, so it
 /// is never stored here.
+///
+/// Keyed by the ``NavigationSplitViewColumn``, not by where the column sits on
+/// screen. `columnVisibility` changes which column is first:
+/// `.doubleColumn` hides the sidebar and puts the content column in its place.
+/// A store keyed by that position handed the content column the sidebar's
+/// width and its pin, so a sidebar dragged to 18 cells drew the content column
+/// 18 wide.
 ///
 /// A column is either **derived** (its width is recomputed each frame from the
 /// active ``NavigationSplitViewStyle``'s proportions, or from what the column
@@ -118,26 +125,26 @@ extension View {
 /// view clamps the raw intent / style default to the viable range each render
 /// and writes the clamped result back via ``setClamped(_:for:)``.
 final class SplitViewWidths {
-    private var widths: [Int: Int] = [:]
+    private var widths: [NavigationSplitViewColumn: Int] = [:]
     /// Columns the user has explicitly resized (drag / keyboard). These override
     /// the style default; columns absent here track the style.
-    private var userSet: Set<Int> = []
+    private var userSet: Set<NavigationSplitViewColumn> = []
 
     /// The last reset token seen (see ``applyResetToken(_:)``); `.some(nil)` once
     /// any token — including an explicit `nil` — has been observed. Kept distinct
     /// from "never observed" so the first token doesn't wipe a persisted resize.
     private var lastResetToken: AnyHashable??
 
-    func value(for column: Int) -> Int? { widths[column] }
+    func value(for column: NavigationSplitViewColumn) -> Int? { widths[column] }
 
     /// Whether `column` has been explicitly resized by the user (so it should
     /// override the style default).
-    func isUserSet(_ column: Int) -> Bool { userSet.contains(column) }
+    func isUserSet(_ column: NavigationSplitViewColumn) -> Bool { userSet.contains(column) }
 
     /// Records an explicit user resize: stores the width *and* pins the column
     /// to user intent so it no longer follows the style. Called by the drag and
     /// keyboard handlers.
-    func set(_ width: Int, for column: Int) {
+    func set(_ width: Int, for column: NavigationSplitViewColumn) {
         widths[column] = width
         userSet.insert(column)
     }
@@ -146,7 +153,7 @@ final class SplitViewWidths {
     /// column as user-set. Used by the split view's per-frame write-back so a
     /// style-derived column keeps a valid drag/keyboard seed while still
     /// re-deriving from the style when the style changes.
-    func setClamped(_ width: Int, for column: Int) { widths[column] = width }
+    func setClamped(_ width: Int, for column: NavigationSplitViewColumn) { widths[column] = width }
 
     /// Releases every user-set width so the columns re-derive from the style /
     /// size-to-fit content on the next render, when `token` differs from the last
@@ -180,11 +187,20 @@ final class SplitViewWidths {
 /// arrow keys always step from the real current width. A consumed key /
 /// mouse event makes the run loop repaint, so no explicit render request is
 /// needed here (same model as ``ItemListHandler``).
-final class _SplitDividerHandler: Focusable {
-    let focusID: String
+final class _SplitDividerHandler: PersistedFocusable {
+    /// The id of the divider's focus section, re-pointed by the split view
+    /// every render. The section is named by the divider's position on screen,
+    /// the Nth gap in the Tab order, while the handler persists per column.
+    /// Hiding the sidebar moves the content column's divider from the second gap
+    /// to the first. Kept at the id it was built with, it went on answering to
+    /// its old position, and could share an id with the sidebar's divider.
+    var focusID: String
 
-    /// The index of the column this divider resizes (the one on its left).
-    let columnIndex: Int
+    /// The column this divider resizes (the one on its left). A column, not a
+    /// position: the handler is persisted per column, so under `.doubleColumn`
+    /// the first divider resizes the content column rather than the hidden
+    /// sidebar.
+    let column: NavigationSplitViewColumn
 
     /// Shared, persisted column widths.
     let widths: SplitViewWidths
@@ -220,7 +236,7 @@ final class _SplitDividerHandler: Focusable {
 
     /// The width a resize steps from: the stored (clamped, written-back) width
     /// when there is one, else the width the column is currently showing.
-    var resizeBaseWidth: Int { widths.value(for: columnIndex) ?? currentWidth }
+    var resizeBaseWidth: Int { widths.value(for: column) ?? currentWidth }
 
     /// Whether the cursor is currently over the divider. Drives the subtle
     /// hover pulse of the grip dots. Set on `.entered`/`.exited`.
@@ -228,13 +244,13 @@ final class _SplitDividerHandler: Focusable {
 
     init(
         focusID: String,
-        columnIndex: Int,
+        column: NavigationSplitViewColumn,
         widths: SplitViewWidths,
         minimumColumnWidth: Int,
         canBeFocused: Bool = true
     ) {
         self.focusID = focusID
-        self.columnIndex = columnIndex
+        self.column = column
         self.widths = widths
         self.minimumColumnWidth = minimumColumnWidth
         self.canBeFocused = canBeFocused
@@ -246,18 +262,18 @@ final class _SplitDividerHandler: Focusable {
         let current = resizeBaseWidth
         switch event.key {
         case .left:
-            widths.set(current - step, for: columnIndex)
+            widths.set(current - step, for: column)
             return true
         case .right:
-            widths.set(current + step, for: columnIndex)
+            widths.set(current + step, for: column)
             return true
         case .home:
             // Narrowest — the render clamp pins it to minimumColumnWidth.
-            widths.set(minimumColumnWidth, for: columnIndex)
+            widths.set(minimumColumnWidth, for: column)
             return true
         case .end:
             // Widest — a large value the render clamp pins to the layout max.
-            widths.set(Int.max / 4, for: columnIndex)
+            widths.set(Int.max / 4, for: column)
             return true
         default:
             return false

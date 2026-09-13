@@ -558,19 +558,20 @@ struct NavigationSplitViewResizeTests {
     @Test("Divider handler arrow keys adjust the stored width")
     func handlerKeyboard() {
         let widths = SplitViewWidths()
-        widths.set(25, for: 0)
+        widths.set(25, for: .sidebar)
         let handler = _SplitDividerHandler(
-            focusID: "d", columnIndex: 0, widths: widths, minimumColumnWidth: 10)
+            focusID: "d", column: .sidebar, widths: widths, minimumColumnWidth: 10)
 
         #expect(handler.handleKeyEvent(KeyEvent(key: .right)))
-        #expect(widths.value(for: 0) == 26)
+        #expect(widths.value(for: .sidebar) == 26)
         _ = handler.handleKeyEvent(KeyEvent(key: .left))
         _ = handler.handleKeyEvent(KeyEvent(key: .left))
-        #expect(widths.value(for: 0) == 24)
+        #expect(widths.value(for: .sidebar) == 24)
         _ = handler.handleKeyEvent(KeyEvent(key: .right, shift: true))
-        #expect(widths.value(for: 0) == 29, "Shift = 5-cell step")
+        #expect(widths.value(for: .sidebar) == 29, "Shift = 5-cell step")
         _ = handler.handleKeyEvent(KeyEvent(key: .home))
-        #expect(widths.value(for: 0) == 10, "Home = narrowest")
+        #expect(widths.value(for: .sidebar) == 10, "Home = narrowest")
+        #expect(widths.value(for: .content) == nil, "only its own column")
         #expect(!handler.handleKeyEvent(KeyEvent(key: .up)), "unrelated key not consumed")
     }
 

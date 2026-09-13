@@ -237,7 +237,7 @@ extension _NavigationSplitViewCore {
                     natural: defaultColumnWidth(
                         for: column, style: style,
                         isThreeColumnLayout: isThreeColumn, usableWidth: usableWidth),
-                    userPinned: widths?.isUserSet(index) == true ? widths?.value(for: index) : nil,
+                    userPinned: widths?.isUserSet(column) == true ? widths?.value(for: column) : nil,
                     request: measured[index].request)
                 // Reserve at least minimumColumnWidth for every column still to
                 // the right, so a wide left column can't starve them.
@@ -251,7 +251,7 @@ extension _NavigationSplitViewCore {
                 // seed yet still re-derives when the style changes; a user-set
                 // column simply keeps its (now re-clamped) value.
                 if writeBack {
-                    widths?.setClamped(width, for: index)
+                    widths?.setClamped(width, for: column)
                 }
                 result.append(width)
                 remainingWidth -= width
@@ -288,7 +288,8 @@ extension _NavigationSplitViewCore {
         // trailing column is neither: it is always the flexible remainder.)
         // `.navigationSplitViewColumnWidthReset(_:)` clears the user's pins.
         for index in 0..<max(0, count - 1) {
-            let pinned = widths?.isUserSet(index) == true ? widths?.value(for: index) : nil
+            let column = visibleColumns[index]
+            let pinned = widths?.isUserSet(column) == true ? widths?.value(for: column) : nil
             let request = measured[index].request
             guard pinned != nil || request != nil else { continue }
             natural[index] = max(
@@ -308,7 +309,8 @@ extension _NavigationSplitViewCore {
             // No flexible column — the rightmost absorbs the slack so the split
             // still fills its width.
             widthsResult[count - 1] += max(0, usable - fixedSum)
-            writeBackUserSet(widthsResult, widths: widths, writeBack: writeBack)
+            writeBackUserSet(
+                widthsResult, visibleColumns: visibleColumns, widths: widths, writeBack: writeBack)
             return widthsResult
         }
 
@@ -334,7 +336,8 @@ extension _NavigationSplitViewCore {
                 ? max(minimumColumnWidth, freeForFlex - per * (flexIndices.count - 1))
                 : per
         }
-        writeBackUserSet(widthsResult, widths: widths, writeBack: writeBack)
+        writeBackUserSet(
+            widthsResult, visibleColumns: visibleColumns, widths: widths, writeBack: writeBack)
         return widthsResult
     }
 
@@ -344,11 +347,12 @@ extension _NavigationSplitViewCore {
     /// counterpart of `calculateColumnWidths`'s write-back. Only user-set columns
     /// are touched; the style-derived ones re-measure from content every frame.
     private func writeBackUserSet(
-        _ effective: [Int], widths: SplitViewWidths?, writeBack: Bool
+        _ effective: [Int], visibleColumns: [NavigationSplitViewColumn],
+        widths: SplitViewWidths?, writeBack: Bool
     ) {
         guard writeBack, let widths else { return }
-        for index in 0..<max(0, effective.count - 1) where widths.isUserSet(index) {
-            widths.setClamped(effective[index], for: index)
+        for index in 0..<max(0, effective.count - 1) where widths.isUserSet(visibleColumns[index]) {
+            widths.setClamped(effective[index], for: visibleColumns[index])
         }
     }
 }

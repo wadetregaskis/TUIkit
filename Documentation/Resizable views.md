@@ -80,7 +80,7 @@ version should be an extraction of it rather than a second implementation:
 | Piece | What it does | Reusable as-is? |
 |---|---|---|
 | `_SplitDividerHandler` | a `Focusable` carrying the drag anchor and handling ←/→, Shift-←/→, Home/End | yes, generalised from "the column to my left" to "the view I belong to" |
-| `SplitViewWidths` | per-index sizes, tracks which the user set, honours a reset token | yes, keyed by focus identity instead of column index |
+| `SplitViewWidths` | per-column sizes, tracks which the user set, honours a reset token | yes, keyed by focus identity instead of by column |
 | `.navigationSplitViewResizable(_:)` | the opt-in | the pattern, not the name |
 | `.navigationSplitViewColumnWidthReset(_:)` | "put it back" as a token change | yes — the same token idea should serve any resizable view |
 
@@ -190,7 +190,7 @@ resizable view on a page.
 ## Persistence, and what it should not do
 
 - Sizes persist through the same store the split view uses, keyed by focus
-  identity rather than column index — which means `.focusID(_:)` is what makes a
+  identity rather than by column — which means `.focusID(_:)` is what makes a
   size durable across a relayout, and a view that never sets one gets a size
   that lasts as long as its identity does. That is the honest behaviour and
   should be documented, not hidden.

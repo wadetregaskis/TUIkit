@@ -325,6 +325,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
                 dividerInfos.append(
                     wireDivider(
                         index: index,
+                        column: column,
                         resizable: resizable,
                         widths: widths,
                         currentWidth: columnWidth,
@@ -365,6 +366,36 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
 }
 
 // MARK: - Private Helpers
+
+/// ``_NavigationSplitViewCore``'s `StateStorage` slots at its own identity. Its
+/// columns render at child identities (`withChildIdentity`), so no caller
+/// content shares these and they keep the leaf range `0...`. At file scope
+/// because a generic type cannot hold static stored properties.
+///
+/// The divider handlers are stored per COLUMN, like the widths they write.
+/// Stored by the divider's position on screen, the first divider kept the
+/// handler it was built with in `.all`, which resizes the sidebar, and went on
+/// resizing the hidden sidebar under `.doubleColumn`.
+private enum SplitViewStateIndex {
+    /// The shared ``SplitViewWidths``.
+    static let widths = 0
+    /// The handler of the divider after the sidebar.
+    static let sidebarDivider = 1
+    /// The handler of the divider after the content column.
+    static let contentDivider = 2
+    // 3 is kept free for a column visibility the split view holds itself, for
+    // a split with no `columnVisibility` binding.
+
+    /// The slot of the divider that follows `column`, or `nil` for the detail
+    /// column, which is always trailing and has no divider after it.
+    static func divider(after column: NavigationSplitViewColumn) -> Int? {
+        switch column {
+        case .sidebar: sidebarDivider
+        case .content: contentDivider
+        default: nil
+        }
+    }
+}
 
 extension _NavigationSplitViewCore {
     /// Resolves the effective visibility from the binding or defaults to `.all`.
@@ -415,7 +446,7 @@ extension _NavigationSplitViewCore {
     fileprivate func resolvePersistedWidths(context: RenderContext) -> SplitViewWidths {
         let stateStorage = context.stateStorage!
         let widths = stateStorage.storage(
-            for: StateStorage.StateKey(identity: context.identity, propertyIndex: 0),
+            for: StateStorage.StateKey(identity: context.identity, propertyIndex: SplitViewStateIndex.widths),
             default: SplitViewWidths()
         ).value
         stateStorage.markActive(context.identity)
@@ -515,7 +546,7 @@ extension _NavigationSplitViewCore {
         var focusID: String?
     }
 
-    /// Sets up the divider that follows column `index`: registers its focus
+    /// Sets up the divider that follows `column`, the `index`th visible column: registers its focus
     /// section + handler (so Tab reaches it and the arrow keys resize it), and
     /// registers the mouse handler that drags it. Returns the info
     /// `combineColumns` needs to draw and hit-test it. A no-op (returns an
@@ -526,6 +557,7 @@ extension _NavigationSplitViewCore {
     /// ``_SplitDividerHandler/currentWidth``).
     fileprivate func wireDivider(
         index: Int,
+        column: NavigationSplitViewColumn,
         resizable: Bool,
         widths: SplitViewWidths?,
         currentWidth: Int,
@@ -533,7 +565,8 @@ extension _NavigationSplitViewCore {
         focusManager: FocusManager?
     ) -> DividerRenderInfo {
         guard resizable, !context.isMeasuring, let widths, let focusManager,
-            let stateStorage = context.stateStorage
+            let stateStorage = context.stateStorage,
+            let handlerSlot = SplitViewStateIndex.divider(after: column)
         else {
             return DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
         }
@@ -559,17 +592,22 @@ extension _NavigationSplitViewCore {
         }
         focusManager.registerSection(id: sectionID)
 
-        // Persist one handler per divider so its drag anchor survives renders.
+        // Persist one handler per column so its drag anchor survives renders
+        // (see `SplitViewStateIndex`).
         let handler = stateStorage.storage(
             for: StateStorage.StateKey(
-                identity: context.identity, propertyIndex: 1 + index),
+                identity: context.identity, propertyIndex: handlerSlot),
             default: _SplitDividerHandler(
                 focusID: sectionID,
-                columnIndex: index,
+                column: column,
                 widths: widths,
                 minimumColumnWidth: minimumColumnWidth
             )
         ).value
+        // The section is positional and the handler is not: re-point the id
+        // before the ring files it, as `FocusRegistration.register` does for
+        // every other persisted handler.
+        handler.focusID = sectionID
         handler.canBeFocused = true
         handler.currentWidth = currentWidth
         focusManager.register(handler, inSection: sectionID)
@@ -592,7 +630,6 @@ extension _NavigationSplitViewCore {
             mouseDispatcher.requestFeature(.motion)
             let captureWidths = widths
             let captureHandler = handler
-            let column = index
             let captureFocus = focusManager
             mouseHandlerID = mouseDispatcher.register { event in
                 // Hover transitions first — these arrive with a non-`.left`

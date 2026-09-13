@@ -180,38 +180,41 @@ struct SplitViewWidthsTests {
     @Test("A user resize pins the width; a clamped write-back keeps it pinned")
     func userResizePins() {
         let widths = SplitViewWidths()
-        #expect(widths.isUserSet(0) == false)
-        widths.set(30, for: 0)
-        #expect(widths.isUserSet(0) == true)
-        #expect(widths.value(for: 0) == 30)
+        #expect(widths.isUserSet(.sidebar) == false)
+        widths.set(30, for: .sidebar)
+        #expect(widths.isUserSet(.sidebar) == true)
+        #expect(widths.value(for: .sidebar) == 30)
         // The per-frame clamp write-back updates the width without un-pinning.
-        widths.setClamped(28, for: 0)
-        #expect(widths.isUserSet(0) == true, "a clamped write-back does not un-pin")
-        #expect(widths.value(for: 0) == 28)
+        widths.setClamped(28, for: .sidebar)
+        #expect(widths.isUserSet(.sidebar) == true, "a clamped write-back does not un-pin")
+        #expect(widths.value(for: .sidebar) == 28)
+        // A pin belongs to its column, not to a position on screen.
+        #expect(widths.isUserSet(.content) == false, "pinning the sidebar pins nothing else")
+        #expect(widths.value(for: .content) == nil)
     }
 
     @Test("The reset token releases pins only when it changes; the first is recorded")
     func resetTokenReleasesOnChange() {
         let widths = SplitViewWidths()
-        widths.set(30, for: 0)
+        widths.set(30, for: .sidebar)
         // First observation of any token records it WITHOUT resetting, so a stable
         // token applied on every render never wipes a resize the user just made.
         widths.applyResetToken(AnyHashable(0))
-        #expect(widths.isUserSet(0) == true, "the first token seen never resets")
+        #expect(widths.isUserSet(.sidebar) == true, "the first token seen never resets")
         widths.applyResetToken(AnyHashable(0))
-        #expect(widths.isUserSet(0) == true, "the same token again still doesn't reset")
+        #expect(widths.isUserSet(.sidebar) == true, "the same token again still doesn't reset")
         // A changed token releases every pin, so the columns re-flow to defaults.
         widths.applyResetToken(AnyHashable(1))
-        #expect(widths.isUserSet(0) == false, "a changed token releases the pin")
-        #expect(widths.value(for: 0) == nil)
+        #expect(widths.isUserSet(.sidebar) == false, "a changed token releases the pin")
+        #expect(widths.value(for: .sidebar) == nil)
     }
 
     @Test("A constant (nil) token stream never resets")
     func nilTokenNeverResets() {
         let widths = SplitViewWidths()
-        widths.set(30, for: 0)
+        widths.set(30, for: .sidebar)
         widths.applyResetToken(nil)
         widths.applyResetToken(nil)
-        #expect(widths.isUserSet(0) == true, "no reset modifier (nil token) never releases a pin")
+        #expect(widths.isUserSet(.sidebar) == true, "no reset modifier (nil token) never releases a pin")
     }
 }
