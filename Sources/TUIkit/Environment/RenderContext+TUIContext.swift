@@ -115,11 +115,33 @@ extension RenderContext {
     /// before; what stops is the page underneath declaring things that outlive
     /// its own inertness.
     func isolatedForBackground() -> Self {
-        var copy = self
+        var copy = withThrowawayKeyChannels()
         let backdropFocus = FocusManager()
         backdropFocus.suppressesAutoFocus = true
         backdropFocus.isBackdrop = true
         copy.environment.focusManager = backdropFocus
+        return copy
+    }
+
+    /// A copy whose key dispatcher, keyboard-shortcut registry and status bar
+    /// are throwaways — every channel a key can arrive on except the focus
+    /// ring itself.
+    ///
+    /// Not the focus manager, because the two renders that need this want
+    /// different ones: the backdrop above marks its manager `isBackdrop`, and
+    /// the windowed stack's ring-continuation probe
+    /// (`_VStackCore.focusRingContinuations`) wants a fresh one per row it
+    /// asks, which must not pass for a backdrop.
+    ///
+    /// One list for both, because two had drifted. The probe kept its own —
+    /// focus manager and mouse dispatcher, nothing else — and a probe is a
+    /// render, not a measure: every row it walked past on the way to the next
+    /// focus stop registered its `onKeyPress` handler, its `.keyboardShortcut`
+    /// (a `.hidden()` holder registers no focusable, so the walk does not stop
+    /// at it) and its `.statusBarItems` into the live services, for rows the
+    /// frame never drew. A channel added here reaches both.
+    func withThrowawayKeyChannels() -> Self {
+        var copy = self
         copy.environment.keyEventDispatcher = KeyEventDispatcher()
         copy.environment.keyboardShortcutRegistry = KeyboardShortcutRegistry()
         copy.environment.statusBar = StatusBarState()

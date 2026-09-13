@@ -30,19 +30,27 @@ struct WindowedFocusReachTests {
         }
     }
 
-    /// One live-loop-shaped frame with a persistent focus manager.
+    /// One live-loop-shaped frame with a persistent focus manager — and, as in
+    /// `RenderLoop.beginSceneRender`, with the key handlers, shortcuts and
+    /// status bar items starting empty, so what a test dispatches afterwards
+    /// is exactly what this frame registered.
     private func renderFrame<V: View>(
-        _ view: V, tuiContext: TUIContext, focusManager: FocusManager, windowOffset: Int
+        _ view: V, tuiContext: TUIContext, focusManager: FocusManager, windowOffset: Int,
+        statusBar: StatusBarState? = nil
     ) {
         var environment = EnvironmentValues()
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
+        environment.statusBar = statusBar
         environment.scrollContentWindow = ScrollContentWindow(
             offset: windowOffset, viewportHeight: Self.viewportHeight)
         let context = RenderContext(
             availableWidth: 40, availableHeight: 600,
             environment: environment, tuiContext: tuiContext)
 
+        tuiContext.keyEventDispatcher.clearHandlers()
+        tuiContext.keyboardShortcuts.beginRenderPass()
+        statusBar?.beginRenderPass()
         tuiContext.preferences.beginRenderPass()
         tuiContext.stateStorage.beginRenderPass()
         tuiContext.renderCache.beginRenderPass()
@@ -86,6 +94,72 @@ struct WindowedFocusReachTests {
         #expect(
             log.began.allSatisfy { $0 == 0 },
             "rows the probe only counted began editing: \(log.began)")
+    }
+
+    /// …nor REGISTER anything on them, on any channel a key can arrive on.
+    ///
+    /// The probe is a render, not a measure, so every row it asks performs its
+    /// render-pass registrations. It used to swap only the focus manager (and
+    /// drop the mouse dispatcher), so a row it merely counted on the way to the
+    /// next stop — never drawn, never in the sweep — kept a live `onKeyPress`
+    /// handler, a `.hidden()` button's `.keyboardShortcut` and its
+    /// `.statusBarItems` for the rest of the frame. Rows 10, 20 and 30 of the
+    /// run lie past the window (rows 0-5, margin row 6) and short of the stop
+    /// at row 40, so only the probe ever renders them.
+    @Test("Probing for the next focus stop registers no key channel for the rows it walks")
+    func probeRegistersNoKeyChannelForTheRowsItWalks() {
+        let log = KeyChannelLog()
+        let tuiContext = TUIContext()
+        let statusBar = StatusBarState()
+        renderSteadyKeyChannelRun(log: log, tuiContext: tuiContext, statusBar: statusBar)
+
+        let handled = tuiContext.keyEventDispatcher.dispatch(KeyEvent(key: .character("d")))
+        let shortcutFired = tuiContext.keyboardShortcuts.trigger(for: KeyEvent(key: .enter))
+        let barShortcuts = statusBar.currentUserItems.map(\.shortcut)
+
+        #expect(!handled, "an undrawn row's onKeyPress took the key")
+        #expect(!shortcutFired, "an undrawn row's hidden button answered Return")
+        #expect(log.farRan.isEmpty, "undrawn rows acted on a key: \(log.farRan)")
+        #expect(!barShortcuts.contains("f"), "an undrawn row's items reached the bar: \(barShortcuts)")
+    }
+
+    /// The rows beside the focus are the ones the probe always asks first, and
+    /// the sweep draws them regardless. Registering the probe's render of them
+    /// as well put their handlers in the dispatcher twice — so a handler that
+    /// looks at a key and declines it (dispatch walks on past a `false`) ran
+    /// twice per keypress, in every windowed stack holding the focus.
+    @Test("A declining key handler beside the focus runs once per keypress")
+    func handlerBesideTheFocusRunsOncePerKeypress() {
+        let log = KeyChannelLog()
+        let tuiContext = TUIContext()
+        renderSteadyKeyChannelRun(log: log, tuiContext: tuiContext)
+
+        _ = tuiContext.keyEventDispatcher.dispatch(KeyEvent(key: .character("j")))
+
+        #expect(log.besideTaps == 1, "one keypress ran row 1's handler \(log.besideTaps) times")
+    }
+
+    /// Forty-one one-line rows whose only focus stops are the first and the
+    /// last, rendered to the steady state: frame 1 registers and auto-focuses
+    /// row 0, frame 2 probes from it across every row to row 40.
+    private func renderSteadyKeyChannelRun(
+        log: KeyChannelLog, tuiContext: TUIContext, statusBar: StatusBarState? = nil
+    ) {
+        let focusManager = FocusManager()
+        let view = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<KeyChannelRow.count, id: \.self) { index in
+                KeyChannelRow(index: index, log: log)
+            }
+        }
+        for _ in 0..<2 {
+            renderFrame(
+                view, tuiContext: tuiContext, focusManager: focusManager, windowOffset: 0,
+                statusBar: statusBar)
+        }
+        // Without this a green run could be vacuous: no focus, no probe.
+        #expect(
+            focusManager.currentFocusedID?.contains("[0]") == true,
+            "the walk must start from row 0: \(focusManager.currentFocusedID ?? "nil")")
     }
 
     /// Row 499's focus ID, captured the honest way: while it is on screen.
@@ -254,5 +328,55 @@ struct FocusIDMatchingTests {
             "toggle-Root/Row.3#true/Toggle", addressesSubtreeAt: "Root/Row.3"))
         // Explicit (path-free) IDs never match.
         #expect(!FocusManager.focusID("save-button", addressesSubtreeAt: "Root/Stack/Row[7]"))
+    }
+}
+
+/// What the rows of the key-channel run in `WindowedFocusReachTests` did with
+/// the keys dispatched after it.
+private final class KeyChannelLog: @unchecked Sendable {
+    /// Runs of row 1's declining handler.
+    var besideTaps = 0
+    /// Every action a row past the window took.
+    var farRan: [String] = []
+}
+
+/// One row of the key-channel run: a focus stop at each end, and between them
+/// one declaration on each channel a key can arrive on — beside the focus
+/// (row 1), and past the window, where only the probe renders (rows 10, 20, 30).
+private struct KeyChannelRow: View {
+    static let count = 41
+
+    let index: Int
+    let log: KeyChannelLog
+
+    var body: some View {
+        if index == 0 || index == Self.count - 1 {
+            Button("stop \(index)") {}
+        } else if index == 1 {
+            Text("beside the focus")
+                .onKeyPress(keys: [.character("j")]) { _ in
+                    log.besideTaps += 1
+                    return false
+                }
+        } else if index == 10 {
+            Text("far handler")
+                .onKeyPress(keys: [.character("d")]) { _ in
+                    log.farRan.append("onKeyPress")
+                    return true
+                }
+        } else if index == 20 {
+            // The hidden-button-as-shortcut-holder idiom: `.hidden()` suppresses
+            // the focus registration, so this row is no stop and the walk goes
+            // straight past it, while the button still registers its shortcut.
+            Button("far shortcut") { log.farRan.append("shortcut") }
+                .keyboardShortcut(.defaultAction)
+                .hidden()
+        } else if index == 30 {
+            Text("far items").statusBarItems {
+                StatusBarItem(shortcut: "f", label: "far")
+            }
+        } else {
+            Text("row \(index)")
+        }
     }
 }

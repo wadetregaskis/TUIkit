@@ -14,7 +14,8 @@
 //  registration order — so the next focusable row must be found BEFORE the
 //  main render sweep and injected into it at its ascending position. The
 //  probe below renders candidate rows against a scratch FocusManager (real
-//  state, no ring side effects) until one registers.
+//  state, no ring side effects) and throwaway key channels (no input side
+//  effects either) until one registers.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -32,14 +33,17 @@ extension _VStackCore {
     /// The nearest row beyond `origin` in `direction` (+1 down, −1 up) that
     /// registers a focusable when rendered, within the probe cap — the
     /// focus ring's required next stop. Probing renders rows against a
-    /// scratch `FocusManager` (and no mouse dispatcher): row state and
-    /// lifecycle behave as for any other rendered-but-off-screen row, and
-    /// the real ring is untouched. Returns `nil` when nothing within the
-    /// cap registers (or there is no focused row to continue from).
-    func nearestFocusableRow(
+    /// scratch `FocusManager` over `isolated`, whose key channels are already
+    /// throwaways and whose mouse dispatcher is gone — built once for both
+    /// directions by `focusRingContinuations`, the only caller, which is why
+    /// this is private. Row state and lifecycle behave as for any other
+    /// rendered-but-off-screen row; neither the real ring nor any live input
+    /// service is touched. Returns `nil` when nothing within the cap
+    /// registers.
+    private func nearestFocusableRow(
         from origin: Int, direction: Int, count: Int,
         child: (Int) -> ChildView, width: Int, viewportHeight: Int,
-        context: RenderContext
+        isolated: RenderContext
     ) -> Int? {
         var probe = origin + direction
         var steps = 0
@@ -53,9 +57,8 @@ extension _VStackCore {
             // a row nobody had focused, every frame, for as many rows as the
             // probe walked. A `TextField` reached that way began editing.
             scratch.suppressesAutoFocus = true
-            var probeContext = context
+            var probeContext = isolated
             probeContext.environment.focusManager = scratch
-            probeContext.environment.mouseEventDispatcher = nil
             _ = child(probe).render(
                 width: width, height: viewportHeight, context: probeContext)
             // Asked directly now, rather than inferred from the side effect of
@@ -78,12 +81,28 @@ extension _VStackCore {
         context: RenderContext
     ) -> [Int] {
         guard let focused = focusedOrdinal else { return [] }
+        // Every channel a key can arrive on goes to a throwaway, not just the
+        // focus ring. A probe is a RENDER — `isMeasuring` is false — so each
+        // row it asks performs every render-pass registration it has, and the
+        // live dispatcher keeps every handler it is handed until the next
+        // frame. With only the focus manager swapped, a row the walk merely
+        // counted (never drawn, never in the sweep) held a live `onKeyPress`,
+        // a `.hidden()` button's `.keyboardShortcut` — hidden registers no
+        // focusable, so the walk goes straight past it — and `.statusBarItems`
+        // that stood on the bar whenever no drawn row declared its own, all
+        // for the whole frame. And the focused row's neighbours, which the
+        // probe always asks first and the sweep draws anyway, registered
+        // twice: a declining handler beside the focus ran twice per keypress.
+        // Built once per frame, not per probed row: what these collect is
+        // never read.
+        var isolated = context.withThrowawayKeyChannels()
+        isolated.environment.mouseEventDispatcher = nil
         var stops: [Int] = []
         for direction in [-1, 1] {
             if let stop = nearestFocusableRow(
                 from: focused, direction: direction, count: count,
                 child: child, width: width, viewportHeight: viewportHeight,
-                context: context)
+                isolated: isolated)
             {
                 stops.append(stop)
             }
