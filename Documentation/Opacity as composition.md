@@ -4217,7 +4217,7 @@ The other two drop on GEOMETRY and needed the degradation:
   `visibleOpacity` clips and keeps every region. The shape that would have broken: a
   bordered box wider than its viewport, whose top and bottom rules are dropped here while
   its width-1 side walls survive — an opaque rule above faded walls.
-- `_ListCore` drops a child's run that will not fit the row, while the row's claims are
+- `_ListCore` drops a child's run that will not fit the row, while the row's lines are
   carried through.
 
 Both now append `AnimatedRunAlpha.drawnRegions(forRunAt:offsetY:)` at the point of the
@@ -4226,6 +4226,23 @@ frame, frozen after — instead of to full strength. `RowRun` also had to CARRY 
 for the runs it keeps, which is the same omission its own comment already records about
 `frameDuration`: rebuilding a child's run with the defaults silently retimed a spinner,
 and rebuilding it without the alpha would silently unfade a caret.
+
+A third drops on neither ground. A breathing `_ListCore` row — the cursor row of a focused
+list — repaints its whole line every tick, so it discards every child run that DID fit: a
+narrower run on that line would be overwritten by the pulse. Dropping them is right, but the
+line the pulse repaints is the child's drawn frame at its opaque spelling, and nothing was
+left behind. Rows bordered with a `.border(AnimatedColor)` at several alphas faded, all but
+the cursor row's, which drew at full strength while the cursor sat on it. That return now
+leaves the same drawn-frame regions for the runs it drops.
+
+WHERE the list puts those regions matters as much as that it puts them anywhere. The
+geometry drop first sent them with the list's own claims — the selection mark, a still
+background — which the container lays down before any row's content regions, and the
+resolver takes a cell's layer from the first region covering it. So a row whose content
+wrapped such a border in `.opacity(0.3)` resolved the dropped cells at layer 1: the border's
+ink right, the row's fade lost. Both drops now hand their regions on in the row buffer's own
+coordinates, beside the lines rather than among the list's claims, and `attachRowOpacity`
+appends them after that row's content regions, through the same clip.
 
 ## 70. A run left outside the buffer that carries it (2026-09-12)
 

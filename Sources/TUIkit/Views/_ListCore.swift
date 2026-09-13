@@ -391,6 +391,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// How many columns a row's own content occupies, past the gutter —
         /// the clip limit for anything positioned in the row's coordinates.
         var rowContentWidth = 0
+        /// What rows' child runs said about ALPHA, for the runs a row kept the lines
+        /// of and dropped — keyed by row index, in each row buffer's own coordinates,
+        /// and empty on nearly every frame (§69.4).
+        ///
+        /// Apart from the list's own claims so `attachRowOpacity` can append them
+        /// AFTER the row content's regions: the resolver takes a cell's layer from the
+        /// first region over it, and the list's claims go down before any row's.
+        var droppedRunClaims: [Int: [OpacityRegion]] = [:]
     }
 
     /// Where an entry the frame drew landed, and how much of its own top went.
@@ -741,6 +749,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// LIST paints, as distinct from the rows' content, which `attachRowOpacity`
         /// carries up from each child buffer.
         let listRowClaims: [OpacityRegion]
+        let droppedRunClaims: [Int: [OpacityRegion]]
         var scrollbarColumn: Int?
         var scrollbarHeight = 0
         var rowContentWidth = 0
@@ -755,7 +764,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 palette: palette
             )
             let contentRowWidth = max(1, rowWidth - 1)
-            (lines, visibleRowYRanges, animatedRuns, listRowClaims) = composeScrollbarRowLines(
+            (lines, visibleRowYRanges, animatedRuns, listRowClaims, droppedRunClaims) = composeScrollbarRowLines(
                 visibleRows: visibleRows,
                 handler: handler,
                 origin: origin,
@@ -775,7 +784,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             scrollbarHeight = bar.count
             rowContentWidth = max(0, contentRowWidth - 1)
         } else {
-            (lines, visibleRowYRanges, animatedRuns, listRowClaims) = composeRowLines(
+            (lines, visibleRowYRanges, animatedRuns, listRowClaims, droppedRunClaims) = composeRowLines(
                 handler: handler,
                 origin: origin,
                 firstSectionContentIndex: source.sectionContentIndex(at: origin.offset),
@@ -805,7 +814,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     ? content as? DynamicViewContentActions : nil)?.dropInsertionAction,
                 scrollbarColumn: scrollbarColumn,
                 scrollbarHeight: scrollbarHeight,
-                rowContentWidth: rowContentWidth
+                rowContentWidth: rowContentWidth,
+                droppedRunClaims: droppedRunClaims
             )
         )
     }
@@ -1176,7 +1186,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext
     ) -> (
         lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
-        claims: [OpacityRegion]
+        claims: [OpacityRegion], droppedRunClaims: [Int: [OpacityRegion]]
     ) {
         let palette = context.environment.palette
         // Read here rather than passed in: a ninth parameter trips
@@ -1198,6 +1208,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// selection marks and the still backgrounds — travelling beside the runs
         /// because both are positioned by LINE and both take the same slide.
         var rowClaims: [OpacityRegion] = []
+        /// What each row's dropped child runs left behind, by row index — NOT
+        /// positioned among the lines, because `attachRowOpacity` places them with the
+        /// row's content regions. See `PopulatedRenderState.droppedRunClaims`.
+        var droppedRunClaims: [Int: [OpacityRegion]] = [:]
         var topIndicator: ScrollIndicatorLine?
         var bottomIndicator: ScrollIndicatorLine?
 
@@ -1267,12 +1281,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 state: RowDrawState(
                     isFocused: isFocused, isSelected: isSelected,
                     isReturningHome: handler.returningRows.contains(rowIndex)),
-                rowWidth: rowWidth,
-                sectionContentIndex: sectionContentIndex,
-                style: style,
-                context: context,
-                palette: palette
-            )
+                rowWidth: rowWidth, sectionContentIndex: sectionContentIndex,
+                style: style, context: context, palette: palette)
+            if !rendered.droppedRunClaims.isEmpty {
+                droppedRunClaims[rowIndex] = rendered.droppedRunClaims
+            }
             // The top visible row enters partially, its first `clip` lines
             // scrolled off above the viewport (clipped by the RESOLVED origin,
             // which is also what the window walk, the indicators, the bands and
@@ -1337,10 +1350,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
         }
 
-        return slideAndWrap(
+        let wrapped = slideAndWrap(
             rowLines: rowLines, ranges: ranges, pulseRuns: pulseRuns, rowClaims: rowClaims,
             topIndicator: topIndicator, bottomIndicator: bottomIndicator,
             handler: handler, rowWidth: rowWidth)
+        return (wrapped.lines, wrapped.ranges, wrapped.runs, wrapped.claims, droppedRunClaims)
     }
 
     /// Applies the overscroll slide to the rows, then wraps the (unmoved) "N
@@ -1520,7 +1534,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext
     ) -> (
         lines: [String], ranges: [VisibleRowRange], runs: [AnimatedCellRun],
-        claims: [OpacityRegion]
+        claims: [OpacityRegion], droppedRunClaims: [Int: [OpacityRegion]]
     ) {
         let palette = context.environment.palette
         let style = context.environment.listStyle
@@ -1539,6 +1553,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// selection marks and the still backgrounds — travelling beside the runs
         /// because both are positioned by LINE and both take the same slide.
         var rowClaims: [OpacityRegion] = []
+        /// By row index, placed by `attachRowOpacity` — see `composeRowLines`.
+        var droppedRunClaims: [Int: [OpacityRegion]] = [:]
         // Seeded, not 0, or the stripes follow the window instead of the rows —
         // see `composeRowLines`.
         var sectionContentIndex = firstSectionContentIndex
@@ -1557,6 +1573,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 context: context,
                 palette: palette
             )
+            if !rendered.droppedRunClaims.isEmpty {
+                droppedRunClaims[rowIndex] = rendered.droppedRunClaims
+            }
             // The top visible row enters partially and the bottom leaves
             // partially — see `clipRow`, which both paths share. The bar area's
             // height is a hard budget here whatever the granularity, because a
@@ -1633,7 +1652,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             slidRanges(ranges, handler: handler, lineCount: slid.count),
             slidRuns(pulseRuns, handler: handler, lineCount: slid.count, topOffset: 0),
             slidClaims(rowClaims, handler: handler, lineCount: slid.count, topOffset: 0)
-                + bar.claims(atColumn: contentRowWidth))
+                + bar.claims(atColumn: contentRowWidth),
+            droppedRunClaims)
     }
 
     /// A row's lines, its pulse frames and its own runs, clipped TOGETHER.
@@ -2136,18 +2156,25 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let clip =
                 (visible.index == state.origin.offset ? state.origin.topClip : 0)
                 + position.linesCutAbove
-            for region in visible.row.buffer.opacityRegions {
-                // The shared trim, so this is not a third spelling of it: the
-                // rows the window kept of this row, and the columns the row
-                // has. (The ScrollView copy was the one that drifted, clipping
-                // rows and letting columns run past the scrollbar.)
+            /// The shared trim, so this is not a third spelling of it: the rows the
+            /// window kept of this row, and the columns the row has. (The ScrollView
+            /// copy was the one that drifted, clipping rows and letting columns run
+            /// past the scrollbar.)
+            func attach(_ region: OpacityRegion) {
                 guard
                     let clipped = region.clipped(
                         toColumns: 0..<state.rowContentWidth,
                         rows: clip..<(clip + position.height))
-                else { continue }
+                else { return }
                 buffer.opacityRegions.append(
                     clipped.shifted(byX: rowContentX, y: topInset + position.yStart - clip))
+            }
+            for region in visible.row.buffer.opacityRegions { attach(region) }
+            // Then what the row's dropped runs left behind — and only then. The
+            // resolver takes a cell's LAYER from the first region over it, so an
+            // `.opacity(_:)` inside the row must already be down (§69.4).
+            if !state.droppedRunClaims.isEmpty, let dropped = state.droppedRunClaims[visible.index] {
+                for region in dropped { attach(region) }
             }
         }
     }
@@ -3070,7 +3097,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             return RenderedRow(
                 lines: lines(over: fill?.opaqueSpelling ?? background.colorNow),
                 pulseFrames: nil, childRuns: childRuns,
-                claims: claims(over: fill) + droppedRunClaims)
+                claims: claims(over: fill), droppedRunClaims: droppedRunClaims)
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
         // on the same line would be overwritten by it — two animations claiming
@@ -3097,10 +3124,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // frame states a concrete colour. The MARK still claims — it is drawn into
         // the line the run replaces, and `resolvingOpacity` re-blends a covered run's
         // frames through the claim.
+        //
+        // And the runs it drops leave what they said about alpha, as a run dropped on
+        // geometry does (§69.4). A run stating its alpha per frame — a
+        // `.border(AnimatedColor)` at several alphas — is the only statement about its
+        // cells, and these lines are its drawn frame at the opaque spelling: without
+        // this the cursor row's border drew at full strength while every other row's
+        // faded.
         return RenderedRow(
             lines: perStep[step],
             pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } },
-            claims: claims(over: nil) + droppedRunClaims)
+            claims: claims(over: nil),
+            droppedRunClaims: droppedRunClaims + childRuns.flatMap(\.leftBehind))
     }
 
     /// A row's rendered lines, plus — when its background breathes — every frame
@@ -3123,6 +3158,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// `attachRowOpacity` already carries up. These are the two things the list
         /// draws around it, from the same derivation `Table` calls.
         var claims: [OpacityRegion] = []
+
+        /// What the row's child runs said about ALPHA, for the ones this row kept the
+        /// lines of and dropped — in the ROW BUFFER's coordinates, not these lines',
+        /// because they travel with the content's own regions: `attachRowOpacity`
+        /// appends them after those, the order the resolver needs (§69.4). Empty for
+        /// nearly every row.
+        var droppedRunClaims: [OpacityRegion] = []
     }
 
     /// One animated run positioned within the lines being assembled: `y` is the
@@ -3152,8 +3194,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         for run in buffer.animatedCells where run.offsetY < buffer.lines.count {
             guard run.isAnimating, !(skippingBadgeLine && run.offsetY == 0) else { continue }
             guard run.width > 0, 1 + run.offsetX + run.width <= rowWidth else {
-                droppedClaims += run.alpha?
-                    .drawnRegions(forRunAt: 1 + run.offsetX, offsetY: run.offsetY) ?? []
+                droppedClaims += Self.leftBehind(by: run)
                 continue
             }
             runs.append(
@@ -3162,6 +3203,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     frameDuration: run.frameDuration, clock: run.clock, alpha: run.alpha))
         }
         return (runs, droppedClaims)
+    }
+
+    /// What `run` said about its cells' ALPHA at the frame its lines were drawn at, as
+    /// ordinary regions in its own buffer's coordinates — for a site that keeps those
+    /// lines and discards the run (§69.4). Right at that frame, frozen after. Empty for
+    /// a run that is not animating, which no row carries either, and for one with no
+    /// payload.
+    private static func leftBehind(by run: AnimatedCellRun) -> [OpacityRegion] {
+        guard run.isAnimating, let alpha = run.alpha else { return [] }
+        return alpha.drawnRegions(forRunAt: run.offsetX, offsetY: run.offsetY)
     }
 
     private struct RowRun {
@@ -3183,6 +3234,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// alpha, so a `TextField`'s caret over a faded well inside a List row would
         /// render at full strength while the same field outside one did not.
         var alpha: AnimatedRunAlpha?
+
+        /// What this run said about ALPHA at its drawn frame, in the ROW BUFFER's
+        /// coordinates — for a run the row carried this far and then drops. `x` counts
+        /// the one-cell selection gutter `carriedChildRuns` moves every run past; the
+        /// content's own regions do not.
+        var leftBehind: [OpacityRegion] {
+            alpha?.drawnRegions(forRunAt: x - 1, offsetY: y) ?? []
+        }
 
         /// The same run on line `y`. Every clip and slide moves runs vertically
         /// and nothing else, so this is the only motion any of them needs.
