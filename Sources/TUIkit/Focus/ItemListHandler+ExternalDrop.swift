@@ -18,10 +18,11 @@ extension ItemListHandler {
     ///
     /// The rule is one method rather than three lines at each of the two call
     /// sites (a `List`'s and a `Table`'s drop destination) because it has to
-    /// stay the same rule in both: past the last row the drop appends, the slot
-    /// is clamped so a list that shrank under the pointer cannot strand it, and
-    /// the line is kept so ``publishRowBands(_:)`` can ask the question again
-    /// against the next frame's rows.
+    /// stay the same rule in both: past the last row the drop appends, above
+    /// the first it lands before that row, the slot is clamped so a list that
+    /// shrank under the pointer cannot strand it, and the line is kept so
+    /// ``publishRowBands(_:)`` can ask the question again against the next
+    /// frame's rows.
     func hoverExternalDrop(atContentY contentY: Int) {
         lastExternalDropContentY = contentY
         // Past the rows, a pointer that is simply resting there means "append"
@@ -29,8 +30,21 @@ extension ItemListHandler {
         // Only the auto-scroll retarget below reads it differently, because
         // there the rows are moving and "the end of the data" is an answer about
         // somewhere the cursor is not.
+        //
+        // ABOVE the rows is not "past" them, and "no band here" cannot tell the
+        // two apart. The drop target's rectangle is the whole control, so a
+        // pointer arriving from above crosses the top border and a `Table`'s
+        // column header first — negative lines in this space, which no band
+        // covers. Falling through to `itemCount` there drew the gap below the
+        // last visible row while the pointer sat on the header, and a release
+        // handed the app the end of the data. The retarget has always answered
+        // that line with the first row, but it runs only while auto-scroll
+        // drives, and scrolling UP needs content above: a list at rest, one
+        // whose rows all fit and a `.scrollDisabled` one never got the
+        // correction. So the hover gives the same answer, through the same
+        // helper, instead of leaving it to a pass that may never come.
         let target = dropTarget(atContentY: contentY)
-        setExternalDropSlot(target ?? itemCount)
+        setExternalDropSlot(target ?? dropIndexAboveTheRows(atContentY: contentY) ?? itemCount)
         // Whether the retarget gets a run against this position turns on
         // WHETHER THE POINTER LANDED ON A BAND, and nothing else.
         //
@@ -46,10 +60,13 @@ extension ItemListHandler {
         // over the pointer.
         //
         // Off one — the hot margin is chrome, and that is where a drag held at
-        // the edge rests — the fallback above is the "append" answer, about the
-        // end of the data rather than about anywhere near the cursor. That is
-        // what the retarget exists to correct, so it is armed, and the correction
-        // lands on the very next frame rather than a scroll step later.
+        // the edge rests — the fallback above answers for an END of the rows,
+        // not for the pointer: below them "append" is about the end of the data
+        // rather than anywhere near the cursor, and above them the first row is
+        // only the first row of THIS frame. Carrying either along as the rows
+        // scroll is what the retarget exists for, so it is armed, and the
+        // correction lands on the very next frame rather than a scroll step
+        // later.
         externalDropResolvedOffset = target == nil ? nil : scrollOffset
     }
 
@@ -82,12 +99,12 @@ extension ItemListHandler {
             guard band.isContent, let index = band.dropIndex else { return nil }
             return (band, index)
         }
-        guard let first = rows.first, let last = rows.last else {
+        guard let last = rows.last else {
             setExternalDropSlot(dropTarget(atContentY: contentY) ?? itemCount)
             return
         }
-        if contentY < first.band.yStart {
-            setExternalDropSlot(first.index)
+        if let above = dropIndexAboveTheRows(atContentY: contentY) {
+            setExternalDropSlot(above)
         } else if contentY >= last.band.yStart + max(1, last.band.height) {
             setExternalDropSlot(last.index)
         } else {
@@ -116,5 +133,29 @@ extension ItemListHandler {
     /// the pointer must not strand it past the end.
     private func setExternalDropSlot(_ slot: Int) {
         externalDropSlot = min(max(0, slot), itemCount)
+    }
+
+    /// The drop index of the first band drawn that takes one, when `contentY`
+    /// is above it — on the border, a `Table`'s column header, a scroll
+    /// indicator drawn over the rows — and `nil` anywhere else.
+    ///
+    /// One helper for the hover and the auto-scroll retarget because they
+    /// answer the same line, and did so differently: the retarget said "the
+    /// first row" and the hover said "append", so on an unscrolled list the gap
+    /// sat at the bottom while the pointer was on the header.
+    ///
+    /// The gap's own band counts, and has to. A row's drop index is its DRAWN
+    /// position (``reorderDrawnPosition(of:)``), so once the gap opens above the
+    /// first row, that row names the position after itself. Passing over the
+    /// gap to read the row walked the slot down one row on the pointer's next
+    /// report over the header. The gap carries `externalDropSlot`, so when it is
+    /// drawn first the answer is the slot it already has: a fixed point.
+    /// Section headers and other chrome publish no drop index, and are passed
+    /// over.
+    private func dropIndexAboveTheRows(atContentY contentY: Int) -> Int? {
+        guard let first = visibleRowBands.first(where: { $0.dropIndex != nil }),
+            contentY < first.yStart
+        else { return nil }
+        return first.dropIndex
     }
 }
