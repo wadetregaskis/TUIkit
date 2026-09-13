@@ -175,6 +175,14 @@ with every other coloured mode, and "draw nothing here" is what `.mono` is for.
 - **Not a recolouring.** `{black → white, white → black}` is not a two-entry
   palette; see below. The two compose: a curve says what the tones BECOME, a
   palette says which colours are available to say it in.
+- **Not mono.** A two-entry black-and-white `.toneRamp` palette is a different
+  renderer from `.mono`, and draws a different picture. For the 1-bit block
+  charsets it splits light from dark at a fixed 128 where mono measures the
+  split from the picture (Otsu), and it draws a half-block cell as `▄` on a
+  coloured background where mono draws `▀`, `▄` or `█` in one ink on one paper.
+  Its dither carries error in OKLab where mono's carries it as luminance. To
+  draw mono in two chosen colours, give the image a `.foregroundStyle` and a
+  `.backgroundStyle`.
 
 ## The other half: recolouring, as a curve
 

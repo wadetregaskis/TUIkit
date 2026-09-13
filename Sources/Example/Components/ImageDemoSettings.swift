@@ -117,13 +117,14 @@ struct ImageDemoSettings: Equatable {
 
     var dithering = false
 
-    /// Whether ``ColourMode/mono`` draws in the theme's colours (the default,
-    /// and what it has always done) or in literal black and white.
+    /// Whether ``ColourMode/mono`` draws in the theme's colours (the default)
+    /// or in literal white ink on black paper.
     ///
-    /// Mono emits no colour codes at all — a full block where the image is lit
-    /// and a space where it is not — so its cells take whatever is in force
-    /// around them, which in an app is the page's own foreground and
-    /// background. Turning this off states the two colours explicitly instead.
+    /// Mono's two colours are the image's `.foregroundStyle` and
+    /// `.backgroundStyle`, the theme's foreground and background where neither
+    /// is stated. Turned off, the page states them: ``monoInk`` and
+    /// ``monoPaper``. The renderer is the same either way, so the glyphs stay
+    /// and only their colours change.
     var monoThemeColours = true
 
     // MARK: - The tone
@@ -222,22 +223,10 @@ struct ImageDemoSettings: Equatable {
         case .ansi16: return .ansi16
         case .grayscale: return .grayscale
         case .mono:
-            // `.mono` proper emits no colour codes at all — a block where the
-            // image is lit and a space where it is not — so its cells take
-            // whatever the page is drawn in, which IS the theme's two colours.
-            // That is the default and always was.
-            //
-            // Asked for the other reading, the two colours are stated instead,
-            // as a two-entry tone ramp: `.rgb` rather than `.white` / `.black`,
-            // which are palette entries a theme may define as something else,
-            // and "literal" is the point of the option. (Setting them with
-            // `.foregroundStyle` / `.background` on the view does nothing — an
-            // `Image` emits its own lines, and mono's carry no colour for a
-            // modifier to rewrite.)
-            guard monoThemeColours else {
-                return .palette(
-                    ASCIIPalette([.rgb(0, 0, 0), .rgb(255, 255, 255)]).asToneRamp())
-            }
+            // One renderer whatever "Theme colours" says. Its two colours are the
+            // image's styles, which `imageDemoSettings(_:)` states from
+            // ``monoInk`` and ``monoPaper``. A two-entry black-and-white palette
+            // would be a different renderer, and would draw different glyphs.
             return .mono
         case .greys: return .palette(.shades(greyLevels))
         case .spread: return .palette(.spread(spreadColours))
@@ -259,6 +248,18 @@ struct ImageDemoSettings: Equatable {
             return .palette(ASCIIPalette([.black, .palette.accent, .white]).asToneRamp())
         }
     }
+
+    /// ``ColourMode/mono``'s ink: literal white while ``monoThemeColours`` is
+    /// off, and otherwise the theme's foreground, which is what an unstated
+    /// style means anyway. `.rgb` rather than `.white`, a palette entry a theme
+    /// may define as something else: "literal" is the point of the option.
+    var monoInk: Color { usesLiteralMono ? .rgb(255, 255, 255) : .palette.foreground }
+
+    /// ``ColourMode/mono``'s paper: literal black while ``monoThemeColours`` is
+    /// off, and otherwise the theme's background.
+    var monoPaper: Color { usesLiteralMono ? .rgb(0, 0, 0) : .palette.background }
+
+    private var usesLiteralMono: Bool { colour == .mono && !monoThemeColours }
 
     var toneCurve: ASCIIToneCurve? {
         switch tone {

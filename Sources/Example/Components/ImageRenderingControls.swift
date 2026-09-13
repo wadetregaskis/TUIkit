@@ -253,9 +253,10 @@ struct ImageRenderingControls: View {
                 RadioButtonItem(
                     ImageDemoSettings.ColourMode.grayscale, "component.imageControls.greyscale")
                 RadioButtonItem(ImageDemoSettings.ColourMode.mono, "component.imageControls.mono") {
-                    // Mono's own knob. It emits no colour codes, so by default
-                    // its cells take the page's — which is the theme's, and is
-                    // what it has always drawn in. Off, the two are stated.
+                    // Mono's own knob: which two colours it draws in. The
+                    // theme's by default; off, literal white on black, stated
+                    // through `.foregroundStyle` / `.backgroundStyle`, with the
+                    // same glyphs.
                     Toggle(
                         "component.imageControls.monoThemeColours",
                         isOn: $settings.monoThemeColours)

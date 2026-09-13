@@ -152,6 +152,14 @@ extension View {
             .imageCharacterSet(settings.characterSet)
             .imageShapeAware(settings.shapeAware)
             .imageColorMode(settings.colorMode)
+            // Mono's two colours. Stated always, not only while "Theme colours"
+            // is off: an `if` here would give the image a different identity on
+            // every flip, dropping its loaded phase and decoding the file again.
+            // On, they are the theme's own foreground and background, which is
+            // what an unstated style means, so nothing changes. Every `Text` in
+            // either page's scope states its own style.
+            .foregroundStyle(settings.monoInk)
+            .backgroundStyle(settings.monoPaper)
             .imageToneCurve(settings.toneCurve)
             .imageDithering(settings.ditheringMode)
             .imageSupersampling(settings.supersampling == 0 ? nil : settings.supersampling)
