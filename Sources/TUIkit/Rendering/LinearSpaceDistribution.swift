@@ -74,17 +74,32 @@ func distributeLinearSpace(
     var result = naturalSizes.map { max(0, $0) }
     let flexIndices = result.indices.filter { isFlexible[$0] }
     let gap = max(0, spacing)
-    let allSpacing = max(0, result.count - 1) * gap
 
     var nonFlexTotal = 0
     var flexTotal = 0
+    // How many children will OCCUPY the axis: the fitting branches below reserve
+    // gaps between those, not one per child. A fixed child of no extent is
+    // appended through `appendHorizontally` / `appendVertically`'s
+    // contributes-nothing branch and earns no gap, so a gap reserved for it was
+    // space no flexible sibling was ever handed — `HStack(spacing: 2) {
+    // Text("A"); EmptyView(); Spacer(); Text("B") }` in 20 cells gave the spacer
+    // 12 rather than 14, and "B" stopped two short of the edge of a row that
+    // reports itself as filling the width. A flexible child counts even at a
+    // natural size of zero (a default `Spacer`), because its allocation is the
+    // very thing being decided — the carve-out `_VStackCore`'s size makes for a
+    // spacer. One the surplus then leaves at zero gives back a gap nothing
+    // reclaims, which is the only over-reservation left.
+    var occupying = 0
     for index in result.indices {
         if isFlexible[index] {
             flexTotal += result[index]
+            occupying += 1
         } else {
             nonFlexTotal += result[index]
+            if result[index] > 0 { occupying += 1 }
         }
     }
+    let allSpacing = totalLinearSpacing(occupiedChildren: occupying, spacing: gap)
 
     if nonFlexTotal + flexTotal + allSpacing <= total {
         // Everything (content + every gap) fits; flexible children absorb the surplus.
@@ -137,9 +152,11 @@ func distributeLinearSpace(
 /// and drew `"A  B"` (4), and a `Spacer` beside that row was then sized from the
 /// inflated claim, so the trailing column stopped two cells short of flush.
 ///
-/// This is the rule `distributeLinearSpace` above already applies in its
-/// overflow branch, where a gap is charged only per PLACED child. Stated once
-/// here so the extent a stack REPORTS and the extent it ASSEMBLES cannot drift.
+/// This is the rule `distributeLinearSpace` above applies as well: its overflow
+/// branch charges a gap only per PLACED child, and its fitting branches reserve
+/// this very count over the children that will occupy the axis. Stated once
+/// here so the extent a stack REPORTS, the extent it DISTRIBUTES and the
+/// extent it ASSEMBLES cannot drift.
 ///
 /// `spacing` is deliberately not clamped at zero: a negative spacing legitimately
 /// subtracts, which is the case `_VStackCore`'s natural-size test guards.
