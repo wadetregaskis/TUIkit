@@ -310,7 +310,23 @@ struct _GridCore<Content: View>: View, Renderable, Layoutable {
     }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let context = context.publishingContainerAxis(.vertical)
+        // Ground the proposal into the context before the lattice reads it —
+        // the same two lines `_ContainerViewCore.sizeThatFits` and
+        // `_ViewThatFitsCore.sizeThatFits` open with. `lattice` measures every
+        // cell at `.unspecified`, which a wrapping cell resolves against
+        // `context.availableWidth`, so without this the proposal reached only
+        // the final clamp and the row heights belonged to a width the grid was
+        // never going to be drawn at. `_HStackCore.resolvedLayout` re-measures
+        // a column it squeezed at `ProposedSize(width: allocated, height: nil)`
+        // and leaves `availableWidth` at the whole row's, while `renderChild`
+        // DOES narrow it: "alpha beta gamma delta epsilon" beside "TAIL" in a
+        // 20-cell row measured as 2 lines wrapped at 20, the row became 2 lines
+        // tall, and the render built its lattice at the 15 cells it was given
+        // — 3 lines — and clamped "epsilon" away with nothing on screen to say
+        // so. Grounded, both passes build the lattice from the same width.
+        var context = context.publishingContainerAxis(.vertical)
+        context.availableWidth = proposal.width ?? context.availableWidth
+        context.availableHeight = proposal.height ?? context.availableHeight
         let rows = rows(context: context)
         guard !rows.isEmpty else { return ViewSize.fixed(0, 0) }
         let lattice = lattice(rows, context: context)

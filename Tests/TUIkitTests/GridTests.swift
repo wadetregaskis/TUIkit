@@ -331,4 +331,44 @@ struct GridTests {
         let rendered = lines(GridRow { Text("a"); Text("b") })
         #expect(rendered[0].hasPrefix("a b"))
     }
+
+    /// The case `measureMatchesRender` cannot see, because it measures and
+    /// renders in ONE context, so the proposal and `availableWidth` never
+    /// disagree.
+    ///
+    /// A squeezing `HStack` makes them disagree: it re-measures a column it
+    /// narrowed at `ProposedSize(width: allocated)` with the ROW's context,
+    /// then renders the column at the allocation. `lattice` measured its cells
+    /// against the context alone, so the grid reported the height of a wrap it
+    /// never draws and the row clipped the line it had not budgeted for.
+    ///
+    /// Spaced words on purpose, unlike the space-less strings the ViewThatFits
+    /// twin of this test uses: the defect IS a re-wrap. The sentence wraps to
+    /// 2 lines at 20 cells and to 3 ("alpha beta" / "gamma delta" / "epsilon",
+    /// 11 wide) at 15.
+    @Test("A grid squeezed by its parent reports the size it draws at the proposed width")
+    func squeezedGridMeasuresAtTheProposal() {
+        let grid = Grid {
+            GridRow { Text("alpha beta gamma delta epsilon") }
+        }
+
+        let squeezed = measureChild(
+            grid, proposal: ProposedSize(width: 15, height: nil), context: makeRenderContext(width: 20, height: 12))
+        let drawn = renderToBuffer(grid, context: makeRenderContext(width: 15, height: 12))
+        #expect(drawn.lines.count == 3)
+        #expect(squeezed.height == drawn.lines.count)
+        #expect(squeezed.width == drawn.width)
+
+        // …and the row that does the squeezing keeps the line. 20 - 4 ("TAIL")
+        // - 1 (spacing) = 15 cells for the grid.
+        let row = renderToBuffer(
+            HStack(alignment: .top, spacing: 1) {
+                Text("TAIL")
+                grid
+            },
+            context: makeRenderContext(width: 20, height: 12))
+        let stripped = row.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+        #expect(row.lines.count == 3)
+        #expect(stripped == ["TAIL alpha beta", "gamma delta", "epsilon"])
+    }
 }
