@@ -4244,6 +4244,14 @@ ink right, the row's fade lost. Both drops now hand their regions on in the row 
 coordinates, beside the lines rather than among the list's claims, and `attachRowOpacity`
 appends them after that row's content regions, through the same clip.
 
+A fourth sat in the same function's first guard. A row carrying a `.badge(_:)` drops every
+child run on its first line, because the badge truncates that line's content to make room
+— and keeps the line. So a badged row with a several-alpha border drew an opaque top rule
+above faded walls: the shape the `ScrollView` bullet describes, with no `ScrollView`
+anywhere. It now takes the geometry arm, and its regions are cut to the content the badge
+kept, by the derivation the line is drawn through, so none of them reaches the fill or the
+badge.
+
 ## 70. A run left outside the buffer that carries it (2026-09-12)
 
 `OverlayLayer`'s leading cut (`cutting(_:leadingColumns:rows:)`) moves every payload

@@ -3075,11 +3075,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         ///
         /// A dropped run is not a frozen animation: nothing yet relies on this
         /// path to move, and everything that animates inside a row still asks
-        /// the run loop to re-render it. It is a missed saving, not a bug.
+        /// the run loop to re-render it. It is a missed saving, not a bug. What a
+        /// dropped run said about ALPHA is not a saving, and is left behind (§69.4).
         let carried = Self.carriedChildRuns(
             of: row.buffer, rowWidth: rowWidth, skippingBadgeLine: shouldRenderBadge)
         let childRuns = carried.runs
-        let droppedRunClaims = carried.droppedClaims
+        let droppedRunClaims = cutToBadgedContent(
+            carried.droppedClaims, of: row, badged: shouldRenderBadge, rowWidth: rowWidth)
 
         // A row whose picture is still walking back to it keeps its space and
         // draws nothing in it — see ``ItemListHandler/returningRows``. Blanked
@@ -3181,19 +3183,28 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// A run is dropped for two different reasons and they want different answers. Not
     /// ANIMATING is the same filter `RenderLoop` applies before keeping a frame's runs:
     /// a still run holds the animation clock open forever to repaint a picture that
-    /// cannot change, and it has nothing to leave. Not FITTING is geometry, and the row's
-    /// claims are carried through where its runs are not — so a run stating its alpha per
-    /// frame would take the only statement about those cells with it, and they would
-    /// render at full strength. That one degrades to what a static claim would have said:
-    /// right at the frame the render drew, frozen after (§69.4).
+    /// cannot change, and it has nothing to leave. Not FITTING is geometry — past the
+    /// row's width, or on a badged row's first line, whose columns the badge re-lays —
+    /// and the row's lines are carried through where its runs are not, so a run stating
+    /// its alpha per frame would take the only statement about those cells with it, and
+    /// they would render at full strength. That one degrades to what a static claim would
+    /// have said: right at the frame the render drew, frozen after (§69.4). A badged
+    /// line's regions leave here whole, and `renderRow` cuts them to the content the
+    /// badge kept, being the only one that knows where that ends.
     private static func carriedChildRuns(
         of buffer: FrameBuffer, rowWidth: Int, skippingBadgeLine: Bool
     ) -> (runs: [RowRun], droppedClaims: [OpacityRegion]) {
         var runs: [RowRun] = []
         var droppedClaims: [OpacityRegion] = []
         for run in buffer.animatedCells where run.offsetY < buffer.lines.count {
-            guard run.isAnimating, !(skippingBadgeLine && run.offsetY == 0) else { continue }
-            guard run.width > 0, 1 + run.offsetX + run.width <= rowWidth else {
+            guard run.isAnimating else { continue }
+            // The badged line joins the geometry arm rather than being skipped ahead of
+            // it: the line is kept either way, so a run dropped from it must leave what
+            // it said. Skipped first, a several-alpha border under a badge drew an opaque
+            // top rule above its faded walls.
+            guard run.width > 0, 1 + run.offsetX + run.width <= rowWidth,
+                !(skippingBadgeLine && run.offsetY == 0)
+            else {
                 droppedClaims += Self.leftBehind(by: run)
                 continue
             }
@@ -3343,6 +3354,31 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let fillPadding = max(1, rowWidth - usedWidth)
         let start = gutterCells + fitted.strippedLength + fillPadding
         return (fitted, fillPadding, start..<(start + badgeWidth))
+    }
+
+    /// `claims` — what a row's dropped child runs left behind, in the row buffer's
+    /// coordinates — with the ones on a badged first line cut to the content the badge
+    /// kept.
+    ///
+    /// That line keeps the child's drawn bytes only as far as `badgePlacement` let it;
+    /// past them are the fill and the badge, which the child never drew, so a region
+    /// reaching them would fade cells it says nothing about. Cut by the same derivation
+    /// `renderLineWithBadge` draws through, so the claim and the bytes cannot disagree
+    /// about where the content ends — the ellipsis of a truncated line included, which
+    /// the cut body's still-open SGR draws in the run's own colour. Answered before any
+    /// work for the two overwhelming cases, no badge and nothing dropped.
+    private func cutToBadgedContent(
+        _ claims: [OpacityRegion], of row: SelectableListRow<SelectionValue>, badged: Bool,
+        rowWidth: Int
+    ) -> [OpacityRegion] {
+        guard badged, !claims.isEmpty, let badge = row.badge else { return claims }
+        let kept = badgePlacement(
+            line: row.buffer.lines.first ?? "", badge: badge, rowWidth: rowWidth, gutterCells: 1
+        ).fitted.strippedLength
+        return claims.compactMap { region -> OpacityRegion? in
+            guard region.offsetY == 0 else { return region }
+            return region.clipped(toColumns: 0..<kept, rows: 0..<1)
+        }
     }
 
     /// Renders a line with a right-aligned badge.
