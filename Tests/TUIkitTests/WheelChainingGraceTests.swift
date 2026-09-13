@@ -2,7 +2,7 @@
 //  WheelChainingGraceTests.swift
 //
 //  The wheel-chaining grace period: a nested scroller that hits its edge
-//  consumes further blocked wheel ticks for a short window (default 500 ms)
+//  consumes further blocked wheel ticks for a short window (default 2 seconds)
 //  before letting them chain to the enclosing scroller — so momentum
 //  finishing a scroll inside a child doesn't immediately fling the parent.
 //
@@ -84,6 +84,16 @@ struct WheelChainingGraceTests {
         let axis = makeAxis(now: { now })
         axis.extent = 5  // fits entirely within the 10-line viewport
         #expect(!wheelDown(axis), "no overflow — the wheel can only mean the parent")
+    }
+
+    /// The default is a spec, not an incidental number: 500 ms spilled ticks to
+    /// the enclosing scroller too soon. A fresh hold must start from the same
+    /// value, since it governs a scroller rendered before any environment
+    /// reaches it.
+    @Test("The default grace is 2 seconds, in the environment and in a fresh hold")
+    func defaultGraceIsTwoSeconds() {
+        #expect(EnvironmentValues().scrollChainingDelay == .seconds(2))
+        #expect(WheelEdgeHold().delayNanos == 2_000_000_000)
     }
 
     @Test("Duration → nanoseconds conversion clamps and scales correctly")

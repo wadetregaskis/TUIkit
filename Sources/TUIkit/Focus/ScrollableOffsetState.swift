@@ -280,7 +280,7 @@ public final class ScrollAxis: ScrollableOffsetState {
 /// wheel tick to the parent — so finishing a scroll to the bottom of an inner
 /// list would fling the whole page. Instead, the first blocked tick at an
 /// edge starts a grace period (`delayNanos`, from the
-/// ``View/scrollChainingDelay(_:)`` environment; default 500 ms):
+/// ``View/scrollChainingDelay(_:)`` environment; default 2 seconds):
 /// blocked ticks within it are consumed silently, and only once it expires do
 /// they chain to the enclosing scroller. Any successful scroll re-arms the
 /// grace for the next edge hit. A scroller with nothing to scroll never
@@ -292,7 +292,7 @@ public struct WheelEdgeHold {
 
     /// The grace duration in nanoseconds; 0 chains immediately (the original
     /// behaviour). Synced from the environment by the owning view each frame.
-    var delayNanos: UInt64 = 500_000_000
+    var delayNanos: UInt64 = ScrollChainingDelayKey.defaultValue.clampedNanoseconds
 
     /// Monotonic clock, injectable for tests.
     var nowNanos: () -> UInt64 = { MonotonicClock.nowNanoseconds }
@@ -747,7 +747,11 @@ extension ScrollableOffsetState {
 // MARK: - Environment
 
 private struct ScrollChainingDelayKey: EnvironmentKey {
-    static let defaultValue: Duration = .milliseconds(500)
+    // Two seconds. 500 ms let blocked ticks spill to the enclosing scroller too
+    // soon in use: a scroll that reached a nested list's edge went on to move the
+    // page. The window is counted from the first blocked tick; a tick that moves
+    // the content re-arms it. `WheelEdgeHold.delayNanos` starts from this value.
+    static let defaultValue: Duration = .seconds(2)
 }
 
 private struct DragAutoScrollDelayKey: EnvironmentKey {
@@ -779,7 +783,7 @@ extension View {
     /// axes) holds blocked wheel ticks at its edge before they chain to the
     /// enclosing scroller — so momentum finishing a scroll inside a child
     /// doesn't immediately fling the parent. `.zero` chains immediately.
-    /// The default is 500 ms.
+    /// The default is 2 seconds.
     public func scrollChainingDelay(_ delay: Duration) -> some View {
         environment(\.scrollChainingDelay, delay)
     }

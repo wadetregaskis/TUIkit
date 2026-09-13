@@ -113,7 +113,7 @@ struct ScrollableEnvironmentWiringTests {
     }
 
     /// `.scrollChainingDelay(_:)` documents itself as reaching "List, Table,
-    /// ScrollView, both axes". A view that misses it keeps the 500 ms default
+    /// ScrollView, both axes". A view that misses it keeps the 2-second default
     /// forever: an app asking for immediate chaining (or a longer hold) is
     /// simply not answered, and nothing says so.
     @Test(
