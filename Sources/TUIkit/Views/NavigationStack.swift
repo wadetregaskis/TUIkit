@@ -381,7 +381,21 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // publishes), so an open menu, popover or drop-down inside it has
         // already posted its own close label — and this write clobbered it,
         // showing "⎋ go back" under an open menu whose ESC closes the menu.
-        if !context.isMeasuring, barContext.environment.statusBar?.escapeLabelOverride == nil {
+        //
+        // A presented sheet or alert claims ESC the OTHER way: as a dismiss item
+        // of its own input-grabbing section, never through the label. The label
+        // test alone let this write go-back over it, and the status bar renames
+        // every escape item to the claimed label — the dialog read "⎋ go back"
+        // while ESC closed the dialog. With dismissal disabled the dialog
+        // publishes no item, and go-back was the only escape entry on the bar,
+        // for a key that did nothing: the dialog's grab keeps the handler below
+        // from running. So a modal section holding the keyboard is a claim too;
+        // with none written, the dialog's own item is what the bar shows and
+        // what ESC fires. A presenter rendered AFTER the stack marks its section
+        // too late for this to see, and is not covered.
+        if !context.isMeasuring, barContext.environment.statusBar?.escapeLabelOverride == nil,
+            barContext.environment.focusManager?.activeSectionIsModal != true
+        {
             barContext.environment.statusBar?.escapeLabelOverride =
                 LocalizationService.shared.string(for: LocalizationKey.StatusBar.goBack)
             barContext.environment.statusBar?.escapeClaimGrabsInput = false
