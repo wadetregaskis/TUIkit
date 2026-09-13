@@ -186,6 +186,26 @@ struct TransitionTests {
         #expect(screen.draw(false, .move(edge: .trailing), atMillis: 2200) == ["----"])
     }
 
+    /// A removal that has played out in a stack leaves nothing behind in the store.
+    ///
+    /// The stack stops drawing the slot the moment the removal finishes, so nothing
+    /// asked the store for that picture again, which was the one question that
+    /// forgot a finished record, and the end of the pass keeps every record whose
+    /// removal had started. One `if` that had animated out once kept the store
+    /// non-empty for the rest of the session, and every `nil` optional in every
+    /// stack walked its records on every pass instead of taking the empty check.
+    @Test("A removal that has played out in a stack is forgotten")
+    func playedOutStackRemovalIsForgotten() {
+        let screen = Screen(.linear(duration: 1))
+        _ = screen.draw(true, .move(edge: .trailing), atMillis: 0)
+        _ = screen.draw(true, .move(edge: .trailing), atMillis: 1000)
+        _ = screen.draw(false, .move(edge: .trailing), atMillis: 1000)
+        _ = screen.draw(false, .move(edge: .trailing), atMillis: 1500)
+        #expect(screen.draw(false, .move(edge: .trailing), atMillis: 2200) == ["----"])
+        let departures = screen.context.environment.stateStorage!.departures
+        #expect(departures.count == .zero, "a finished removal is still tracked: \(departures.count)")
+    }
+
     @Test("A stack a view is not leaving keeps exactly the children it had")
     func absentOptionalCostsNoSlot() {
         // The other half of the contract: the slot exists only while a removal

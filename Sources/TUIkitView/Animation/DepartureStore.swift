@@ -180,13 +180,34 @@ extension DepartureStore {
     /// The empty check is the whole point of the fast path: almost every tree
     /// has no departures at all, and this is asked once per `nil` optional per
     /// pass.
+    ///
+    /// ## Forgetting a removal that has played out
+    ///
+    /// A finished removal is dropped HERE, because nothing else would drop it. A
+    /// slot host that finds the removal finished stops drawing the slot, so
+    /// ``departing(at:nowNanos:frameAnimation:)`` — which drops a finished record
+    /// when it is asked for one — is never asked again, and ``endRenderPass()``
+    /// keeps every record whose removal has started. Left in place, one removal
+    /// that had played out in a stack kept the store non-empty for the rest of
+    /// the session, and every `nil` optional in every stack paid this loop on
+    /// every walk instead of the empty check above.
+    ///
+    /// Safe on the measure walk, which runs before the frame's presence marks:
+    /// a removal that has finished stays finished, and a view that comes back
+    /// records a fresh entry when it renders.
     public func hasDeparture(
         directlyUnder parent: ViewIdentity, ofType type: Any.Type, nowNanos: Int64,
         frameAnimation: Animation?
     ) -> Bool {
         guard !entries.isEmpty else { return false }
         let wanted = ObjectIdentifier(type)
-        for (identity, entry) in entries where !isFinished(entry, at: nowNanos) {
+        var finished: [ViewIdentity] = []
+        defer { for identity in finished { entries.removeValue(forKey: identity) } }
+        for (identity, entry) in entries {
+            guard !isFinished(entry, at: nowNanos) else {
+                finished.append(identity)
+                continue
+            }
             // A slot exists only for a removal that will actually PLAY:
             // already resolved, named by the transition, or animated by the
             // frame doing the removing. An unanimated removal snaps, and its
@@ -225,7 +246,10 @@ extension DepartureStore {
     }
 
     /// Ends a pass: drops the entries of views that vanished without anything
-    /// starting their removal.
+    /// starting their removal. (A removal that started and has finished is
+    /// dropped by whichever of ``departing(at:nowNanos:frameAnimation:)`` and
+    /// ``hasDeparture(directlyUnder:ofType:nowNanos:frameAnimation:)`` next
+    /// sees it finished; this has no clock to tell.)
     ///
     /// The parting picture is recorded on EVERY frame a transitioning view
     /// renders, so every such view holds an entry while it is present. When
