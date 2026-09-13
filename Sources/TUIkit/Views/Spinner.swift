@@ -471,8 +471,12 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
             glyphWidths.count == 1
             ? context.environment.cursorTimer?.elapsed(for: .content) ?? 0
             : Double(context.environment.frameNowNanos) / 1_000_000_000
-        let step = Int((elapsed / style.interval).rounded(.down))
-        let frameIndex = cycle.isEmpty ? 0 : ((step % cycle.count) + cycle.count) % cycle.count
+        // Through the conversion the run's own index uses, so the frame drawn here is
+        // the frame the loop replays: a floor in seconds put a summed `.dots` clock one
+        // step short at steps 27–40, and every render on such a wake stuttered back.
+        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: style.interval)
+        let count = Int64(max(1, cycle.count))
+        let frameIndex = cycle.isEmpty ? 0 : Int(((step % count) + count) % count)
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
 
         let output: String

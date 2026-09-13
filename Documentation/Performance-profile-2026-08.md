@@ -2924,7 +2924,9 @@ end was ~1e-17 again, raised to the 10 ms floor. A steady 350 ms blink became pl
 0.35 → 0.01 → 0.34 s, which with the timer's one-wake-stale sleep gave holds of ~370,
 ~700 and ~45 ms. Steps and ends are now counted in whole nanoseconds by one conversion,
 `AnimationClock.step(atElapsed:frameDuration:)`, shared by the run index, the time to
-change and `CursorTimer`'s tick count. Measured on a focused field over 22 s: 17 of 53
+change and `CursorTimer`'s tick count — and, since 2026-09-13, by the frame a `Spinner`
+draws itself, which had kept its own seconds floor and drew the frame before the one its
+run replays at steps 27–40 of a summed `.dots` clock. Measured on a focused field over 22 s: 17 of 53
 holds within 350 ± 40 ms before, 54 of 54 after. The timer's other half — it slept on the
 plan made one wake earlier, because the loop re-planned only after serving the tick —
 is fixed beside it by planning at the wake (`CursorTimer.planner`); after both, 53 of 53

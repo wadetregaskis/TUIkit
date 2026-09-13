@@ -75,4 +75,35 @@ struct AnimationStepBoundaryTests {
         let atOn = blink.timeUntilChange(afterElapsed: summed(0.05, 14))
         #expect(abs(atOn - 0.35) < 1e-9, "at the on flip: \(atOn) s")
     }
+
+    /// A spinner draws its current frame itself AND leaves a run the loop replays, so
+    /// both must pick the same step. `.dots` at 0.11 s: summed, the clock lands one ulp
+    /// under its boundary at every step from 27 to 40, and a floor in seconds drew the
+    /// frame before the one the run replays there — a one-frame stutter on every render
+    /// that fell on such a wake.
+    @Test("A spinner draws the frame its run replays at every step of a summed clock")
+    func spinnerDrawsTheFrameItsRunReplays() {
+        let timer = CursorTimer(renderNotifier: AppState())
+        let style = SpinnerStyle.dots
+        var wrong: [(step: Int, drawn: String, replayed: String, due: String)] = []
+        for step in 0..<60 {
+            var context = RenderContext(
+                availableWidth: 10, availableHeight: 1, tuiContext: TUIContext()
+            ).isolatingRenderCache()
+            context.environment.cursorTimer = timer
+            let buffer = renderToBuffer(Spinner(style: style), context: context)
+            guard let run = buffer.animatedCells.first else {
+                Issue.record("the spinner left no run at step \(step)")
+                return
+            }
+            let drawn = buffer.lines.first?.stripped ?? ""
+            let replayed = run.frames[run.index(atElapsed: timer.elapsed(for: .content))].stripped
+            let due = style.frames[step % style.frames.count]
+            if drawn != replayed || drawn != due {
+                wrong.append((step, drawn, replayed, due))
+            }
+            timer.creditWake(slept: style.interval)
+        }
+        #expect(wrong.isEmpty, "steps whose drawn frame was not the replayed one: \(wrong)")
+    }
 }
