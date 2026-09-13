@@ -179,7 +179,9 @@ extension TerminalWidthTraits {
     /// measurement means — so a cache populated under one host's traits is
     /// wrong under another's. Rather than reach for a shared cache the
     /// architecture deliberately does not have, the caches compare this counter
-    /// once per render pass and drop themselves when it moves.
+    /// and drop themselves when it moves — `RenderCache` once per render pass,
+    /// `TextWrapping`'s wrap and fit memos on every lookup, since nothing gives
+    /// those a pass boundary.
     ///
     /// Only the process value bumps it. A task-local pin is scoped to work that
     /// opts into it, and the render path is not that work.

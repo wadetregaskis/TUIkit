@@ -61,8 +61,20 @@ enum TextWrapping {
         // changes between those calls: wrapping is a pure function of the text
         // and the width, so the repeats are pure waste.
         //
-        // Purity is also why this can be a plain memo with no invalidation —
-        // there is no state to go stale, only memory to bound.
+        // Pure, though, in one input the key does not carry: the host's width
+        // CLAIM. `terminalWidth` reads `TerminalWidthTraits.current` for ZWJ
+        // and skin-tone clusters and for the chrome glyphs a host overhangs,
+        // so the same (text, width) wraps to different widths — and breaks in
+        // different places — under another host, and `TerminalClient.simulated`
+        // moves that claim at runtime. This memo predates the claim and said
+        // "a plain memo with no invalidation — there is no state to go stale",
+        // and kept answering that way: after a host switch `RenderCache`
+        // dropped its sizes and re-asked `Text`, which re-asked here and got
+        // the OLD host's widths back, so a label measured before the switch
+        // disagreed with an identical one first drawn after it. The claim is
+        // checked by generation rather than folded into the key, so a switch
+        // frees the old host's entries instead of leaving them to the cap.
+        dropMemosIfClaimMoved()
         if let hit = cache[WrapKey(text: text, width: width)] { return hit }
         let wrapped = uncachedWrapMeasured(text, width: width)
         // A flat cap rather than an LRU: entries are small, a frame's working
@@ -74,7 +86,9 @@ enum TextWrapping {
         return wrapped
     }
 
-    /// The identity of a wrap: its inputs, and nothing else.
+    /// The identity of a wrap: its explicit inputs. The one implicit input,
+    /// the host's width claim, is deliberately not a field — see
+    /// ``dropMemosIfClaimMoved()``.
     private struct WrapKey: Hashable {
         let text: String
         let width: Int
@@ -92,6 +106,35 @@ enum TextWrapping {
     private static let cacheLimit = 4096
     private static var cache: [WrapKey: Wrapped] = [:]
     private static var fitCache: [FitKey: Wrapped] = [:]
+
+    /// The `TerminalWidthTraits.generation` both memos were filled under.
+    ///
+    /// Starts at zero instead of reading the counter, so its initializer is a
+    /// constant rather than a cross-module read: if startup's traits publish
+    /// has already bumped the counter, the first lookup just empties two
+    /// memos that are still empty.
+    private static var memoizedUnderWidthGeneration = 0
+
+    /// Empties both memos when the process-wide width claim has moved since
+    /// they were filled — the check `RenderCache.beginRenderPass()` makes for
+    /// its own memos, which never reached these two.
+    ///
+    /// Per lookup, not per render pass: this enum has no pass of its own, and
+    /// its callers — `Text`, a `Table` cell, both tooltip styles, tests — do
+    /// not cross one shared boundary to hang the check on. Ahead of a lookup
+    /// that hashes the whole string it costs two integer loads and a compare.
+    ///
+    /// Blind, like `RenderCache`, to a `TerminalWidthTraits.withTraits` pin,
+    /// which does not bump the counter: a wrap under a pin fills this shared
+    /// memo with the pinned claim, so a test that wraps under one should
+    /// ``clearWrapCache()`` on both sides of it.
+    private static func dropMemosIfClaimMoved() {
+        let generation = TerminalWidthTraits.generation
+        guard generation != memoizedUnderWidthGeneration else { return }
+        memoizedUnderWidthGeneration = generation
+        cache.removeAll()
+        fitCache.removeAll()
+    }
 
     /// Clears the wrap and fit memos. For tests that want to measure cold.
     static func clearWrapCache() {
@@ -177,6 +220,10 @@ enum TextWrapping {
             return uncachedFitMeasured(
                 text, width: width, maxLines: nil, mode: mode, atWordBoundary: atWordBoundary)
         }
+        // Checked here and not only inside `wrapMeasured`: a hit below returns
+        // before the wrap is ever asked, so a wrap-side check alone would still
+        // serve a fit folded or truncated under the old host's claim.
+        dropMemosIfClaimMoved()
         let key = FitKey(
             text: text, width: width, maxLines: maxLines, mode: mode,
             atWordBoundary: atWordBoundary)
