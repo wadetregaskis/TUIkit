@@ -52,6 +52,13 @@ import TUIkitStyling
 /// every gradient editor does and what "split here" has to mean once a stop
 /// has a position at all.
 ///
+/// Flipping (⇄) is the one edit that can move a position, and only on a
+/// lopsided ramp. It reverses the ramp end for end, which on screen has to
+/// read as the preview mirrored — so a stop at 0.2 goes to 0.8. Wherever a
+/// ramp's positions are symmetric, which is every preset and every ramp built
+/// from `Gradient(colors:)`, mirroring and reversing only the colours agree
+/// exactly, and the positions come back bit-identical.
+///
 /// ## It edits a solid colour too
 ///
 /// A ``Gradient`` of one stop IS a colour — every consumer paints it flat —
@@ -335,6 +342,11 @@ public struct GradientEditorPanel: View {
                 selectedStop = selected
             }
             .disabled(selection >= ramp.stops.count - 1)
+            Button("⇄") {
+                let (updated, selected) = Self.flippingStops(ramp, at: selection)
+                gradient.wrappedValue = updated
+                selectedStop = selected
+            }
         }
     }
 
@@ -527,6 +539,30 @@ extension GradientEditorPanel {
         var colours = list.map(\.color)
         colours.insert(colours.remove(at: source), at: destination)
         return (gradient.withStops(recoloured(list, with: colours)), destination)
+    }
+
+    /// The ramp reversed end for end, with the selection following the colour it was
+    /// on.
+    ///
+    /// Each position takes the colour of the stop mirrored across the ramp, and the
+    /// POSITIONS mirror too, since that is what makes the preview read backwards. But
+    /// computed so a symmetric layout comes back exactly: where a stop and its mirror
+    /// already sum to 1, the stop keeps its own location rather than `1 - mirror`,
+    /// which in binary is one ulp off. Every preset and every `Gradient(colors:)` ramp
+    /// is symmetric, so for them this is a pure colour reversal and flipping twice is
+    /// the identity; only a hand-spaced ramp's positions move.
+    static func flippingStops(_ gradient: Gradient, at index: Int) -> (Gradient, selected: Int) {
+        let list = gradient.stops
+        guard list.count > 1 else { return (gradient, max(0, min(index, list.count - 1))) }
+        let last = list.count - 1
+        let flipped = list.indices.map { position -> Gradient.Stop in
+            let mirror = list[last - position]
+            let own = list[position].location
+            let location = own + mirror.location == 1 ? own : 1 - mirror.location
+            return Gradient.Stop(color: mirror.color, location: location)
+        }
+        let selected = list.indices.contains(index) ? last - index : 0
+        return (gradient.withStops(flipped), selected)
     }
 
     /// `stops` with `colours` laid back onto their positions, in order.

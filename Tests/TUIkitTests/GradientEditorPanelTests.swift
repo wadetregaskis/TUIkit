@@ -80,6 +80,39 @@ struct GradientEditorPanelMutationTests {
     /// Reordering moves COLOURS between positions. The stops are where they
     /// are; what "move this stop left" means on screen is that its colour is
     /// now the one further left, and the ramp keeps its shape.
+    @Test("Flipping reverses an evenly spaced ramp's colours and keeps its positions exactly")
+    func flipEvenRamp() {
+        let ramp = gradient([teal, blue, violet])
+        let (flipped, selected) = Panel.flippingStops(ramp, at: 0)
+        #expect(colours(flipped) == [violet, blue, teal])
+        #expect(locations(flipped) == locations(ramp), "bit-identical positions")
+        #expect(selected == 2, "the selection follows teal to the far end")
+    }
+
+    @Test("Flipping a lopsided ramp mirrors its positions")
+    func flipLopsidedRamp() {
+        let ramp = Gradient(stops: [
+            Gradient.Stop(color: teal, location: 0),
+            Gradient.Stop(color: blue, location: 0.2),
+            Gradient.Stop(color: violet, location: 1),
+        ])
+        let (flipped, selected) = Panel.flippingStops(ramp, at: 1)
+        #expect(colours(flipped) == [violet, blue, teal])
+        let mirrored = locations(flipped)
+        #expect(mirrored.count == 3 && mirrored[0] == 0 && abs(mirrored[1] - 0.8) < 1e-12 && mirrored[2] == 1, "\(mirrored)")
+        #expect(selected == 1, "blue stays the middle stop")
+    }
+
+    @Test("Flipping an evenly spaced ramp twice gives back the same ramp")
+    func flipTwiceIsIdentity() {
+        let ramp = gradient([teal, blue, violet, teal])
+        let once = Panel.flippingStops(ramp, at: 1)
+        let twice = Panel.flippingStops(once.0, at: once.selected)
+        #expect(colours(twice.0) == colours(ramp))
+        #expect(locations(twice.0) == locations(ramp))
+        #expect(twice.selected == 1)
+    }
+
     @Test("Moving swaps with the neighbour and follows the stop")
     func move() {
         let (right, rightSelected) = Panel.movingStop(gradient([teal, blue, violet]), at: 0, by: 1)
