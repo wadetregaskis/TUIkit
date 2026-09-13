@@ -2966,7 +2966,8 @@ glyphs, at the ½ threshold. Four renderers make glyph decisions and all four no
   read no coverage at all until §72.2), which
   paints no colours at all and therefore has no claim to make (true of the CONVERTER, and
   read for two months as though it were true of mono as a whole: `_ImageCore.inked` stamps
-  the theme's two colours over the converter's output afterwards, and had a claim to make.
+  mono's ink and paper over the converter's output afterwards (the view's `.foregroundStyle`
+  and `.backgroundStyle`, the theme's two colours where unstated), and had a claim to make.
   See §70.2 — and over the cells nothing of the picture reaches, it had paper to
   withhold: §70.5);
 - **the ramp charsets** draw a space in no colour where there is no coverage, rather than
@@ -4328,6 +4329,17 @@ bytes, the alpha claimed beside them, one region per line over the whole line �
 whole line is exactly what `colorize` puts both codes in force for. `OpacityRegion.claim`
 answers `nil` for an opaque pair, so an ordinary palette adds no regions and the resolver
 keeps its `opacityRegions.isEmpty` fast path.
+
+**2026-09-13: the pair is the view's styles.** `inked` no longer reads the palette. Its ink
+is `.foregroundStyle` and its paper `.backgroundStyle`, each falling back to the palette's
+colour. Both are derived once, in `ImageMonoColours`, which `inked(_:monoColours:)`,
+`inkClaims` and the terminal-graphics path's `monoInk`/`monoPaper` all read, and resolved
+against the palette there, because a style stated straight into the environment arrives
+unresolved. A faded style is paired exactly as the faded palette was: the opaque spelling in
+the bytes, the alpha claimed beside them. One difference follows from §70.4: a faded
+`.backgroundStyle` owes its field alpha, where the palette's paper is a root ground and
+reaches the view already spent. The pixel path drops the alpha of both, as it does for every
+colour it bakes into a picture.
 
 ### 70.1 And the cut site, which had a second consequence
 

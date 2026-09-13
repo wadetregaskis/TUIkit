@@ -294,6 +294,14 @@ the default before one answers, so an unmeasured terminal draws glyphs. TUI-spec
 photograph, which an app built around a ramp genuinely wants — see
 `Documentation/Terminal graphics protocols.md`.
 
+**`.mono` plays the template image's part.** SwiftUI tints a template image with
+`foregroundStyle`. TUIkit has no `renderingMode(_:)`; `.imageColorMode(.mono)` draws
+a picture in two tones instead, and its ink is the view's `foregroundStyle`, so it is
+re-inked wherever `Text` would be (a button's label, a menu row's highlight). Its
+paper is the view's `backgroundStyle`, which is TUI-specific: a template image's
+unlit pixels are transparent, but a half-block cell's unlit half is the cell's
+background colour and has to be stated.
+
 A cell grid still cannot blit a bitmap *itself*, which is why this is a protocol
 and not a drawing API: TUIkit hands the terminal an image and a rectangle of
 cells, and the terminal draws. Vector glyphs are unchanged — see below.

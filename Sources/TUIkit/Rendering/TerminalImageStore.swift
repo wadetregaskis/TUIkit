@@ -53,10 +53,11 @@ struct TerminalImageSignature: Equatable {
     var edgeContrast: Double
     var dithering: DitheringMode
 
-    /// The two colours ``ASCIIColorMode/mono`` is painted in, which for pixels
-    /// are baked into the picture rather than stated around it — so a theme
-    /// change makes a mono image a genuinely different picture, and has to
-    /// re-transmit.
+    /// The two colours ``ASCIIColorMode/mono`` is painted in (the view's
+    /// `.foregroundStyle` and `.backgroundStyle`, the palette's where unstated),
+    /// which for pixels are baked into the picture rather than stated around it.
+    /// So a style or theme change makes a mono image a genuinely different
+    /// picture, and has to re-transmit.
     ///
     /// Ignored by every other mode, so there they are PINNED to
     /// `recoloured`'s defaults (white ink, black paper) rather than omitted:
@@ -66,6 +67,36 @@ struct TerminalImageSignature: Equatable {
     /// value nothing reads costs a re-transmission for nothing: read from the
     /// palette whatever the mode, these re-sent every true-colour picture on a
     /// theme change.
+    ///
+    /// ## A changing ink is followed, frame by frame
+    ///
+    /// A mono picture re-sends whenever its ink or paper changes in 8-bit RGB,
+    /// and that includes every frame of a `.foregroundStyle` fading under
+    /// `withAnimation`. Each alternative is wrong somewhere worse:
+    ///
+    /// - Snapping to the end colour needs the animation's target, and that
+    ///   belongs to the style view's store entry. The image sees only the
+    ///   interpolated paint.
+    /// - Holding the old picture while the ink moves cannot tell the last frame
+    ///   of a fade from any other, and there is no frame after the last to send
+    ///   the settled colour on.
+    /// - Quantising the ink draws the settled picture in a colour nobody stated.
+    ///
+    /// The cost is bounded. Only `.mono` pays it (above). Only an RGB change
+    /// counts: alpha is dropped, so a fade that moves only alpha is the same
+    /// picture. A fade costs one re-send per frame for its length; a hover, a
+    /// menu highlight or a disabled dim costs one. And the store frees a token's
+    /// previous image before transmitting its next, so nothing accumulates in
+    /// the terminal.
+    ///
+    /// **A known cost, not fixed:** a view that renders one label several times
+    /// in ONE pass, each time under its own `.foregroundStyle` and at one
+    /// identity. A `.link` button's breath does exactly that
+    /// (`BreathingLabel.draw(ends:cycle:indicating:isMeasuring:render:)`). A mono
+    /// picture in a focused link's label re-transmits once per breath frame on
+    /// every pass that re-renders it, and the terminal is left holding the last
+    /// frame's colour, because the breath's runs replay identical placeholder
+    /// cells. The glyph path breathes correctly.
     var monoInk: RGBA
     var monoPaper: RGBA
 }

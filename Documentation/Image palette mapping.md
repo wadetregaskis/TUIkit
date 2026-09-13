@@ -162,8 +162,9 @@ glyph ramps' do.
 
 Note also what this settles from the original open questions: **the palette does
 not include a background.** Its colours are inks on the app's background, like
-`.grayscale`, not ink-and-paper like `.mono`. Consistent with every other
-coloured mode, and "draw nothing here" is what `.mono` is for.
+`.grayscale`, not ink-and-paper like `.mono` (whose ink and paper are the view's
+`.foregroundStyle` and `.backgroundStyle`, the theme's where unstated). Consistent
+with every other coloured mode, and "draw nothing here" is what `.mono` is for.
 
 ## What it does not do
 

@@ -1,7 +1,9 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ImageMonoInkTests.swift
 //
-//  What `.mono` draws with inside an app that paints its own page.
+//  What `.mono` draws with inside an app that paints its own page: the view's
+//  `.foregroundStyle` on its `.backgroundStyle`, and the theme's two colours
+//  where neither is stated.
 //
 //  Reaching the LOADED phase without a load: the phase lives in `StateStorage`
 //  at the view's identity, and a measure pass reads it without touching the
@@ -18,7 +20,7 @@ import Testing
 @testable import TUIkitStyling
 
 @MainActor
-@Suite("Mono images use the theme's ink")
+@Suite("Mono images use the view's styles, and the theme's ink by default")
 struct ImageMonoInkTests {
 
     /// A gradient, so the conversion has something to threshold.
@@ -54,9 +56,25 @@ struct ImageMonoInkTests {
     }
 
     /// The same render, whole: the claims matter as much as the bytes.
+    ///
+    /// `configure` runs after the palette is set, so a test can state styles beside it.
     private func buffer(
         mode: ASCIIColorMode, palette: any Palette, image: RGBAImage? = nil,
-        characterSet: ASCIICharacterSet = .blocks(.fine), shapeAware: Bool = false
+        characterSet: ASCIICharacterSet = .blocks(.fine), shapeAware: Bool = false,
+        configure: (inout EnvironmentValues) -> Void = { _ in }
+    ) -> FrameBuffer {
+        render(
+            _ImageCore(source: .file("unused")), mode: mode, palette: palette, image: image,
+            characterSet: characterSet, shapeAware: shapeAware, configure: configure)
+    }
+
+    /// Renders `view` — an image core, or one wrapped in modifiers that render it at
+    /// the SAME identity, which is where the seeded phase is found.
+    private func render<V: View>(
+        _ view: V,
+        mode: ASCIIColorMode, palette: any Palette, image: RGBAImage? = nil,
+        characterSet: ASCIICharacterSet = .blocks(.fine), shapeAware: Bool = false,
+        configure: (inout EnvironmentValues) -> Void = { _ in }
     ) -> FrameBuffer {
         let tui = TUIContext(
             lifecycle: LifecycleManager(firesEffects: false),
@@ -68,6 +86,7 @@ struct ImageMonoInkTests {
         environment.imageColorMode = mode
         environment.imageCharacterSet = characterSet
         environment.imageShapeAware = shapeAware
+        configure(&environment)
         var context = RenderContext(
             availableWidth: 24, availableHeight: 8, environment: environment, tuiContext: tui)
         // Reads the phase, runs no lifecycle — see the file note.
@@ -78,7 +97,20 @@ struct ImageMonoInkTests {
             default: .loading)
         box.value = .success(image ?? ramp(width: 48, height: 32))
 
-        return renderToBuffer(_ImageCore(source: .file("unused")), context: context)
+        return renderToBuffer(view, context: context)
+    }
+
+    /// The first line that states a colour.
+    private func painted(_ drawn: FrameBuffer) throws -> String {
+        try #require(drawn.lines.first { $0.contains("\u{1B}[") }, "the image drew something")
+    }
+
+    private func foreground(_ colour: Color) -> String {
+        colour.foregroundCodes().joined(separator: ";")
+    }
+
+    private func background(_ colour: Color) -> String {
+        colour.backgroundCodes().joined(separator: ";")
     }
 
     /// The reported case: under the default Green theme a mono image was
@@ -117,6 +149,51 @@ struct ImageMonoInkTests {
         #expect(
             !painted.hasPrefix("\u{1B}[\(foreground)"),
             "true colour was wrapped in the theme's ink")
+    }
+
+    /// A mono image is inked like any other basic view: in `.foregroundStyle`, on
+    /// `.backgroundStyle`. `inked` read the palette whatever was stated, so the only
+    /// way to draw mono in other colours was a different renderer.
+    @Test("Mono draws in the view's foreground style on its background style")
+    func monoDrawsInTheStyles() throws {
+        let palette = SystemPalette(.green)
+        let ink = Color.rgb(230, 40, 40)
+        let paper = Color.rgb(10, 10, 60)
+        let line = try painted(
+            buffer(mode: .mono, palette: palette) {
+                $0.foregroundStyle = .color(ink)
+                $0.backgroundStyle = .color(paper)
+            })
+        #expect(line.contains(foreground(ink)), "\(line.debugDescription)")
+        #expect(line.contains(background(paper)), "\(line.debugDescription)")
+        #expect(
+            !line.hasPrefix("\u{1B}[\(foreground(palette.foreground));"),
+            "still the theme's ink: \(line.debugDescription)")
+    }
+
+    /// …through the public modifiers, not only the environment slots they fill.
+    @Test("The foregroundStyle and backgroundStyle modifiers ink a mono image")
+    func monoFollowsTheStyleModifiers() throws {
+        let ink = Color.rgb(230, 40, 40)
+        let paper = Color.rgb(10, 10, 60)
+        let line = try painted(
+            render(
+                _ImageCore(source: .file("unused")).foregroundStyle(ink).backgroundStyle(paper),
+                mode: .mono, palette: SystemPalette(.green)))
+        #expect(line.contains(foreground(ink)), "\(line.debugDescription)")
+        #expect(line.contains(background(paper)), "\(line.debugDescription)")
+    }
+
+    /// A style set straight into the environment is not resolved on the way in, as
+    /// `.foregroundStyle(_:)` resolves it. A semantic colour reaching the emitter
+    /// unresolved traps, so the derivation resolves against the palette itself.
+    @Test("A semantic style resolves against the palette")
+    func aSemanticStyleResolves() throws {
+        let palette = SystemPalette(.green)
+        let line = try painted(
+            buffer(mode: .mono, palette: palette) { $0.foregroundStyle = .color(.palette.accent) })
+        let accent = foreground(palette.accent.resolve(with: palette).opaqueSpelling)
+        #expect(line.contains(accent), "\(line.debugDescription)")
     }
 
     /// A faded palette's two colours are CLAIMED, not handed to the emitter.
@@ -159,12 +236,79 @@ struct ImageMonoInkTests {
         #expect(claim.width > 0)
     }
 
+    /// A faded STYLE is the same pairing as a faded palette: the opaque spelling in the
+    /// bytes, the alpha claimed beside them — and both halves owed, because a
+    /// `.backgroundStyle` is not a root ground. Nothing spends its alpha on the way to
+    /// the view the way the palette setter spends the page's (§70.4).
+    @Test("A faded style is spelled opaque and claimed")
+    func aFadedStyleIsClaimed() throws {
+        let ink = Color.rgb(230, 40, 40).opacity(0.5)
+        let paper = Color.rgb(10, 10, 60).opacity(0.5)
+        let drawn = buffer(mode: .mono, palette: SystemPalette(.green)) {
+            $0.foregroundStyle = .color(ink)
+            $0.backgroundStyle = .color(paper)
+        }
+        let line = try painted(drawn)
+        #expect(line.contains(foreground(ink.opaqueSpelling)), "\(line.debugDescription)")
+        #expect(line.contains(background(paper.opaqueSpelling)), "\(line.debugDescription)")
+
+        let claim = try #require(
+            drawn.opacityRegions.first { $0.offsetY == 0 && $0.inkOpacity < 1 },
+            "no claim for the styles: \(drawn.opacityRegions)")
+        #expect(claim.fieldOpacity < 1)
+        #expect(claim.offsetX == 0)
+        #expect(claim.width > 0)
+    }
+
     /// An opaque palette adds nothing — the guard, so the common case allocates no
     /// regions and the resolver keeps its `opacityRegions.isEmpty` fast path.
     @Test("An opaque palette claims nothing extra")
     func anOpaquePaletteClaimsNothing() {
         let drawn = buffer(mode: .mono, palette: SystemPalette(.green))
         #expect(drawn.opacityRegions.allSatisfy { $0.inkOpacity == 1 && $0.fieldOpacity == 1 })
+    }
+
+    /// What is claimed is what is DRAWN: an opaque style pair over a faded theme owes
+    /// nothing, since none of the theme's colours reach the picture.
+    @Test("An opaque style pair claims nothing, even over a faded palette")
+    func anOpaqueStylePairClaimsNothing() throws {
+        let ink = Color.rgb(230, 40, 40)
+        let drawn = buffer(mode: .mono, palette: FadedAll()) {
+            $0.foregroundStyle = .color(ink)
+            $0.backgroundStyle = .color(.rgb(10, 10, 60))
+        }
+        #expect(drawn.opacityRegions.allSatisfy { $0.inkOpacity == 1 && $0.fieldOpacity == 1 })
+        let line = try painted(drawn)
+        #expect(line.contains(foreground(ink)), "\(line.debugDescription)")
+    }
+
+    /// The glyph path and the pixel path read one derivation, so a terminal that draws
+    /// pictures cannot show a mono image in a different colour from one that draws
+    /// glyphs.
+    @Test("Both renderers take mono's colours from one derivation")
+    func bothRenderersShareTheDerivation() throws {
+        var environment = EnvironmentValues()
+        environment.palette = SystemPalette(.green)
+        let palette = environment.palette
+
+        let unstated = ImageMonoColours.pixels(for: .mono, in: environment)
+        let theme = try #require(palette.foreground.resolve(with: palette).rgbComponents)
+        #expect(unstated.ink == RGBA(r: theme.red, g: theme.green, b: theme.blue))
+
+        environment.foregroundStyle = .color(.rgb(230, 40, 40))
+        environment.backgroundStyle = .color(.rgb(10, 10, 60))
+        let glyphs = try #require(ImageMonoColours(for: .mono, in: environment))
+        #expect(glyphs.ink == .rgb(230, 40, 40))
+        #expect(glyphs.paper == .rgb(10, 10, 60))
+        let pixels = ImageMonoColours.pixels(for: .mono, in: environment)
+        #expect(pixels.ink == RGBA(r: 230, g: 40, b: 40))
+        #expect(pixels.paper == RGBA(r: 10, g: 10, b: 60))
+
+        // Outside mono neither renderer has a pair to read.
+        #expect(ImageMonoColours(for: .trueColor, in: environment) == nil)
+        let other = ImageMonoColours.pixels(for: .trueColor, in: environment)
+        #expect(other.ink == ImageMonoColours.defaultInk)
+        #expect(other.paper == ImageMonoColours.defaultPaper)
     }
 
     /// A transparent surround keeps what is behind it, in every mono renderer.

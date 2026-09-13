@@ -368,4 +368,55 @@ struct ImageGraphicsSettingsTests {
                 { $0.palette = SystemPalette(.green) },
                 { $0.palette = SystemPalette(.amber) }), "true colour")
     }
+
+    /// A mono picture is drawn in the view's `.foregroundStyle` on its
+    /// `.backgroundStyle`, and for pixels those are baked in — so either changing
+    /// is a different picture, which the store must be told about or the terminal
+    /// keeps drawing the old ink.
+    @Test("A mono picture's ink and paper follow the view's styles")
+    func monoFollowsTheStyles() throws {
+        #expect(
+            try retransmits(
+                { $0.imageColorMode = .mono },
+                {
+                    $0.imageColorMode = .mono
+                    $0.foregroundStyle = .color(.rgb(255, 0, 0))
+                }), "foreground style")
+        #expect(
+            try retransmits(
+                { $0.imageColorMode = .mono },
+                {
+                    $0.imageColorMode = .mono
+                    $0.backgroundStyle = .color(.rgb(0, 0, 255))
+                }), "background style")
+    }
+
+    /// …and a picture in any other mode never reads them, so a style inherited
+    /// from a button's label or a menu row's highlight costs it nothing.
+    @Test("A style re-sends nothing for a picture that is not mono")
+    func stylesDoNotRetransmitOtherModes() throws {
+        #expect(
+            try !retransmits(
+                { _ in },
+                {
+                    $0.foregroundStyle = .color(.rgb(255, 0, 0))
+                    $0.backgroundStyle = .color(.rgb(0, 0, 255))
+                }))
+    }
+
+    /// A pixel has no alpha to fade (it is dropped, as `.opacity` is declined on this
+    /// path), so a change that moves only a style's alpha is the same picture.
+    @Test("An alpha-only change of a mono ink re-sends nothing")
+    func alphaOnlyStyleChangeDoesNotRetransmit() throws {
+        #expect(
+            try !retransmits(
+                {
+                    $0.imageColorMode = .mono
+                    $0.foregroundStyle = .color(.rgb(255, 0, 0))
+                },
+                {
+                    $0.imageColorMode = .mono
+                    $0.foregroundStyle = .color(Color.rgb(255, 0, 0).opacity(0.5))
+                }))
+    }
 }

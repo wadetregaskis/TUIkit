@@ -426,6 +426,39 @@ extension View {
 
     /// Sets the color mode for ASCII art image rendering.
     ///
+    /// ## Mono draws in the view's colours
+    ///
+    /// ``ASCIIColorMode/mono`` draws the picture in two colours. Its ink is the
+    /// view's foreground style and its paper the view's background style (see
+    /// ``View/foregroundStyle(_:)-(S)`` and ``View/backgroundStyle(_:)-(S)``),
+    /// each falling back to the palette's foreground or background where nothing
+    /// is stated. It is TUIkit's analogue of a SwiftUI template image, which
+    /// `foregroundStyle` tints. TUIkit has no `renderingMode(_:)`, and taking
+    /// the paper from `backgroundStyle` is TUI-specific.
+    ///
+    /// ```swift
+    /// Image(.file("logo.png"))
+    ///     .imageColorMode(.mono)
+    ///     .foregroundStyle(.rgb(255, 255, 255))
+    ///     .backgroundStyle(.rgb(0, 0, 0))
+    /// ```
+    ///
+    /// - A gradient style inks the picture in its representative colour, and the
+    ///   text style cascade is not consulted: an image is not text.
+    /// - A faded colour fades the glyphs. Where the terminal draws the picture as
+    ///   pixels it is drawn at full strength, since those carry no alpha.
+    /// - A cell nothing of the picture reaches is left unpainted, so a
+    ///   transparent surround shows what the image sits on.
+    ///
+    /// Because it is inked the way `Text` is, it is re-inked wherever `Text`
+    /// would be. A Button's label colour, a menu row's highlight, a disabled
+    /// control's dim, and a Toggle's or RadioButton's hover or disabled colour
+    /// all reach a mono image in their label. Where the terminal draws pictures
+    /// as pixels, each new ink re-sends the picture: once per state change, and
+    /// once per frame of a `withAnimation` fade. A focused link-style button
+    /// whose label holds one re-sends it once per breath frame on each
+    /// re-render, and leaves it in the last breath frame's colour.
+    ///
     /// - Parameter colorMode: The color mode to use.
     /// - Returns: A modified view.
     public func imageColorMode(_ colorMode: ASCIIColorMode) -> some View {

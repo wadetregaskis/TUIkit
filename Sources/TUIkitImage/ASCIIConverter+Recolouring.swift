@@ -49,18 +49,20 @@ extension ASCIIConverter {
     ///
     /// ## Mono has to be given its two colours
     ///
-    /// ``ASCIIColorMode/mono`` emits no colour at all — that is the point of
-    /// it — and the character renderer relies on that: its cells take whatever
-    /// the page is already painted in, and `_ImageCore.inked(_:monoColours:)`
-    /// states the theme's ink and paper *after* the render cache, so a theme
-    /// change re-colours a cached conversion for free.
+    /// ``ASCIIColorMode/mono``'s conversion emits no colour at all — that is
+    /// the point of it — and the character renderer relies on that:
+    /// `_ImageCore.inked(_:monoColours:)` states the ink and paper around the
+    /// converted lines *after* the render cache, so a style or theme change
+    /// re-colours a cached conversion for free. They are the view's
+    /// `.foregroundStyle` and `.backgroundStyle`, the palette's foreground and
+    /// background where neither is stated.
     ///
     /// Pixels have no such inheritance. A pixel is a colour or it is nothing,
     /// so mono here means "these two colours", and they must be named. The
     /// defaults are literal black and white, which is what mono means with no
-    /// theme in the conversation; ``Image`` passes the palette's foreground
-    /// and background, which is what `inked` puts on the character rendering
-    /// of the same picture.
+    /// colours in the conversation. ``Image`` passes the pair it puts on the
+    /// character rendering of the same picture, from the one derivation both of
+    /// its renderers read.
     ///
     /// Only a `.mono` conversion reads the pair: the recolouring at the end of
     /// this function tests the requested `colorMode` for `.mono` before it

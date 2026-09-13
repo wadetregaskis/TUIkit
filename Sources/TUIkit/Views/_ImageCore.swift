@@ -557,7 +557,8 @@ extension _ImageCore {
         // The other half of `inked`'s claim/bytes pairing. `art.claims` says what the
         // SOURCE PICTURE owes — its own per-pixel transparency — and is empty for the
         // overwhelming majority of pictures, which are opaque; it says nothing at all
-        // about the two THEME colours `inked` stamps over every cell of every line. A
+        // about mono's ink and paper, which `inked` stamps over every cell of every line
+        // (the view's styles, the theme's where unstated). A
         // faded palette's `foreground`/`background` therefore reached the emitter at
         // full strength and with nothing claimed, which is §68's bug in its seventh
         // place (§42.4 is right that the mono CONVERTER paints no colours and has no
@@ -575,8 +576,8 @@ extension _ImageCore {
     /// one per line, for a picture with no uncovered cell.
     ///
     /// `nil`-free by construction: `OpacityRegion.claim` answers `nil` for an opaque
-    /// pair, so an ordinary palette adds nothing and allocates nothing past the
-    /// `guard`.
+    /// pair, so an opaque pair (an ordinary palette, or opaque styles) adds nothing and
+    /// allocates nothing past the `guard`.
     private static func inkClaims(
         for art: ASCIIArt, monoColours: ImageMonoColours?
     ) -> [OpacityRegion] {
@@ -584,7 +585,7 @@ extension _ImageCore {
         // Only where `inked` painted. A claim left over an uncovered cell is not merely
         // wasted: that cell shows whatever is behind the picture — a `.background(_:)`
         // fill or a row's highlight, written into these same bytes — and the resolver
-        // would fade THAT toward the surface by the palette's alpha.
+        // would fade THAT toward the surface by the ink's alpha.
         var uncovered = art.uncovered[...]
         var claims: [OpacityRegion] = []
         for (index, line) in art.lines.enumerated() {
@@ -600,7 +601,9 @@ extension _ImageCore {
         return claims
     }
 
-    /// Mono output, given the theme's ink and paper.
+    /// Mono output, in its ink and paper: the view's `.foregroundStyle` and
+    /// `.backgroundStyle`, the theme's foreground and background where unstated
+    /// (``ImageMonoColours``, which the pixel path reads too).
     ///
     /// ``ASCIIColorMode/mono`` emits no colour at all — that is the point of it,
     /// and what makes it work on a terminal that has none. Inside an app that
@@ -610,8 +613,8 @@ extension _ImageCore {
     /// the image simply does not appear.
     ///
     /// Applied here rather than in the converter, and AFTER the render cache,
-    /// because the cache is not keyed on the palette: baking the colours into
-    /// the cached lines would serve the old theme's ink forever. Same reason
+    /// because the cache is not keyed on the palette or the styles: baking the
+    /// colours into the cached lines would serve the old ink forever. Same reason
     /// ``ASCIIColorMode/resolved(with:)`` is applied before it.
     ///
     /// **Never over a cell nothing of the picture reaches.** A mono line cannot say a
@@ -671,7 +674,7 @@ extension _ImageCore {
     /// those runs from the front of `uncovered`, which is in reading order.
     ///
     /// One walk for the bytes and for their claim, so the two cannot disagree about which
-    /// cells carry the theme's colours. Clamped to `width` rather than trusted, because a
+    /// cells carry mono's colours. Clamped to `width` rather than trusted, because a
     /// run naming a column past the line would otherwise index off its end.
     private static func forEachInkedSpan(
         ofLine line: Int, width: Int, uncovered: inout ArraySlice<ASCIIArt.CoverageRun>,
@@ -914,11 +917,13 @@ extension _ImageCore {
         let dithering = context.environment.imageDithering
         // Mono's two colours, which pixels have to be TOLD. The character
         // renderer states them after the fact — `inked(_:monoColours:)`, run
-        // after the render cache so a theme change re-colours a cached
+        // after the render cache so a style or theme change re-colours a cached
         // conversion — and pixels have nothing to state them onto: a pixel is a
         // colour or it is nothing. So they are baked in, and therefore they are
-        // in the signature: change the theme and a mono picture is genuinely a
-        // different picture.
+        // in the signature: change the style or the theme and a mono picture is
+        // genuinely a different picture, on every frame of a fading
+        // `.foregroundStyle` too. `TerminalImageSignature.monoInk` says what that
+        // costs and why it is the choice.
         //
         // A MONO picture. `recoloured` paints the pair for `.mono` and for no
         // other mode, so everywhere else it is pinned to that function's

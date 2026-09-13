@@ -242,6 +242,12 @@ public enum ASCIIColorMode: Sendable, Equatable {
     case grayscale
 
     /// Black and white only. Universal compatibility.
+    ///
+    /// The conversion states no colour: its glyphs are the picture, each pixel
+    /// lit or not. An `Image` draws them in the view's foreground style on its
+    /// background style, or in the theme's foreground and background where
+    /// neither is stated, so "black and white" is what mono means only where
+    /// nothing supplies the two colours.
     case mono
 
     /// A specific set of colours, chosen by intent rather than by what the

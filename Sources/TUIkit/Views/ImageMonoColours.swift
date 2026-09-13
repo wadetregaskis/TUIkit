@@ -14,6 +14,24 @@
 /// pixel path bakes it into the picture (`recoloured`), and so into the store's
 /// signature. Derived twice, the two could disagree, and which renderer a
 /// terminal happens to get would decide what colour the picture is.
+///
+/// ## Where the colours come from
+///
+/// A mono picture is inked like any other basic view: the ink is the
+/// environment's `foregroundStyle`, the paper its `backgroundStyle`, and each
+/// falls back to the palette's colour where nothing is stated (the paper by
+/// `BackgroundStyle`'s own rule). Two deliberate differences from `Text`:
+///
+/// - **A gradient is its representative colour.** One pair inks the whole
+///   picture. A ramp across a picture is a tone curve, which is
+///   `imageToneCurve`'s job.
+/// - **The style cascade is not consulted.** `Text` asks `.textStyle`'s entries
+///   before `foregroundStyle`, and an image is not text.
+///
+/// Both colours are resolved here, against the palette: a style stated straight
+/// into the environment arrives unresolved, and a semantic colour that reaches
+/// the emitter traps. Their alpha is KEPT. The glyph path spells the pair opaque
+/// and claims the alpha; the pixel path drops it.
 struct ImageMonoColours {
     /// What the picture's lit pixels are drawn in.
     let ink: Color
@@ -35,8 +53,10 @@ struct ImageMonoColours {
     init?(for colorMode: ASCIIColorMode, in environment: EnvironmentValues) {
         guard colorMode == .mono else { return nil }
         let palette = environment.palette
-        ink = palette.foreground
-        paper = palette.background
+        ink = (environment.foregroundStyle?.representative ?? palette.foreground)
+            .resolve(with: palette)
+        paper = BackgroundStyle().paint(in: environment).representative
+            .resolve(with: palette)
     }
 
     /// Whether neither colour carries alpha, so the glyph path owes no claim.
@@ -51,21 +71,17 @@ struct ImageMonoColours {
         guard let colours = Self(for: colorMode, in: environment) else {
             return (defaultInk, defaultPaper)
         }
-        let palette = environment.palette
-        return (
-            rgb(colours.ink, in: palette) ?? defaultInk,
-            rgb(colours.paper, in: palette) ?? defaultPaper
-        )
+        return (rgb(colours.ink) ?? defaultInk, rgb(colours.paper) ?? defaultPaper)
     }
 
-    /// A colour as pixels, or `nil` for a semantic colour that has no RGB even
-    /// after resolution.
-    private static func rgb(_ color: Color, in palette: any Palette) -> RGBA? {
+    /// A resolved colour as pixels, or `nil` for a colour with no RGB, which only
+    /// a semantic colour lacks and resolution never leaves one.
+    private static func rgb(_ color: Color) -> RGBA? {
         // Alpha is not carried, for the reason `ASCIIPalette.init` states: this is
         // a colour being handed to the image pipeline as a MATCHING candidate or a
         // recolouring target, and transparency is not an axis of either. An
         // image's own transparency comes from its alpha channel instead.
-        guard let components = color.resolve(with: palette).rgbComponents else { return nil }
+        guard let components = color.rgbComponents else { return nil }
         return RGBA(r: components.red, g: components.green, b: components.blue)
     }
 }
