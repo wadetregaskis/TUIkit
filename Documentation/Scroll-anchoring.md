@@ -426,6 +426,17 @@ screen is still clickable where it is drawn.
 Verified live: with `top: .rows(2)`, a wheel tick at the top opens exactly two
 blank rows above `Line 1`, and a second tick adds nothing.
 
+**A reveal answers for the slide.** The slide is drawn after reveal-on-focus has
+chosen its offset, so an excursion left standing moved the control the reveal had
+just placed: a push past the top hides the viewport's last rows, which is exactly
+where a scroll-down reveal aims, and a Tab after a push drew the focused control
+below the viewport (fixed 2026-09-12). The ScrollView reveal now drops the
+excursion when it moves the offset, or when the rows the slide pushes off include
+the control it is revealing, and otherwise keeps it: a resize, or a Tab to a
+control the push leaves on screen, is no reason to cancel a push the user still
+holds. `List` and `Table` drop it on every cursor move in
+`ensureFocusedItemVisible`, where the cursor move is itself the signal.
+
 **`List` and `Table` now covered too.** They could not reuse the `ScrollView`
 technique: that one slides the finished viewport buffer, which works only
 because the bar is appended as a whole column afterwards. `_ListCore` and

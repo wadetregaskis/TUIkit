@@ -203,6 +203,34 @@ extension _ScrollViewCore {
                     )
                 )
             }
+            // The overscroll slide (`applyOverscroll`) is drawn on the finished
+            // viewport AFTER this, and every number above is unslid geometry,
+            // so an excursion left standing moves the control just placed. A
+            // push past the top hides the viewport's LAST rows, which is where
+            // a scroll-down reveal aims; one past the bottom hides the first,
+            // where a scroll-up reveal aims. A Tab after a push revealed its
+            // control straight off the screen — and with the unslid target
+            // reading as visible, no later frame re-snapped. `List` and `Table`
+            // clear in `ensureFocusedItemVisible`; this twin never did.
+            //
+            // Not on every snap, though. A resize, or a Tab to a control the
+            // push leaves on screen, is no reason to cancel a push the user
+            // still holds (`ScrollOverscrollState.resolve` keeps a legal one
+            // through a resize on purpose). Dropped when the snap MOVED the
+            // offset, which aimed the target at an exact line, or when the
+            // rows the slide pushes off include the target — whether or not
+            // the snap itself saw anything to do: a target inside the unslid
+            // window fires nothing above and is still slid out of sight.
+            let overscroll = handler.overscrollState
+            if overscroll.excursion != 0,
+                handler.scrollOffset != offsetBeforeSnap
+                    || overscroll.pushesOff(
+                        top: regionTop, bottom: regionBottom,
+                        shownTop: viewportTop + (topIndicatorShows ? 1 : 0),
+                        shownBottom: viewportBottom - (bottomIndicatorShows ? 1 : 0))
+            {
+                handler.clearOverscroll()
+            }
             // A FOCUS-JUMP snap that MOVED arms (or continues) the pursuit
             // for the next frame, where refined estimates may relocate the
             // target; one that did not — the target is visible, or the clamp

@@ -127,6 +127,25 @@ extension ScrollOverscrollState {
         guard clippedEnd > clippedStart else { return nil }
         return (clippedStart, clippedEnd - clippedStart, clippedStart - moved)
     }
+
+    /// Whether this slide pushes any of the content rows `top..<bottom` off a
+    /// viewport whose content shows on rows `shownTop..<shownBottom`, all in the
+    /// same content coordinates.
+    ///
+    /// The slide opens its blank rows at one edge and pushes as many rows out at
+    /// the other: a push past the top (a negative excursion) loses the LAST
+    /// `-excursion` shown rows, a push past the bottom the FIRST `excursion`. The
+    /// shown band stops short of any "N more" line, which is chrome drawn over
+    /// the slid content rather than content that slides.
+    ///
+    /// Asked by a reveal that has just placed a control: an excursion that hides
+    /// it has to go, and one that does not may stay.
+    func pushesOff(top: Int, bottom: Int, shownTop: Int, shownBottom: Int) -> Bool {
+        guard excursion != 0 else { return false }
+        let lostTop = excursion < 0 ? shownBottom + excursion : shownTop
+        let lostBottom = excursion < 0 ? shownBottom : shownTop + excursion
+        return top < lostBottom && bottom > lostTop
+    }
 }
 
 // MARK: - Environment
@@ -173,7 +192,8 @@ extension View {
     /// the edge is spent getting there, and the next one pushes past. That is
     /// what makes a deliberate push distinguishable from a graze. Programmatic
     /// movement (`scrollTo`, an anchor, a reveal) never overscrolls, and never
-    /// leaves an excursion behind.
+    /// leaves an excursion behind. A reveal with nothing to move keeps the push,
+    /// unless the push is what hides the control being revealed.
     ///
     /// A view whose content already fits its viewport can still be pushed — the
     /// allowance is not conditional on there being anything to scroll.
