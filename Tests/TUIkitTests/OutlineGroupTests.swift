@@ -250,14 +250,97 @@ struct OutlineGroupTests {
         return lines(frame(view, tui: tui, context: context)).contains { $0.contains("TUIkit") }
     }
 
-    /// The triangle discloses; the label does not. An outline row's text has to
-    /// stay free for whatever contains the outline to claim — a list's
-    /// selection — which is the whole reason this is narrower than
-    /// ``DisclosureGroup``'s whole-row target.
-    @Test("clicking the triangle opens the branch; clicking the label does not")
-    func onlyTheTriangleToggles() {
+    /// In a bare outline the label discloses too. Nothing else owns a bare row's text:
+    /// the reason the label was left alone — a containing `List` claims it for
+    /// selection — does not arise without a list, and there a click on the text did
+    /// nothing at all. Inside a `List` the text is still the list's
+    /// (`OutlineClickDisclosureTests` pins that half).
+    @Test("a bare outline row discloses from its label as well as its triangle")
+    func labelDisclosesInABareOutline() {
         #expect(clickOpensFirstBranch(atColumn: 2), "the triangle itself")
-        #expect(clickOpensFirstBranch(atColumn: 6) == false, "a click on \"Sources\" is not a toggle")
+        #expect(clickOpensFirstBranch(atColumn: 6), "a click on \"Sources\" discloses too")
+    }
+
+    /// Clicks `(x, y)` on `view`, press then release, and re-renders.
+    private func click(
+        _ x: Int, _ y: Int, on view: some View, tui: TUIContext, context: RenderContext
+    ) -> [String] {
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        return lines(frame(view, tui: tui, context: context))
+    }
+
+    @Test("a second click on a bare row's label closes it again")
+    func labelClosesAgain() {
+        let (tui, context) = harness()
+        let view = outline()
+        frame(view, tui: tui, context: context)
+        let opened = click(6, 0, on: view, tui: tui, context: context)
+        #expect(opened.contains { $0.contains("TUIkit") }, "\(opened)")
+        let closed = click(6, 0, on: view, tui: tui, context: context)
+        #expect(!closed.contains { $0.contains("TUIkit") }, "\(closed)")
+    }
+
+    /// A leaf has nothing to disclose, and a click on it must not reach its parent.
+    @Test("a click on a leaf row's label does nothing")
+    func leafLabelIsInert() {
+        let (tui, context) = harness()
+        let view = outline()
+        let before = lines(frame(view, tui: tui, context: context))
+        let readme = before.firstIndex { $0.contains("README") } ?? 1
+        let after = click(6, readme, on: view, tui: tui, context: context)
+        #expect(!after.contains { $0.contains("TUIkit") }, "\(after)")
+    }
+
+    /// Anything interactive in the label keeps its own click: the row's target sits
+    /// BEHIND its content.
+    @Test("a button in a bare row's label keeps its own click")
+    func childButtonKeepsItsClick() throws {
+        final class Taps { var count = 0 }
+        let taps = Taps()
+        let (tui, context) = harness()
+        let view = VStack(alignment: .leading, spacing: 0) {
+            OutlineGroup(tree, children: \.children) { node in
+                HStack(spacing: 1) {
+                    Text(verbatim: node.id)
+                    Button("go") { taps.count += 1 }
+                }
+            }
+        }
+        let first = lines(frame(view, tui: tui, context: context))
+        let row = try #require(first.first, "\(first)")
+        let x = try #require(column(of: "go", in: row), "\(row)")
+        let after = click(x, 0, on: view, tui: tui, context: context)
+        #expect(taps.count == 1, "the button took its click")
+        #expect(!after.contains { $0.contains("TUIkit") }, "and the row did not: \(after)")
+    }
+
+    @Test("a disabled bare outline ignores a click on its label")
+    func disabledLabelIsInert() {
+        let (tui, context) = harness()
+        let view = outline().disabled(true)
+        frame(view, tui: tui, context: context)
+        let after = click(6, 0, on: view, tui: tui, context: context)
+        #expect(!after.contains { $0.contains("TUIkit") }, "\(after)")
+    }
+
+    /// A label click moves the keyboard to that row, as a click on the triangle does,
+    /// so Left, Right and Space act on the row just clicked.
+    @Test("a click on a bare row's label focuses that row's triangle")
+    func labelClickFocusesTheRow() throws {
+        let (tui, context) = harness()
+        let view = outline()
+        frame(view, tui: tui, context: context)
+        let opened = click(6, 0, on: view, tui: tui, context: context)
+        let tuikit = try #require(opened.firstIndex { $0.contains("TUIkit") }, "\(opened)")
+        let focusBefore = context.environment.focusManager?.currentFocusedID
+        let x = try #require(column(of: "TUIkit", in: opened[tuikit]))
+        let after = click(x + 1, tuikit, on: view, tui: tui, context: context)
+        #expect(after.contains { $0.contains("Views") }, "TUIkit opened: \(after)")
+        let focusAfter = context.environment.focusManager?.currentFocusedID
+        #expect(
+            focusAfter != nil && focusAfter != focusBefore,
+            "focus moved to TUIkit's row: \(String(describing: focusBefore)) → \(String(describing: focusAfter))")
     }
 
     /// One cell is a mean target with a mouse, so the button is deliberately

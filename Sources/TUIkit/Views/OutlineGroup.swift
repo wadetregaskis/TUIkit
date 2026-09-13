@@ -506,34 +506,59 @@ public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
 
     let content: (Element) -> Leaf
 
+    /// Whether the triangle holds the focus — written by a click on a bare row's label,
+    /// so the row just clicked is the one Left, Right and Space act on next, as after a
+    /// click on the triangle itself.
+    @FocusState private var triangleFocused: Bool
+
     public var body: some View {
         if isBranch {
-            HStack(spacing: 0) {
-                // Only the TRIANGLE toggles, not the whole row — the rest of an
-                // outline row belongs to whatever the outline is inside, which
-                // is what lets a list select the node the triangle discloses.
-                //
-                // One cell is a small target, so the button is deliberately
-                // wider than its glyph: the frame adds the blank cell after the
-                // triangle, and the focus gutter contributes the two before it.
-                // Four cells to hit, one glyph to read.
-                //
-                // Inside a list the triangle keeps that click target but stops
-                // being FOCUSABLE: the row is the focusable there, Space is the
-                // row's (it selects) and Return is the row's (it activates —
-                // which for a branch means disclosing it). A second focus stop
-                // in the row would take both keys with it.
-                triangle
-
-                content(element)
-            }
-            .padding(.leading, depth * DisclosureMetrics.contentIndent)
+            branchRow
+                .padding(.leading, depth * DisclosureMetrics.contentIndent)
         } else {
             // One step further in than its depth, so a leaf's label lands in
             // the same column as a sibling branch's label rather than under
             // that branch's triangle.
             content(element)
                 .padding(.leading, (depth + 1) * DisclosureMetrics.contentIndent)
+        }
+    }
+
+    /// A branch's row: the triangle and the label — and, in a bare outline, the label
+    /// discloses too.
+    ///
+    /// Inside a `List` only the TRIANGLE toggles, not the whole row: the rest of the row
+    /// is the list's, which is what lets it select the node the triangle discloses
+    /// (e42fcef2 narrowed the target for exactly that). A bare `OutlineGroup` has no list
+    /// to claim the text, and the narrowing left a click on it doing nothing at all. So
+    /// there, and only there, the row gets a click target of its own — BEHIND its content,
+    /// so the triangle and anything interactive in the label keep their clicks. In a list
+    /// the same region would sit in front of the list's and swallow its selection.
+    @ViewBuilder
+    private var branchRow: some View {
+        let row = HStack(spacing: 0) {
+            //
+            // One cell is a small target, so the button is deliberately
+            // wider than its glyph: the frame adds the blank cell after the
+            // triangle, and the focus gutter contributes the two before it.
+            // Four cells to hit, one glyph to read.
+            //
+            // Inside a list the triangle keeps that click target but stops
+            // being FOCUSABLE: the row is the focusable there, Space is the
+            // row's (it selects) and Return is the row's (it activates —
+            // which for a branch means disclosing it). A second focus stop
+            // in the row would take both keys with it.
+            triangle
+
+            content(element)
+        }
+        if rowOwnsFocus {
+            row
+        } else {
+            _BehindContentTapModifier(content: row) {
+                triangleFocused = true
+                toggle()
+            }
         }
     }
 
@@ -563,6 +588,9 @@ public struct _OutlineRow<Element, ID: Hashable, Leaf: View>: View {
                 .buttonKeyExtras(keys: [.left, .right]) { event in
                     setExpanded(event.key == .right)
                 }
+                // So a click on the LABEL can move the keyboard here too — see
+                // `branchRow`.
+                .focused($triangleFocused)
         }
     }
 
