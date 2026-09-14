@@ -88,18 +88,51 @@ struct _InlineMenuCore: View, Renderable, Layoutable {
         // Registered straight with the dispatcher rather than through
         // `.onKeyPress`: a modifier around the column would hide the rows from
         // `renderMenuColumn`, which walks the content to find them.
-        guard !context.isMeasuring,
-            let dispatcher = context.environment.keyEventDispatcher,
-            let focusManager = context.environment.focusManager
+        guard !context.isMeasuring, context.environment.keyEventDispatcher != nil,
+            context.environment.focusManager != nil
         else { return }
         // The dispatcher clears its handlers every frame, so re-registering is
-        // per-frame presence — declare it, or a memoised replay would drop it.
-        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        // per-frame presence. Declared as REPLAYABLE: a memo serving the menu
+        // registers the keys again from the entry recorded below.
+        context.environment.volatileReadTracker?.recordReplayableEffect()
         let path = context.identity.path
         // One screenful of rows: the height the menu was offered, less its own
         // chrome (two border rows, the label, and the rule under it).
         let page = max(1, context.availableHeight - 4)
-        dispatcher.addHandler(sectionID: context.environment.activeFocusSectionID) { event in
+        let sectionID = context.environment.activeFocusSectionID
+        InlineMenuPagingRegistrar.register(path: path, page: page, sectionID: sectionID, context: context)
+        if let journal = context.recordingEffectJournal {
+            journal.append(
+                EffectJournal.Entry(
+                    kind: InlineMenuPagingRegistrar.kind, channelToken: context.environment.keyChannelToken
+                ) { replay in
+                    InlineMenuPagingRegistrar.register(
+                        path: path, page: page, sectionID: sectionID, context: replay)
+                })
+        }
+    }
+}
+
+// MARK: - Registration
+
+/// The paging keys an inline menu registers, shared by the live render and by a
+/// value memo replaying them — see `EffectJournal`.
+enum InlineMenuPagingRegistrar {
+    /// The journal kind of an inline menu's paging keys.
+    static let kind = EffectJournal.Kind("inlineMenuPaging")
+
+    /// Registers Page Up/Down, Home and End for the menu at `path`, moving the
+    /// focus among its rows `page` at a time.
+    ///
+    /// The dispatcher AND the focus manager are looked up in `context`, not
+    /// handed in: a replay belongs to a later walk, and the manager in force
+    /// there is the one the rows registered with.
+    @MainActor
+    static func register(path: String, page: Int, sectionID: String?, context: RenderContext) {
+        guard let dispatcher = context.environment.keyEventDispatcher,
+            let focusManager = context.environment.focusManager
+        else { return }
+        dispatcher.addHandler(sectionID: sectionID) { event in
             let jump: FocusManager.SubtreeFocusJump
             switch event.key {
             case .pageUp: jump = .backward(page)

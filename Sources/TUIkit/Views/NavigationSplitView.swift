@@ -262,6 +262,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
             return FrameBuffer()
         }
         let focusManager = context.environment.focusManager
+        declareFocusRegistrations(context: context, focusManager: focusManager)
 
         // A hidden leading column leaves a ▶ edge column at the left, registered
         // before the columns; they share what is left of the width.
@@ -959,5 +960,25 @@ extension _NavigationSplitViewCore {
 extension NavigationSplitView: @preconcurrency Equatable where Sidebar: Equatable, Content: Equatable, Detail: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.sidebar == rhs.sidebar && lhs.content == rhs.content && lhs.detail == rhs.detail && lhs.isThreeColumn == rhs.isThreeColumn
+    }
+}
+
+// MARK: - Render-cache declarations
+
+extension _NavigationSplitViewCore {
+    /// Declares, once per render, everything this split registers into the
+    /// focus manager: every column's focus section, the dividers' and the edge's
+    /// focus registrations, and the hand-over of the keyboard at the end of the
+    /// render. The manager is emptied before every walk, so a value memo must
+    /// never serve a split that made them, and none of them can be replayed.
+    ///
+    /// The sidebar chords used to be the split's only declaration. They are
+    /// skipped under `.disabled()` or with no shortcut registry, and they are
+    /// replayable now, so they cannot stand in for these. Today a split's buffer
+    /// always carries hit-test regions and is never stored anyway; this is what
+    /// keeps a split correct once that stops being true.
+    fileprivate func declareFocusRegistrations(context: RenderContext, focusManager: FocusManager?) {
+        guard !context.isMeasuring, focusManager != nil else { return }
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
     }
 }

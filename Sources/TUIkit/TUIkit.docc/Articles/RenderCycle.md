@@ -525,6 +525,12 @@ Under `TUIKIT_VERIFY_RENDER_MEMO` a hit renders fresh instead, which registers
 for real, and the verifier compares the kinds and number of registrations that
 render makes against the stored ones.
 
+An inline menu's paging keys and a split view's sidebar chords are recorded the
+same way, but neither view can be served yet. A `.menuStyle(_:)` puts a value in
+the environment that cannot be compared, which stops every memo beneath it
+storing. And a split view's buffer carries hit-test regions, which are never
+stored.
+
 ### Keeping Nested Entries Alive
 
 A hit at an outer `.equatable()` skips the subtree entirely, so a *nested*

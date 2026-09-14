@@ -46,6 +46,9 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   so a cached subtree's section vanishes from the ring, and the active
     ///   section's indicator it hands down keeps the focus state it was stored
     ///   with.
+    /// - `NavigationSplitView`, with a focus manager — its column sections, its
+    ///   dividers' and edge's focus registrations, and the hand-over of the
+    ///   keyboard when a column hides.
     /// - `NavigationStack`, while a screen is pushed — that depth's focus
     ///   section, the Escape handler and its status-bar claim, and the
     ///   collections that read the root's and the screen's titles.
