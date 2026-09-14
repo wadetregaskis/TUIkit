@@ -126,6 +126,61 @@ struct DeclinedRunClockTests {
         #expect(mismatches.isEmpty, "frames where the two spinners disagreed: \(mismatches)")
     }
 
+    /// A spinner that leaves a run, alone.
+    private struct RunBackedSpinnerApp: App {
+        init() {}
+
+        var body: some Scene {
+            WindowGroup {
+                Spinner(style: .custom("ab"))
+            }
+        }
+    }
+
+    /// An opaque indeterminate bar, which leaves a run.
+    private struct RunBackedBarApp: App {
+        init() {}
+
+        var body: some Scene {
+            WindowGroup {
+                ProgressView()
+            }
+        }
+    }
+
+    /// Four frames of `app` at advancing frame times, rendered with NO cursor timer — a
+    /// render outside the run loop has none — stripped to their text.
+    private func framesWithoutTimer<A: App>(of app: A, step: Double) -> [String] {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(app)
+        let scheduler = AnimationScheduler()
+        // 90,090 s: a whole number of 120 ms steps.
+        let base: Int64 = 90_090 * 1_000_000_000
+        return (0..<4).map { frame in
+            let now = base + Int64((Double(frame) * step * 1e9).rounded()) + 1_000_000
+            scheduler.beginFrame()
+            loop.render(animationScheduler: scheduler, frameNowNanos: now)
+            scheduler.endFrame()
+            return (loop.replayable?.contentLines ?? []).map(\.stripped).joined()
+        }
+    }
+
+    /// The run path used to read the cursor timer and fall back to zero without one, so
+    /// a render with no timer drew the first frame whatever its frame time said. Both
+    /// paths read the frame clock now.
+    @Test("A spinner that leaves a run advances with the frame clock when there is no cursor timer")
+    func runBackedSpinnerWithoutTimerAdvances() {
+        let pictures = framesWithoutTimer(of: RunBackedSpinnerApp(), step: 0.120)
+        let shown = pictures.map { $0.contains("b") ? "b" : "a" }
+        #expect(shown == ["a", "b", "a", "b"], "\(pictures)")
+    }
+
+    @Test("An indeterminate bar that leaves a run advances with the frame clock when there is no cursor timer")
+    func runBackedBarWithoutTimerAdvances() {
+        let pictures = framesWithoutTimer(of: RunBackedBarApp(), step: 0.1)
+        #expect(Set(pictures).count > 1, "every frame drew the same picture: \(pictures)")
+    }
+
     @Test("A translucent indeterminate bar alone on a page moves from frame to frame")
     func translucentBarMoves() {
         let run = frames(of: TranslucentBarApp(), step: 0.1)

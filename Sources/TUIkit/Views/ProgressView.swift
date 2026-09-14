@@ -336,9 +336,12 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             lines.append(labelLine)
         }
 
-        // Where the animation is now. A determinate bar ignores it entirely:
-        // its value comes from the caller's data, and it does not animate.
-        let elapsed = context.environment.cursorTimer?.elapsed(for: .content) ?? 0
+        // Where the animation is now: the frame clock, the instant the loop's content
+        // clock was shown before this render (§74), so the frame drawn here is the one
+        // a replay splices and a declined run needs no clock of its own. A determinate
+        // bar ignores it entirely: its value comes from the caller's data, and it does
+        // not animate.
+        let elapsed = Double(context.environment.frameNowNanos) / 1_000_000_000
 
         // An indeterminate bar leaves its whole cycle behind, so the loop can
         // splice the next frame over these cells without re-rendering anything.
@@ -365,14 +368,10 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                     frequency: Double(IndeterminateRenderer.frameCount(of: style))
                         / IndeterminateRenderer.period(of: style))
             }
-            // The scheduler drives this path, not the cursor timer — which the loop
-            // stops, and zeroes, on a page that leaves no runs and reads nothing, so
-            // a bar reading it drew frame zero forever. Its frame comes from the
-            // frame clock instead, as every other per-render animation's does (§66).
-            // A determinate bar ignores it.
-            let bar = renderBarLine(
-                width: width, palette: palette, context: context,
-                elapsed: Double(context.environment.frameNowNanos) / 1_000_000_000)
+            // The scheduler drives this path, not the cursor timer, which nothing keeps
+            // running on a page holding only this (§66). The frame comes from the same
+            // clock as the run path's.
+            let bar = renderBarLine(width: width, palette: palette, context: context, elapsed: elapsed)
             lines.append(bar.text)
             var buffer = FrameBuffer(lines: lines)
             // Down to the row the bar landed on. Nothing is composited over this

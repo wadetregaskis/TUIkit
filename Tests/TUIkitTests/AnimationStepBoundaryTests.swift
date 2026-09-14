@@ -92,11 +92,15 @@ struct AnimationStepBoundaryTests {
         let base: UInt64 = 110_000 * 1_000_000_000
         var wrong: [(step: Int, drawn: String, replayed: String, due: String)] = []
         for step in 0..<60 {
-            timer.creditWake(atNanos: base + UInt64(step) * 110_000_000)
+            // One instant for both, as the run loop gives a frame: the replay reads the
+            // timer's snapshot, the spinner the frame's stamp.
+            let now = base + UInt64(step) * 110_000_000
+            timer.creditWake(atNanos: now)
             var context = RenderContext(
                 availableWidth: 10, availableHeight: 1, tuiContext: TUIContext()
             ).isolatingRenderCache()
             context.environment.cursorTimer = timer
+            context.environment.frameNowNanos = Int64(now)
             let buffer = renderToBuffer(Spinner(style: style), context: context)
             guard let run = buffer.animatedCells.first else {
                 Issue.record("the spinner left no run at step \(step)")

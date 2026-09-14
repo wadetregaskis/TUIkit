@@ -9,9 +9,10 @@ import Foundation
 /// The app's one animation TIMER, and the two clocks it serves: the
 /// focus-relative one the cursor's blink and every focus indicator's breath
 /// read, and the monotonic one a spinner's or an indeterminate bar's run replays
-/// on. One that declines its run reads the frame clock instead (§66 of
-/// `Opacity as composition.md`); since every render shows this timer its frame
-/// time first, the two are the same instant (§74).
+/// on. A view draws its own frame from the frame clock, `frameNowNanos`, which
+/// every render shows this timer before anything reads it, so the frame a view
+/// draws and the frame a replay splices are one instant (§74 of
+/// `Opacity as composition.md`).
 ///
 /// **Both clocks are measured, not counted.** ``AnimationClock/content`` is
 /// ``MonotonicClock`` itself, with no origin of its own, and

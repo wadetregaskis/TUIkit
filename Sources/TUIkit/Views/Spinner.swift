@@ -461,16 +461,15 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         let cycle = spinnerFrames(color: resolvedColor, context: context)
         let glyphWidths = Set(cycle.map(\.strippedLength))
 
-        // The clock, not a per-spinner start time: every spinner of a style is
-        // then in phase, and — much more to the point — the frame drawn is the
-        // frame the run loop will replay, so the first tick does not jump. A cycle
-        // whose frames are not all one width leaves no run and is re-rendered by
-        // the scheduler instead; the cursor timer is stopped, and zeroed, on a page
-        // with nothing else animating, so that one takes the frame clock (§66).
-        let elapsed =
-            glyphWidths.count == 1
-            ? context.environment.cursorTimer?.elapsed(for: .content) ?? 0
-            : Double(context.environment.frameNowNanos) / 1_000_000_000
+        // The frame clock, not a per-spinner start time: every spinner of a style is
+        // then in phase, and — much more to the point — the frame drawn is the frame
+        // the run loop will replay, so the first tick does not jump. The run replays on
+        // the cursor timer's content clock, and every render shows the timer this
+        // frame's time before the tree is walked, so here the two are one instant
+        // (§74). A cycle whose frames are not all one width leaves no run and reads the
+        // same clock; it used to need a branch of its own (§66), and a render with no
+        // timer at all drew the run-backed spinner's first frame whatever the time.
+        let elapsed = Double(context.environment.frameNowNanos) / 1_000_000_000
         // Through the conversion the run's own index uses, so the frame drawn here is
         // the frame the loop replays: a floor in seconds put a summed `.dots` clock one
         // step short at steps 27–40, and every render on such a wake stuttered back.

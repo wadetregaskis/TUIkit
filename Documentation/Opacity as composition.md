@@ -4676,6 +4676,14 @@ ahead of anything the timer has seen.
 The test renders a same-width `.custom("ab")` beside a mixed-width `.custom("-你")`, both
 at 0.12 s, through `RenderLoop` at six advancing frame times, and requires the two to show
 the same frame index every time. Before, with the timer never started as a unit test
-leaves it, the run-backed one drew `a` in every frame while the other stepped. The §66
-branch in `Spinner` and `ProgressView` is still there in this commit; with the clocks
-agreeing it has nothing left to choose between.
+leaves it, the run-backed one drew `a` in every frame while the other stepped.
+
+**With the clocks agreeing, the §66 branch had nothing left to choose between, and it is
+gone.** `Spinner` and `ProgressView` draw their own frame from `frameNowNanos` on both
+paths; only the replay reads the timer. That also fixes a case the branch never covered:
+a render with no cursor timer at all — a snapshot, a test — drew a run-backed spinner's
+or bar's first frame whatever its frame time, because the timer's absence read as zero.
+Tested through `RenderLoop` with no timer: a same-width `.custom("ab")` at four frame times
+shows `a b a b`, and an opaque indeterminate bar changes between frames. Measured on the
+Spinners page against the commit before, the change is nil, as it should be: the value
+read is the same number.
