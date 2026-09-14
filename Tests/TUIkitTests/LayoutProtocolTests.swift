@@ -107,6 +107,38 @@ private struct SumOfSpans: Layout {
     }
 }
 
+/// Lays its subviews left to right on one line, one cell apart: the one-line
+/// case of a flow layout, which is where the Example's track editor puts its
+/// toggles and buttons.
+private struct SideBySide: Layout {
+    func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize {
+        var width = 0
+        var height = 0
+        for (index, subview) in subviews.enumerated() {
+            let size = subview.sizeThatFits(.unspecified)
+            width += (index == 0 ? 0 : 1) + size.width
+            height = max(height, size.height)
+        }
+        return ViewSize(width: width, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()
+    ) {
+        var x = bounds.x
+        for subview in subviews {
+            subview.place(at: (x: x, y: bounds.y), proposal: .unspecified)
+            x += subview.sizeThatFits(.unspecified).width + 1
+        }
+    }
+}
+
+/// Which Button actions ran, in order.
+@MainActor
+private final class ActionLog {
+    var fired: [String] = []
+}
+
 // MARK: - Suite
 
 /// The `Layout` protocol in whole cells.
@@ -397,6 +429,82 @@ struct LayoutProtocolTests {
                 #expect(buffer.width == 9)
             }
         }
+    }
+
+    // MARK: - Controls inside a layout
+
+    /// `_LayoutCore` resolves its children through `resolveChildViews`, so each
+    /// child gets an identity of its own, and `FrameBuffer.composite(with:at:)`
+    /// lifts each child's hit regions to where the layout placed it. Neither was
+    /// pinned for a `Layout`: only `Text` had ever been put in one here. The
+    /// Example's track editor puts Toggles and Buttons in its `Flow`.
+    @Test(
+        "Two Buttons in a custom layout are two focus stops, each clicked where it is drawn",
+        arguments: [false, true])
+    func buttonsInACustomLayout(erased: Bool) {
+        let log = ActionLog()
+        if erased {
+            exerciseTwoButtons(
+                AnyLayout(SideBySide()) {
+                    Button("One") { log.fired.append("one") }
+                    Button("Two") { log.fired.append("two") }
+                }, log: log)
+        } else {
+            exerciseTwoButtons(
+                SideBySide {
+                    Button("One") { log.fired.append("one") }
+                    Button("Two") { log.fired.append("two") }
+                }, log: log)
+        }
+    }
+
+    private func exerciseTwoButtons(_ view: some View, log: ActionLog) {
+        var captured: TUIContext?
+        let context = makeRenderContext(width: 40, height: 4) { _, tuiContext in captured = tuiContext }
+        guard let tui = captured, let focusManager = context.environment.focusManager,
+            let dispatcher = context.environment.mouseEventDispatcher
+        else {
+            Issue.record("the harness lacks a TUI context, a focus manager or a mouse dispatcher")
+            return
+        }
+        /// One live-loop frame, bracketed as `RenderLoop` brackets it, so
+        /// `focusableIDs` afterwards is this frame's ring and not a union of
+        /// every frame rendered.
+        func frame() -> FrameBuffer {
+            dispatcher.beginRenderPass()
+            tui.stateStorage.beginRenderPass()
+            focusManager.beginRenderPass()
+            let buffer = renderToBuffer(view, context: context)
+            focusManager.endRenderPass()
+            tui.stateStorage.endRenderPass()
+            dispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+        _ = frame()
+        let buffer = frame()
+
+        let ids = focusManager.focusableIDs
+        #expect(ids.count == 2, "one focus stop per Button, this frame: \(ids)")
+        #expect(Set(ids).count == ids.count, "the Buttons share a focus id: \(ids)")
+        #expect(ids.allSatisfy { $0.hasPrefix("button-") }, "\(ids)")
+
+        let row = buffer.lines[0].stripped
+        guard let one = row.range(of: "One"), let two = row.range(of: "Two") else {
+            Issue.record("both Buttons draw on row 0: \(row)")
+            return
+        }
+        func click(_ range: Range<String.Index>) {
+            // Every character before a label is one cell wide (the caps and spaces).
+            let x = row.distance(from: row.startIndex, to: range.lowerBound)
+            for phase in [MousePhase.pressed, .released] {
+                _ = dispatcher.dispatch(MouseEvent(button: .left, phase: phase, x: x, y: 0))
+            }
+        }
+        click(two)
+        #expect(log.fired == ["two"], "a click on the second Button's cells ran \(log.fired)")
+        _ = frame()  // re-render between gestures, as the live loop does
+        click(one)
+        #expect(log.fired == ["two", "one"], "\(log.fired)")
     }
 
     @Test("An empty layout renders nothing and does not crash")
