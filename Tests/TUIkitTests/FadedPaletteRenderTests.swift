@@ -57,7 +57,7 @@ struct FadedPaletteRenderTests {
                 context: context(palette: FadedAll(), width: 30, height: 3) {
                     // A focus manager of its own, so the lone toggle takes the focus.
                     $0.focusManager = FocusManager()
-                    $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+                    $0.selectionIndicatorStyle = animation
                 })
         }
         for glyphs in [ToggleCharacterSet.unicode, .ascii, .emoji] {
@@ -245,7 +245,7 @@ struct FadedPaletteRenderTests {
                     innerWidth: 12, scroll: ScrollAxis(), followHighlight: false,
                     autoRepeatToken: "faded-dropdown"),
                 context: context(palette: palette, width: 30, height: 10) {
-                    $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+                    $0.selectionIndicatorStyle = animation
                     // Room for six of the twenty rows, so the popup scrolls and draws
                     // its bar. The default budget is 24 lines, and every row fits.
                     $0.overlayContentHeight = 8
@@ -273,7 +273,7 @@ struct FadedPaletteRenderTests {
                     innerWidth: 12, scroll: ScrollAxis(), followHighlight: false,
                     autoRepeatToken: "faded-dropdown-border"),
                 context: context(palette: palette, width: 30, height: 10) {
-                    $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .pulse)
+                    $0.selectionIndicatorStyle = .pulse
                 },
                 onHover: { _ in }, onActivate: { _ in }, onDismiss: {})
             let top = try #require(popup.animatedCells.first { $0.offsetY == 0 }, "the border breathes")

@@ -328,7 +328,7 @@ struct NavigationCrumbAppearanceTests {
         withColorDepth(.truecolor) {
             let context = makeRenderContext(width: 40, height: 3) { environment, _ in
                 environment.palette = FadedAll()
-                environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .none)
+                environment.selectionIndicatorStyle = .none
             }
             let palette = context.environment.palette
             let ground = palette.background.resolve(with: palette)

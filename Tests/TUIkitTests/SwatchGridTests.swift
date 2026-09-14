@@ -158,7 +158,7 @@ struct SwatchGridRenderTests {
         let fm = FocusManager()
         let tui = TUIContext()
         /// The grid's buffer under a given indicator style, focused.
-        func render(style: SelectionIndicatorStyle) -> FrameBuffer {
+        func render(style: TextCursorStyle.Animation) -> FrameBuffer {
             var env = EnvironmentValues()
             env.focusManager = fm
             env.selectionIndicatorStyle = style
@@ -173,12 +173,12 @@ struct SwatchGridRenderTests {
             fm.endRenderPass()
             return buffer
         }
-        _ = render(style: SelectionIndicatorStyle())  // first render auto-focuses
+        _ = render(style: .pulse)  // first render auto-focuses
 
         // Not "the output tracks the phase": the grid no longer reads the phase
         // as it renders — that read re-rendered the whole panel on every tick.
         // It leaves ONE run, over the cursor swatch, and the breathing is there.
-        let pulsing = render(style: SelectionIndicatorStyle(animation: .pulse))
+        let pulsing = render(style: .pulse)
         #expect(pulsing.animatedCells.count == 1, "the focused mark left no run")
         let run = pulsing.animatedCells[0]
         #expect(run.isAnimating, "pulse: the focused mark animates")
@@ -191,7 +191,7 @@ struct SwatchGridRenderTests {
             "the run does not sit on the cursor swatch")
 
         // none: steady, so there is nothing for the loop to advance.
-        #expect(render(style: SelectionIndicatorStyle(animation: .none)).animatedCells.isEmpty,
+        #expect(render(style: .none).animatedCells.isEmpty,
             "none: the mark is steady")
     }
 

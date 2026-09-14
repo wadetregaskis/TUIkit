@@ -14,7 +14,7 @@
 /// different formulas, so the same focus pulse breathed at 2 s on a section's
 /// border and 0.8 s on the controls inside it, depending only on which route
 /// the view happened to take. Both cadences became one clock and one formula
-/// (`CursorTimer`), selected per element by ``SelectionIndicatorStyle`` rather
+/// (`CursorTimer`), selected per element by `.selectionIndicatorStyle(_:)` rather
 /// than by the plumbing — and commit 7c5514aa (2026-09-01) then split that one
 /// clock along a different seam. These two still tick together off the one
 /// timer and share the one formula; they differ only in where their zero sits,

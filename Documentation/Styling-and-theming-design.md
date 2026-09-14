@@ -263,7 +263,7 @@ extension View {
   breath or pulse is an 800 ms ramp sampled every 50 ms (up to 1,000 frames a
   cycle, by the same rule), which may move within
   the tolerance onto whole 50 ms frames (at 800 ms it already is). Neither
-  `SelectionIndicatorStyle` nor `TextCursorStyle` carries a speed of its own.
+  the selection indicator's animation nor `TextCursorStyle` carries a speed of its own.
 - **A theme can set them too**, with `Theme.indicatorAnimationSpeeds` (§6).
 
 ## 4. Tint (implemented **last** — wholly new)

@@ -19,7 +19,7 @@ There is already one rule, and it is nearly universal:
 
 > **Focus is a pulsing accent applied to whichever cells the control owns.**
 
-`SelectionIndicatorStyle` (`.none` / `.blink` / `.pulse`) already cascades
+`.selectionIndicatorStyle(_:)` (`.none` / `.blink` / `.pulse`) already cascades
 through the environment, with its speed set apart from it by
 `.indicatorAnimationSpeed(_:for: .focusEmphasis)`, and every affordance below resolves through
 `SelectionEmphasis`, so *how* focus animates is configurable already. What
@@ -134,7 +134,7 @@ actually recommend them:
    always visible", "nothing". `.background` and `.foreground` are then not
    modes but *what `.automatic` already resolves to* — which is true today.
 2. **Ship nothing, and make `List` draw the bullet `Table` already does.** The
-   inconsistency goes away, `SelectionIndicatorStyle` continues to answer the
+   inconsistency goes away, `.selectionIndicatorStyle(_:)` continues to answer the
    "how loud" question, and no new public surface is added for a preference
    nobody has asked for twice.
 
@@ -154,7 +154,7 @@ app ask for something the framework then quietly does not do — which is the
 failure mode this codebase spends most of its rules avoiding.
 
 A note on scope if it is built: `FocusIndication` answers *what*, and
-`SelectionIndicatorStyle` answers *how it animates*. They should stay separate
+`.selectionIndicatorStyle(_:)` answers *how it animates*. They should stay separate
 and compose — `.focusIndication(.marker).selectionIndicatorStyle(.none)` is a
 perfectly sensible pair, and folding them into one type would make half its
 combinations unspellable.

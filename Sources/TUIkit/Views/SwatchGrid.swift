@@ -258,7 +258,7 @@ struct _SwatchGridCore: View, Renderable {
 
     /// One swatch: the colour as a background, with a check on the selected cell.
     /// The check is contrasting so it stays visible on any swatch; when the grid
-    /// is focused it animates (per ``SelectionIndicatorStyle``) between the swatch
+    /// is focused it animates (per ``View/selectionIndicatorStyle(_:)``) between the swatch
     /// colour and the contrasting tone — breathing/blinking/steady — and is bold.
     ///
     /// `mark` is what makes a cell the CURSOR cell — non-nil says "draw the

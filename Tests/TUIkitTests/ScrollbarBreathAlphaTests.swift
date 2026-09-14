@@ -41,7 +41,7 @@ struct ScrollbarBreathAlphaTests {
         for palette in palettes {
             var environment = EnvironmentValues()
             environment.palette = palette
-            environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+            environment.selectionIndicatorStyle = animation
             let cycle = SelectionEmphasisClock(environment: environment).cycle(true)
             // A hovered cell, so the pointer's lift of each frame is checked too.
             let frames = ScrollbarPulse(cycle: cycle, hoveredCell: 0, palette: palette).frames

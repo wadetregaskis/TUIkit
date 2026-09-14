@@ -37,7 +37,7 @@ struct ScrollIndicatorBreathAlphaTests {
         for palette in palettes {
             var environment = EnvironmentValues()
             environment.palette = palette
-            environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+            environment.selectionIndicatorStyle = animation
             let cycle = SelectionEmphasisClock(environment: environment).cycle(true)
             let ends = scrollIndicatorBreath(palette: palette, over: palette.background)
             let colors = cycle.colors(dim: ends.dim, bright: ends.bright)

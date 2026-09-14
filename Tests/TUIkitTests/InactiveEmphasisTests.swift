@@ -34,7 +34,7 @@ struct InactiveEmphasisTests {
         var environment = EnvironmentValues()
         environment.cursorTimer = timer
         environment.volatileReadTracker = tracker
-        environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: style)
+        environment.selectionIndicatorStyle = style
         environment.appearsActive = appearsActive
         timer.beginFrameReadTracking()
         return (environment, timer, tracker)

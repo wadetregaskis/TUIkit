@@ -116,7 +116,7 @@ struct TabChipBreathAlphaTests {
     private func chip(palette: any Palette, animation: TextCursorStyle.Animation) -> ActiveChipCycle {
         var environment = EnvironmentValues()
         environment.palette = palette
-        environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+        environment.selectionIndicatorStyle = animation
         let context = RenderContext(
             availableWidth: 20, availableHeight: 3, environment: environment, tuiContext: TUIContext())
         let surface = palette.liftedBackground.resolve(with: palette)

@@ -37,7 +37,7 @@ import Foundation
 /// different formulas, so the same focus pulse breathed at 2 s on a section's
 /// border and 0.8 s on the controls inside it, depending only on which route
 /// the view took. One clock and one formula now serve both, with the animation
-/// chosen per element by ``SelectionIndicatorStyle`` and its speed by
+/// chosen per element by ``View/selectionIndicatorStyle(_:)`` and its speed by
 /// ``View/indicatorAnimationSpeed(_:for:)``.
 ///
 /// The timer is a single `@MainActor` `Task` that sleeps between ticks (the

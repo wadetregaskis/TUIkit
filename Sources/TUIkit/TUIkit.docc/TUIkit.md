@@ -183,7 +183,6 @@ struct MyApp: App {
 - ``FocusInteractions``
 - ``DefaultFocusEvaluationPriority``
 - ``SelectionEmphasis``
-- ``SelectionIndicatorStyle``
 
 ### Keyboard
 

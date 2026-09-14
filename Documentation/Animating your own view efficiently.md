@@ -366,7 +366,7 @@ content changes — none do, and no amount of API design makes them.
 
 **The focus pulse is not an app animation.** It is a shared affordance on one
 clock, phase-locked across every element showing focus, its cadence chosen by
-`SelectionIndicatorStyle` rather than by the call site. Rebuilt on
+`.selectionIndicatorStyle(_:)` rather than by the call site. Rebuilt on
 `withAnimation(.repeatForever)` it would be per-element and phased from
 whenever each element started, so a section's border and the control inside it
 would drift apart — which is the exact bug that merged the two clocks into one

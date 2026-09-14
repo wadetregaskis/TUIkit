@@ -42,7 +42,7 @@ struct CursorBlinkRegularityTests {
         _ animation: TextCursorStyle.Animation, _ speed: IndicatorAnimationSpeed
     ) -> EnvironmentValues {
         var environment = EnvironmentValues()
-        environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: animation)
+        environment.selectionIndicatorStyle = animation
         environment.indicatorAnimationSpeeds.set(speed, for: .focusEmphasis)
         return environment
     }

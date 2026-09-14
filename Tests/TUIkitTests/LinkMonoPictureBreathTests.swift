@@ -115,7 +115,7 @@ struct LinkMonoPictureBreathTests {
 
         try KittyGraphics.withSupport(true) {
             let still = pass(view, tui: tui, focus: focus) {
-                $0.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .none)
+                $0.selectionIndicatorStyle = .none
             }
             try #require(still.buffer.animatedCells.isEmpty, "a still focus has no breath")
             #expect(still.transmissions == 1, "still focus")

@@ -424,7 +424,7 @@ struct _Color256GridCore: View, Renderable {
     /// Builds the grid lines and the geometry of every placed swatch. Each cell
     /// is the palette colour as a background; the cursor cell shows a check in a
     /// contrasting foreground so it stays visible on any colour, including
-    /// mid-grey, and (when focused) animates per ``SelectionIndicatorStyle``.
+    /// mid-grey, and (when focused) animates per ``View/selectionIndicatorStyle(_:)``.
     static func renderGrid(
         cursor: Int, indicator: SelectionEmphasis, cellWidth: Int, showNumbers: Bool,
         arrangement: Palette256Layout.Arrangement = Palette256Layout.preferred
@@ -493,7 +493,7 @@ struct _Color256GridCore: View, Renderable {
         let foreground = contrast(forIndex: index)
         if let mark {
             // A check, centred on the swatch, in a contrasting tone so it shows on
-            // any colour; when focused it animates (per SelectionIndicatorStyle)
+            // any colour; when focused it animates (per `.selectionIndicatorStyle`)
             // between the swatch colour and that contrasting tone, and is bold.
             return ANSIRenderer.colorize(
                 centred(_SwatchGridCore.selectionMark, in: cellWidth),

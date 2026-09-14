@@ -27,7 +27,7 @@ struct SwitchTrackBreathTests {
             PaletteRegistry.all.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
             + [FadedAll()]
         var environment = EnvironmentValues()
-        environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .pulse)
+        environment.selectionIndicatorStyle = .pulse
         let cycle = environment.selectionEmphasis.cycle(true)
         var offenders: [String] = []
         for palette in palettes {

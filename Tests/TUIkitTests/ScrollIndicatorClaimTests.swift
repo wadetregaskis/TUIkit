@@ -116,7 +116,7 @@ struct ScrollIndicatorClaimTests {
         let context = makeRenderContext(width: Self.width, height: 10) { environment, _ in
             environment.palette = FadedAll()
             environment.scrollIndicatorStyle = .text
-            environment.selectionIndicatorStyle = SelectionIndicatorStyle(animation: .none)
+            environment.selectionIndicatorStyle = .none
         }
         let drawn = renderToBuffer(
             List(selection: .constant(Set<Int>())) { ForEach(Self.rows) { Text($0.name) } },
