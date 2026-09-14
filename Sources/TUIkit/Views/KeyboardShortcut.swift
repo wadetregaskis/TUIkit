@@ -376,20 +376,56 @@ extension View {
 /// and when overlapping surfaces each register (a dialog over a page), the
 /// LAST registration wins, which render order makes the topmost surface.
 ///
+/// Below the app's shortcuts sits a tier of framework DEFAULTS
+/// (``registerDefault(_:holdsFocus:action:)``), for shortcuts the framework
+/// binds for itself, such as a split view's sidebar chord. Any app shortcut on
+/// the same trigger beats a default whatever the registration order: under the
+/// default `.commandKey(.control)`, SwiftUI's ⌃⌘S and an app's plain ⌘S are the
+/// same ⌃S, and the app means its own. This is `RowShortcuts`' rule, "defaults
+/// first, then the overrides on top".
+///
 /// `@unchecked Sendable` like its sibling per-frame services
 /// (`MouseEventDispatcher`, `KeyEventDispatcher`): touched only from the
 /// main run loop (render pass registration + input dispatch).
 final class KeyboardShortcutRegistry: @unchecked Sendable {
     private var actions: [KeyboardShortcut.Trigger: () -> Void] = [:]
 
+    /// A framework default, and whether the view that registered it held the
+    /// focus.
+    private struct Default {
+        let holdsFocus: Bool
+        let action: () -> Void
+    }
+
+    /// The framework defaults, consulted only when no app shortcut has the
+    /// trigger.
+    private var defaults: [KeyboardShortcut.Trigger: Default] = [:]
+
     /// Clears the frame's registrations (called from the render loop).
     func beginRenderPass() {
         actions.removeAll(keepingCapacity: true)
+        defaults.removeAll(keepingCapacity: true)
     }
 
     /// Registers `action` for `shortcut`; the last registration in a frame wins.
     func register(_ shortcut: KeyboardShortcut, action: @escaping () -> Void) {
         actions[shortcut.trigger] = action
+    }
+
+    /// Registers a framework default for `shortcut`, which fires only when no
+    /// app shortcut has the same trigger, however the two were ordered.
+    ///
+    /// Among defaults on one trigger, one registered by a view that holds the
+    /// focus (`holdsFocus`) beats one that does not, and otherwise the FIRST
+    /// registration wins. First, not last as for app shortcuts, because a
+    /// framework control registering after its content has rendered finishes
+    /// after anything nested inside it: the innermost of several nested
+    /// focus-holding views registers first.
+    func registerDefault(
+        _ shortcut: KeyboardShortcut, holdsFocus: Bool = false, action: @escaping () -> Void
+    ) {
+        if let existing = defaults[shortcut.trigger], existing.holdsFocus || !holdsFocus { return }
+        defaults[shortcut.trigger] = Default(holdsFocus: holdsFocus, action: action)
     }
 
     /// Runs the action matching a fallen-through key event, if any.
@@ -404,9 +440,10 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
         return run(trigger)
     }
 
-    /// Runs the registered action for `trigger`, reporting whether there was one.
+    /// Runs the registered action for `trigger`, reporting whether there was one:
+    /// the app's, else the framework default's.
     private func run(_ trigger: KeyboardShortcut.Trigger) -> Bool {
-        guard let action = actions[trigger] else { return false }
+        guard let action = actions[trigger] ?? defaults[trigger]?.action else { return false }
         action()
         return true
     }
