@@ -170,27 +170,41 @@ This path is built automatically during rendering based on:
 
 ### Persistent State Storage
 
-All `@State` values live in a central `StateStorage` (owned by `TUIContext`), keyed by:
-- The view's structural identity
-- The property's declaration index within the view (0, 1, 2, ...)
+All `@State` values live in one `StateStorage`, owned by the app's `TUIContext`. Each value
+is held in a reference box (`StateBox`), keyed by:
+- The structural identity of the view that declares the property
+- The property's declaration index within that view (0, 1, 2, ...)
 
-An `App`'s own `@State` is stored the same way, under the identity at the root of the view
-tree, and is bound before `app.body` is evaluated. A write to it therefore invalidates the
-whole tree below the root, just as a write to a root view's `@State` does.
+Declaring `@State var count = 0` stores nothing. The `init` only records the default, in a
+box of its own that belongs to no identity. The property is bound when its view renders:
+`bindStateProperties(of:identity:storage:)` walks the view's properties in declaration order
+and points each `@State` at the box stored under the view's identity and that index. An
+existing box keeps its value; a missing one is created with the default. The measure pass
+binds the same way, under the same identity, so a view is measured and drawn with the same
+values.
 
-When `@State var count = 0` is declared, the `init` only records the default. Each time the
-view is rendered, the property is bound to the box stored for its view's identity and
-declaration index: an existing box keeps its value, and the default is used only when there
-is none yet.
+The key is the identity the view renders at, not the body it was constructed in. That is
+what keeps two views an `if`/`else` or `switch` swaps between from sharing state: each branch
+renders under an identity of its own.
+
+Until its view first renders, a `@State` still points at the box its `init` made. That box
+has no identity and no render cache, so a write to it requests no render. The first bind
+replaces it with the stored box, so the written value is not kept either.
+
+An `App` is not a view, so no render walk reaches it. `RenderLoop` binds the App's own
+`@State` itself, at the identity at the root of the view tree, each frame before it evaluates
+`app.body`, and marks that identity active so the prune at the end of the pass keeps it. A
+write to it therefore invalidates the whole tree below the root, just as a write to a root
+view's `@State` does.
 
 ### Re-Render Trigger
 
 When a ``State`` value changes:
 
-1. `StateBox.value.didSet` calls `invalidateRender(for: identity)` on its context's `RenderCache`. That queues the identity behind a lock, so a write from a background `Task` is safe, and calls `AppState.shared.setNeedsRender()`. The affected subtree's cached buffers are dropped later, on the main actor, as the next render pass begins: `clearAffected(by:)`, or `clearAll()` for a box with no identity yet
-2. The observer registered by `AppRunner` requests a re-render
-3. The main loop re-evaluates `app.body` fresh: reconstructing all views
-4. Each view's `@State` properties are bound again, at render time, to their boxes in `StateStorage`, recovering persisted values
+1. `StateBox.value`'s `didSet` calls `invalidateRender(for: identity)` on the box's invalidation sink: the `RenderCache` of the `TUIContext` whose `StateStorage` bound it. That call only records the identity behind a lock, so a write from a background `Task` never touches the cache, and then calls `AppState.shared.setNeedsRender()`
+2. `setNeedsRender()` sets the `needsRender` flag and calls `AppState`'s observers. The observer `AppRunner` registers does not render: it only wakes the run loop, which may be blocked waiting for input. The loop checks the flag on each iteration (`foldPendingWork`), clears it and marks a frame due, and `FramePacer` renders that frame once the frame-rate cap has cleared. Any number of writes between two frames produce one frame
+3. As the render pass begins, `RenderCache.beginRenderPass()` drains the recorded identities on the main actor into `clearAffected(by:)`. That drops the cached buffers and sizes of each identity, its ancestors and its descendants; sibling subtrees keep theirs
+4. The App's `@State` is bound and `app.body` is evaluated again, and the tree is rendered. A memoized subtree whose cached buffer survived step 3 is served from the cache; every other view is rendered, and each composite view's `@State` is bound again to the same boxes, so it reads the values they now hold
 5. The new ``FrameBuffer`` output is written to the terminal
 
 ### Garbage Collection

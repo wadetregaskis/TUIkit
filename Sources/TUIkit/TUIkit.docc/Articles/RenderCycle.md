@@ -102,7 +102,7 @@ The context is passed down the view tree. Each view can create a modified copy f
 
 `app.body` is evaluated fresh each frame, producing a ``WindowGroup`` that wraps the root view. The `WindowGroup` implements `SceneRenderable` and bridges from the scene layer to the view layer.
 
-> Note: Views are fully reconstructed on every frame. `@State` values survive because `State.init` self-hydrates from `StateStorage`: looking up the persistent value by the view's structural identity.
+> Note: `app.body` builds new view values on every frame. `@State` values survive because `State.init` only records the default: as each view renders, `bindStateProperties(of:identity:storage:)` binds its `@State` properties to the boxes `StateStorage` keeps under the view's structural identity and each property's declaration index.
 
 ### Step 6: Render View Tree
 
@@ -442,7 +442,7 @@ Cache invalidation is **identity-scoped** where possible, with full clears as th
 
 | Trigger | Mechanism |
 |---------|-----------|
-| A `@State` change | `StateBox.value.didSet` calls `renderCache.invalidateRender(for: identity)`, which queues the identity behind a lock (the write may come from a background `Task`) and requests a render. `beginRenderPass()` drains the queue on the main actor into `clearAffected(by: identity)`, so only the affected subtree's cached buffers are invalidated. `clearAll()` is the fallback when the box has no identity yet |
+| A `@State` change | `StateBox.value.didSet` calls `renderCache.invalidateRender(for: identity)`, which queues the identity behind a lock (the write may come from a background `Task`) and requests a render. `beginRenderPass()` drains the queue on the main actor into `clearAffected(by: identity)`, so only the affected subtree's cached buffers are invalidated. A box gets its identity and its render cache together, when `StateStorage` binds it, so a `@State` that has not been bound yet has no cache to invalidate and requests no render |
 | An `@Observable` change | The body that read the property was evaluated under `withObservationTracking` at its view's identity, so the change calls `renderCache.invalidateRender(for: identity)` — the same sink as a `@State` write, and the same scope. `AppState.setNeedsRenderWithCacheClear()` → `clearAll()` is the fallback only when the render has no cache to scope to |
 | An `@AppStorage` / `@SceneStorage` write | Nothing can scope it: the wrapper is not `Equatable` so it cannot be in the memo's key, it is read as a plain field so `noteAppliedEnvironment` never sees it, and the write carries no view identity — so not even the ancestor `clearAffected` that rescues the equivalent `@State`. The setter calls `AppState.setNeedsRenderWithCacheClear()` → `clearAll()`. This is the framework's only per-user-action full clear (the `@Observable` row above scopes instead; the nearest neighbour is `LocalizationService.register`, at startup), affordable because a storage write is a user action and the flag coalesces a frame's writes into one clear — but a `Slider` bound straight to `$storage` writes per interaction tick and pays per tick |
 | A global environment change | `RenderLoop` compares an `EnvironmentSnapshot` each frame and clears on mismatch: the palette (by value where it is `Equatable`, by ID where it is not — a palette edited in place keeps its ID), the appearance ID, the resolved toggle glyphs, the locale and the scene phase |
