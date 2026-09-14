@@ -150,14 +150,14 @@ extension RenderLoop {
         }
         let readerBoundary = reads ? Self.timeToNextTick(ofCursorClockAt: elapsed(.cursor)) : nil
         let plan = [readerBoundary, soonestChange(lastActivity.chromeRuns), reads ? nil : soonestChange(replayable?.runs ?? [])]
-        return plan.compactMap { $0 }.min() ?? AnimationClock.cursor.tickInterval
+        return plan.compactMap { $0 }.min() ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
     }
 
     /// Seconds from `elapsed` on ``AnimationClock/cursor`` to the end of the tick
     /// showing there, counted in whole nanoseconds like every step boundary, so the
     /// answer is never a tick late or a nanosecond early.
     private static func timeToNextTick(ofCursorClockAt elapsed: Double) -> Double {
-        let tick = AnimationClock.cursor.tickInterval
+        let tick = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
         let untilEnd =
             AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: tick)
             - AnimationClock.nanoseconds(elapsed)

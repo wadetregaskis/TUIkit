@@ -95,7 +95,7 @@ struct RepeatingOpacityTests {
         func render(_ opacity: Double, atTick tick: Int) -> FrameBuffer {
             context.environment.animationTick = tick
             context.environment.frameNowNanos =
-                Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000)
+                Int64(Double(tick) * AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks) * 1_000_000_000)
             // Bracketed exactly as the run loop brackets a frame. Without this
             // the whole suite passed while the app froze: the store's records
             // were pruned at the end of every pass, so every pass saw a first
@@ -127,7 +127,7 @@ struct RepeatingOpacityTests {
         /// Whether the run loop would still be rendering for this.
         func needsRenders(atTick tick: Int) -> Bool {
             context.environment.stateStorage!.animations.hasLiveAnimations(
-                at: Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000))
+                at: Int64(Double(tick) * AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks) * 1_000_000_000))
         }
     }
 

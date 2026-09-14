@@ -102,7 +102,7 @@ struct OpacityOverFloatedContentTests {
         func render(_ opacity: Double, atTick tick: Int) -> FrameBuffer {
             context.environment.animationTick = tick
             context.environment.frameNowNanos =
-                Int64(Double(tick) * AnimationClock.cursor.tickInterval * 1_000_000_000)
+                Int64(Double(tick) * AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks) * 1_000_000_000)
             let storage = context.environment.stateStorage!
             storage.beginRenderPass()
             defer { storage.endRenderPass() }

@@ -26,7 +26,7 @@ struct IndicatorCycleTiming: Equatable, Sendable {
     /// One cursor tick a frame, on the focus-relative clock: a still cycle's timing,
     /// and a pulse's standard frame.
     static let cursorTick = Self(
-        frameDuration: AnimationClock.cursor.tickInterval, clock: .cursor)
+        frameDuration: AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), clock: .cursor)
 
     /// Which frame of a cycle laid out on this timing shows at `timer`'s last
     /// snapshot, or 0 without a timer.

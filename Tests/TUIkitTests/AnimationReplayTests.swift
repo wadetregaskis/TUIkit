@@ -296,7 +296,7 @@ struct ANSIStateAtColumnTests {
 struct AnimationTickStrideTests {
 
     /// The clock's own interval, which is what a run gets when it names none.
-    private let tick = AnimationClock.cursor.tickInterval
+    private let tick = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
 
     private func expect(_ actual: Double, _ expected: Double, _ label: String) {
         #expect(abs(actual - expected) < 1e-9, "\(label): \(actual) vs \(expected)")
@@ -365,7 +365,7 @@ struct AnimationTickStrideTests {
     func defaultRateIsTheClock() {
         let plain = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"], clock: .cursor)
-        #expect(plain.frameDuration == AnimationClock.cursor.tickInterval)
+        #expect(plain.frameDuration == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
     }
 
     @Test("Frames that are all the same picture are not an animation")

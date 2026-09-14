@@ -70,12 +70,12 @@ import Foundation
 @MainActor
 final class CursorTimer {
     /// How often a view that reads the phase AS IT RENDERS is re-rendered.
-    /// Taken from ``AnimationClock/tickInterval`` rather than written here so
+    /// Taken from ``AnimationClock/standardFrameTicks`` rather than written here so
     /// there is one number, not two that can disagree.
-    private static let tickInterval = AnimationClock.cursor.tickInterval
+    nonisolated private static let standardFrameSeconds = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
 
     /// The same, in whole nanoseconds — the lattice the focus epoch is floored to.
-    private static let tickNanos = UInt64(AnimationClock.nanoseconds(AnimationClock.cursor.tickInterval))
+    nonisolated private static let standardFrameNanos = UInt64(AnimationClock.nanoseconds(standardFrameSeconds))
 
     /// Where a wake reads the time. The clock `FrameClock` reads too, which is
     /// what makes a wake's reading and a frame's comparable at all; injectable
@@ -119,7 +119,7 @@ final class CursorTimer {
     func observe(nowNanos now: UInt64) {
         snapshotNanos = max(snapshotNanos, now)
         if focusEpochNanos == nil {
-            focusEpochNanos = snapshotNanos - snapshotNanos % Self.tickNanos
+            focusEpochNanos = snapshotNanos - snapshotNanos % Self.standardFrameNanos
         }
     }
 
@@ -157,7 +157,7 @@ final class CursorTimer {
         // and the pre-rendered runs agree on which tick an instant is in — a floor in
         // seconds put a summed 0.35 s in tick 6, when this clock was a sum. Clamped
         // rather than narrowed: `Int` is 32 bits on wasm32.
-        Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameDuration: Self.tickInterval))
+        Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameDuration: Self.standardFrameSeconds))
     }
 
     /// Whether the cursor clock was read during the current render frame.
@@ -189,7 +189,7 @@ final class CursorTimer {
     /// Readable rather than fully private so a test can assert that a served
     /// animation replay re-based the sleep — the value never leaves this class
     /// otherwise, and the run loop only ever writes it through ``advance(by:)``.
-    private(set) var sleepSeconds = CursorTimer.tickInterval
+    private(set) var sleepSeconds = CursorTimer.standardFrameSeconds
 
     /// Sets how far the next wake-up is. Takes effect after the current sleep.
     ///
@@ -301,7 +301,7 @@ extension CursorTimer {
         case .pulse:
             // The framework's own cycle, so the tolerance may move it: snapping.
             let ramp = speed.rampLayout(
-                standardCycle: standardPulseCycle, framesPerSecond: 1 / AnimationClock.cursor.tickInterval,
+                standardCycle: standardPulseCycle, framesPerSecond: 1 / Self.standardFrameSeconds,
                 snapping: true)
             return CycleLayout(
                 frameCount: ramp.frameCount,
@@ -393,7 +393,7 @@ extension CursorTimer {
             while !Task.isCancelled {
                 // Read per iteration: `creditWake(atNanos:)` planned it at the previous
                 // wake — or, for the first pass, a render set it through `advance(by:)`.
-                let seconds = self?.sleepSeconds ?? Self.tickInterval
+                let seconds = self?.sleepSeconds ?? Self.standardFrameSeconds
                 do {
                     try await Task.sleep(nanoseconds: Self.sleepNanoseconds(seconds))
                 } catch {
@@ -460,7 +460,7 @@ extension CursorTimer {
         task?.cancel()
         task = nil
         focusEpochNanos = nil
-        sleepSeconds = Self.tickInterval
+        sleepSeconds = Self.standardFrameSeconds
     }
 
     /// Restarts ``AnimationClock/cursor`` at its bright end, leaving
@@ -480,7 +480,7 @@ extension CursorTimer {
     /// two frames.
     func restartFocusPhase() {
         focusEpochNanos = nil
-        sleepSeconds = Self.tickInterval
+        sleepSeconds = Self.standardFrameSeconds
         // The in-flight sleep was sized for the OLD cadence, and its wake would set
         // the new zero at the wake rather than at the render that follows the focus
         // change. Cancelling usually ends the sleep with a CancellationError the loop

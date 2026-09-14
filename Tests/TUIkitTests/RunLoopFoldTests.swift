@@ -249,14 +249,14 @@ struct RunLoopFoldTests {
         let frameNow: UInt64 = 90_090 * 1_000_000_000
         _ = loop.render(cursorTimer: timer, frameNowNanos: Int64(frameNow))
         timer.planner = { [loop] elapsed in loop.timeUntilNextChange(elapsed: elapsed) }
-        #expect(timer.sleepSeconds == AnimationClock.cursor.tickInterval, "the clock starts on its own grid")
+        #expect(timer.sleepSeconds == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), "the clock starts on its own grid")
 
         timer.creditWake(atNanos: frameNow + 50_000_000)
 
         // The run's own cadence from where the clock now is (a `.dots` spinner's), not
         // the 0.05 s grid, and not a plan made a wake earlier.
         let expected = loop.timeUntilNextChange(elapsed: timer.elapsed)
-        #expect(expected != AnimationClock.cursor.tickInterval, "the run must ask for its own rate")
+        #expect(expected != AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), "the run must ask for its own rate")
         #expect(abs(timer.sleepSeconds - expected) < 1e-9, "\(timer.sleepSeconds) vs \(expected)")
     }
 
@@ -291,6 +291,6 @@ struct RunLoopFoldTests {
         _ = loop.render(cursorTimer: timer)
 
         #expect(runner.serveAnimationTicks(renderer: loop, cursorTimer: timer))
-        #expect(timer.sleepSeconds == AnimationClock.cursor.tickInterval, "no tick, no re-base")
+        #expect(timer.sleepSeconds == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), "no tick, no re-base")
     }
 }

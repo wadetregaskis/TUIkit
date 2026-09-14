@@ -41,7 +41,7 @@ struct AnimationClockRateTests {
     private static func planner(_ runs: [AnimatedCellRun]) -> ((AnimationClock) -> Double) -> Double {
         { elapsed in
             runs.map { $0.timeUntilChange(afterElapsed: elapsed($0.clock)) }.min()
-                ?? AnimationClock.cursor.tickInterval
+                ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
         }
     }
 

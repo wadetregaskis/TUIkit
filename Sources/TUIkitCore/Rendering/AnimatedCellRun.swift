@@ -39,7 +39,7 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     case content
 
     /// How often a view that builds its appearance from the phase AS IT
-    /// RENDERS is re-rendered.
+    /// RENDERS is re-rendered, in ticks of 1/60 s: 3 ticks, 50 ms.
     ///
     /// This is not the rate anything replayed moves at. A pre-rendered cycle
     /// carries its own ``AnimatedCellRun/frameDuration`` and the loop wakes on
@@ -52,11 +52,12 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// It is also the default frame duration for a run that does not name one,
     /// which is what every producer written before runs carried their own
     /// timing already assumed.
-    public var tickInterval: Double {
-        switch self {
-        case .cursor, .content: 0.05
-        }
-    }
+    ///
+    /// One count for both clocks, and a count of ticks rather than seconds: a frame
+    /// is a whole number of the display's 1/60 s ticks, and this frame is three of
+    /// them, not one. In seconds it is `seconds(forTicks: standardFrameTicks)`, which
+    /// is bit for bit `0.05`.
+    public static let standardFrameTicks = 3
 
     /// The tick animation frame durations are meant to be whole multiples of:
     /// 25 ms.
@@ -316,8 +317,8 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// changed speed (rounding 0.11 s to 0.10), and it caps every animation at
     /// the grid's rate however fine the producer's own timing was.
     ///
-    /// Defaults to ``AnimationClock/tickInterval``, which is what every
-    /// producer written before this assumed.
+    /// Defaults to ``AnimationClock/standardFrameTicks`` ticks, 50 ms, which is
+    /// what every producer written before this assumed.
     public let frameDuration: Double
 
     /// The clock that advances this run.
@@ -356,7 +357,8 @@ public struct AnimatedCellRun: Sendable, Equatable {
         self.width = width
         self.frames = frames
         self.frameDuration = max(
-            AnimationClock.minimumFrameDuration, frameDuration ?? clock.tickInterval)
+            AnimationClock.minimumFrameDuration,
+            frameDuration ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
         self.clock = clock
         self.alpha = alpha
     }

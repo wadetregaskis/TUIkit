@@ -80,7 +80,7 @@ public struct AnimatedColor: Sendable, Equatable {
         storage = .constant(color)
         step = 0
         clock = .cursor
-        frameDuration = AnimationClock.cursor.tickInterval
+        frameDuration = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
     }
 
     /// A colour given as every frame of its cycle.
@@ -91,7 +91,7 @@ public struct AnimatedColor: Sendable, Equatable {
     ///     place to take an app down.
     ///   - step: Which frame is showing now.
     ///   - frameDuration: How long each frame is shown, in seconds. Defaults to
-    ///     `clock`'s own interval.
+    ///     ``AnimationClock/standardFrameTicks`` ticks, 50 ms.
     ///   - clock: The clock that advances it.
     public init(
         frames: [Color], step: Int, frameDuration: Double? = nil, clock: AnimationClock = .cursor
@@ -103,7 +103,7 @@ public struct AnimatedColor: Sendable, Equatable {
         }
         self.step = step
         self.clock = clock
-        self.frameDuration = frameDuration ?? clock.tickInterval
+        self.frameDuration = frameDuration ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
     }
 
     /// The colour to draw in the frame being rendered now.

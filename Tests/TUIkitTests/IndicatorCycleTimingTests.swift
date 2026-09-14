@@ -104,7 +104,7 @@ struct IndicatorCycleTimingTests {
             resolved.run(offsetX: 0, offsetY: 0) { ANSIRenderer.colorize("x", foreground: $0) })
         #expect(AnimationClock.nanoseconds(run.frameDuration) == 75_000_000)
         #expect(run.clock == .content)
-        #expect(AnimatedColor(.red).frameDuration == AnimationClock.cursor.tickInterval)
+        #expect(AnimatedColor(.red).frameDuration == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
     }
 
     // MARK: - The producers

@@ -197,7 +197,7 @@ struct RenderLoopReplayTests {
         let harness = RenderLoopHarness()
         let loop = primedLoop(harness, runs: [])
 
-        #expect(loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.cursor.tickInterval)
+        #expect(loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
     }
 
     /// The point of asking the runs: a 0.11 s spinner is not resampled onto the
@@ -209,7 +209,7 @@ struct RenderLoopReplayTests {
 
         let sleep = loop.timeUntilNextChange(elapsed: { _ in 0 })
         #expect(abs(sleep - 0.11) < 1e-9, "woke at the run's own rate, not the grid's: \(sleep)")
-        #expect(sleep > AnimationClock.cursor.tickInterval, "and not on the clock's interval")
+        #expect(sleep > AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), "and not on the clock's interval")
     }
 
     @Test("Several runs wake the loop at the soonest of them")
@@ -241,7 +241,7 @@ struct RenderLoopReplayTests {
             terminalWidth: 5, startRow: 1, backgroundCode: "")
 
         #expect(
-            loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.cursor.tickInterval,
+            loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks),
             "a one-second run does not license a one-second sleep here")
     }
 

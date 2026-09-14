@@ -73,7 +73,9 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
         // instead (the caller falls back when this returns nil), which honours
         // the delay correctly; the one-time delay is not worth a cycle anyway.
         guard animation.effectiveDelay <= 0 else { return nil }
-        let count = Int((period / clock.tickInterval).rounded())
+        // One value per standard animation frame, 50 ms, on either clock.
+        let frame = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
+        let count = Int((period / frame).rounded())
         guard count >= 2, count <= Self.maximumTicks else { return nil }
 
         // Which tick the animation began on. The current tick is `tick` and the
@@ -81,7 +83,7 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
         // gives the start — and every value below is then a function of the
         // tick alone, which is what makes them replayable.
         let elapsed = Double(nowNanos - startNanos) / 1_000_000_000
-        let startTick = tick - Int((elapsed / clock.tickInterval).rounded())
+        let startTick = tick - Int((elapsed / frame).rounded())
 
         var values: [Value] = []
         values.reserveCapacity(count)
@@ -89,7 +91,7 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
             // The tick at or after `startTick` whose index is `index`, so the
             // array reads correctly under `tick % count` at every tick.
             let offset = (index - startTick).modulo(count)
-            let fraction = animation.fraction(at: Double(offset) * clock.tickInterval)
+            let fraction = animation.fraction(at: Double(offset) * frame)
             values.append(from.interpolated(towards: to, amount: fraction))
         }
         self.values = values

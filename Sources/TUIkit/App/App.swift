@@ -302,7 +302,8 @@ extension AppRunner {
         // screen. Deciding it here in the loop after serving the tick was one wake too
         // late — see `CursorTimer.planner`.
         cursorTimer.planner = { [weak renderer] elapsed in
-            renderer?.timeUntilNextChange(elapsed: elapsed) ?? AnimationClock.cursor.tickInterval
+            renderer?.timeUntilNextChange(elapsed: elapsed)
+                ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
         }
 
         isRunning = true
