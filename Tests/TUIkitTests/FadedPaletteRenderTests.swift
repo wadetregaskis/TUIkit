@@ -359,9 +359,9 @@ struct FadedPaletteRenderTests {
 
     /// An `Image`'s placeholder centres a spinner glyph in `palette.accent` and its
     /// caption in `foregroundSecondary`; the failure path centres `palette.error`. All
-    /// three reached the emitter faded (§68.3) — and only the centring knows where a
-    /// line landed, so that is where the claim is made now, past the pad and over the
-    /// cells the glyphs took.
+    /// three reached the emitter faded (§68.3). The spinner is a composed `Spinner`
+    /// now, which claims its own cell, and the frame that centres it carries the claim
+    /// there; the pad beside it is still blank and claims nothing.
     ///
     /// Effects are pinned off, as `ImageRenderTests` explains: with them firing, a
     /// missing file's load can fail fast enough to land on the error path instead of

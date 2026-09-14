@@ -696,7 +696,8 @@ extension _ImageCore {
 
 extension _ImageCore {
 
-    /// Renders a centered placeholder with optional spinner and text.
+    /// Renders the placeholder, centred: a spinner above the text when the spinner
+    /// is shown, and otherwise the text alone, or "Loading..." when there is none.
     private func renderPlaceholder(
         width: Int,
         height: Int,
@@ -704,6 +705,31 @@ extension _ImageCore {
         showSpinner: Bool,
         context: RenderContext
     ) -> FrameBuffer {
+        if showSpinner {
+            // A real `Spinner`, composed, the way `RefreshableModifier` draws its
+            // indicator. So it animates with a run of its own at the speed set for
+            // spinners, takes `.foregroundStyle`, and claims its own cell, which the
+            // frame's offset carries to wherever the centring puts it. It used to be a
+            // still "⠋" in the accent. The text keeps the secondary foreground whatever
+            // `.foregroundStyle` says, as it always has.
+            //
+            // At a child identity, so nothing the composition keys by identity (the
+            // spinner's fallback wake token, for one) shares this core's.
+            let placeholder = VStack(spacing: 0) {
+                Spinner(style: .dots)
+                if let text {
+                    Text(verbatim: text).foregroundStyle(Color.palette.foregroundSecondary)
+                }
+            }
+            // `.center` said out loud: TUIkit's `frame(width:height:)` defaults to
+            // `.topLeading`, where SwiftUI's centres.
+            .frame(width: width, height: height, alignment: .center)
+            return TUIkitView.renderToBuffer(
+                placeholder,
+                context: context.withAvailableSize(width: width, height: height)
+                    .withChildIdentity(type: type(of: placeholder)))
+        }
+
         let palette = context.environment.palette
 
         // Build placeholder content lines, each with the colour it is to be drawn
@@ -711,10 +737,6 @@ extension _ImageCore {
         // knows where a centred line lands, so it is the only thing that can claim
         // the cells (§68.3).
         var contentLines: [(text: String, ink: Color)] = []
-
-        if showSpinner {
-            contentLines.append((text: "⠋", ink: palette.accent))
-        }
 
         if let text {
             contentLines.append((text: text, ink: palette.foregroundSecondary))

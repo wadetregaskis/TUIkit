@@ -4035,6 +4035,13 @@ knew the colour and the renderer knew the position, so the claim travelled as da
 renderer. Here the producer could hand over the colour itself, so it does. What is not
 allowed is the third option: deriving the position twice.
 
+The spinner has since left `centerContent`. The placeholder now composes a real `Spinner`
+above its caption (a `VStack` in a `.frame` of the placeholder's size), so the glyph claims
+its own cell the way every `Spinner` does, and the frame's offset carries the claim to
+where the centring put the glyph. That is the §68.1 shape, and the position is still
+derived once. `centerContent` keeps the other paints: the caption when the spinner is off,
+the "Loading..." fallback, and the error line.
+
 ### 68.4 A date picker's field
 
 `_DatePickerCore` draws every component of the field itself: the separators in

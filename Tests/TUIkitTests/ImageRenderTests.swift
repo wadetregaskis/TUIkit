@@ -7,6 +7,7 @@
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitStyling
 
 // MARK: - Test Helpers
 
@@ -81,6 +82,61 @@ struct ImageRenderTests {
         let leading = row.prefix { $0 == " " }.count
         // One glyph in a 21-wide row centres at ~10 leading spaces.
         #expect(leading == 10)
+    }
+
+    // MARK: The spinner is a Spinner
+
+    /// Where the placeholder's `"⠋"` landed, as (column, row) in cells.
+    private func spinnerCell(in buffer: FrameBuffer) -> (column: Int, row: Int)? {
+        let lines = buffer.lines.map { $0.stripped }
+        guard let row = lines.firstIndex(where: { $0.contains("⠋") }) else { return nil }
+        return (lines[row].prefix { $0 == " " }.count, row)
+    }
+
+    /// The frame duration of every run `buffer` leaves, in nanoseconds.
+    private func runNanos(_ buffer: FrameBuffer) -> [Int64] {
+        buffer.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) }
+    }
+
+    @Test("The loading placeholder's spinner animates, over its own cell, at the .dots interval")
+    func placeholderSpinnerAnimates() throws {
+        let buffer = renderToBuffer(Image(.file("/nope.png")), context: createTestContext())
+        #expect(runNanos(buffer) == [AnimationClock.nanoseconds(SpinnerStyle.dots.interval)])
+        let run = try #require(buffer.animatedCells.first)
+        let cell = try #require(spinnerCell(in: buffer))
+        #expect(run.offsetX == cell.column && run.offsetY == cell.row, "the run sits on the glyph")
+        #expect(run.width == 1)
+    }
+
+    @Test("The placeholder's spinner follows the speed set for spinners")
+    func placeholderSpinnerFollowsTheSpeed() {
+        let buffer = renderToBuffer(
+            Image(.file("/nope.png")).indicatorAnimationSpeed(2, for: .spinners),
+            context: createTestContext())
+        #expect(runNanos(buffer) == [55_000_000])
+    }
+
+    @Test("With the spinner off, the placeholder leaves no run")
+    func noSpinnerNoRun() {
+        let textOnly = renderToBuffer(
+            Image(.file("/nope.png")).imagePlaceholder("Wait…").imagePlaceholderSpinner(false),
+            context: createTestContext())
+        #expect(textOnly.animatedCells.isEmpty)
+        let fallback = renderToBuffer(
+            Image(.file("/nope.png")).imagePlaceholderSpinner(false), context: createTestContext())
+        #expect(fallback.animatedCells.isEmpty)
+    }
+
+    @Test("A foregroundStyle on the image tints the placeholder's spinner, and not its caption")
+    func foregroundStyleTintsTheSpinner() throws {
+        let buffer = renderToBuffer(
+            Image(.file("/nope.png")).imagePlaceholder("Loading photo").foregroundStyle(Color.red),
+            context: createTestContext(width: 24, height: 6))
+        let red = Color.red.foregroundCodes().joined(separator: ";")
+        let spinnerRow = try #require(buffer.lines.first { $0.contains("⠋") })
+        #expect(spinnerRow.contains(red), "the glyph is red: \(spinnerRow.debugDescription)")
+        let captionRow = try #require(buffer.lines.first { $0.stripped.contains("Loading photo") })
+        #expect(!captionRow.contains(red), "the caption keeps its own colour: \(captionRow.debugDescription)")
     }
 
     // MARK: Custom text, no spinner

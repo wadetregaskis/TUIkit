@@ -60,8 +60,13 @@ enum ImageLoadingPhase: Sendable {
 ///
 /// ## Placeholder
 ///
-/// While loading, a centered placeholder is displayed. By default this is
-/// a ``Spinner``. Use ``View/imagePlaceholder(_:)-(LocalizedStringKey)`` to customize.
+/// While loading, a centered placeholder is displayed. By default this is an
+/// animated ``Spinner``, above the placeholder text when there is some. It
+/// animates at the speed set for spinners (see
+/// ``View/indicatorAnimationSpeed(_:for:)``) and is drawn in this image's
+/// `foregroundStyle`, or the palette's accent. Use
+/// ``View/imagePlaceholder(_:)-(LocalizedStringKey)`` to set the text and
+/// ``View/imagePlaceholderSpinner(_:)`` to leave the spinner out.
 ///
 /// ## SF Symbols
 ///
@@ -586,6 +591,16 @@ extension View {
     }
 
     /// Controls whether a spinner is shown while an image is loading.
+    ///
+    /// On by default. The spinner is a real ``Spinner`` in the `.dots` style: it
+    /// animates for as long as the image is loading, at the speed set for spinners
+    /// with ``View/indicatorAnimationSpeed(_:for:)``, so a loading image keeps the
+    /// animation clock running until its picture arrives. It is drawn in this
+    /// view's `foregroundStyle` when one is set, and otherwise in the palette's
+    /// accent. The placeholder text keeps the secondary foreground either way.
+    ///
+    /// Pass `false` for a placeholder that does not move: the text alone, or
+    /// "Loading..." when there is no text.
     ///
     /// - Parameter showSpinner: Whether to show a spinner.
     /// - Returns: A modified view.
