@@ -310,7 +310,51 @@ animation-clocks work.
 
 ```bash
 python3 Tools/Profiling/idle_cpu.py BIN [settle_s] [window_s] [keys]
+python3 Tools/Profiling/idle_cpu.py BIN 3 10 --page spinners --wakeups
 ```
+
+`--page NAME` launches the binary with `--page NAME` (the Example lands on that
+`DemoPage` case without navigating); positional `keys` still drive there by
+keystroke instead. The child always runs with `TUIKIT_CONFIG_DIR` pointed at a
+fresh temporary directory, removed afterwards, so a probe never touches the
+user's settings.
+
+Three numbers per window, plus one on request:
+
+| | |
+|---|---|
+| **CPU %** | `ps -o cputime=` before and after (`RUSAGE_CHILDREN` reads 0 for a live child). Centisecond resolution: lengthen the window before believing a small one. |
+| **bytes/s** | Render output drained from the PTY. |
+| **bursts/s** | Reads that arrive more than 5 ms after the previous one — roughly one per frame or replayed tick that wrote something. A wake that wrote nothing is invisible to it. |
+| **idle wakeups/s** (`--wakeups`) | `top -l N -s 1 -pid PID -stats pid,cpu,idlew` sampled across the window. IDLEW is cumulative, so the reading is the difference between the first and last sample, per second — never a single row. Counts every exit from idle, whether or not it drew. macOS only. |
+
+For an A/B, alternate the two binaries run by run (five each is the minimum
+worth reporting) on a machine whose load average is below about 1.5, with
+nothing building, testing or benchmarking, and report the median and spread of
+each column. A single run of an animated page moves by several percent.
+
+## How fast an animation really steps — `animation_rate.py`
+
+`idle_cpu.py` says what an animated page costs; this says whether it is running
+at the rate it asked for, which the cost cannot tell you (a clock that runs slow
+makes a page look cheaper). It decodes the child's output with `pyte`, times
+every change of every cell's character, groups adjacent animating cells into one
+animation, and prints each one's median change interval beside its nominal
+`SpinnerStyle.interval` — parsed from `Spinner.swift`, so the table cannot
+drift — and the ratio.
+
+```bash
+python3 Tools/Profiling/animation_rate.py BIN 12                 # the Spinners page
+python3 Tools/Profiling/animation_rate.py BIN 12 --page progress  # medians only
+```
+
+A ratio near 1.00 on every style is the goal. The same ratio well above 1 on
+every style at once means the animation clock loses time, not that any one
+spinner asks for the wrong duration. Only character changes are seen, so a
+colour-only animation (a breathing focus ring) is invisible, and needs `pyte`
+like `page_open.py`. **pyte abandons a write at a U+FE0F** (VS-16): a row with
+an emoji-presentation cluster reads truncated whatever the app sent — use
+`Tools/Smoke/raw_probe.py` for those.
 
 ### `analyze_stream.py` — where the BYTES went
 Attributes the output a run produced, rather than the time it took. Give it a
