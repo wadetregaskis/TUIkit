@@ -3,8 +3,8 @@
 //
 //  The sidebar toggle of ``NavigationSplitView``: the ▶ edge column that brings
 //  a hidden leading column back, the ◀ on the leftmost divider that hides one,
-//  the visibility steps behind both, and the focus hand-over between a handle
-//  and the one that undoes it. Split out of `NavigationSplitView.swift`, which
+//  the ⌃S and ⌥⌃S chords, the visibility steps behind all three, and the focus
+//  hand-over between a handle and the one that undoes it. Split out of `NavigationSplitView.swift`, which
 //  holds the columns and dividers.
 //
 //  Created by Wade Tregaskis
@@ -42,6 +42,22 @@ enum SplitViewToggle {
     /// Two columns: `.detailOnly` → `.all`. Three columns: `.detailOnly` →
     /// `.doubleColumn` → `.all`. A two-column split reveals to `.all` rather than
     /// to whatever it held before hiding, which SwiftUI does not document either.
+    /// The visibility after a sidebar chord (⌃S, ⌥⌃S): the sidebar alone
+    /// toggles, as macOS's View ▸ Show Sidebar does, and anything that hides it
+    /// comes back to every column.
+    ///
+    /// Two columns: `.detailOnly` ⇄ `.all`. Three columns: `.all` ⇄
+    /// `.doubleColumn`, and `.detailOnly` → `.all`.
+    static func togglingSidebar(
+        _ visibility: NavigationSplitViewVisibility, isThreeColumn: Bool
+    ) -> NavigationSplitViewVisibility {
+        switch visibility {
+        case .detailOnly: .all
+        case .doubleColumn where isThreeColumn: .all
+        default: isThreeColumn ? .doubleColumn : .detailOnly
+        }
+    }
+
     static func revealing(
         _ visibility: NavigationSplitViewVisibility, isThreeColumn: Bool
     ) -> NavigationSplitViewVisibility? {
@@ -149,10 +165,17 @@ extension _NavigationSplitViewCore {
         let handler: _SplitEdgeHandler?
     }
 
-    /// The sidebar toggle's state, having marked this split's identity active so
-    /// it outlives the per-frame `StateStorage` GC whether or not the split is
-    /// resizable. `nil` without state storage (a bare measurement).
-    func resolveToggleState(context: RenderContext) -> SplitViewToggleState? {
+    /// Starts the sidebar toggle's part of a render, and returns its state.
+    ///
+    /// - Marks this split's identity active, so the state outlives the per-frame
+    ///   `StateStorage` GC whether or not the split is resizable.
+    /// - Notes how many focus sections are registered so far, so the end of the
+    ///   render can tell which ones the split registered.
+    /// - Registers the sidebar chords, before any column renders (see
+    ///   ``registerSidebarChords(context:toggleState:holdsFocus:)``).
+    ///
+    /// `nil` without state storage (a bare measurement).
+    func beginToggleRender(context: RenderContext) -> SplitViewToggleState? {
         guard let stateStorage = context.stateStorage else { return nil }
         stateStorage.markActive(context.identity)
         let state = stateStorage.storage(
@@ -162,7 +185,43 @@ extension _NavigationSplitViewCore {
         if !context.isMeasuring, let focusManager = context.environment.focusManager {
             state.sectionsAtRenderStart = focusManager.sections.count
         }
+        registerSidebarChords(context: context, toggleState: state, holdsFocus: false)
         return state
+    }
+
+    /// Registers SwiftUI's two sidebar chords, View ▸ Show Sidebar
+    /// `("s", [.command, .control])` and the hidden Toggle Sidebar
+    /// `("s", [.command, .option])`, each resolved through `commandKey`: ⌃S and
+    /// ⌥⌃S under the default `.control`, none under `.unavailable`.
+    ///
+    /// They work wherever the focus is, as framework defaults
+    /// (`KeyboardShortcutRegistry.registerDefault`), so an app shortcut on the
+    /// same keys wins, and anything that consumes the key earlier in the input
+    /// chain (`onKeyPress`, a focused sortable Table) does too. Every split
+    /// registers them twice: at the start of its render, which makes the first
+    /// split in render order the one that toggles when no split holds the focus;
+    /// and, if it holds the focus, again once its columns have rendered, which
+    /// makes the innermost focus-holding split win.
+    ///
+    /// A disabled split registers nothing, as a disabled `Button` registers no
+    /// shortcut. `.toolbar(removing: .sidebarToggle)` leaves the chords alone, as
+    /// SwiftUI's menu items stay when its toolbar button goes.
+    func registerSidebarChords(
+        context: RenderContext, toggleState: SplitViewToggleState, holdsFocus: Bool
+    ) {
+        guard !context.isMeasuring, context.environment.isEnabled,
+            let registry = context.environment.keyboardShortcutRegistry
+        else { return }
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        let action = stepAction(toggleState: toggleState, focus: nil) { visibility, isThreeColumn in
+            SplitViewToggle.togglingSidebar(visibility, isThreeColumn: isThreeColumn)
+        }
+        for modifiers: EventModifiers in [[.command, .control], [.command, .option]] {
+            guard let shortcut = KeyboardShortcut("s", modifiers: modifiers)
+                .resolved(commandKey: context.environment.commandKey)
+            else { continue }
+            registry.registerDefault(shortcut, holdsFocus: holdsFocus, action: action)
+        }
     }
 
     /// The edge column for this render, if there is one, and the context the
@@ -328,13 +387,14 @@ extension _NavigationSplitViewCore {
         stepAction(toggleState: toggleState, focus: .edge, step: SplitViewToggle.hidingLeading)
     }
 
-    /// A handle's action: `step` the visibility the split is drawing and write
-    /// the result through the binding, or into the split's own state when there
-    /// is none, recording where the keyboard goes once it is drawn. Reads the
+    /// A handle's or chord's action: `step` the visibility the split is drawing
+    /// and write the result through the binding, or into the split's own state
+    /// when there is none, recording where the keyboard goes once it is drawn
+    /// (`nil` for a chord, which leaves the keyboard where it is). Reads the
     /// visibility when it runs, not when the handle was drawn, so several key
     /// presses in one input batch each take a step.
     private func stepAction(
-        toggleState: SplitViewToggleState, focus: SplitViewFocusTarget,
+        toggleState: SplitViewToggleState, focus: SplitViewFocusTarget?,
         step: @escaping (NavigationSplitViewVisibility, Bool) -> NavigationSplitViewVisibility?
     ) -> () -> Void {
         let binding = columnVisibility
@@ -342,7 +402,7 @@ extension _NavigationSplitViewCore {
         return {
             let current = binding?.wrappedValue ?? toggleState.visibility
             guard let next = step(current, isThreeColumn) else { return }
-            toggleState.pendingFocus = focus
+            if let focus { toggleState.pendingFocus = focus }
             if let binding {
                 binding.wrappedValue = next
             } else {
@@ -367,8 +427,9 @@ extension _NavigationSplitViewCore {
         return result
     }
 
-    /// Settles where the keyboard is, now that this render has registered every
-    /// section the split owns.
+    /// Ends the sidebar toggle's part of a render, now that it has registered
+    /// every section the split owns: settles where the keyboard is, then records
+    /// it, and registers the chords again if the split holds the keyboard.
     ///
     /// - A handle pressed last frame asked for the handle that undoes it (see
     ///   ``SplitViewToggleState/pendingFocus``). The first of its candidates
@@ -379,8 +440,9 @@ extension _NavigationSplitViewCore {
     ///   visible column takes it (see ``SplitViewToggleState/heldFocusSectionID``).
     ///
     /// Either way it then records which of this split's sections holds the
-    /// keyboard, for the next render.
-    func settleFocus(
+    /// keyboard, for the next render, and a split that holds it registers the
+    /// chords as the focus-holding default.
+    func endToggleRender(
         toggleState: SplitViewToggleState?, visibleColumns: [NavigationSplitViewColumn],
         context: RenderContext, focusManager: FocusManager?
     ) {
@@ -388,6 +450,9 @@ extension _NavigationSplitViewCore {
         defer {
             toggleState.heldFocusSectionID = focusManager.activeSectionID(
                 registeredSince: toggleState.sectionsAtRenderStart)
+            if toggleState.heldFocusSectionID != nil {
+                registerSidebarChords(context: context, toggleState: toggleState, holdsFocus: true)
+            }
         }
         guard let target = toggleState.pendingFocus else {
             if let held = toggleState.heldFocusSectionID,

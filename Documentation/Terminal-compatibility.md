@@ -3164,6 +3164,39 @@ rather than wondering why one menu item is dead. `.commandKey(.option)` has no
 such collision, at the cost of Option itself being less reliable: Apple
 Terminal composes accented characters unless "Use Option as Meta key" is on.
 
+#### ⌃S and ⌥⌃S: the split view's sidebar chords (recorded 2026-09-13)
+
+`NavigationSplitView` registers SwiftUI's sidebar chords, ⌃⌘S (View ▸ Show
+Sidebar) and ⌥⌘S (Toggle Sidebar), through `commandKey`. Under the default
+`.control` they are:
+
+| Chord | Resolves to | Bytes | Decodes to |
+|---|---|---|---|
+| ⌃⌘S | ⌃S | `0x13` | `.character("s")`, ctrl |
+| ⌥⌘S | ⌥⌃S | `ESC 0x13` (Esc+ mode) | `.character("s")`, ctrl + alt |
+
+**⌘S and ⌃⌘S collapse.** Removing ⌘ and inserting ⌃ turns an app's plain ⌘S
+(Save) into ⌃S as well, so the two are one trigger. The chords therefore register
+in the shortcut registry's framework-default tier, which any app shortcut beats
+whatever the registration order; on a screen that binds Save, ⌃S saves and ⌥⌃S
+still toggles the sidebar.
+
+**Why `cat -v` shows nothing for ⌃S, and why that is not a measurement.** The
+owner ran `cat -v` in Apple Terminal and pressed ⌃S and ⌃⌥S: nothing appeared.
+That is expected and says nothing about Terminal.app. `cat` runs with the tty in
+cooked mode, where IXON flow control takes ^S as XOFF and pauses output instead of
+delivering the byte (^Q resumes), and ICANON holds input back until Return in any
+case. TUIkit's raw mode clears IXON and ICANON (`Terminal.enableRawMode`), so
+`0x13` reaches the parser; `NavigationSplitViewSidebarChordTests` pins that
+through the `readSource` seam, and pins `ESC 0x13` too. A real measurement needs
+the tty in raw mode without IXON, `stty raw -echo -ixon; od -c`, or a PTY probe.
+
+*Not yet captured:* **what ⌥⌃S sends.** That depends on each terminal's Option
+setting, as the ⌥⌃A table above does: `ESC 0x13` in Esc+ mode, which the chord
+matches; the high bit in Meta mode, or whatever Normal mode composes, neither of
+which reaches it. Measure it with the raw-mode method above, in Terminal.app,
+iTerm2, Ghostty and Warp.
+
 ### Shifted function keys are re-coded (Apple Terminal)
 
 Measured 2026-07-27, `cat -v` in Terminal.app 2.14 (455): **Shift+F10 emits

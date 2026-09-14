@@ -88,6 +88,16 @@ import TUIkitCore
 /// keeps the ◀ alone on its leftmost divider. `.toolbar(removing: .sidebarToggle)`
 /// (``View/toolbar(removing:)``) takes both handles away.
 ///
+/// SwiftUI's sidebar chords work too, through ``EnvironmentValues/commandKey``:
+/// ⌃⌘S and ⌥⌘S, which are ⌃S and ⌥⌃S under the default `.control`. They toggle
+/// the sidebar only, as macOS does — two columns `.all` ⇄ `.detailOnly`, three
+/// `.all` ⇄ `.doubleColumn` — wherever the focus is. An app shortcut on the same
+/// keys wins over them (an app's ⌘S is ⌃S too), as does an `onKeyPress` handler
+/// or a focused control that uses the key, such as a sortable ``Table``. With
+/// several split views on screen, the one holding the focus toggles, else the
+/// first. The chords stay when the handles are removed, and a `.disabled()` split
+/// ignores them.
+///
 /// ## Focus Navigation
 ///
 /// Each column registers as a separate focus section. Use Tab/Shift+Tab to
@@ -243,7 +253,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let style = context.environment.navigationSplitViewStyle
-        let toggleState = resolveToggleState(context: context)
+        let toggleState = beginToggleRender(context: context)
         let visibility = resolveVisibility(toggleState: toggleState)
 
         // Calculate visible columns based on visibility
@@ -370,9 +380,10 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
                 dividers: dividerInfos.map(\.focusID))
             // Every section this split owns is registered now, so a handle
             // pressed last frame can hand the keyboard to the one that undoes
-            // it, and a column hidden with the keyboard in it can hand the
-            // keyboard to the leftmost visible column.
-            settleFocus(
+            // it, a column hidden with the keyboard in it can hand the keyboard
+            // to the leftmost visible column, and a split holding the keyboard
+            // claims the sidebar chords.
+            endToggleRender(
                 toggleState: toggleState, visibleColumns: visibleColumns,
                 context: context, focusManager: focusManager)
         }

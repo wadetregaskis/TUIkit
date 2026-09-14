@@ -160,6 +160,32 @@ The `FocusManager` dispatches key events in three steps:
 
 For more details, see <doc:FocusSystem>.
 
+## Framework Shortcuts
+
+A few controls bind keys of their own, the way SwiftUI's built-in menu items do.
+``NavigationSplitView`` binds SwiftUI's sidebar chords, View ▸ Show Sidebar
+(⌃⌘S) and Toggle Sidebar (⌥⌘S). A terminal cannot report ⌘, so they go through
+``EnvironmentValues/commandKey`` like any other ⌘ shortcut: <kbd>⌃S</kbd> and
+<kbd>⌥⌃S</kbd> under the default `.control`, nothing under `.unavailable`.
+
+| Chord | Default keys | Action |
+|-------|--------------|--------|
+| ⌃⌘S | Ctrl-S (0x13) | Toggle the sidebar of the split view that holds the focus, else the first on screen |
+| ⌥⌘S | Option-Ctrl-S (ESC 0x13, where Option sends ESC) | The same |
+
+They work wherever the focus is, but they are the framework's, not yours, so
+everything of yours on the same keys comes first:
+
+- A `.keyboardShortcut` on the same keys wins, wherever its button renders. Under
+  `.control`, your ⌘S *is* Ctrl-S, so a Save button takes Ctrl-S and the split
+  view keeps Option-Ctrl-S.
+- An `onKeyPress` handler that consumes the key wins.
+- A focused control that uses the key wins: a sortable ``Table`` sorts on
+  Ctrl-S. A `TextField`, a `TextEditor` and a `List` do not use it, so the chord
+  works while typing.
+
+A `.disabled()` split view ignores them.
+
 ## Default Bindings
 
 Layer 4 provides five built-in key bindings, but only quit, suspend and help are enabled without configuration:

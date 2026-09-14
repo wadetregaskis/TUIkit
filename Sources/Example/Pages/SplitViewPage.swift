@@ -203,8 +203,8 @@ struct SplitViewPage: View {
 
     /// Which leading columns are showing — the `columnVisibility` binding. The
     /// split view writes it back when the user hides a column with the ◀ on its
-    /// leftmost divider or brings one back with the ▶ edge column, and this group
-    /// follows. Otherwise it shows what was picked, not what was drawn: Auto stays
+    /// leftmost divider, brings one back with the ▶ edge column, or toggles the
+    /// sidebar with ⌃S, and this group follows. Otherwise it shows what was picked, not what was drawn: Auto stays
     /// selected while all three columns show, because the split view draws
     /// `.automatic` as `.all`.
     ///

@@ -138,7 +138,9 @@ either, the keyboard is on the handle that undoes it, so <kbd>Return</kbd>,
 ``View/navigationSplitViewResizable(_:)`` keeps the ◀ without the grip dots,
 and <kbd>Left</kbd> and <kbd>Right</kbd> on it move to the columns either side.
 ``View/toolbar(removing:)`` with `.sidebarToggle` takes both handles away, on the
-split, above it or inside one of its columns.
+split, above it or inside one of its columns. SwiftUI's sidebar chords, ⌃⌘S and
+⌥⌘S, toggle the sidebar through ``EnvironmentValues/commandKey`` (<kbd>⌃S</kbd>
+and <kbd>⌥⌃S</kbd> by default) wherever the focus is; see <doc:KeyboardShortcuts>.
 The edge column needs the split to be at
 least one cell wider than its visible columns; narrower than that it is left
 out, so it never pushes the columns' content out of the split.
