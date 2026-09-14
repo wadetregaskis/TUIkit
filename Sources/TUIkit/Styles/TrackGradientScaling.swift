@@ -41,7 +41,7 @@ public enum TrackGradientScaling: Sendable, Equatable, CaseIterable {
 
 // MARK: - Environment
 
-private struct TrackGradientScalingKey: EnvironmentKey {
+private struct TrackFillGradientScalingKey: EnvironmentKey {
     static let defaultValue = TrackGradientScaling.track
 }
 
@@ -52,9 +52,9 @@ private struct TrackBackgroundGradientScalingKey: EnvironmentKey {
 extension EnvironmentValues {
     /// What a track's **fill** gradient is measured across. See
     /// ``TUIkit/View/trackGradientScaling(_:)``.
-    public var trackGradientScaling: TrackGradientScaling {
-        get { self[TrackGradientScalingKey.self] }
-        set { self[TrackGradientScalingKey.self] = newValue }
+    public var trackFillGradientScaling: TrackGradientScaling {
+        get { self[TrackFillGradientScalingKey.self] }
+        set { self[TrackFillGradientScalingKey.self] = newValue }
     }
 
     /// What a track's **background** gradient is measured across — the ramp a
@@ -114,7 +114,7 @@ extension View {
     ) -> some View {
         // `background` shadows `View.background(_:)` in this body; it is only
         // ever the parameter here.
-        environment(\.trackGradientScaling, fill)
+        environment(\.trackFillGradientScaling, fill)
             .environment(\.trackBackgroundGradientScaling, background)
     }
 }

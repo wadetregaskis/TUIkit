@@ -348,7 +348,7 @@ struct TrackGradientScalingTests {
     func defaultIsTrack() {
         // Both halves of the default: the environment value a view reads, and
         // the renderer's own parameter for callers that pass none.
-        #expect(EnvironmentValues().trackGradientScaling == .track)
+        #expect(EnvironmentValues().trackFillGradientScaling == .track)
         #expect(EnvironmentValues().trackBackgroundGradientScaling == .track)
         let defaulted = TrackRenderer.render(
             fraction: 0.5, width: 10,
@@ -490,7 +490,7 @@ struct TrackGradientScalingTests {
             var body: Never { fatalError("renders via Renderable") }
             func renderToBuffer(context: RenderContext) -> FrameBuffer {
                 seen.scalings = (
-                    context.environment.trackGradientScaling, context.environment.trackBackgroundGradientScaling)
+                    context.environment.trackFillGradientScaling, context.environment.trackBackgroundGradientScaling)
                 return FrameBuffer()
             }
         }
