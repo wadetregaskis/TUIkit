@@ -252,7 +252,11 @@ extension EnvironmentValues {
         // subtree may still override it. See LocaleEnvironment.swift.
         locale = LocalizationService.shared.currentLanguage.locale
         // …and the scene phase from the run loop, for the same reason: one
-        // source of truth, republished every frame.
+        // source of truth, republished every frame. `appearsActive` is derived
+        // from it rather than held beside it, so the two cannot disagree; it
+        // needs no place of its own in the render loop's `EnvironmentSnapshot`,
+        // because the phase it is derived from already has one.
         scenePhase = context.scenePhase
+        appearsActive = context.scenePhase == .active
     }
 }

@@ -68,3 +68,36 @@ extension EnvironmentValues {
         set { self[ScenePhaseKey.self] = newValue }
     }
 }
+
+// MARK: - appearsActive
+
+private struct AppearsActiveKey: EnvironmentKey {
+    /// A view rendered outside a running app is being looked at, the same
+    /// reasoning as `ScenePhaseKey`.
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// Whether views and styles in this environment should prefer an active
+    /// appearance over an inactive one. Matches SwiftUI's property of the same
+    /// name.
+    ///
+    /// Published each frame beside ``scenePhase``, as `scenePhase == .active`:
+    /// `false` for the frame rendered on the way into a suspend, and whenever
+    /// the scene is reported ``ScenePhase/inactive``. See ``ScenePhase`` for
+    /// what a terminal can and cannot report, and do not build behaviour that
+    /// depends on noticing an inactive window: many terminals never say.
+    ///
+    /// Settable, as in SwiftUI: `.environment(\.appearsActive, true)` makes a
+    /// subtree look active whatever the scene is doing, and `false` makes it
+    /// look inactive.
+    ///
+    /// SwiftUI's `controlActiveState` is not published beside it. SwiftUI
+    /// soft-deprecates it on macOS in favour of this property, and the one
+    /// distinction it adds, between the key window (`.key`) and an active app's
+    /// other windows (`.active`), has no meaning for a single terminal scene.
+    public var appearsActive: Bool {
+        get { self[AppearsActiveKey.self] }
+        set { self[AppearsActiveKey.self] = newValue }
+    }
+}

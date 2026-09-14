@@ -121,6 +121,61 @@ struct ScenePhaseTests {
     private func frameText<A: App>(_ loop: RenderLoop<A>) -> String {
         (loop.replayable?.contentLines ?? []).map(\.stripped).joined(separator: "\n")
     }
+
+    // MARK: - appearsActive
+
+    @Test("Outside a running app a view appears active")
+    func appearsActiveDefaultIsTrue() {
+        #expect(EnvironmentValues().appearsActive)
+    }
+
+    @Test("appearsActive is published from the phase: true only while active")
+    func appearsActiveFollowsThePhase() {
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        for (phase, expected) in [
+            (ScenePhase.inactive, false), (.background, false), (.active, true),
+        ] {
+            tuiContext.scenePhase = phase
+            environment.applyRuntimeServices(from: tuiContext)
+            #expect(environment.appearsActive == expected, "under \(phase)")
+        }
+    }
+
+    @Test("appearsActive survives RenderContext(tuiContext:)")
+    func appearsActiveReachesAView() {
+        let tuiContext = TUIContext()
+        tuiContext.scenePhase = .inactive
+        #expect(render(AppearsActiveReader(), tuiContext: tuiContext) == "inactive")
+    }
+
+    /// Settable, as SwiftUI's is, in both directions: a subtree can say it
+    /// looks inactive in an active scene, or active in an inactive one.
+    @Test("A subtree override of appearsActive is seen below it")
+    func appearsActiveSubtreeOverride() {
+        let active = TUIContext()
+        #expect(render(AppearsActiveReader().environment(\.appearsActive, false), tuiContext: active) == "inactive")
+
+        let inactive = TUIContext()
+        inactive.scenePhase = .inactive
+        #expect(render(AppearsActiveReader().environment(\.appearsActive, true), tuiContext: inactive) == "active")
+    }
+
+    private func render(_ view: some View, tuiContext: TUIContext) -> String {
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 1, environment: environment, tuiContext: tuiContext)
+        let line = renderToBuffer(view, context: context).lines.first?.stripped ?? ""
+        return String(line.reversed().drop { $0 == " " }.reversed())
+    }
+}
+
+private struct AppearsActiveReader: View {
+    @Environment(\.appearsActive) private var appearsActive
+    var body: some View {
+        Text(appearsActive ? "active" : "inactive")
+    }
 }
 
 /// Draws the phase it rendered under as text, so a buffer served from the memo
