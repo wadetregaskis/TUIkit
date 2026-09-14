@@ -57,10 +57,11 @@ public final class FocusManager: @unchecked Sendable {
     /// `registerSectionGroup(_:)`, and cleared with the sections themselves.
     var sectionGroups: [String: [String]] = [:]
 
-    /// Last frame's sections — see ``beginRenderPass()``. Read only by
-    /// ``notifyFocusLost()``, as the fallback when the focused element is not
-    /// registered in the CURRENT frame's ring.
-    private var previousSections: [FocusSection] = []
+    /// Last frame's sections — see ``beginRenderPass()``. Read when the focused
+    /// element is not registered in the CURRENT frame's ring: by
+    /// ``notifyFocusLost()``, to reach it anyway, and by `recoveryTarget(after:)`,
+    /// to find where it stood.
+    private(set) var previousSections: [FocusSection] = []
 
     /// Set when focus was assigned directly from section memory (a modal
     /// dismissal restoring the page's control) at a moment the target could
@@ -1234,20 +1235,23 @@ extension FocusManager {
         // session to end, and `notifyFocusLost` stays silent — see
         // ``pendingRestoreNotificationID``.
         //
-        // Where it goes next depends on which. A control that is STILL HERE but can
-        // no longer hold focus — a button that just disabled itself — hands it to its
-        // nearest neighbour in the ring: the next focusable, else the previous. That
-        // is what `unregister` promises, and what Qt's `setEnabled(false)` does. It
+        // Either way it goes to its nearest neighbour in the ring: the next focusable,
+        // else the previous, never round the end. That is what `unregister` promises.
+        // A control that is STILL HERE but can no longer hold focus (a button that
+        // just disabled itself) walks from where it stands; one that has LEFT the
+        // tree walks from where it stood last frame (`recoveryTarget(after:)`). Both
         // used to fall through to the section's FIRST focusable, so a gradient
         // editor's ▶, pressed until its stop reached the end and disabled itself,
-        // sent the keyboard back to the toggle at the top of the dialog. A control
-        // that has LEFT the tree has no position in this pass's ring to be a
-        // neighbour of, and keeps the first-focusable fallback below.
+        // sent the keyboard back to the toggle at the top of the dialog.
+        //
+        // Not Qt's rule, which this once claimed to be: Qt's `setEnabled(false)`
+        // calls `focusNextChild()`, which wraps round the chain, and then clears the
+        // focus. This deliberately never wraps.
         var recovery: Focusable?
         if let focusID = focusedID, let section = activeSection {
             let focused = section.focusables.first { $0.focusID == focusID }
             if focused == nil || focused?.canBeFocused == false {
-                if focused != nil { recovery = recoveryTarget(after: focusID) }
+                recovery = recoveryTarget(after: focusID)
                 notifyFocusLost()
                 self.focusedID = nil
             }

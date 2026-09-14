@@ -118,6 +118,35 @@ neighbouring column instead — landing on what was last focused there — while
 and Down keep stepping within the column. A focused control that uses Left and
 Right itself, such as an outline's disclosure or a slider, still gets them first.
 
+## When a Control Loses Focus
+
+A focused control can stop being able to hold the focus without anyone moving
+it: it is disabled, hidden with `hidden()`, or removed from the tree. At the end
+of that render pass the focus manager finds the focus a new home, in this order:
+
+1. A `defaultFocus(_:_:priority:)` that still wants the focus takes it.
+2. Otherwise the focus goes to the control's **neighbour** in its section's
+   ring: the next focusable control, else the previous one. It never wraps
+   round the end, so a control at the bottom of a dialog does not send the
+   keyboard back to its top.
+3. If the control cannot be placed in the ring at all, the section's first
+   focusable control.
+
+A control that is still in the tree but can no longer be focused, such as a
+disabled `Button`, walks from where it stands. A control that has left the ring
+walks from where it stood on the last frame: just after the nearest control
+before it that is still there. A disabled `focusable(_:interactions:)` view is
+one of these, because it leaves the ring rather than staying in it disabled, and
+it lands where a disabled `Button` in its place would. A control that an
+`if`/`else` swaps for another hands the focus to its replacement, which stands
+in the same place.
+
+This applies only when the focused control lost the ability to hold focus.
+Tab, the arrow keys, a click, and writing a `@FocusState` move the focus where
+they say. Dismissing a modal returns the focus to the control that held it
+before the modal opened, and a menu opened with the pointer may rest with
+nothing focused.
+
 ## FocusRegistration Helper
 
 Built-in interactive views use the internal `FocusRegistration` helper to avoid boilerplate. It handles three tasks in one call:
