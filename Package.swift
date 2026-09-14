@@ -42,19 +42,31 @@ let package = Package(
         // build requirement.
     ],
     targets: [
+        // Tools/validate-test-boundaries.sh keeps a hand copy of the four
+        // library targets' `dependencies:` below (its `allowed_for` table,
+        // which decides what each per-module test target may import). It
+        // cannot read this file, so change that table whenever these change.
+
         // ── Low-level (no deps) ─────────────────────────────────────────────────────────────────────────
         .target(name: "CSTBImage", publicHeadersPath: "include"),
         .target(name: "TUIkitCore"),
         .target(name: "TUIkitStyling"),
 
         // ── Mid-level ───────────────────────────────────────────────────────────────────────────────────
-        // TUIkitStyling is here for ONE reason: `Color: View` has to be
-        // declared in the module that owns `View`, or a `Color` in a
+        // TUIkitStyling came in for `Color: View`, which has to be declared in
+        // the module that owns `View`: declared anywhere else, a `Color` in a
         // `@ViewBuilder` pack beside a generic view segfaults the debug
         // runtime while instantiating the pack's metadata. See §14 of
         // `Documentation/Gradients where a colour is accepted.md` — it is a
         // toolchain bug, reproduced on Swift 6.2.4 and still present on the
-        // 6.5-dev snapshot of 2026-08-30.
+        // 6.5-dev snapshot of 2026-08-30. PaletteEnvironment.swift and
+        // ColorAnimation.swift moved down with it.
+        //
+        // It is no longer the only use. OpacityClaim.swift derives a
+        // translucent paint's opacity claim from the `Color`s it painted with,
+        // and RenderCache.swift records the surface `Color` a memoized buffer
+        // was blended over. So a toolchain fix would let `Color: View` move
+        // back up, but as the code stands the dependency would stay.
         .target(name: "TUIkitView", dependencies: ["TUIkitCore", "TUIkitStyling"]),
         .target(name: "TUIkitImage", dependencies: ["CSTBImage", "TUIkitStyling"]),
 
