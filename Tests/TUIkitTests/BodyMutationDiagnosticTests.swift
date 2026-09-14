@@ -49,33 +49,63 @@ private struct WellBehavedProbe: View, Renderable {
     }
 }
 
+/// The diagnostic is opt-in via the environment, so a test has to install
+/// one explicitly rather than rely on the process it happens to run in.
+///
+/// A free function rather than a method so an exit test's child process can
+/// call it: an exit test's body cannot capture the suite.
+@MainActor
+private func makeContextWithDiagnostic() -> (RenderContext, BodyMutationDiagnostic) {
+    let diagnostic = BodyMutationDiagnostic()
+    let context = RenderContext(
+        availableWidth: 20,
+        availableHeight: 4,
+        environment: EnvironmentValues(),
+        tuiContext: TUIContext()
+    ).isolatingRenderCache()
+    context.renderCache!.bodyMutationDiagnostic = diagnostic
+    // `isolatingRenderCache()` swaps the CONTEXT's cache; the state boxes
+    // take their invalidation sink from `StateStorage.renderCache`, which
+    // still points at the TUIContext's original. Point it at the isolated
+    // one too, or every write in these tests would route past the
+    // diagnostic and each assertion would pass vacuously.
+    context.environment.stateStorage?.renderCache = context.renderCache
+    return (context, diagnostic)
+}
+
 @MainActor
 @Suite("Body-mutation diagnostic")
 struct BodyMutationDiagnosticTests {
 
-    /// The diagnostic is opt-in via the environment, so a test has to install
-    /// one explicitly rather than rely on the process it happens to run in.
-    private func contextWithDiagnostic() -> (RenderContext, BodyMutationDiagnostic) {
-        let diagnostic = BodyMutationDiagnostic()
-        let context = RenderContext(
-            availableWidth: 20,
-            availableHeight: 4,
-            environment: EnvironmentValues(),
-            tuiContext: TUIContext()
-        ).isolatingRenderCache()
-        context.renderCache!.bodyMutationDiagnostic = diagnostic
-        // `isolatingRenderCache()` swaps the CONTEXT's cache; the state boxes
-        // take their invalidation sink from `StateStorage.renderCache`, which
-        // still points at the TUIContext's original. Point it at the isolated
-        // one too, or every write in these tests would route past the
-        // diagnostic and each assertion would pass vacuously.
-        context.environment.stateStorage?.renderCache = context.renderCache
-        return (context, diagnostic)
+    /// The report is read by people, from a log, so its words are part of what
+    /// it does. The exit test runs in a child process so its stderr can be read
+    /// back whole, which is where the report goes when no file is named.
+    @Test("A report reaches stderr in exactly these words")
+    func reportTextOnStandardError() async {
+        let result = await #expect(processExitsWith: .success, observing: [\.standardErrorContent]) {
+            await MainActor.run {
+                // An inherited TUIKIT_DIAGNOSTICS_FILE would send the report to
+                // that file instead, and this test would read nothing.
+                unsetenv("TUIKIT_DIAGNOSTICS_FILE")
+                let (context, diagnostic) = makeContextWithDiagnostic()
+                diagnostic.beginTraversal()
+                _ = renderToBuffer(MutatingProbe(), context: context)
+                diagnostic.endTraversal()
+            }
+        }
+        let text = String(bytes: result?.standardErrorContent ?? [], encoding: .utf8)
+        #expect(
+            text == """
+                [TUIkit] state written during a tree walk, frame 0: <root>
+                  A write during the walk asks for another frame. If this repeats \
+                every frame the run loop can never idle.
+
+                """)
     }
 
     @Test("A write during the walk is reported, with the subtree that did it")
     func writeDuringWalkIsReported() {
-        let (context, diagnostic) = contextWithDiagnostic()
+        let (context, diagnostic) = makeContextWithDiagnostic()
 
         diagnostic.beginTraversal()
         _ = renderToBuffer(MutatingProbe(), context: context)
@@ -89,7 +119,7 @@ struct BodyMutationDiagnosticTests {
 
     @Test("A view that only reads is not reported")
     func readOnlyViewIsSilent() {
-        let (context, diagnostic) = contextWithDiagnostic()
+        let (context, diagnostic) = makeContextWithDiagnostic()
 
         diagnostic.beginTraversal()
         _ = renderToBuffer(WellBehavedProbe(), context: context)
@@ -103,7 +133,7 @@ struct BodyMutationDiagnosticTests {
     /// frame is what makes the two tellable apart in a log.
     @Test("A per-frame mutation is reported once per frame, not once ever")
     func perFrameMutationRepeatsPerFrame() {
-        let (context, diagnostic) = contextWithDiagnostic()
+        let (context, diagnostic) = makeContextWithDiagnostic()
         let cache = context.renderCache!
 
         for _ in 0..<3 {
@@ -123,7 +153,7 @@ struct BodyMutationDiagnosticTests {
     /// header-height correction — must not read as two separate offences.
     @Test("Two walks of one frame report once")
     func repeatedWalksWithinAFrameReportOnce() {
-        let (context, diagnostic) = contextWithDiagnostic()
+        let (context, diagnostic) = makeContextWithDiagnostic()
 
         context.renderCache!.beginRenderPass()
         for _ in 0..<2 {
@@ -139,7 +169,7 @@ struct BodyMutationDiagnosticTests {
     /// what every event handler does — and must never be reported.
     @Test("A write outside any walk is not a body mutation")
     func writeOutsideWalkIsSilent() {
-        let (context, diagnostic) = contextWithDiagnostic()
+        let (context, diagnostic) = makeContextWithDiagnostic()
 
         // Render once inside a window so the box exists and is wired to the
         // cache, then write again with the window closed, as a key handler would.
@@ -160,7 +190,7 @@ struct BodyMutationDiagnosticTests {
     /// mutation — even if it lands while the main thread happens to be walking.
     @Test("A write from another thread is not reported")
     func writeFromAnotherThreadIsSilent() async {
-        let (context, diagnostic) = contextWithDiagnostic()
+        let (context, diagnostic) = makeContextWithDiagnostic()
 
         diagnostic.beginTraversal()
         _ = renderToBuffer(WellBehavedProbe(), context: context)

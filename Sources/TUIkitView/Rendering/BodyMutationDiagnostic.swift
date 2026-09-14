@@ -35,7 +35,9 @@ import TUIkitCore
 /// Reports go to **stderr**, matching `TUIKIT_DEBUG_RENDER` — stdout is the
 /// terminal UI, so anything written there corrupts the frame. Redirect to
 /// capture; a TUI run without a redirect will scribble on its own screen, which
-/// is the honest trade for having no other channel.
+/// is the honest trade for having no other channel. `TUIKIT_DIAGNOSTICS_FILE`
+/// names a file to append them to instead, which is the channel every
+/// framework diagnostic shares.
 ///
 /// ``reports`` collects the same records in memory, which is how tests read
 /// them and how an app could surface them itself.
@@ -83,32 +85,6 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
     /// Every mutation reported so far, oldest first.
     public var reports: [Report] {
         lock.withLock { collected }
-    }
-
-    /// Where reports go. `TUIKIT_DIAGNOSTICS_FILE` names a file; otherwise
-    /// stderr, matching `TUIKIT_DEBUG_RENDER`.
-    ///
-    /// A file is the better channel and the reason is the same one that makes
-    /// this whole area awkward: a TUI owns the terminal, so stderr lands on the
-    /// screen it is drawing unless the caller redirects — and under a PTY probe
-    /// there is nothing to redirect *to*, since stderr and stdout are the same
-    /// pseudo-terminal. A path sidesteps that entirely.
-    public static let destination: String? =
-        ProcessInfo.processInfo.environment["TUIKIT_DIAGNOSTICS_FILE"]
-
-    /// Appends `text` wherever reports are configured to go.
-    public static func emit(_ text: String) {
-        guard let path = destination else {
-            FileHandle.standardError.write(Data(text.utf8))
-            return
-        }
-        if let handle = FileHandle(forWritingAtPath: path) {
-            handle.seekToEndOfFile()
-            handle.write(Data(text.utf8))
-            try? handle.close()
-        } else {
-            try? text.write(toFile: path, atomically: true, encoding: .utf8)
-        }
     }
 
     /// A token for the calling thread — the whole of what this diagnostic needs
@@ -172,7 +148,7 @@ public final class BodyMutationDiagnostic: @unchecked Sendable {
             return report
         }
         guard let report else { return }
-        Self.emit(
+        DiagnosticChannel.emit(
             (
                 """
                 [TUIkit] state written during a tree walk, frame \(report.frame): \
