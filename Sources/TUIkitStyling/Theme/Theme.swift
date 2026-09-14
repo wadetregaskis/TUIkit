@@ -170,7 +170,18 @@ extension Palette {
     /// terminals have no alpha, so the blend has to be resolved to a concrete
     /// cell colour (see ``Color/opacity(_:over:)``, and
     /// `Documentation/Terminal-compatibility.md` on the 256-colour cube).
-    public var focusBackground: Color { foregroundTertiary.opacity(0.3, over: background) }
+    public var focusBackground: Color { derivedFocusBackground() }
+
+    /// What the default `focusBackground` derives from this palette's other
+    /// roles: the tertiary foreground at 30% composited over the background.
+    ///
+    /// The default's body, as a function a palette's own override does not
+    /// replace. So it still answers "what would the default be here" for a
+    /// palette that states its own `focusBackground`, or for a wrapper that
+    /// forwards one.
+    package func derivedFocusBackground() -> Color {
+        foregroundTertiary.opacity(0.3, over: background)
+    }
 
     /// The text caret's colour. Defaults to ``accent``, so the caret is the
     /// same hue as the rest of the palette's active-element cues.
@@ -186,7 +197,15 @@ extension Palette {
     /// that has to announce an edge. Sharing one number made the choice between
     /// them: at a plane's step Novel's fields disappeared, and at a well's every
     /// tab body shouted.
-    public var fieldBackground: Color {
+    public var fieldBackground: Color { derivedFieldBackground() }
+
+    /// What the default `fieldBackground` derives from this palette's other
+    /// roles: the stated chrome tone when it is a well's worth of separation
+    /// from the page, and otherwise the page stepped by `wellSeparation`.
+    ///
+    /// The default's body, as a function a palette's own override does not
+    /// replace, for the reason `derivedFocusBackground()` gives.
+    package func derivedFieldBackground() -> Color {
         let base = background.resolve(with: self)
         let stated = appHeaderBackground.resolve(with: self)
         if Self.isVisiblySeparate(stated, from: base, separation: Self.wellSeparation) {
