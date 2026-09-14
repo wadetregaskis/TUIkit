@@ -69,9 +69,11 @@ enum IndeterminateRenderer {
     /// is shown.
     ///
     /// Sampled at 30 frames a second shown — the rate these bars used to ask to be
-    /// re-rendered at — so the animation looks as it did, at any speed. Frames that
-    /// come out identical cost nothing at replay: ``AnimatedCellRun`` skips
-    /// straight past them.
+    /// re-rendered at — so the animation looks as it did, at any speed, up to
+    /// `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` frames, past which each
+    /// lasts longer. Frames that come out identical cost nothing at replay:
+    /// ``AnimatedCellRun`` skips straight past them. They still cost their building
+    /// and their memory, which is what the bound is for.
     static func cycle(
         width: Int, style: IndeterminateStyle,
         fillColor: Color, backgroundColor: Color, accentColor: Color,

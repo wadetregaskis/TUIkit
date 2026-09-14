@@ -73,6 +73,40 @@ struct IndicatorAnimationSpeedValueTests {
         }
     }
 
+    /// A ramp is sampled at its frame rate until that would be more than a thousand
+    /// frames. A longer cycle keeps a thousand, each longer, so it costs no more to
+    /// build than a 33 s bar and still lasts exactly as long. Before, an hour was
+    /// 108,000 frames, and a rate of 1e-9 asked for `Int32.max` of them.
+    @Test("A ramp longer than a thousand frames is sampled at a thousand, and its cycle stays exact")
+    func rampFrameCountIsBounded() {
+        let cases: [(standardCycle: Double, speed: IndicatorAnimationSpeed, framesPerSecond: Double, frames: Int)] = [
+            (20, 1, 30, 600),
+            (1000.0 / 30, 1, 30, 1000),
+            (40, 1, 30, 1000),
+            (3600, 1, 30, 1000),
+            (1.6, 0.001, 30, 1000),
+            (0.8, 0.0001, 20, 1000),
+            (1.6, IndicatorAnimationSpeed(1e-9), 30, 1000),
+        ]
+        for (standardCycle, speed, framesPerSecond, frames) in cases {
+            for snapping in [false, true] {
+                let layout = speed.rampLayout(
+                    standardCycle: standardCycle, framesPerSecond: framesPerSecond, snapping: snapping)
+                let label = "\(standardCycle) s at \(speed.rate), \(framesPerSecond) fps, snapping \(snapping)"
+                #expect(layout.frameCount == frames, "\(label)")
+                #expect(
+                    AnimationClock.nanoseconds(Double(layout.frameCount) * layout.frameDuration)
+                        == AnimationClock.nanoseconds(standardCycle / speed.rate), "\(label)")
+            }
+        }
+        // A tolerance cannot lift the bound: 1,600 s at 0.001 ± 0.0005 has no whole
+        // number of 1/30 s frames in its band that a thousand frames reach.
+        let tolerant = IndicatorAnimationSpeed(0.001, tolerance: 0.0005)
+            .rampLayout(standardCycle: 1.6, framesPerSecond: 30, snapping: true)
+        #expect(tolerant.frameCount == 1000)
+        #expect(AnimationClock.nanoseconds(tolerant.frameDuration) == 1_600_000_000)
+    }
+
     @Test("The presets and literals are the rates they name, exact")
     func presets() {
         #expect(IndicatorAnimationSpeed.standard == IndicatorAnimationSpeed(1))
@@ -296,6 +330,18 @@ private struct QuickTranslucentSweepApp: App {
     }
 }
 
+/// A translucent `.sweep` bar whose pass the app set to an hour.
+private struct HourLongTranslucentSweepApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 3600)))
+                .tint(Color.red.opacity(0.5))
+        }
+    }
+}
+
 @MainActor
 @Suite("Indicator animation speed on indeterminate bars")
 struct IndicatorAnimationSpeedBarTests {
@@ -442,5 +488,53 @@ struct IndicatorAnimationSpeedBarTests {
         }
         #expect(try cycleNanos(1) == 1_600_000_000)
         #expect(try cycleNanos(2) == 800_000_000)
+    }
+
+    /// At 30 frames a second an hour is 108,000 frames, every one built at the first
+    /// render and held for as long as the bar is on screen.
+    @Test("An hour-long pass is a thousand frames of 3.6 s, and lasts exactly an hour")
+    func hourLongPassIsBounded() throws {
+        let run = try #require(
+            bar(ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 3600))))
+                .animatedCells.first)
+        #expect(run.frames.count == 1000)
+        #expect(AnimationClock.nanoseconds(run.frameDuration) == 3_600_000_000)
+        #expect(AnimationClock.nanoseconds(run.cycleDuration) == 3_600_000_000_000)
+        // Sampled across the whole hour, not its first 33 s: the head of a 20-cell
+        // sweep stands on every column.
+        #expect(Set(run.frames).count == 20)
+    }
+
+    /// As pictures, each frame is also an image sent to the terminal: 1,800 of them
+    /// for a minute at 30 frames a second.
+    @Test("A minute-long .gradient pass is a thousand frames of 60 ms as pictures and as glyphs")
+    func minuteLongGradientIsBoundedOnBothPaths() throws {
+        let view = ProgressView().indeterminateStyle(
+            .custom(IndeterminateConfiguration(motion: .gradient, period: 60)))
+        let pictures = bar(view, pictures: true)
+        let glyphs = bar(view)
+        #expect(placeholders(pictures) == 20, "the picture path was not taken")
+        #expect(placeholders(glyphs) == 0, "the glyph path drew pictures")
+        for buffer in [pictures, glyphs] {
+            let run = try #require(buffer.animatedCells.first)
+            #expect(run.frames.count == 1000)
+            #expect(AnimationClock.nanoseconds(run.frameDuration) == 60_000_000)
+            #expect(AnimationClock.nanoseconds(run.cycleDuration) == 60_000_000_000)
+        }
+    }
+
+    /// A declined bar wakes at the frames its pass is laid out in, so an hour-long
+    /// bar asks for a render every 3.6 s, as its run would change, not every 1/30 s.
+    @Test("A translucent hour-long bar asks for its next render at the end of its 3.6 s frame")
+    func hourLongFallbackWakesAtItsFrame() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(HourLongTranslucentSweepApp())
+        let scheduler = AnimationScheduler()
+        let now: Int64 = 1_037_000_000
+        scheduler.beginFrame()
+        loop.render(animationScheduler: scheduler, frameNowNanos: now)
+        scheduler.endFrame()
+        #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
+        #expect(scheduler.nextFiring(after: now) == 3_600_000_000)
     }
 }

@@ -97,6 +97,11 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// assertion failure. A release build reports it once and uses 1.6 seconds,
     /// the ``sweep`` preset's period, whichever preset the configuration was
     /// built from.
+    ///
+    /// A pass is drawn from frames built ahead, 30 a second, up to a thousand. A
+    /// pass longer than a thousand thirtieths of a second (about 33 seconds) keeps a
+    /// thousand frames, each shown for a thousandth of the pass, so a very slow bar
+    /// costs no more to build and hold than a 33-second one.
     public var period: Double
 
     /// The lit run's length as a fraction of the track, for the two motions

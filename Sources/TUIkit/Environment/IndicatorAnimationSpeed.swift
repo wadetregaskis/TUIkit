@@ -152,17 +152,33 @@ extension IndicatorAnimationSpeed {
         /// frames runs at. A view that draws the ramp at an arbitrary instant, rather
         /// than from its frames, draws it at the clock's elapsed time times this.
         let timeScale: Double
+
+        /// The most frames a ramp's cycle is sampled at. A longer cycle keeps this
+        /// many, each longer.
+        ///
+        /// Every frame of a cycle is built at its first render and held while it is on
+        /// screen: an indeterminate bar's styled row, or its picture sent to the
+        /// terminal. At 30 frames a second an hour-long pass was 108,000 of them,
+        /// measured at 9.4 s and 214 MB for an 80-cell `.gradient` bar in a debug build,
+        /// and a 600 s one drawn as pictures took 68 s. Nothing that slow changes
+        /// visibly 30 times a second. A glyph bar has at most four positions a cell
+        /// (the `.gradient` motion's quarter-cell steps; a sweep has one), so a thousand
+        /// frames still show every step of a bar up to 250 cells wide.
+        static let maximumFrameCount = 1000
     }
 
     /// How a continuous ramp (an indeterminate bar's pass) is laid out at this
     /// speed: over its cycle divided by the rate, sampled as often as at the
-    /// standard rate.
+    /// standard rate, up to ``RampLayout/maximumFrameCount`` frames.
     ///
     /// Frames are not stretched or squeezed, the way a sequence's are
     /// (``frameDuration(standard:)``). The frame count is the cycle times
-    /// `framesPerSecond`, rounded, at least two, and each frame lasts the cycle over
-    /// the count. So a slowed ramp stays smooth, and a quickened one does not wake
-    /// the loop more often than a standard one does.
+    /// `framesPerSecond`, rounded, at least two and at most
+    /// ``RampLayout/maximumFrameCount``, and each frame lasts the cycle over the
+    /// count. So a slowed ramp stays smooth, a quickened one does not wake the loop
+    /// more often than a standard one does, and a very slow one costs no more to
+    /// build than one of a thousand frames. The cycle lasts exactly its length
+    /// whichever bound applies.
     ///
     /// With `snapping` and a tolerance, a cycle of whole frames
     /// (`count / framesPerSecond`) is used instead, when its rate is within the
@@ -180,9 +196,11 @@ extension IndicatorAnimationSpeed {
         standardCycle: TimeInterval, framesPerSecond: Double, snapping: Bool
     ) -> RampLayout {
         let cycle = standardCycle / rate
-        // Capped so `Int(_:)` cannot trap on a rate small enough to ask for more
-        // frames than an `Int32` holds; nobody watches a ramp that slow move.
-        let count = max(2, Int(min((cycle * framesPerSecond).rounded(), Double(Int32.max))))
+        // Bounded in `Double` before `Int(_:)`, which would trap on a count too large
+        // for an `Int`. Past the bound the frames lengthen instead (`cycle / count`
+        // below), so the cycle stays exact.
+        let count = max(
+            2, Int(min((cycle * framesPerSecond).rounded(), Double(RampLayout.maximumFrameCount))))
         if snapping, tolerance > 0 {
             let whole = Double(count) / framesPerSecond
             let fastest = standardCycle / (rate + tolerance)
@@ -217,7 +235,8 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     ///
     /// A blink is two frames that stretch: each half is 350 ms at the standard
     /// rate, divided by the rate. A pulse is a ramp: its 800 ms cycle is divided by
-    /// the rate and still sampled every 50 ms. Within the speed's tolerance the
+    /// the rate and still sampled every 50 ms, up to a thousand frames a cycle, past
+    /// which the frames lengthen. Within the speed's tolerance the
     /// pulse may move onto whole 50 ms frames.
     public static let textCursor = Self(rawValue: 1 << 0)
 
@@ -226,7 +245,8 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     ///
     /// A blink is two frames that stretch: each half is 350 ms at the standard
     /// rate, divided by the rate. A breath is a ramp: its 800 ms cycle is divided
-    /// by the rate and still sampled every 50 ms, so a slow breath stays smooth.
+    /// by the rate and still sampled every 50 ms, so a slow breath stays smooth, up
+    /// to a thousand frames a cycle, past which the frames lengthen.
     /// Within the speed's tolerance the breath may move onto whole 50 ms frames.
     public static let focusEmphasis = Self(rawValue: 1 << 1)
 
@@ -235,7 +255,9 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     public static let spinners = Self(rawValue: 1 << 2)
 
     /// An indeterminate ``ProgressView``'s bar: one pass of its motion takes its
-    /// period divided by the rate.
+    /// period divided by the rate, sampled at 30 frames a second, up to a thousand
+    /// frames a pass. A longer pass keeps a thousand frames, each longer, and still
+    /// takes exactly that time.
     ///
     /// A named ``IndeterminateStyle`` preset's pass may move within the speed's
     /// tolerance onto whole frames of the bar's 30 frames a second. A period an app

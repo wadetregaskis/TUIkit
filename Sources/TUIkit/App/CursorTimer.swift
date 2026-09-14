@@ -273,7 +273,8 @@ extension CursorTimer {
     ///   blink more frames rather than longer ones.
     /// - **A pulse is continuous.** ``standardPulseCycle`` divided by the rate,
     ///   sampled at its standard frame, one cursor tick: `max(2, round(cycle / tick))`
-    ///   frames, each `cycle / count` long, so the cycle is exactly that length. A
+    ///   frames, at most `RampLayout.maximumFrameCount`, each `cycle / count` long,
+    ///   so the cycle is exactly that length. A
     ///   slowed breath stays as smooth, and a quickened one wakes the loop no more
     ///   often. Within `speed`'s tolerance the cycle may move onto whole ticks
     ///   (``IndicatorAnimationSpeed/rampLayout(standardCycle:framesPerSecond:snapping:)``);

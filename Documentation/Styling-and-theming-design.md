@@ -253,12 +253,15 @@ extension View {
   tolerance.
 - **Every kind reads it.** A spinner's frames are a sequence, so each lasts its
   standard duration divided by the rate. A bar's pass is a ramp: it takes its
-  period divided by the rate, and is still sampled at 30 frames a second. A named
+  period divided by the rate, and is still sampled at 30 frames a second, up to
+  1,000 frames a pass; a longer pass keeps 1,000 frames, each longer, so its cycle
+  stays exact and costs no more to build than a 33 s one. A named
   preset's pass may move within the tolerance onto whole frames, which moves
   nothing while those frames are 1/30 s. A period the app sets through `.custom`
   stays exact. The focus emphasis and the caret have both kinds, laid out alike:
   a blink is two frames of 350 ms at the standard rate, which stretch, and a
-  breath or pulse is an 800 ms ramp sampled every 50 ms, which may move within
+  breath or pulse is an 800 ms ramp sampled every 50 ms (up to 1,000 frames a
+  cycle, by the same rule), which may move within
   the tolerance onto whole 50 ms frames (at 800 ms it already is). Neither
   `SelectionIndicatorStyle` nor `TextCursorStyle` carries a speed of its own.
 - **A theme can set them too**, with `Theme.indicatorAnimationSpeeds` (§6).
