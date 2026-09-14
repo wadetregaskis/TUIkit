@@ -19,10 +19,10 @@ struct IndeterminateStyleEditor: View {
     /// index: reordering the enum must not silently repoint a saved setting.
     @AppStorage("indeterminateEditor.motion") private var motionName = "sweep"
     @AppStorage("indeterminateEditor.fill") private var fillGlyph = "█"
-    @AppStorage("indeterminateEditor.empty") private var emptyGlyph = "░"
+    @AppStorage("indeterminateEditor.empty") private var backgroundPattern = "░"
     @AppStorage("indeterminateEditor.period") private var period = 1.6
     @AppStorage("indeterminateEditor.extent") private var extent = 1.0 / 3.0
-    @AppStorage("indeterminateEditor.tinted") private var tinted = false
+    @AppStorage("indeterminateEditor.tinted") private var coloured = false
     /// The ramp's stops, persisted as comma-separated hex like every other
     /// editable gradient on these pages. Default: the teal → violet demo.
     @AppStorage("indeterminateEditor.stops") private var stopsRaw = "3CC8BE,506EF0,AA46DC"
@@ -33,7 +33,7 @@ struct IndeterminateStyleEditor: View {
     // from the track editor's: a fill that reads well under a sweep is not the
     // one that reads well behind a boundary ramp.
     @AppStorage("indeterminateEditor.recentFills") private var recentFillsJSON = "[]"
-    @AppStorage("indeterminateEditor.recentEmpties") private var recentEmptiesJSON = "[]"
+    @AppStorage("indeterminateEditor.recentEmpties") private var recentBackgroundsJSON = "[]"
 
     private static let defaultStops = Gradient(colors: [
         .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
@@ -44,7 +44,7 @@ struct IndeterminateStyleEditor: View {
     private let fillGlyphs = ["█", "▓", "▌", "■", "●", "◢◤", "━", "=", "🎵"]
 
     /// Pre-defined unlit patterns, matching the track editor's vocabulary.
-    private let emptyGlyphs = ["░", "·", "─", "␣", "•"]
+    private let backgroundPatterns = ["░", "·", "─", "␣", "•"]
 
     private var motion: IndeterminateConfiguration.Motion {
         IndeterminateConfiguration.Motion(rawValue: motionName) ?? .sweep
@@ -77,8 +77,8 @@ struct IndeterminateStyleEditor: View {
         IndeterminateConfiguration(
             motion: motion,
             fill: fillGlyph.isEmpty ? "█" : fillGlyph,
-            background: emptyGlyph == "␣" ? " " : (emptyGlyph.isEmpty ? "░" : emptyGlyph),
-            gradient: tinted ? stops : nil,
+            background: backgroundPattern == "␣" ? " " : (backgroundPattern.isEmpty ? "░" : backgroundPattern),
+            gradient: coloured ? stops : nil,
             period: period,
             extent: extent)
     }
@@ -99,8 +99,8 @@ struct IndeterminateStyleEditor: View {
                     "component.trackEditor.fill", text: $fillGlyph, width: 9,
                     predefined: fillGlyphs, recentsJSON: $recentFillsJSON)
                 comboField(
-                    "component.trackEditor.unfilled", text: $emptyGlyph, width: 9,
-                    predefined: emptyGlyphs, recentsJSON: $recentEmptiesJSON)
+                    "component.trackEditor.unfilled", text: $backgroundPattern, width: 9,
+                    predefined: backgroundPatterns, recentsJSON: $recentBackgroundsJSON)
             }
 
             Slider(value: $period, in: 0.2...6, step: 0.1) {
@@ -114,9 +114,9 @@ struct IndeterminateStyleEditor: View {
             .disabled(!usesExtent)
 
             HStack(spacing: 2) {
-                Toggle("component.indeterminateEditor.colors", isOn: $tinted)
+                Toggle("component.indeterminateEditor.colors", isOn: $coloured)
                 Button("component.trackEditor.editGradient") { editingStops = true }
-                    .disabled(!tinted)
+                    .disabled(!coloured)
             }
             Text("component.trackEditor.comboHint")
                 .foregroundStyle(.palette.foregroundSecondary)
