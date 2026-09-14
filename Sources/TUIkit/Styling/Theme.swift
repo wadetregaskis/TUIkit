@@ -14,7 +14,8 @@ import TUIkitView
 ///
 /// A theme is **not** a new resolution mechanism — `.theme(_:)` expands into the
 /// individual environment settings (palette, appearance, tint, a set of scoped
-/// style entries, and optional control styles), so anything applied *closer* to
+/// style entries, optional control styles, and indicator animation speeds), so
+/// anything applied *closer* to
 /// the content still overrides it. It's the convenient way to apply a consistent
 /// set of customisations app-wide (or to any subtree).
 ///
@@ -41,6 +42,15 @@ public struct Theme: Sendable {
     public var listStyle: (any ListStyle)?
     /// The picker style to install, or `nil` to keep the inherited/default style.
     public var pickerStyle: (any PickerStyle)?
+    /// How fast the theme's ambient indicators animate, per kind: each entry sets
+    /// a speed as ``View/indicatorAnimationSpeed(_:for:)`` does.
+    ///
+    /// Applied broadest first, the entry naming the most kinds before the ones
+    /// naming fewer, so the theme's narrower entries win where they overlap, as its
+    /// scoped styles do; entries naming as many kinds apply in the order they are
+    /// written. A kind no entry names keeps what it inherited, and a speed set
+    /// closer to the content still wins.
+    public var indicatorAnimationSpeeds: [IndicatorAnimationSpeeds.Entry]
 
     public init(
         palette: any Palette,
@@ -49,7 +59,8 @@ public struct Theme: Sendable {
         styles: [StyleCascade.Entry] = [],
         buttonStyle: (any ButtonStyle)? = nil,
         listStyle: (any ListStyle)? = nil,
-        pickerStyle: (any PickerStyle)? = nil
+        pickerStyle: (any PickerStyle)? = nil,
+        indicatorAnimationSpeeds: [IndicatorAnimationSpeeds.Entry] = []
     ) {
         self.palette = palette
         self.appearance = appearance
@@ -58,6 +69,7 @@ public struct Theme: Sendable {
         self.buttonStyle = buttonStyle
         self.listStyle = listStyle
         self.pickerStyle = pickerStyle
+        self.indicatorAnimationSpeeds = indicatorAnimationSpeeds
     }
 
     /// The palette with the theme's tint folded into its accent — what the
@@ -129,6 +141,7 @@ public struct ThemeModifier<Content: View>: View {
             note(styleToken(theme.buttonStyle) as Any, \EnvironmentValues.buttonStyle)
             note(styleToken(theme.listStyle) as Any, \EnvironmentValues.listStyle)
             note(styleToken(theme.pickerStyle) as Any, \EnvironmentValues.pickerStyle)
+            note(theme.indicatorAnimationSpeeds, \EnvironmentValues.indicatorAnimationSpeeds)
             if changed {
                 // A theme is ink; the sizes below it stay, as `TintModifier` and
                 // `_StyleEnvironmentView` both keep theirs.
@@ -154,9 +167,34 @@ public struct ThemeModifier<Content: View>: View {
             cascade = cascade.appending(entry.scope, entry.attributes)
         }
         environment.styleCascade = cascade
+        if !theme.indicatorAnimationSpeeds.isEmpty {
+            environment.indicatorAnimationSpeeds = Self.applying(
+                theme.indicatorAnimationSpeeds, to: environment.indicatorAnimationSpeeds)
+        }
         var modified = context.withEnvironment(environment)
         modified.environmentApplicationDepth += 1
         return modified
+    }
+}
+
+extension ThemeModifier {
+    /// `inherited`, with `entries` set over it broadest first: the entry naming the
+    /// most kinds before the ones naming fewer, and entries naming as many kinds in
+    /// the order they are written. The speed counterpart of the specificity order
+    /// the theme's scoped styles are installed in.
+    static func applying(
+        _ entries: [IndicatorAnimationSpeeds.Entry], to inherited: IndicatorAnimationSpeeds
+    ) -> IndicatorAnimationSpeeds {
+        let ordered = entries.enumerated().sorted { lhs, rhs in
+            let lhsKinds = lhs.element.indicators.rawValue.nonzeroBitCount
+            let rhsKinds = rhs.element.indicators.rawValue.nonzeroBitCount
+            return lhsKinds != rhsKinds ? lhsKinds > rhsKinds : lhs.offset < rhs.offset
+        }
+        var speeds = inherited
+        for (_, entry) in ordered {
+            speeds.set(entry.speed, for: entry.indicators)
+        }
+        return speeds
     }
 }
 

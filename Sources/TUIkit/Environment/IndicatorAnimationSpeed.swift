@@ -293,6 +293,31 @@ public struct IndicatorAnimationSpeeds: Hashable, Sendable {
     }
 }
 
+extension IndicatorAnimationSpeeds {
+    /// One speed for some kinds of indicator, as a ``Theme`` lists them in
+    /// ``Theme/indicatorAnimationSpeeds``.
+    ///
+    /// Spelled as ``View/indicatorAnimationSpeed(_:for:)`` is:
+    /// `Entry(.halfSpeed, for: .spinners)`.
+    public struct Entry: Hashable, Sendable {
+        /// The speed.
+        public var speed: IndicatorAnimationSpeed
+
+        /// The kinds of indicator it applies to.
+        public var indicators: IndicatorAnimations
+
+        /// Creates an entry.
+        ///
+        /// - Parameters:
+        ///   - speed: The speed.
+        ///   - indicators: Which kinds of indicator it applies to. Defaults to all.
+        public init(_ speed: IndicatorAnimationSpeed, for indicators: IndicatorAnimations = .all) {
+            self.speed = speed
+            self.indicators = indicators
+        }
+    }
+}
+
 private struct IndicatorAnimationSpeedsKey: EnvironmentKey {
     static let defaultValue = IndicatorAnimationSpeeds()
 }
@@ -301,7 +326,8 @@ extension EnvironmentValues {
     /// How fast each kind of ambient indicator in this subtree animates.
     ///
     /// Set it with ``View/indicatorAnimationSpeed(_:for:)``, which changes only
-    /// the kinds it names.
+    /// the kinds it names, or for a whole theme with
+    /// ``Theme/indicatorAnimationSpeeds``.
     public var indicatorAnimationSpeeds: IndicatorAnimationSpeeds {
         get { self[IndicatorAnimationSpeedsKey.self] }
         set { self[IndicatorAnimationSpeedsKey.self] = newValue }

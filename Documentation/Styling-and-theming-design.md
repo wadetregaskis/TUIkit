@@ -261,6 +261,7 @@ extension View {
   breath or pulse is an 800 ms ramp sampled every 50 ms, which may move within
   the tolerance onto whole 50 ms frames (at 800 ms it already is). Neither
   `SelectionIndicatorStyle` nor `TextCursorStyle` carries a speed of its own.
+- **A theme can set them too**, with `Theme.indicatorAnimationSpeeds` (§6).
 
 ## 4. Tint (implemented **last** — wholly new)
 
@@ -289,7 +290,8 @@ change — nested disabling — hence its own late phase.)
 
 A theme is **not** a new resolution mechanism — it's a struct whose `.theme(_:)`
 modifier expands into individual environment settings (palette, appearance, tint,
-and a set of scoped style entries). Deeper modifiers then override pieces naturally.
+a set of scoped style entries, control styles and indicator animation speeds).
+Deeper modifiers then override pieces naturally.
 
 ```swift
 public struct Theme: Sendable {
@@ -300,6 +302,7 @@ public struct Theme: Sendable {
     public var buttonStyle: any ButtonStyle
     public var listStyle: any ListStyle
     public var pickerStyle: any PickerStyle
+    public var indicatorAnimationSpeeds: [IndicatorAnimationSpeeds.Entry]  // §3.8
     // …extensible
 }
 
@@ -312,6 +315,16 @@ buttons are bold" — as scoped entries, ordered by specificity within the bundl
 its specific entries beat its broad ones, while any deeper subtree modifier still
 wins by proximity. Built-in themes wrap the palettes from the colour work (phosphor
 presets + Terminal.app profiles).
+
+`indicatorAnimationSpeeds` is the same idea for §3.8's speeds, which are not style
+entries because an indicator has no scope path. Each entry is a speed for some
+kinds, spelled as the modifier is (`Entry(.halfSpeed, for: .spinners)`). They
+apply broadest first, so the entry naming the most kinds goes first and a
+narrower one wins where they overlap: `[.spinners: 0.5, .all: 2]` gives spinners
+0.5 and every other kind 2, in either order. Entries naming as many kinds apply
+in the order written. A kind no entry names keeps what it inherited, and
+`.theme(_:)` notes the entries for the render cache, so a theme whose speeds
+alone change re-renders a memoized subtree below it.
 
 **Override semantics (confirmed):** `.theme()` sets the baseline; any modifier
 closer to the content wins; a nested `.theme()` fully replaces for its subtree.
