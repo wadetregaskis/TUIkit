@@ -1,10 +1,10 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
-//  TerminalProfilePalette.swift
+//  AppleTerminalPalette.swift
 //
 //  Created by LAYERED.work
 //  License: MIT
 
-// MARK: - Terminal Profile Palette
+// MARK: - Apple Terminal Palette
 
 /// A palette recreating one of the built-in **macOS Terminal.app** profiles
 /// (Basic, Grass, Homebrew, Man Page, Novel, Ocean, Pro, Red Sands, Silver
@@ -28,7 +28,7 @@
 /// - `success / warning / error / info` are readable green / amber / red / blue
 ///   tuned to the background's lightness (Terminal uses its default ANSI set
 ///   for all profiles, so these are intentionally profile-independent in hue).
-public struct TerminalProfilePalette: Palette, Hashable {
+public struct AppleTerminalPalette: Palette, Hashable {
 
     // MARK: - Profile
 
@@ -190,7 +190,7 @@ public struct TerminalProfilePalette: Palette, Hashable {
 
 // MARK: - Profile Specifications
 
-extension TerminalProfilePalette {
+extension AppleTerminalPalette {
 
     /// The five defining colours of each profile, as exact sRGB values decoded
     /// from the shipped `.terminal` files. `cursor`/`selection` are `nil` where
@@ -259,7 +259,7 @@ extension TerminalProfilePalette {
 
 // MARK: - Derivation Helpers
 
-extension TerminalProfilePalette {
+extension AppleTerminalPalette {
 
     /// Whether a colour reads as "dark" by perceived luminance (Rec. 601 luma).
     private static func isDark(_ color: Color) -> Bool {
@@ -300,7 +300,7 @@ extension TerminalProfilePalette {
 
 // MARK: - Convenience
 
-extension TerminalProfilePalette {
+extension AppleTerminalPalette {
     /// Every Terminal.app profile palette, in Terminal's listing order.
-    public static let all: [TerminalProfilePalette] = Profile.allCases.map(TerminalProfilePalette.init)
+    public static let all: [AppleTerminalPalette] = Profile.allCases.map(AppleTerminalPalette.init)
 }

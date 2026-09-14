@@ -19,7 +19,7 @@ import TUIkitView
 /// set of customisations app-wide (or to any subtree).
 ///
 /// ```swift
-/// WindowGroup { ContentView() }.theme(.init(palette: TerminalProfilePalette(.ocean)))
+/// WindowGroup { ContentView() }.theme(.init(palette: AppleTerminalPalette(.ocean)))
 /// // …or just one slice deeper:
 /// DangerZone().tint(.red)
 /// ```

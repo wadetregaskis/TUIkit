@@ -209,10 +209,10 @@ Available presets (`SystemPalette.Preset`):
 - `.blue` — vacuum fluorescent displays (VFDs)
 - `.white` — DEC VT100/VT220 (P4 phosphor)
 
-**macOS Terminal.app profiles** — `TerminalProfilePalette` recreates ten built-in Terminal.app profiles from their exact shipped colours (Basic, Grass, Homebrew, Man Page, Novel, Ocean, Pro, Red Sands, Silver Aerogel, Solid Colors):
+**macOS Terminal.app profiles** — `AppleTerminalPalette` recreates ten built-in Terminal.app profiles from their exact shipped colours (Basic, Grass, Homebrew, Man Page, Novel, Ocean, Pro, Red Sands, Silver Aerogel, Solid Colors):
 
 ```swift
-.palette(TerminalProfilePalette(.homebrew))
+.palette(AppleTerminalPalette(.homebrew))
 ```
 
 `PaletteRegistry.all` enumerates all 16 built-in palettes (`.phosphorPresets` + `.terminalProfiles`), with `PaletteRegistry.palette(withId:)` / `palette(withName:)` lookups. Custom palettes conform to `Palette` directly, and the `ColorPicker` lets users edit colours interactively — R/G/B inline, or the full modal editor from a click or `Return` on its swatch.

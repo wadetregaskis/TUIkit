@@ -380,7 +380,7 @@ struct ThemeBundleTests {
     @Test(".theme applies palette + tint + scoped styles together")
     func themeBundle() {
         let theme = Theme(
-            palette: TerminalProfilePalette(.ocean),
+            palette: AppleTerminalPalette(.ocean),
             tint: .rgb(7, 8, 9),
             styles: [
                 StyleCascade.Entry(
@@ -398,7 +398,7 @@ struct ThemeBundleTests {
         // the palette background (the label itself is contrast-floored, so
         // the raw tint RGB shows in the fill, not the text).
         let face = Color.rgb(7, 8, 9).opacity(
-            ViewConstants.focusBorderDim, over: TerminalProfilePalette(.ocean).background)
+            ViewConstants.focusBorderDim, over: AppleTerminalPalette(.ocean).background)
         #expect(joined.contains(sgrTriplet(face)), "theme tint reaches the button face")
         #expect(
             buffer.lines.contains { $0.contains("SETTINGS") },

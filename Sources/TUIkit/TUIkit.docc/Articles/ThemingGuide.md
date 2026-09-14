@@ -20,7 +20,7 @@ TUIkit includes a full theming system with six built-in palettes inspired by cla
 These six classic-phosphor presets are instances of ``SystemPalette``.
 
 In addition, TUIkit ships recreations of the ten built-in **macOS Terminal.app**
-profiles as ``TerminalProfilePalette`` — Basic, Grass, Homebrew, Man Page, Novel,
+profiles as ``AppleTerminalPalette`` — Basic, Grass, Homebrew, Man Page, Novel,
 Ocean, Pro, Red Sands, Silver Aerogel and Solid Colors — built from the exact
 colours those profiles ship with.
 

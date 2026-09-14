@@ -246,7 +246,7 @@ struct MyApp: App {
 
 - ``Palette``
 - ``SystemPalette``
-- ``TerminalProfilePalette``
+- ``AppleTerminalPalette``
 - ``PaletteRegistry``
 - ``Color``
 - ``Font``

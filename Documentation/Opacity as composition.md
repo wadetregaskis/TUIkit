@@ -4542,7 +4542,7 @@ this, had no row for either. Its doc comment said to add one for anything below
 `// MARK: - Color Derivations`, and `Color.swift` has no such mark; `adjusted(by:)` sits
 under "Private Helpers". The rows are added, and the comment now describes what a
 derivation looks like rather than where one lives. The framework's own caller,
-`TerminalProfilePalette`'s bar background, is only ever handed the opaque colours decoded
+`AppleTerminalPalette`'s bar background, is only ever handed the opaque colours decoded
 from Terminal's profiles, so no bundled theme renders differently.
 
 ### 71.1 `Color.gradient` took the same step, and a faded colour's ramp faded in

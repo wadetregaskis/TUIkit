@@ -875,12 +875,12 @@ public struct PaletteRegistry {
     public static let phosphorPresets: [any Palette] = SystemPalette.Preset.allCases.map { SystemPalette($0) }
 
     /// Recreations of the built-in macOS Terminal.app profiles, built from
-    /// ``TerminalProfilePalette/Profile``.
+    /// ``AppleTerminalPalette/Profile``.
     ///
     /// Order: Basic → Grass → Homebrew → Man Page → Novel → Ocean → Pro →
     /// Red Sands → Silver Aerogel → Solid Colors
-    public static let terminalProfiles: [any Palette] = TerminalProfilePalette.Profile.allCases.map {
-        TerminalProfilePalette($0)
+    public static let terminalProfiles: [any Palette] = AppleTerminalPalette.Profile.allCases.map {
+        AppleTerminalPalette($0)
     }
 
     /// All built-in palettes in cycling order: the phosphor presets first, then
