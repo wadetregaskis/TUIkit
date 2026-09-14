@@ -382,7 +382,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             isDisabled: isDisabled,
             displayCharacter: { _ in TerminalSymbols.maskBullet },
             surface: chrome.surface,
-            contentForeground: cascaded.foreground
+            contentForeground: cascaded.foreground,
+            cursorSpeed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor)
         )
 
         let fieldContent = renderer.buildContent(

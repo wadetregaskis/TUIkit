@@ -47,6 +47,15 @@ struct TextFieldContentRenderer {
     /// The cursor, selection, and (dim) prompt keep their own colours.
     var contentForeground: Color?
 
+    /// How fast the caret animates: the speed set for the text cursor, which a
+    /// field reads from its environment as
+    /// `indicatorAnimationSpeeds.speed(for: .textCursor)`.
+    ///
+    /// Held here rather than handed to `buildContent`, which already takes as many
+    /// arguments as a function should. `.automatic` is also what a field under no
+    /// setting has.
+    var cursorSpeed: IndicatorAnimationSpeed = .automatic
+
     /// The entered-text foreground, resolved to a concrete colour. A
     /// `.textFieldTextStyle` override may be a *semantic* colour (e.g.
     /// `.palette.accent`); resolving it against the palette here keeps a
@@ -447,7 +456,7 @@ struct TextFieldContentRenderer {
         let (cycle, colors) = Self.caretSetup(
             palette: palette, background: background, textForeground: textForeground,
             selection: (selectionForeground, selectionBackground),
-            cursorStyle: cursorStyle, cursorTimer: cursorTimer, timing: cursorTiming)
+            cursorStyle: cursorStyle, speed: cursorSpeed, cursorTimer: cursorTimer, timing: cursorTiming)
         var caret: AnimatedCellRun?
 
         func emitCaret(cells: Int, underlying: Character, isSelected: Bool) {
@@ -526,11 +535,15 @@ struct TextFieldContentRenderer {
     /// background at all — falls back to the page, and then only on the cells the
     /// caret occupies while it is visible.
     ///
+    /// `speed` is the one set for the caret, which the caller reads from its
+    /// environment as `indicatorAnimationSpeeds.speed(for: .textCursor)`.
+    ///
     /// Static, and shared with `TextEditor`, whose rows draw this same caret.
     static func caretSetup(
         palette: any Palette, background: Color?, textForeground: Color,
         selection: (foreground: Color, background: Color),
-        cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?, timing: IndicatorCycleTiming?
+        cursorStyle: TextCursorStyle, speed: IndicatorAnimationSpeed, cursorTimer: CursorTimer?,
+        timing: IndicatorCycleTiming?
     ) -> (cycle: CursorCycle, colors: CaretColors) {
         // The whole cycle, not just this tick's frame: the caret's cells are the
         // only thing that changes while a focused field sits still, and
@@ -543,7 +556,7 @@ struct TextFieldContentRenderer {
         let ground = background ?? palette.background
         let cycle = Self.computeCursorCycle(
             baseColor: palette.cursorColor, over: ground,
-            animation: cursorStyle.animation, speed: cursorStyle.speed,
+            animation: cursorStyle.animation, speed: speed,
             cursorTimer: cursorTimer, timing: timing)
         return (
             cycle,
@@ -759,7 +772,7 @@ struct TextFieldContentRenderer {
         baseColor: Color,
         over surface: Color,
         animation: TextCursorStyle.Animation,
-        speed: TextCursorStyle.Speed,
+        speed: IndicatorAnimationSpeed,
         cursorTimer: CursorTimer?,
         timing forced: IndicatorCycleTiming? = nil
     ) -> CursorCycle {

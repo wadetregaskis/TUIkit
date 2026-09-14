@@ -212,7 +212,13 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
         self.rawValue = rawValue
     }
 
-    /// A text field's caret, blinking or pulsing. Not yet read by the caret.
+    /// The caret of a ``TextField``, a ``SecureField`` or a ``TextEditor``,
+    /// whatever ``TextCursorStyle`` it has.
+    ///
+    /// A blink is two frames that stretch: each half is 350 ms at the standard
+    /// rate, divided by the rate. A pulse is a ramp: its 800 ms cycle is divided by
+    /// the rate and still sampled every 50 ms. Within the speed's tolerance the
+    /// pulse may move onto whole 50 ms frames.
     public static let textCursor = Self(rawValue: 1 << 0)
 
     /// The breath or blink a focused control draws itself with, whatever

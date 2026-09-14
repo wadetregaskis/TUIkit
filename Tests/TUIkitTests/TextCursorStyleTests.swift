@@ -29,36 +29,32 @@ struct TextCursorStyleTests {
 
     // MARK: - Default Values
 
-    @Test("Default style uses block shape with blink animation at regular speed")
+    @Test("Default style uses block shape with blink animation")
     func defaultStyle() {
         let style = TextCursorStyle()
         #expect(style.shape == .block)
         #expect(style.animation == .blink)
-        #expect(style.speed == .regular)
     }
 
-    @Test("Static block convenience uses block shape with blink at regular speed")
+    @Test("Static block convenience uses block shape with blink")
     func staticBlockConvenience() {
         let style = TextCursorStyle.block
         #expect(style.shape == .block)
         #expect(style.animation == .blink)
-        #expect(style.speed == .regular)
     }
 
-    @Test("Static bar convenience uses bar shape with blink at regular speed")
+    @Test("Static bar convenience uses bar shape with blink")
     func staticBarConvenience() {
         let style = TextCursorStyle.bar
         #expect(style.shape == .bar)
         #expect(style.animation == .blink)
-        #expect(style.speed == .regular)
     }
 
-    @Test("Static underscore convenience uses underscore shape with blink at regular speed")
+    @Test("Static underscore convenience uses underscore shape with blink")
     func staticUnderscoreConvenience() {
         let style = TextCursorStyle.underscore
         #expect(style.shape == .underscore)
         #expect(style.animation == .blink)
-        #expect(style.speed == .regular)
     }
 
     // MARK: - Custom Initialization
@@ -130,69 +126,14 @@ struct TextCursorStyleTests {
         #expect(cases.contains(.pulse))
     }
 
-    // MARK: - Speed
-
-    @Test("Speed has exactly three cases")
-    func speedHasThreeCases() {
-        #expect(TextCursorStyle.Speed.allCases.count == 3)
-    }
-
-    @Test("Speed cases are slow, regular, fast")
-    func speedCasesCorrect() {
-        let cases = TextCursorStyle.Speed.allCases
-        #expect(cases.contains(.slow))
-        #expect(cases.contains(.regular))
-        #expect(cases.contains(.fast))
-    }
-
-    @Test("Slow speed has correct blink cycle")
-    func slowSpeedBlinkCycle() {
-        #expect(TextCursorStyle.Speed.slow.blinkCycleMs == 1000)
-    }
-
-    @Test("Regular speed has correct blink cycle")
-    func regularSpeedBlinkCycle() {
-        // 700, not 660: a 330 ms half is 6.6 of the 50 ms ticks the blink is
-        // drawn on, and the period wobbled 600↔700 ms for exactly that reason.
-        #expect(TextCursorStyle.Speed.regular.blinkCycleMs == 700)
-    }
-
-    @Test("Fast speed has correct blink cycle")
-    func fastSpeedBlinkCycle() {
-        #expect(TextCursorStyle.Speed.fast.blinkCycleMs == 400)
-    }
-
-    @Test("Slow speed has correct pulse cycle")
-    func slowSpeedPulseCycle() {
-        #expect(TextCursorStyle.Speed.slow.pulseCycleMs == 1200)
-    }
-
-    @Test("Regular speed has correct pulse cycle")
-    func regularSpeedPulseCycle() {
-        #expect(TextCursorStyle.Speed.regular.pulseCycleMs == 800)
-    }
-
-    @Test("Fast speed has correct pulse cycle")
-    func fastSpeedPulseCycle() {
-        #expect(TextCursorStyle.Speed.fast.pulseCycleMs == 500)
-    }
-
-    @Test("Styles with different speeds are not equal")
-    func inequalityWithDifferentSpeeds() {
-        let style1 = TextCursorStyle(shape: .block, animation: .pulse, speed: .slow)
-        let style2 = TextCursorStyle(shape: .block, animation: .pulse, speed: .fast)
-        #expect(style1 != style2)
-    }
-
     // MARK: - Environment Default
 
-    @Test("Environment default is block with blink at regular speed")
+    @Test("Environment default is block with blink")
     func environmentDefaultValue() {
         let env = EnvironmentValues()
         let style = env.textCursorStyle
         #expect(style.shape == .block)
         #expect(style.animation == .blink)
-        #expect(style.speed == .regular)
     }
 
     // MARK: - Over-the-top rendering (TextField)

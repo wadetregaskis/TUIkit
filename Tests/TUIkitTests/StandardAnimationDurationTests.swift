@@ -46,8 +46,8 @@ struct StandardAnimationDurationTests {
     /// The standard blink's half, and the standard pulse's frame and cycle, as those
     /// cycles are laid out.
     private static let cursorDurations: [StandardAnimationDuration] = {
-        let blink = CursorTimer.cycleLayout(of: .blink, speed: .regular)
-        let pulse = CursorTimer.cycleLayout(of: .pulse, speed: .regular)
+        let blink = CursorTimer.cycleLayout(of: .blink, speed: .standard)
+        let pulse = CursorTimer.cycleLayout(of: .pulse, speed: .standard)
         return [
             StandardAnimationDuration(name: "blinkHalf", seconds: blink.timing.frameDuration),
             StandardAnimationDuration(name: "pulseFrame", seconds: pulse.timing.frameDuration),

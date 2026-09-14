@@ -73,8 +73,9 @@ struct AnimationClockGatingTests {
 @Suite("One focus clock")
 struct FocusClockUnityTests {
 
-    /// Every speed the style offers.
-    private var speeds: [TextCursorStyle.Speed] { [.slow, .regular, .fast] }
+    /// Half, the default and double speed: breaths of 32, 16 and 8 frames, each of which
+    /// has a frame at its dim end.
+    private var speeds: [IndicatorAnimationSpeed] { [.halfSpeed, .automatic, .doubleSpeed] }
 
     @Test("A breath starts at its BRIGHT end")
     func breathStartsBright() {

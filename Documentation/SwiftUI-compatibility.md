@@ -743,7 +743,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `.palette` / `.appearance` (View **and** Scene), `SystemPalette`, `ColorDepth`, `BorderStyle` | ANSI theming + capability tiers |
 | `.mouseSupport` (Scene) | opt into terminal mouse tracking modes |
 | `.appHeader`, `.notificationHost`, `.modal` | out-of-tree surfaces + terminal modal |
-| `.textCursor(_:animation:speed:)` | text-field cursor shape/blink |
+| `.textCursor(_:animation:)`, `.indicatorAnimationSpeed(_:for:)` | text-field cursor shape/blink; how fast a caret, a focus emphasis, a spinner or an indeterminate bar animates, per kind |
 | `.dimmed()`, `Text.dim()/.blink()/.inverted()` | ANSI display attributes |
 | `.memoized(id:)` | reuses a subtree's previous *rendering* while a caller-supplied token holds. The token counterpart to `.equatable()`, which SwiftUI does have: `equatable()` PROVES a subtree unchanged with `==`, and this one takes the caller's word, which is the only option open to a view holding a closure (every `Button` action) or an `AnyView`. SwiftUI needs no such escape hatch because its diffing sees through the view graph the compiler builds for it; TUIkit re-runs `body` and compares values, so where equality is undecidable there is nothing to compare. Named apart deliberately — SwiftUI's nearest spelling, `.drawingGroup()`, is about compositing rather than caching. Inherits `EquatableView`'s storability gate, so an interactive or time-varying subtree is refused rather than served wrongly, and one buffer per memoized identity is released when the view leaves the tree |
 | Image: `.imageCharacterSet`/`.imageColorMode`/`.imageDithering`/… | raster→ASCII conversion controls |

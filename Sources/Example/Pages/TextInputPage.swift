@@ -41,15 +41,18 @@ struct TextInputPage: View {
     // Cursor settings (F1/F2/F3), applied to the whole page's cursor.
     @State private var cursorShapeIndex: Int = 0
     @State private var cursorAnimationIndex: Int = 0
-    @State private var cursorSpeedIndex: Int = 1  // Start at regular
+    @State private var cursorSpeedIndex: Int = 1  // Start at standard
 
     private let shapes: [TextCursorStyle.Shape] = [.block, .bar, .underscore]
     private let animations: [TextCursorStyle.Animation] = [.none, .blink, .pulse]
-    private let speeds: [TextCursorStyle.Speed] = [.slow, .regular, .fast]
+    /// The caret's speed is not part of its style: it is the speed set for
+    /// `.textCursor` with `.indicatorAnimationSpeed(_:for:)`. F3 steps through the
+    /// three recommended presets, though any positive rate works.
+    private let speeds: [IndicatorAnimationSpeed] = [.halfSpeed, .standard, .doubleSpeed]
 
     private var currentShape: TextCursorStyle.Shape { shapes[cursorShapeIndex] }
     private var currentAnimation: TextCursorStyle.Animation { animations[cursorAnimationIndex] }
-    private var currentSpeed: TextCursorStyle.Speed { speeds[cursorSpeedIndex] }
+    private var currentSpeed: IndicatorAnimationSpeed { speeds[cursorSpeedIndex] }
 
     private var shapeLabel: String {
         // The glyph prefix is the shape's own rendering, so the label always
@@ -74,10 +77,11 @@ struct TextInputPage: View {
     }
 
     private var speedLabel: String {
-        switch currentSpeed {
-        case .slow: L("page.textField.speed.slow")
-        case .regular: L("page.textField.speed.regular")
-        case .fast: L("page.textField.speed.fast")
+        // By position, because a speed is a value rather than an enum case.
+        switch cursorSpeedIndex {
+        case 0: L("page.textField.speed.half")
+        case 2: L("page.textField.speed.double")
+        default: L("page.textField.speed.standard")
         }
     }
 
@@ -281,7 +285,8 @@ struct TextInputPage: View {
 
             Spacer()
         }
-        .textCursor(currentShape, animation: currentAnimation, speed: currentSpeed)
+        .textCursor(currentShape, animation: currentAnimation)
+        .indicatorAnimationSpeed(currentSpeed, for: .textCursor)
         .statusBarItems(cursorStatusBarItems)
         .scrollableDemoPage()
         .appHeader {

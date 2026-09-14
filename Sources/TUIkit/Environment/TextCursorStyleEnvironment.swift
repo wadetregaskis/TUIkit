@@ -47,25 +47,26 @@ extension View {
         environment(\.textCursorStyle, style)
     }
 
-    /// Sets the text cursor style with separate shape, animation, and speed parameters.
+    /// Sets the text cursor style with separate shape and animation parameters.
     ///
-    /// Use this modifier when you want to specify shape, animation, and speed:
+    /// How fast the cursor animates is set apart from its style, with
+    /// ``View/indicatorAnimationSpeed(_:for:)`` for
+    /// ``IndicatorAnimations/textCursor``:
     ///
     /// ```swift
     /// TextField("Code", text: $code)
-    ///     .textCursor(.underscore, animation: .blink, speed: .fast)
+    ///     .textCursor(.underscore, animation: .blink)
+    ///     .indicatorAnimationSpeed(.doubleSpeed, for: .textCursor)
     /// ```
     ///
     /// - Parameters:
     ///   - shape: The cursor shape.
     ///   - animation: The cursor animation. Defaults to `.pulse`.
-    ///   - speed: The animation speed. Defaults to `.regular`.
     /// - Returns: A view with the cursor style applied.
     public func textCursor(
         _ shape: TextCursorStyle.Shape,
-        animation: TextCursorStyle.Animation = .pulse,
-        speed: TextCursorStyle.Speed = .regular
+        animation: TextCursorStyle.Animation = .pulse
     ) -> some View {
-        environment(\.textCursorStyle, TextCursorStyle(shape: shape, animation: animation, speed: speed))
+        environment(\.textCursorStyle, TextCursorStyle(shape: shape, animation: animation))
     }
 }

@@ -99,7 +99,7 @@ struct ControlIndicatorAlphaTests {
         for animation in TextCursorStyle.Animation.allCases {
             let states = TextFieldContentRenderer.computeCursorCycle(
                 baseColor: faded, over: .black, animation: animation,
-                speed: .regular, cursorTimer: nil
+                speed: .standard, cursorTimer: nil
             ).states
             let carried = states.enumerated().filter { !$0.element.color.isOpaque }
             #expect(

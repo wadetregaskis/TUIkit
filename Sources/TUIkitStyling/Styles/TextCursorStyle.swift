@@ -31,11 +31,10 @@
 ///
 /// ## Animation Speed
 ///
-/// | Speed | Multiplier | Cycle Duration |
-/// |-------|------------|----------------|
-/// | `slow` | 1.5x | ~1.3 seconds |
-/// | `regular` | 3x | ~0.67 seconds |
-/// | `fast` | 6x | ~0.33 seconds |
+/// How fast the cursor animates is not part of its style. It is the speed set for
+/// the text cursor with `indicatorAnimationSpeed(_:for: .textCursor)`. At the
+/// standard rate a blink shows and hides for 350 ms each and a pulse takes 800 ms,
+/// and each is divided by the rate: at `.doubleSpeed` a blink's halves are 175 ms.
 ///
 /// ## Usage
 ///
@@ -49,7 +48,8 @@
 ///
 /// // Fast blinking underscore cursor
 /// TextField("Code", text: $code)
-///     .textCursor(.underscore, animation: .blink, speed: .fast)
+///     .textCursor(.underscore, animation: .blink)
+///     .indicatorAnimationSpeed(.doubleSpeed, for: .textCursor)
 ///
 /// // Apply to all text fields in a container
 /// VStack {
@@ -65,19 +65,14 @@ public struct TextCursorStyle: Equatable, Sendable {
     /// The animation style of the cursor.
     public let animation: Animation
 
-    /// The speed of the cursor animation.
-    public let speed: Speed
-
-    /// Creates a text cursor style with the specified shape, animation, and speed.
+    /// Creates a text cursor style with the specified shape and animation.
     ///
     /// - Parameters:
     ///   - shape: The cursor shape. Defaults to `.block`.
     ///   - animation: The cursor animation. Defaults to `.blink`.
-    ///   - speed: The animation speed. Defaults to `.regular`.
-    public init(shape: Shape = .block, animation: Animation = .blink, speed: Speed = .regular) {
+    public init(shape: Shape = .block, animation: Animation = .blink) {
         self.shape = shape
         self.animation = animation
-        self.speed = speed
     }
 }
 
@@ -135,43 +130,15 @@ extension TextCursorStyle {
     }
 }
 
-// MARK: - Speed
-
-extension TextCursorStyle {
-    /// The speed of the cursor animation.
-    ///
-    /// Each speed defines specific cycle durations for blink and pulse animations,
-    /// controlled by the `CursorTimer`.
-    public enum Speed: String, CaseIterable, Sendable {
-        /// Slow animation.
-        ///
-        /// - Blink: 1000ms cycle (500ms on, 500ms off)
-        /// - Pulse: 1200ms cycle (1.2 second breathing)
-        case slow
-
-        /// Regular animation (default).
-        ///
-        /// - Blink: 660ms cycle (330ms on, 330ms off)
-        /// - Pulse: 800ms cycle (0.8 second breathing)
-        case regular
-
-        /// Fast animation.
-        ///
-        /// - Blink: 400ms cycle (200ms on, 200ms off)
-        /// - Pulse: 500ms cycle (0.5 second breathing)
-        case fast
-    }
-}
-
 // MARK: - Convenience Initializers
 
 extension TextCursorStyle {
-    /// A block cursor with blink animation at regular speed (the default style).
-    public static let block = TextCursorStyle(shape: .block, animation: .blink, speed: .regular)
+    /// A block cursor with blink animation (the default style).
+    public static let block = TextCursorStyle(shape: .block, animation: .blink)
 
-    /// A bar cursor with blink animation at regular speed.
-    public static let bar = TextCursorStyle(shape: .bar, animation: .blink, speed: .regular)
+    /// A bar cursor with blink animation.
+    public static let bar = TextCursorStyle(shape: .bar, animation: .blink)
 
-    /// An underscore cursor with blink animation at regular speed.
-    public static let underscore = TextCursorStyle(shape: .underscore, animation: .blink, speed: .regular)
+    /// An underscore cursor with blink animation.
+    public static let underscore = TextCursorStyle(shape: .underscore, animation: .blink)
 }

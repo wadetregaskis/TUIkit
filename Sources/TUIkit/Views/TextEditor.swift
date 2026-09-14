@@ -218,6 +218,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             let setup = TextFieldContentRenderer.caretSetup(
                 palette: palette, background: fieldBackground, textForeground: styling.text,
                 selection: styling.selection, cursorStyle: cursorStyle,
+                speed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor),
                 cursorTimer: context.environment.cursorTimer,
                 timing: context.environment.indicatorCycleTiming)
             caret = RowCaret(

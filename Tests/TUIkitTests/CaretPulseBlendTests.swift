@@ -19,7 +19,7 @@ struct CaretPulseBlendTests {
     /// clock: `computeCursorCycle` builds every tick up front.
     private func dimmestState(base: Color, over surface: Color) -> Color? {
         let cycle = TextFieldContentRenderer.computeCursorCycle(
-            baseColor: base, over: surface, animation: .pulse, speed: .regular,
+            baseColor: base, over: surface, animation: .pulse, speed: .standard,
             cursorTimer: nil)
         return cycle.states
             .map(\.color)

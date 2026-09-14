@@ -26,16 +26,13 @@ import Testing
 @MainActor
 @Suite("A cursor blink's period is regular")
 struct CursorBlinkRegularityTests {
-    /// The focus emphasis's speeds under test: the default, the presets, and two
-    /// rates whose frames are not whole cursor ticks.
+    /// The speeds under test, for the focus emphasis and the caret alike: the
+    /// default, the presets, and two rates whose frames are not whole cursor ticks.
     ///
     /// `nonisolated`: `@Test(arguments:)` reads it from outside the main actor.
-    nonisolated static let emphasisSpeeds: [IndicatorAnimationSpeed] = [
+    nonisolated static let speeds: [IndicatorAnimationSpeed] = [
         .automatic, .halfSpeed, .doubleSpeed, 1.5, 3,
     ]
-
-    /// The caret's speeds.
-    nonisolated static let caretSpeeds: [TextCursorStyle.Speed] = [.slow, .regular, .fast]
 
     /// 100,000 s of uptime, on the 50 ms lattice, so the focus clock's zero is here.
     private let base: UInt64 = 100_000 * 1_000_000_000
@@ -64,14 +61,14 @@ struct CursorBlinkRegularityTests {
     }
 
     /// The caret's blink cycle at `speed`.
-    private func caretCycle(_ speed: TextCursorStyle.Speed) -> TextFieldContentRenderer.CursorCycle {
+    private func caretCycle(_ speed: IndicatorAnimationSpeed) -> TextFieldContentRenderer.CursorCycle {
         TextFieldContentRenderer.computeCursorCycle(
             baseColor: .red, over: .black, animation: .blink, speed: speed, cursorTimer: nil)
     }
 
     /// The caret's blink as the run a text field builds from it, showing "on " while
     /// the caret is visible and "off" while it is not.
-    private func caretBlinkRun(_ speed: TextCursorStyle.Speed) -> AnimatedCellRun {
+    private func caretBlinkRun(_ speed: IndicatorAnimationSpeed) -> AnimatedCellRun {
         let cycle = caretCycle(speed)
         return AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 3, frames: cycle.states.map { $0.visible ? "on " : "off" },
@@ -81,7 +78,7 @@ struct CursorBlinkRegularityTests {
     /// A blink's standard half, 350 ms, at `speed`'s rate, in nanoseconds. Every
     /// speed under test is exact but the default, whose 350 ms is already a whole
     /// number of base ticks.
-    private func emphasisHalfNanos(_ speed: IndicatorAnimationSpeed) -> Int64 {
+    private func halfNanos(_ speed: IndicatorAnimationSpeed) -> Int64 {
         AnimationClock.nanoseconds(0.35 / speed.rate)
     }
 
@@ -115,20 +112,20 @@ struct CursorBlinkRegularityTests {
 
     @Test(
         "A focus blink holds visible and hidden for exactly half its cycle, at every speed",
-        arguments: emphasisSpeeds)
+        arguments: speeds)
     func emphasisBlinkIsRegular(_ speed: IndicatorAnimationSpeed) throws {
-        expectRegularBlink(try emphasisBlinkRun(speed), half: emphasisHalfNanos(speed), "\(speed)")
+        expectRegularBlink(try emphasisBlinkRun(speed), half: halfNanos(speed), "\(speed)")
     }
 
-    @Test("A caret blink holds visible and hidden for exactly half its cycle, at every speed", arguments: caretSpeeds)
-    func caretBlinkIsRegular(_ speed: TextCursorStyle.Speed) {
-        expectRegularBlink(caretBlinkRun(speed), half: Int64(speed.blinkCycleMs) * 1_000_000 / 2, "\(speed)")
+    @Test("A caret blink holds visible and hidden for exactly half its cycle, at every speed", arguments: speeds)
+    func caretBlinkIsRegular(_ speed: IndicatorAnimationSpeed) {
+        expectRegularBlink(caretBlinkRun(speed), half: halfNanos(speed), "\(speed)")
     }
 
     /// A control that re-renders mid-blink draws what the live reader says, and the
     /// loop replays the run between renders. If the two disagree about when a half
     /// ends, the emphasis steps.
-    @Test("A render that reads the blink sees what the replayed run shows, at every instant", arguments: emphasisSpeeds)
+    @Test("A render that reads the blink sees what the replayed run shows, at every instant", arguments: speeds)
     func liveBlinkMatchesTheRun(_ speed: IndicatorAnimationSpeed) throws {
         let run = try emphasisBlinkRun(speed)
         let timer = CursorTimer(renderNotifier: AppState())
@@ -147,7 +144,7 @@ struct CursorBlinkRegularityTests {
 
     /// 0.8 s at the speed's rate, sampled one 50 ms cursor tick a frame as nearly as
     /// a whole number of frames allows.
-    @Test("A focus breath lasts exactly its cycle, sampled once a cursor tick, at every speed", arguments: emphasisSpeeds)
+    @Test("A focus breath lasts exactly its cycle, sampled once a cursor tick, at every speed", arguments: speeds)
     func breathLastsItsCycle(_ speed: IndicatorAnimationSpeed) throws {
         let cycle = emphasisCycle(.pulse, speed)
         let run = try #require(cycle.run(offsetX: 0, offsetY: 0) { "\($0.phase)" })
@@ -156,7 +153,7 @@ struct CursorBlinkRegularityTests {
         #expect(AnimationClock.nanoseconds(run.frameDuration) == AnimationClock.nanoseconds(0.8 / speed.rate / Double(count)))
     }
 
-    @Test("A render that reads the breath sees the phase the replayed run shows, at every instant", arguments: emphasisSpeeds)
+    @Test("A render that reads the breath sees the phase the replayed run shows, at every instant", arguments: speeds)
     func liveBreathMatchesTheRun(_ speed: IndicatorAnimationSpeed) throws {
         let cycle = emphasisCycle(.pulse, speed)
         let run = try #require(cycle.run(offsetX: 0, offsetY: 0) { "\($0.phase)" })
@@ -187,10 +184,10 @@ struct CursorBlinkRegularityTests {
         #expect(AnimationClock.nanoseconds(breath.frameDuration) == 50_000_000)
     }
 
-    @Test("A caret blink is two frames of half its cycle", arguments: caretSpeeds)
-    func caretCycleIsLaidOutByKind(_ speed: TextCursorStyle.Speed) {
+    @Test("A caret blink is two frames of half its cycle", arguments: speeds)
+    func caretCycleIsLaidOutByKind(_ speed: IndicatorAnimationSpeed) {
         let caret = caretCycle(speed)
         #expect(caret.states.count == 2)
-        #expect(AnimationClock.nanoseconds(caret.timing.frameDuration) == Int64(speed.blinkCycleMs) * 1_000_000 / 2)
+        #expect(AnimationClock.nanoseconds(caret.timing.frameDuration) == halfNanos(speed))
     }
 }
