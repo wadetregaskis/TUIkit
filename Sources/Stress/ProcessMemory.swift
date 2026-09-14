@@ -88,7 +88,15 @@ enum ProcessMemory {
         // branch is `#elseif`'d out there.
         var line = [CChar](repeating: 0, count: 128)
         guard fgets(&line, Int32(line.count), handle) != nil else { return nil }
-        let fields = String(cString: line).split(separator: " ")
+        // Up to `fgets`'s terminating NUL, validated as UTF-8 — not
+        // `String(cString: line)`, whose `[CChar]` overload is deprecated.
+        // `truncatingIfNeeded` so the byte conversion compiles whether
+        // `CChar` is signed or unsigned.
+        guard let text = String(
+            validating: line.prefix { $0 != 0 }.map { UInt8(truncatingIfNeeded: $0) },
+            as: UTF8.self)
+        else { return nil }
+        let fields = text.split(separator: " ")
         guard fields.count > 1, let resident = UInt64(fields[1]) else { return nil }
         return resident &* UInt64(sysconf(_SC_PAGESIZE))
         #else
