@@ -196,6 +196,9 @@ extension AppRunner {
         // drains and wakes the notifier. `await`s until every source is armed.
         await signals.install(wake: { [weak stdinArrival] in stdinArrival?.wake() })
         terminal.enterAlternateScreen()
+        // From here stderr is the screen being drawn, so a soft trap's report is
+        // held until the terminal is handed back (`cleanup`, `suspendUntilContinued`).
+        SoftTrap.holdUntilTerminalRestored()
         terminal.hideCursor()
         terminal.enableRawMode()
 
@@ -587,6 +590,8 @@ extension AppRunner {
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()
+        // The shell's screen is back, so held soft-trap reports can be read there.
+        SoftTrap.terminalRestored()
         // Our own resume delivers a SIGCONT too; the repaint is already
         // forced below, so arm the source to swallow that one signal.
         // Arming (not consume-after-resume): the SIGCONT source runs on the
@@ -618,6 +623,7 @@ extension AppRunner {
         }
         #endif
         terminal.enterAlternateScreen()
+        SoftTrap.holdUntilTerminalRestored()
         terminal.hideCursor()
         terminal.enableRawMode()
         // `disableRawMode` put grapheme clustering (mode 2027) back the way the
@@ -702,6 +708,7 @@ extension AppRunner {
         terminal.disableRawMode()
         terminal.showCursor()
         terminal.exitAlternateScreen()
+        SoftTrap.terminalRestored()
         signals.stop()
         appState.clearObservers()
         focusManager.clear()
