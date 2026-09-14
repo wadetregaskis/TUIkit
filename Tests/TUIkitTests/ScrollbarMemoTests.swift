@@ -10,6 +10,23 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
+/// A palette edited in place: the id stays while a colour changes, as the
+/// Example's Theme page does. `foregroundQuaternary` is the rung the bar's
+/// track is drawn from.
+private struct EditablePalette: Palette, Hashable {
+    var id = "editable"
+    var name = "Editable"
+    var background: Color = .rgb(0, 0, 0)
+    var foreground: Color = .rgb(200, 200, 200)
+    var foregroundQuaternary: Color = .rgb(90, 90, 90)
+    var accent: Color = .rgb(0, 200, 0)
+    var success: Color = .rgb(0, 200, 0)
+    var warning: Color = .rgb(200, 200, 0)
+    var error: Color = .rgb(200, 0, 0)
+    var info: Color = .rgb(0, 200, 200)
+    var border: Color = .rgb(100, 100, 100)
+}
+
 /// A focused scroll view's bar pulses, and its animated runs were one
 /// scrollbar render per pulse frame on every frame. The bar and its runs are
 /// kept on the handler with the inputs they were drawn from, and drawn again
@@ -23,7 +40,7 @@ struct ScrollbarMemoTests {
         let tui = TUIContext()
         let focusManager = FocusManager()
 
-        func frame() -> FrameBuffer {
+        func frame(palette: any Palette = SystemPalette(.green)) -> FrameBuffer {
             let view = ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(0..<60, id: \.self) { index in Text("row \(index)") }
@@ -32,6 +49,7 @@ struct ScrollbarMemoTests {
             var environment = EnvironmentValues()
             environment.focusManager = focusManager
             environment.applyRuntimeServices(from: tui)
+            environment.palette = palette
             let context = RenderContext(
                 availableWidth: 30, availableHeight: 8, environment: environment, tuiContext: tui)
             tui.stateStorage.beginRenderPass()
@@ -77,5 +95,25 @@ struct ScrollbarMemoTests {
         let scrolled = harness.frame()
         #expect(handler.verticalScrollbarMemoHits == hitsBefore, "moved inputs are not served: \(handler.verticalScrollbarMemoHits) vs \(hitsBefore)")
         #expect(first.lines.map(\.stripped) != scrolled.lines.map(\.stripped))
+    }
+
+    @Test("A palette edited under the same id draws a new bar")
+    func paletteEditedInPlaceInvalidates() {
+        // The key held only the palette's id, so an edit that kept it served the
+        // bar drawn before the edit. The oracle is a harness that has only ever
+        // seen the edited palette, rendered the same number of frames, so focus
+        // and the pulse are in the same state on both sides.
+        var palette = EditablePalette()
+        let harness = Harness()
+        _ = harness.frame(palette: palette)
+        _ = harness.frame(palette: palette)
+        palette.foregroundQuaternary = .rgb(90, 0, 90)
+        let edited = harness.frame(palette: palette)
+
+        let oracle = Harness()
+        _ = oracle.frame(palette: palette)
+        _ = oracle.frame(palette: palette)
+        let expected = oracle.frame(palette: palette)
+        #expect(edited.lines == expected.lines, "the bar kept the colours from before the edit")
     }
 }

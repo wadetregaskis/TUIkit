@@ -146,7 +146,7 @@ extension _ScrollViewCore {
             offset: handler.scrollOffset, arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             isFocused: isFocused, isScrollEnabled: context.environment.isScrollEnabled,
-            hoveredCell: handler.hoveredBarCell, paletteID: palette.id,
+            hoveredCell: handler.hoveredBarCell, palette: ComparablePalette(palette),
             depth: ColorDepth.current, cycle: pulse?.cycle)
         let memo: VerticalScrollbarMemo
         if let remembered = handler.verticalScrollbarMemo, remembered.key == key {
@@ -273,7 +273,9 @@ struct VerticalScrollbarMemo {
         let isFocused: Bool
         let isScrollEnabled: Bool
         let hoveredCell: Int?
-        let paletteID: String
+        /// The palette by value where it can be, not by its id: a palette edited in
+        /// place keeps the id, and a key of the id served the bar drawn before the edit.
+        let palette: ComparablePalette
         let depth: ColorDepth
         let cycle: SelectionEmphasisCycle?
     }
