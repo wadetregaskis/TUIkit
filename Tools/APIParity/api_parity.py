@@ -283,9 +283,18 @@ def label_deviations(swiftui, tuikit):
 
     Arity has to match for this to mean anything; without it every missing
     overload would look like a misspelling.
+
+    A TUIkit declaration that is itself SwiftUI API is never a candidate. It
+    matches SwiftUI exactly, so it cannot be a misspelling of a DIFFERENT
+    SwiftUI declaration: `View.toolbar(removing:)` is not
+    `View.toolbar(content:)` spelt wrong, it is `toolbar(removing:)`.
+    Without this rule, implementing one overload of a family makes it look
+    like a misspelling of every same-arity sibling TUIkit has not got.
     """
     by_name = {}
     for key in tuikit:
+        if key in swiftui:
+            continue
         name, labels = signature(key)
         if labels is not None:
             by_name.setdefault(name, []).append((labels, key))

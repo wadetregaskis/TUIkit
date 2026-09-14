@@ -153,6 +153,12 @@ jobs:
       - name: Toolchain version
         run: swift --version
 
+      # The comparison's own rules, on hand-written symbol sets: no SDK, no
+      # build, well under a second. Before the check, so a broken matcher
+      # fails as itself rather than as a baseline that no longer matches.
+      - name: Parity tool tests
+        run: python3 -m unittest discover -s Tools/APIParity
+
       # Fails on a new unexplained gap, on a gap CLOSED but not recorded, on a
       # new argument-label deviation, and on a map entry that has gone stale.
       # The last two are the ones no human notices: a map nobody audits stops

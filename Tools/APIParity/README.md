@@ -12,6 +12,7 @@ Tools/APIParity/api_parity.py --check    # exit 1 on new gaps or a stale map (CI
 Tools/APIParity/api_parity.py --accept   # record today's gaps as the baseline
 Tools/APIParity/api_parity.py --stale    # audit the curated map only
 Tools/APIParity/api_parity.py --json out.json --work-dir /tmp/parity
+python3 -m unittest discover -s Tools/APIParity   # the tool's own tests; no SDK needed
 ```
 
 Needs macOS with Xcode — SwiftUI's symbol graph comes out of the SDK. Takes a
@@ -112,11 +113,22 @@ A symbol that TUIkit has under the same name and arity but a different spelling
 is worse than one it lacks: the capability is *there*, so nothing looks wrong
 until real SwiftUI source fails to compile. Those are pulled out into their own
 section rather than buried among absences, and `baseline.json` tracks them
-separately so `--check` fails on a **new** one.
+separately so `--check` fails on a **new** one. A recorded deviation the tool no
+longer produces does not fail it; it stays in the baseline until the next
+`--accept`.
 
 Arity must match for the comparison to mean anything — otherwise every missing
 overload (`Button.init(_:image:action:)`, which needs an asset catalogue) would
-read as a misspelling. Even with that filter the list contains coincidences:
+read as a misspelling.
+
+A TUIkit declaration that is itself SwiftUI API is never a candidate. It matches
+SwiftUI exactly, so it cannot be a misspelling of a *different* SwiftUI
+declaration: `View.toolbar(removing:)` is not `View.toolbar(content:)` spelt
+wrong. Without that rule, implementing one overload of a family made it read as
+a misspelling of every same-arity sibling TUIkit lacks — 60 of the 80 entries
+the list held when the rule was added.
+
+Even with those filters the list contains coincidences:
 `Tab.init(_:image:content:)` against `Tab.init(_:value:content:)` is two
 different initialisers, not one misspelt. Read it as a shortlist to judge, not
 a defect list.
