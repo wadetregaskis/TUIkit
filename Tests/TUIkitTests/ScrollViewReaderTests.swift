@@ -317,20 +317,36 @@ struct ScrollViewReaderTests {
         #expect(grown.first?.contains("line 0") == true, "the glue stays released: \(grown)")
     }
 
-    @Test("The registry sweeps dead scroll views and reaches live ones")
+    /// The registry reaches a scroll view the way a `@State` write reaches its
+    /// view: an invalidation on the render cache the scroll view rendered with,
+    /// which the next pass applies as it starts (`beginRenderPass`) and which is
+    /// what asks the run loop for that frame. Counted as the subtree clears a
+    /// pass start applies, so a clear made at request time does not count.
+    @Test("The registry sweeps dead scroll views and asks each live one's render cache for a frame")
     func registryLifecycle() {
         let registry = ScrollToRegistry()
+        let cache = RenderCache()
         var handler: ScrollViewHandler? = ScrollViewHandler(focusID: "sv-live")
         let identity = ViewIdentity(path: "Root/ScrollView")
-        registry.register(handler: handler!, identity: identity, renderCache: nil)
+        registry.register(handler: handler!, identity: identity, renderCache: cache)
+        /// Starts a pass and counts the subtree clears it applied.
+        func clearsAppliedByNextPass() -> Int {
+            let before = cache.stats.subtreeClears
+            cache.beginRenderPass()
+            return cache.stats.subtreeClears - before
+        }
 
+        let beforeRequest = cache.stats.subtreeClears
         registry.scrollTo(key: "42", anchor: .top)
         #expect(
             handler?.pendingScrollTo == ScrollToRequest(key: "42", anchor: .top),
             "a live handler receives the parked request")
+        #expect(cache.stats.subtreeClears == beforeRequest, "nothing is cleared until the next pass")
+        #expect(clearsAppliedByNextPass() == 1, "the next pass clears the scroll view's subtree")
 
         handler = nil
         registry.scrollTo(key: "43", anchor: nil)  // sweeps the dead entry, no crash
+        #expect(clearsAppliedByNextPass() == 0, "a dead scroll view asks for nothing")
     }
 
     @Test("Seeded storm: seeks and data mutations interleave, invariants hold")

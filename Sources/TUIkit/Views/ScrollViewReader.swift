@@ -117,23 +117,22 @@ final class ScrollToRegistry: @unchecked Sendable {
 
     /// Parks the request on every live registered scroll view — each
     /// resolves independently against its own content; ones without the
-    /// key no-op — invalidates their cached subtrees (mirroring what a
-    /// `StateBox` mutation does), and wakes the render loop, so `scrollTo`
-    /// works from `.task`/async contexts where no input event would
-    /// otherwise trigger a frame.
+    /// key no-op — and invalidates each one's identity through the render
+    /// cache it rendered with, so `scrollTo` works from `.task`/async
+    /// contexts where no input event would otherwise trigger a frame.
+    ///
+    /// That is the sink a `@State` write uses: it asks the run loop for a
+    /// frame, and that frame's start drops the cached buffers of the scroll
+    /// view, of its content and of everything above it. With no live scroll
+    /// view it asks for nothing.
     func scrollTo(key: String, anchor: UnitPoint?) {
-        var reachedAny = false
         for (path, entry) in entries {
             guard let handler = entry.handler else {
                 entries[path] = nil
                 continue
             }
             handler.pendingScrollTo = ScrollToRequest(key: key, anchor: anchor)
-            entry.renderCache?.clearAffected(by: entry.identity)
-            reachedAny = true
-        }
-        if reachedAny {
-            AppState.shared.setNeedsRender()
+            entry.renderCache?.invalidateRender(for: entry.identity)
         }
     }
 }
