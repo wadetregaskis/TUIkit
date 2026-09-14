@@ -178,17 +178,19 @@ An `App`'s own `@State` is stored the same way, under the identity at the root o
 tree, and is bound before `app.body` is evaluated. A write to it therefore invalidates the
 whole tree below the root, just as a write to a root view's `@State` does.
 
-When `@State var count = 0` is declared, the `init` checks if a persistent value already
-exists for this position. If it does, the existing value is used instead of the default.
+When `@State var count = 0` is declared, the `init` only records the default. Each time the
+view is rendered, the property is bound to the box stored for its view's identity and
+declaration index: an existing box keeps its value, and the default is used only when there
+is none yet.
 
 ### Re-Render Trigger
 
 When a ``State`` value changes:
 
-1. `StateBox.value.didSet` calls `renderCache?.clearAffected(by: identity)` (invalidating the affected subtree's cached buffers) then `AppState.shared.setNeedsRender()`
+1. `StateBox.value.didSet` calls `invalidateRender(for: identity)` on its context's `RenderCache`. That queues the identity behind a lock, so a write from a background `Task` is safe, and calls `AppState.shared.setNeedsRender()`. The affected subtree's cached buffers are dropped later, on the main actor, as the next render pass begins: `clearAffected(by:)`, or `clearAll()` for a box with no identity yet
 2. The observer registered by `AppRunner` requests a re-render
 3. The main loop re-evaluates `app.body` fresh: reconstructing all views
-4. Each `@State.init` self-hydrates from `StateStorage`, recovering persisted values
+4. Each view's `@State` properties are bound again, at render time, to their boxes in `StateStorage`, recovering persisted values
 5. The new ``FrameBuffer`` output is written to the terminal
 
 ### Garbage Collection
