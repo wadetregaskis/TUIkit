@@ -103,6 +103,12 @@ enum SelectionIndicator {
             return SelectionEmphasis(
                 isFocused: isFocused, animation: style.animation, phase: 1, blinkOn: true)
         }
+        // Held still, and still focused, while the view does not appear active:
+        // what is left on screen that asks (an open menu's highlight, a hovered
+        // divider) keeps its bright end, and no clock is read, so nothing keeps
+        // the loop waking. Asked after the focus test, so an unfocused element
+        // pays for no extra environment read.
+        guard environment.appearsActive else { return .steady(isFocused: true) }
         let timer = environment.cursorTimer
         // The same speed `SelectionEmphasisClock.cycle(_:)` lays its runs out at, so
         // a render that reads the clock and a replay agree at every speed.
@@ -223,7 +229,9 @@ public struct SelectionEmphasis: Equatable, Sendable {
 /// Resolving is what keeps the clock ticking — the phase read is volatile, so a
 /// frame that asks for an animating emphasis schedules the next frame, and one
 /// that doesn't lets the loop idle. Nothing is read at all unless the element is
-/// focused AND the style actually animates.
+/// focused AND the style actually animates AND the view appears active
+/// (``EnvironmentValues/appearsActive``). Where it does not, a focused element's
+/// emphasis holds still at its bright end.
 public struct SelectionEmphasisClock {
     let environment: EnvironmentValues
 
@@ -431,6 +439,11 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
 extension SelectionEmphasisClock {
     /// Every frame of the cycle for an element that is (or isn't) focused.
     ///
+    /// Where the view does not appear active (``EnvironmentValues/appearsActive``
+    /// is `false`), a focused element's cycle is one still frame at its bright
+    /// end, as with the animation off. It is still focused, so a fill still
+    /// draws as focused.
+    ///
     /// See ``SelectionEmphasisCycle``.
     @MainActor
     public func cycle(_ isFocused: Bool) -> SelectionEmphasisCycle {
@@ -442,6 +455,11 @@ extension SelectionEmphasisClock {
                         isFocused: isFocused, animation: style.animation, phase: 1, blinkOn: true)
                 ],
                 step: 0)
+        }
+        // Held still while the view does not appear active — see
+        // `SelectionIndicator.resolve(isFocused:environment:)`.
+        guard environment.appearsActive else {
+            return SelectionEmphasisCycle(frames: [.steady(isFocused: true)], step: 0)
         }
         let layout = CursorTimer.cycleLayout(
             of: style.animation, speed: environment.indicatorAnimationSpeeds.speed(for: .focusEmphasis))

@@ -275,6 +275,14 @@ What stays:
   as it does there.
 - **A text cursor**, for the same reason it survives `focusEffectDisabled`.
 
+What is still on screen and still breathes holds still instead: an open menu
+keeps its highlighted row and its frame, and a hovered split divider keeps its
+hover, each at its bright end, as under `.selectionIndicatorStyle(.none)`.
+``EnvironmentValues/selectionEmphasis`` gives a focused element one
+still frame there and reads no clock, so an inactive window does not keep the
+run loop waking to animate it. A view that asks it for its own emphasis holds
+still the same way.
+
 ``RenderContext/indicatesFocus(_:)`` answers for both conditions, so a view
 that already asks it needs no change. A view that reads `\.isFocused` in its
 `body` should gate its look on `isFocused && appearsActive`.
