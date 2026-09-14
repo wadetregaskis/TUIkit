@@ -291,6 +291,29 @@ struct GradientPictureTests {
         #expect(pending.components(separatedBy: "a=t,").count - 1 == frames.count, "transmitted once each")
     }
 
+    /// The picture cycle and the glyph cycle are two builders of one bar. Each
+    /// preset's period, on the `.gradient` motion over a solid fill (the one bar
+    /// that has pictures), must step at the same frame duration and hold the same
+    /// number of frames on both paths, or a bar would change speed with the
+    /// terminal it is drawn on.
+    @Test(
+        "An indeterminate bar's cycle of pictures steps at its glyph cycle's frame duration, at every preset's period",
+        arguments: [IndeterminateStyle.sweep, .barberPole, .pulse, .knightRider, .gradient()])
+    func pictureCycleSharesTheGlyphFrame(_ preset: IndeterminateStyle) throws {
+        let bar = ProgressView().indeterminateStyle(
+            .custom(IndeterminateConfiguration(motion: .gradient, period: preset.configuration.period)))
+        let pictures = KittyGraphics.withSupport(true) { rendered(bar, height: 1) }
+        let glyphs = rendered(bar, height: 1)
+        #expect(placeholders(pictures.buffer) == 20, "the picture path was not taken")
+        #expect(placeholders(glyphs.buffer) == 0, "the glyph path drew pictures")
+        let pictureRun = try #require(pictures.buffer.animatedCells.first)
+        let glyphRun = try #require(glyphs.buffer.animatedCells.first)
+        #expect(
+            AnimationClock.nanoseconds(pictureRun.frameDuration)
+                == AnimationClock.nanoseconds(glyphRun.frameDuration))
+        #expect(pictureRun.frames.count == glyphRun.frames.count)
+    }
+
     @Test("Two identical bars share one picture")
     func identicalBarsShare() {
         let two = VStack {

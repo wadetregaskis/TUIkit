@@ -92,9 +92,10 @@ enum IndeterminateRenderer {
     /// How many frames one pass is sampled at — and therefore the rate the
     /// FALLBACK path asks to be re-rendered at, so a bar that cannot be
     /// pre-rendered still animates at exactly the speed one that can does.
+    /// `ProgressView`'s cycle of pictures is sampled at it too.
     ///
-    /// Both numbers used to be a literal 30 in two places, which is the shape a
-    /// divergence arrives in.
+    /// These numbers used to be a literal 30 in three places, which is the shape
+    /// a divergence arrives in.
     static func frameCount(of style: IndeterminateStyle) -> Int {
         max(2, Int((period(of: style) * framesPerSecond).rounded()))
     }

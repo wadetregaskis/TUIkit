@@ -437,8 +437,10 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // The `.gradient` motion over a solid fill is a colour field, and a
         // colour field can be pictures where the terminal draws them — see
         // ``IndeterminateRaster``. Asked for with the frame count it will
-        // own, so every frame's picture is released when the bar goes.
-        let frameCount = max(2, Int((IndeterminateRenderer.period(of: style) * 30).rounded()))
+        // own, so every frame's picture is released when the bar goes. The
+        // count the glyph cycle is sampled at, so a bar steps at one rate
+        // whichever path draws it.
+        let frameCount = IndeterminateRenderer.frameCount(of: style)
         let graphics =
             configuration.motion == .gradient && configuration.fill == "█"
             ? context.gradientGraphics(token: "track-\(context.identity.path)", frames: frameCount)
