@@ -3120,13 +3120,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // And then something has to move them, because a producer that left a
         // run behind is no longer asking to be re-rendered — that is the whole
         // point of leaving one. So the list takes over the asking on the
-        // dropped run's behalf, at the clock the run would have advanced on. A
-        // spinner on the cursor row therefore costs exactly what every spinner
-        // used to cost, and only while the cursor is on its row.
+        // dropped runs' behalf: one render at the soonest of their next steps,
+        // each on the clock it would have advanced on, and the frame that render
+        // produces asks for the step after. A spinner on the cursor row costs a
+        // render per step it takes, and only while the cursor is on its row.
+        //
+        // It used to ask for a 20 Hz grid instead: a whole-screen render twenty
+        // times a second for a 110 ms spinner that changes nine times, on a phase
+        // anchored at whichever frame first asked rather than at the run's steps.
         if !childRuns.isEmpty, !context.isMeasuring {
-            context.requestAnimation(
+            context.requestWake(
                 token: "list-dropped-run-\(context.identity.path)",
-                frequency: 1.0 / AnimationClock.cursor.tickInterval)
+                atNanos: Self.nextStepNanos(of: childRuns, context: context))
         }
         // Transposed to line-major, because that is how the runs are asked for:
         // one run per LINE, carrying that line at every point of the cycle.
@@ -3225,6 +3230,33 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     frameDuration: run.frameDuration, clock: run.clock, alpha: run.alpha))
         }
         return (runs, droppedClaims)
+    }
+
+    /// When the soonest of `runs` next steps, as an instant on the frame clock: the
+    /// render a breathing row owes the runs it dropped.
+    ///
+    /// Each run is asked on its own clock. ``AnimationClock/content`` is the frame
+    /// clock itself. ``AnimationClock/cursor`` counts from the focus epoch the cursor
+    /// timer keeps, or from zero without one, which is where the row's breath is
+    /// drawn from too. Counted in whole nanoseconds through
+    /// `AnimationClock.stepEndNanos`, so the wake is never a nanosecond before the
+    /// step it is for.
+    @MainActor
+    private static func nextStepNanos(of runs: [RowRun], context: RenderContext) -> Int64 {
+        let now = context.environment.frameNowNanos
+        let content = Double(now) / 1_000_000_000
+        let cursor = context.environment.cursorTimer?.elapsed(for: .cursor) ?? 0
+        let untilSoonest: Int64 =
+            runs.lazy.map { run -> Int64 in
+                let elapsed =
+                    switch run.clock {
+                    case .content: content
+                    case .cursor: cursor
+                    }
+                return AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: run.frameDuration)
+                    - AnimationClock.nanoseconds(elapsed)
+            }.min() ?? 0
+        return now &+ untilSoonest
     }
 
     /// What `run` said about its cells' ALPHA at the frame its lines were drawn at, as

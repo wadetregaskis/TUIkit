@@ -85,15 +85,37 @@ extension RenderContext {
     ///     distant future cannot overflow the monotonic clock.
     @MainActor
     func requestWake(token: String, afterSeconds delay: Double) {
+        let nanos = (max(0, delay) * 1_000_000_000).rounded()
+        let clamped = Int64(min(nanos, Self.wakeHorizonNanos))
+        requestWake(token: token, atNanos: environment.frameNowNanos &+ clamped)
+    }
+
+    /// Declares that the view rendering here needs one render at `instant`, in
+    /// nanoseconds on the frame's monotonic clock (the clock `frameNowNanos` reads).
+    ///
+    /// The counterpart of ``requestWake(token:afterSeconds:)`` for a view that
+    /// already knows the instant in whole nanoseconds: a run's next step boundary,
+    /// from `AnimationClock.stepEndNanos(atElapsed:frameDuration:)`. Asked in
+    /// seconds, that boundary would go through a `Double` and back, and one that
+    /// comes back a nanosecond early is a render that finds the step not yet
+    /// changed — the trap `CursorTimer.sleepNanoseconds(_:)` exists for.
+    ///
+    /// Re-declared every frame and dropped when it is not, like the other. An
+    /// instant this frame has already reached is not a firing (see
+    /// ``AnimationScheduler/nextFiring(after:)``).
+    ///
+    /// - Parameters:
+    ///   - token: A stable per-view key, from the structural identity.
+    ///   - instant: When to render, on the frame clock.
+    @MainActor
+    func requestWake(token: String, atNanos instant: Int64) {
         guard !isMeasuring else { return }
         // Same reason as `requestAnimation`: a memoizing ancestor serving a
         // cached buffer would both freeze the visible frame and skip the
         // per-frame re-declaration below, dropping the wake entirely.
         environment.volatileReadTracker?.recordRenderSideEffect()
         guard let scheduler = environment.animationScheduler else { return }
-        let nanos = (max(0, delay) * 1_000_000_000).rounded()
-        let clamped = Int64(min(nanos, Self.wakeHorizonNanos))
-        scheduler.requestWake(token, at: environment.frameNowNanos &+ clamped)
+        scheduler.requestWake(token, at: instant)
     }
 
     /// The furthest ahead a one-shot wake may be asked for: ~3.2 years in
