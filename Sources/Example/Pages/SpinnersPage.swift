@@ -19,6 +19,16 @@ struct SpinnersPage: View {
     /// `Spinner` has when nobody names a colour, and a state you can come back
     /// to rather than an approximation of it in the hex field.
     @AppStorage("spinners.editorThemeColour") private var editorUsesThemeColor = true
+    /// The catalogue's speed, as a `SpinnerSpeedChoice` name, and for Custom its
+    /// rate in percent and tolerance in hundredths of the rate: whole numbers,
+    /// which stepping cannot drift (see `SpinnerSpeedSettings`).
+    @AppStorage("spinners.speed") private var speedChoice = SpinnerSpeedChoice.automatic.rawValue
+    @AppStorage("spinners.speedRatePercent") private var speedRatePercent = 100
+    @AppStorage("spinners.speedToleranceHundredths") private var speedToleranceHundredths = 0
+    /// Per-style frame durations in base ticks, spelled `"dots=4,line=6"`.
+    @AppStorage("spinners.frameOverrides") private var frameOverrides = ""
+    /// The style the frame stepper edits.
+    @AppStorage("spinners.overrideStyle") private var overrideStyle = SpinnerStyleChoice.dots.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -44,6 +54,8 @@ struct SpinnersPage: View {
                 }
             }
 
+            durationsReadout
+
             Spacer()
         }
         .scrollableDemoPage()
@@ -64,7 +76,8 @@ struct SpinnersPage: View {
     @ViewBuilder
     private func stylesCatalogue(columns: Int) -> some View {
         let color = editedColor
-        let dealt = catalogueColumns(columns: columns, color: color)
+        let settings = speedSettings
+        let dealt = catalogueColumns(columns: columns, color: color, settings: settings)
         DemoSection("page.spinners.styles") {
             HStack(alignment: .top, spacing: 3) {
                 ForEach(dealt) { column in
@@ -75,7 +88,33 @@ struct SpinnersPage: View {
                     }
                 }
             }
+            // The catalogue's speed, set once around every row; a row with an
+            // override sets its own inside this, and the nearer setting wins.
+            .indicatorAnimationSpeed(settings.catalogueSpeed, for: .spinners)
         }
+    }
+
+    /// The catalogue's rows, in order: the sixteen built-in styles, then the
+    /// custom row.
+    ///
+    /// The custom row IS the customiser's frame and label fields: one custom
+    /// spinner on the page, edited in one place, rather than a second one frozen
+    /// at whatever the fields happened to say when this list was written. It is
+    /// the only row they reach, and the only row no frame override reaches,
+    /// which is why it is built apart from the sixteen fixed ones.
+    private func catalogueEntries(color: Color?, settings: SpinnerSpeedSettings) -> [CatalogueEntry] {
+        let colorKey = color.map { String(describing: $0) } ?? "theme"
+        let frames = editedFrames
+        return SpinnerStyleChoice.allCases.map {
+            CatalogueEntry(
+                name: $0.rawValue, choice: $0, style: $0.style, label: nil, colorKey: colorKey,
+                settings: settings)
+        }
+            + [
+                CatalogueEntry(
+                    name: "custom(\"\(frames)\")", choice: nil, style: .custom(frames),
+                    label: editedLabel, colorKey: colorKey, settings: settings)
+            ]
     }
 
     /// The catalogue's rows, dealt into `columns` columns.
@@ -88,24 +127,10 @@ struct SpinnersPage: View {
     /// contents had changed — the catalogue went on showing the theme's accent,
     /// and the previous frame sequence, while every other spinner on the page
     /// had followed the editor.
-    private func catalogueColumns(columns: Int, color: Color?) -> [CatalogueColumn] {
-        let colorKey = color.map { String(describing: $0) } ?? "theme"
-        let frames = editedFrames
-        // The catalogue's custom row IS the customiser's frame and label
-        // fields: one custom spinner on the page, edited in one place, rather
-        // than a second one frozen at whatever the fields happened to say when
-        // this list was written. It is the only row they reach, which is why it
-        // is built apart from the eleven fixed ones.
-        let styles: [CatalogueEntry] =
-            SpinnerStyleChoice.allCases.map {
-                CatalogueEntry(
-                    name: $0.rawValue, style: $0.style, label: nil, colorKey: colorKey)
-            }
-            + [
-                CatalogueEntry(
-                    name: "custom(\"\(frames)\")", style: .custom(frames),
-                    label: editedLabel, colorKey: colorKey)
-            ]
+    private func catalogueColumns(
+        columns: Int, color: Color?, settings: SpinnerSpeedSettings
+    ) -> [CatalogueColumn] {
+        let styles = catalogueEntries(color: color, settings: settings)
         let perColumn = (styles.count + columns - 1) / columns
         return (0..<columns).map { column in
             CatalogueColumn(
@@ -120,45 +145,79 @@ struct SpinnersPage: View {
     /// Everything you can change about the spinners on the left.
     @ViewBuilder
     private var customiser: some View {
-        DemoSection("page.spinners.editorSection") {
-            VStack(alignment: .leading, spacing: 1) {
-                // Wrapped, not run on: `ViewThatFits` chooses on IDEAL width,
-                // so one long line of prose is enough on its own to rule out
-                // every side-by-side arrangement of the page.
-                Text("page.spinners.editorHint")
-                    .frame(width: 44, alignment: .leading)
-                    .foregroundStyle(.palette.foregroundSecondary)
+        VStack(alignment: .leading, spacing: 1) {
+            DemoSection("page.spinners.editorSection") {
+                VStack(alignment: .leading, spacing: 1) {
+                    // Wrapped, not run on: `ViewThatFits` chooses on IDEAL width,
+                    // so one long line of prose is enough on its own to rule out
+                    // every side-by-side arrangement of the page.
+                    Text("page.spinners.editorHint")
+                        .frame(width: 44, alignment: .leading)
+                        .foregroundStyle(.palette.foregroundSecondary)
 
-                // Two states of one choice, so two radio buttons rather than a
-                // checkbox: "theme accent" is not a modifier on the colour
-                // below it, it is the alternative to it. As a `Toggle` the two
-                // controls read as unrelated, and nothing said that switching
-                // it off is what makes the colour take effect.
-                RadioButtonGroup(selection: colorSourceBinding) {
-                    RadioButtonItem(ColorSource.theme, "page.spinners.editorThemeColour")
-                    RadioButtonItem(ColorSource.custom, "page.spinners.editorCustomColour") {
-                        // The option's own content, so the group indents it to
-                        // the label and disables it while the other option is
-                        // chosen — the two together are what say "this is the
-                        // colour that option means". It was a hand-written
-                        // indent and a hand-written `disabled` beside the
-                        // group, which is the same thing said twice and once
-                        // wrong: the indent is the INDICATOR's width, not 2.
-                        //
-                        // Swatch only: the inline R/G/B sliders are ninety
-                        // cells wide, which alone decided this page's layout —
-                        // no side-by-side arrangement could fit, so the
-                        // customiser fell below the catalogue. The swatch still
-                        // focuses and still opens the full editor on Return,
-                        // Space or a click.
-                        ColorPicker("page.spinners.editorColour", selection: colorBinding)
-                            .colorPickerChannels(.hidden)
-                            .colorPickerLabelWidth(8)
+                    // Two states of one choice, so two radio buttons rather than a
+                    // checkbox: "theme accent" is not a modifier on the colour
+                    // below it, it is the alternative to it. As a `Toggle` the two
+                    // controls read as unrelated, and nothing said that switching
+                    // it off is what makes the colour take effect.
+                    RadioButtonGroup(selection: colorSourceBinding) {
+                        RadioButtonItem(ColorSource.theme, "page.spinners.editorThemeColour")
+                        RadioButtonItem(ColorSource.custom, "page.spinners.editorCustomColour") {
+                            // The option's own content, so the group indents it to
+                            // the label and disables it while the other option is
+                            // chosen — the two together are what say "this is the
+                            // colour that option means". It was a hand-written
+                            // indent and a hand-written `disabled` beside the
+                            // group, which is the same thing said twice and once
+                            // wrong: the indent is the INDICATOR's width, not 2.
+                            //
+                            // Swatch only: the inline R/G/B sliders are ninety
+                            // cells wide, which alone decided this page's layout —
+                            // no side-by-side arrangement could fit, so the
+                            // customiser fell below the catalogue. The swatch still
+                            // focuses and still opens the full editor on Return,
+                            // Space or a click.
+                            ColorPicker("page.spinners.editorColour", selection: colorBinding)
+                                .colorPickerChannels(.hidden)
+                                .colorPickerLabelWidth(8)
+                        }
                     }
-                }
 
-                customFields
+                    customFields
+                }
             }
+
+            SpinnersSpeedSection(
+                choice: $speedChoice, ratePercent: $speedRatePercent,
+                toleranceHundredths: $speedToleranceHundredths,
+                frameOverrides: $frameOverrides, overrideStyle: $overrideStyle)
+        }
+    }
+
+    /// Every built-in style's frame duration on one line, then the model's count
+    /// of instants for the whole catalogue.
+    ///
+    /// Under the whole page rather than in the customiser's column, so it can be
+    /// copied: a terminal selects whole screen rows, and a line wrapped beside
+    /// the catalogue would come away with pieces of the catalogue in it.
+    /// `name=ms` pairs separated by single spaces wrap only between pairs, so
+    /// each row copies as whole pairs, and the names are the API case names.
+    @ViewBuilder
+    private var durationsReadout: some View {
+        let entries = catalogueEntries(color: editedColor, settings: speedSettings)
+        let line = entries.compactMap { entry in
+            entry.choice.map {
+                "\($0.rawValue)=\(SpinnerSpeedSettings.milliseconds(entry.frameNanoseconds))"
+            }
+        }
+        .joined(separator: " ")
+        let instants = SpinnerSpeedSettings.oneDecimal(
+            SpinnerSpeedSettings.frameInstantsPerSecond(entries.map(\.frameNanoseconds)))
+        VStack(alignment: .leading, spacing: 0) {
+            Text("page.spinners.durations").foregroundStyle(.palette.foregroundSecondary)
+            Text(verbatim: line)
+            Text("page.spinners.instantsModel \(instants)")
+                .foregroundStyle(.palette.foregroundSecondary)
         }
     }
 
@@ -237,15 +296,49 @@ struct SpinnersPage: View {
         editorLabel.isEmpty ? nil : editorLabel
     }
 
+    /// What the speed controls have decided, from the stored values.
+    private var speedSettings: SpinnerSpeedSettings {
+        SpinnerSpeedSettings(
+            choice: speedChoice, ratePercent: speedRatePercent,
+            toleranceHundredths: speedToleranceHundredths, frameOverrides: frameOverrides)
+    }
+
     /// One row of the style catalogue. Its `id` carries everything the
     /// customiser can change about it, so a change moves it — see
     /// `stylesCatalogue(columns:)`.
     private struct CatalogueEntry: Identifiable, Equatable {
         let name: String
+        /// The built-in style this row shows; `nil` for the custom row.
+        let choice: SpinnerStyleChoice?
         let style: SpinnerStyle
         let label: String?
         let colorKey: String
-        var id: String { "\(name)|\(label ?? "")|\(colorKey)" }
+        /// The speed this row sets for itself, inside the catalogue's.
+        let overrideSpeed: IndicatorAnimationSpeed?
+        /// The speed its spinner reads, whoever set it.
+        let speedKey: String
+        /// How long it shows each frame, as its spinner will work it out.
+        let frameNanoseconds: Int64
+
+        init(
+            name: String, choice: SpinnerStyleChoice?, style: SpinnerStyle, label: String?,
+            colorKey: String, settings: SpinnerSpeedSettings
+        ) {
+            self.name = name
+            self.choice = choice
+            self.style = style
+            self.label = label
+            self.colorKey = colorKey
+            overrideSpeed = settings.overrideSpeed(for: choice)
+            let speed = overrideSpeed ?? settings.catalogueSpeed
+            speedKey = "\(overrideSpeed == nil ? "catalogue" : "row")@\(speed.rate)±\(speed.tolerance)"
+            frameNanoseconds = settings.frameNanoseconds(style, choice: choice)
+        }
+
+        // The speed and the duration are in it too: a speed is an environment
+        // value the row's spinner reads, and a memo keyed on anything less would
+        // serve the row drawn at the old speed.
+        var id: String { "\(name)|\(label ?? "")|\(colorKey)|\(speedKey)|\(frameNanoseconds)" }
 
         /// The row is what its id says it is — which is what lets the value
         /// memo tell a changed row from an unchanged one.
@@ -265,14 +358,28 @@ struct SpinnersPage: View {
         static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
     }
 
-    /// A `[spinner  style-name]` row for the style catalogue, in the colour the
-    /// customiser is on — "apply to all the examples on the page" being what
-    /// makes a colour choice something you can actually judge.
+    /// A `[duration  spinner  style-name]` row for the style catalogue, in the
+    /// colour the customiser is on — "apply to all the examples on the page"
+    /// being what makes a colour choice something you can actually judge.
+    ///
+    /// The duration is on the left, right-aligned, so the column lines up
+    /// whatever the spinner's width, and the style's name stays the word to
+    /// the spinner's right, which is what `Tools/Profiling/animation_rate.py`
+    /// reads. It is in the accent colour when the row has an override.
     @ViewBuilder
     private func spinnerRow(_ entry: CatalogueEntry, color: Color?) -> some View {
-        HStack(spacing: 1) {
+        let row = HStack(spacing: 1) {
+            Text(verbatim: "\(SpinnerSpeedSettings.milliseconds(entry.frameNanoseconds)) ms")
+                .frame(width: 8, alignment: .trailing)
+                .foregroundStyle(
+                    entry.overrideSpeed == nil ? .palette.foregroundSecondary : .palette.accent)
             Spinner(entry.label, style: entry.style, color: color)
             Text(entry.name).foregroundStyle(.palette.foregroundSecondary)
+        }
+        if let speed = entry.overrideSpeed {
+            row.indicatorAnimationSpeed(speed, for: .spinners)
+        } else {
+            row
         }
     }
 }
