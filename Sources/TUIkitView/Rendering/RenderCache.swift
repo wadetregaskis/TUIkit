@@ -210,11 +210,34 @@ public final class RenderCache: @unchecked Sendable {
         /// since `7db94fe9`.
         public let identity: ViewIdentity
 
-        public init(
+        /// The replayable registrations the subtree made while it rendered,
+        /// into its own key channels, which a hit makes again in order — see
+        /// `EffectJournal`. Empty for almost every entry.
+        package let effects: [EffectJournal.Entry]
+
+        /// The focus section in force where `effects` were recorded, or `nil`
+        /// when there are none. A lookup under a different section misses.
+        package let effectSection: String?
+
+        public convenience init(
             identity: ViewIdentity,
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
             gradientFrame: GradientFrame? = nil,
             surfaceBackground: Color? = nil
+        ) {
+            self.init(
+                identity: identity, viewSnapshot: viewSnapshot, buffer: buffer,
+                contextWidth: contextWidth, contextHeight: contextHeight,
+                gradientFrame: gradientFrame, surfaceBackground: surfaceBackground,
+                effects: [], effectSection: nil)
+        }
+
+        /// Creates an entry that carries recorded registrations.
+        package init(
+            identity: ViewIdentity,
+            viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
+            gradientFrame: GradientFrame?, surfaceBackground: Color?,
+            effects: [EffectJournal.Entry], effectSection: String?
         ) {
             self.identity = identity
             self.viewSnapshot = viewSnapshot
@@ -223,6 +246,8 @@ public final class RenderCache: @unchecked Sendable {
             self.contextHeight = contextHeight
             self.gradientFrame = gradientFrame
             self.surfaceBackground = surfaceBackground
+            self.effects = effects
+            self.effectSection = effectSection
         }
     }
 
@@ -500,6 +525,10 @@ extension RenderCache {
     ///     composited against now. A cached buffer holds ink already blended,
     ///     so an entry made over a different surface has to miss.
     /// - Returns: The cached ``FrameBuffer`` if valid, or `nil` on miss.
+    ///
+    /// An entry that stored registrations is looked up as if no focus section
+    /// were in force; the value memo asks `lookupEntry`, which is told the
+    /// section.
     public func lookup<V: Equatable>(
         identity: ViewIdentity,
         view: V,
@@ -508,6 +537,31 @@ extension RenderCache {
         gradientFrame: GradientFrame? = nil,
         surfaceBackground: Color? = nil
     ) -> FrameBuffer? {
+        lookupEntry(
+            identity: identity, view: view, contextWidth: contextWidth, contextHeight: contextHeight,
+            gradientFrame: gradientFrame, surfaceBackground: surfaceBackground, effectSection: nil
+        )?.buffer
+    }
+
+    /// The whole entry for a view, under the same rules as
+    /// ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``,
+    /// plus one: an entry that stored registrations misses when `effectSection`
+    /// is not the section they were recorded in.
+    ///
+    /// The section is not in the key because it is assigned straight into the
+    /// environment (`.focusSection` and six other sites), so nothing notices it
+    /// change. An autoclosure, read only for an entry that has registrations.
+    ///
+    /// One caller, the value memo.
+    package func lookupEntry<V: Equatable>(
+        identity: ViewIdentity,
+        view: V,
+        contextWidth: Int,
+        contextHeight: Int,
+        gradientFrame: GradientFrame?,
+        surfaceBackground: Color?,
+        effectSection: @autoclosure () -> String?
+    ) -> CacheEntry? {
         guard let entry = entries[identity.structuralHash] else {
             stats.misses += 1
             logDebug("MISS (no entry) \(identity.path)")
@@ -544,9 +598,16 @@ extension RenderCache {
             logDebug("MISS (view changed) \(identity.path)")
             return nil
         }
+        // Replaying would file the registrations in the section they were
+        // recorded in, not the one in force here.
+        guard entry.effects.isEmpty || entry.effectSection == effectSection() else {
+            stats.misses += 1
+            logDebug("MISS (focus section changed) \(identity.path)")
+            return nil
+        }
         stats.hits += 1
         logDebug("HIT \(identity.path)")
-        return entry.buffer
+        return entry
     }
 
     /// Stores a rendered buffer for a view identity.
@@ -574,6 +635,29 @@ extension RenderCache {
         gradientFrame: GradientFrame? = nil,
         surfaceBackground: Color? = nil
     ) {
+        store(
+            identity: identity, view: view, buffer: buffer,
+            contextWidth: contextWidth, contextHeight: contextHeight,
+            gradientFrame: gradientFrame, surfaceBackground: surfaceBackground,
+            recorded: (effects: [], section: nil))
+    }
+
+    /// Stores a rendered buffer with the registrations to make again on a hit.
+    ///
+    /// - Parameter recorded: The replayable registrations the render made into
+    ///   its own key channels, in order, and the focus section they were made
+    ///   in (`nil` when there are none). One parameter, as the pair is only
+    ///   ever meaningful together.
+    package func store<V: Equatable>(
+        identity: ViewIdentity,
+        view: V,
+        buffer: FrameBuffer,
+        contextWidth: Int,
+        contextHeight: Int,
+        gradientFrame: GradientFrame?,
+        surfaceBackground: Color?,
+        recorded: (effects: [EffectJournal.Entry], section: String?)
+    ) {
         stats.stores += 1
         entries[identity.structuralHash] = CacheEntry(
             identity: identity,
@@ -582,7 +666,9 @@ extension RenderCache {
             contextWidth: contextWidth,
             contextHeight: contextHeight,
             gradientFrame: gradientFrame,
-            surfaceBackground: surfaceBackground
+            surfaceBackground: surfaceBackground,
+            effects: recorded.effects,
+            effectSection: recorded.section
         )
         logDebug("STORE \(identity.path)")
     }
@@ -748,11 +834,30 @@ extension RenderCache {
                     + "but a fresh render says \(fresh.lines[$0].debugDescription)"
             }
             ?? "served \(served.lines.count) lines, a fresh render gives \(fresh.lines.count)"
-        renderMemoMismatches.append(
-            "\(viewType): \(firstDiff)" + (identity.isEmpty ? "" : " at \(identity)"))
-        if let path = Self.renderMemoMismatchLog, let last = renderMemoMismatches.last,
-            let data = (last + "\n").data(using: .utf8)
-        {
+        recordRenderMemoMismatch("\(viewType): \(firstDiff)" + (identity.isEmpty ? "" : " at \(identity)"))
+    }
+
+    /// Records a served entry whose replayed registrations a fresh render did
+    /// not make: a different kind, order or count.
+    ///
+    /// Compared by kind because the recorded closures are opaque. What it
+    /// catches is a key that compares equal over a subtree that registers
+    /// differently, which a served buffer would silently get wrong.
+    @MainActor package func noteRenderMemoEffectMismatch(
+        viewType: String, served: [EffectJournal.Kind], fresh: [EffectJournal.Kind], identity: String = ""
+    ) {
+        guard renderMemoMismatches.count < 20 else { return }
+        let names = { (kinds: [EffectJournal.Kind]) in kinds.map(\.name).joined(separator: ", ") }
+        recordRenderMemoMismatch(
+            "\(viewType): served registrations [\(names(served))] but a fresh render makes [\(names(fresh))]"
+                + (identity.isEmpty ? "" : " at \(identity)"))
+    }
+
+    /// Appends one finding to ``renderMemoMismatches``, and to the log file
+    /// when the environment variable names one.
+    @MainActor private func recordRenderMemoMismatch(_ line: String) {
+        renderMemoMismatches.append(line)
+        if let path = Self.renderMemoMismatchLog, let data = (line + "\n").data(using: .utf8) {
             if let handle = FileHandle(forWritingAtPath: path) {
                 handle.seekToEndOfFile()
                 handle.write(data)

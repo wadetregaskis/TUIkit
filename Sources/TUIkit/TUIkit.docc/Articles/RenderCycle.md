@@ -482,15 +482,45 @@ declines when it:
   state);
 - **read a time-varying value** or requested an animation (a cached ``Spinner``
   would freeze);
-- **registered an effect** — `onAppear`, `.task`, `onChange`, a key handler, a
-  focus registration, a preference write. A cache hit skips the body that
-  registers them, so the frame the cache answers is a frame on which the effect
-  does not exist.
+- **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
+  registration, a preference write, a status-bar item. A cache hit skips the
+  body that registers them, so the frame the cache answers is a frame on which
+  the effect does not exist.
 
 The last one turns on *placement*. `Leaf().equatable().onAppear { … }` puts the
 effect **above** the boundary, where it re-registers every frame and caching the
 leaf below it is perfectly correct. Only an effect **inside** the memoized
 subtree declines the cache.
+
+### Registrations a Hit Makes Again
+
+A key handler (`onKeyPress`) does not decline the cache. While a memoized subtree
+renders on a miss, each handler it registers is also recorded, and the
+recording is stored with the buffer. Every hit then registers those handlers
+again, in the order they were made, at the point in the walk where the subtree
+would have rendered. So the dispatcher sees the same handlers in the same
+precedence whether a row rendered or was served, and a frame the render loop
+walks twice gets them once per walk.
+
+Three rules keep that equivalent to rendering:
+
+- **The channels in force.** A handler recorded into a different dispatcher
+  from the memo's own — a `.dimmed()` subtree, or the page rendered beneath a
+  modal, both of which get throwaway key channels — is not kept. A replay goes
+  into the channels of the frame that serves it.
+- **The focus section.** A handler files under the section it renders in, and
+  that section is assigned into the environment rather than compared, so the
+  key would not see it change. A hit under a different section than the one the
+  handlers were recorded in is a miss.
+- **What the handler captured.** A replayed handler is the closure the subtree
+  built when it rendered. `@State` and `@Observable` changes reach it as they
+  reach any memo (they clear the entry), and bindings read current values. A
+  value a `ForEach` row captures from *outside* its element stays as it was,
+  the same captured-data hole a row's drawing already has.
+
+Under `TUIKIT_VERIFY_RENDER_MEMO` a hit renders fresh instead, which registers
+for real, and the verifier compares the kinds and number of registrations that
+render makes against the stored ones.
 
 ### Keeping Nested Entries Alive
 

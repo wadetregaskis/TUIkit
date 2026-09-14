@@ -62,7 +62,11 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// Monotonic count of per-frame registrations the buffer memo can make
     /// again on a cache hit, because the registrar also recorded them in the
     /// render cache's effect journal. Like ``sideEffects``, only ever compared
-    /// as a delta.
+    /// as a delta. Recorded by:
+    /// - `onKeyPress`, once per registration on a render pass;
+    /// - the buffer memo itself, once per hit that replays a stored subtree's
+    ///   registrations, so an enclosing gate sees the same delta whether the
+    ///   subtree rendered or was served.
     ///
     /// Counted apart from ``sideEffects`` so that only a gate that replays can
     /// leave it out. Every other gate reads ``cacheUnsafeCount``, which
@@ -74,6 +78,12 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// The combined count a value-memoizing view snapshots around a scoped
     /// render: any delta means the subtree is unsafe to cache.
     public var cacheUnsafeCount: Int { reads &+ sideEffects &+ replayableEffects }
+
+    /// Everything in ``cacheUnsafeCount`` except ``replayableEffects``: the
+    /// count the buffer memo's store gate reads, since that memo stores a
+    /// subtree's replayable registrations with its buffer and makes them again
+    /// on every hit.
+    public var unreplayableCount: Int { reads &+ sideEffects }
 
     /// Creates a tracker with zero counts.
     public init() {}

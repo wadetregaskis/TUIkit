@@ -33,13 +33,15 @@ extension KeyPressModifier: Renderable {
         //   register a SECOND handler for the same modifier within the frame,
         //   running the action twice per keypress;
         // - always declared to any value-memoizing ancestor — the dispatcher
-        //   clears its handlers every frame, so a cached row would stop
-        //   re-registering and its onKeyPress would go dead while the row is
-        //   still on screen.
+        //   clears its handlers every frame, so a row served from the cache
+        //   must still register. Declared as REPLAYABLE: the buffer memo stores
+        //   the entry recorded below with the row's buffer and makes the
+        //   registration again on every hit, at the row's own position. Every
+        //   gate that does not replay still counts it and declines.
         guard !context.isMeasuring else {
             return TUIkit.renderToBuffer(content, context: context)
         }
-        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        context.environment.volatileReadTracker?.recordReplayableEffect()
 
         let sectionID = context.environment.activeFocusSectionID
         KeyPressRegistrar.register(keys: keys, handler: handler, sectionID: sectionID, context: context)

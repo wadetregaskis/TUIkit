@@ -109,6 +109,10 @@ package final class EffectJournal {
     /// Whether a registrar should append what it registers.
     package var isRecording: Bool { recordingDepth > 0 }
 
+    /// How many entries are recorded, so a memo can tell whether its render
+    /// appended anything without slicing.
+    package var count: Int { entries.count }
+
     /// Creates an empty journal that is not recording.
     package init() {}
 

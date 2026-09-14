@@ -32,6 +32,11 @@ import TUIkitCore
 
 /// The buffer half: serves `key`'s cached buffer, or renders and stores it.
 ///
+/// A stored subtree may carry registrations (`EffectJournal`): the per-frame
+/// registrations its render recorded, which a hit makes again at this position
+/// in the walk, so the key dispatcher and the other per-walk registries see
+/// the same thing whether the subtree rendered or was served.
+///
 /// - Parameters:
 ///   - key: The value the memo is keyed by. A hit means this compared equal;
 ///     whether that implies an equal rendering is the CALLER's claim, and the two
@@ -47,6 +52,8 @@ import TUIkitCore
 /// `render` once per row per pass. Left out of line it cost **+3.3% on the
 /// `menus` stress scenario** — the shape with the highest miss ratio, since an
 /// interactive row can never be stored and so takes the miss path every frame.
+/// For the same reason everything a hit or a store does with registrations is
+/// out of line below, behind a count check.
 @inline(__always)
 @MainActor
 func renderValueMemoized<Key: Equatable>(
@@ -63,11 +70,12 @@ func renderValueMemoized<Key: Equatable>(
     let identity = context.identity
     cache.markActive(identity)
 
-    if let cached = cache.lookup(
+    if let entry = cache.lookupEntry(
         identity: identity, view: key,
         contextWidth: context.availableWidth, contextHeight: context.availableHeight,
         gradientFrame: context.gradientFrame,
-        surfaceBackground: context.environment.surfaceBackground)
+        surfaceBackground: context.environment.surfaceBackground,
+        effectSection: context.environment.activeFocusSectionID)
     {
         // Keep the cached subtree's state alive for GC — the WHOLE subtree, not
         // just this identity: nothing below is visited on a hit, so a `@State`
@@ -92,14 +100,13 @@ func renderValueMemoized<Key: Equatable>(
         // element in a `_MemoizedRow` and nothing in `Stress` uses
         // `.equatable()`.
         if RenderCache.verifiesRenderMemo {
-            let fresh = render(context)
-            if fresh.lines != cached.lines {
-                cache.noteRenderMemoMismatch(
-                    viewType: String(describing: viewType()), served: cached,
-                    fresh: fresh, identity: identity.path)
-            }
+            verifyServe(entry, viewType: viewType, context: context, cache: cache, render: render)
+        } else if !entry.effects.isEmpty, !context.isMeasuring {
+            // A measure pass registers nothing when it renders, so it replays
+            // nothing when it is served.
+            replayEffects(entry.effects, context: context, cache: cache)
         }
-        return cached
+        return entry.buffer
     }
 
     // Miss: render under a volatile-read tracker (reusing an ancestor's, so
@@ -111,14 +118,20 @@ func renderValueMemoized<Key: Equatable>(
     //     per-frame handler state, and a focused control pulses);
     //   • never a time-varying subtree (a pulse-phase read or an animation
     //     request means the next frame differs even though the value compares
-    //     equal — a cached Spinner would freeze, issue #1).
+    //     equal — a cached Spinner would freeze, issue #1);
+    //   • never a subtree that made a per-frame registration this memo cannot
+    //     make again. One it CAN (`recordReplayableEffect`) was recorded in the
+    //     effect journal while this render ran, and is stored with the buffer.
     let existingTracker = context.environment.volatileReadTracker
     let tracker = existingTracker ?? VolatileReadTracker()
     let renderContext =
         existingTracker == nil
         ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
         : context
-    let unsafeBefore = tracker.cacheUnsafeCount
+    // `unreplayableCount`, not `cacheUnsafeCount`: this is the one gate that
+    // replays. Every other gate on the tracker keeps counting replayable
+    // registrations, because it has no way to make them again.
+    let unsafeBefore = tracker.unreplayableCount
     // Snapshot the invalidation generation too: a `clearAffected` DURING this
     // render — an environment or colour-environment change, a `ScrollViewReader`
     // publish; those are its synchronous callers — fires before we store, and
@@ -128,21 +141,93 @@ func renderValueMemoized<Key: Equatable>(
     // so this counter does not move for them and the store goes ahead — which is
     // right, because the drain clears the entry before it can be served.
     let clearsBefore = cache.stats.subtreeClears
+    let journal = cache.effectJournal
+    let journalStart = journal.beginRecording()
 
     let buffer = render(renderContext)
 
     if RenderCache.isStorable(
         buffer: buffer, context: context,
-        readVolatile: tracker.cacheUnsafeCount > unsafeBefore,
+        readVolatile: tracker.unreplayableCount > unsafeBefore,
         invalidatedDuringRender: cache.stats.subtreeClears > clearsBefore)
     {
+        let effects = journal.count > journalStart ? ownChannelEffects(journal, since: journalStart, context: context) : []
         cache.store(
             identity: identity, view: key, buffer: buffer,
             contextWidth: context.availableWidth, contextHeight: context.availableHeight,
             gradientFrame: context.gradientFrame,
-            surfaceBackground: context.environment.surfaceBackground)
+            surfaceBackground: context.environment.surfaceBackground,
+            recorded: (effects, effects.isEmpty ? nil : context.environment.activeFocusSectionID))
     }
+    // Empties the journal when this was the outermost recording memo. An inner
+    // one leaves its entries in place for the memo enclosing it.
+    journal.endRecording()
     return buffer
+}
+
+/// The recorded registrations since `start` that went into `context`'s own key
+/// channels.
+///
+/// The others went into throwaways swapped in somewhere below — `.dimmed()`,
+/// the page under a modal, a focus-reach probe — and were discarded with them.
+/// Replayed from here they would land in the channels in force at this memo,
+/// which for a live memo are the LIVE ones. Comparing `ObjectIdentifier`s is
+/// sound here because this context holds its dispatcher for the whole render
+/// that appended them.
+@MainActor
+private func ownChannelEffects(
+    _ journal: EffectJournal, since start: Int, context: RenderContext
+) -> [EffectJournal.Entry] {
+    let token = context.environment.keyChannelToken
+    return journal.entries(since: start).filter { $0.channelToken == token }
+}
+
+/// Makes a served subtree's registrations again, into `context`'s channels.
+///
+/// Also declares them as a replayable effect, so every gate enclosing this memo
+/// sees the same count as if the subtree had rendered, and re-records them for
+/// an enclosing memo that is recording, tagged with THIS context's channels:
+/// the entry was stored under whatever channels were in force when it rendered,
+/// and the ones in force now may be a different throwaway.
+@MainActor
+private func replayEffects(_ effects: [EffectJournal.Entry], context: RenderContext, cache: RenderCache) {
+    for effect in effects { effect.apply(context) }
+    context.environment.volatileReadTracker?.recordReplayableEffect()
+    let journal = cache.effectJournal
+    guard journal.isRecording else { return }
+    let token = context.environment.keyChannelToken
+    for effect in effects { journal.append(effect.retagged(token)) }
+}
+
+/// A hit under `TUIKIT_VERIFY_RENDER_MEMO`: renders the subtree fresh and
+/// compares it with what was served.
+///
+/// The fresh render registers for real, so the stored registrations are NOT
+/// replayed here, or every handler would be there twice. Instead the fresh
+/// render's registrations are recorded and compared with the stored ones by kind
+/// and count, the only comparison opaque closures allow.
+@MainActor
+private func verifyServe(
+    _ entry: RenderCache.CacheEntry, viewType: () -> Any.Type, context: RenderContext,
+    cache: RenderCache, render: (RenderContext) -> FrameBuffer
+) {
+    let journal = cache.effectJournal
+    let start = journal.beginRecording()
+    defer { journal.endRecording() }
+    let fresh = render(context)
+    if fresh.lines != entry.buffer.lines {
+        cache.noteRenderMemoMismatch(
+            viewType: String(describing: viewType()), served: entry.buffer,
+            fresh: fresh, identity: context.identity.path)
+    }
+    guard !context.isMeasuring else { return }
+    let freshKinds = ownChannelEffects(journal, since: start, context: context).map(\.kind)
+    let servedKinds = entry.effects.map(\.kind)
+    if freshKinds != servedKinds {
+        cache.noteRenderMemoEffectMismatch(
+            viewType: String(describing: viewType()), served: servedKinds,
+            fresh: freshKinds, identity: context.identity.path)
+    }
 }
 
 /// The size half: the same memo keyed by proposal as well as value.
@@ -189,7 +274,8 @@ func measureValueMemoized<Key: Equatable>(
     // its measurement memoised away — a served size would silently hide real
     // layout participation, breaking the `OnRenderPassModifier` contract
     // ("observation must not be memoised away"). Store-gating suffices: such a
-    // subtree never stores, so it never hits either.
+    // subtree never stores, so it never hits either. `cacheUnsafeCount`, which
+    // counts replayable registrations too: this half replays nothing.
     let existingTracker = context.environment.volatileReadTracker
     let tracker = existingTracker ?? VolatileReadTracker()
     let measureContext =

@@ -42,8 +42,9 @@ private struct CountKey: PreferenceKey {
 
 /// A subtree that registers an effect must never be served from cache: the frame
 /// the cache answers is a frame on which the effect was never registered, so
-/// `onAppear` never fires, a key handler is not in the dispatcher, focus is not
-/// in the ring.
+/// `onAppear` never fires and focus is not in the ring. The exception is a
+/// registration the memo records and makes again on every hit — a key handler —
+/// which stores.
 ///
 /// Every effect site declares itself through
 /// `VolatileReadTracker.recordRenderSideEffect()`, and `EquatableView` refuses
@@ -113,9 +114,12 @@ struct EquatableViewEffectGateTests {
         #expect(!storesBuffer { EffectLeaf(label: "x") { $0.onChange(of: 1) { _, _ in } }.equatable() })
     }
 
-    @Test("A key handler inside the subtree declines the cache")
-    func keyPressDeclines() {
-        #expect(!storesBuffer { EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }.equatable() })
+    @Test("A key handler inside the subtree is stored, because a hit replays it")
+    func keyPressStores() {
+        // The one registration here that the memo records and makes again on
+        // every hit (`EffectJournal`), so it no longer has to decline. What
+        // proves the replay is KeyPressMemoTests; this pins the gate.
+        #expect(storesBuffer { EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }.equatable() })
     }
 
     @Test("Focus registration inside the subtree declines the cache")
@@ -208,8 +212,8 @@ struct EquatableViewEffectGateTests {
                 )
             case 5:
                 (
-                    "a key handler inside",
-                    wrapped(EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }), false
+                    "a key handler inside (replayed on a hit)",
+                    wrapped(EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }), true
                 )
             case 6:
                 ("focus registration inside", wrapped(EffectLeaf(label: "x") { $0.focusable() }), false)

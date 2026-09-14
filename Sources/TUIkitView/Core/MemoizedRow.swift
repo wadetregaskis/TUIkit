@@ -97,6 +97,13 @@ public struct AnyEquatableBox: Equatable {
 /// `ForEach` — iterate the data itself (so it IS the element), or drop the
 /// `ForEach`. The gradient editor's frozen preview strip was this exact shape.
 ///
+/// **The hole covers actions too.** A served row makes its replayable
+/// registrations again (`EffectJournal`), and what it replays is the handler it
+/// built when it rendered. A handler that reads data captured from a cousin
+/// subtree keeps the old data, and nothing shows it: a stale picture can be
+/// seen, a stale action only does the wrong thing. The rule above is the same
+/// for a row that acts on captured data as for one that draws it.
+///
 /// For `List` the selection highlight is applied *outside* the cached row
 /// buffer, so selection/scroll never invalidate it — only the row's own content
 /// matters.

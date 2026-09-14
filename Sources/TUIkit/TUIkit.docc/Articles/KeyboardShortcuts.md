@@ -143,6 +143,8 @@ VStack {
 
 > Important: All key handlers are re-registered every render frame. If a view is not rendered (e.g. behind a conditional), its handlers are not active.
 
+This precedence holds inside memoized subtrees too. A `ForEach` row or an `.equatable()` view served from the render cache registers its handlers again at the place in the tree where it would have rendered, so they rank exactly as they would if it had rendered (see <doc:RenderCycle#Registrations-a-Hit-Makes-Again>).
+
 ## Focus Navigation
 
 The `FocusManager` dispatches key events in three steps:
