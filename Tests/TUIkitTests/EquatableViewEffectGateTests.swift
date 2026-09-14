@@ -122,6 +122,13 @@ struct EquatableViewEffectGateTests {
         #expect(storesBuffer { EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }.equatable() })
     }
 
+    @Test("A refreshable inside the subtree is stored, because a hit replays its Ctrl-R")
+    func refreshableStores() {
+        // Its Ctrl-R handler is recorded and replayed like `onKeyPress`'s. What
+        // proves the replay, and the spinner redrawing, is RefreshableMemoTests.
+        #expect(storesBuffer { EffectLeaf(label: "x") { $0.refreshable {} }.equatable() })
+    }
+
     @Test("Focus registration inside the subtree declines the cache")
     func focusableDeclines() {
         #expect(!storesBuffer { EffectLeaf(label: "x") { $0.focusable() }.equatable() })

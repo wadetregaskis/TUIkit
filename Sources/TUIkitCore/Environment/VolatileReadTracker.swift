@@ -64,6 +64,7 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// render cache's effect journal. Like ``sideEffects``, only ever compared
     /// as a delta. Recorded by:
     /// - `onKeyPress`, once per registration on a render pass;
+    /// - `.refreshable`, once per Ctrl-R binding on a render pass;
     /// - the buffer memo itself, once per hit that replays a stored subtree's
     ///   registrations, so an enclosing gate sees the same delta whether the
     ///   subtree rendered or was served.

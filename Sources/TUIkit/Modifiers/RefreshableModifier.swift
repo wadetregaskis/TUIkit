@@ -44,14 +44,40 @@ public struct RefreshAction: Equatable, Sendable {
         private let lock = NSLock()
         private var running = false
 
+        /// Whose cached buffers show this state, so a run starting or ending
+        /// can drop them: the render cache of the frame that last rendered the
+        /// `.refreshable`, and its identity.
+        ///
+        /// A value memo above the modifier may serve a buffer instead of
+        /// rendering it, and the key it compares does not change when a run
+        /// starts. Without this the memo kept serving the idle picture, so the
+        /// spinner never drew, and a buffer stored mid-run kept the spinner
+        /// after the run ended. Weak, like a `StateBox`'s sink: the cache owns
+        /// the state storage this lives in, not the other way round.
+        private weak var invalidationSink: (any RenderInvalidationSink)?
+        private var identity: ViewIdentity?
+
         init() {}
+
+        /// Records where a change of this state has to be seen. Called by each
+        /// render of the `.refreshable` that owns it.
+        func bind(to sink: (any RenderInvalidationSink)?, identity: ViewIdentity) {
+            lock.lock()
+            invalidationSink = sink
+            self.identity = identity
+            lock.unlock()
+        }
 
         /// Claims the right to run, or reports that someone else already has.
         func beginIfIdle() -> Bool {
             lock.lock()
-            defer { lock.unlock() }
-            if running { return false }
+            if running {
+                lock.unlock()
+                return false
+            }
             running = true
+            lock.unlock()
+            invalidateBound()
             return true
         }
 
@@ -59,6 +85,19 @@ public struct RefreshAction: Equatable, Sendable {
             lock.lock()
             running = false
             lock.unlock()
+            invalidateBound()
+        }
+
+        /// Drops the bound identity's cached buffers, and its ancestors', and
+        /// asks for a frame. Thread-safe: the sink only queues the identity.
+        private func invalidateBound() {
+            lock.lock()
+            let sink = invalidationSink
+            let identity = identity
+            lock.unlock()
+            // Never `nil`, which would clear the whole cache.
+            guard let sink, let identity else { return }
+            sink.invalidateRender(for: identity)
         }
 
         var isRunning: Bool {
@@ -197,6 +236,7 @@ public struct RefreshableModifier<Content: View>: View {
             identity: context.identity, propertyIndex: RefreshableStateIndex.runState)
         let box: StateBox<RefreshAction.RunState> = storage.storage(
             for: key, default: RefreshAction.RunState())
+        box.value.bind(to: context.renderCache, identity: context.identity)
         return RefreshAction(action, state: box.value)
     }
 }
@@ -216,20 +256,23 @@ extension RefreshableModifier: Renderable {
 
         // Declared to any value-memoizing ancestor: the dispatcher clears its
         // handlers every frame, so a cached subtree would stop re-registering
-        // and Ctrl-R would go dead while still on screen.
-        context.environment.volatileReadTracker?.recordRenderSideEffect()
-        context.environment.keyEventDispatcher?.addHandler(
-            sectionID: context.environment.activeFocusSectionID
-        ) { [action] event in
-            guard event.ctrl, case .character(let character) = event.key,
-                character.lowercased() == "r"
-            else { return false }
-            // The key is consumed either way. Whether it STARTS anything is
-            // the action's business — it coalesces a request made while one is
-            // in flight, so this route and a button reaching the same refresh
-            // through the environment behave identically.
-            Task { @MainActor in await action() }
-            return true
+        // and Ctrl-R would go dead while still on screen. Declared as
+        // REPLAYABLE, as `onKeyPress` is: the buffer memo stores the entry
+        // recorded below and binds Ctrl-R again on every hit. The spinner is
+        // the part a hit could get wrong, and the run state invalidates this
+        // identity when a run starts or ends (`RunState.bind`).
+        context.environment.volatileReadTracker?.recordReplayableEffect()
+        let sectionID = context.environment.activeFocusSectionID
+        RefreshRegistrar.register(action: action, sectionID: sectionID, context: context)
+        if let journal = context.recordingEffectJournal {
+            // Built only while a memo records. The action is captured with the
+            // run state it shares with every other frame's.
+            journal.append(
+                EffectJournal.Entry(
+                    kind: RefreshRegistrar.kind, channelToken: context.environment.keyChannelToken
+                ) { [action] replay in
+                    RefreshRegistrar.register(action: action, sectionID: sectionID, context: replay)
+                })
         }
 
         let buffer = TUIkitView.renderToBuffer(content, context: childContext)
@@ -263,6 +306,34 @@ extension RefreshableModifier: Renderable {
                     .padding(.horizontal, 1)
             },
             context: childContext)
+    }
+}
+
+// MARK: - Registration
+
+/// The one registration `.refreshable` makes, shared by the live render and by
+/// a value memo replaying it — see `EffectJournal`.
+enum RefreshRegistrar {
+    /// The journal kind of a `.refreshable`'s Ctrl-R binding.
+    static let kind = EffectJournal.Kind("refreshable")
+
+    /// Binds Ctrl-R to `action` in `context`'s key dispatcher, in `sectionID`.
+    ///
+    /// It looks the dispatcher up in `context` rather than taking one, so a
+    /// replay binds into the channels of the frame that serves it.
+    @MainActor
+    static func register(action: RefreshAction, sectionID: String?, context: RenderContext) {
+        context.environment.keyEventDispatcher?.addHandler(sectionID: sectionID) { event in
+            guard event.ctrl, case .character(let character) = event.key,
+                character.lowercased() == "r"
+            else { return false }
+            // The key is consumed either way. Whether it STARTS anything is
+            // the action's business — it coalesces a request made while one is
+            // in flight, so this route and a button reaching the same refresh
+            // through the environment behave identically.
+            Task { @MainActor in await action() }
+            return true
+        }
     }
 }
 
