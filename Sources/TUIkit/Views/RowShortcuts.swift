@@ -143,6 +143,17 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
 /// An action that isn't mentioned keeps its defaults, so an override never has
 /// to restate the rest of the table. See ``ShortcutSet`` for the four things a
 /// value can say.
+///
+/// ## One chord, two actions
+///
+/// An override that names a chord one of TUIkit's defaults holds takes it: the
+/// default yields, and that is not a mistake.
+///
+/// Two overrides that name the same chord are a mistake, because only one
+/// action can answer a key. A debug build stops with an assertion failure. A
+/// release build reports it once, and the action declared first in
+/// ``RowAction`` keeps the chord, whatever order the dictionary was written in.
+/// The other action keeps the rest of its bindings.
 public struct RowShortcuts: Hashable, Sendable {
     /// The app's changes, by action. Empty for the stock table.
     public let overrides: [RowAction: ShortcutSet]
@@ -185,7 +196,15 @@ public struct RowShortcuts: Hashable, Sendable {
 
     /// The chord → action map the key handler dispatches through, built once
     /// per render rather than scanned per keystroke.
-    func lookup(commandKey: CommandKeyBinding) -> RowShortcutLookup {
+    ///
+    /// Two overrides on one chord are reported through `onClash`, and the action
+    /// ``RowAction`` declares first keeps the chord. The default report is a
+    /// soft trap: an assertion failure in a debug build, a report once per
+    /// distinct message in a release build. The parameter exists so a test can
+    /// see the clash without a debug build stopping.
+    func lookup(
+        commandKey: CommandKeyBinding, onClash report: (String) -> Void = { SoftTrap.report($0) }
+    ) -> RowShortcutLookup {
         var byTrigger: [KeyboardShortcut.Trigger: RowAction] = [:]
         // Defaults first, then the overrides on top: an app that binds Ctrl-A to
         // something else means it, and the default that used to hold that chord
@@ -204,9 +223,10 @@ public struct RowShortcuts: Hashable, Sendable {
                     if let existing = clash, existing != action,
                         overrides[existing]?.explicit.contains(shortcut) == true
                     {
-                        assertionFailure(
+                        report(
                             "rowShortcuts binds \(resolved.displayString ?? "?") to both "
-                                + "\(existing) and \(action); the first wins")
+                                + "\(existing) and \(action); \(existing), which RowAction "
+                                + "declares first, keeps it")
                         continue
                     }
                     byTrigger[resolved.trigger] = action
@@ -272,6 +292,9 @@ extension View {
     /// replacement, as everywhere else), which is why ``ShortcutSet/default``
     /// exists: an inner scope can put one action back the way TUIkit ships it
     /// without knowing what that is.
+    ///
+    /// An override may take a chord from one of TUIkit's defaults. Two overrides
+    /// on the same chord are a mistake: see ``RowShortcuts`` for what happens.
     ///
     /// ```swift
     /// page.rowShortcuts([.extendSelection: [.init("e")]])

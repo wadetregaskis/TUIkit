@@ -149,9 +149,49 @@ struct RowShortcutsTests {
     @Test("An override takes a chord away from a default binding")
     func overrideBeatsDefault() {
         let table = RowShortcuts([.extendSelection: [ctrlA]])
-        let lookup = table.lookup(commandKey: .control)
+        var reports: [String] = []
+        let lookup = table.lookup(commandKey: .control, onClash: { reports.append($0) })
         #expect(lookup.action(for: KeyEvent(key: .character("a"), ctrl: true))?.action == .extendSelection)
+        #expect(reports.isEmpty, "taking a default's chord is not a clash: \(reports)")
     }
+
+    /// Only one action can answer a key, so two overrides on one chord are the
+    /// app's mistake. What a release build does with it: the action `RowAction`
+    /// declares first keeps the chord, and the clash is reported once per build
+    /// of the table. The pairs are written with the later-declared action first,
+    /// so declaration order, not the literal's order, is what decides.
+    @Test(
+        "Two overrides on one chord: the action RowAction declares first keeps it, and the clash is reported",
+        arguments: [
+            (RowAction.extendSelection, RowAction.selectAll),
+            (RowAction.reverseSortOrder, RowAction.pickUpRow),
+        ])
+    func clashingOverrides(later: RowAction, earlier: RowAction) {
+        let ctrlX = KeyboardShortcut("x", modifiers: .control)
+        let table = RowShortcuts([later: [ctrlE, ctrlX], earlier: [ctrlE]])
+        var reports: [String] = []
+        let lookup = table.lookup(commandKey: .control, onClash: { reports.append($0) })
+
+        #expect(lookup.action(for: KeyEvent(key: .character("e"), ctrl: true))?.action == earlier)
+        #expect(
+            lookup.action(for: KeyEvent(key: .character("x"), ctrl: true))?.action == later,
+            "the losing action keeps the chords nobody else claimed")
+        #expect(
+            reports == ["rowShortcuts binds ^E to both \(earlier) and \(later); \(earlier), which RowAction declares first, keeps it"])
+    }
+
+    #if DEBUG
+        /// The default report is a soft trap, so a debug build stops. In a child
+        /// process, because a stop in this one would end the test run.
+        @Test("Two overrides on one chord stop a debug build")
+        func clashStopsADebugBuild() async {
+            await #expect(processExitsWith: .failure) {
+                let ctrlE = KeyboardShortcut("e", modifiers: .control)
+                _ = RowShortcuts([.selectAll: [ctrlE], .extendSelection: [ctrlE]])
+                    .lookup(commandKey: .control)
+            }
+        }
+    #endif
 
     // MARK: - The table is memoised, and the memo notices
 
