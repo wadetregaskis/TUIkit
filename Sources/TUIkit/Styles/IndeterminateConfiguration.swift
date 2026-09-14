@@ -84,8 +84,13 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     ///   rainbow. Fewer than two usable stops falls back the same way.
     public var gradient: Gradient?
 
-    /// How long one full pass takes, in seconds. Must be positive; anything
-    /// else is treated as the preset's.
+    /// How long one full pass takes, in seconds. Must be finite and greater
+    /// than zero.
+    ///
+    /// Any other value is a mistake in the app. A debug build stops with an
+    /// assertion failure. A release build reports it once and uses 1.6 seconds,
+    /// the ``sweep`` preset's period, whichever preset the configuration was
+    /// built from.
     public var period: Double
 
     /// The lit run's length as a fraction of the track, for the two motions

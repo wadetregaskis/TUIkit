@@ -138,8 +138,8 @@ enum IndeterminateRenderer {
     /// in the animation is now a pure function, so the caller can build every
     /// frame at once and leave them as an ``AnimatedCellRun`` instead of asking
     /// to be re-rendered thirty times a second.
-    private static func phase(elapsed: Double, period: Double = 1.6) -> Double {
-        let period = period > 0 ? period : 1.6
+    private static func phase(elapsed: Double, period: Double) -> Double {
+        let period = usablePeriod(period)
         let wrapped = elapsed.truncatingRemainder(dividingBy: period)
         return (wrapped < 0 ? wrapped + period : wrapped) / period
     }
@@ -149,8 +149,34 @@ enum IndeterminateRenderer {
     /// The cycle builder needs exactly what the renderer uses, so both read it
     /// off the configuration rather than keeping a table of their own.
     static func period(of style: IndeterminateStyle) -> Double {
-        let period = style.configuration.period
-        return period > 0 ? period : 1.6
+        usablePeriod(style.configuration.period)
+    }
+
+    /// The period a pass takes when a configuration's cannot be used: the
+    /// ``IndeterminateConfiguration/sweep`` preset's.
+    static let fallbackPeriod: Double = 1.6
+
+    /// `period` if it is finite and greater than zero; otherwise
+    /// ``fallbackPeriod``, reported through `onRejection`.
+    ///
+    /// One rule for every reader, because there used to be two copies of
+    /// `period > 0 ? period : 1.6`, and neither rejected infinity, which passes
+    /// `> 0` and then traps in `frameCount(of:)` converting the frame count to
+    /// an `Int`.
+    ///
+    /// The default report is a soft trap: an assertion failure in a debug build,
+    /// a report once per distinct message in a release build. The parameter
+    /// exists so a test can see what is rejected without stopping.
+    static func usablePeriod(
+        _ period: Double, onRejection report: (String) -> Void = { SoftTrap.report($0) }
+    ) -> Double {
+        guard period.isFinite, period > 0 else {
+            report(
+                "IndeterminateConfiguration.period must be finite and greater than zero, "
+                    + "not \(period); using \(fallbackPeriod) s")
+            return fallbackPeriod
+        }
+        return period
     }
 
     /// The lit run's length in cells — at least one, however small the

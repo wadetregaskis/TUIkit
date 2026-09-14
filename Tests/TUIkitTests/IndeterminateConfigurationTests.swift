@@ -118,17 +118,38 @@ struct IndeterminateConfigurationTests {
         #expect(slowCycle.frames.count == 4 * quickCycle.frames.count)
     }
 
-    /// A configuration is a value an app can build from a text field, so the
-    /// degenerate ones have to render rather than trap.
-    @Test("A non-positive period falls back instead of dividing by zero")
-    func degeneratePeriodIsSurvivable() {
-        for period in [0.0, -3.0] {
-            let style = IndeterminateStyle.custom(
-                IndeterminateConfiguration(motion: .sweep, period: period))
-            #expect(IndeterminateRenderer.period(of: style) == 1.6)
-            #expect(render(style, at: 0.4).strippedLength == 24)
-        }
+    /// A configuration is a value an app can build from a text field, so a
+    /// period with no meaning must not trap a release build. It must not pass
+    /// unnoticed in a debug one either, which is why the rejection is reported.
+    @Test(
+        "A period that is not finite and positive is rejected, reported, and replaced by 1.6 s",
+        arguments: [0.0, -1.0, -3.0, .nan, .infinity, -.infinity])
+    func unusablePeriodIsRejected(period: Double) {
+        var reports: [String] = []
+        let used = IndeterminateRenderer.usablePeriod(period, onRejection: { reports.append($0) })
+        #expect(used == 1.6)
+        #expect(reports.count == 1, "reports: \(reports)")
+        #expect(reports.first?.contains("IndeterminateConfiguration.period") == true)
     }
+
+    @Test("A finite positive period is used as given, unreported", arguments: [1.6, 0.25, 0.6, 4.0])
+    func usablePeriodPassesThrough(period: Double) {
+        var reports: [String] = []
+        #expect(IndeterminateRenderer.usablePeriod(period, onRejection: { reports.append($0) }) == period)
+        #expect(reports.isEmpty, "reports: \(reports)")
+    }
+
+    #if DEBUG
+        /// The default report is a soft trap, so a debug build stops. It runs in a
+        /// child process, because a stop in this one would end the test run.
+        @Test("A zero period stops a debug build")
+        func zeroPeriodStopsADebugBuild() async {
+            await #expect(processExitsWith: .failure) {
+                _ = IndeterminateRenderer.period(
+                    of: .custom(IndeterminateConfiguration(motion: .sweep, period: 0)))
+            }
+        }
+    #endif
 
     @Test("A zero or negative extent still lights one cell")
     func extentAlwaysLightsSomething() {
