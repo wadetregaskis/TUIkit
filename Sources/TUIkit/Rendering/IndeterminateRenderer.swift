@@ -10,14 +10,29 @@ import Foundation
 
 /// Utility for rendering an animated indeterminate-progress bar.
 ///
-/// Every animation derives a phase in `0..<1` from an elapsed time, so the bar
-/// animates at a consistent visual speed regardless of how often the view tree
-/// re-renders. What is drawn comes from an ``IndeterminateConfiguration``, of
-/// which each ``IndeterminateStyle`` case is a preset — so a named style and a
-/// hand-rolled `.custom(_:)` go down the same path.
+/// A frame is drawn at a ``Position`` in its pass: one of the steps a stepped
+/// motion walks through, or a phase in `0..<1` for the pulse, whose colour is
+/// continuous. An elapsed time maps to a position, so the bar animates at a
+/// consistent visual speed regardless of how often the view tree re-renders.
+/// What is drawn comes from an ``IndeterminateConfiguration``, of which each
+/// ``IndeterminateStyle`` case is a preset — so a named style and a hand-rolled
+/// `.custom(_:)` go down the same path.
 enum IndeterminateRenderer {
 
-    /// Renders one frame of the indeterminate animation.
+    /// Where in its pass a frame is drawn.
+    enum Position: Equatable {
+        /// Step `n` of the ``IndeterminateRenderer/states(of:width:cellPixels:)`` a
+        /// motion walks through in one pass, wrapped into that range, so a caller can
+        /// name a state in integers rather than as a time that has to land inside it.
+        /// The pulse has no steps, and draws the start of its pass.
+        case step(Int)
+        /// A point in the pass, in `0..<1`. A stepped motion draws the step that
+        /// point falls in.
+        case phase(Double)
+    }
+
+    /// Renders one frame of the indeterminate animation, `elapsed` seconds into the
+    /// motion's own time.
     ///
     /// - Parameters:
     ///   - width: The track's total width in terminal cells.
@@ -38,30 +53,110 @@ enum IndeterminateRenderer {
         elapsed: Double,
         palette: any Palette
     ) -> ClaimingRow {
+        // Before the phase, whose period check reports an unusable period, so a track
+        // with no cells reports nothing, as it always has.
+        guard width > 0 else { return ClaimingRow() }
+        return render(
+            width: width, style: style, fillColor: fillColor, backgroundColor: backgroundColor,
+            accentColor: accentColor,
+            position: .phase(phase(elapsed: elapsed, period: style.configuration.period)),
+            palette: palette)
+    }
+
+    /// Renders one frame of the indeterminate animation at `position` in its pass.
+    ///
+    /// The parameters and the result are ``render(width:style:fillColor:backgroundColor:accentColor:elapsed:palette:)``'s.
+    static func render(
+        width: Int,
+        style: IndeterminateStyle,
+        fillColor: Color,
+        backgroundColor: Color,
+        accentColor: Color,
+        position: Position,
+        palette: any Palette
+    ) -> ClaimingRow {
         guard width > 0 else { return ClaimingRow() }
         // A motion's own gradient is read straight from the style, so it has
         // never met the palette. See `StyleGradientResolution.swift`.
         let configuration = style.configuration.resolvingColours(with: palette)
-        switch configuration.motion {
-        case .sweep:
+        // Every stepped motion's count is at least 1, so the wrap below cannot divide
+        // by zero; the pulse has none.
+        let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
+        func wrapped(_ step: Int) -> Int { ((step % states) + states) % states }
+        switch (configuration.motion, position) {
+        case (.sweep, .step(let step)):
             return renderSweep(
                 width: width, configuration: configuration, empty: backgroundColor,
-                accent: accentColor, elapsed: elapsed)
-        case .barberPole:
+                accent: accentColor, head: wrapped(step))
+        case (.sweep, .phase(let phase)):
+            // Unwrapped: a phase a hair under 1 can reach `width`, which the trail's
+            // own wrap reads as column 0.
+            return renderSweep(
+                width: width, configuration: configuration, empty: backgroundColor,
+                accent: accentColor, head: Int(phase * Double(width)))
+        case (.barberPole, _):
+            // The pattern shifted by `shift` characters is the pattern shifted by
+            // `shift` modulo its length, which is all a step has to name.
+            let shift: Int
+            switch position {
+            case .step(let step): shift = wrapped(step)
+            case .phase(let phase): shift = wrapped(Int(phase * Double(width * 2)))
+            }
             return renderBarberPole(
                 width: width, configuration: configuration, filled: fillColor,
-                accent: accentColor, elapsed: elapsed)
-        case .pulse:
+                accent: accentColor, shift: shift)
+        case (.pulse, _):
+            let phase: Double
+            if case .phase(let given) = position { phase = given } else { phase = 0 }
             return renderPulse(
                 width: width, configuration: configuration, dim: backgroundColor,
-                bright: accentColor, elapsed: elapsed)
-        case .knightRider:
+                bright: accentColor, phase: phase)
+        case (.knightRider, .step(let step)):
             return renderKnightRider(
                 width: width, configuration: configuration, empty: backgroundColor,
-                accent: accentColor, elapsed: elapsed)
-        case .gradient:
+                accent: accentColor, step: wrapped(step))
+        case (.knightRider, .phase(let phase)):
+            return renderKnightRider(
+                width: width, configuration: configuration, empty: backgroundColor,
+                accent: accentColor, step: min(states - 1, Int(phase * Double(states))))
+        case (.gradient, .step(let step)):
             return renderGradient(
-                width: width, configuration: configuration, elapsed: elapsed)
+                width: width, configuration: configuration,
+                phase: Double(wrapped(step)) / Double(states))
+        case (.gradient, .phase(let phase)):
+            return renderGradient(width: width, configuration: configuration, phase: phase)
+        }
+    }
+
+    /// How many distinct states one pass of `configuration` steps through across
+    /// `width` cells, or `nil` for the pulse, whose colour is continuous.
+    ///
+    /// - `sweep`: the width, a head on each column.
+    /// - `knightRider`: ``bounceSteps(width:)``, 2(W − 1) and at least 1.
+    /// - `barberPole`: the characters in `fill` (at least 1), since the pattern
+    ///   shifted by its own length is the pattern again.
+    /// - `gradient`: ``samplesPerCell`` a cell in glyphs, or the picture's width in
+    ///   pixels when it is drawn as pictures.
+    ///
+    /// - Parameters:
+    ///   - cellPixels: A cell's size in pixels when the bar is drawn as pictures, or
+    ///     `nil` when it is drawn in glyphs.
+    static func states(
+        of configuration: IndeterminateConfiguration, width: Int, cellPixels: TerminalCellPixels?
+    ) -> Int? {
+        let width = max(1, width)
+        switch configuration.motion {
+        case .sweep: return width
+        case .knightRider: return bounceSteps(width: width)
+        case .barberPole: return max(1, configuration.fill.count)
+        case .pulse: return nil
+        case .gradient:
+            if let cellPixels,
+                let picture = GradientRaster.resolution(columns: width, rows: 1, cellPixels: cellPixels)
+            {
+                return picture.width
+            }
+            return samplesPerCell * width
         }
     }
 
@@ -293,11 +388,9 @@ extension IndeterminateRenderer {
     /// sweeps continuously across the track.
     private static func renderSweep(
         width: Int, configuration: IndeterminateConfiguration,
-        empty: Color, accent: Color, elapsed: Double
+        empty: Color, accent: Color, head: Int
     ) -> ClaimingRow {
-        let phase = phase(elapsed: elapsed, period: configuration.period)
         let segment = segment(of: configuration, across: width)
-        let head = Int(phase * Double(width))
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.background)
         // Sampled as a RAMP, not cell by cell: `Color.quantisedRamp` is what
@@ -324,16 +417,16 @@ extension IndeterminateRenderer {
     /// so the row reads as moving diagonal stripes.
     private static func renderBarberPole(
         width: Int, configuration: IndeterminateConfiguration,
-        filled: Color, accent: Color, elapsed: Double
+        filled: Color, accent: Color, shift: Int
     ) -> ClaimingRow {
         let fill = Array(configuration.fill)
         let stripes = configuration.gradient.map { $0.stops.map(\.color) }.flatMap {
             $0.isEmpty ? nil : $0
         } ?? [accent, filled]
-        // A fast-cycling phase so the stripes appear to scroll briskly; the eye
-        // reads the built-in `0.6 s` per stripe-pair shift as "moving" rather
-        // than "ticking".
-        let shift = Int(phase(elapsed: elapsed, period: configuration.period) * Double(width * 2))
+        // `shift` is at least 0, so neither remainder below goes negative. A phase
+        // reaches it as a fast-cycling shift of twice the width a pass, so the
+        // stripes appear to scroll briskly; the eye reads the built-in `0.6 s` per
+        // stripe-pair shift as "moving" rather than "ticking".
         return laid(width: width) { column in
             let slot = fill.isEmpty ? 0 : (column + shift) % fill.count
             return (glyph(fill, at: column + shift), stripes[slot % stripes.count])
@@ -347,13 +440,13 @@ extension IndeterminateRenderer {
     /// The whole bar breathes between the two ends of the ramp.
     private static func renderPulse(
         width: Int, configuration: IndeterminateConfiguration,
-        dim: Color, bright: Color, elapsed: Double
+        dim: Color, bright: Color, phase: Double
     ) -> ClaimingRow {
         // A sine wave gives a smoother breath than a sawtooth `phase()`,
         // and clamping its `0..<2π` range to `[0, 1]` via `(1 - cos)/2`
         // makes the brightest and dimmest points sit at the start and
         // middle of each period — easier to read as "alive but waiting".
-        let raw = phase(elapsed: elapsed, period: configuration.period) * .pi * 2
+        let raw = phase * .pi * 2
         let intensity = (1.0 - cos(raw)) / 2.0
         let colour = ramp(configuration, dim: dim, bright: bright).color(at: intensity)
         let fill = Array(configuration.fill)
@@ -380,21 +473,17 @@ extension IndeterminateRenderer {
     /// The lead now walks 0 … W−1 … 1, one step per `period / (2(W − 1))` seconds,
     /// standing on each end once — what a one-cell block hitting a wall does, and
     /// what `Spinner`'s bounce does. The "freshest visit wins" age is the same rule
-    /// `Spinner.renderBouncingFrame` applies to its trail. Frames still sample the
-    /// phase at the cycle's own rate, so the documented `period` holds whatever the
-    /// width.
+    /// `Spinner.renderBouncingFrame` applies to its trail. `step` is which of the
+    /// ``bounceSteps(width:)`` the lead is on, and a cycle's frames name them in
+    /// order, so the documented `period` holds whatever the width.
     private static func renderKnightRider(
         width: Int, configuration: IndeterminateConfiguration,
-        empty: Color, accent: Color, elapsed: Double
+        empty: Color, accent: Color, step: Int
     ) -> ClaimingRow {
         // At least one tail cell behind the lead wherever the track has room for
         // one: the preset's eighth of a track is under two cells below 16 columns,
         // and a lead with no tail is a different animation.
         let length = min(width, max(2, segment(of: configuration, across: width)))
-        let steps = bounceSteps(width: width)
-        let step = min(
-            steps - 1,
-            Int(phase(elapsed: elapsed, period: configuration.period) * Double(steps)))
         let fill = Array(configuration.fill)
         let unlit = Array(configuration.background)
         // The ramp, quantised as one — see `renderSweep`.
@@ -448,10 +537,9 @@ extension IndeterminateRenderer {
     /// index as time passes, so the eye reads the gradient as moving
     /// rightward.
     private static func renderGradient(
-        width: Int, configuration: IndeterminateConfiguration, elapsed: Double
+        width: Int, configuration: IndeterminateConfiguration, phase: Double
     ) -> ClaimingRow {
         let ramp = cyclic(configuration.gradient)
-        let phase = phase(elapsed: elapsed, period: configuration.period)
         let fill = Array(configuration.fill)
         // The ramp, sampled once as a whole — four entries per cell, so the
         // motion still slides in quarter-cell steps — and quantised through
