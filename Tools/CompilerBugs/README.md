@@ -1,6 +1,6 @@
 # Compiler bugs TUIkit has hit
 
-Four Swift bugs the framework works around. Each has a self-contained repro here
+Five Swift bugs the framework works around. Each has a self-contained repro here
 so the workaround can be checked against a new toolchain and deleted the moment
 it stops being needed — and so they can be reported upstream without anyone
 having to build TUIkit.
@@ -8,7 +8,7 @@ having to build TUIkit.
 The first two were found in August 2026. Toolchains: **Apple Swift 6.2.4**
 (`swiftlang-6.2.4.1.4`, Xcode) and the **6.5-dev snapshot of 2026-08-30**
 (`swift-DEVELOPMENT-SNAPSHOT-2026-08-30-a`, which is built `+assertions`).
-The third and fourth were found in September 2026, on swift.org's **Swift
+The third, fourth and fifth were found in September 2026, on swift.org's **Swift
 6.2.4** (`swift-6.2.4-RELEASE`, which is also built `+assertions`, and is what
 swiftly installs).
 
@@ -211,3 +211,56 @@ in a method of `_NavigationStackCore<Root>`, where `crumbView` returns
 `some View`. It was the next thing swift.org's 6.2.4 stopped on once section 3
 was worked around. **Workaround:** `{ pair in crumbView(pair.element, …) }`. See
 `Sources/TUIkit/Views/NavigationStack.swift`.
+
+---
+
+## 5. `ExpectOptionalProduct` — `#expect` comparing an `Int64?` with a product of literals
+
+```
+cd ExpectOptionalProduct && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./variants.sh
+```
+
+```
+#expect(Int64? == 9 * 116_666_667)          ASSERTS
+a literal, not a product                    ok
+a sum, not a product                        ASSERTS
+the product typed, Int64(9) * ...           ok
+value not optional                          ok
+Int?, not Int64?                            ok
+compared outside #expect                    ok
+```
+
+`Tests/ReproTests/Crash.swift` is one test with one expectation, and the
+compiler stops in SILGen while it emits a reabstraction thunk for the
+comparison `#expect` expands to:
+
+```
+TYPE MISMATCH IN ARGUMENT 0 OF APPLY AT <<debugloc at "<compiler-generated>":0:0>>
+  argument value:   %16 = alloc_stack $Int64
+  argument type: $*Int64
+  parameter type: $*Optional<Int64>
+While emitting reabstraction thunk in SIL function
+"@$ss11AnyHashableVABIgr_SbIgngd_s5Int64VSgxRi_zRi0_zlyABIsgr_SbIegngd_TR".
+```
+
+Three ingredients, all necessary:
+
+1. **An `Int64?` on the left** of `==`. The same comparison with an `Int64`, or
+   with an `Int?`, is fine.
+2. **An arithmetic expression of integer literals on the right**: a product or
+   a sum. A single literal, or the same product with one operand typed
+   (`Int64(9) * 116_666_667`), is fine.
+3. **Inside `#expect`.** The same comparison assigned to a `let` first, and the
+   `let` expected, is fine.
+
+**Assertions-enabled compilers, and not fixed yet.** swift.org's 6.2.4 and the
+6.4.x snapshot of 2026-09-10 (both built `+assertions`) abort on the same two
+variants. Xcode's 6.2.4 and swift.org's 6.3.3 print `ok` for all seven. So the
+nightly lanes stop on this spelling too.
+
+**Where TUIkit hit it:** tests of the instants a spinner's run next steps at,
+written as `#expect(scheduler.nextFiring(after: now) == 9 * 116_666_667)` (nine
+7-tick frames). **Workaround:** the expected instant as one literal,
+`1_050_000_003`, with the arithmetic in the message. See
+`Tests/TUIkitTests/DeclinedRunClockTests.swift`, `ListChildRunTests.swift` and
+`IndicatorAnimationSpeedTests.swift`.
