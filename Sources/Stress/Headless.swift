@@ -76,8 +76,17 @@ enum Headless {
     /// cache) so `--bench --cold` can reset between frames to measure the cold
     /// measure+render cost rather than the cache-warm steady state.
     @MainActor
-    private static func makeContext(cols: Int, rows: Int) -> RenderContext {
+    private static func makeContext(
+        cols: Int, rows: Int, keyChannels: HeadlessKeyChannels
+    ) -> RenderContext {
         var environment = EnvironmentValues()
+        // The key channels the app wires: a key dispatcher, a shortcut registry
+        // and a status bar. Without them a `Button`'s `.keyboardShortcut`
+        // registered nothing and declared nothing, so `menus` measured cheaper
+        // rows than the app draws, and an `onKeyPress` trapped on its missing
+        // dispatcher. Shared across `--cold` contexts, because the frame loop
+        // empties them before every walk as `RenderLoop` does.
+        keyChannels.install(into: &environment)
         environment.stateStorage = StateStorage()
         environment.renderCache = RenderCache()
         // Route through a real `TUIContext` so EVERY service the render pass
@@ -120,18 +129,21 @@ enum Headless {
         var failures = 0
         print("selfcheck — scale \(config.scale) seed \(config.seed) @ 120x40")
         for scenario in Scenarios.all {
-            let context = makeContext(cols: 120, rows: 40)
+            let keyChannels = HeadlessKeyChannels()
+            let context = makeContext(cols: 120, rows: 40, keyChannels: keyChannels)
             let view = AnyView(scenario.make(config).environment(clock))
             let trimmedBefore = StackGuard.truncationCount
             // TWICE, with the pass lifecycle between, because a memo only
             // SERVES on a second render — so a one-render check never exercised
             // the buffer memo at all, and `TUIKIT_VERIFY_RENDER_MEMO` had
             // nothing to verify. The second render is what the verifier reads.
+            keyChannels.beginWalk()
             context.environment.stateStorage?.beginRenderPass()
             context.environment.renderCache?.beginRenderPass()
             _ = renderToBuffer(view, context: context)
             context.environment.stateStorage?.endRenderPass()
             context.environment.renderCache?.removeInactive()
+            keyChannels.beginWalk()
             context.environment.stateStorage?.beginRenderPass()
             context.environment.renderCache?.beginRenderPass()
             let buffer = renderToBuffer(view, context: context)
@@ -161,6 +173,27 @@ enum Headless {
         return failures
     }
 
+    /// Prints the memos' totals and what the last walk left registered.
+    ///
+    /// The value-memo line is `RenderCache.stats`, which counts the buffer half
+    /// AND the size half of `.equatable()` and the `ForEach` row memo together,
+    /// so a scenario whose rows never store a buffer can still show stores and
+    /// hits there. `TUIKIT_DEBUG_RENDER=1` logs the buffer half alone. The totals
+    /// include the warm-up (under `--cold`, they are the last frame's context
+    /// only). Beside the key-handler count they say whether a scenario's
+    /// registrations keep its rows out of the cache, which nothing else printed
+    /// here can.
+    @MainActor
+    private static func printMemoTotals(_ cache: RenderCache?, keyChannels: HeadlessKeyChannels) {
+        let memo = cache?.measureMemoTotals ?? (hits: 0, misses: 0)
+        let lookups = memo.hits + memo.misses
+        print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",
+            memo.hits, lookups, lookups > 0 ? Double(memo.hits) / Double(lookups) * 100 : 0))
+        let render = cache?.stats ?? RenderCache.Stats()
+        print("  value memos (buffer + size): \(render.hits) hits / \(render.lookups) lookups, "
+            + "\(render.stores) stores; key handlers (last frame): \(keyChannels.keyHandlerCount)")
+    }
+
     /// Renders one scenario `iterations` times and reports timing + a checksum
     /// (so the optimiser can't elide the loop). With `cold == true` a fresh
     /// state/cache is used each frame (worst-case measure+render); otherwise the
@@ -183,7 +216,8 @@ enum Headless {
         let view = AnyView(scenario.make(config).environment(clock))
 
         // Warm up (build lazy state, prime caches) outside the timed region.
-        var warm = makeContext(cols: cols, rows: rows)
+        let keyChannels = HeadlessKeyChannels()
+        var warm = makeContext(cols: cols, rows: rows, keyChannels: keyChannels)
         _ = renderToBuffer(view, context: warm)
 
         var checksum = 0
@@ -211,7 +245,7 @@ enum Headless {
         var memory = ProcessMemory.Samples()
         for iteration in 0..<iterations {
             if iteration.isMultiple(of: 64) { memory.sample() }
-            if cold { warm = makeContext(cols: cols, rows: rows) }
+            if cold { warm = makeContext(cols: cols, rows: rows, keyChannels: keyChannels) }
             clock.tick &+= 1
             let cpuStart = threadCPUNanoseconds()
             let frameStart = DispatchTime.now()
@@ -224,6 +258,9 @@ enum Headless {
             // and the per-pass measure memo grew by every miss forever (2,400
             // entries a frame on `kitchensink`; millions over a profile),
             // which put dictionary resizes in profiles of code that has none.
+            // The key channels are emptied first, as `RenderLoop` empties them
+            // before each walk, so every frame re-registers into empty ones.
+            keyChannels.beginWalk()
             warm.stateStorage?.beginRenderPass()
             warm.renderCache?.beginRenderPass()
             let buffer = renderToBuffer(view, context: warm)
@@ -275,10 +312,7 @@ enum Headless {
                 print(String(format: "  rss-peak=%.1fMB", mb(peak)))
             }
         }
-        let memo = warm.renderCache?.measureMemoTotals ?? (hits: 0, misses: 0)
-        let lookups = memo.hits + memo.misses
-        print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",
-            memo.hits, lookups, lookups > 0 ? Double(memo.hits) / Double(lookups) * 100 : 0))
+        printMemoTotals(warm.renderCache, keyChannels: keyChannels)
         // `TUIKIT_VERIFY_MEASURE_MEMO=1` re-measures every memo hit and reports
         // any the fresh measurement disagrees with — the direct check on the
         // memo's cross-budget claim, run over whichever scenario is at hand.

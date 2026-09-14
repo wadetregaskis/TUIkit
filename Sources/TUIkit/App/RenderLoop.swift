@@ -948,21 +948,8 @@ extension RenderLoop {
         tuiContext.preferences.beginRenderPass()
         tuiContext.stateStorage.beginSceneRender()
         focusManager.beginSceneRender()
-        statusBar.beginRenderPass()
-        // The transient escape-label override is published by whichever
-        // open modal surface (Picker drop-down, etc.) renders in this
-        // frame; clearing it here makes the default the absence of any
-        // override, so a surface that disappeared on the previous frame
-        // never leaves its stale label behind on the next page. The
-        // grabs-input flag travels with it (modal by default; a list's
-        // lightweight selection claim lowers it each frame it applies).
-        statusBar.escapeLabelOverride = nil
-        statusBar.escapeClaimGrabsInput = true
-        statusBar.itemActionsSuppressed = false
-        // Same contract for the Return verb: published by whichever control
-        // holds the focus this frame, so its absence has to be the default or a
-        // control that lost the focus would leave its verb on the bar.
-        statusBar.activationLabelOverride = nil
+        // The bar's items and its per-frame escape and Return claims.
+        statusBar.beginSceneRender()
         // And for a tooltip's FOCUS candidate, republished by the focused
         // control every render for the same reason. Its hover candidate is not
         // cleared here: the pointer stays where it is between frames, and only

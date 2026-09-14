@@ -480,6 +480,29 @@ extension StatusBarState {
         declaredGlobalItems.removeAll()
     }
 
+    /// Everything a walk of the scene republishes, emptied before the walk:
+    /// the items (``beginRenderPass()``) and the per-frame claims below.
+    ///
+    /// One method so the render loop and a headless renderer reset the same
+    /// things.
+    func beginSceneRender() {
+        beginRenderPass()
+        // The transient escape-label override is published by whichever
+        // open modal surface (Picker drop-down, etc.) renders in this
+        // frame; clearing it here makes the default the absence of any
+        // override, so a surface that disappeared on the previous frame
+        // never leaves its stale label behind on the next page. The
+        // grabs-input flag travels with it (modal by default; a list's
+        // lightweight selection claim lowers it each frame it applies).
+        escapeLabelOverride = nil
+        escapeClaimGrabsInput = true
+        itemActionsSuppressed = false
+        // Same contract for the Return verb: published by whichever control
+        // holds the focus this frame, so its absence has to be the default or a
+        // control that lost the focus would leave its verb on the bar.
+        activationLabelOverride = nil
+    }
+
     /// Pushes a new user context without triggering a re-render.
     func pushSilently(context: String, items: [any StatusBarItemProtocol]) {
         userContextStack.removeAll { $0.context == context }
