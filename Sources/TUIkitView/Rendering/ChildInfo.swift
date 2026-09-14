@@ -28,8 +28,9 @@ public struct ChildView {
     /// the element across reorders, as SwiftUI's `ForEach` contract requires.
     private let identityKey: String?
     /// The STATIC tuple slot of the provider this keyed child was spliced
-    /// from, or `-1` for a child that was never spliced (a lone `ForEach` as
-    /// a container's whole content) or is positionally identified.
+    /// from, or `ProviderSlot.unnamespaced` for a child that was never spliced
+    /// (a lone `ForEach` as a container's whole content) or is positionally
+    /// identified.
     ///
     /// The identity namespace for sibling providers: two `ForEach` loops in
     /// one container whose rows share a content type and overlapping id
@@ -49,7 +50,7 @@ public struct ChildView {
     /// keeps its identity instead of flattening it back to a slot-prefixed key.
     /// See `spliced(fromSlot:under:branched:)`.
     ///
-    /// An `Int32` with a `-1` sentinel rather than `Optional<Int>`, and it is
+    /// An `Int32` with a sentinel (`ProviderSlot`) rather than `Optional<Int>`, and it is
     /// load-bearing: the optional grew the struct from 97 to 105 bytes (a
     /// 96→112 stride step), and this struct is built and copied per child per
     /// pass — the growth alone cost the all-invalidating `churn` scenario
@@ -66,6 +67,14 @@ public struct ChildView {
     ///   number above is history, not a lever: do not re-derive it without a
     ///   clean-built A/B on both sides (§41.1 of the performance profile).
     private let providerSlot: Int32
+
+    /// The values of `providerSlot` that are not a tuple slot.
+    private enum ProviderSlot {
+        /// Nothing has namespaced this child: a row straight out of its
+        /// `ForEach`, or a positional child.
+        static let unnamespaced: Int32 = -1
+    }
+
     /// The identity this child renders and measures under, when it has been
     /// resolved ahead of use — see ``resolvingIdentity(under:)``. `nil` means
     /// ``childContext(_:)`` derives it from the context it is given.
@@ -131,7 +140,7 @@ public struct ChildView {
         self.identityType = nil
         self.childIndex = 0
         self.identityKey = nil
-        self.providerSlot = -1
+        self.providerSlot = ProviderSlot.unnamespaced
         self.resolvedIdentity = nil
     }
 
@@ -152,7 +161,7 @@ public struct ChildView {
         self.identityType = V.self
         self.childIndex = childIndex
         self.identityKey = nil
-        self.providerSlot = -1
+        self.providerSlot = ProviderSlot.unnamespaced
         self.resolvedIdentity = nil
     }
 
@@ -288,7 +297,7 @@ public struct ChildView {
             identityType: resolvedType,
             childIndex: index,
             identityKey: nil,
-            providerSlot: -1,
+            providerSlot: ProviderSlot.unnamespaced,
             isSpacer: isSpacer,
             spacerMinLength: spacerMinLength,
             zIndex: zIndex,
@@ -334,7 +343,7 @@ public struct ChildView {
             if resolvedIdentity != nil { return self }
             return reindexed(to: identityChildIndex ?? 0, providerSlot: slot, under: parent)
         }
-        if providerSlot < 0, !branched {
+        if providerSlot == ProviderSlot.unnamespaced, !branched {
             return reindexed(to: 0, providerSlot: slot, under: nil)
         }
         let resolved =
@@ -379,7 +388,7 @@ public struct ChildView {
         self.identityType = identityType
         self.childIndex = childIndex
         self.identityKey = nil
-        self.providerSlot = -1
+        self.providerSlot = ProviderSlot.unnamespaced
         self.resolvedIdentity = nil
     }
 
@@ -396,7 +405,7 @@ public struct ChildView {
         self.identityType = identityType
         self.childIndex = 0
         self.identityKey = key
-        self.providerSlot = -1
+        self.providerSlot = ProviderSlot.unnamespaced
         self.resolvedIdentity = nil
     }
 
