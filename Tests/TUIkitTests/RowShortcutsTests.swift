@@ -180,6 +180,25 @@ struct RowShortcutsTests {
             reports == ["rowShortcuts binds ^E to both \(earlier) and \(later); \(earlier), which RowAction declares first, keeps it"])
     }
 
+    /// A shortcut written the SwiftUI way, `KeyboardShortcut("e")`, is ⌘E, and ⌘E
+    /// is Ctrl-E where ⌘ stands for Control. So it clashes with an override
+    /// written as Ctrl-E exactly as a second Ctrl-E would, in either order.
+    @Test(
+        "Two spellings of one chord clash like one spelling",
+        arguments: [
+            (KeyboardShortcut("e"), KeyboardShortcut("e", modifiers: .control)),
+            (KeyboardShortcut("e", modifiers: .control), KeyboardShortcut("e")),
+        ])
+    func clashingSpellings(earlierSpelling: KeyboardShortcut, laterSpelling: KeyboardShortcut) {
+        let table = RowShortcuts([.extendSelection: [laterSpelling], .selectAll: [earlierSpelling]])
+        var reports: [String] = []
+        let lookup = table.lookup(commandKey: .control, onClash: { reports.append($0) })
+
+        #expect(lookup.action(for: KeyEvent(key: .character("e"), ctrl: true))?.action == .selectAll)
+        #expect(
+            reports == ["rowShortcuts binds ^E to both selectAll and extendSelection; selectAll, which RowAction declares first, keeps it"])
+    }
+
     #if DEBUG
         /// The default report is a soft trap, so a debug build stops. In a child
         /// process, because a stop in this one would end the test run.

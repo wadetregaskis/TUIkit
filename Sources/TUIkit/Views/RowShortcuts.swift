@@ -150,7 +150,9 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
 /// default yields, and that is not a mistake.
 ///
 /// Two overrides that name the same chord are a mistake, because only one
-/// action can answer a key. A debug build stops with an assertion failure. A
+/// action can answer a key. The chord is what a shortcut stands for, not how
+/// it is written: `KeyboardShortcut("e")` (⌘E) and Ctrl-E are one chord where ⌘
+/// stands for Control. A debug build stops with an assertion failure. A
 /// release build reports it once, and the action declared first in
 /// ``RowAction`` keeps the chord, whatever order the dictionary was written in.
 /// The other action keeps the rest of its bindings.
@@ -206,6 +208,11 @@ public struct RowShortcuts: Hashable, Sendable {
         commandKey: CommandKeyBinding, onClash report: (String) -> Void = { SoftTrap.report($0) }
     ) -> RowShortcutLookup {
         var byTrigger: [KeyboardShortcut.Trigger: RowAction] = [:]
+        // The chords an override has claimed, keyed by the chord each one
+        // RESOLVES to rather than by how it was written: ⌘E and Ctrl-E are one
+        // key where ⌘ stands for Control, and comparing the written shortcuts
+        // let the later of two such overrides take the chord in silence.
+        var claimedByOverride: [KeyboardShortcut.Trigger: RowAction] = [:]
         // Defaults first, then the overrides on top: an app that binds Ctrl-A to
         // something else means it, and the default that used to hold that chord
         // yields rather than fighting over it.
@@ -219,10 +226,8 @@ public struct RowShortcuts: Hashable, Sendable {
                     // fix, so say so — and still resolve it the same way every
                     // run (RowAction's declaration order), never by whichever
                     // way the dictionary happened to hash.
-                    let clash = pass ? byTrigger[resolved.trigger] : nil
-                    if let existing = clash, existing != action,
-                        overrides[existing]?.explicit.contains(shortcut) == true
-                    {
+                    let clash = pass ? claimedByOverride[resolved.trigger] : nil
+                    if let existing = clash, existing != action {
                         report(
                             "rowShortcuts binds \(resolved.displayString ?? "?") to both "
                                 + "\(existing) and \(action); \(existing), which RowAction "
@@ -230,6 +235,7 @@ public struct RowShortcuts: Hashable, Sendable {
                         continue
                     }
                     byTrigger[resolved.trigger] = action
+                    if pass { claimedByOverride[resolved.trigger] = action }
                 }
             }
         }
