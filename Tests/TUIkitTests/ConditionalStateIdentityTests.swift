@@ -183,16 +183,6 @@ struct ConditionalStateIdentityTests {
         buffer.lines.joined(separator: "\n")
     }
 
-    /// Renders `host(true)` then `host(false)` through ONE context (two frames
-    /// sharing a state store) and returns both frames' text with the styling
-    /// stripped, so a row highlight cannot split the text asserted on.
-    private func flipped<Host: View>(_ host: (Bool) -> Host) -> (before: String, after: String) {
-        let ctx = makeRenderContext()
-        let before = renderToBuffer(host(true), context: ctx).lines.map(\.stripped)
-        let after = renderToBuffer(host(false), context: ctx).lines.map(\.stripped)
-        return (before.joined(separator: "\n"), after.joined(separator: "\n"))
-    }
-
     @Test("Directly-swapped conditional branches keep independent @State")
     func directConstructionIsolatesState() {
         // Reuse ONE context (and its StateStorage) across both renders, the way a
@@ -235,19 +225,19 @@ struct ConditionalStateIdentityTests {
     /// and a branch of several views (positional steps, taken under the branch).
     @Test("A conditional that is a stack's only content keeps each branch's @State")
     func loneConditionalInAStackIsolatesState() {
-        let sameType = flipped { LoneSameTypeHost(showA: $0) }
+        let sameType = renderedBeforeAndAfterFlip { LoneSameTypeHost(showA: $0) }
         #expect(sameType.before.contains("T=A"))
         #expect(
             sameType.after.contains("T=B"),
             "one view per branch — the false branch read the true one's box: \(sameType.after)")
 
-        let differentTypes = flipped { LoneDifferentTypeHost(showA: $0) }
+        let differentTypes = renderedBeforeAndAfterFlip { LoneDifferentTypeHost(showA: $0) }
         #expect(differentTypes.before.contains("A=A"))
         #expect(
             differentTypes.after.contains("B=B"),
             "one view per branch, different types: \(differentTypes.after)")
 
-        let tupleBranches = flipped { LoneTupleBranchHost(showA: $0) }
+        let tupleBranches = renderedBeforeAndAfterFlip { LoneTupleBranchHost(showA: $0) }
         #expect(tupleBranches.before.contains("T=A"))
         #expect(
             tupleBranches.after.contains("T=B"),
@@ -259,11 +249,11 @@ struct ConditionalStateIdentityTests {
     /// applies the branch step to a lone conditional.
     @Test("A conditional that is a List's or a Section's only content keeps each branch's @State")
     func loneConditionalInAListIsolatesState() {
-        let list = flipped { LoneListHost(showA: $0) }
+        let list = renderedBeforeAndAfterFlip { LoneListHost(showA: $0) }
         #expect(list.before.contains("T=A"))
         #expect(list.after.contains("T=B"), "a List's rows: \(list.after)")
 
-        let section = flipped { LoneSectionHost(showA: $0) }
+        let section = renderedBeforeAndAfterFlip { LoneSectionHost(showA: $0) }
         #expect(section.before.contains("T=A"))
         #expect(section.after.contains("T=B"), "a Section's rows: \(section.after)")
     }

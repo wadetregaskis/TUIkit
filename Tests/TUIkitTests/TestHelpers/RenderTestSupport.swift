@@ -197,3 +197,20 @@ func renderToScreen(_ view: some View, context: RenderContext) -> FrameBuffer {
 func verifierRenders(hits: Int) -> Int {
     RenderCache.verifiesRenderMemo ? hits : 0
 }
+
+// MARK: - Flipping a host between two frames
+
+/// Renders `host(true)` then `host(false)` through ONE context (two frames
+/// sharing a state store) and returns both frames' text with the styling
+/// stripped, so a row highlight cannot split the text asserted on.
+@MainActor
+func renderedBeforeAndAfterFlip<Host: View>(
+    width: Int = 80,
+    height: Int = 24,
+    _ host: (Bool) -> Host
+) -> (before: String, after: String) {
+    let ctx = makeRenderContext(width: width, height: height)
+    let before = renderToBuffer(host(true), context: ctx).lines.map(\.stripped)
+    let after = renderToBuffer(host(false), context: ctx).lines.map(\.stripped)
+    return (before.joined(separator: "\n"), after.joined(separator: "\n"))
+}
