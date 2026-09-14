@@ -1,13 +1,16 @@
 # Compiler bugs TUIkit has hit
 
-Two Swift bugs the framework works around. Each has a self-contained repro here
+Three Swift bugs the framework works around. Each has a self-contained repro here
 so the workaround can be checked against a new toolchain and deleted the moment
 it stops being needed — and so they can be reported upstream without anyone
 having to build TUIkit.
 
-Both were found in August 2026. Toolchains: **Apple Swift 6.2.4**
+The first two were found in August 2026. Toolchains: **Apple Swift 6.2.4**
 (`swiftlang-6.2.4.1.4`, Xcode) and the **6.5-dev snapshot of 2026-08-30**
 (`swift-DEVELOPMENT-SNAPSHOT-2026-08-30-a`, which is built `+assertions`).
+The third was found in September 2026, on swift.org's **Swift 6.2.4**
+(`swift-6.2.4-RELEASE`, which is also built `+assertions`, and is what swiftly
+installs).
 
 ---
 
@@ -108,3 +111,53 @@ invisible on release toolchains, and stops the nightly lanes dead.
 well over three words and `MouseEvent` is eight, so both thresholds were met.
 **Workaround:** a named struct instead of the tuple, which the matrix above
 shows is exactly the shape that does not assert.
+
+---
+
+## 3. `PackPreconcurrencyConformance` — `@preconcurrency` on a type that stores a pack
+
+```
+cd PackPreconcurrencyConformance && ./variants.sh /path/to/swift-6.2.4-RELEASE.xctoolchain
+```
+
+```
+@preconcurrency, pack condition             ASSERTS
+@MainActor (isolated) conformance           ok
+@preconcurrency, pack condition, trivial == ASSERTS
+@preconcurrency, pack, no condition         ASSERTS
+@preconcurrency, ordinary generic           ok
+protocol not main-actor isolated            ok
+```
+
+`Crash.swift` declares one conformance, and the compiler stops while it emits
+the witness thunk for `==`:
+
+```
+Assertion failed: (isPreconcurrency), function emitProtocolWitness,
+file SILGenPoly.cpp, line 7521.
+```
+
+Three ingredients, all necessary:
+
+1. **A main-actor-isolated protocol**, so the conforming type is main-actor
+   isolated. Drop the isolation and a plain conformance is fine.
+2. **A struct that STORES a parameter pack** and conforms to it. The same
+   conformance on an ordinary one-parameter generic is fine.
+3. **A `@preconcurrency` conformance to a nonisolated protocol** (`Equatable`).
+   The isolated spelling, `@MainActor Equatable` (SE-0470), is fine.
+
+The conformance's `where repeat each V: Equatable` condition is not needed, and
+neither is anything in the body of `==`.
+
+**Assertions-enabled 6.2.4 only.** Xcode's 6.2.4 prints `ok` for all six
+variants, and so do swift.org's 6.3.3 and the 6.4.x snapshot of 2026-09-10 (which
+is built `+assertions` too). So the bug was fixed after 6.2.4, and the
+workaround can go once 6.2 is no longer supported.
+
+**Where TUIkit hit it:** `TupleView: @preconcurrency Equatable`, spelled like
+every other view's conformance. `swift build` with swift.org's 6.2.4 aborted in
+`TUIkitView`, natively on macOS as well as in the Linux static-SDK and
+WebAssembly builds that first showed it. **Workaround:** `extension TupleView:
+@MainActor Equatable`, the isolated spelling, which the matrix shows does not
+assert. See `Sources/TUIkitView/Core/TupleViews.swift`. No other view stores a
+pack, so the rest keep `@preconcurrency`.

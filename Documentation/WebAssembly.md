@@ -17,11 +17,13 @@ Three things have to line up, and two of them are not obvious.
    the WebAssembly LLVM target: it does not fail to *link*, it stops at
    `No available targets are compatible with triple wasm32-unknown-wasip1`
    while compiling the first file.
-2. **6.3 or newer.** On 6.2.4 the compiler aborts on `TupleView`'s
-   pack-expansion conformance (`SILGenPoly.cpp`, `isPreconcurrency`) — the same
-   assertion that blocks the Linux static-SDK check, and the reason
-   `TUIkitView` cannot be built for either target on that version. 6.3.3 builds
-   the whole package.
+2. **6.3 or newer.** 6.3.3 builds the whole package, and it is the only version
+   this has been measured with. swift.org's 6.2.4 is an assertions build, and
+   it aborted on `TupleView`'s `@preconcurrency` pack conformance
+   (`SILGenPoly.cpp`, `isPreconcurrency`) — the same assertion that blocked the
+   Linux static-SDK check. `TupleView` now spells that conformance in a way that
+   does not abort (see `Tools/CompilerBugs/README.md`, section 3), but whether
+   6.2.4 builds for WebAssembly since has not been measured.
 3. **A Swift SDK whose version matches the toolchain exactly.** A 6.2.4 SDK
    under a 6.3.3 toolchain fails to load the standard library.
 

@@ -79,9 +79,11 @@ because each fails in a way that does not name its cause:
 * **Xcode's compiler cannot do it.** It is built without the WebAssembly LLVM
   target and stops at `No available targets are compatible with triple
   wasm32-unknown-wasip1`. Use a swift.org toolchain (`swiftly install 6.3.3`).
-* **6.2 cannot do it either.** The compiler asserts on `TupleView`'s
-  pack-expansion conformance, exactly as it does for the Linux static SDK, so
-  `TUIkitView` will not build. 6.3 is fine.
+* **6.3 is what it has been measured with.** swift.org's 6.2 asserted on
+  `TupleView`'s pack conformance, exactly as it did for the Linux static SDK, so
+  `TUIkitView` would not build. That conformance no longer asserts
+  (`Tools/CompilerBugs/README.md`, section 3), but nobody has built for
+  WebAssembly on 6.2 since.
 * **`--static-swift-stdlib` is required**, and the SDK must be named by its
   bundle id rather than by the triple. Without the first, Foundation is missing
   from an SDK that contains it; without the second, SwiftPM may pick the
