@@ -526,12 +526,17 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
             // width — which a run cannot express, because every frame must
             // occupy exactly the cells the run claims. A mixed-width
             // `.custom(_:)` sequence is the only way to get here, and it falls
-            // back to what every spinner used to do: ask the run loop to
-            // re-render the whole screen at the style's rate.
+            // back to re-rendering the whole screen: one render at the next step
+            // of the style's interval on the frame clock, the step it draws from,
+            // and that render asks for the one after. It used to ask for a grid at
+            // the style's rate, anchored at whichever frame first asked rather
+            // than at the steps, so every render landed part-way through one.
             if !context.isMeasuring, cycle.count > 1 {
-                context.requestAnimation(
+                context.requestWake(
                     token: "spinner-\(context.identity.path)",
-                    frequency: 1.0 / style.interval)
+                    atNanos: AnimationClock.stepEndNanos(
+                        atElapsed: Double(context.environment.frameNowNanos) / 1_000_000_000,
+                        frameDuration: style.interval))
             }
             return buffer
         }

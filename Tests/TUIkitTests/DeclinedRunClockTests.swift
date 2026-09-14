@@ -78,6 +78,22 @@ struct DeclinedRunClockTests {
         #expect(Set(run.pictures).count > 1, "every frame drew the same picture: \(run.pictures)")
     }
 
+    /// A declined run is re-rendered at its next step, not on a grid anchored at
+    /// whichever frame first asked. A `.custom` sequence steps every 120 ms, so at
+    /// 1.037 s the next step is 1.080 s.
+    @Test("A mixed-width spinner asks for one render at its next step, and registers no grid")
+    func mixedWidthSpinnerWakesAtItsNextStep() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(MixedWidthSpinnerApp())
+        let scheduler = AnimationScheduler()
+        let now: Int64 = 1_037_000_000
+        scheduler.beginFrame()
+        loop.render(animationScheduler: scheduler, frameNowNanos: now)
+        scheduler.endFrame()
+        #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
+        #expect(scheduler.nextFiring(after: now) == 1_080_000_000, "a 120 ms step at 1.037 s ends at 1.080 s")
+    }
+
     /// A same-width spinner, which leaves a run, beside a mixed-width one, which
     /// declines it: two `.custom` sequences of two frames at the one interval every
     /// `.custom` runs at, so at any instant both are due the same frame index.
