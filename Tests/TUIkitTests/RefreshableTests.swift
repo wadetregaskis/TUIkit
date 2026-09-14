@@ -397,6 +397,20 @@ struct RefreshableTests {
             "row: \(row.debugDescription)")
     }
 
+    @Test("Two refresh indicators are equal when they draw the same frames, at the same interval, in the same colour")
+    func indicatorEqualityIsByWhatIsDrawn() {
+        // Two values built separately, so `==` is what decides and not identity.
+        let first = RefreshIndicator(style: .custom("ab"))
+        let second = RefreshIndicator(style: .custom("ab"))
+        #expect(first == second)
+        // `.dots`' frames as a `.custom` sequence step at `.custom`'s 120 ms, not 110.
+        #expect(
+            RefreshIndicator(style: .custom(SpinnerStyle.dots.frames.joined()))
+                != RefreshIndicator(style: .dots))
+        #expect(RefreshIndicator(style: .line) != RefreshIndicator(style: .dots))
+        #expect(RefreshIndicator(color: .red) != RefreshIndicator())
+    }
+
     /// The indicator is a `Spinner` composed inside the refreshable's subtree, so
     /// the speed set for spinners there reaches it without anything of its own.
     @Test("The indicator animates at the speed set for spinners")
