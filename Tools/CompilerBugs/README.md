@@ -1,6 +1,6 @@
 # Compiler bugs TUIkit has hit
 
-Three Swift bugs the framework works around. Each has a self-contained repro here
+Four Swift bugs the framework works around. Each has a self-contained repro here
 so the workaround can be checked against a new toolchain and deleted the moment
 it stops being needed — and so they can be reported upstream without anyone
 having to build TUIkit.
@@ -8,9 +8,9 @@ having to build TUIkit.
 The first two were found in August 2026. Toolchains: **Apple Swift 6.2.4**
 (`swiftlang-6.2.4.1.4`, Xcode) and the **6.5-dev snapshot of 2026-08-30**
 (`swift-DEVELOPMENT-SNAPSHOT-2026-08-30-a`, which is built `+assertions`).
-The third was found in September 2026, on swift.org's **Swift 6.2.4**
-(`swift-6.2.4-RELEASE`, which is also built `+assertions`, and is what swiftly
-installs).
+The third and fourth were found in September 2026, on swift.org's **Swift
+6.2.4** (`swift-6.2.4-RELEASE`, which is also built `+assertions`, and is what
+swiftly installs).
 
 ---
 
@@ -161,3 +161,53 @@ WebAssembly builds that first showed it. **Workaround:** `extension TupleView:
 @MainActor Equatable`, the isolated spelling, which the matrix shows does not
 assert. See `Sources/TUIkitView/Core/TupleViews.swift`. No other view stores a
 pack, so the rest keep `@preconcurrency`.
+
+---
+
+## 4. `GenericDestructuringClosure` — a destructured closure parameter in a generic type
+
+```
+cd GenericDestructuringClosure && ./variants.sh /path/to/swift-6.2.4-RELEASE.xctoolchain
+```
+
+```
+generic type, destructuring closure     ASSERTS
+one closure parameter, not destructured ok
+type not generic                        ok
+helper's result not opaque              ok
+enclosing method's result not opaque    ASSERTS
+generic free function, not a type       ok
+```
+
+`Crash.swift` is one generic struct with two methods, and the compiler stops
+while it lowers the closure:
+
+```
+Assertion failed: (!type->hasTypeParameter() && "no generic environment
+provided for type with type parameters"), function mapTypeIntoContext,
+file GenericEnvironment.cpp, line 337.
+```
+
+Three ingredients, all necessary:
+
+1. **A closure that destructures its tuple parameter**: `{ _, string in … }`
+   over `(Int, String)`. The same closure taking `pair` and reading `pair.1` is
+   fine.
+2. **Inside a method of a generic type.** `Root` is never used. The same code in
+   a non-generic type, or in a generic free function, is fine.
+3. **Calling a method whose result type is opaque** (`some Equatable`). A
+   concrete result is fine.
+
+Whether the enclosing method's own result is opaque makes no difference, and
+nothing about views, result builders or `ForEach` is involved.
+
+**Assertions-enabled 6.2.4 only.** Xcode's 6.2.4, swift.org's 6.3.3 and the
+6.4.x snapshot of 2026-09-10 (built `+assertions`) print `ok` for all six
+variants.
+
+**Where TUIkit hit it:** the crumb trail in `NavigationStack`'s bar,
+`ForEach(Array(crumbs.enumerated()), id: \.offset) { _, crumb in crumbView(…) }`,
+in a method of `_NavigationStackCore<Root>`, where `crumbView` returns
+`some View`. It was the next thing swift.org's 6.2.4 stopped on once section 3
+was worked around. **Workaround:** `{ pair in crumbView(pair.element, …) }`. See
+`Sources/TUIkit/Views/NavigationStack.swift`.

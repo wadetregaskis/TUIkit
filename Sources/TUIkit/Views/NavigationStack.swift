@@ -486,8 +486,15 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 if let crumbs {
-                    ForEach(Array(crumbs.enumerated()), id: \.offset) { _, crumb in
-                        crumbView(crumb, coordinator: coordinator)
+                    // One closure parameter, NOT `{ _, crumb in`. Destructuring
+                    // it — in a method of a type generic over `Root`, calling
+                    // `crumbView`, whose result is opaque — aborts swift.org's
+                    // Swift 6.2.4 (an assertions build) in SILGen: "no generic
+                    // environment provided for type with type parameters".
+                    // Xcode's 6.2.4 compiles either spelling. See
+                    // Tools/CompilerBugs/README.md, section 4.
+                    ForEach(Array(crumbs.enumerated()), id: \.offset) { pair in
+                        crumbView(pair.element, coordinator: coordinator)
                     }
                 } else if hidesBack {
                     Text(title).bold()
