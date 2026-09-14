@@ -178,21 +178,25 @@ enum IndeterminateRenderer {
         // Sampled over the configuration's OWN period, whatever the speed: a faster
         // bar shows the same motion in less time, not a different motion. A sweep's,
         // a knightRider's and a gradient's frame i of F is their step ⌊i·N/F⌋,
-        // counted in integers (`step(ofFrame:of:states:)`); a barberPole's and a
-        // pulse's are still timed.
+        // counted in integers (`step(ofFrame:of:states:)`), with a knightRider's
+        // turn at the far wall kept (`bounceStep(ofFrame:of:width:)`); a
+        // barberPole's and a pulse's are still timed.
         let sample = period(of: style) / Double(layout.frameCount)
         let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
-        let frames = (0..<layout.frameCount).map { index in
+        let frames = (0..<layout.frameCount).map { index -> String in
             switch configuration.motion {
             case .sweep, .knightRider, .gradient:
-                render(
+                let step: Int =
+                    configuration.motion == .knightRider
+                    ? bounceStep(ofFrame: index, of: layout.frameCount, width: width)
+                    : step(ofFrame: index, of: layout.frameCount, states: states)
+                return render(
                     width: width, style: style, fillColor: fillColor,
                     backgroundColor: backgroundColor, accentColor: accentColor,
-                    position: .step(step(ofFrame: index, of: layout.frameCount, states: states)),
-                    palette: palette
+                    position: .step(step), palette: palette
                 ).text
             case .barberPole, .pulse:
-                render(
+                return render(
                     width: width, style: style, fillColor: fillColor,
                     backgroundColor: backgroundColor, accentColor: accentColor,
                     elapsed: Double(index) * sample, palette: palette
@@ -200,6 +204,24 @@ enum IndeterminateRenderer {
             }
         }
         return (frames, layout.frameTicks)
+    }
+
+    /// The step frame `frame` of a knightRider's pass of `frameCount` frames shows
+    /// across `width` cells: `step(ofFrame:of:states:)` of its
+    /// ``bounceSteps(width:)``, except that when the pass has fewer frames than steps,
+    /// frame ⌊F/2⌋ shows the far wall, step W − 1.
+    ///
+    /// A pass with fewer frames than steps skips steps, and when F is odd
+    /// ⌊i·2(W − 1)/F⌋ can skip W − 1 itself: at 80 cells a 1.975 s pass is 59 frames
+    /// for 158 steps, and no frame reaches step 79, so the lead turned one cell short
+    /// of the end. W − 1 is half the steps, so it belongs to the middle frame, and only
+    /// that frame moves; with F even it is already W − 1.
+    static func bounceStep(ofFrame frame: Int, of frameCount: Int, width: Int) -> Int {
+        let states = bounceSteps(width: width)
+        guard frameCount < states, frame == frameCount / 2 else {
+            return step(ofFrame: frame, of: frameCount, states: states)
+        }
+        return max(0, width - 1)
     }
 
     /// The step frame `frame` of a pass laid out in `frameCount` frames shows, of the
@@ -502,7 +524,10 @@ extension IndeterminateRenderer {
     /// what `Spinner`'s bounce does. The "freshest visit wins" age is the same rule
     /// `Spinner.renderBouncingFrame` applies to its trail. `step` is which of the
     /// ``bounceSteps(width:)`` the lead is on, and a cycle's frames name them in
-    /// order, so the documented `period` holds whatever the width.
+    /// order, so the documented `period` holds whatever the width. A pass with fewer
+    /// frames than steps shows the far wall at its middle frame
+    /// (``bounceStep(ofFrame:of:width:)``), so the lead reaches both ends however few
+    /// frames it is drawn in.
     private static func renderKnightRider(
         width: Int, configuration: IndeterminateConfiguration,
         empty: Color, accent: Color, step: Int

@@ -69,4 +69,32 @@ struct KnightRiderBounceTests {
         }
         #expect(walk == ["●●···", "●●···", "·●●··", "··●●·", "···●●", "···●●", "··●●·", "·●●··"], "\(walk)")
     }
+
+    /// A pass with fewer frames than steps skips steps, and an odd frame count can
+    /// step straight over the far wall. The preset's knightRider at 80 cells with a
+    /// 1.975 s pass is 59 frames of 2 ticks for 158 steps, and ⌊i·158/59⌋ is never
+    /// 79: the lead turned one cell short of the end. So frame ⌊F/2⌋ shows step W − 1,
+    /// and the bounce reaches both walls. 1.7 s is 51 frames, likewise.
+    @Test(
+        "An 80-cell knightRider with fewer frames than steps reaches the far wall",
+        arguments: [(1.975, 59), (1.7, 51)])
+    func fewerFramesThanStepsStillReachTheFarWall(period: Double, frames: Int) {
+        let style = IndeterminateStyle.custom(
+            IndeterminateConfiguration(motion: .knightRider, period: period, extent: 1.0 / 8.0))
+        func draw(_ position: IndeterminateRenderer.Position) -> String {
+            IndeterminateRenderer.render(
+                width: 80, style: style, fillColor: .green, backgroundColor: .black, accentColor: .white,
+                position: position, palette: SystemPalette(.green)
+            ).text
+        }
+        let cycle = IndeterminateRenderer.cycle(
+            width: 80, style: style, fillColor: .green, backgroundColor: .black, accentColor: .white,
+            palette: SystemPalette(.green), speed: .standard)
+        #expect(cycle.frames.count == frames)
+        let farWall = draw(.step(79))
+        #expect(
+            cycle.frames.firstIndex(of: farWall) == frames / 2,
+            "the lead stood on column 79 at frames \(cycle.frames.indices.filter { cycle.frames[$0] == farWall })")
+        #expect(cycle.frames.first == draw(.step(0)), "the near wall")
+    }
 }
