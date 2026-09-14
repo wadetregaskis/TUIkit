@@ -324,11 +324,11 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
             fraction: fraction,
             width: barWidth,
             style: trackStyle(for: style),
-            filledColor: palette.foregroundSecondary,
-            emptyColor: palette.foregroundTertiary,
+            fillColor: palette.foregroundSecondary,
+            backgroundColor: palette.foregroundTertiary,
             accentColor: palette.accent,
             fillScaling: context.environment.trackGradientScaling,
-            emptyScaling: context.environment.trackBackgroundGradientScaling,
+            backgroundScaling: context.environment.trackBackgroundGradientScaling,
             palette: palette,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )

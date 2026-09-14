@@ -511,7 +511,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             isDisabled: isDisabled,
             showsValue: showsValue,
             fillScaling: context.environment.trackGradientScaling,
-            emptyScaling: context.environment.trackBackgroundGradientScaling,
+            backgroundScaling: context.environment.trackBackgroundGradientScaling,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )
 
@@ -906,7 +906,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         isDisabled: Bool,
         showsValue: Bool,
         fillScaling: TrackGradientScaling,
-        emptyScaling: TrackGradientScaling,
+        backgroundScaling: TrackGradientScaling,
         graphics: GradientGraphicsContext?
     ) -> (
         content: String, drawnTrackWidth: Int, valueClaim: OpacityRegion?,
@@ -950,11 +950,11 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             fraction: fraction,
             width: trackWidth,
             style: trackStyle,
-            filledColor: forState(palette.foregroundSecondary),
-            emptyColor: forState(palette.foregroundTertiary),
+            fillColor: forState(palette.foregroundSecondary),
+            backgroundColor: forState(palette.foregroundTertiary),
             accentColor: forState(palette.accent),
             fillScaling: fillScaling,
-            emptyScaling: emptyScaling,
+            backgroundScaling: backgroundScaling,
             palette: palette,
             graphics: graphics
         )

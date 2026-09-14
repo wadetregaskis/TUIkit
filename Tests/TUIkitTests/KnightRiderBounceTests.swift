@@ -26,7 +26,7 @@ struct KnightRiderBounceTests {
     /// Which cells are lit `step` steps into the bounce, a hundredth into the step.
     private func lit(atStep step: Int) -> String {
         IndeterminateRenderer.render(
-            width: 5, style: style, filledColor: .green, emptyColor: .black, accentColor: .white,
+            width: 5, style: style, fillColor: .green, backgroundColor: .black, accentColor: .white,
             elapsed: Double(step) * 0.5 + 0.01, palette: SystemPalette(.green)
         ).text.stripped
     }
@@ -63,7 +63,7 @@ struct KnightRiderBounceTests {
             IndeterminateConfiguration(motion: .knightRider, fill: "●", background: "·", period: 4, extent: 0.1))
         let walk = (0..<8).map { step in
             IndeterminateRenderer.render(
-                width: 5, style: pair, filledColor: .green, emptyColor: .black, accentColor: .white,
+                width: 5, style: pair, fillColor: .green, backgroundColor: .black, accentColor: .white,
                 elapsed: Double(step) * 0.5 + 0.01, palette: SystemPalette(.green)
             ).text.stripped
         }

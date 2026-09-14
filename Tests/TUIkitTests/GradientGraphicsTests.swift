@@ -100,8 +100,8 @@ struct TrackRasterTests {
             let picture = try #require(
                 TrackRaster.picture(
                     fraction: Double(step) / 20, width: 10, config: .block,
-                    filledColor: .rgb(0, 255, 0), emptyColor: .rgb(40, 40, 40),
-                    fillScaling: .track, emptyScaling: .track, cellPixels: cell))
+                    fillColor: .rgb(0, 255, 0), backgroundColor: .rgb(40, 40, 40),
+                    fillScaling: .track, backgroundScaling: .track, cellPixels: cell))
             widths.insert(picture.width)
             // Count the lit pixels of the first row.
             var lit = 0
@@ -121,8 +121,8 @@ struct TrackRasterTests {
             let picture = try #require(
                 TrackRaster.picture(
                     fraction: 0.5, width: 10, config: config,
-                    filledColor: .white, emptyColor: .black,
-                    fillScaling: scaling, emptyScaling: scaling, cellPixels: cell))
+                    fillColor: .white, backgroundColor: .black,
+                    fillScaling: scaling, backgroundScaling: scaling, cellPixels: cell))
             let x = picture.width / 2 - 1
             return Array(picture.bytes[(x * 3)..<(x * 3 + 3)])
         }

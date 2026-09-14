@@ -32,8 +32,8 @@ enum TrackRaster {
     /// size for the box, so its proportions are the box's and the terminal's
     /// fit is exact. Colours are what the cell renderer would have painted:
     /// the fill gradient (or the flat fill colour) across the span
-    /// `fillScaling` names, and the unfilled colour or gradient over the rest
-    /// across the span `emptyScaling` names — sampled through
+    /// `fillScaling` names, and the background colour or gradient over the rest
+    /// across the span `backgroundScaling` names — sampled through
     /// `Color.quantisedRamp` at truecolor exactly as
     /// `TrackRenderer.gradientColor` does, so the two renderings agree about
     /// every colour and share one ramp cache.
@@ -41,8 +41,8 @@ enum TrackRaster {
     /// - Returns: the picture, or `nil` for a box with no pixels.
     static func picture(
         fraction: Double, width: Int, config: TrackConfiguration,
-        filledColor: Color, emptyColor: Color,
-        fillScaling: TrackGradientScaling, emptyScaling: TrackGradientScaling,
+        fillColor: Color, backgroundColor: Color,
+        fillScaling: TrackGradientScaling, backgroundScaling: TrackGradientScaling,
         cellPixels: TerminalCellPixels
     ) -> GradientRaster.Picture? {
         guard let size = GradientRaster.resolution(columns: width, rows: 1, cellPixels: cellPixels)
@@ -52,15 +52,15 @@ enum TrackRaster {
         // steps, so 50% of an even width is exactly half.
         let lit = Int((fraction * Double(size.width)).rounded())
         let unlit = size.width - lit
-        let empty = config.backgroundColor ?? emptyColor
+        let empty = config.backgroundColor ?? backgroundColor
 
         // The fill's ramp spans the bar or the lit part, as the cells' does;
         // `TrackRenderer` says why a scale-meaning ramp must span the bar.
         let fillSpan = fillScaling == .track ? size.width : lit
-        let fillRamp = ramp(config.fillGradient, span: fillSpan, fallback: filledColor)
+        let fillRamp = ramp(config.fillGradient, span: fillSpan, fallback: fillColor)
         // The unfilled ramp starts AT the boundary (the cells' rule for the
         // same reason), spanning the bar or the remainder.
-        let emptySpan = emptyScaling == .track ? size.width : unlit
+        let emptySpan = backgroundScaling == .track ? size.width : unlit
         let emptyRamp = ramp(config.backgroundGradient, span: emptySpan, fallback: empty)
 
         var bytes = [UInt8](repeating: 0, count: size.width * size.height * 3)
@@ -70,7 +70,7 @@ enum TrackRaster {
             if x < lit {
                 colour = fillRamp[min(fillRamp.count - 1, x)]
             } else {
-                let index = emptyScaling == .track ? x : x - lit
+                let index = backgroundScaling == .track ? x : x - lit
                 colour = emptyRamp[min(emptyRamp.count - 1, max(0, index))]
             }
             row[x * 3] = colour.0

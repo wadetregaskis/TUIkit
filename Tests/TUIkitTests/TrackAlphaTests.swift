@@ -26,8 +26,8 @@ struct TrackAlphaTests {
         accent: Color = .rgb(40, 200, 40)
     ) -> ClaimingRow {
         TrackRenderer.render(
-            fraction: fraction, width: width, style: style, filledColor: filled,
-            emptyColor: empty, accentColor: accent, palette: palette())
+            fraction: fraction, width: width, style: style, fillColor: filled,
+            backgroundColor: empty, accentColor: accent, palette: palette())
     }
 
     private var half: Double { 128.0 / 255 }
@@ -149,7 +149,7 @@ struct TrackAlphaTests {
 
     // MARK: - The two indicator styles
 
-    /// `.knob` takes filledColor AND headColor from the accent, so the lit rail and
+    /// `.knob` takes fillColor AND headColor from the accent, so the lit rail and
     /// the head are both claimed and the unlit remainder — the control's own colour —
     /// is not. They arrive as ONE rectangle rather than two, because they owe the same
     /// alpha and `ClaimingRow` merges runs that do; what matters is which columns are
@@ -211,7 +211,7 @@ struct TrackAlphaTests {
         guard let graphics else { return }  // no graphics on this host: nothing to decline
         let row = TrackRenderer.render(
             fraction: 0.5, width: 10, style: .block,
-            filledColor: Color.rgb(200, 40, 40).opacity(0.5), emptyColor: .rgb(40, 40, 40),
+            fillColor: Color.rgb(200, 40, 40).opacity(0.5), backgroundColor: .rgb(40, 40, 40),
             accentColor: .rgb(40, 200, 40), palette: palette(), graphics: graphics)
         #expect(!row.claims.isEmpty, "declined to a claiming cell path: \(row.claims)")
         #expect(

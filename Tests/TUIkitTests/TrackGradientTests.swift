@@ -24,8 +24,8 @@ struct TrackGradientTests {
             style: .threeSegment(
                 leading: "Sw", middle: "i", trailing: "ft", backgroundPattern: "·",
                 coloring: coloring),
-            filledColor: .rgb(1, 2, 3),
-            emptyColor: .rgb(9, 9, 9),
+            fillColor: .rgb(1, 2, 3),
+            backgroundColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
             palette: SystemPalette.green).text
     }
@@ -40,7 +40,7 @@ struct TrackGradientTests {
             style: .threeSegment(
                 leading: "🌑", middle: "🌕", trailing: "🌖", backgroundPattern: "·",
                 coloring: .gradient(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)]))),
-            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
+            fillColor: .rgb(1, 2, 3), backgroundColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
             palette: SystemPalette.green).text
         // A wide glyph is coloured at its FIRST cell, so the last glyph (cells
         // 18–19) wears ramp[18] of 20 — not the final stop itself, but eighteen
@@ -117,7 +117,7 @@ struct TrackGradientTests {
         // regardless of the animation phase.
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33), .rgb(11, 22, 33)])),
-            filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
+            fillColor: .rgb(1, 1, 1), backgroundColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
             elapsed: 0,
             palette: SystemPalette.green)
         let triples = foregroundTriples(in: output.text)
@@ -133,7 +133,7 @@ struct TrackGradientTests {
             ordered(
                 in: IndeterminateRenderer.render(
                     width: 8, style: .gradient(Gradient(colors: stops, colorSpace: space)),
-                    filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2),
+                    fillColor: .rgb(1, 1, 1), backgroundColor: .rgb(2, 2, 2),
                     accentColor: .rgb(3, 3, 3), elapsed: 0,
                     palette: SystemPalette.green
                 ).text)
@@ -156,8 +156,8 @@ struct TrackGradientTests {
             Gradient.Stop(color: .rgb(0, 0, 255), location: 1),
         ])
         let output = IndeterminateRenderer.render(
-            width: 30, style: .gradient(squashed), filledColor: .rgb(1, 1, 1),
-            emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3), elapsed: 0,
+            width: 30, style: .gradient(squashed), fillColor: .rgb(1, 1, 1),
+            backgroundColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3), elapsed: 0,
             palette: SystemPalette.green)
         let cells = ordered(in: output.text)
         let greenest = cells.indices.max { greenness(of: cells[$0]) < greenness(of: cells[$1]) }
@@ -190,7 +190,7 @@ struct TrackGradientTests {
     func indeterminateFallback() {
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33)])),
-            filledColor: .rgb(1, 1, 1), emptyColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
+            fillColor: .rgb(1, 1, 1), backgroundColor: .rgb(2, 2, 2), accentColor: .rgb(3, 3, 3),
             elapsed: 0,
             palette: SystemPalette.green)
         let triples = foregroundTriples(in: output.text)
@@ -211,10 +211,10 @@ struct TrackBackgroundStylingTests {
     {
         TrackRenderer.render(
             fraction: 0.5, width: 10, style: .custom(config),
-            filledColor: .rgb(1, 2, 3),
-            emptyColor: .rgb(9, 9, 9),
+            fillColor: .rgb(1, 2, 3),
+            backgroundColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
-            fillScaling: scaling, emptyScaling: scaling,
+            fillScaling: scaling, backgroundScaling: scaling,
             palette: SystemPalette.green).text
     }
 
@@ -280,8 +280,8 @@ struct TrackGradientScalingTests {
         TrackRenderer.render(
             fraction: fraction, width: 10,
             style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
-            filledColor: .rgb(1, 2, 3),
-            emptyColor: .rgb(9, 9, 9),
+            fillColor: .rgb(1, 2, 3),
+            backgroundColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7),
             fillScaling: scaling,
             palette: SystemPalette.green).text
@@ -327,8 +327,8 @@ struct TrackGradientScalingTests {
                 style: .threeSegment(
                     leading: "[", middle: "=", trailing: "]", backgroundPattern: "·",
                     coloring: .gradient(Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)]))),
-                filledColor: .rgb(1, 2, 3),
-                emptyColor: .rgb(9, 9, 9),
+                fillColor: .rgb(1, 2, 3),
+                backgroundColor: .rgb(9, 9, 9),
                 accentColor: .rgb(7, 7, 7),
                 fillScaling: scaling,
                 palette: SystemPalette.green).text
@@ -353,7 +353,7 @@ struct TrackGradientScalingTests {
         let defaulted = TrackRenderer.render(
             fraction: 0.5, width: 10,
             style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
-            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
+            fillColor: .rgb(1, 2, 3), backgroundColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
             palette: SystemPalette.green).text
         #expect(defaulted == render(0.5, .track))
         #expect(defaulted != render(0.5, .region), "…and the two really do differ")
@@ -375,8 +375,8 @@ struct TrackGradientScalingTests {
                 TrackConfiguration(
                     fullGlyph: "█", leadingEdge: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
                     background: .solid, backgroundGradient: Self.fade)),
-            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), fillScaling: scaling, emptyScaling: scaling,
+            fillColor: .rgb(1, 2, 3), backgroundColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7), fillScaling: scaling, backgroundScaling: scaling,
             palette: SystemPalette.green).text
     }
 
@@ -433,8 +433,8 @@ struct TrackGradientScalingTests {
                 TrackConfiguration(
                     fullGlyph: "█", leadingEdge: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
                     background: .solid, backgroundGradient: Self.fade)),
-            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), fillScaling: .region, emptyScaling: .region,
+            fillColor: .rgb(1, 2, 3), backgroundColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7), fillScaling: .region, backgroundScaling: .region,
             palette: SystemPalette.green).text
         let ramp = Color.quantisedRamp(Self.fade, count: 5, depth: .truecolor)
         #expect(runs(in: output).suffix(5).map(\.background) == ramp.map { triple($0) })
@@ -451,8 +451,8 @@ struct TrackGradientScalingTests {
                     fullGlyph: "█", background: .solid,
                     fillGradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)]),
                     backgroundGradient: Self.fade)),
-            filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), fillScaling: fill, emptyScaling: background,
+            fillColor: .rgb(1, 2, 3), backgroundColor: .rgb(9, 9, 9),
+            accentColor: .rgb(7, 7, 7), fillScaling: fill, backgroundScaling: background,
             palette: SystemPalette.green).text
     }
 

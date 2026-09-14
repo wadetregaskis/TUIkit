@@ -2070,7 +2070,7 @@ whole job is to recede against the page it sits on.
   *moves*: a given column is lit in some frames and unlit in others. The resolver
   re-blends a run's frames at one alpha per column for all frames, so a static region
   is right only if every colour any frame can paint shares one alpha — which
-  `emptyColor` and `accentColor` do not. Still loud.
+  `emptyColor` (now `backgroundColor`) and `accentColor` do not. Still loud.
 - **Pre-styled segment strings.** `.automatic` / `.solid` / `.perSegment` accept
   segments carrying the caller's own ANSI. Where they do, some cells' effective ink is
   not the colour the claim is about. The run *was* painted at that alpha, so the claim

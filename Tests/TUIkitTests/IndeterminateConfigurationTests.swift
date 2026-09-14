@@ -23,7 +23,7 @@ struct IndeterminateConfigurationTests {
 
     private func render(_ style: IndeterminateStyle, width: Int = 24, at elapsed: Double) -> String {
         IndeterminateRenderer.render(
-            width: width, style: style, filledColor: filled, emptyColor: empty,
+            width: width, style: style, fillColor: filled, backgroundColor: empty,
             accentColor: accent, elapsed: elapsed,
             palette: SystemPalette.green
         ).text
@@ -110,10 +110,10 @@ struct IndeterminateConfigurationTests {
         #expect(IndeterminateRenderer.period(of: slow) == 4)
         #expect(IndeterminateRenderer.period(of: quick) == 1)
         let slowCycle = IndeterminateRenderer.cycle(
-            width: 12, style: slow, filledColor: filled, emptyColor: empty, accentColor: accent,
+            width: 12, style: slow, fillColor: filled, backgroundColor: empty, accentColor: accent,
             palette: SystemPalette.green)
         let quickCycle = IndeterminateRenderer.cycle(
-            width: 12, style: quick, filledColor: filled, emptyColor: empty, accentColor: accent,
+            width: 12, style: quick, fillColor: filled, backgroundColor: empty, accentColor: accent,
             palette: SystemPalette.green)
         #expect(slowCycle.frames.count == 4 * quickCycle.frames.count)
     }

@@ -71,7 +71,7 @@ struct IndeterminateAlphaTests {
         let opaque = SystemPalette.default
         #expect(
             IndeterminateRenderer.isOpaqueThroughout(
-                style: .sweep, filledColor: .red, emptyColor: .blue, accentColor: .green,
+                style: .sweep, fillColor: .red, backgroundColor: .blue, accentColor: .green,
                 palette: opaque))
         for (name, colours) in [
             ("filled", (Color.red.opacity(0.5), Color.blue, Color.green)),
@@ -80,7 +80,7 @@ struct IndeterminateAlphaTests {
         ] {
             #expect(
                 !IndeterminateRenderer.isOpaqueThroughout(
-                    style: .sweep, filledColor: colours.0, emptyColor: colours.1,
+                    style: .sweep, fillColor: colours.0, backgroundColor: colours.1,
                     accentColor: colours.2, palette: opaque),
                 "a translucent \(name) was missed")
         }
@@ -88,7 +88,7 @@ struct IndeterminateAlphaTests {
         #expect(
             !IndeterminateRenderer.isOpaqueThroughout(
                 style: .gradient(Gradient(colors: [.red, Color.blue.opacity(0.5)])),
-                filledColor: .red, emptyColor: .blue, accentColor: .green, palette: opaque))
+                fillColor: .red, backgroundColor: .blue, accentColor: .green, palette: opaque))
     }
 
     /// A styled bar's gradient reaches `laid` as the colour of each cell, so its alpha

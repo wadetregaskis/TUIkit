@@ -355,7 +355,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let canPreRender =
             IndeterminateRenderer.isOpaqueThroughout(
                 style: context.environment.indeterminateStyle,
-                filledColor: palette.foregroundSecondary, emptyColor: palette.foregroundTertiary,
+                fillColor: palette.foregroundSecondary, backgroundColor: palette.foregroundTertiary,
                 accentColor: palette.accent, palette: palette)
         guard fractionCompleted == nil, !context.isMeasuring, width > 0, canPreRender else {
             if fractionCompleted == nil, !context.isMeasuring, width > 0 {
@@ -466,8 +466,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 }
             }
             let built = IndeterminateRenderer.cycle(
-                width: width, style: style, filledColor: filled,
-                emptyColor: empty, accentColor: accent, palette: palette)
+                width: width, style: style, fillColor: filled,
+                backgroundColor: empty, accentColor: accent, palette: palette)
             return CachedCycle(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
                 pictures: false, frames: built.frames,
@@ -562,8 +562,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             return IndeterminateRenderer.render(
                 width: width,
                 style: context.environment.indeterminateStyle,
-                filledColor: palette.foregroundSecondary,
-                emptyColor: palette.foregroundTertiary,
+                fillColor: palette.foregroundSecondary,
+                backgroundColor: palette.foregroundTertiary,
                 accentColor: palette.accent,
                 elapsed: elapsed,
                 palette: palette)
@@ -572,11 +572,11 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             fraction: fraction,
             width: width,
             style: style,
-            filledColor: palette.foregroundSecondary,
-            emptyColor: palette.foregroundTertiary,
+            fillColor: palette.foregroundSecondary,
+            backgroundColor: palette.foregroundTertiary,
             accentColor: palette.accent,
             fillScaling: context.environment.trackGradientScaling,
-            emptyScaling: context.environment.trackBackgroundGradientScaling,
+            backgroundScaling: context.environment.trackBackgroundGradientScaling,
             palette: palette,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )

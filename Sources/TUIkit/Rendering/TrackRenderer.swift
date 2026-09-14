@@ -19,8 +19,8 @@
 ///     fraction: 0.5,
 ///     width: 20,
 ///     style: .block,
-///     filledColor: palette.foregroundSecondary,
-///     emptyColor: palette.foregroundTertiary,
+///     fillColor: palette.foregroundSecondary,
+///     backgroundColor: palette.foregroundTertiary,
 ///     accentColor: palette.accent
 /// )
 /// ```
@@ -31,12 +31,12 @@ enum TrackRenderer {
     ///   - fraction: The completed fraction (0.0 to 1.0).
     ///   - width: The width in characters.
     ///   - style: The visual style to use.
-    ///   - filledColor: The color for filled portions.
-    ///   - emptyColor: The color for empty portions.
+    ///   - fillColor: The color for the fill.
+    ///   - backgroundColor: The color for the background.
     ///   - accentColor: The color for accent elements (e.g., dot head).
     ///   - fillScaling: What the fill's gradient is measured across — the whole
     ///     bar (the default) or only the lit part. See ``TrackGradientScaling``.
-    ///   - emptyScaling: The same question for the unfilled remainder's
+    ///   - backgroundScaling: The same question for the background's
     ///     gradient — the bar, or only the cells the fill has not reached.
     ///   - palette: The palette the style's own colours are resolved against.
     ///     The three colours above arrive resolved; a style read from the
@@ -51,11 +51,11 @@ enum TrackRenderer {
         fraction: Double,
         width: Int,
         style: TrackStyle,
-        filledColor: Color,
-        emptyColor: Color,
+        fillColor: Color,
+        backgroundColor: Color,
         accentColor: Color,
         fillScaling: TrackGradientScaling = .track,
-        emptyScaling: TrackGradientScaling = .track,
+        backgroundScaling: TrackGradientScaling = .track,
         palette: any Palette,
         graphics: GradientGraphicsContext? = nil
     ) -> ClaimingRow {
@@ -85,15 +85,15 @@ enum TrackRenderer {
             // `ProgressView`'s default, so without this the gap would be
             // terminal-distributed — right on Apple Terminal, wrong on kitty.
             let opaqueThroughout =
-                filledColor.isOpaque && emptyColor.isOpaque
+                fillColor.isOpaque && backgroundColor.isOpaque
                 && config.backgroundColor?.isOpaque != false
                 && config.fillGradient?.isOpaqueThroughout != false
                 && config.backgroundGradient?.isOpaqueThroughout != false
             if let graphics, config.isColourField, opaqueThroughout,
                 let row = renderPicture(
                     fraction: fraction, width: width, config: config,
-                    filledColor: filledColor, emptyColor: emptyColor,
-                    fillScaling: fillScaling, emptyScaling: emptyScaling, graphics: graphics)
+                    fillColor: fillColor, backgroundColor: backgroundColor,
+                    fillScaling: fillScaling, backgroundScaling: backgroundScaling, graphics: graphics)
             {
                 var drawn = ClaimingRow()
                 drawn.appendFinished(row, cells: width)
@@ -101,8 +101,8 @@ enum TrackRenderer {
             }
             return renderConfigured(
                 fraction: fraction, width: width, config: config,
-                filledColor: filledColor, emptyColor: emptyColor,
-                fillScaling: fillScaling, emptyScaling: emptyScaling, depth: depth)
+                fillColor: fillColor, backgroundColor: backgroundColor,
+                fillScaling: fillScaling, backgroundScaling: backgroundScaling, depth: depth)
         }
 
         switch style {
@@ -123,9 +123,9 @@ enum TrackRenderer {
                 filledChar: "▬",
                 headChar: "●",
                 emptyChar: "─",
-                filledColor: filledColor,
+                fillColor: fillColor,
                 headColor: accentColor,
-                emptyColor: emptyColor
+                backgroundColor: backgroundColor
             )
         case .knob:
             return renderHeadStyle(
@@ -134,9 +134,9 @@ enum TrackRenderer {
                 filledChar: "━",
                 headChar: "●",
                 emptyChar: "─",
-                filledColor: accentColor,
+                fillColor: accentColor,
                 headColor: accentColor,
-                emptyColor: emptyColor
+                backgroundColor: backgroundColor
             )
         case .marker:
             return renderMarkerStyle(
@@ -144,20 +144,20 @@ enum TrackRenderer {
                 width: width,
                 lineChar: "─",
                 markerChar: "●",
-                lineColor: emptyColor,
+                lineColor: backgroundColor,
                 markerColor: accentColor
             )
-        case .threeSegment(let leading, let middle, let trailing, let emptyFill, let coloring):
+        case .threeSegment(let leading, let middle, let trailing, let backgroundPattern, let coloring):
             return renderThreeSegmentStyle(
                 fraction: fraction,
                 width: width,
                 leading: leading,
                 middle: middle,
                 trailing: trailing,
-                emptyFill: emptyFill,
+                backgroundPattern: backgroundPattern,
                 coloring: coloring,
-                filledColor: filledColor,
-                emptyColor: emptyColor,
+                fillColor: fillColor,
+                backgroundColor: backgroundColor,
                 fillScaling: fillScaling,
                 depth: depth
             )
@@ -192,20 +192,20 @@ enum TrackRenderer {
     /// one is freed as each arrives (`TerminalImageStore` reuses the id).
     private static func renderPicture(
         fraction: Double, width: Int, config: TrackConfiguration,
-        filledColor: Color, emptyColor: Color,
-        fillScaling: TrackGradientScaling, emptyScaling: TrackGradientScaling,
+        fillColor: Color, backgroundColor: Color,
+        fillScaling: TrackGradientScaling, backgroundScaling: TrackGradientScaling,
         graphics: GradientGraphicsContext
     ) -> String? {
         guard
             let picture = TrackRaster.picture(
                 fraction: fraction, width: width, config: config,
-                filledColor: filledColor, emptyColor: emptyColor,
-                fillScaling: fillScaling, emptyScaling: emptyScaling,
+                fillColor: fillColor, backgroundColor: backgroundColor,
+                fillScaling: fillScaling, backgroundScaling: backgroundScaling,
                 cellPixels: graphics.cellPixels)
         else { return nil }
         let signature = TrackImageSignature(
-            config: config, filledColor: filledColor, emptyColor: emptyColor,
-            fillScaling: fillScaling, emptyScaling: emptyScaling,
+            config: config, fillColor: fillColor, backgroundColor: backgroundColor,
+            fillScaling: fillScaling, backgroundScaling: backgroundScaling,
             width: picture.width, height: picture.height,
             lit: Int((fraction * Double(picture.width)).rounded()))
         return graphics.store.placeholderRows(
@@ -245,10 +245,10 @@ extension TrackRenderer {
         fraction: Double,
         width: Int,
         config: TrackConfiguration,
-        filledColor: Color,
-        emptyColor: Color,
+        fillColor: Color,
+        backgroundColor: Color,
         fillScaling: TrackGradientScaling,
-        emptyScaling: TrackGradientScaling,
+        backgroundScaling: TrackGradientScaling,
         depth: ColorDepth
     ) -> ClaimingRow {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
@@ -277,7 +277,7 @@ extension TrackRenderer {
             return renderCoarsePattern(
                 fraction: fraction, width: width, quantum: quantum,
                 fillChars: fillChars, emptyChars: emptyChars,
-                config: config, filledColor: filledColor, emptyColor: emptyColor,
+                config: config, fillColor: fillColor, backgroundColor: backgroundColor,
                 paintsBackground: paintsBackground, fillScaling: fillScaling,
                 depth: depth)
         }
@@ -307,7 +307,7 @@ extension TrackRenderer {
         // drawn AGAINST — the unfilled half of a bar is half of what it looks
         // like. `nil` keeps the control's own recessive colour, which is what
         // every built-in preset does.
-        let emptyColor = config.backgroundColor ?? emptyColor
+        let backgroundColor = config.backgroundColor ?? backgroundColor
 
         // Optional per-cell colour fade. What it is measured across is the
         // caller's choice (``TrackGradientScaling``): the whole bar, so a
@@ -318,11 +318,11 @@ extension TrackRenderer {
         let gradientSpan = fillScaling == .track ? width : litCellCount
         func fillColour(at index: Int) -> Color {
             guard let gradient = config.fillGradient, gradientSpan > 1 else {
-                return filledColor
+                return fillColor
             }
             return gradientColor(
                 gradient, index: index, span: gradientSpan,
-                fallback: filledColor, depth: depth)
+                fallback: fillColor, depth: depth)
         }
 
         // For COLOUR, the unfilled region starts AT the boundary cell rather
@@ -341,12 +341,12 @@ extension TrackRenderer {
         // what each paints, and a scale on one side says nothing about a
         // decoration on the other.
         let emptyRegionStart = fullCount
-        let emptySpan = emptyScaling == .track ? width : width - emptyRegionStart
+        let emptySpan = backgroundScaling == .track ? width : width - emptyRegionStart
         func emptyColour(at cell: Int) -> Color {
-            guard let gradient = config.backgroundGradient, emptySpan > 1 else { return emptyColor }
+            guard let gradient = config.backgroundGradient, emptySpan > 1 else { return backgroundColor }
             return gradientColor(
-                gradient, index: emptyScaling == .track ? cell : cell - emptyRegionStart,
-                span: emptySpan, fallback: emptyColor, depth: depth)
+                gradient, index: backgroundScaling == .track ? cell : cell - emptyRegionStart,
+                span: emptySpan, fallback: backgroundColor, depth: depth)
         }
 
         var row = ClaimingRow()
@@ -395,9 +395,9 @@ extension TrackRenderer {
                 // One CLAIM as well, for the same reason.
                 row.append(
                     String(repeating: " ", count: emptyCount), cells: emptyCount,
-                    ink: emptyColor, field: emptyColor)
+                    ink: backgroundColor, field: backgroundColor)
             } else {
-                row.append(emptyGlyphs(), cells: emptyCount, ink: emptyColor)
+                row.append(emptyGlyphs(), cells: emptyCount, ink: backgroundColor)
             }
         }
         return row
@@ -424,14 +424,14 @@ extension TrackRenderer {
         fillChars: [Character],
         emptyChars: [Character],
         config: TrackConfiguration,
-        filledColor: Color,
-        emptyColor: Color,
+        fillColor: Color,
+        backgroundColor: Color,
         paintsBackground: Bool,
         fillScaling: TrackGradientScaling,
         depth: ColorDepth
     ) -> ClaimingRow {
         // The style's own unfilled colour, if it named one — see the fine path.
-        let emptyColor = config.backgroundColor ?? emptyColor
+        let backgroundColor = config.backgroundColor ?? backgroundColor
         let effectiveWidth = (width / quantum) * quantum
         guard effectiveWidth > 0 else { return ClaimingRow() }
         let steps = effectiveWidth / quantum
@@ -452,11 +452,11 @@ extension TrackRenderer {
         let gradientSpan = fillScaling == .track ? steps * quantum : targetCells
         func fillColour(atCell cell: Int) -> Color {
             guard let gradient = config.fillGradient, gradientSpan > 1 else {
-                return filledColor
+                return fillColor
             }
             return gradientColor(
                 gradient, index: cell, span: gradientSpan,
-                fallback: filledColor, depth: depth)
+                fallback: fillColor, depth: depth)
         }
 
         // The fill: walk the cyclic pattern up to the step boundary.
@@ -483,7 +483,7 @@ extension TrackRenderer {
             // shortfall so the unfilled region still starts on its cell.
             row.append(
                 String(repeating: " ", count: targetCells - cell), cells: targetCells - cell,
-                ink: emptyColor, field: paintsBackground ? emptyColor : nil)
+                ink: backgroundColor, field: paintsBackground ? backgroundColor : nil)
         }
 
         // The partially-filled block: its ramp glyph (chosen by the sub-block
@@ -507,7 +507,7 @@ extension TrackRenderer {
             }
             row.append(
                 block, cells: rampCells, ink: rampColour,
-                field: paintsBackground ? emptyColor : nil)
+                field: paintsBackground ? backgroundColor : nil)
         }
 
         // The unfilled remainder: spaces on the empty colour for
@@ -517,8 +517,8 @@ extension TrackRenderer {
         guard remaining > 0 else { return row }
         if paintsBackground {
             row.append(
-                String(repeating: " ", count: remaining), cells: remaining, ink: emptyColor,
-                field: emptyColor)
+                String(repeating: " ", count: remaining), cells: remaining, ink: backgroundColor,
+                field: backgroundColor)
             return row
         }
         var empty = ""
@@ -535,7 +535,7 @@ extension TrackRenderer {
         if emptyCell < remaining {
             empty += String(repeating: " ", count: remaining - emptyCell)
         }
-        row.append(empty, cells: remaining, ink: emptyColor)
+        row.append(empty, cells: remaining, ink: backgroundColor)
         return row
     }
 
@@ -552,10 +552,10 @@ extension TrackRenderer {
         leading: String,
         middle: String,
         trailing: String,
-        emptyFill: String,
+        backgroundPattern: String,
         coloring: SegmentColoring,
-        filledColor: Color,
-        emptyColor: Color,
+        fillColor: Color,
+        backgroundColor: Color,
         fillScaling: TrackGradientScaling,
         depth: ColorDepth
     ) -> ClaimingRow {
@@ -582,7 +582,7 @@ extension TrackRenderer {
             let truncated = (leading + trailing).ansiAwarePrefix(visibleCount: filledCount)
             renderLitRegion(
                 leading: truncated, middleRun: "", trailing: "",
-                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan,
+                coloring: coloring, fillColor: fillColor, gradientSpan: gradientSpan,
                 depth: depth, into: &row)
         } else {
             // Endpoints fit. Repeat `middle` to fill the gap, plus a
@@ -599,23 +599,23 @@ extension TrackRenderer {
             }
             renderLitRegion(
                 leading: leading, middleRun: middleRun, trailing: trailing,
-                coloring: coloring, filledColor: filledColor, gradientSpan: gradientSpan,
+                coloring: coloring, fillColor: fillColor, gradientSpan: gradientSpan,
                 depth: depth, into: &row)
         }
 
         let emptyCellCount = max(0, width - filledCount)
         if emptyCellCount > 0 {
-            let emptyFillWidth = max(1, emptyFill.strippedLength)
-            let emptyReps = emptyCellCount / emptyFillWidth
-            let emptyRemainder = emptyCellCount - emptyReps * emptyFillWidth
+            let backgroundPatternWidth = max(1, backgroundPattern.strippedLength)
+            let emptyReps = emptyCellCount / backgroundPatternWidth
+            let emptyRemainder = emptyCellCount - emptyReps * backgroundPatternWidth
             var empty = ""
             if emptyReps > 0 {
-                empty += String(repeating: emptyFill, count: emptyReps)
+                empty += String(repeating: backgroundPattern, count: emptyReps)
             }
             if emptyRemainder > 0 {
-                empty += emptyFill.ansiAwarePrefix(visibleCount: emptyRemainder)
+                empty += backgroundPattern.ansiAwarePrefix(visibleCount: emptyRemainder)
             }
-            row.append(empty, cells: emptyCellCount, ink: emptyColor)
+            row.append(empty, cells: emptyCellCount, ink: backgroundColor)
         }
         return row
     }
@@ -639,13 +639,13 @@ extension TrackRenderer {
     ///   by cell and expects plain text, so it has no such gap.
     private static func renderLitRegion(
         leading: String, middleRun: String, trailing: String,
-        coloring: SegmentColoring, filledColor: Color, gradientSpan: Int, depth: ColorDepth,
+        coloring: SegmentColoring, fillColor: Color, gradientSpan: Int, depth: ColorDepth,
         into row: inout ClaimingRow
     ) {
         let whole = leading + middleRun + trailing
         switch coloring {
         case .automatic:
-            row.append(whole, cells: whole.strippedLength, ink: filledColor)
+            row.append(whole, cells: whole.strippedLength, ink: fillColor)
         case .solid(let color):
             row.append(whole, cells: whole.strippedLength, ink: color)
         case .perSegment(let leadingColor, let middleColor, let trailingColor):
@@ -658,7 +658,7 @@ extension TrackRenderer {
             }
         case .gradient(let stops):
             gradientCells(
-                whole.stripped, gradient: stops, fallback: filledColor,
+                whole.stripped, gradient: stops, fallback: fillColor,
                 span: gradientSpan, depth: depth, into: &row)
         }
     }
@@ -743,9 +743,9 @@ extension TrackRenderer {
         filledChar: Character,
         headChar: Character,
         emptyChar: Character,
-        filledColor: Color,
+        fillColor: Color,
         headColor: Color,
-        emptyColor: Color
+        backgroundColor: Color
     ) -> ClaimingRow {
         var row = ClaimingRow()
         guard width > 1 else {
@@ -756,9 +756,9 @@ extension TrackRenderer {
 
         if position > 0 {
             row.append(
-                String(repeating: filledChar, count: position), cells: position, ink: filledColor)
+                String(repeating: filledChar, count: position), cells: position, ink: fillColor)
         }
-        // `.knob` — a `Slider`'s default — takes BOTH `filledColor` and `headColor`
+        // `.knob` — a `Slider`'s default — takes BOTH `fillColor` and `headColor`
         // from the accent, so `.tint(.red.opacity(0.5))` fades the lit rail and the
         // knob together. That is the shortest route from a public modifier to this
         // renderer, and it is what used to reach the emitter's assertion.
@@ -766,7 +766,7 @@ extension TrackRenderer {
         let trailing = width - 1 - position
         if trailing > 0 {
             row.append(
-                String(repeating: emptyChar, count: trailing), cells: trailing, ink: emptyColor)
+                String(repeating: emptyChar, count: trailing), cells: trailing, ink: backgroundColor)
         }
         return row
     }
@@ -780,10 +780,10 @@ extension TrackRenderer {
 /// nothing.
 struct TrackImageSignature: Equatable {
     var config: TrackConfiguration
-    var filledColor: Color
-    var emptyColor: Color
+    var fillColor: Color
+    var backgroundColor: Color
     var fillScaling: TrackGradientScaling
-    var emptyScaling: TrackGradientScaling
+    var backgroundScaling: TrackGradientScaling
     var width: Int
     var height: Int
     var lit: Int

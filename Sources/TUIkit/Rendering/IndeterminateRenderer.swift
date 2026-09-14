@@ -22,9 +22,9 @@ enum IndeterminateRenderer {
     /// - Parameters:
     ///   - width: The track's total width in terminal cells.
     ///   - style: The chosen animation.
-    ///   - filledColor: The control's own "lit" colour, used where the
+    ///   - fillColor: The control's own "lit" colour, used where the
     ///     configuration names no colours of its own.
-    ///   - emptyColor: The colour for unlit cells, and the dim end of a ramp.
+    ///   - backgroundColor: The colour for unlit cells, and the dim end of a ramp.
     ///   - accentColor: The bright end of a ramp.
     /// - Returns: The row's bytes — exactly `width` visible cells — and the cells
     ///   owing a blend. Every colour goes in at its opaque spelling, so a
@@ -32,8 +32,8 @@ enum IndeterminateRenderer {
     static func render(
         width: Int,
         style: IndeterminateStyle,
-        filledColor: Color,
-        emptyColor: Color,
+        fillColor: Color,
+        backgroundColor: Color,
         accentColor: Color,
         elapsed: Double,
         palette: any Palette
@@ -45,19 +45,19 @@ enum IndeterminateRenderer {
         switch configuration.motion {
         case .sweep:
             return renderSweep(
-                width: width, configuration: configuration, empty: emptyColor,
+                width: width, configuration: configuration, empty: backgroundColor,
                 accent: accentColor, elapsed: elapsed)
         case .barberPole:
             return renderBarberPole(
-                width: width, configuration: configuration, filled: filledColor,
+                width: width, configuration: configuration, filled: fillColor,
                 accent: accentColor, elapsed: elapsed)
         case .pulse:
             return renderPulse(
-                width: width, configuration: configuration, dim: emptyColor,
+                width: width, configuration: configuration, dim: backgroundColor,
                 bright: accentColor, elapsed: elapsed)
         case .knightRider:
             return renderKnightRider(
-                width: width, configuration: configuration, empty: emptyColor,
+                width: width, configuration: configuration, empty: backgroundColor,
                 accent: accentColor, elapsed: elapsed)
         case .gradient:
             return renderGradient(
@@ -73,7 +73,7 @@ enum IndeterminateRenderer {
     /// straight past them.
     static func cycle(
         width: Int, style: IndeterminateStyle,
-        filledColor: Color, emptyColor: Color, accentColor: Color,
+        fillColor: Color, backgroundColor: Color, accentColor: Color,
         palette: any Palette
     ) -> (frames: [String], frameDuration: Double) {
         let period = period(of: style)
@@ -81,8 +81,8 @@ enum IndeterminateRenderer {
         let duration = period / Double(count)
         let frames = (0..<count).map { index in
             render(
-                width: width, style: style, filledColor: filledColor,
-                emptyColor: emptyColor, accentColor: accentColor,
+                width: width, style: style, fillColor: fillColor,
+                backgroundColor: backgroundColor, accentColor: accentColor,
                 elapsed: Double(index) * duration, palette: palette
             ).text
         }
@@ -121,10 +121,10 @@ enum IndeterminateRenderer {
     /// actually painted costs the bar its pre-rendered cycle, and nothing else.
     static func isOpaqueThroughout(
         style: IndeterminateStyle,
-        filledColor: Color, emptyColor: Color, accentColor: Color,
+        fillColor: Color, backgroundColor: Color, accentColor: Color,
         palette: any Palette
     ) -> Bool {
-        guard filledColor.isOpaque, emptyColor.isOpaque, accentColor.isOpaque else { return false }
+        guard fillColor.isOpaque, backgroundColor.isOpaque, accentColor.isOpaque else { return false }
         let configuration = style.configuration.resolvingColours(with: palette)
         guard let gradient = configuration.gradient else { return true }
         return gradient.stops.allSatisfy { $0.color.isOpaque }
