@@ -73,9 +73,9 @@ struct IndicatorCycleTimingTests {
         }
     }
 
-    @Test("Cycles are laid out one cursor tick a frame, on the cursor clock, unless something says otherwise")
-    func defaultIsTheCursorTick() {
-        #expect(EnvironmentValues().indicatorCycleTiming == .cursorTick)
+    @Test("Nothing forces a cycle's timing unless a test does, and the cursor tick is 50 ms on the cursor clock")
+    func nothingForcesATiming() {
+        #expect(EnvironmentValues().indicatorCycleTiming == nil)
         #expect(AnimationClock.nanoseconds(IndicatorCycleTiming.cursorTick.frameDuration) == 50_000_000)
         #expect(IndicatorCycleTiming.cursorTick.clock == .cursor)
     }

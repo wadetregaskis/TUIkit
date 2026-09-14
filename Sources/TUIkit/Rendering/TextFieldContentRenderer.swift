@@ -97,7 +97,7 @@ struct TextFieldContentRenderer {
         palette: any Palette,
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
-        cursorTiming: IndicatorCycleTiming = .cursorTick,
+        cursorTiming: IndicatorCycleTiming? = nil,
         contentWidth: Int
     ) -> FieldContent {
         let isEmpty = text.isEmpty
@@ -381,7 +381,7 @@ struct TextFieldContentRenderer {
         palette: any Palette,
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
-        cursorTiming: IndicatorCycleTiming = .cursorTick,
+        cursorTiming: IndicatorCycleTiming? = nil,
         background: Color?,
         width: Int,
         foregroundOverride: Color? = nil,
@@ -530,7 +530,7 @@ struct TextFieldContentRenderer {
     static func caretSetup(
         palette: any Palette, background: Color?, textForeground: Color,
         selection: (foreground: Color, background: Color),
-        cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?, timing: IndicatorCycleTiming
+        cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?, timing: IndicatorCycleTiming?
     ) -> (cycle: CursorCycle, colors: CaretColors) {
         // The whole cycle, not just this tick's frame: the caret's cells are the
         // only thing that changes while a focused field sits still, and
@@ -761,35 +761,38 @@ struct TextFieldContentRenderer {
         animation: TextCursorStyle.Animation,
         speed: TextCursorStyle.Speed,
         cursorTimer: CursorTimer?,
-        timing: IndicatorCycleTiming = .cursorTick
+        timing forced: IndicatorCycleTiming? = nil
     ) -> CursorCycle {
-        let states = (0..<CursorTimer.cycleTicks(for: speed, animation: animation)).map { tick in
+        let layout = CursorTimer.cycleLayout(of: animation, speed: speed)
+        let states = (0..<layout.frameCount).map { frame in
             caretState(
-                atTick: tick, baseColor: baseColor, over: surface,
-                animation: animation, speed: speed)
+                atFrame: frame, of: layout.frameCount, baseColor: baseColor, over: surface,
+                animation: animation)
         }
+        // A test may force the timing; nothing else sets it.
+        let timing = forced ?? layout.timing
         // `step(on:)` is a plain read: unlike `blinkVisible(for:)` it does not mark
         // the frame as having consulted the clock, so a producer that uses it stays
         // replayable.
         return CursorCycle(states: states, step: timing.step(on: cursorTimer), timing: timing)
     }
 
-    /// The caret's visibility and colour at one tick of the cycle, from the
-    /// static formulas rather than the live clock.
+    /// The caret's visibility and colour at one frame of a cycle of `frameCount`,
+    /// from the static formulas rather than the live clock.
     private static func caretState(
-        atTick tick: Int, baseColor: Color, over surface: Color,
-        animation: TextCursorStyle.Animation, speed: TextCursorStyle.Speed
+        atFrame frame: Int, of frameCount: Int, baseColor: Color, over surface: Color,
+        animation: TextCursorStyle.Animation
     ) -> (visible: Bool, color: Color) {
         switch animation {
         case .none:
             return (true, baseColor.spendingAlpha(over: surface))
         case .blink:
             return (
-                CursorTimer.blinkVisible(atTick: tick, speed: speed),
+                CursorTimer.blinkVisible(atFrame: frame),
                 baseColor.spendingAlpha(over: surface)
             )
         case .pulse:
-            let phase = CursorTimer.pulsePhase(atTick: tick, speed: speed)
+            let phase = CursorTimer.pulsePhase(atFrame: frame, of: frameCount)
             // Blended toward the field, not toward black. Bare `opacity` fades
             // to black, which on a light palette makes the dim end of the
             // pulse a DARKER mark than the bright end rather than a fainter

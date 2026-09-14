@@ -78,20 +78,21 @@ struct FocusClockUnityTests {
 
     @Test("A breath starts at its BRIGHT end")
     func breathStartsBright() {
-        // The clock is reset whenever the focus moves, so tick 0 is what a
+        // The clock is reset whenever the focus moves, so frame 0 is what a
         // newly focused control shows. A breath that began dim left it looking
         // unfocused for a third of a second — at the moment it most needs to
         // be seen.
         for speed in speeds {
-            #expect(CursorTimer.pulsePhase(atTick: 0, speed: speed) == 1)
+            let count = CursorTimer.cycleLayout(of: .pulse, speed: speed).frameCount
+            #expect(CursorTimer.pulsePhase(atFrame: 0, of: count) == 1)
         }
     }
 
     @Test("A breath is a round trip: bright → dim → bright")
     func breathIsARoundTrip() {
         for speed in speeds {
-            let ticks = CursorTimer.cycleTicks(for: speed, animation: .pulse)
-            let phases = (0...ticks).map { CursorTimer.pulsePhase(atTick: $0, speed: speed) }
+            let count = CursorTimer.cycleLayout(of: .pulse, speed: speed).frameCount
+            let phases = (0...count).map { CursorTimer.pulsePhase(atFrame: $0, of: count) }
             #expect(phases.min()! < 0.02, "\(speed): never reached the dim end")
             #expect(phases.last! > 0.98, "\(speed): did not come back bright")
         }

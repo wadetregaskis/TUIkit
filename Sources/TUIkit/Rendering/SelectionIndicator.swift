@@ -435,17 +435,22 @@ extension SelectionEmphasisClock {
                 ],
                 step: 0)
         }
-        let ticks = CursorTimer.cycleTicks(for: style.speed, animation: style.animation)
-        let frames = (0..<ticks).map { tick in
+        let layout = CursorTimer.cycleLayout(of: style.animation, speed: style.speed)
+        let frames = (0..<layout.frameCount).map { frame in
+            // Each frame states only its own animation: a blink's phase is 1 and a
+            // pulse's blink is on, as `SelectionEmphasis` documents for the animation
+            // not in force. Both used to be sampled from both formulas on the tick
+            // grid, and nothing read the one that did not apply.
             SelectionEmphasis(
                 isFocused: true,
                 animation: style.animation,
-                phase: CursorTimer.pulsePhase(atTick: tick, speed: style.speed),
-                blinkOn: CursorTimer.blinkVisible(atTick: tick, speed: style.speed))
+                phase: style.animation == .pulse
+                    ? CursorTimer.pulsePhase(atFrame: frame, of: layout.frameCount) : 1,
+                blinkOn: style.animation == .blink ? CursorTimer.blinkVisible(atFrame: frame) : true)
         }
         // Read only where the cycle animates: a still cycle is one frame, and no
-        // timing moves it.
-        let timing = environment.indicatorCycleTiming
+        // timing moves it. A test may force one; nothing else sets it.
+        let timing = environment.indicatorCycleTiming ?? layout.timing
         // `step(on:)` is a plain read: unlike `pulsePhase(for:)` it does not mark
         // the frame as having consulted the clock, so a producer that uses it stays
         // replayable.

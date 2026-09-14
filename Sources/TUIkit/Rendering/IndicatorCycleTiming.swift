@@ -23,8 +23,8 @@ struct IndicatorCycleTiming: Equatable, Sendable {
     /// replays on.
     var clock: AnimationClock
 
-    /// One cursor tick a frame, on the focus-relative clock: the timing of every
-    /// focus-emphasis and caret cycle the framework builds.
+    /// One cursor tick a frame, on the focus-relative clock: a still cycle's timing,
+    /// and a pulse's standard frame.
     static let cursorTick = Self(
         frameDuration: AnimationClock.cursor.tickInterval, clock: .cursor)
 
@@ -47,16 +47,16 @@ struct IndicatorCycleTiming: Equatable, Sendable {
 }
 
 private struct IndicatorCycleTimingKey: EnvironmentKey {
-    static let defaultValue = IndicatorCycleTiming.cursorTick
+    static let defaultValue: IndicatorCycleTiming? = nil
 }
 
 extension EnvironmentValues {
-    /// The timing focus-emphasis and caret cycles are built on.
+    /// A timing to build every focus-emphasis and caret cycle on, in place of the
+    /// one its animation is laid out on (`CursorTimer.cycleLayout(of:speed:)`).
     ///
-    /// Always `IndicatorCycleTiming.cursorTick` in an app: nothing public sets it.
-    /// A test sets another, to see which producer assumes the tick instead of
-    /// carrying its cycle's timing.
-    var indicatorCycleTiming: IndicatorCycleTiming {
+    /// Always `nil` in an app: nothing public sets it. A test sets one, to see which
+    /// producer assumes a timing instead of carrying its cycle's.
+    var indicatorCycleTiming: IndicatorCycleTiming? {
         get { self[IndicatorCycleTimingKey.self] }
         set { self[IndicatorCycleTimingKey.self] = newValue }
     }

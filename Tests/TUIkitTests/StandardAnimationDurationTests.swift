@@ -43,15 +43,18 @@ struct StandardAnimationDurationTests {
         ("moon", .moon), ("earth", .earth), ("clock", .clock), ("custom", .custom("ab")),
     ].map { StandardAnimationDuration(name: $0.0, seconds: $0.1.interval) }
 
-    /// The caret's standard blink, its pulse's frame (one cursor tick), and its
-    /// pulse's cycle.
-    private static let cursorDurations: [StandardAnimationDuration] = [
-        StandardAnimationDuration(
-            name: "blinkHalf", seconds: Double(TextCursorStyle.Speed.regular.blinkCycleMs) / 2 / 1000),
-        StandardAnimationDuration(name: "pulseFrame", seconds: AnimationClock.cursor.tickInterval),
-        StandardAnimationDuration(
-            name: "pulseCycle", seconds: Double(TextCursorStyle.Speed.regular.pulseCycleMs) / 1000),
-    ]
+    /// The standard blink's half, and the standard pulse's frame and cycle, as those
+    /// cycles are laid out.
+    private static let cursorDurations: [StandardAnimationDuration] = {
+        let blink = CursorTimer.cycleLayout(of: .blink, speed: .regular)
+        let pulse = CursorTimer.cycleLayout(of: .pulse, speed: .regular)
+        return [
+            StandardAnimationDuration(name: "blinkHalf", seconds: blink.timing.frameDuration),
+            StandardAnimationDuration(name: "pulseFrame", seconds: pulse.timing.frameDuration),
+            StandardAnimationDuration(
+                name: "pulseCycle", seconds: Double(pulse.frameCount) * pulse.timing.frameDuration),
+        ]
+    }()
 
     private static let barFrameDurations: [StandardAnimationDuration] = [
         ("sweep", IndeterminateStyle.sweep), ("barberPole", .barberPole), ("pulse", .pulse),

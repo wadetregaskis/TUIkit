@@ -46,11 +46,14 @@ import Foundation
 ///
 /// ## Animation Speeds
 ///
-/// The blink speed is controlled by ``TextCursorStyle/Speed``, and every half is
-/// a whole number of ticks so the period cannot wobble:
+/// The blink speed is controlled by ``TextCursorStyle/Speed``. A blink is two
+/// frames, visible then hidden, each shown for half the cycle:
 /// - `.slow`: 1000ms cycle (visible 500ms, hidden 500ms)
 /// - `.regular`: 700ms cycle (visible 350ms, hidden 350ms)
 /// - `.fast`: 400ms cycle (visible 200ms, hidden 200ms)
+///
+/// A pulse is a cosine sampled once per 50 ms tick: 24, 16 or 10 frames. See
+/// ``cycleLayout(of:speed:)``.
 ///
 /// ## Usage
 ///
@@ -69,10 +72,6 @@ final class CursorTimer {
     /// Taken from ``AnimationClock/tickInterval`` rather than written here so
     /// there is one number, not two that can disagree.
     private static let tickInterval = AnimationClock.cursor.tickInterval
-
-    /// The same, in whole milliseconds — what the blink and pulse formulas are
-    /// written in.
-    private static let tickIntervalMs = Int(AnimationClock.cursor.tickInterval * 1000)
 
     /// The same, in whole nanoseconds — the lattice the focus epoch is floored to.
     private static let tickNanos = UInt64(AnimationClock.nanoseconds(AnimationClock.cursor.tickInterval))
@@ -244,60 +243,66 @@ extension CursorTimer {
     /// - Returns: `true` if cursor should be visible, `false` if hidden.
     func blinkVisible(for speed: TextCursorStyle.Speed) -> Bool {
         didReadThisFrame = true
-        return Self.blinkVisible(atTick: elapsedTicks, speed: speed)
+        return Self.blinkVisible(atFrame: Self.cycleLayout(of: .blink, speed: speed).timing.step(on: self))
     }
 
-    /// How many whole ticks the cursor is visible for, and then hidden for.
+    /// How a cycle of `animation` at `speed` is laid out: how many frames it has,
+    /// and how long each is shown, on which clock.
     ///
-    /// **The blink is defined on the tick grid, not in milliseconds**, because
-    /// the grid is what it is actually drawn on: nothing can change between
-    /// ticks, so a half-cycle boundary that falls part-way through one is
-    /// delivered at whichever tick edge is nearer — and which edge that is
-    /// changes from cycle to cycle.
+    /// Two kinds of cycle, laid out differently on purpose:
+    /// - **A blink is discrete.** The caret is visible, then hidden: two frames,
+    ///   each shown for half the cycle. It used to be one frame per 50 ms tick,
+    ///   seven visible and seven hidden at `.regular`. That holds only while a half
+    ///   is a whole number of ticks, and it makes a slower blink more frames rather
+    ///   than longer ones.
+    /// - **A pulse is continuous.** A cosine sampled at its standard frame, one
+    ///   cursor tick: `max(2, round(cycle / tick))` frames, each `cycle / count`
+    ///   long, so the cycle is exactly its declared length.
+    /// - `.none` is one frame, a still picture.
     ///
-    /// Written in milliseconds it did. `(tick * 50) % 660 < 330` gives on/off
-    /// runs of 350, 350, 300, 350, 300, 350, 350, 300 … ms: a period wobbling
-    /// between 600 and 700 ms and a duty cycle between 46% and 54%, which is
-    /// exactly the irregular blink it looked like. `.slow` (1000 ms) and `.fast`
-    /// (400 ms) were unaffected, and so was every pulse — their cycles are whole
-    /// multiples of the 50 ms tick, which is why only this one wobbled.
+    /// Both animate on the focus-relative clock. The whole cycle is built from this
+    /// and from the two frame formulas below, and the live readers step through the
+    /// same layout, so a replayed run and a render that reads the clock show the
+    /// same frame at the same instant: one layout, not two that can drift apart.
     ///
-    /// Rounded rather than truncated, so the delivered period is the nearest one
-    /// the grid can express rather than always the shorter one, and floored at a
-    /// tick so a cycle finer than the grid still blinks instead of standing still.
-    static func blinkHalfTicks(for speed: TextCursorStyle.Speed) -> Int {
-        let halfMs = Double(speed.blinkCycleMs) / 2
-        return max(1, Int((halfMs / Double(Self.tickIntervalMs)).rounded()))
+    /// `nonisolated`: it is arithmetic on two constants and reads no timer.
+    nonisolated static func cycleLayout(
+        of animation: TextCursorStyle.Animation, speed: TextCursorStyle.Speed
+    ) -> CycleLayout {
+        switch animation {
+        case .none:
+            return CycleLayout(frameCount: 1, timing: .cursorTick)
+        case .blink:
+            return CycleLayout(
+                frameCount: 2,
+                timing: IndicatorCycleTiming(
+                    frameDuration: Double(speed.blinkCycleMs) / 2 / 1000, clock: .cursor))
+        case .pulse:
+            let cycle = Double(speed.pulseCycleMs) / 1000
+            let count = max(2, Int((cycle / AnimationClock.cursor.tickInterval).rounded()))
+            return CycleLayout(
+                frameCount: count,
+                timing: IndicatorCycleTiming(frameDuration: cycle / Double(count), clock: .cursor))
+        }
     }
 
-    /// The blink state at an arbitrary tick.
+    /// A cycle's frame count and the timing its frames step on. See
+    /// ``cycleLayout(of:speed:)``.
+    struct CycleLayout: Equatable, Sendable {
+        let frameCount: Int
+        let timing: IndicatorCycleTiming
+    }
+
+    /// Whether the caret is visible at `frame` of a blink: the first of its two
+    /// frames, and every other one after it.
     ///
     /// Static, and the instance method above defers to it, so a producer that
-    /// pre-renders its whole cycle (see ``AnimatedCellRun``) computes exactly
-    /// what a live render would — one formula, not two that can drift apart.
-    /// Reading it does NOT mark the frame as having consulted the clock, which
-    /// is what lets such a producer be replayed rather than re-rendered.
-    ///
-    /// "Exactly what a live render would" is a claim the millisecond form could
-    /// not keep either: a 13-frame run (`660 / 50`) replayed a 650 ms cycle while
-    /// the live formula ran a 660 ms one, so a field that re-rendered mid-blink
-    /// stepped its caret. Whole half-ticks make the run length exactly the period.
-    static func blinkVisible(atTick tick: Int, speed: TextCursorStyle.Speed) -> Bool {
-        let half = blinkHalfTicks(for: speed)
-        // Visible for the first half of the cycle. Integer division rather than a
-        // modulo of milliseconds: every boundary lands on a tick by construction.
-        return (tick / half).isMultiple(of: 2)
-    }
-
-    /// How many ticks a full cycle of `animation` takes at `speed` — the number
-    /// of frames a pre-rendered run needs.
-    static func cycleTicks(for speed: TextCursorStyle.Speed, animation: TextCursorStyle.Animation) -> Int {
-        switch animation {
-        case .none: return 1
-        // Both halves, so the run's length IS the period the live formula runs.
-        case .blink: return 2 * blinkHalfTicks(for: speed)
-        case .pulse: return max(1, speed.pulseCycleMs / Self.tickIntervalMs)
-        }
+    /// pre-renders its whole cycle (see ``AnimatedCellRun``) computes exactly what
+    /// a live render would. Reading it does NOT mark the frame as having consulted
+    /// the clock, which is what lets such a producer be replayed rather than
+    /// re-rendered.
+    nonisolated static func blinkVisible(atFrame frame: Int) -> Bool {
+        frame.isMultiple(of: 2)
     }
 
     /// Returns the pulse phase (0-1) for smooth cursor animation.
@@ -316,7 +321,7 @@ extension CursorTimer {
     /// - Returns: Phase value between 0 and 1.
     func pulsePhase(for speed: TextCursorStyle.Speed) -> Double {
         didReadThisFrame = true
-        return Self.pulsePhase(atTick: elapsedTicks, speed: speed)
+        return pulsePhaseNow(speed: speed)
     }
 
     /// The breath phase right now, WITHOUT marking the clock as consumed.
@@ -327,15 +332,23 @@ extension CursorTimer {
     /// (Demand is tracked at the seam's own getter, which is why this one must
     /// not set `didReadThisFrame`.)
     var breathPhase: Double {
-        Self.pulsePhase(atTick: elapsedTicks, speed: .regular)
+        pulsePhaseNow(speed: .regular)
     }
 
-    /// The pulse phase at an arbitrary tick. See ``blinkVisible(atTick:speed:)``
-    /// for why this is static and why reading it is not a volatile read.
-    static func pulsePhase(atTick tick: Int, speed: TextCursorStyle.Speed) -> Double {
-        let cycleMs = speed.pulseCycleMs
-        let normalized = Double((tick * Self.tickIntervalMs) % cycleMs) / Double(cycleMs)
-        // Cosine wave: 1 → 0 → 1 over the cycle, so tick 0 is the bright end.
+    /// The pulse phase at the last snapshot, read through the pulse's own layout.
+    private func pulsePhaseNow(speed: TextCursorStyle.Speed) -> Double {
+        let layout = Self.cycleLayout(of: .pulse, speed: speed)
+        return Self.pulsePhase(atFrame: layout.timing.step(on: self), of: layout.frameCount)
+    }
+
+    /// The pulse phase at `frame` of a pulse of `count` frames. See
+    /// ``blinkVisible(atFrame:)`` for why this is static and why reading it is not a
+    /// volatile read.
+    nonisolated static func pulsePhase(atFrame frame: Int, of count: Int) -> Double {
+        guard count > 0 else { return 1 }
+        let wrapped = frame % count
+        let normalized = Double(wrapped < 0 ? wrapped + count : wrapped) / Double(count)
+        // Cosine wave: 1 → 0 → 1 over the cycle, so frame 0 is the bright end.
         return (cos(normalized * 2 * .pi) + 1) / 2
     }
 }
@@ -457,11 +470,13 @@ extension CursorTimer {
 extension TextCursorStyle.Speed {
     /// The blink cycle duration in milliseconds (on + off).
     ///
-    /// Each HALF has to be a whole number of ``AnimationClock/cursor`` ticks
-    /// (50 ms) or the blink cannot be delivered evenly — see
-    /// ``CursorTimer/blinkHalfTicks(for:)``, which rounds anything else onto the
-    /// grid. `.regular` was 660 ms, whose 330 ms half is 6.6 ticks, and it
-    /// wobbled between a 600 ms and a 700 ms period for that reason alone.
+    /// Each half is one frame of the blink's run, so a replayed blink holds it
+    /// exactly, whatever its length: see ``CursorTimer/cycleLayout(of:speed:)``. A
+    /// view that reads ``CursorTimer/blinkVisible(for:)`` as it renders is
+    /// re-rendered on the 50 ms cursor lattice, though, so for that view a half
+    /// that is not a whole number of ticks still flips up to a tick late. All three
+    /// are whole ticks. `.regular` was once 660 ms, and its live blink wobbled
+    /// between a 600 ms and a 700 ms period.
     var blinkCycleMs: Int {
         switch self {
         case .slow: 1000  // 500ms on, 500ms off
@@ -472,8 +487,8 @@ extension TextCursorStyle.Speed {
 
     /// The pulse cycle duration in milliseconds (dim → bright → dim).
     ///
-    /// Whole multiples of the 50 ms tick, which is why the breath was regular
-    /// while the blink was not.
+    /// A pulse is sampled one 50 ms tick a frame, and each of these is a whole
+    /// number of ticks, so every frame is exactly one tick.
     var pulseCycleMs: Int {
         switch self {
         case .slow: 1200  // 1.2 second breathing cycle
