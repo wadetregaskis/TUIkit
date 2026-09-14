@@ -712,36 +712,16 @@ extension Terminal {
         // replies being line-buffered and echoed back at the user.
         guard isatty(STDIN_FILENO) == 1, isRawMode else { return (TerminalIdentity(), nil) }
 
-        writeImmediate(TerminalIdentityQuery.request)
-
-        var collected: [UInt8] = []
-        var chunk = [UInt8](repeating: 0, count: 512)
-        let deadline = Date().addingTimeInterval(timeout)
-        var identity = TerminalIdentity()
-        while !identity.sawFence {
-            guard Terminal.waitForInput(until: deadline) else { break }
-            let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
-            guard read > 0 else { break }
-            collected.append(contentsOf: chunk[0..<read])
-            identity = TerminalIdentityQuery.parse(collected)
-        }
+        // The fence as this exchange's own parser records it, so the read ends
+        // on exactly the reply the parse below credits.
+        let collected = fencedExchange(
+            request: TerminalIdentityQuery.request, timeout: timeout,
+            sawFence: { TerminalIdentityQuery.parse($0).sawFence })
+        let identity = TerminalIdentityQuery.parse(collected)
 
         // Whatever was typed during the round trip belongs to the input parser.
         if !identity.unconsumed.isEmpty { enqueue(input: identity.unconsumed) }
         return (identity, TerminalHost.nameFromDeviceAttributes(identity))
-    }
-
-    /// Appends bytes to the pending-input buffer as though they had just been
-    /// read from stdin.
-    ///
-    /// For handing back bytes another reader took but does not own — see
-    /// ``queryIdentity(timeout:)``. Appends rather than
-    /// prepends because the only caller runs before the loop starts, when the
-    /// buffer is empty and these ARE the oldest bytes.
-    private func enqueue(input bytes: [UInt8]) {
-        input.append(addingCount: bytes.count) { (span: inout OutputSpan<UInt8>) in
-            for byte in bytes { span.append(byte) }
-        }
     }
 }
 

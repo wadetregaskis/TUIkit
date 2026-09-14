@@ -214,16 +214,16 @@ extension Terminal {
 
     /// Asks the terminal whether it will place an image in the cell grid.
     ///
-    /// The same shape as ``queryMode(_:timeout:)``: one write, then read until
-    /// the DSR fence lands or the deadline passes.
+    /// The same exchange as ``queryMode(_:timeout:)``,
+    /// ``fencedExchange(request:timeout:sawFence:)``: one write, then read
+    /// until the DSR fence lands or the deadline passes.
     ///
     /// Bytes that arrive during the round trip and are not replies — a
-    /// keystroke typed while the app was starting — are discarded, which is
-    /// what ``queryMode(_:timeout:)`` already does and for the same reason:
-    /// handing them back needs the input buffer, which is private to the file
-    /// that owns it. ``TerminalIdentityQuery`` is the one exchange that does
-    /// preserve them, and it is the one that runs before a host is known at
-    /// all. A sub-millisecond window at startup is the price.
+    /// keystroke typed while the app was starting — are discarded, as
+    /// ``queryMode(_:timeout:)`` discards them, rather than handed back
+    /// through ``enqueue(input:)``. ``TerminalIdentityQuery`` is the one
+    /// exchange that does preserve them, and it is the one that runs before a
+    /// host is known at all. A sub-millisecond window at startup is the price.
     ///
     /// - Returns: `true` only for a terminal that acknowledged the placement.
     ///   Silence, an error reply, no tty, and a host measured to print APC all
@@ -236,19 +236,9 @@ extension Terminal {
         // erase as the guard for the ones that share the gap.
         guard !TerminalHost.isAppleTerminal else { return TerminalGraphicsQuery.Answers() }
 
-        writeImmediate(TerminalGraphicsQuery.request)
-
-        var collected: [UInt8] = []
-        var chunk = [UInt8](repeating: 0, count: 512)
-        let deadline = Date().addingTimeInterval(timeout)
-        while !TerminalGraphicsQuery.sawFence(collected) {
-            // Shared with the other two startup probes, and EINTR-aware —
-            // see ``Terminal/waitForInput(on:until:)``.
-            guard Terminal.waitForInput(until: deadline) else { break }
-            let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
-            guard read > 0 else { break }
-            collected.append(contentsOf: chunk[0..<read])
-        }
+        let collected = fencedExchange(
+            request: TerminalGraphicsQuery.request, timeout: timeout,
+            sawFence: TerminalGraphicsQuery.sawFence)
         return TerminalGraphicsQuery.parse(collected)
     }
 }

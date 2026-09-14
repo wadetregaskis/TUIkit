@@ -135,29 +135,20 @@ extension Terminal {
     /// Asks whether a DEC private mode is set, or `nil` if the terminal did not
     /// say — which a terminal that does not implement DECRQM will not.
     ///
-    /// Same shape as ``queryIdentity(timeout:)``: one write, then read until
-    /// the DSR fence comes back or the deadline passes. Unlike it, a keystroke
-    /// that arrives during the round trip is DISCARDED with the reply: handing
-    /// it back needs the input buffer, which is private to the file that owns
-    /// it. Only the identity exchange preserves them, and it is the one that
-    /// runs before a host is known at all; this one runs on Ghostty alone, a
-    /// sub-millisecond window at startup.
+    /// The same exchange as ``queryIdentity(timeout:)``,
+    /// ``fencedExchange(request:timeout:sawFence:)``: one write, then read
+    /// until the DSR fence comes back or the deadline passes. Unlike it, a
+    /// keystroke that arrives during the round trip is DISCARDED with the
+    /// reply rather than handed back through ``enqueue(input:)``. Only the
+    /// identity exchange preserves them, and it is the one that runs before a
+    /// host is known at all; this one runs on Ghostty alone, a sub-millisecond
+    /// window at startup.
     func queryMode(_ mode: Int, timeout: Double = 0.5) -> TerminalModeQuery.State? {
         guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
 
-        writeImmediate(TerminalModeQuery.request(mode: mode))
-
-        var collected: [UInt8] = []
-        var chunk = [UInt8](repeating: 0, count: 512)
-        let deadline = Date().addingTimeInterval(timeout)
-        while !TerminalModeQuery.sawFence(collected) {
-            // Shared with the other two startup probes, and EINTR-aware —
-            // see ``Terminal/waitForInput(on:until:)``.
-            guard Terminal.waitForInput(until: deadline) else { break }
-            let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
-            guard read > 0 else { break }
-            collected.append(contentsOf: chunk[0..<read])
-        }
+        let collected = fencedExchange(
+            request: TerminalModeQuery.request(mode: mode), timeout: timeout,
+            sawFence: TerminalModeQuery.sawFence)
         return TerminalModeQuery.parse(collected, mode: mode)
     }
 
