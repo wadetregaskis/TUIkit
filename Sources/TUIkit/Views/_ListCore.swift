@@ -3132,7 +3132,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // render per step it takes, and only while the cursor is on its row.
         //
         // It used to ask for a 20 Hz grid instead: a whole-screen render twenty
-        // times a second for a 110 ms spinner that changes nine times, on a phase
+        // times a second for a 7-tick spinner that changes under nine times, on a phase
         // anchored at whichever frame first asked rather than at the run's steps.
         if !childRuns.isEmpty, !context.isMeasuring {
             context.requestWake(
@@ -3287,9 +3287,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// The rate the run asked for, and the clock it asked on.
         ///
         /// Carried rather than assumed. Rebuilding a child's run with the
-        /// defaults silently retimed it: a `.dots` spinner asks for 0.110 s a
-        /// frame and got the clock's own 0.05 s, so a spinner inside a List ran
-        /// 2.2x too fast — and looked, in a screenshot, exactly right.
+        /// defaults silently retimed it: a spinner that asks for more than 0.05 s
+        /// a frame (`.dots` then asked for 0.110 s) got the clock's own 0.05 s, so
+        /// a spinner inside a List ran 2.2x too fast — and looked, in a
+        /// screenshot, exactly right.
         var frameDuration: Double
         var clock: AnimationClock
 

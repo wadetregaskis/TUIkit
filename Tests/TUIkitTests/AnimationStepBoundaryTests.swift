@@ -78,7 +78,7 @@ struct AnimationStepBoundaryTests {
     }
 
     /// A spinner draws its current frame itself AND leaves a run the loop replays, so
-    /// both must pick the same step. `.dots` at 0.11 s: when the clock was a sum of
+    /// both must pick the same step. `.dots`, then at 0.11 s: when the clock was a sum of
     /// sleeps it landed one ulp under its boundary at every step from 27 to 40, and a
     /// floor in seconds drew the frame before the one the run replays there — a
     /// one-frame stutter on every render that fell on such a wake. The clock is measured
@@ -88,13 +88,14 @@ struct AnimationStepBoundaryTests {
     func spinnerDrawsTheFrameItsRunReplays() {
         let timer = CursorTimer(renderNotifier: AppState())
         let style = SpinnerStyle.dots
-        // 110,000 s: a whole million 110 ms steps, so step `k` from here shows frame `k`.
-        let base: UInt64 = 110_000 * 1_000_000_000
+        // A whole million 7-tick steps of 116,666,667 ns, so step `k` from here shows
+        // frame `k`.
+        let base: UInt64 = 116_666_667 * 1_000_000
         var wrong: [(step: Int, drawn: String, replayed: String, due: String)] = []
         for step in 0..<60 {
             // One instant for both, as the run loop gives a frame: the replay reads the
             // timer's snapshot, the spinner the frame's stamp.
-            let now = base + UInt64(step) * 110_000_000
+            let now = base + UInt64(step) * 116_666_667
             timer.creditWake(atNanos: now)
             var context = RenderContext(
                 availableWidth: 10, availableHeight: 1, tuiContext: TUIContext()

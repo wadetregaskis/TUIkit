@@ -105,9 +105,9 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     /// Inside that band the framework picks a frame duration that is a whole
     /// number of ``AnimationClock/baseTick``s when there is one, so indicators on
     /// one screen step together and the run loop wakes once for them. At the
-    /// standard durations as they are, that moves only the spinner styles whose
-    /// interval is 120 ms or 130 ms, to 125 ms. Use ``standard`` for the exact
-    /// rate.
+    /// standard durations as they are, that moves none of them: each is a whole
+    /// number of 1/60 s ticks, and none has a whole number of base ticks within
+    /// 0.05 of its rate other than itself. Use ``standard`` for the exact rate.
     public static let automatic = Self(1, tolerance: 0.05)
 
     /// The standard rate, exactly.

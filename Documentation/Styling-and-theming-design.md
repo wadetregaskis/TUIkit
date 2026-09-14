@@ -248,9 +248,10 @@ extension View {
   `Timer.publish(every:tolerance:)`. Inside it, the framework may pick a duration
   that is a whole number of `AnimationClock.baseTick`s, so indicators step
   together. A tolerance of 0 is exact. The default, `.automatic`, is `1 ± 0.05`;
-  at the standard durations as they are, that moves only the 120 ms and 130 ms
-  spinner styles, to 125 ms. An explicit speed is exact unless it names a
-  tolerance.
+  at the standard durations as they are, that moves none of them (the spinner
+  intervals are whole 1/60 s ticks, 5 to 9 of them, and none has a 25 ms
+  multiple within 0.05 of its rate other than itself). An explicit speed is
+  exact unless it names a tolerance.
 - **Every kind reads it.** A spinner's frames are a sequence, so each lasts its
   standard duration divided by the rate. A bar's pass is a ramp: it takes its
   period divided by the rate, and is still sampled at 30 frames a second, up to

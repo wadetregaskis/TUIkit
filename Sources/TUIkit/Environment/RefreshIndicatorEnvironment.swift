@@ -41,8 +41,8 @@ public struct RefreshIndicator: Sendable, Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         // `SpinnerStyle` carries a custom-frames case, so compare what is drawn
         // rather than requiring the enum itself to be Equatable. The interval as
-        // well as the frames: `.custom` with `.dots`' frames still steps at 120 ms,
-        // not 110.
+        // well as the frames: `.custom` with `.line`'s frames still steps at
+        // `.custom`'s 7 ticks, not 8.
         lhs.style.frames == rhs.style.frames && lhs.style.interval == rhs.style.interval
             && lhs.color == rhs.color
     }

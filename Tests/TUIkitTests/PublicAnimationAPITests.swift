@@ -192,9 +192,9 @@ struct PublicAnimationAPITests {
 
     @Test("An app can read a spinner style's standard interval and set a frame duration from it")
     func spinnerIntervalIsPublic() {
-        #expect(AnimationClock.nanoseconds(SpinnerStyle.dots.interval) == 110_000_000)
-        // The recipe in `SpinnerStyle.interval`'s doc: four base ticks a frame.
-        let speed = IndicatorAnimationSpeed(SpinnerStyle.dots.interval / (4 * AnimationClock.baseTick))
+        #expect(AnimationClock.nanoseconds(SpinnerStyle.dots.interval) == 116_666_667)
+        // The recipe in `SpinnerStyle.interval`'s doc: six ticks a frame.
+        let speed = IndicatorAnimationSpeed(SpinnerStyle.dots.interval / AnimationClock.seconds(forTicks: 6))
         let buffer = renderToBuffer(
             Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners),
             context: makeRenderContext(width: 20, height: 2))

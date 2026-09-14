@@ -154,13 +154,13 @@ struct IndicatorAnimationSpeedValueTests {
 // MARK: - Spinners
 
 /// A spinner whose two frames are one cell and two wide, so no run can hold it,
-/// at three times the speed.
+/// at three and a half times the speed.
 private struct FastMixedWidthSpinnerApp: App {
     init() {}
 
     var body: some Scene {
         WindowGroup {
-            Spinner(style: .custom("-你")).indicatorAnimationSpeed(3, for: .spinners)
+            Spinner(style: .custom("-你")).indicatorAnimationSpeed(3.5, for: .spinners)
         }
     }
 }
@@ -185,36 +185,38 @@ struct IndicatorAnimationSpeedSpinnerTests {
         }
     }
 
-    /// `.automatic` is 1 ± 0.05, so 110 ms accepts 104.8 ms to 115.8 ms, which holds
-    /// no whole number of 25 ms ticks.
-    @Test("Unset, a .dots spinner shows each frame for its style's 110 ms")
+    /// `.automatic` is 1 ± 0.05, so 7 ticks (116.7 ms) accepts 111.1 ms to 122.8 ms,
+    /// which holds no whole number of 25 ms base ticks.
+    @Test("Unset, a .dots spinner shows each frame for its style's 7 ticks, 116,666,667 ns")
     func unsetIsTheStyleInterval() {
-        #expect(runNanos(Spinner(style: .dots)) == [110_000_000])
+        #expect(runNanos(Spinner(style: .dots)) == [116_666_667])
     }
 
-    /// 120 ms at 1 ± 0.05 accepts 114.3 ms to 126.3 ms, and 125 ms, five base
-    /// ticks, is in it. `.standard` is exact.
-    @Test("Unset, a .pie spinner shows each frame for 125 ms, and at .standard for its style's 120 ms")
-    func automaticMovesOntoTheLattice() {
+    /// `.pie` was 120 ms, which `.automatic` moved to 125 ms. It is 7 ticks now, which
+    /// `.automatic` leaves alone, as it leaves every standard interval.
+    @Test("Unset, a .pie spinner is its style's 116,666,667 ns at .automatic and at .standard")
+    func automaticMovesNoStandardInterval() {
         #expect(IndicatorAnimationSpeed.automatic == IndicatorAnimationSpeed(1, tolerance: 0.05))
-        #expect(runNanos(Spinner(style: .pie)) == [125_000_000])
-        #expect(runNanos(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [120_000_000])
+        #expect(runNanos(Spinner(style: .pie)) == [116_666_667])
+        #expect(runNanos(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [116_666_667])
     }
 
-    @Test("A .dots spinner at twice the speed shows each frame for 55 ms")
+    @Test("A .dots spinner at twice the speed shows each frame for 58,333,333 ns")
     func doubleSpeed() {
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)) == [55_000_000])
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)) == [58_333_333])
     }
 
-    @Test("A .dots spinner at 1.1 shows each frame for exactly 100 ms")
+    @Test("A .dots spinner at 1.1 shows each frame for exactly its interval divided by 1.1")
     func exactRate() {
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(1.1, for: .spinners)) == [100_000_000])
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(1.1, for: .spinners)) == [106_060_606])
     }
 
-    @Test("A .dots spinner at 1.05 ± 0.05 shows each frame for 100 ms, not 104.8 ms")
-    func toleranceMovesOntoTheLattice() {
+    /// 1.05 ± 0.05 on 7 ticks accepts 106.1 ms to 116.7 ms, which holds no whole number
+    /// of 25 ms base ticks, so the duration is the exact one.
+    @Test("A .dots spinner at 1.05 ± 0.05 with no base tick in reach shows each frame for exactly 111,111,111 ns")
+    func toleranceWithNothingInReachIsExact() {
         let speed = IndicatorAnimationSpeed(1.05, tolerance: 0.05)
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [100_000_000])
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [111_111_111])
     }
 
     @Test("The nearest setting for spinners wins, and replaces the one above rather than multiplying it")
@@ -222,19 +224,19 @@ struct IndicatorAnimationSpeedSpinnerTests {
         // Inner `.all` at 2 inside outer `.spinners` at 0.5.
         #expect(
             runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(0.5, for: .spinners))
-                == [55_000_000])
+                == [58_333_333])
         // Inner `.spinners` at 0.5 inside outer `.all` at 2.
         #expect(
             runNanos(Spinner(style: .dots).indicatorAnimationSpeed(0.5, for: .spinners).indicatorAnimationSpeed(2))
-                == [220_000_000])
+                == [233_333_333])
         // 2 inside 2 is 2, not 4.
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(2)) == [55_000_000])
+            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(2)) == [58_333_333])
         // A nearer setting for another kind leaves spinners at the one above.
         #expect(
             runNanos(
                 Spinner(style: .dots).indicatorAnimationSpeed(2, for: .textCursor)
-                    .indicatorAnimationSpeed(0.5, for: .spinners)) == [220_000_000])
+                    .indicatorAnimationSpeed(0.5, for: .spinners)) == [233_333_333])
     }
 
     @Test("A setting reaches only its own subtree, not a sibling")
@@ -243,12 +245,13 @@ struct IndicatorAnimationSpeedSpinnerTests {
             Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)
             Spinner(style: .dots)
         }
-        #expect(runNanos(view).sorted() == [55_000_000, 110_000_000])
+        #expect(runNanos(view).sorted() == [58_333_333, 116_666_667])
     }
 
-    /// At three times the speed a `.custom` sequence steps every 40 ms, so at
-    /// 1.037 s it shows its second frame and its next step is at 1.040 s. At the
-    /// standard speed (120 ms) it would show the first frame until 1.080 s.
+    /// At three and a half times the speed a `.custom` sequence's 7 ticks are 2, a
+    /// frame of 33,333,333 ns, so at 1.037 s it is on step 31, its second frame, and
+    /// its next step is 32 frames in. At the standard speed it would be on step 8, the
+    /// first frame, until 1.05 s.
     @Test("A mixed-width spinner draws, and asks for its next render, at the speed it is set to")
     func fallbackFollowsTheSpeed() {
         let harness = RenderLoopHarness()
@@ -258,9 +261,9 @@ struct IndicatorAnimationSpeedSpinnerTests {
         scheduler.beginFrame()
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
-        #expect(scheduler.nextFiring(after: now) == 1_040_000_000)
+        #expect(scheduler.nextFiring(after: now) == 1_066_666_656, "32 frames of 33,333,333 ns")
         let picture = (loop.replayable?.contentLines ?? []).map(\.stripped).joined()
-        #expect(picture.contains("你"), "step 25 of a two-frame cycle is its second frame: \(picture.debugDescription)")
+        #expect(picture.contains("你"), "step 31 of a two-frame cycle is its second frame: \(picture.debugDescription)")
     }
 
     @Test("A change of speed alone reaches a spinner inside an .equatable() view")
@@ -282,13 +285,13 @@ struct IndicatorAnimationSpeedSpinnerTests {
             return buffer.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) }
         }
 
-        #expect(frame(1) == [110_000_000])
+        #expect(frame(1) == [116_666_667])
         let before = cache.stats
-        #expect(frame(1) == [110_000_000])
+        #expect(frame(1) == [116_666_667])
         #expect(
             cache.stats.delta(since: before).hits >= 1,
             "the spinner was not served from the memo, so this is not the case under test")
-        #expect(frame(2) == [55_000_000])
+        #expect(frame(2) == [58_333_333])
     }
 }
 

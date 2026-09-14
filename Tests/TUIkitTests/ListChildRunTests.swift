@@ -186,18 +186,20 @@ struct ListChildRunTests {
     }
 
     /// The dropped run's own next step, not a 20 Hz grid. A grid re-rendered the
-    /// whole screen twenty times a second for a spinner that changes nine times,
-    /// and anchored wherever the first frame happened to be, off every run's
+    /// whole screen twenty times a second for a spinner that changes under nine
+    /// times, and anchored wherever the first frame happened to be, off every run's
     /// boundaries.
     @Test("A breathing row wakes the loop at its dropped spinner's next step, and registers no grid")
     func droppedSpinnerWakesAtItsNextStep() {
         let schedule = breathingRowSchedule(
             HStack { Text("row"); Spinner(style: .dots) }, nowNanos: 1_000_000_000)
         #expect(
-            schedule.runs.count == 1 && !schedule.runs.contains { $0.frameDuration == 0.11 },
+            schedule.runs.count == 1 && !schedule.runs.contains { $0.frameDuration == SpinnerStyle.dots.interval },
             "pre-condition: only the row's breath is left, the spinner's run is dropped: \(schedule.runs)")
         #expect(schedule.grids == 0, "a grid was registered for the dropped run")
-        #expect(schedule.nextRender == 1_100_000_000, "a 110 ms spinner at 1.000 s next steps at 1.100 s")
+        #expect(
+            schedule.nextRender == 1_050_000_003,
+            "a 7-tick spinner at 1.000 s is on step 8, and next steps 9 steps of 116,666,667 ns in")
     }
 
     @Test("Several dropped runs wake the loop at the soonest of their next steps")

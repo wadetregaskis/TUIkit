@@ -403,10 +403,10 @@ struct RefreshableTests {
         let first = RefreshIndicator(style: .custom("ab"))
         let second = RefreshIndicator(style: .custom("ab"))
         #expect(first == second)
-        // `.dots`' frames as a `.custom` sequence step at `.custom`'s 120 ms, not 110.
+        // `.line`'s frames as a `.custom` sequence step at `.custom`'s 7 ticks, not 8.
         #expect(
-            RefreshIndicator(style: .custom(SpinnerStyle.dots.frames.joined()))
-                != RefreshIndicator(style: .dots))
+            RefreshIndicator(style: .custom(SpinnerStyle.line.frames.joined()))
+                != RefreshIndicator(style: .line))
         #expect(RefreshIndicator(style: .line) != RefreshIndicator(style: .dots))
         #expect(RefreshIndicator(color: .red) != RefreshIndicator())
     }
@@ -427,8 +427,8 @@ struct RefreshableTests {
         let busy = harness.frame(view)
         gate.release()
         await settle()
-        // `.dots` is 110 ms a frame at the standard speed.
-        #expect(busy.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) } == [55_000_000])
+        // `.dots` is 7 ticks, 116,666,667 ns, a frame at the standard speed.
+        #expect(busy.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) } == [58_333_333])
     }
 
     @Test("A running refresh renders its content once")

@@ -79,9 +79,9 @@ struct DeclinedRunClockTests {
     }
 
     /// A declined run is re-rendered at its next step, not on a grid anchored at
-    /// whichever frame first asked. A `.custom` sequence's standard step is 120 ms, and
-    /// `.automatic`, the default speed, moves it to 125 ms, so at 1.037 s the next step
-    /// is 1.125 s.
+    /// whichever frame first asked. A `.custom` sequence's standard step is 7 ticks,
+    /// 116,666,667 ns, which `.automatic`, the default speed, leaves alone, so at 1.037 s
+    /// it is on step 8 and the next step begins 9 steps in.
     @Test("A mixed-width spinner asks for one render at its next step, and registers no grid")
     func mixedWidthSpinnerWakesAtItsNextStep() {
         let harness = RenderLoopHarness()
@@ -92,7 +92,7 @@ struct DeclinedRunClockTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
-        #expect(scheduler.nextFiring(after: now) == 1_125_000_000, "a 125 ms step at 1.037 s ends at 1.125 s")
+        #expect(scheduler.nextFiring(after: now) == 1_050_000_003, "step 8 at 1.037 s ends 9 steps of 116,666,667 ns in")
     }
 
     /// A same-width spinner, which leaves a run, beside a mixed-width one, which
@@ -123,12 +123,13 @@ struct DeclinedRunClockTests {
         let loop = harness.loop(RunBesideDeclinedApp())
         let timer = CursorTimer(renderNotifier: harness.appState)
         let scheduler = AnimationScheduler()
-        // 90,090 s, a whole number of 125 ms steps, and past any real clock reading.
+        // 90,090 s, 772,200 whole 7-tick steps, and past any real clock reading. A step
+        // is 116,666,667 ns, so that many steps end 257,400 ns after it.
         let base: Int64 = 90_090 * 1_000_000_000
         var mismatches: [(frame: Int, picture: String)] = []
         for frame in 0..<6 {
             // 1 ms into each step, so both spinners are due frame index `frame % 2`.
-            let now = base + Int64(frame) * 125_000_000 + 1_000_000
+            let now = base + Int64(frame) * 116_666_667 + 1_000_000
             scheduler.beginFrame()
             loop.render(cursorTimer: timer, animationScheduler: scheduler, frameNowNanos: now)
             scheduler.endFrame()

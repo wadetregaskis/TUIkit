@@ -93,10 +93,10 @@ struct ImagePlaceholderSpinnerTests {
         let first = ImagePlaceholderSpinner(style: .custom("ab"))
         let second = ImagePlaceholderSpinner(style: .custom("ab"))
         #expect(first == second)
-        // `.dots`' frames as a `.custom` sequence step at `.custom`'s 120 ms, not 110.
+        // `.line`'s frames as a `.custom` sequence step at `.custom`'s 7 ticks, not 8.
         #expect(
-            ImagePlaceholderSpinner(style: .custom(SpinnerStyle.dots.frames.joined()))
-                != ImagePlaceholderSpinner(style: .dots))
+            ImagePlaceholderSpinner(style: .custom(SpinnerStyle.line.frames.joined()))
+                != ImagePlaceholderSpinner(style: .line))
         #expect(ImagePlaceholderSpinner(style: .line) != ImagePlaceholderSpinner(style: .dots))
         #expect(ImagePlaceholderSpinner(color: .red) != ImagePlaceholderSpinner())
         #expect(ImagePlaceholderSpinner(isShown: false) != ImagePlaceholderSpinner())

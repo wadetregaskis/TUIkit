@@ -162,43 +162,46 @@ public enum SpinnerStyle: Sendable {
     }
 
     /// How long each frame of this style is shown at the standard speed, in
-    /// seconds.
+    /// seconds: a whole number of 1/60 s ticks, from 5 (83.3 ms) to 9 (150 ms).
+    ///
+    /// Whole ticks because a terminal's paint is shown on a display that refreshes
+    /// 60 times a second: a frame of any other length is held for an uneven number
+    /// of refreshes, and spinners whose frames are whole ticks change on the same
+    /// refresh wherever their tick counts share a multiple.
     ///
     /// A spinner shows each frame for this long under
-    /// ``IndicatorAnimationSpeed/standard``. Under the default,
-    /// ``IndicatorAnimationSpeed/automatic``, the rate may move by up to 0.05 onto
-    /// a whole number of ``AnimationClock/baseTick``s, so the 120 ms and 130 ms
-    /// styles show each frame for 125 ms. Under another speed set with
-    /// ``View/indicatorAnimationSpeed(_:for:)`` it shows each frame for
-    /// ``IndicatorAnimationSpeed/frameDuration(standard:)`` of this interval. So
-    /// to show a style's frames for a duration of your choosing, set the speed to
-    /// this interval divided by that duration:
+    /// ``IndicatorAnimationSpeed/standard``, and under the default,
+    /// ``IndicatorAnimationSpeed/automatic``, which moves none of these intervals.
+    /// Under another speed set with ``View/indicatorAnimationSpeed(_:for:)`` it
+    /// shows each frame for ``IndicatorAnimationSpeed/frameDuration(standard:)`` of
+    /// this interval. So to show a style's frames for a duration of your choosing,
+    /// set the speed to this interval divided by that duration:
     ///
     /// ```swift
-    /// // .dots, whose standard interval is 110 ms, at 4 base ticks (100 ms) a frame
+    /// // .dots, whose standard interval is 7 ticks (116.7 ms), at 6 ticks (100 ms) a frame
     /// let speed = IndicatorAnimationSpeed(
-    ///     SpinnerStyle.dots.interval / (4 * AnimationClock.baseTick))
+    ///     SpinnerStyle.dots.interval / AnimationClock.seconds(forTicks: 6))
     /// Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)
     /// ```
     public var interval: TimeInterval {
         switch self {
-        case .dots: return 0.110
-        case .line: return 0.140
-        case .dancingLine: return 0.110
-        case .bouncing: return 0.100
-        case .pie: return 0.120
-        case .beachball: return 0.130
-        case .box: return 0.125
-        case .curve: return 0.120
-        case .column: return 0.080
-        case .bar: return 0.080
-        case .shade: return 0.130
-        case .blockWedge: return 0.120
-        case .spinningTriangle: return 0.120
-        case .moon: return 0.120
-        case .earth: return 0.150
-        case .clock: return 0.090
-        case .custom: return 0.120
+        case .dots: return AnimationClock.seconds(forTicks: 7)
+        case .line: return AnimationClock.seconds(forTicks: 8)
+        case .dancingLine: return AnimationClock.seconds(forTicks: 7)
+        case .bouncing: return AnimationClock.seconds(forTicks: 6)
+        case .pie: return AnimationClock.seconds(forTicks: 7)
+        case .beachball: return AnimationClock.seconds(forTicks: 8)
+        case .box: return AnimationClock.seconds(forTicks: 8)
+        case .curve: return AnimationClock.seconds(forTicks: 7)
+        case .column: return AnimationClock.seconds(forTicks: 5)
+        case .bar: return AnimationClock.seconds(forTicks: 5)
+        case .shade: return AnimationClock.seconds(forTicks: 8)
+        case .blockWedge: return AnimationClock.seconds(forTicks: 7)
+        case .spinningTriangle: return AnimationClock.seconds(forTicks: 7)
+        case .moon: return AnimationClock.seconds(forTicks: 7)
+        case .earth: return AnimationClock.seconds(forTicks: 9)
+        case .clock: return AnimationClock.seconds(forTicks: 5)
+        case .custom: return AnimationClock.seconds(forTicks: 7)
         }
     }
 
@@ -346,9 +349,9 @@ extension SpinnerStyle {
 ///
 /// | Style | Visual | Interval |
 /// |-------|--------|----------|
-/// | `.dots` | `⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏` | 110ms |
-/// | `.line` | `\| / - \\` | 140ms |
-/// | `.bouncing` | `■■▇▇▇▇■■■` (with fade trail) | 100ms |
+/// | `.dots` | `⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏` | 116.7ms (7 ticks of 1/60 s) |
+/// | `.line` | `\| / - \\` | 133.3ms (8 ticks) |
+/// | `.bouncing` | `■■▇▇▇▇■■■` (with fade trail) | 100ms (6 ticks) |
 ///
 /// Three of many, not the set: ``SpinnerStyle`` carries the rest, each with its
 /// own frames and interval, and ``SpinnerStyle/custom(_:)`` takes a sequence of
@@ -362,7 +365,7 @@ extension SpinnerStyle {
 /// draws too:
 ///
 /// ```swift
-/// // .dots at 220ms a frame
+/// // .dots at 233.3ms (14 ticks) a frame
 /// Spinner("Loading...").indicatorAnimationSpeed(.halfSpeed, for: .spinners)
 /// ```
 public struct Spinner: View {
@@ -485,10 +488,11 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         /// shown for the style's own interval.
         ///
         /// Its own interval exactly, not rounded to anything: a run carries its
-        /// frame duration, so `.dots` runs at the 0.110 s it asks for and the
+        /// frame duration, so `.dots` runs at the 7/60 s it asks for and the
         /// loop wakes for it then. This used to be resampled onto a fixed 0.05 s
-        /// grid, which forced a choice between a visible limp (frames of 2, 2,
-        /// 3, 2, 2, 3 ticks) and a changed speed (0.110 rounded to 0.100).
+        /// grid, which forced a choice between a visible limp (`.dots`, then
+        /// 0.110 s, drew frames of 2, 2, 3, 2, 2, 3 of those steps) and a changed
+        /// speed (0.110 rounded to 0.100).
         let cycle = spinnerFrames(color: resolvedColor, context: context)
         let glyphWidths = Set(cycle.map(\.strippedLength))
 

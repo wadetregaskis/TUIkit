@@ -211,7 +211,7 @@ struct ImagePlaceholderSpinner: Sendable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         // `SpinnerStyle` carries a custom-frames case and is not `Equatable`, so
         // compare what is drawn, as `RefreshIndicator` does. The interval as well as
-        // the frames: `.custom` with `.dots`' frames still steps at 120 ms, not 110.
+        // the frames: `.custom` with `.line`'s frames still steps at 7 ticks, not 8.
         lhs.isShown == rhs.isShown && lhs.style.frames == rhs.style.frames
             && lhs.style.interval == rhs.style.interval && lhs.color == rhs.color
     }

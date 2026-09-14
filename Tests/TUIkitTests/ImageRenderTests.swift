@@ -113,7 +113,7 @@ struct ImageRenderTests {
         let buffer = renderToBuffer(
             Image(.file("/nope.png")).indicatorAnimationSpeed(2, for: .spinners),
             context: createTestContext())
-        #expect(runNanos(buffer) == [55_000_000])
+        #expect(runNanos(buffer) == [58_333_333], "half of .dots' 7 ticks, 116,666,667 ns")
     }
 
     @Test("With the spinner off, the placeholder leaves no run")

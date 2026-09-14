@@ -60,7 +60,7 @@ struct ThemeIndicatorAnimationSpeedTests {
             [Entry(2), Entry(0.5, for: .spinners)],
         ]
         for entries in orders {
-            #expect(runNanos(Spinner(style: .dots).theme(theme(entries))) == [220_000_000], "\(entries)")
+            #expect(runNanos(Spinner(style: .dots).theme(theme(entries))) == [233_333_333], "\(entries)")
             #expect(caretNanos { $0.theme(theme(entries)) } == [175_000_000], "\(entries)")
         }
     }
@@ -69,27 +69,27 @@ struct ThemeIndicatorAnimationSpeedTests {
     func tiesKeepArrayOrder() {
         #expect(
             runNanos(Spinner(style: .dots).theme(theme([Entry(0.5, for: .spinners), Entry(2, for: .spinners)])))
-                == [55_000_000])
+                == [58_333_333])
         #expect(
             runNanos(Spinner(style: .dots).theme(theme([Entry(2, for: .spinners), Entry(0.5, for: .spinners)])))
-                == [220_000_000])
+                == [233_333_333])
     }
 
     @Test("A modifier nearer the content beats the theme, and a theme nearer than a modifier beats it")
     func nearerWins() {
         let slow = theme([Entry(0.5, for: .spinners)])
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners).theme(slow)) == [55_000_000])
+            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners).theme(slow)) == [58_333_333])
         #expect(
-            runNanos(Spinner(style: .dots).theme(slow).indicatorAnimationSpeed(2, for: .spinners)) == [220_000_000])
+            runNanos(Spinner(style: .dots).theme(slow).indicatorAnimationSpeed(2, for: .spinners)) == [233_333_333])
     }
 
     @Test("A theme's entry for one kind leaves the kinds it does not name as inherited")
     func unnamedKindsAreInherited() {
         let view = Spinner(style: .dots).theme(theme([Entry(0.5, for: .textCursor)]))
             .indicatorAnimationSpeed(2, for: .spinners)
-        #expect(runNanos(view) == [55_000_000])
-        #expect(runNanos(Spinner(style: .dots).theme(theme([]))) == [110_000_000])
+        #expect(runNanos(view) == [58_333_333])
+        #expect(runNanos(Spinner(style: .dots).theme(theme([]))) == [116_666_667])
     }
 
     @Test("A change to a theme's speeds alone reaches a spinner inside an .equatable() view")
@@ -110,12 +110,12 @@ struct ThemeIndicatorAnimationSpeedTests {
             return buffer.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) }
         }
 
-        #expect(frame([Entry(1, for: .spinners)]) == [110_000_000])
+        #expect(frame([Entry(1, for: .spinners)]) == [116_666_667])
         let before = cache.stats
-        #expect(frame([Entry(1, for: .spinners)]) == [110_000_000])
+        #expect(frame([Entry(1, for: .spinners)]) == [116_666_667])
         #expect(
             cache.stats.delta(since: before).hits >= 1,
             "the spinner was not served from the memo, so this is not the case under test")
-        #expect(frame([Entry(2, for: .spinners)]) == [55_000_000])
+        #expect(frame([Entry(2, for: .spinners)]) == [58_333_333])
     }
 }

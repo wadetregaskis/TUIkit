@@ -15,11 +15,11 @@ A ratio of 1.00 is a spinner stepping at its own rate. The same ratio well above
 1 on EVERY style is a slow clock rather than slow spinners: the animation clock
 losing time at each wake, not any one run asking for the wrong duration.
 
-The nominal is the style's STANDARD interval, not always the one it runs at. A
-page that sets no speed runs at `IndicatorAnimationSpeed.automatic`, which lets
-a 120 ms or 130 ms style move to 125 ms, a whole number of 25 ms base ticks. So
-on the Spinners page those rows read 1.04 and 0.96 by design; every other row
-should still read 1.00.
+The nominal is the style's STANDARD interval: a literal in seconds, or
+`AnimationClock.seconds(forTicks: n)`, read as n/60 s. A page that sets no speed
+runs at `IndicatorAnimationSpeed.automatic`, which moves none of the standard
+intervals, so on the Spinners page at its default speed every row should read
+1.00.
 
 Only CHARACTER changes are seen. A colour-only animation (a focused control's
 breath, a faded tint) changes no cell's character and is invisible here, which
@@ -67,7 +67,11 @@ def nominal_intervals():
     body = re.search(r"var interval: TimeInterval \{(.*?)\n    \}", text, re.S)
     if not body:
         return {}
-    return {name: float(value) * 1000 for name, value in re.findall(r"case \.(\w+)(?:\(.*?\))?: return ([0-9.]+)", body.group(1))}
+    cases = re.findall(
+        r"case \.(\w+)(?:\(.*?\))?: return (?:AnimationClock\.seconds\(forTicks: (\d+)\)|([0-9.]+))",
+        body.group(1))
+    return {name: int(ticks) * 1000 / 60 if ticks else float(seconds) * 1000
+            for name, ticks, seconds in cases}
 
 
 class Timeout(Exception):
