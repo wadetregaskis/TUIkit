@@ -120,8 +120,9 @@ struct DynamicRowActionsTests {
     /// route, not just the handler in isolation.
     @Test("An editable List deletes the focused row on Delete (end to end)")
     func listDeleteEndToEnd() {
-        final class Box { var items = ["a", "b", "c", "d"] }
-        let box = Box()
+        // A `MainActorBox`, not a plain class: Swift 6.3.3 rejects a plain one
+        // captured by `render()` at -O (see `MainActorBox`).
+        let items = MainActorBox(["a", "b", "c", "d"])
         let tui = TUIContext()
         let focusManager = FocusManager()
         var env = EnvironmentValues()
@@ -130,8 +131,8 @@ struct DynamicRowActionsTests {
 
         func render() {
             let view = List(selection: .constant(String?.none)) {
-                ForEach(box.items, id: \.self) { Text($0) }
-                    .onDelete { box.items.remove(atOffsets: $0) }
+                ForEach(items.value, id: \.self) { Text($0) }
+                    .onDelete { items.value.remove(atOffsets: $0) }
             }
             .focusID("editable-list")
             .frame(height: 8)
@@ -148,6 +149,6 @@ struct DynamicRowActionsTests {
         render()  // re-render so the handler's per-frame state is current
         let consumed = focusManager.dispatchKeyEvent(KeyEvent(key: .delete))
         #expect(consumed == true)
-        #expect(box.items == ["a", "c", "d"], "the focused row was removed via onDelete")
+        #expect(items.value == ["a", "c", "d"], "the focused row was removed via onDelete")
     }
 }

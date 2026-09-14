@@ -80,48 +80,52 @@ struct OnGeometryChangeTests {
     @Test("It fires once on the first render and then only on a change")
     func firesOnceThenOnChange() {
         let fixture = Fixture()
-        var seen: [Int] = []
+        // A `MainActorBox`, not a captured `var`: Swift 6.3.3 rejects the `var`
+        // at -O (see `MainActorBox`).
+        let seen = MainActorBox([Int]())
         var width = 4
 
         func view() -> some View {
             Text(String(repeating: "x", count: width))
-                .onGeometryChange(for: Int.self) { $0.size.width } action: { seen.append($0) }
+                .onGeometryChange(for: Int.self) { $0.size.width } action: { seen.value.append($0) }
         }
 
         fixture.frame(view())
-        #expect(seen == [4])
+        #expect(seen.value == [4])
 
         // Same size, several frames: silence.
         fixture.frame(view())
         fixture.frame(view())
-        #expect(seen == [4], "a re-render at the same size is not a change: \(seen)")
+        #expect(seen.value == [4], "a re-render at the same size is not a change: \(seen.value)")
 
         width = 9
         fixture.frame(view())
-        #expect(seen == [4, 9])
+        #expect(seen.value == [4, 9])
     }
 
     @Test("The two-argument form carries the previous value")
     func twoArgumentForm() {
         let fixture = Fixture()
-        var pairs: [(Int, Int)] = []
+        let pairs = MainActorBox([(Int, Int)]())
         var width = 3
 
         func view() -> some View {
             Text(String(repeating: "x", count: width))
                 .onGeometryChange(for: Int.self) { $0.size.width } action: { old, new in
-                    pairs.append((old, new))
+                    pairs.value.append((old, new))
                 }
         }
 
         fixture.frame(view())
-        #expect(pairs.count == 1)
-        #expect(pairs[0].0 == 3 && pairs[0].1 == 3, "the first report is old == new: \(pairs)")
+        #expect(pairs.value.count == 1)
+        #expect(
+            pairs.value[0].0 == 3 && pairs.value[0].1 == 3,
+            "the first report is old == new: \(pairs.value)")
 
         width = 7
         fixture.frame(view())
-        #expect(pairs.count == 2)
-        #expect(pairs[1].0 == 3 && pairs[1].1 == 7, "\(pairs)")
+        #expect(pairs.value.count == 2)
+        #expect(pairs.value[1].0 == 3 && pairs.value[1].1 == 7, "\(pairs.value)")
     }
 
     /// The layout must be exactly what it would be without the modifier — the

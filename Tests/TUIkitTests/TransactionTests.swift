@@ -216,55 +216,58 @@ struct TransactionTests {
     @Test("transaction(value:) applies only on the frame its value moved")
     func valueScopedTransaction() {
         let frames = Frames()
-        var seen: [Transaction] = []
+        // A `MainActorBox`, not a captured `var`: Swift 6.3.3 rejects the `var`
+        // at -O (see `MainActorBox`).
+        let seen = MainActorBox([Transaction]())
         var zoom = 1
 
         func view() -> some View {
-            TransactionProbe { seen.append($0) }
+            TransactionProbe { seen.value.append($0) }
                 .transaction(value: zoom) { $0.animation = .easeIn }
         }
 
         // First render: no previous value, so no change, so nothing applied.
         frames.render(view())
-        #expect(seen.last?.animation == nil, "the first frame is not a change: \(seen)")
+        #expect(seen.value.last?.animation == nil, "the first frame is not a change: \(seen.value)")
 
         zoom = 2
         frames.render(view())
-        #expect(seen.last?.animation == .easeIn, "\(seen)")
+        #expect(seen.value.last?.animation == .easeIn, "\(seen.value)")
 
         // Unchanged again: back to whatever was inherited.
         frames.render(view())
-        #expect(seen.last?.animation == nil, "a re-render at the same value is not a change")
+        #expect(seen.value.last?.animation == nil, "a re-render at the same value is not a change")
     }
 
     @Test("It transforms the INHERITED transaction rather than replacing it")
     func valueScopedTransactionComposes() {
         let frames = Frames()
-        var seen: [Transaction] = []
+        let seen = MainActorBox([Transaction]())
         var zoom = 1
 
         func view() -> some View {
-            TransactionProbe { seen.append($0) }
+            TransactionProbe { seen.value.append($0) }
                 .transaction(value: zoom) { $0.disablesAnimations = true }
         }
 
         frames.render(view())
         zoom = 2
         frames.render(view(), inherited: Transaction(animation: .linear(duration: 1)))
-        #expect(seen.last?.animation == .linear(duration: 1), "the inherited animation survived")
-        #expect(seen.last?.disablesAnimations == true, "and the transform reached it")
-        #expect(seen.last?.effectiveAnimation == nil, "so the subtree opts out: \(seen)")
+        #expect(
+            seen.value.last?.animation == .linear(duration: 1), "the inherited animation survived")
+        #expect(seen.value.last?.disablesAnimations == true, "and the transform reached it")
+        #expect(seen.value.last?.effectiveAnimation == nil, "so the subtree opts out: \(seen.value)")
     }
 
     @Test("Two values scope independently")
     func twoValuesScopeIndependently() {
         let frames = Frames()
-        var seen: [Transaction] = []
+        let seen = MainActorBox([Transaction]())
         var zoom = 1
         var data = 1
 
         func view() -> some View {
-            TransactionProbe { seen.append($0) }
+            TransactionProbe { seen.value.append($0) }
                 .transaction(value: zoom) { $0.animation = .easeIn }
                 .transaction(value: data) { $0.disablesAnimations = true }
         }
@@ -272,13 +275,13 @@ struct TransactionTests {
         frames.render(view())
         data = 2
         frames.render(view())
-        #expect(seen.last?.animation == nil, "the data change is not the zoom's business")
-        #expect(seen.last?.disablesAnimations == true)
+        #expect(seen.value.last?.animation == nil, "the data change is not the zoom's business")
+        #expect(seen.value.last?.disablesAnimations == true)
 
         zoom = 2
         frames.render(view())
-        #expect(seen.last?.animation == .easeIn)
-        #expect(seen.last?.disablesAnimations == false, "…and vice versa: \(seen)")
+        #expect(seen.value.last?.animation == .easeIn)
+        #expect(seen.value.last?.disablesAnimations == false, "…and vice versa: \(seen.value)")
     }
 
     @Test("Animatable geometry is measured where it is drawn on the change frame")
