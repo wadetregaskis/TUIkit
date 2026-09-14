@@ -383,7 +383,8 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             displayCharacter: { _ in TerminalSymbols.maskBullet },
             surface: chrome.surface,
             contentForeground: cascaded.foreground,
-            cursorSpeed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor)
+            cursorSpeed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor),
+            appearsActive: context.environment.appearsActive
         )
 
         let fieldContent = renderer.buildContent(

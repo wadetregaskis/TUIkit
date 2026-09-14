@@ -455,7 +455,8 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             displayCharacter: displayCharacter,
             surface: chrome.surface,
             contentForeground: cascaded.foreground,
-            cursorSpeed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor)
+            cursorSpeed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor),
+            appearsActive: context.environment.appearsActive
         )
 
         let fieldContent = renderer.buildContent(

@@ -273,7 +273,11 @@ What stays:
   selected rows stay, drawn exactly as they are whenever the list is unfocused,
   and ``View/unfocusedSelectionVisibility(_:)`` with `.hidden` hides them here
   as it does there.
-- **A text cursor**, for the same reason it survives `focusEffectDisabled`.
+- **A text cursor**, for the same reason it survives `focusEffectDisabled`. It
+  stops moving: whatever its animation, it holds still at the dim end of its
+  pulse, the cell-drawn counterpart of the hollow cursor a terminal draws in a
+  window without focus. It picks its animation up again when the view appears
+  active. Under `focusEffectDisabled` alone it animates as usual.
 
 What is still on screen and still breathes holds still instead: an open menu
 keeps its highlighted row and its frame, and a hovered split divider keeps its

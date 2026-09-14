@@ -220,7 +220,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                 selection: styling.selection, cursorStyle: cursorStyle,
                 speed: context.environment.indicatorAnimationSpeeds.speed(for: .textCursor),
                 cursorTimer: context.environment.cursorTimer,
-                timing: context.environment.indicatorCycleTiming)
+                timing: context.environment.indicatorCycleTiming,
+                appearsActive: context.environment.appearsActive)
             caret = RowCaret(
                 column: cursorDisplayColumn,
                 cycle: .init(shape: cursorStyle.shape, cursor: setup.cycle, colors: setup.colors))

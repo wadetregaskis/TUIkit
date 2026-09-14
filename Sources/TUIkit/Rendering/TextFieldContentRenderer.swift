@@ -56,6 +56,13 @@ struct TextFieldContentRenderer {
     /// setting has.
     var cursorSpeed: IndicatorAnimationSpeed = .automatic
 
+    /// Whether the field appears active, which a field reads from its environment
+    /// as `appearsActive`. Where it does not, the caret holds still, dimmed — see
+    /// ``computeCursorCycle(baseColor:over:animation:speed:cursorTimer:timing:appearsActive:)``.
+    ///
+    /// Held here for the reason ``cursorSpeed`` is.
+    var appearsActive: Bool = true
+
     /// The entered-text foreground, resolved to a concrete colour. A
     /// `.textFieldTextStyle` override may be a *semantic* colour (e.g.
     /// `.palette.accent`); resolving it against the palette here keeps a
@@ -456,7 +463,8 @@ struct TextFieldContentRenderer {
         let (cycle, colors) = Self.caretSetup(
             palette: palette, background: background, textForeground: textForeground,
             selection: (selectionForeground, selectionBackground),
-            cursorStyle: cursorStyle, speed: cursorSpeed, cursorTimer: cursorTimer, timing: cursorTiming)
+            cursorStyle: cursorStyle, speed: cursorSpeed, cursorTimer: cursorTimer, timing: cursorTiming,
+            appearsActive: appearsActive)
         var caret: AnimatedCellRun?
 
         func emitCaret(cells: Int, underlying: Character, isSelected: Bool) {
@@ -536,14 +544,19 @@ struct TextFieldContentRenderer {
     /// caret occupies while it is visible.
     ///
     /// `speed` is the one set for the caret, which the caller reads from its
-    /// environment as `indicatorAnimationSpeeds.speed(for: .textCursor)`.
+    /// environment as `indicatorAnimationSpeeds.speed(for: .textCursor)`, and
+    /// `appearsActive` is the environment's `appearsActive`.
     ///
     /// Static, and shared with `TextEditor`, whose rows draw this same caret.
-    static func caretSetup(
+    ///
+    /// Nine parameters: the caret's colours need five, and how it moves needs four
+    /// (speed, clock, forced timing, whether the field appears active), each of
+    /// which both callers already hold separately.
+    static func caretSetup(  // swiftlint:disable:this function_parameter_count
         palette: any Palette, background: Color?, textForeground: Color,
         selection: (foreground: Color, background: Color),
         cursorStyle: TextCursorStyle, speed: IndicatorAnimationSpeed, cursorTimer: CursorTimer?,
-        timing: IndicatorCycleTiming?
+        timing: IndicatorCycleTiming?, appearsActive: Bool
     ) -> (cycle: CursorCycle, colors: CaretColors) {
         // The whole cycle, not just this tick's frame: the caret's cells are the
         // only thing that changes while a focused field sits still, and
@@ -557,7 +570,7 @@ struct TextFieldContentRenderer {
         let cycle = Self.computeCursorCycle(
             baseColor: palette.cursorColor, over: ground,
             animation: cursorStyle.animation, speed: speed,
-            cursorTimer: cursorTimer, timing: timing)
+            cursorTimer: cursorTimer, timing: timing, appearsActive: appearsActive)
         return (
             cycle,
             CaretColors(
@@ -768,14 +781,27 @@ struct TextFieldContentRenderer {
     }
 
     /// The caret's whole cycle, without reading the clock. See ``CursorCycle``.
+    ///
+    /// Where the field does not appear active (`appearsActive` is `false`), the
+    /// cycle is one visible state at the pulse's dim end, whatever the animation.
+    /// The caret is the insertion point, so it stays; what it stops doing is
+    /// moving, and the dim is the cell-drawn counterpart of the hollow cursor a
+    /// terminal draws in a window without focus. A still cycle leaves no run, so
+    /// nothing keeps the loop waking for it.
     static func computeCursorCycle(
         baseColor: Color,
         over surface: Color,
         animation: TextCursorStyle.Animation,
         speed: IndicatorAnimationSpeed,
         cursorTimer: CursorTimer?,
-        timing forced: IndicatorCycleTiming? = nil
+        timing forced: IndicatorCycleTiming? = nil,
+        appearsActive: Bool = true
     ) -> CursorCycle {
+        guard appearsActive else {
+            // The same dim end the pulse below reaches, spent against the field.
+            let dim = baseColor.breathEnds(dimmedTo: ViewConstants.focusPulseMin, over: surface).dim
+            return CursorCycle(states: [(true, dim)], step: 0, timing: forced ?? .cursorTick)
+        }
         let layout = CursorTimer.cycleLayout(of: animation, speed: speed)
         let states = (0..<layout.frameCount).map { frame in
             caretState(

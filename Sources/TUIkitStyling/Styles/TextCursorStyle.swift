@@ -36,6 +36,13 @@
 /// standard rate a blink shows and hides for 350 ms each and a pulse takes 800 ms,
 /// and each is divided by the rate: at `.doubleSpeed` a blink's halves are 175 ms.
 ///
+/// ## While the Window Is Not Active
+///
+/// Where a field does not appear active (its environment's `appearsActive` is
+/// `false`, as when the terminal window loses focus), the cursor neither blinks
+/// nor pulses. It stays visible, still, at the dim end of its pulse, whatever its
+/// animation, and animates again when the field appears active.
+///
 /// ## Usage
 ///
 /// ```swift
