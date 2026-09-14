@@ -733,6 +733,7 @@ SwiftUI API (the CLAUDE.md rule).
 | `Binding.defaulted(to:)` | substitutes a value for `nil`, turning a `Binding<T?>` into the `Binding<T>` a control can take. The case that needs it is a dictionary entry — `$flags[key]` is a `Binding<Bool?>`, and `$flags[key, default: false]` cannot be written at all because an autoclosure argument cannot form a key path (§1, Iteration). Not a terminal constraint, so it is a deliberate divergence: SwiftUI's answer is an explicit `Binding(get:set:)`, and this is the same thing under a name. Writing through it **creates** the entry, including a write of the fallback — see its doc comment for why it does not delete instead |
 | `.statusBarItems`, system status items | bottom status/shortcut bar |
 | `.focusSection`, `.focusID`, `unfocusedSelectionVisibility`, `selectionDisabled` | terminal focus model (Tab/Shift-Tab between sections) |
+| `.focusHandoff(_:_:)` | where a control's focus goes when it is disabled, hidden or removed while focused, named by `@FocusState` value and followed along a chain. SwiftUI says nothing about where focus goes then; TUIkit's default is the control's neighbour in the ring, which is wrong for mirrored pairs like ◀ ▶ |
 | `.palette` / `.appearance` (View **and** Scene), `SystemPalette`, `ColorDepth`, `BorderStyle` | ANSI theming + capability tiers |
 | `.mouseSupport` (Scene) | opt into terminal mouse tracking modes |
 | `.appHeader`, `.notificationHost`, `.modal` | out-of-tree surfaces + terminal modal |

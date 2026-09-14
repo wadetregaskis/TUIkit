@@ -139,9 +139,17 @@ enum FocusRegistration {
         // `.hidden()` subtree, which has no picture for Tab to land on but is
         // otherwise alive (see `EnvironmentValues.isFocusSuppressed`).
         // markActive is unrelated to focus (state GC) and always runs.
-        if !context.environment.isFocusSuppressed {
-            context.environment.focusManager?.register(
-                handler, inSection: context.environment.activeFocusSectionID)
+        if !context.environment.isFocusSuppressed, let manager = context.environment.focusManager {
+            manager.register(handler, inSection: context.environment.activeFocusSectionID)
+            // A `.focusHandoff(_:_:)` above names where this control's focus goes
+            // when it can no longer hold it. Declared only where the control
+            // registers, so a control that stops registering (removed, hidden, a
+            // disabled `.focusable()`) stops declaring, and the manager recovers it
+            // by what it declared on its last frame. Behind the side-effect note
+            // above, so no memo can serve a subtree without its declarations.
+            if let handoff = context.environment.focusHandoffOffer?.claim(context.identity) {
+                manager.registerFocusHandoff(from: focusID, store: handoff.store, value: handoff.value)
+            }
         }
         context.stateStorage!.markActive(context.identity)
         publishHelpText(context: context, focusID: focusID)

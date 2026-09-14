@@ -125,11 +125,13 @@ it: it is disabled, hidden with `hidden()`, or removed from the tree. At the end
 of that render pass the focus manager finds the focus a new home, in this order:
 
 1. A `defaultFocus(_:_:priority:)` that still wants the focus takes it.
-2. Otherwise the focus goes to the control's **neighbour** in its section's
+2. Otherwise, if the control declared a **handoff** with
+   `focusHandoff(_:_:)`, the control it names (see below).
+3. Otherwise the focus goes to the control's **neighbour** in its section's
    ring: the next focusable control, else the previous one. It never wraps
    round the end, so a control at the bottom of a dialog does not send the
    keyboard back to its top.
-3. If the control cannot be placed in the ring at all, the section's first
+4. If the control cannot be placed in the ring at all, the section's first
    focusable control.
 
 A control that is still in the tree but can no longer be focused, such as a
@@ -146,6 +148,47 @@ Tab, the arrow keys, a click, and writing a `@FocusState` move the focus where
 they say. Dismissing a modal returns the focus to the control that held it
 before the modal opened, and a menu opened with the pointer may rest with
 nothing focused.
+
+### Naming where the focus goes
+
+The neighbour is the wrong answer for controls that mirror each other. A pair
+of `◀ ▶` buttons that move a selection wants ▶, disabled at the end, to hand
+the focus to ◀ on its left, and ◀, disabled at the start, to hand it to ▶ on
+its right. No rule based on position gives both, so each button says where its
+focus goes, by `@FocusState` value:
+
+```swift
+enum Move: Hashable { case left, right }
+@FocusState private var move: Move?
+
+HStack {
+    Button("◀") { selection -= 1 }
+        .disabled(selection == 0)
+        .focused($move, equals: .left)
+        .focusHandoff($move, .right)
+    Button("▶") { selection += 1 }
+        .disabled(selection == last)
+        .focused($move, equals: .right)
+        .focusHandoff($move, .left)
+}
+```
+
+`focusHandoff(_:_:)` is TUIkit's own; SwiftUI has no equivalent. It applies
+however the control lost the ability to hold focus: its own action, or a change
+anywhere else that disabled, hid or removed it. A control that has left the tree
+is handed off by what it declared on its last frame.
+
+When the named control cannot take the focus either (it is disabled too, or not
+in the tree), the focus follows *that* control's handoff, and so on along the
+chain, stopping at the first control that can take it. A chain that comes back
+to a control it has already passed through, such as ◀ and ▶ above both being
+disabled, stops there, and the focus goes to the original control's neighbour.
+A handoff never leaves the focus waiting for a control to appear.
+
+A target in another focus section moves the focus into that section, unless the
+section that held the focus is a modal; the rule above then applies inside the
+modal. Like `focused(_:equals:)`, a handoff written on a container belongs to the
+first focusable control inside it.
 
 ## FocusRegistration Helper
 
