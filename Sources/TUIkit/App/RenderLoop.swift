@@ -64,12 +64,19 @@ internal struct EnvironmentSnapshot: Equatable {
     /// as the toggle-glyph field above, in a different coat.
     let localeIdentifier: String
 
+    /// The frame's scene phase, republished from the run loop each frame the way
+    /// the locale is, and for the same reason: it changes between frames with no
+    /// view value and no `@State` changing, so without it a memoized subtree that
+    /// read `\.scenePhase` went on drawing the phase from before a suspend.
+    let scenePhase: ScenePhase
+
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
         self.palette = ComparablePalette(environment.palette)
         self.appearanceID = environment.appearance.id
         self.resolvedAutomaticToggleCharacterSet = environment.resolvedAutomaticToggleCharacterSet
         self.localeIdentifier = environment.locale.identifier
+        self.scenePhase = environment.scenePhase
     }
 }
 
@@ -1273,9 +1280,9 @@ extension RenderLoop {
     ///
     /// Compares this frame's `EnvironmentSnapshot` with the previous frame's. On
     /// mismatch, all `EquatableView`-cached subtrees are invalidated so they
-    /// re-render with the new palette, appearance, glyphs or locale.
+    /// re-render with the new palette, appearance, glyphs, locale or scene phase.
     ///
-    /// This runs once per frame (a palette comparison and three small ones) and
+    /// This runs once per frame (a palette comparison and four small ones) and
     /// ensures developers never need to manually invalidate the cache after theme
     /// changes — including a palette whose colours were edited under the same id.
     fileprivate func invalidateCacheIfEnvironmentChanged(environment: EnvironmentValues) {

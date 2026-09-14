@@ -82,4 +82,64 @@ struct ScenePhaseTests {
         // set.
         #expect(renderToBuffer(PhaseReader(), context: context).lines[0].stripped.contains("asleep"))
     }
+
+    /// The phase changes between frames with no view value and no `@State`
+    /// changing, so the render loop's snapshot is the only thing that can tell a
+    /// memoized subtree to draw again — the same reason the locale is in it.
+    @Test("A phase change changes the environment snapshot")
+    func phaseChangeChangesSnapshot() {
+        var environment = EnvironmentValues()
+        let active = EnvironmentSnapshot(from: environment)
+        environment.scenePhase = .background
+        #expect(active != EnvironmentSnapshot(from: environment), "a suspend must clear the render cache")
+        environment.scenePhase = .inactive
+        #expect(active != EnvironmentSnapshot(from: environment))
+        environment.scenePhase = .active
+        #expect(active == EnvironmentSnapshot(from: environment), "an unchanged phase keeps the cache")
+    }
+
+    @Test("A memoized view draws the phase of the frame it is in")
+    func memoizedViewFollowsPhase() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(PhaseProbeApp())
+
+        loop.render()
+        #expect(frameText(loop).contains("phase active"))
+
+        // What the loop does on the way into a suspend: set the phase, render.
+        harness.tuiContext.scenePhase = .background
+        loop.render()
+        #expect(
+            frameText(loop).contains("phase background"),
+            "the memoized probe kept the phase from before the suspend")
+
+        harness.tuiContext.scenePhase = .active
+        loop.render()
+        #expect(frameText(loop).contains("phase active"))
+    }
+
+    private func frameText<A: App>(_ loop: RenderLoop<A>) -> String {
+        (loop.replayable?.contentLines ?? []).map(\.stripped).joined(separator: "\n")
+    }
+}
+
+/// Draws the phase it rendered under as text, so a buffer served from the memo
+/// shows the OLD phase. Equatable with no stored properties: every frame's value
+/// is equal to the last, so only a cleared cache can make it draw again.
+private struct PhaseProbe: View, Equatable, Renderable {
+    var body: Never { fatalError("PhaseProbe renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        FrameBuffer(text: "phase \(context.environment.scenePhase)")
+    }
+}
+
+private struct PhaseProbeApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            PhaseProbe().equatable()
+        }
+    }
 }
