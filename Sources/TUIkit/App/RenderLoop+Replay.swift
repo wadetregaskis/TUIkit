@@ -110,18 +110,20 @@ extension RenderLoop {
     ///
     /// A frame whose animation is entirely in ``AnimatedCellRun``s knows
     /// exactly: each run carries its whole cycle, already rendered, at its own
-    /// frame duration, so the next moment a cell changes is a lookup and the
-    /// answer is the soonest of them. Nothing is rounded to a shared grid — a
-    /// 0.11 s spinner beside a 1/30 s progress bar wakes the loop at 0.11 s and
-    /// at 1/30 s, and at neither more often than it asked.
+    /// whole number of 1/60 s ticks a frame, so the next moment a cell changes is
+    /// a lookup and the answer is the soonest of them. No run is resampled onto
+    /// another's rate — a 7-tick spinner beside a 2-tick progress bar wakes the
+    /// loop on its 7th ticks and the bar's 2nd, and at neither more often than it
+    /// asked — and every step begins when a tick begins, so where their multiples
+    /// meet, at every 14th tick, the two change at one instant and cost one wake.
     ///
     /// A frame where some view built its appearance from the phase *while
     /// rendering* cannot say — only that view knows what it would draw next. Its
     /// phase formulas are defined on the cursor clock's 50 ms steps, so it can change
-    /// only at a whole step of that clock, and the plan is the NEXT such boundary.
-    /// It used to be one interval from the wake, which put every render a wake's
-    /// lateness past its boundary and off the lattice every other 50 ms run on the
-    /// page steps on. The page's runs do not join the plan while a reader is
+    /// only at a whole step of that clock, and the plan is the NEXT such boundary:
+    /// a 3-tick instant. It used to be one interval from the wake, which put every
+    /// render a wake's lateness past its boundary and off the lattice every other run
+    /// on the page steps on. The page's runs do not join the plan while a reader is
     /// present: every wake then renders, and a render serves them.
     ///
     /// A run in the chrome is advanced only by a render, so its next change joins
@@ -154,8 +156,9 @@ extension RenderLoop {
     }
 
     /// Seconds from `elapsed` on ``AnimationClock/cursor`` to the end of the 50 ms
-    /// step showing there, counted in whole nanoseconds like every step boundary, so
-    /// the answer is never a step late or a nanosecond early.
+    /// step showing there, the instant its next 3-tick multiple begins, counted from
+    /// tick indexes like every step boundary, so the answer is never a step late or a
+    /// nanosecond early.
     private static func timeToNextStep(ofCursorClockAt elapsed: Double) -> Double {
         let untilEnd =
             AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: AnimationClock.standardFrameTicks)

@@ -201,8 +201,8 @@ struct ListChildRunTests {
             "pre-condition: only the row's breath is left, the spinner's run is dropped: \(schedule.runs)")
         #expect(schedule.grids == 0, "a grid was registered for the dropped run")
         #expect(
-            schedule.nextRender == 1_050_000_003,
-            "a 7-tick spinner at 1.000 s is on step 8, and next steps 9 steps of 116,666,667 ns in")
+            schedule.nextRender == 1_050_000_000,
+            "a 7-tick spinner at 1.000 s, tick 60, is on step 8, and next steps when tick 63 begins")
     }
 
     @Test("Several dropped runs wake the loop at the soonest of their next steps")
@@ -217,14 +217,14 @@ struct ListChildRunTests {
         #expect(schedule.runs.count == 1, "pre-condition: both runs are dropped: \(schedule.runs)")
         #expect(schedule.grids == 0, "a grid was registered for the dropped runs")
         #expect(
-            schedule.nextRender == 1_066_666_664,
-            "at 1.000 s the 8-tick run steps 8 steps of 133,333,333 ns in, before the 6-tick one at 1.100 s")
+            schedule.nextRender == 1_066_666_667,
+            "at 1.000 s, tick 60, the 8-tick run steps when tick 64 begins, before the 6-tick one at tick 66, 1.100 s")
     }
 
     /// Each dropped run is asked on its own clock. The cursor clock's zero is the
     /// focus epoch, floored to 50 ms: at 1.030 s it is 1.000 s, so a 7-tick run on
     /// that clock steps at 1,116,666,667 ns, where the same run on the content clock
-    /// would step at 1,050,000,003.
+    /// would step at 1,050,000,000.
     @Test("A dropped run on the cursor clock wakes the loop at that clock's next step")
     func droppedCursorRunWakesOnItsClock() {
         let row = Text("row").animatedCells([

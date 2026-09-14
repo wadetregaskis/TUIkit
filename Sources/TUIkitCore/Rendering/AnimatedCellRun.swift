@@ -80,50 +80,47 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
         Int64((seconds * 1_000_000_000).rounded())
     }
 
-    /// Whole steps of `frameTicks` ticks in `elapsed`, counted at nanosecond
-    /// resolution — see ``nanoseconds(_:)``. A `frameTicks` below 1 is step 0.
+    /// Whole steps of `frameTicks` ticks in `elapsed`: the tick `elapsed` is in, counted
+    /// at nanosecond resolution (see ``nanoseconds(_:)`` and
+    /// ``tick(atNanoseconds:)``), divided by `frameTicks`. A `frameTicks` below 1 is
+    /// taken as 1.
     ///
-    /// A step lasts `frameNanoseconds(ticks:)`: the whole number of nanoseconds
-    /// nearest `frameTicks` sixtieths of a second, which is not a whole number of
-    /// nanoseconds unless `frameTicks` is a multiple of 3.
+    /// So step `s` begins exactly when tick `s·frameTicks` begins, and every run's
+    /// steps begin on the one lattice of tick instants. A step used to last its frame's
+    /// length rounded to whole nanoseconds, because a sixtieth of a second is not one:
+    /// 2 ticks were 33,333,333 ns and 7 ticks 116,666,667. Each rounded step moved its
+    /// boundaries up to a third of a nanosecond further off their ticks, so runs whose
+    /// multiples meet on a tick changed nanoseconds apart there, and the timer woke for
+    /// each. Counting ticks by index has nothing to drift.
+    ///
+    /// Elapsed is a `Double` of seconds, and the round trip from whole nanoseconds
+    /// through it is exact below 2^51 ns, about 26 days. Past that, a wake landing
+    /// exactly on a tick's instant can read the tick before, and draw its change one
+    /// tick late; a render and a replay index the same `Double`, so they still agree.
     ///
     /// `Int64` rather than `Int`, which is 32 bits on wasm32: a step count is bounded by
     /// elapsed time, not by anything this can clamp, and a narrowing conversion that
     /// traps there has shipped in this codebase before. Floor division, so a negative
     /// elapsed steps backwards rather than towards zero.
     public static func step(atElapsed elapsed: Double, frameTicks: Int) -> Int64 {
-        let duration = frameNanoseconds(ticks: frameTicks)
-        guard duration > 0 else { return 0 }
-        let time = nanoseconds(elapsed)
-        let quotient = time / duration
-        return time % duration < 0 ? quotient - 1 : quotient
+        let period = Int64(max(1, frameTicks))
+        let tick = tick(atNanoseconds: nanoseconds(elapsed))
+        let quotient = tick / period
+        return tick % period < 0 ? quotient - 1 : quotient
     }
 
     /// When the step showing at `elapsed` ends, in whole nanoseconds on the same
-    /// clock as `elapsed`: the next whole multiple of a `frameTicks`-tick step.
+    /// clock as `elapsed`: the instant the next tick whose index is a multiple of
+    /// `frameTicks` begins. A `frameTicks` below 1 is taken as 1.
     ///
-    /// Both sides are counted in nanoseconds, the unit ``step(atElapsed:frameTicks:)``
-    /// counts in, so the end is the end of the step actually showing, and never the
-    /// end of the one before. See `AnimatedCellRun.timeUntilChange(afterElapsed:)`
-    /// for why a seconds-based answer spun the run loop.
+    /// Counted from the same tick index ``step(atElapsed:frameTicks:)`` divides, so the
+    /// end is the end of the step actually showing, and never the end of the one before;
+    /// and it is strictly after `elapsed`, by the inverse pair of
+    /// ``nanoseconds(atTick:)`` and ``tick(atNanoseconds:)``. See
+    /// `AnimatedCellRun.timeUntilChange(afterElapsed:)` for why a seconds-based answer
+    /// spun the run loop.
     package static func stepEndNanos(atElapsed elapsed: Double, frameTicks: Int) -> Int64 {
-        frameNanoseconds(ticks: frameTicks) * (step(atElapsed: elapsed, frameTicks: frameTicks) + 1)
-    }
-
-    /// `ticks` ticks as whole nanoseconds, rounded to the nearest: ⌊(ticks·50,000,000 + 1)/3⌋,
-    /// or 0 for a count below 1.
-    ///
-    /// In integers, and equal to rounding `seconds(forTicks: ticks)` through
-    /// ``nanoseconds(_:)`` for every count under 62.9 million ticks, past which that
-    /// `Double` no longer holds the product exactly. The division by 3 leaves no
-    /// remainder, or a third or two thirds of a nanosecond, never a half, so the
-    /// rounding has no ties. Saturates to `Int64.max` for a count whose length does not
-    /// fit.
-    static func frameNanoseconds(ticks: Int) -> Int64 {
-        guard ticks > 0 else { return 0 }
-        let product = Int64(ticks).multipliedReportingOverflow(by: 50_000_000)
-        guard !product.overflow else { return .max }
-        return product.partialValue / 3 + (product.partialValue % 3 == 2 ? 1 : 0)
+        nanoseconds(ofNextTickMultiple: frameTicks, after: nanoseconds(elapsed))
     }
 }
 
@@ -430,48 +427,53 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   changes 16 times out of 16 frames in truecolor and **9 out of 16**
     ///   through the cube.
     /// - The answer is in SECONDS, so a caller holding several runs takes the
-    ///   minimum and sleeps exactly that long. Nothing is rounded to a shared
-    ///   grid, and a slow run costs nothing extra for sharing a screen with a
-    ///   fast one.
+    ///   minimum and sleeps exactly that long. It is always to the instant a
+    ///   1/60 s tick begins, the one lattice every run's steps begin on, so runs
+    ///   whose steps meet wake the loop once, and a slow run costs nothing extra
+    ///   for sharing a screen with a fast one.
     public func timeUntilChange(afterElapsed elapsed: Double) -> Double {
-        let frameSeconds = AnimationClock.seconds(forTicks: frameTicks)
-        guard frames.count > 1 else { return frameSeconds }
+        guard frames.count > 1 else { return AnimationClock.seconds(forTicks: frameTicks) }
+        let step = AnimationClock.step(atElapsed: elapsed, frameTicks: frameTicks)
         let index = index(atElapsed: elapsed)
         let current = frames[index]
-        // Time to the end of the frame now showing, then whole frames after it
-        // for as long as they paint the same picture.
+        // The frame now showing, then whole frames after it for as long as they paint the
+        // same picture.
         //
-        // From the frame's own END rather than `truncatingRemainder`, which is
-        // not exact in binary: `0.1 % 0.05` is 0.049999…, so at every exact
-        // frame boundary the remainder came out one ulp short of a whole frame
-        // and the answer was ~1e-17. That is not a rounding blemish, it is a
-        // spinning run loop — a sleep of nothing, at the very moment the loop
-        // is most likely to ask.
-        //
-        // And in whole NANOSECONDS, the unit `AnimationClock.step` counts in, so the end
-        // asked about is the end of the step actually showing. The seconds floor that
-        // replaced `truncatingRemainder` had the same flaw one level up: at a boundary
-        // reached by summing sleeps it picked the step before, whose end had already
-        // passed, and answered ~1e-17 again.
-        let untilStepEnds =
-            AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: frameTicks)
-            - AnimationClock.nanoseconds(elapsed)
-        var remaining = max(
-            Self.shortestUsefulSleep, Double(untilStepEnds) / 1_000_000_000)
         // The (picture, alpha) PAIR, not the picture alone: a frame that paints the
         // same cells in the same bytes but owes a different alpha shows something
         // different once the resolver has spent it, and sleeping through it would
         // freeze exactly the animation ``AnimatedRunAlpha`` exists for.
         let currentSpans = alpha?.spans(atFrame: index)
+        var held: Int64 = 1
         for offset in 1..<frames.count {
             let next = (index + offset) % frames.count
-            if frames[next] != current { return remaining }
-            if let currentSpans, alpha?.spans(atFrame: next) != currentSpans { return remaining }
-            remaining += frameSeconds
+            if frames[next] != current { break }
+            if let currentSpans, alpha?.spans(atFrame: next) != currentSpans { break }
+            held += 1
         }
-        // Every frame identical: nothing will ever change, so the caller may
-        // wait a whole cycle (it will find the same answer again).
-        return remaining
+        // Every frame identical leaves `held` a whole cycle: nothing will ever change,
+        // so the caller may wait that long (it will find the same answer again).
+        //
+        // To the END of the last frame held rather than a `truncatingRemainder`, which is
+        // not exact in binary: `0.1 % 0.05` is 0.049999…, so at every exact frame boundary
+        // the remainder came out one ulp short of a whole frame and the answer was ~1e-17.
+        // That is not a rounding blemish, it is a spinning run loop — a sleep of nothing,
+        // at the very moment the loop is most likely to ask.
+        //
+        // And in TICK INDEXES, the unit `AnimationClock.step` counts in, so the end asked
+        // about is the end of the step actually showing. The seconds floor that replaced
+        // `truncatingRemainder` had the same flaw one level up: at a boundary reached by
+        // summing sleeps it picked the step before, whose end had already passed, and
+        // answered ~1e-17 again. The end is a tick's instant computed from its index, not
+        // a frame's length added once per frame held, so nothing accumulates; and it is
+        // after `elapsed` by the inverse pair of `AnimationClock.nanoseconds(atTick:)`
+        // and `tick(atNanoseconds:)`.
+        let endTick = (step + held).multipliedReportingOverflow(by: Int64(frameTicks))
+        let end = endTick.overflow ? Int64.max : AnimationClock.nanoseconds(atTick: endTick.partialValue)
+        let untilChange = end.subtractingReportingOverflow(AnimationClock.nanoseconds(elapsed))
+        return max(
+            Self.shortestUsefulSleep,
+            Double(untilChange.overflow ? Int64.max : untilChange.partialValue) / 1_000_000_000)
     }
 
     /// How many ticks of 1/60 s one full cycle lasts: every frame's ``frameTicks``.

@@ -17,7 +17,9 @@ import Foundation
 /// **Both clocks are measured, not counted.** ``AnimationClock/content`` is
 /// ``MonotonicClock`` itself, with no origin of its own, and
 /// ``AnimationClock/cursor`` is the same reading less the moment the focus last
-/// moved, floored to the 50 ms step lattice. The timer keeps one snapshot of
+/// moved, floored to a 50 ms step: 3 ticks of 1/60 s, a whole number of nanoseconds,
+/// so a cursor run's steps begin on the same tick instants as a content run's. The
+/// timer keeps one snapshot of
 /// that clock, taken whenever a frame renders (``observe(nowNanos:)``) or the
 /// timer wakes (``creditWake(atNanos:)``), so every read inside one frame agrees.
 ///
@@ -74,10 +76,10 @@ final class CursorTimer {
     /// there is one number, not two that can disagree.
     nonisolated private static let standardFrameSeconds = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
 
-    /// The same, in whole nanoseconds — the lattice the focus epoch is floored to.
-    /// Internal rather than private so the spec for the framework's standard durations
-    /// can check it.
-    nonisolated static let standardFrameNanos = UInt64(AnimationClock.nanoseconds(standardFrameSeconds))
+    /// The same, in whole nanoseconds, from the instant its tick begins — the lattice the
+    /// focus epoch is floored to. Internal rather than private so the spec for the
+    /// framework's standard durations can check it.
+    nonisolated static let standardFrameNanos = UInt64(AnimationClock.nanoseconds(atTick: Int64(AnimationClock.standardFrameTicks)))
 
     /// Where a wake reads the time. The clock `FrameClock` reads too, which is
     /// what makes a wake's reading and a frame's comparable at all; injectable
@@ -91,7 +93,7 @@ final class CursorTimer {
     /// behind a render that stamped a later frame) cannot run the phases back.
     private(set) var snapshotNanos: UInt64 = 0
 
-    /// Where ``AnimationClock/cursor``'s zero sits, on the 50 ms step lattice, or `nil`
+    /// Where ``AnimationClock/cursor``'s zero sits, on the 3-tick, 50 ms lattice, or `nil`
     /// until the next ``observe(nowNanos:)`` sets it.
     ///
     /// Cleared whenever the focus moves, which is how the blink and the focus
@@ -102,9 +104,17 @@ final class CursorTimer {
     ///
     /// Set lazily, at the frame after the change, not at the change. See
     /// ``restartFocusPhase()`` for what setting it early did. Floored to the
-    /// lattice so a caret's and a breath's changes land on the same 50 ms grid as
-    /// every other 50 ms run on the page, and the wakes coalesce — at the price of
-    /// a first half that can be up to one step short: 300–350 ms of a 350 ms blink.
+    /// lattice so a caret's and a breath's changes land on the same 1/60 s tick
+    /// instants as every run on the content clock, and the wakes coalesce — at the
+    /// price of a first half that can be up to one step short: 300–350 ms of a 350 ms
+    /// blink.
+    ///
+    /// Three ticks, not one, because three ticks are the fewest that are a whole number
+    /// of nanoseconds. An epoch on tick `E`'s instant, 50,000,000·m ns, plus tick `j`'s
+    /// instant is exactly tick `E + j`'s instant. An epoch floored to single ticks would
+    /// put many of those sums 1 ns past their tick (16,666,667 + 33,333,334 is
+    /// 50,000,001), and a cursor run would change a nanosecond after the content runs
+    /// beside it.
     private var focusEpochNanos: UInt64?
 
     /// Shows the timer the time: a frame's `frameNow`, before anything in that
@@ -133,9 +143,11 @@ final class CursorTimer {
     /// spinner that appears starts where the shared clock is rather than at its
     /// first frame.
     ///
-    /// In seconds, from whole nanoseconds. A `Double` holds those exactly for about
-    /// 48 days of uptime (2^22 s); past that, a nanosecond here and there can be
-    /// lost, but a render and a replay index the same `Double` and agree.
+    /// In seconds, from whole nanoseconds. Converting back to whole nanoseconds, as
+    /// every step boundary does, gives the same count below 2^51 ns, about 26 days of
+    /// uptime. Past that, a wake landing exactly on a tick's instant can read the tick
+    /// before and draw its change a tick late (real wakes are milliseconds late, so it
+    /// is rare), but a render and a replay index the same `Double` and agree.
     func elapsed(for clock: AnimationClock) -> Double {
         switch clock {
         case .content: Double(snapshotNanos) / 1_000_000_000

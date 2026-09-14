@@ -285,13 +285,13 @@ struct RenderLoopReplayTests {
         #expect(!headerRuns.isEmpty, "pre-condition: the header must leave a run")
         #expect(!pageRuns.isEmpty, "pre-condition: the page must leave a run")
 
-        // At 1.030 s the header's 5-tick run ends at 1,083,333,329 ns, 13 steps of 83,333,333,
-        // and the page's 6-tick one at 1.100 s.
+        // At 1.030 s, tick 61, the header's 5-tick run ends when tick 65 begins, at
+        // 1,083,333,334 ns, and the page's 6-tick one at tick 66, 1.100 s.
         let beforeHeader = loop.timeUntilNextChange(elapsed: { _ in 1.030 })
         #expect(
-            AnimationClock.nanoseconds(beforeHeader) == 53_333_329,
-            "the header is due at 1,083,333,329 ns: \(beforeHeader)")
-        // At 1.095 s the page's run ends at 1.100 s, the header's at 1,166,666,662 ns.
+            AnimationClock.nanoseconds(beforeHeader) == 53_333_334,
+            "the header is due at 1,083,333,334 ns: \(beforeHeader)")
+        // At 1.095 s the page's run ends at 1.100 s, the header's at tick 70, 1,166,666,667 ns.
         let beforePage = loop.timeUntilNextChange(elapsed: { _ in 1.095 })
         #expect(
             AnimationClock.nanoseconds(beforePage) == 5_000_000,

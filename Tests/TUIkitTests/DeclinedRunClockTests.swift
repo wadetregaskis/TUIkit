@@ -80,8 +80,8 @@ struct DeclinedRunClockTests {
 
     /// A declined run is re-rendered at its next step, not on a grid anchored at
     /// whichever frame first asked. A `.custom` sequence's standard step is 7 ticks,
-    /// 116,666,667 ns, which `.automatic`, the default speed, leaves alone, so at 1.037 s
-    /// it is on step 8 and the next step begins 9 steps in.
+    /// which `.automatic`, the default speed, leaves alone, so at 1.037 s, tick 62, it is
+    /// on step 8, and the next step begins with tick 63.
     @Test("A mixed-width spinner asks for one render at its next step, and registers no grid")
     func mixedWidthSpinnerWakesAtItsNextStep() {
         let harness = RenderLoopHarness()
@@ -92,7 +92,7 @@ struct DeclinedRunClockTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
-        #expect(scheduler.nextFiring(after: now) == 1_050_000_003, "step 8 at 1.037 s ends 9 steps of 116,666,667 ns in")
+        #expect(scheduler.nextFiring(after: now) == 1_050_000_000, "step 8 at 1.037 s ends when tick 63 begins")
     }
 
     /// A same-width spinner, which leaves a run, beside a mixed-width one, which
@@ -123,13 +123,13 @@ struct DeclinedRunClockTests {
         let loop = harness.loop(RunBesideDeclinedApp())
         let timer = CursorTimer(renderNotifier: harness.appState)
         let scheduler = AnimationScheduler()
-        // 90,090 s, 772,200 whole 7-tick steps, and past any real clock reading. A step
-        // is 116,666,667 ns, so that many steps end 257,400 ns after it.
-        let base: Int64 = 90_090 * 1_000_000_000
+        // 90,090 s, tick 5,405,400: 772,200 whole 7-tick steps, and past any real clock
+        // reading.
+        let baseTick: Int64 = 90_090 * 60
         var mismatches: [(frame: Int, picture: String)] = []
         for frame in 0..<6 {
             // 1 ms into each step, so both spinners are due frame index `frame % 2`.
-            let now = base + Int64(frame) * 116_666_667 + 1_000_000
+            let now = AnimationClock.nanoseconds(atTick: baseTick + 7 * Int64(frame)) + 1_000_000
             scheduler.beginFrame()
             loop.render(cursorTimer: timer, animationScheduler: scheduler, frameNowNanos: now)
             scheduler.endFrame()
@@ -210,9 +210,9 @@ struct DeclinedRunClockTests {
         }
     }
 
-    /// The bar's twin of the spinner's: one render at the cycle's next frame, a whole
-    /// multiple of `period / frameCount` on the frame clock, not a grid anchored at
-    /// whichever frame first asked.
+    /// The bar's twin of the spinner's: one render at the cycle's next frame, the next
+    /// tick whose index is a multiple of the frame's ticks on the frame clock, not a grid
+    /// anchored at whichever frame first asked.
     @Test("A translucent indeterminate bar asks for one render at its next frame, and registers no grid")
     func translucentBarWakesAtItsNextFrame() {
         let harness = RenderLoopHarness()
@@ -222,12 +222,11 @@ struct DeclinedRunClockTests {
         scheduler.beginFrame()
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
-        let frame = AnimationClock.nanoseconds(
-            AnimationClock.seconds(forTicks: IndeterminateRenderer.layout(of: .sweep, speed: .automatic).frameTicks))
+        let frameTicks = IndeterminateRenderer.layout(of: .sweep, speed: .automatic).frameTicks
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
         #expect(
-            scheduler.nextFiring(after: now) == (now / frame + 1) * frame,
-            "the next multiple of the \(frame) ns frame after \(now) ns")
+            scheduler.nextFiring(after: now) == AnimationClock.nanoseconds(ofNextTickMultiple: frameTicks, after: now),
+            "the next multiple of the \(frameTicks)-tick frame after \(now) ns")
     }
 
     @Test("A translucent indeterminate bar alone on a page moves from frame to frame")

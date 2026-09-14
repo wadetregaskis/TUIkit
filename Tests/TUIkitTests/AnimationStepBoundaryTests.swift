@@ -117,11 +117,97 @@ struct AnimationStepBoundaryTests {
         #expect(wrong.isEmpty, "steps whose drawn frame was not the replayed one: \(wrong)")
     }
 
-    /// A step of a run is a whole number of nanoseconds: its frame's length, rounded to
-    /// the nearest. Two ticks round to 33,333,333 ns, so 1.037 s is in step 31, and the
-    /// step ends at 32 of them, 11 ns before the 1/60 s tick 64 begins.
-    @Test("A 2-tick step showing at 1.037 s ends at 32 whole steps of 33,333,333 ns")
-    func stepEndIsAWholeNumberOfRoundedFrames() {
-        #expect(AnimationClock.stepEndNanos(atElapsed: 1.037, frameTicks: 2) == 1_066_666_656)
+    /// A run of forty distinct frames of `frameTicks` ticks on `clock`, so every step is
+    /// a change and the loop has something to wake for at each.
+    private func countingRun(frameTicks: Int, clock: AnimationClock) -> AnimatedCellRun {
+        AnimatedCellRun(
+            offsetX: 0, offsetY: 0, width: 2, frames: countingRun().frames,
+            frameTicks: frameTicks, clock: clock)
+    }
+
+    /// What `RenderLoop.timeUntilNextChange(elapsed:)` answers for a frame holding only
+    /// `runs`.
+    private func planner(_ runs: [AnimatedCellRun]) -> ((AnimationClock) -> Double) -> Double {
+        { elapsed in
+            runs.map { $0.timeUntilChange(afterElapsed: elapsed($0.clock)) }.min()
+                ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
+        }
+    }
+
+    /// A step begins when a tick begins: step `s` of an `n`-tick run is tick `s·n`.
+    ///
+    /// It used to last its frame's length rounded to whole nanoseconds, and a rounded
+    /// frame drifts off the tick it was meant to be: 2 ticks rounded to 33,333,333 ns, so
+    /// at 1.037 s, in step 31, the step ended at 1,066,666,656, 11 ns before tick 64
+    /// begins at 1,066,666,667.
+    @Test("A 2-tick step showing at 1.037 s ends when tick 64 begins")
+    func stepEndIsATickInstant() {
+        #expect(AnimationClock.stepEndNanos(atElapsed: 1.037, frameTicks: 2) == AnimationClock.nanoseconds(atTick: 64))
+        #expect(AnimationClock.nanoseconds(atTick: 64) == 1_066_666_667)
+    }
+
+    /// Deep into the clock, where a rounded frame had drifted furthest: a million steps of
+    /// 116,666,667 ns end 333,333 ns after the tick that seven million ticks lead to.
+    @Test("Step 1,000,000 of a 7-tick run ends when tick 7,000,007 begins")
+    func deepStepEndIsATickInstant() {
+        let inside = Double(AnimationClock.nanoseconds(atTick: 7_000_003)) / 1_000_000_000
+        #expect(AnimationClock.step(atElapsed: inside, frameTicks: 7) == 1_000_000)
+        #expect(
+            AnimationClock.stepEndNanos(atElapsed: inside, frameTicks: 7)
+                == AnimationClock.nanoseconds(atTick: 7_000_007))
+    }
+
+    /// Two runs whose frames are whole ticks change on the same tick wherever their
+    /// multiples meet, so the timer wakes there once.
+    ///
+    /// With rounded frames they missed each other by nanoseconds: at tick 35, 583,333,334
+    /// ns, the 5-tick run changed at 583,333,331 (seven steps of 83,333,333) and the
+    /// 7-tick run at 583,333,335 (five of 116,666,667). The timer woke for the first, found
+    /// the second 4 ns away, and slept its 10 ms floor: two wakes, and a 7-tick spinner
+    /// drawn 10 ms late.
+    @Test("A 7-tick and a 5-tick run change together when tick 35 begins, and the plan from there is a whole frame")
+    func runsMeetingOnATickWakeOnce() {
+        let runs = [countingRun(frameTicks: 7, clock: .content), countingRun(frameTicks: 5, clock: .content)]
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.planner = planner(runs)
+        // Tick 33.
+        var now: UInt64 = 550_000_000
+        timer.creditWake(atNanos: now)
+        now += CursorTimer.sleepNanoseconds(timer.sleepSeconds)
+        #expect(now == 583_333_334, "the wake after tick 33 lands when tick 35 begins")
+        #expect(runs.map { $0.index(atElapsed: Double(now) / 1_000_000_000) } == [5, 7], "both runs have changed")
+        timer.creditWake(atNanos: now)
+        #expect(
+            CursorTimer.sleepNanoseconds(timer.sleepSeconds) == 83_333_333,
+            "the next change is the 5-tick run's, when tick 40 begins at 666,666,667 ns")
+    }
+
+    /// A run on the cursor clock steps on tick instants too, because the focus epoch is
+    /// floored to 3 ticks, 50,000,000 ns, the smallest number of ticks that is a whole
+    /// number of nanoseconds: the epoch plus tick `j`'s instant is the instant of the
+    /// epoch's tick plus `j`, exactly.
+    ///
+    /// With rounded frames a 2-tick bar's 24th step ended at 799,999,992 ns and a 21-tick
+    /// blink, from an epoch of 100,000,000, at 800,000,000: the timer woke 8 ns before the
+    /// blink's flip, and flipped it 10 ms late.
+    @Test("A 2-tick content run and a 21-tick cursor run end their steps at the same instant, 800,000,000 ns")
+    func contentAndCursorRunsMeetOnATick() {
+        let bar = countingRun(frameTicks: 2, clock: .content)
+        let blink = countingRun(frameTicks: 21, clock: .cursor)
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.planner = planner([bar, blink])
+        // The focus epoch floors to 100,000,000.
+        timer.observe(nowNanos: 120_000_000)
+        var now: UInt64 = 785_000_000
+        timer.creditWake(atNanos: now)
+        now += CursorTimer.sleepNanoseconds(timer.sleepSeconds)
+        #expect(now == 800_000_000, "tick 48 of the content clock, tick 42 of the cursor clock")
+        #expect(bar.index(atElapsed: timer.elapsed(for: .content)) == 23, "before the wake, the bar is on step 23")
+        timer.creditWake(atNanos: now)
+        #expect(bar.index(atElapsed: timer.elapsed(for: .content)) == 24, "the bar changed at the wake")
+        #expect(blink.index(atElapsed: timer.elapsed(for: .cursor)) == 2, "and the blink changed at the same wake")
+        #expect(
+            CursorTimer.sleepNanoseconds(timer.sleepSeconds) == 33_333_334,
+            "the bar's next step begins with tick 50, at 833,333,334 ns")
     }
 }

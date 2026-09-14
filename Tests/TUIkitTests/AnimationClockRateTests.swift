@@ -110,7 +110,6 @@ struct AnimationClockRateTests {
         let timer = CursorTimer(renderNotifier: AppState())
         let ticks = Self.spinnerTicks + [2]
         timer.planner = Self.planner(Self.runs(ticks: ticks))
-        let durations = ticks.map { UInt64(AnimationClock.frameNanoseconds(ticks: $0)) }
         // The timer's floor on a plan, 10 ms.
         let floor: UInt64 = 10_000_000
         // Off every boundary, so the first plan is an odd length too.
@@ -119,8 +118,12 @@ struct AnimationClockRateTests {
         timer.creditWake(atNanos: now)
         var divergence: (wake: Int, now: UInt64, ideal: UInt64)?
         for wake in 0..<1000 {
-            // The schedule in integers: the soonest boundary of any run, or the floor.
-            ideal += max(floor, durations.map { $0 - ideal % $0 }.min() ?? floor)
+            // The schedule in integers: the soonest tick instant that begins a step of any
+            // run, or the floor.
+            let boundaries = ticks.map {
+                UInt64(AnimationClock.nanoseconds(ofNextTickMultiple: $0, after: Int64(ideal))) - ideal
+            }
+            ideal += max(floor, boundaries.min() ?? floor)
             now += CursorTimer.sleepNanoseconds(timer.sleepSeconds)
             guard now == ideal else {
                 divergence = (wake, now, ideal)

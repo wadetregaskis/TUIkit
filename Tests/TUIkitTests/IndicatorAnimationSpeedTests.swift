@@ -297,10 +297,10 @@ struct IndicatorAnimationSpeedSpinnerTests {
         #expect(runTicks(view).sorted() == [4, 7])
     }
 
-    /// At three and a half times the speed a `.custom` sequence's 7 ticks are 2, a
-    /// frame of 33,333,333 ns, so at 1.037 s it is on step 31, its second frame, and
-    /// its next step is 32 frames in. At the standard speed it would be on step 8, the
-    /// first frame, until 1.05 s.
+    /// At three and a half times the speed a `.custom` sequence's 7 ticks are 2, so at
+    /// 1.037 s, tick 62, it is on step 31, its second frame, and its next step begins
+    /// with tick 64. At the standard speed it would be on step 8, the first frame, until
+    /// 1.05 s.
     @Test("A mixed-width spinner draws, and asks for its next render, at the speed it is set to")
     func fallbackFollowsTheSpeed() {
         let harness = RenderLoopHarness()
@@ -310,7 +310,7 @@ struct IndicatorAnimationSpeedSpinnerTests {
         scheduler.beginFrame()
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
-        #expect(scheduler.nextFiring(after: now) == 1_066_666_656, "32 frames of 33,333,333 ns")
+        #expect(scheduler.nextFiring(after: now) == 1_066_666_667, "when tick 64 begins")
         let picture = (loop.replayable?.contentLines ?? []).map(\.stripped).joined()
         #expect(picture.contains("你"), "step 31 of a two-frame cycle is its second frame: \(picture.debugDescription)")
     }
@@ -487,8 +487,8 @@ struct IndicatorAnimationSpeedBarTests {
     }
 
     /// 1.6 s at 1.1 is 1.4545 s, 87.3 ticks, which is 43.6 frames of 2 ticks and rounds
-    /// to 44. A frame is 2 ticks at any speed, so at 1.037 s it is step 31 of
-    /// 33,333,333 ns steps, which ends at 1,066,666,656 ns. It used to be 44 frames of
+    /// to 44. A frame is 2 ticks at any speed, so at 1.037 s, tick 62, it is step 31,
+    /// which ends when tick 64 begins, at 1,066,666,667 ns. It used to be 44 frames of
     /// 33,057,851 ns, ending at 1,057,851,232 ns.
     @Test("A translucent bar asks for its next render at the end of its 2-tick frame, at any speed")
     func fallbackWakesAtTheSpeedsFrame() {
@@ -500,7 +500,7 @@ struct IndicatorAnimationSpeedBarTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
-        #expect(scheduler.nextFiring(after: now) == 1_066_666_656)
+        #expect(scheduler.nextFiring(after: now) == 1_066_666_667)
     }
 
     /// A declined bar draws one frame per render, at an instant rather than from its

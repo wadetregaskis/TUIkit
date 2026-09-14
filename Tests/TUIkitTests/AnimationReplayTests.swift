@@ -345,10 +345,13 @@ struct AnimationTickStrideTests {
         // and the slow one is not woken for frames it does not have.
         let soonest = [fast, slow].map { $0.timeUntilChange(afterElapsed: 0) }.min()!
         expect(soonest, AnimationClock.seconds(forTicks: 2), "soonest")
-        // A third of a second in, the fast run has moved ten times and the slow
-        // one twice; neither has been resampled onto the other.
-        #expect(fast.index(atElapsed: 1.0 / 3) == 10 % 2)
-        #expect(slow.index(atElapsed: 1.0 / 3) == 2 % 2)
+        // A third of a second in, when tick 20 begins, the fast run has moved ten times
+        // and the slow one twice; neither has been resampled onto the other. The instant
+        // of tick 20 rather than `1.0 / 3`, which is 333,333,333 ns, a nanosecond before
+        // it: still tick 19.
+        let thirdOfASecond = Double(AnimationClock.nanoseconds(atTick: 20)) / 1_000_000_000
+        #expect(fast.index(atElapsed: thirdOfASecond) == 10 % 2)
+        #expect(slow.index(atElapsed: thirdOfASecond) == 2 % 2)
     }
 
     @Test("A frame of fewer than one tick is clamped to one, not honoured")

@@ -83,11 +83,6 @@ struct CursorBlinkRegularityTests {
         Int((21 / speed.rate).rounded())
     }
 
-    /// The same half in nanoseconds, the unit a run's holds are measured in.
-    private func halfNanos(_ speed: IndicatorAnimationSpeed) -> Int64 {
-        AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: halfTicks(speed)))
-    }
-
     /// The first `count` things `run` shows from the start of its cycle, and how
     /// long it holds each, in nanoseconds.
     private func holds(of run: AnimatedCellRun, count: Int = 24) -> [(shows: String, nanos: Int64)] {
@@ -102,14 +97,25 @@ struct CursorBlinkRegularityTests {
         return holds
     }
 
-    /// Visible first, then hidden, then visible, each for `half` nanoseconds.
+    /// Visible first, then hidden, then visible, each for `halfTicks` ticks: every flip
+    /// exactly when its tick begins, so hold `k` is the gap between the instants of
+    /// ticks `k·halfTicks` and `(k+1)·halfTicks`.
+    ///
+    /// Those gaps are a whole half to the nanosecond when the half is a multiple of 3
+    /// ticks, and otherwise differ from one another by the 1 ns a sixtieth of a second
+    /// rounds to (11 ticks are 183,333,333 or 183,333,334 ns): the flips are on the
+    /// display's ticks, not a nanosecond-rounded half added up.
     private func expectRegularBlink(
-        _ run: AnimatedCellRun, half: Int64, _ label: String,
+        _ run: AnimatedCellRun, halfTicks: Int, _ label: String,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let seen = holds(of: run)
+        let due = seen.indices.map {
+            AnimationClock.nanoseconds(atTick: Int64(($0 + 1) * halfTicks))
+                - AnimationClock.nanoseconds(atTick: Int64($0 * halfTicks))
+        }
         #expect(
-            seen.allSatisfy { $0.nanos == half },
+            seen.map(\.nanos) == due,
             "\(label): holds of \(seen.prefix(8).map(\.nanos)) ns", sourceLocation: sourceLocation)
         #expect(
             seen.map(\.shows) == seen.indices.map { $0.isMultiple(of: 2) ? "on " : "off" },
@@ -120,12 +126,12 @@ struct CursorBlinkRegularityTests {
         "A focus blink holds visible and hidden for exactly half its cycle, at every speed",
         arguments: speeds)
     func emphasisBlinkIsRegular(_ speed: IndicatorAnimationSpeed) throws {
-        expectRegularBlink(try emphasisBlinkRun(speed), half: halfNanos(speed), "\(speed)")
+        expectRegularBlink(try emphasisBlinkRun(speed), halfTicks: halfTicks(speed), "\(speed)")
     }
 
     @Test("A caret blink holds visible and hidden for exactly half its cycle, at every speed", arguments: speeds)
     func caretBlinkIsRegular(_ speed: IndicatorAnimationSpeed) {
-        expectRegularBlink(caretBlinkRun(speed), half: halfNanos(speed), "\(speed)")
+        expectRegularBlink(caretBlinkRun(speed), halfTicks: halfTicks(speed), "\(speed)")
     }
 
     /// A control that re-renders mid-blink draws what the live reader says, and the
