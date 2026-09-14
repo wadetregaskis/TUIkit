@@ -1,16 +1,19 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  StandardAnimationDurationTests.swift
 //
-//  The spec the framework's own indicator durations are meant to meet: every one
-//  is a whole number of `AnimationClock.baseTick`s, so indicators on one screen
-//  step together and the run loop wakes once for all of them.
+//  The spec the framework's own animation durations are meant to meet: every one
+//  is a whole number of 1/60 s ticks, and at least two of them. A terminal's paint
+//  is shown on a display that refreshes 60 times a second, so a frame of any other
+//  length is held for an uneven number of refreshes, and two indicators whose
+//  frames are not whole ticks change on different refreshes and wake the run loop
+//  apart. Two ticks is the shortest default, so no default on its own asks for
+//  every refresh.
 //
-//  Most of today's durations do not meet it. They were chosen one style at a
-//  time, before there was a base tick, and the new ones wait on the owner's
-//  experiment with the Spinners page's speed control. Until then those entries
-//  are on `awaitingExperiment` and run as known issues. A known issue that stops
-//  failing fails the test, so the commit that changes a duration has to take it
-//  off the list, and the list cannot go stale.
+//  Most spinner intervals do not meet it yet. They were chosen one style at a time,
+//  and move onto whole ticks in a later commit. Until then those entries are on
+//  `awaitingExperiment` and run as known issues. A known issue that stops failing
+//  fails the test, so the commit that changes a duration has to take it off the
+//  list, and the list cannot go stale.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -30,10 +33,10 @@ struct StandardAnimationDuration: Sendable, CustomTestStringConvertible {
 @Suite("Standard animation durations")
 struct StandardAnimationDurationTests {
     /// Every standard duration: each spinner style's interval, the caret blink's
-    /// half, the focus pulse's frame and cycle, and each indeterminate preset's
-    /// bar frame.
+    /// half, the focus pulse's frame and cycle, and each indeterminate preset's bar
+    /// frame and pass at two widths.
     static let durations: [StandardAnimationDuration] =
-        spinnerDurations + cursorDurations + barFrameDurations
+        spinnerDurations + cursorDurations + barDurations
 
     private static let spinnerDurations: [StandardAnimationDuration] = [
         ("dots", SpinnerStyle.dots), ("line", .line), ("dancingLine", .dancingLine),
@@ -56,34 +59,48 @@ struct StandardAnimationDurationTests {
         ]
     }()
 
-    private static let barFrameDurations: [StandardAnimationDuration] = [
-        ("sweep", IndeterminateStyle.sweep), ("barberPole", .barberPole), ("pulse", .pulse),
-        ("knightRider", .knightRider), ("gradient", .gradient()),
-    ].map {
-        StandardAnimationDuration(
-            name: "\($0.0)BarFrame",
-            seconds: IndeterminateRenderer.layout(of: $0.1, speed: .standard).frameDuration)
-    }
+    /// Each preset's frame and whole pass, as the cycle a bar of 20 and of 36 cells
+    /// is built with: how long a frame is shown, and its frame count times that. Both
+    /// widths, because what a bar steps through can depend on how wide it is.
+    private static let barDurations: [StandardAnimationDuration] = {
+        let presets: [(String, IndeterminateStyle)] = [
+            ("sweep", .sweep), ("barberPole", .barberPole), ("pulse", .pulse),
+            ("knightRider", .knightRider), ("gradient", .gradient()),
+        ]
+        return presets.flatMap { name, style in
+            [20, 36].flatMap { width in
+                let cycle = IndeterminateRenderer.cycle(
+                    width: width, style: style, fillColor: .green, backgroundColor: .blue,
+                    accentColor: .red, palette: SystemPalette.green, speed: .standard)
+                return [
+                    StandardAnimationDuration(name: "\(name)BarFrame(\(width))", seconds: cycle.frameDuration),
+                    StandardAnimationDuration(
+                        name: "\(name)BarPass(\(width))",
+                        seconds: Double(cycle.frames.count) * cycle.frameDuration),
+                ]
+            }
+        }
+    }()
 
-    /// The entries whose durations are not yet on the lattice, and will not be
-    /// until the owner picks new defaults.
+    /// The entries whose durations are not yet whole ticks, and will not be until the
+    /// spinner defaults move onto them.
     static let awaitingExperiment: Set<String> = [
-        "dots", "line", "dancingLine", "pie", "beachball", "curve", "column", "bar", "shade",
-        "blockWedge", "spinningTriangle", "moon", "clock", "custom",
-        "sweepBarFrame", "barberPoleBarFrame", "pulseBarFrame", "knightRiderBarFrame",
-        "gradientBarFrame",
+        "dots", "line", "dancingLine", "pie", "beachball", "box", "curve", "column", "bar",
+        "shade", "blockWedge", "spinningTriangle", "moon", "clock", "custom",
     ]
 
-    @Test("Every standard duration is a whole number of base ticks", arguments: durations)
-    func isWholeBaseTicks(_ duration: StandardAnimationDuration) {
-        let tick = AnimationClock.nanoseconds(AnimationClock.baseTick)
-        let nanos = AnimationClock.nanoseconds(duration.seconds)
+    /// Within 1e-9 of a tick, because a duration is a binary `Double`: 0.1 s is
+    /// 6.000000000000001 ticks.
+    @Test("Every standard duration is a whole number of 1/60 s ticks, and at least two", arguments: durations)
+    func isWholeTicks(_ duration: StandardAnimationDuration) {
+        let ticks = duration.seconds * Double(AnimationClock.ticksPerSecond)
+        let isWholeTicks = abs(ticks - ticks.rounded()) <= 1e-9 && ticks.rounded() >= 2
         if Self.awaitingExperiment.contains(duration.name) {
-            withKnownIssue("defaults await the Spinners-page experiment") {
-                #expect(nanos.isMultiple(of: tick), "\(duration.name) is \(nanos) ns")
+            withKnownIssue("spinner defaults are not whole ticks yet") {
+                #expect(isWholeTicks, "\(duration.name) is \(ticks) ticks")
             }
         } else {
-            #expect(nanos.isMultiple(of: tick), "\(duration.name) is \(nanos) ns")
+            #expect(isWholeTicks, "\(duration.name) is \(ticks) ticks")
         }
     }
 
