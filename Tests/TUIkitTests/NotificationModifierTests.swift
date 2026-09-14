@@ -8,6 +8,20 @@ import Foundation
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitCore
+
+/// A clock a test sets by hand, for a `NotificationService` to read.
+private final class ManualClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var nanos: UInt64
+
+    init(_ nanos: UInt64) { self.nanos = nanos }
+
+    var now: UInt64 {
+        get { lock.withLock { nanos } }
+        set { lock.withLock { nanos = newValue } }
+    }
+}
 
 @MainActor
 @Suite("Notification Tests", .serialized)
@@ -158,17 +172,17 @@ struct NotificationTests {
         #expect(entries.isEmpty)
     }
 
-    @Test("Expired entries are pruned by activeEntries")
+    @Test("Expired entries are pruned by activeEntries, on the service's clock")
     func expiredEntriesPruned() {
-        let service = NotificationService()
-        // Post with a very short duration so it expires almost immediately.
-        service.post("Quick", duration: 0.0)
+        let clock = ManualClock(1_000_000_000_000)
+        let service = NotificationService(nowNanos: { clock.now })
+        service.post("Quick", duration: 3.0)
 
-        // Wait slightly longer than fade-in + fade-out.
-        Thread.sleep(forTimeInterval: NotificationTiming.fadeInDuration + NotificationTiming.fadeOutDuration + 0.05)
-
-        let entries = service.activeEntries()
-        #expect(entries.isEmpty)
+        // 0.2 s in, 3 s up, 0.3 s out: still there 3.45 s after the post, gone at 3.55 s.
+        clock.now += 3_450_000_000
+        #expect(service.activeEntries().count == 1)
+        clock.now += 100_000_000
+        #expect(service.activeEntries().isEmpty)
     }
 
     // MARK: - NotificationHostModifier Rendering
@@ -256,6 +270,58 @@ struct NotificationTests {
                 lifecycle.hasAppeared(token: "notification-host-animation"),
                 "frame \(frame) let the animation token disappear, cancelling the task")
         }
+    }
+
+    // MARK: - The clock a toast fades on
+
+    /// The screen a host over `Text("Base")` draws for `service`, with the frame
+    /// stamped at `frameNanos` — or, for `nil`, a one-off render with no frame time.
+    /// Effects are off, so no fade task outlives the test.
+    private func toastScreen(_ service: NotificationService, frameAt frameNanos: UInt64?) -> String {
+        let lifecycle = LifecycleManager(firesEffects: false)
+        let tuiContext = TUIContext(
+            lifecycle: lifecycle, keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage())
+        var env = EnvironmentValues()
+        env.applyRuntimeServices(from: tuiContext)
+        env.notificationService = service
+        if let frameNanos {
+            env.animationFrame = AnimationFrame(nowNanos: Int64(frameNanos), canAnimate: true)
+        }
+        let context = RenderContext(
+            availableWidth: 60, availableHeight: 12, environment: env, tuiContext: tuiContext)
+        let buffer = renderToBuffer(Text("Base").notificationHost(), context: context)
+        return buffer.compositingOverlays(maxWidth: 60, maxHeight: 12, palette: env.palette)
+            .lines.joined(separator: "\n")
+    }
+
+    /// A toast's age is measured on the clock the frames are stamped with, not `Date()`:
+    /// a frame 3.35 s after the post is in the fade-out, whatever the wall clock says.
+    @Test("A toast fades by the frame's time, not the wall clock's")
+    func toastFadesOnTheFrameClock() {
+        let service = NotificationService()
+        service.post("Fading")
+        let posted = MonotonicClock.nowNanoseconds
+        let flat = toastScreen(service, frameAt: posted + 1_000_000_000)
+        #expect(flat.contains("Fading"))
+        #expect(toastScreen(service, frameAt: posted + 2_000_000_000) == flat, "the visible stretch is flat")
+        let fading = toastScreen(service, frameAt: posted + 3_350_000_000)
+        #expect(fading != flat, "3.35 s after the post the toast must be fading out")
+    }
+
+    /// A render outside the run loop has no frame time (`nowNanos` is 0), and a toast read
+    /// against that would be younger than its post and never fade in. It reads the
+    /// service's clock instead.
+    @Test("A one-off render measures a toast's age on the service's clock")
+    func oneOffRenderReadsTheServiceClock() {
+        let clock = ManualClock(1_000_000_000_000)
+        let service = NotificationService(nowNanos: { clock.now })
+        service.post("Hello")
+        clock.now += 1_000_000_000
+        let oneOff = toastScreen(service, frameAt: nil)
+        let framed = toastScreen(service, frameAt: clock.now)
+        #expect(oneOff.contains("Hello"))
+        #expect(oneOff == framed, "a one-off render one second in must draw what a frame one second in draws")
     }
 
     @Test("Multiple notifications stack vertically")

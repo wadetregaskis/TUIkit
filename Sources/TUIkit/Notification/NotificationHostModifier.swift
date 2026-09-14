@@ -58,10 +58,16 @@ extension NotificationHostModifier: Renderable {
         // Start the animation timer if not already running.
         startAnimationTask(
             entries: activeEntries,
+            service: service,
             lifecycle: context.environment.lifecycle!
         )
 
-        let now = Date().timeIntervalSinceReferenceDate
+        // The frame's stamp, so every toast in one frame fades by one instant and a
+        // re-walk of the frame draws the same picture. A one-off render has no stamp —
+        // `nowNanos` is 0 outside the run loop — and reads the service's clock instead,
+        // which is what the toast was posted on.
+        let frame = context.environment.animationFrame
+        let now = frame.canAnimate ? UInt64(bitPattern: frame.nowNanos) : service.nowNanos()
         let palette = context.environment.palette
         let horizontalPadding = 1
         let innerWidth = max(1, width - BorderRenderer.borderWidthOverhead)
@@ -71,7 +77,7 @@ extension NotificationHostModifier: Renderable {
         // Render each notification as a Box and stack them vertically.
         var stackedBuffer = FrameBuffer()
         for entry in activeEntries {
-            let elapsed = now - entry.postedAt
+            let elapsed = entry.age(atNanos: now)
             let opacity = NotificationTiming.opacity(
                 elapsed: elapsed,
                 visibleDuration: entry.duration
@@ -185,6 +191,7 @@ extension NotificationHostModifier {
     /// The task stops automatically when no notifications are active.
     fileprivate func startAnimationTask(
         entries: [NotificationEntry],
+        service: NotificationService,
         lifecycle: LifecycleManager
     ) {
         let token = "notification-host-animation"
@@ -204,15 +211,13 @@ extension NotificationHostModifier {
         _ = lifecycle.recordAppear(token: token) {}
         guard isFirstAppear else { return }
 
-        // Calculate the latest expiration time across all entries.
-        let totalOverhead = NotificationTiming.fadeInDuration + NotificationTiming.fadeOutDuration
-        let latestExpiry =
-            entries.map { $0.postedAt + $0.duration + totalOverhead }
-            .max() ?? 0
+        // The latest expiry across all entries, on the service's clock.
+        let latestExpiry = entries.map(\.expiresAtNanos).max() ?? 0
+        let nowNanos = service.nowNanos
 
         lifecycle.startTask(token: token, priority: .medium) { [lifecycle] in
             while !Task.isCancelled {
-                let now = Date().timeIntervalSinceReferenceDate
+                let now = nowNanos()
                 if now > latestExpiry {
                     break
                 }
@@ -228,7 +233,7 @@ extension NotificationHostModifier {
                 // of layout rather than of appearance.
                 let due = entries.map {
                     NotificationTiming.timeUntilOpacityChanges(
-                        elapsed: now - $0.postedAt, visibleDuration: $0.duration)
+                        elapsed: $0.age(atNanos: now), visibleDuration: $0.duration)
                 }.min() ?? NotificationTiming.frameInterval
                 let sleep = min(
                     NotificationTiming.longestSleep,

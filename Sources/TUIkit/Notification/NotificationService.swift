@@ -23,19 +23,35 @@ struct NotificationEntry: Identifiable, Sendable {
     /// How long the notification stays visible (in seconds).
     let duration: TimeInterval
 
-    /// Timestamp when this notification was posted.
-    let postedAt: TimeInterval
+    /// When this notification was posted, in nanoseconds on the service's clock —
+    /// ``MonotonicClock`` in an app, the clock the frames are stamped with.
+    let postedAtNanos: UInt64
 
     /// Creates a notification entry.
     ///
     /// - Parameters:
     ///   - message: The notification message text.
     ///   - duration: Display duration in seconds.
-    init(message: String, duration: TimeInterval) {
+    ///   - postedAtNanos: The service clock's reading at the post.
+    init(message: String, duration: TimeInterval, postedAtNanos: UInt64) {
         self.id = UUID()
         self.message = message
         self.duration = duration
-        self.postedAt = Date().timeIntervalSinceReferenceDate
+        self.postedAtNanos = postedAtNanos
+    }
+
+    /// Seconds from the post to `now`, on the same clock; zero for a `now` before it.
+    ///
+    /// Saturating because the two readings can come from different moments of one
+    /// frame: a toast posted while a frame renders is younger than that frame's stamp.
+    func age(atNanos now: UInt64) -> TimeInterval {
+        now > postedAtNanos ? Double(now - postedAtNanos) / 1_000_000_000 : 0
+    }
+
+    /// The service clock's reading at which this notification has finished fading out.
+    var expiresAtNanos: UInt64 {
+        let lifetime = NotificationTiming.fadeInDuration + duration + NotificationTiming.fadeOutDuration
+        return postedAtNanos &+ UInt64(clamping: AnimationClock.nanoseconds(lifetime))
     }
 }
 
@@ -104,8 +120,24 @@ public final class NotificationService: @unchecked Sendable {
     /// The active notification entries, ordered by posting time.
     private var entries: [NotificationEntry] = []
 
+    /// The clock a notification's age is measured on.
+    ///
+    /// ``MonotonicClock``, the clock the run loop stamps every frame with, so a toast's
+    /// fade is on the same timeline as every other animation. It was the wall clock,
+    /// `Date()`, which can be set backwards (or forwards) while a toast is up, and which
+    /// no test could step.
+    let nowNanos: @Sendable () -> UInt64
+
     /// Creates an empty notification service.
-    public init() {}
+    public convenience init() {
+        self.init(nowNanos: { MonotonicClock.nowNanoseconds })
+    }
+
+    /// Creates an empty notification service that reads `nowNanos` for the time — a
+    /// test's own clock.
+    init(nowNanos: @escaping @Sendable () -> UInt64) {
+        self.nowNanos = nowNanos
+    }
 }
 
 // MARK: - Public API
@@ -139,7 +171,8 @@ extension NotificationService {
     ///   - duration: How long the notification stays visible in seconds (default: 3.0).
     @_disfavoredOverload
     public func post<S: StringProtocol>(_ message: S, duration: TimeInterval = 3.0) {
-        let entry = NotificationEntry(message: String(message), duration: duration)
+        let entry = NotificationEntry(
+            message: String(message), duration: duration, postedAtNanos: nowNanos())
         lock.lock()
         entries.append(entry)
         lock.unlock()
@@ -151,14 +184,10 @@ extension NotificationService {
     /// Entries whose total animation time (fade-in + visible + fade-out) has
     /// elapsed are pruned before the snapshot is returned.
     func activeEntries() -> [NotificationEntry] {
-        let now = Date().timeIntervalSinceReferenceDate
-        let totalAnimationOverhead = NotificationTiming.fadeInDuration + NotificationTiming.fadeOutDuration
+        let now = nowNanos()
 
         lock.lock()
-        entries.removeAll { entry in
-            let totalDuration = totalAnimationOverhead + entry.duration
-            return (now - entry.postedAt) > totalDuration
-        }
+        entries.removeAll { now > $0.expiresAtNanos }
         let snapshot = entries
         lock.unlock()
         return snapshot
