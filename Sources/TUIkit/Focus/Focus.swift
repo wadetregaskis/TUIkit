@@ -49,7 +49,7 @@ public final class FocusManager: @unchecked Sendable {
     static let defaultSectionID = "__default__"
 
     /// Registered focus sections in render order.
-    private var sections: [FocusSection] = []
+    private(set) var sections: [FocusSection] = []
 
     /// Sections that sit side by side as one row of columns, keyed by each member's
     /// id, in left-to-right order — so Left and Right can move between them. Posted
@@ -221,11 +221,18 @@ public final class FocusManager: @unchecked Sendable {
     /// ``pruneFocusRegistry()`` can drop those whose control left the tree,
     /// keeping the maps bounded to the working set (a windowed list of thousands
     /// of `.focused` rows never accumulates thousands of stale entries).
-    private var focusBindings: [String: [AnyHashable: FocusBinding]] = [:]
+    private(set) var focusBindings: [String: [AnyHashable: FocusBinding]] = [:]
 
     /// The declared default-focus value per store (from `.defaultFocus`), used
     /// to pick the initial focus once its bound control's id is known.
     private var focusDefaultValues: [String: DefaultFocusDeclaration] = [:]
+
+    /// Each control's handoff (from `.focusHandoff(_:_:)`), keyed by the control's
+    /// focus id: where its focus goes when it can no longer hold it. Stamped and
+    /// pruned like ``focusBindings``, and kept past its frame for the same kind of
+    /// reason: a control that has just left the tree is recovered by the handoff
+    /// it declared on its last frame. See `FocusManagerRecovery.swift`.
+    var focusHandoffs: [String: FocusHandoff] = [:]
 
     /// Hands out ``DefaultFocusDeclaration/sequence``.
     private var defaultFocusSequence: UInt64 = 0
@@ -238,7 +245,7 @@ public final class FocusManager: @unchecked Sendable {
 
     /// Monotonic per-render-pass counter, bumped in ``beginRenderPass()``, used
     /// to age out `@FocusState` registry entries whose control stopped rendering.
-    private var focusRenderGeneration: UInt64 = 0
+    private(set) var focusRenderGeneration: UInt64 = 0
 
     /// Creates a new focus manager instance.
     public init() {}
@@ -436,7 +443,9 @@ extension FocusManager {
         if wasFocused {
             focusedID = nil
             if let successor {
-                focus(successor)
+                // A handoff may name a control in another section.
+                activeSectionID = successor.sectionID
+                focus(successor.element)
             } else {
                 // Nothing left to focus. A focus that just went nil is as
                 // invisible as one that moved — the frame on screen still draws
@@ -475,6 +484,7 @@ extension FocusManager {
         focusBindings.removeAll()
         focusDefaultValues.removeAll()
         appliedDefaultFocus.removeAll()
+        focusHandoffs.removeAll()
     }
 
     /// Focuses a specific element.
@@ -680,6 +690,7 @@ extension FocusManager {
             focusDefaultValues[store] = nil
             appliedDefaultFocus.remove(store)
         }
+        pruneFocusHandoffs()
     }
 
     /// Whether a focus ID (default form: `"<prefix>-<identity path>"`)
@@ -1247,7 +1258,11 @@ extension FocusManager {
         // Not Qt's rule, which this once claimed to be: Qt's `setEnabled(false)`
         // calls `focusNextChild()`, which wraps round the chain, and then clears the
         // focus. This deliberately never wraps.
-        var recovery: Focusable?
+        //
+        // Ahead of the neighbour, a control's `.focusHandoff(_:_:)` names where its
+        // focus goes instead — followed along a chain, possibly into another
+        // section, which the auto-focus below then activates.
+        var recovery: RecoveryTarget?
         if let focusID = focusedID, let section = activeSection {
             let focused = section.focusables.first { $0.focusID == focusID }
             if focused == nil || focused?.canBeFocused == false {
@@ -1267,11 +1282,13 @@ extension FocusManager {
         resolvePendingDefaultFocus()
 
         // Auto-focus if, after validation and any default, nothing holds focus: the
-        // dropped control's neighbour when it had one, the first focusable otherwise.
+        // dropped control's handoff target or neighbour when it had one, the first
+        // focusable otherwise.
         if focusedID == nil, let section = activeSection,
             !optionalFocusSectionIDs.contains(section.id),
-            let target = recovery ?? section.focusables.first(where: { $0.canBeFocused })
+            let target = recovery?.element ?? section.focusables.first(where: { $0.canBeFocused })
         {
+            if let sectionID = recovery?.sectionID { activeSectionID = sectionID }
             focusPreservingPendingIntent(target)
         }
 

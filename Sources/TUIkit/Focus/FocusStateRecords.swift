@@ -18,6 +18,21 @@ extension FocusManager {
         var generation: UInt64
     }
 
+    /// Where one control's focus goes when it can no longer hold it: the control
+    /// bound to `value` in the `@FocusState` store `store`. Keyed by the source
+    /// control's focus id on the manager.
+    ///
+    /// Named by store and value, not by focus id, because the target's focus id is
+    /// derived from its position in the tree and an app cannot spell it. It is
+    /// looked up in the store's bindings at the moment focus is lost.
+    struct FocusHandoff {
+        let store: String
+        let value: AnyHashable
+        /// The render pass that last declared it, so a control that stops declaring
+        /// it (or stops rendering) loses it — see `pruneFocusHandoffs()`.
+        var generation: UInt64
+    }
+
     /// One `.defaultFocus(_:_:)` declaration.
     struct DefaultFocusDeclaration {
         let value: AnyHashable
