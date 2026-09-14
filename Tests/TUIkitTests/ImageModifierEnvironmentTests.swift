@@ -166,8 +166,20 @@ struct ImageModifierEnvironmentTests {
         check("imagePlaceholder(String?)", ["imagePlaceholderText": #"Optional("wait")"#]) {
             AnyView($0.imagePlaceholder(String?.some("wait")))
         }
-        check("imagePlaceholderSpinner", ["imagePlaceholderSpinner": "false"]) {
+        check(
+            "imagePlaceholderSpinner(Bool)",
+            ["imagePlaceholderSpinner": String(describing: ImagePlaceholderSpinner(isShown: false))]
+        ) {
             AnyView($0.imagePlaceholderSpinner(false))
+        }
+        check(
+            "imagePlaceholderSpinner(style:color:)",
+            [
+                "imagePlaceholderSpinner": String(
+                    describing: ImagePlaceholderSpinner(style: .line, color: .red))
+            ]
+        ) {
+            AnyView($0.imagePlaceholderSpinner(style: .line, color: .red))
         }
     }
 

@@ -65,8 +65,9 @@ enum ImageLoadingPhase: Sendable {
 /// animates at the speed set for spinners (see
 /// ``View/indicatorAnimationSpeed(_:for:)``) and is drawn in this image's
 /// `foregroundStyle`, or the palette's accent. Use
-/// ``View/imagePlaceholder(_:)-(LocalizedStringKey)`` to set the text and
-/// ``View/imagePlaceholderSpinner(_:)`` to leave the spinner out.
+/// ``View/imagePlaceholder(_:)-(LocalizedStringKey)`` to set the text,
+/// ``View/imagePlaceholderSpinner(style:color:)`` to choose the spinner, and
+/// ``View/imagePlaceholderSpinner(_:)`` to leave it out.
 ///
 /// ## SF Symbols
 ///
@@ -193,9 +194,32 @@ private struct ImagePlaceholderTextKey: EnvironmentKey {
     static let defaultValue: String? = nil
 }
 
-/// Environment key controlling whether a spinner is shown while loading.
+/// The spinner a loading `Image` draws in its placeholder: whether it draws one,
+/// and which. `imagePlaceholderSpinner(_:)` writes only `isShown`, and
+/// `imagePlaceholderSpinner(style:color:)` writes all three.
+struct ImagePlaceholderSpinner: Sendable, Equatable {
+    /// Whether the placeholder draws a spinner at all.
+    var isShown = true
+
+    /// The animation style to draw.
+    var style: SpinnerStyle = .dots
+
+    /// The colour to draw it in, or `nil` for the view's `foregroundStyle`, and
+    /// failing that the palette's accent.
+    var color: Color?
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        // `SpinnerStyle` carries a custom-frames case and is not `Equatable`, so
+        // compare what is drawn, as `RefreshIndicator` does. The interval as well as
+        // the frames: `.custom` with `.dots`' frames still steps at 120 ms, not 110.
+        lhs.isShown == rhs.isShown && lhs.style.frames == rhs.style.frames
+            && lhs.style.interval == rhs.style.interval && lhs.color == rhs.color
+    }
+}
+
+/// Environment key for the placeholder's spinner.
 private struct ImagePlaceholderSpinnerKey: EnvironmentKey {
-    static let defaultValue: Bool = true
+    static let defaultValue = ImagePlaceholderSpinner()
 }
 
 /// Environment key for the image content mode.
@@ -331,8 +355,8 @@ extension EnvironmentValues {
         set { self[ImagePlaceholderTextKey.self] = newValue }
     }
 
-    /// Whether to show a spinner in the placeholder.
-    var imagePlaceholderSpinner: Bool {
+    /// Whether the placeholder shows a spinner, and which.
+    var imagePlaceholderSpinner: ImagePlaceholderSpinner {
         get { self[ImagePlaceholderSpinnerKey.self] }
         set { self[ImagePlaceholderSpinnerKey.self] = newValue }
     }
@@ -592,20 +616,52 @@ extension View {
 
     /// Controls whether a spinner is shown while an image is loading.
     ///
-    /// On by default. The spinner is a real ``Spinner`` in the `.dots` style: it
-    /// animates for as long as the image is loading, at the speed set for spinners
-    /// with ``View/indicatorAnimationSpeed(_:for:)``, so a loading image keeps the
-    /// animation clock running until its picture arrives. It is drawn in this
-    /// view's `foregroundStyle` when one is set, and otherwise in the palette's
-    /// accent. The placeholder text keeps the secondary foreground either way.
+    /// On by default. The spinner is a real ``Spinner``, `.dots` unless
+    /// ``View/imagePlaceholderSpinner(style:color:)`` chose another: it animates
+    /// for as long as the image is loading, at the speed set for spinners with
+    /// ``View/indicatorAnimationSpeed(_:for:)``, so a loading image keeps the
+    /// animation clock running until its picture arrives. It is drawn in the
+    /// colour that modifier gave it, or else in this view's `foregroundStyle`, or
+    /// else in the palette's accent. The placeholder text keeps the secondary
+    /// foreground either way.
     ///
     /// Pass `false` for a placeholder that does not move: the text alone, or
-    /// "Loading..." when there is no text.
+    /// "Loading..." when there is no text. This sets only whether the spinner is
+    /// shown, so a style chosen further out is kept for when it is shown again.
     ///
     /// - Parameter showSpinner: Whether to show a spinner.
     /// - Returns: A modified view.
     public func imagePlaceholderSpinner(_ showSpinner: Bool) -> some View {
-        environment(\.imagePlaceholderSpinner, showSpinner)
+        // `transformEnvironment`, not `environment`: this says only WHETHER there is
+        // a spinner, so a style or colour chosen further out has to survive it.
+        transformEnvironment(\.imagePlaceholderSpinner) { $0.isShown = showSpinner }
+    }
+
+    /// Shows a spinner while an image is loading, and chooses which, for every
+    /// `Image` in this subtree.
+    ///
+    /// TUI-specific, like ``View/refreshIndicator(style:color:)``: a spinner here is
+    /// a handful of glyphs whose legibility depends on the terminal's font. `.dots`
+    /// (Braille) is the default, and `.line` is pure ASCII for a font without
+    /// Braille.
+    ///
+    /// Choosing a style asks for a spinner, so this shows one even inside an outer
+    /// `.imagePlaceholderSpinner(false)`. An `.imagePlaceholderSpinner(false)`
+    /// inside this one hides it again.
+    ///
+    /// ```swift
+    /// Image(.url(address))
+    ///     .imagePlaceholderSpinner(style: .line)   // ASCII, for fonts without Braille
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - style: The spinner animation style (default: `.dots`).
+    ///   - color: The colour to draw it in, or `nil` for this view's
+    ///     `foregroundStyle`, and failing that the palette's accent.
+    /// - Returns: A view whose loading images show that spinner.
+    public func imagePlaceholderSpinner(style: SpinnerStyle = .dots, color: Color? = nil) -> some View {
+        environment(
+            \.imagePlaceholderSpinner, ImagePlaceholderSpinner(isShown: true, style: style, color: color))
     }
 
     /// Sets the aspect ratio and content mode for image rendering.

@@ -199,7 +199,7 @@ struct _ImageCore: View, Renderable, Layoutable {
         let contentMode = context.environment.imageContentMode
         let aspectRatioOverride = context.environment.imageAspectRatio
         let placeholderText = context.environment.imagePlaceholderText
-        let showSpinner = context.environment.imagePlaceholderSpinner
+        let spinner = context.environment.imagePlaceholderSpinner
         let maxPixelCount = context.environment.imageMaxPixelCount
         let urlTimeout = context.environment.imageURLTimeout
 
@@ -265,7 +265,7 @@ struct _ImageCore: View, Renderable, Layoutable {
                 width: renderWidth,
                 height: renderHeight,
                 text: placeholderText,
-                showSpinner: showSpinner,
+                spinner: spinner,
                 context: context
             )
 
@@ -702,10 +702,10 @@ extension _ImageCore {
         width: Int,
         height: Int,
         text: String?,
-        showSpinner: Bool,
+        spinner: ImagePlaceholderSpinner,
         context: RenderContext
     ) -> FrameBuffer {
-        if showSpinner {
+        if spinner.isShown {
             // A real `Spinner`, composed, the way `RefreshableModifier` draws its
             // indicator. So it animates with a run of its own at the speed set for
             // spinners, takes `.foregroundStyle`, and claims its own cell, which the
@@ -716,7 +716,7 @@ extension _ImageCore {
             // At a child identity, so nothing the composition keys by identity (the
             // spinner's fallback wake token, for one) shares this core's.
             let placeholder = VStack(spacing: 0) {
-                Spinner(style: .dots)
+                Spinner(style: spinner.style, color: spinner.color)
                 if let text {
                     Text(verbatim: text).foregroundStyle(Color.palette.foregroundSecondary)
                 }
