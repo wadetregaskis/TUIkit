@@ -62,7 +62,7 @@ struct IndeterminateConfigurationTests {
             for fill in fills {
                 for width in [1, 2, 3, 7, 24, 25] {
                     let style = IndeterminateStyle.custom(
-                        IndeterminateConfiguration(motion: motion, fill: fill, empty: "·"))
+                        IndeterminateConfiguration(motion: motion, fill: fill, background: "·"))
                     for step in 0..<5 {
                         let line = render(style, width: width, at: Double(step) * 0.31)
                         #expect(
@@ -78,13 +78,13 @@ struct IndeterminateConfigurationTests {
         }
     }
 
-    @Test("A custom fill and empty pattern are what gets drawn")
+    @Test("A custom fill and background pattern are what gets drawn")
     func customGlyphsAreDrawn() {
         let style = IndeterminateStyle.custom(
-            IndeterminateConfiguration(motion: .knightRider, fill: "●", empty: "·", period: 4))
+            IndeterminateConfiguration(motion: .knightRider, fill: "●", background: "·", period: 4))
         let line = render(style, at: 0.4).stripped
         #expect(line.contains("●"), "the fill: |\(line)|")
-        #expect(line.contains("·"), "the empty pattern: |\(line)|")
+        #expect(line.contains("·"), "the background pattern: |\(line)|")
         #expect(!line.contains("█"), "the preset's glyph should be gone: |\(line)|")
     }
 

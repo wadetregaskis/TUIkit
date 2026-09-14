@@ -22,7 +22,7 @@ struct TrackGradientTests {
         TrackRenderer.render(
             fraction: 0.6, width: 20,
             style: .threeSegment(
-                leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                leading: "Sw", middle: "i", trailing: "ft", backgroundPattern: "·",
                 coloring: coloring),
             filledColor: .rgb(1, 2, 3),
             emptyColor: .rgb(9, 9, 9),
@@ -38,7 +38,7 @@ struct TrackGradientTests {
         let full = TrackRenderer.render(
             fraction: 1.0, width: 20,
             style: .threeSegment(
-                leading: "🌑", middle: "🌕", trailing: "🌖", emptyFill: "·",
+                leading: "🌑", middle: "🌕", trailing: "🌖", backgroundPattern: "·",
                 coloring: .gradient(Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)]))),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
             palette: SystemPalette.green).text
@@ -200,11 +200,11 @@ struct TrackGradientTests {
 
 // MARK: - Scaling
 
-/// The unfilled half of a bar, which a style could say nothing about until now:
+/// The background of a bar, which a style could say nothing about until now:
 /// the control passed its own recessive colour and that was the end of it.
 @MainActor
-@Suite("Track empty styling")
-struct TrackEmptyStylingTests {
+@Suite("Track background styling")
+struct TrackBackgroundStylingTests {
 
     private func render(_ config: TrackConfiguration, _ scaling: TrackGradientScaling = .track)
         -> String
@@ -222,24 +222,24 @@ struct TrackEmptyStylingTests {
         output.contains("38;2;\(code)")
     }
 
-    @Test("Without one, the control's own empty colour is used")
+    @Test("Without one, the control's own background colour is used")
     func defaultsToTheControlsColour() {
         #expect(hasForeground(render(.bar), "9;9;9"))
     }
 
-    @Test("A style's own empty colour replaces it")
+    @Test("A style's own background colour replaces it")
     func styleColourWins() {
         var config = TrackConfiguration.bar
-        config.emptyColor = .rgb(40, 50, 60)
+        config.backgroundColor = .rgb(40, 50, 60)
         let output = render(config)
         #expect(hasForeground(output, "40;50;60"))
         #expect(!hasForeground(output, "9;9;9"), "the control's colour is gone: \(output.debugDescription)")
     }
 
-    @Test("An empty gradient pinned to the bar takes the ramp its position names")
-    func emptyGradientIsPositional() {
+    @Test("A background gradient pinned to the bar takes the ramp its position names")
+    func backgroundGradientIsPositional() {
         var config = TrackConfiguration.bar
-        config.emptyGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
+        config.backgroundGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
         let output = render(config, .track)
         // Half full, so the unfilled run covers the SECOND half of the ramp:
         // it reaches the last stop and never shows the first.
@@ -247,11 +247,11 @@ struct TrackEmptyStylingTests {
         #expect(!hasForeground(output, "0;0;0"), "the ramp's start belongs to the filled half")
     }
 
-    @Test("Compressed, the same gradient is squeezed into the unfilled run")
-    func emptyGradientCompresses() {
+    @Test("Compressed, the same gradient is squeezed into the background")
+    func backgroundGradientCompresses() {
         var config = TrackConfiguration.bar
-        config.emptyGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
-        let output = render(config, .fill)
+        config.backgroundGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
+        let output = render(config, .region)
         #expect(hasForeground(output, "0;0;0"), "…so it starts at the first stop instead")
         #expect(hasForeground(output, "255;0;0"))
     }
@@ -259,7 +259,7 @@ struct TrackEmptyStylingTests {
     @Test("A solid-background track gradients its background too")
     func backgroundStyleGradients() {
         var config = TrackConfiguration.block
-        config.emptyGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
+        config.backgroundGradient = Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)])
         let output = render(config, .track)
         #expect(output.contains("48;2;255;0;0"), "the unfilled remainder is a FILL, not a glyph")
     }
@@ -301,8 +301,8 @@ struct TrackGradientScalingTests {
     }
 
     @Test("Compressed into the fill, half full still ends at the last stop")
-    func fillScalingReachesTheEnd() {
-        let output = render(0.5, .fill)
+    func regionScalingReachesTheEnd() {
+        let output = render(0.5, .region)
         #expect(hasForeground(output, "0;0;0"))
         #expect(
             hasForeground(output, "255;0;0"),
@@ -313,7 +313,7 @@ struct TrackGradientScalingTests {
     func fullBarAgrees() {
         // Nothing to compress at 100%, so the two spellings must not diverge —
         // the property that makes `.track` a safe default.
-        #expect(render(1.0, .track) == render(1.0, .fill))
+        #expect(render(1.0, .track) == render(1.0, .region))
     }
 
     /// The same question for `.threeSegment`, which answered it wrongly by
@@ -325,7 +325,7 @@ struct TrackGradientScalingTests {
             TrackRenderer.render(
                 fraction: fraction, width: 10,
                 style: .threeSegment(
-                    leading: "[", middle: "=", trailing: "]", emptyFill: "·",
+                    leading: "[", middle: "=", trailing: "]", backgroundPattern: "·",
                     coloring: .gradient(Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)]))),
                 filledColor: .rgb(1, 2, 3),
                 emptyColor: .rgb(9, 9, 9),
@@ -337,11 +337,11 @@ struct TrackGradientScalingTests {
         #expect(
             !hasForeground(pinned, "255;0;0"),
             "a half-full bar has not reached the last stop: \(pinned.debugDescription)")
-        let compressed = segments(0.5, .fill)
+        let compressed = segments(0.5, .region)
         #expect(
             hasForeground(compressed, "255;0;0"),
             "…but compressed into the fill it has: \(compressed.debugDescription)")
-        #expect(segments(1.0, .track) == segments(1.0, .fill), "and a full bar agrees")
+        #expect(segments(1.0, .track) == segments(1.0, .region), "and a full bar agrees")
     }
 
     @Test("The default is the bar")
@@ -349,14 +349,14 @@ struct TrackGradientScalingTests {
         // Both halves of the default: the environment value a view reads, and
         // the renderer's own parameter for callers that pass none.
         #expect(EnvironmentValues().trackGradientScaling == .track)
-        #expect(EnvironmentValues().trackEmptyGradientScaling == .track)
+        #expect(EnvironmentValues().trackBackgroundGradientScaling == .track)
         let defaulted = TrackRenderer.render(
             fraction: 0.5, width: 10,
             style: .shadeRamp(gradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(128, 128, 128), .rgb(255, 0, 0)])),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9), accentColor: .rgb(7, 7, 7),
             palette: SystemPalette.green).text
         #expect(defaulted == render(0.5, .track))
-        #expect(defaulted != render(0.5, .fill), "…and the two really do differ")
+        #expect(defaulted != render(0.5, .region), "…and the two really do differ")
     }
 
     // MARK: - The unfilled gradient under the boundary cell
@@ -373,8 +373,8 @@ struct TrackGradientScalingTests {
             fraction: 0.55, width: 10,
             style: .custom(
                 TrackConfiguration(
-                    fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
-                    emptyStyle: .background, emptyGradient: Self.fade)),
+                    fullGlyph: "█", leadingEdge: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+                    background: .solid, backgroundGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
             accentColor: .rgb(7, 7, 7), fillScaling: scaling, emptyScaling: scaling,
             palette: SystemPalette.green).text
@@ -412,7 +412,7 @@ struct TrackGradientScalingTests {
 
     @Test("A compressed unfilled ramp starts AT the boundary cell, not after it")
     func boundaryCellStartsTheCompressedRamp() {
-        let output = fadedTrack(scaling: .fill)
+        let output = fadedTrack(scaling: .region)
         // Five cells are unfilled to any degree — the boundary cell and the
         // four behind it — so the compressed ramp is five cells long and
         // begins on the boundary. It used to be squeezed into the four cells
@@ -431,10 +431,10 @@ struct TrackGradientScalingTests {
             fraction: 0.5, width: 10,
             style: .custom(
                 TrackConfiguration(
-                    fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
-                    emptyStyle: .background, emptyGradient: Self.fade)),
+                    fullGlyph: "█", leadingEdge: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"],
+                    background: .solid, backgroundGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), fillScaling: .fill, emptyScaling: .fill,
+            accentColor: .rgb(7, 7, 7), fillScaling: .region, emptyScaling: .region,
             palette: SystemPalette.green).text
         let ramp = Color.quantisedRamp(Self.fade, count: 5, depth: .truecolor)
         #expect(runs(in: output).suffix(5).map(\.background) == ramp.map { triple($0) })
@@ -443,16 +443,16 @@ struct TrackGradientScalingTests {
     // MARK: - The two ramps answer separately
 
     /// A fill ramp and an unfilled ramp on one bar, each with its own scaling.
-    private func twoRamps(fill: TrackGradientScaling, empty: TrackGradientScaling) -> String {
+    private func twoRamps(fill: TrackGradientScaling, background: TrackGradientScaling) -> String {
         TrackRenderer.render(
             fraction: 0.5, width: 10,
             style: .custom(
                 TrackConfiguration(
-                    fullGlyph: "█", emptyStyle: .background,
+                    fullGlyph: "█", background: .solid,
                     fillGradient: Gradient(colors: [.rgb(0, 0, 0), .rgb(255, 0, 0)]),
-                    emptyGradient: Self.fade)),
+                    backgroundGradient: Self.fade)),
             filledColor: .rgb(1, 2, 3), emptyColor: .rgb(9, 9, 9),
-            accentColor: .rgb(7, 7, 7), fillScaling: fill, emptyScaling: empty,
+            accentColor: .rgb(7, 7, 7), fillScaling: fill, emptyScaling: background,
             palette: SystemPalette.green).text
     }
 
@@ -460,21 +460,21 @@ struct TrackGradientScalingTests {
     /// whichever way the fill is measured — and the other way round.
     @Test("The fill's scaling leaves the unfilled ramp alone, and vice versa")
     func scalingsAreIndependent() {
-        let unfilledPinned = runs(in: twoRamps(fill: .track, empty: .track)).suffix(5).map(\.background)
-        let unfilledPinnedUnderCompressedFill = runs(in: twoRamps(fill: .fill, empty: .track)).suffix(5).map(\.background)
+        let unfilledPinned = runs(in: twoRamps(fill: .track, background: .track)).suffix(5).map(\.background)
+        let unfilledPinnedUnderCompressedFill = runs(in: twoRamps(fill: .region, background: .track)).suffix(5).map(\.background)
         #expect(unfilledPinned == unfilledPinnedUnderCompressedFill)
         // Pinned to the bar the unfilled ramp's last cell is the ramp's end
         // (white); compressed into its five cells it is too, but its FIRST cell
         // is the ramp's start (black) rather than the bar's midpoint.
-        let compressedEmpty = runs(in: twoRamps(fill: .track, empty: .fill)).suffix(5).map(\.background)
+        let compressedEmpty = runs(in: twoRamps(fill: .track, background: .region)).suffix(5).map(\.background)
         #expect(compressedEmpty.first == triple(.rgb(0, 0, 0)), "\(compressedEmpty)")
         #expect(unfilledPinned.first != triple(.rgb(0, 0, 0)), "\(unfilledPinned)")
         #expect(compressedEmpty.last == unfilledPinned.last, "both reach the ramp's end")
         // The fill, read the same way: pinned it stops halfway (no pure red),
         // compressed it reaches red — whatever the unfilled side asks.
         func hasForeground(_ output: String, _ code: String) -> Bool { output.contains("38;2;\(code)") }
-        #expect(!hasForeground(twoRamps(fill: .track, empty: .fill), "255;0;0"))
-        #expect(hasForeground(twoRamps(fill: .fill, empty: .track), "255;0;0"))
+        #expect(!hasForeground(twoRamps(fill: .track, background: .region), "255;0;0"))
+        #expect(hasForeground(twoRamps(fill: .region, background: .track), "255;0;0"))
     }
 
     /// `trackGradientScaling(_:)` answers both halves at once; the two-argument
@@ -483,23 +483,23 @@ struct TrackGradientScalingTests {
     func modifiersSetTheHalves() {
         // Read back through a real render rather than the setter: the modifier
         // is what callers write.
-        final class Seen { var scalings: (fill: TrackGradientScaling, empty: TrackGradientScaling)? }
+        final class Seen { var scalings: (fill: TrackGradientScaling, background: TrackGradientScaling)? }
         let seen = Seen()
         struct Probe: View, Renderable {
             let seen: Seen
             var body: Never { fatalError("renders via Renderable") }
             func renderToBuffer(context: RenderContext) -> FrameBuffer {
                 seen.scalings = (
-                    context.environment.trackGradientScaling, context.environment.trackEmptyGradientScaling)
+                    context.environment.trackGradientScaling, context.environment.trackBackgroundGradientScaling)
                 return FrameBuffer()
             }
         }
         _ = renderToBuffer(
-            Probe(seen: seen).trackGradientScaling(.fill), context: makeRenderContext(width: 10, height: 1))
-        #expect(seen.scalings?.fill == .fill && seen.scalings?.empty == .fill)
+            Probe(seen: seen).trackGradientScaling(.region), context: makeRenderContext(width: 10, height: 1))
+        #expect(seen.scalings?.fill == .region && seen.scalings?.background == .region)
         _ = renderToBuffer(
-            Probe(seen: seen).trackGradientScaling(fill: .track, empty: .fill),
+            Probe(seen: seen).trackGradientScaling(fill: .track, background: .region),
             context: makeRenderContext(width: 10, height: 1))
-        #expect(seen.scalings?.fill == .track && seen.scalings?.empty == .fill)
+        #expect(seen.scalings?.fill == .track && seen.scalings?.background == .region)
     }
 }

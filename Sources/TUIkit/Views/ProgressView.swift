@@ -576,7 +576,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             emptyColor: palette.foregroundTertiary,
             accentColor: palette.accent,
             fillScaling: context.environment.trackGradientScaling,
-            emptyScaling: context.environment.trackEmptyGradientScaling,
+            emptyScaling: context.environment.trackBackgroundGradientScaling,
             palette: palette,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )

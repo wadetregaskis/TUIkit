@@ -260,7 +260,7 @@ extension IndeterminateRenderer {
         let segment = segment(of: configuration, across: width)
         let head = Int(phase * Double(width))
         let fill = Array(configuration.fill)
-        let unlit = Array(configuration.empty)
+        let unlit = Array(configuration.background)
         // Sampled as a RAMP, not cell by cell: `Color.quantisedRamp` is what
         // keeps a 256-colour host from banding, and the determinate track goes
         // through it too (`TrackRenderer`). `segment + 1` entries, so that entry
@@ -357,7 +357,7 @@ extension IndeterminateRenderer {
             steps - 1,
             Int(phase(elapsed: elapsed, period: configuration.period) * Double(steps)))
         let fill = Array(configuration.fill)
-        let unlit = Array(configuration.empty)
+        let unlit = Array(configuration.background)
         // The ramp, quantised as one — see `renderSweep`.
         let trail = Color.quantisedRamp(
             ramp(configuration, dim: empty, bright: accent), count: length + 1, depth: ColorDepth.current)

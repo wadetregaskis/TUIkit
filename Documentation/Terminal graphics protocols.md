@@ -733,7 +733,7 @@ turned it off, those four are drawn as pictures through the same
 | Where | Cells | Picture |
 |---|---|---|
 | `BackgroundModifier` over a BLANK buffer (a gradient view, `.background` on a spacer) | one colour per cell | `GradientRaster` — one per pixel, any geometry, the `.gradientExtent(.subtree)` window honoured |
-| `TrackRenderer` for a `TrackConfiguration.isColourField` style (`.block`, `.blockFine`, a custom `█`-on-`.background`) | full cells + an eighths ramp | `TrackRaster` — the boundary on a PIXEL, the fill gradient sampled per pixel |
+| `TrackRenderer` for a `TrackConfiguration.isColourField` style (`.block`, `.blockFine`, a custom `█`-on-`.solid`) | full cells + an eighths ramp | `TrackRaster` — the boundary on a PIXEL, the fill gradient sampled per pixel |
 | The indeterminate `.gradient` motion over a `█` fill | 4 samples a cell, re-coloured every frame | `IndeterminateRaster` — a picture per frame, transmitted once; a frame is a row of unchanged cells naming a different id |
 | everything with a glyph in it — shade, braille, dot, knob, text over a ramp | unchanged | — |
 

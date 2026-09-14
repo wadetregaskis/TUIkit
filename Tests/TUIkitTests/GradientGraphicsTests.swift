@@ -116,7 +116,7 @@ struct TrackRasterTests {
     @Test("The fill ramp spans the bar or the lit part, as the cells' does")
     func fillRampFollowsTheScaling() throws {
         let gradient = Gradient(colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)])
-        let config = TrackConfiguration(fullGlyph: "█", emptyStyle: .background, fillGradient: gradient)
+        let config = TrackConfiguration(fullGlyph: "█", background: .solid, fillGradient: gradient)
         func lastLit(_ scaling: TrackGradientScaling) throws -> [UInt8] {
             let picture = try #require(
                 TrackRaster.picture(
@@ -127,7 +127,7 @@ struct TrackRasterTests {
             return Array(picture.bytes[(x * 3)..<(x * 3 + 3)])
         }
         let acrossTrack = try lastLit(.track)
-        let acrossFill = try lastLit(.fill)
+        let acrossFill = try lastLit(.region)
         #expect(acrossFill[2] > 200, "the fill's last pixel is the ramp's end")
         #expect(acrossTrack[0] > 100 && acrossTrack[2] > 100, "…and the ramp's middle when the bar is the scale")
     }

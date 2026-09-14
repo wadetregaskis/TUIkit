@@ -129,10 +129,10 @@ struct TrackStyleEditor: View {
     /// cyclically along the track, and multi-cell characters (emoji, CJK)
     /// coarsen the resolution — see ``TrackConfiguration/fill``.
     private var configuration: TrackConfiguration {
-        let empty: TrackConfiguration.EmptyStyle
+        let empty: TrackConfiguration.Background
         switch unfilledName {
         case "␣": empty = .glyph(" ")
-        case "background": empty = .background  // stable token; label is localized
+        case "background": empty = .solid  // stable token; label is localized
         case "": empty = .glyph("░")
         default: empty = .pattern(unfilledName)
         }
@@ -146,8 +146,8 @@ struct TrackStyleEditor: View {
         }
         return TrackConfiguration(
             fill: fill,
-            partialRamp: rampText.isEmpty ? nil : Array(rampText),
-            emptyStyle: empty,
+            leadingEdge: rampText.isEmpty ? nil : Array(rampText),
+            background: empty,
             fillGradient: gradientEnabled ? gradientStops : nil,
             // The unfilled half is stylable too: a flat colour of the style's
             // own, or a ramp across it. Its first stop doubles as the flat
@@ -155,8 +155,8 @@ struct TrackStyleEditor: View {
             // Its first stop doubles as the flat colour, for the paths that
             // take no gradient at all (a coarse multi-cell fill, or a track
             // one cell wide).
-            emptyColor: emptyTinted ? emptyStops.stops.first?.color : nil,
-            emptyGradient: emptyTinted ? emptyStops : nil)
+            backgroundColor: emptyTinted ? emptyStops.stops.first?.color : nil,
+            backgroundGradient: emptyTinted ? emptyStops : nil)
     }
 
     /// A slowly-advancing fraction (0→1 over 50 s) for the preview bar.
@@ -244,15 +244,15 @@ struct TrackStyleEditor: View {
                     .progressViewStyle(.custom(configuration))
                     .frame(maxWidth: .infinity)
                     .trackGradientScaling(
-                        fill: gradientSpansTrack ? .track : .fill,
-                        empty: emptyGradientSpansTrack ? .track : .fill)
+                        fill: gradientSpansTrack ? .track : .region,
+                        background: emptyGradientSpansTrack ? .track : .region)
             case .slider:
                 Slider(value: $sliderValue)
                     .trackStyle(.custom(configuration))
                     .frame(maxWidth: .infinity)
                     .trackGradientScaling(
-                        fill: gradientSpansTrack ? .track : .fill,
-                        empty: emptyGradientSpansTrack ? .track : .fill)
+                        fill: gradientSpansTrack ? .track : .region,
+                        background: emptyGradientSpansTrack ? .track : .region)
             }
         }
         .modal(isPresented: $editingEmptyGradient) {

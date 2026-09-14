@@ -99,8 +99,8 @@ public enum TrackStyle: Sendable, Equatable {
     ///
     /// `leading` is drawn once at the left of the filled region;
     /// `trailing` once at the right of the filled region; `middle` is
-    /// repeated across the gap between them. Empty cells are filled with
-    /// a space, padded out to the track's width.
+    /// repeated across the gap between them. Background cells are filled with
+    /// `backgroundPattern` (a space by default), padded out to the track's width.
     ///
     /// `coloring` selects how the lit region is coloured: the control's
     /// own filled colour (``SegmentColoring/automatic``, the default), one
@@ -110,25 +110,25 @@ public enum TrackStyle: Sendable, Equatable {
     /// re-colours every cell, so it expects plain segment text.
     ///
     /// (Five associated values is the honest shape here — three segment
-    /// strings, the unfilled fill, and the colouring are orthogonal, and
+    /// strings, the background pattern, and the colouring are orthogonal, and
     /// bundling them into a struct would just add a second spelling of the
     /// same call.)
     case threeSegment(  // swiftlint:disable:this enum_case_associated_values_count
-        leading: String, middle: String, trailing: String, emptyFill: String = " ",
+        leading: String, middle: String, trailing: String, backgroundPattern: String = " ",
         coloring: SegmentColoring = .automatic)
 
     /// A fully-configurable "fill" track.
     ///
     /// Most fill styles above are just presets of ``TrackConfiguration``; use
-    /// this to supply your own combination of fill glyph, fractional boundary
-    /// ramp, unfilled treatment (glyph or solid background), and optional
-    /// colour gradient — without the framework predefining every mix.
+    /// this to supply your own combination of fill glyph, leading-edge ramp,
+    /// background (a pattern or solid), and optional colour gradient — without
+    /// the framework predefining every mix.
     case custom(TrackConfiguration)
 }
 
 // MARK: - Segment Coloring
 
-/// How a ``TrackStyle/threeSegment(leading:middle:trailing:emptyFill:coloring:)``
+/// How a ``TrackStyle/threeSegment(leading:middle:trailing:backgroundPattern:coloring:)``
 /// track's lit region is coloured.
 public enum SegmentColoring: Sendable, Equatable {
     /// The control's own filled colour (the default).

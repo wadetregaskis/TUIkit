@@ -694,7 +694,7 @@
       "why": "The value type naming monochrome/hierarchical/palette/multicolor. Only monochrome survives a cell grid: the symbol is one codepoint (Sources/TUIkit/SFSymbols/SFSymbol.swift:62) drawn in the cell's single foreground colour, so a type distinguishing four modes would have exactly on"
     },
     "SymbolVariableValueMode": {
-      "why": "color vs draw modes for how a variable-value symbol shows its fraction, both defined over the symbol's layers; TUIkit has one glyph and no layers (Sources/TUIkit/SFSymbols/SFSymbol.swift:62). The terminal's way of showing a fraction is a glyph ramp instead — TrackConfiguration.pa"
+      "why": "color vs draw modes for how a variable-value symbol shows its fraction, both defined over the symbol's layers; TUIkit has one glyph and no layers (Sources/TUIkit/SFSymbols/SFSymbol.swift:62). The terminal's way of showing a fraction is a glyph ramp instead — TrackConfiguration.leadingEdge"
     },
     "TabBarMinimizeBehavior": {
       "why": "Exists only to feed `tabBarMinimizeBehavior(_:)`; the minimized state is a translucent floating pill at a fraction of the bar's height, which a grid of opaque whole-row cells cannot represent."

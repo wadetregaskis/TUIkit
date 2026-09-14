@@ -511,7 +511,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
             isDisabled: isDisabled,
             showsValue: showsValue,
             fillScaling: context.environment.trackGradientScaling,
-            emptyScaling: context.environment.trackEmptyGradientScaling,
+            emptyScaling: context.environment.trackBackgroundGradientScaling,
             graphics: context.gradientGraphics(token: "track-\(context.identity.path)")
         )
 

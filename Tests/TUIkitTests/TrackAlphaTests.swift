@@ -1,7 +1,7 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TrackAlphaTests.swift
 //
-//  Row 8 of §16.1: `TrackConfiguration(emptyColor:)`, `SegmentColoring`, and every
+//  Row 8 of §16.1: `TrackConfiguration(emptyColor:)` (now `backgroundColor:`), `SegmentColoring`, and every
 //  other colour a track paints. Nineteen emit sites, all of which already counted
 //  cells and none of which said where a run began.
 //
@@ -58,12 +58,12 @@ struct TrackAlphaTests {
     /// `.blockFine`'s fractional boundary cell is the one place in the framework whose
     /// ink and field come from different sources: the ramp glyph is the fill's colour
     /// and the rest of the cell shows the empty colour through it. An opaque fill with
-    /// a translucent `TrackConfiguration.emptyColor` must resolve `inkOpacity == 1`
+    /// a translucent `TrackConfiguration.backgroundColor` must resolve `inkOpacity == 1`
     /// and `fieldOpacity < 1`. One alpha per cell gets it wrong in both directions.
-    @Test("The boundary cell takes its ink from the fill and its field from the empty colour")
+    @Test("The boundary cell takes its ink from the fill and its field from the background colour")
     func boundaryCellSplitsItsChannels() throws {
         var config = TrackConfiguration.blockFine
-        config.emptyColor = Color.rgb(40, 40, 40).opacity(0.5)
+        config.backgroundColor = Color.rgb(40, 40, 40).opacity(0.5)
         // A fraction that lands mid-cell, so a boundary cell is drawn at all.
         let row = drawn(.custom(config), fraction: 0.55, width: 10)
         let split = try #require(
@@ -74,10 +74,10 @@ struct TrackAlphaTests {
 
     // MARK: - The public entry points row 8 names
 
-    @Test("TrackConfiguration(emptyColor:) claims the unfilled remainder")
-    func configuredEmptyColorClaims() throws {
+    @Test("TrackConfiguration(backgroundColor:) claims the background")
+    func configuredBackgroundColorClaims() throws {
         var config = TrackConfiguration.block
-        config.emptyColor = Color.rgb(40, 40, 40).opacity(0.5)
+        config.backgroundColor = Color.rgb(40, 40, 40).opacity(0.5)
         let row = drawn(.custom(config), fraction: 0.4)
         let claim = try #require(
             row.claims.first { $0.fieldOpacity == half }, "\(row.claims)")
@@ -89,7 +89,7 @@ struct TrackAlphaTests {
     func segmentSolidClaims() throws {
         let row = drawn(
             .threeSegment(
-                leading: "[", middle: "=", trailing: "]", emptyFill: "·",
+                leading: "[", middle: "=", trailing: "]", backgroundPattern: "·",
                 coloring: .solid(Color.rgb(200, 40, 40).opacity(0.5))),
             fraction: 0.6)
         let claim = try #require(row.claims.first { $0.inkOpacity == half }, "\(row.claims)")
@@ -101,7 +101,7 @@ struct TrackAlphaTests {
         let faded = Color.rgb(200, 40, 40).opacity(0.5)
         let row = drawn(
             .threeSegment(
-                leading: "🌑", middle: "=", trailing: "🌖", emptyFill: "·",
+                leading: "🌑", middle: "=", trailing: "🌖", backgroundPattern: "·",
                 coloring: .perSegment(leading: faded, middle: .rgb(0, 0, 255), trailing: faded)),
             fraction: 1.0, width: 10)
         // Two claims, and the second must start past the wide leading glyph's TWO
@@ -127,7 +127,7 @@ struct TrackAlphaTests {
         // the merge cannot collapse it to a single rectangle by accident.
         let row = drawn(
             .threeSegment(
-                leading: "[", middle: "=", trailing: "]", emptyFill: "·",
+                leading: "[", middle: "=", trailing: "]", backgroundPattern: "·",
                 coloring: .gradient(
                     Gradient(colors: [
                         Color.rgb(200, 40, 40).opacity(0.25), Color.rgb(40, 40, 200).opacity(1.0),

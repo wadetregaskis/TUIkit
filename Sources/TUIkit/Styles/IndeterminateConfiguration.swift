@@ -23,7 +23,7 @@ import TUIkitStyling
 /// ProgressView()
 ///     .indeterminateStyle(.custom(
 ///         IndeterminateConfiguration(
-///             motion: .knightRider, fill: "●", empty: "·", period: 4)))
+///             motion: .knightRider, fill: "●", background: "·", period: 4)))
 /// ```
 public struct IndeterminateConfiguration: Sendable, Equatable {
 
@@ -62,10 +62,10 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// so the animation is always exactly as wide as it was asked to be.
     public var fill: String
 
-    /// The pattern drawn where the track is not lit, in the control's empty
+    /// The pattern drawn where the track is not lit, in the control's background
     /// colour. Unused by ``Motion/pulse``, ``Motion/barberPole`` and
     /// ``Motion/gradient``, which light every cell.
-    public var empty: String
+    public var background: String
 
     /// The colours the motion draws from, or `nil` for the control's own.
     ///
@@ -74,7 +74,7 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     ///
     /// - ``Motion/sweep``, ``Motion/knightRider`` and ``Motion/pulse`` take
     ///   them as a RAMP, sampled from the dim end (first) to the bright end
-    ///   (last). `nil` ramps from the control's empty colour to its accent.
+    ///   (last). `nil` ramps from the control's background colour to its accent.
     /// - ``Motion/barberPole`` takes them as the stripe colours, one per glyph
     ///   of ``fill`` in turn. `nil` alternates accent and filled.
     /// - ``Motion/gradient`` takes them as CYCLIC stops — the last interpolates
@@ -100,7 +100,7 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// - Parameters:
     ///   - motion: What the animation does.
     ///   - fill: The lit pattern (see ``fill``).
-    ///   - empty: The unlit pattern (see ``empty``).
+    ///   - background: The unlit pattern (see ``background``).
     ///   - gradient: The ramp the motion draws from, or `nil` for the
     ///     control's own colours.
     ///   - period: Seconds for one full pass.
@@ -108,14 +108,14 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     public init(
         motion: Motion,
         fill: String = "█",
-        empty: String = "░",
+        background: String = "░",
         gradient: Gradient? = nil,
         period: Double = 1.6,
         extent: Double = 1.0 / 3.0
     ) {
         self.motion = motion
         self.fill = fill
-        self.empty = empty
+        self.background = background
         self.gradient = gradient
         self.period = period
         self.extent = extent
@@ -133,7 +133,7 @@ extension IndeterminateConfiguration {
     /// stripe-pair shift as "moving" rather than "ticking".
     public static let barberPole = Self(motion: .barberPole, fill: "◢◤", period: 0.6)
 
-    /// The whole bar breathing between the empty colour and the accent.
+    /// The whole bar breathing between the background colour and the accent.
     public static let pulse = Self(motion: .pulse, period: 1.8)
 
     /// A single bright block bouncing end to end with a short trail.

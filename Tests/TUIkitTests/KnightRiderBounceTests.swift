@@ -21,7 +21,7 @@ struct KnightRiderBounceTests {
 
     /// Five cells, a three-cell tail, a four-second period: eight steps of half a second.
     private let style = IndeterminateStyle.custom(
-        IndeterminateConfiguration(motion: .knightRider, fill: "●", empty: "·", period: 4, extent: 0.6))
+        IndeterminateConfiguration(motion: .knightRider, fill: "●", background: "·", period: 4, extent: 0.6))
 
     /// Which cells are lit `step` steps into the bounce, a hundredth into the step.
     private func lit(atStep step: Int) -> String {
@@ -60,7 +60,7 @@ struct KnightRiderBounceTests {
     @Test("The lead walks one cell per step, standing on each end once")
     func leadWalksUniformly() {
         let pair = IndeterminateStyle.custom(
-            IndeterminateConfiguration(motion: .knightRider, fill: "●", empty: "·", period: 4, extent: 0.1))
+            IndeterminateConfiguration(motion: .knightRider, fill: "●", background: "·", period: 4, extent: 0.1))
         let walk = (0..<8).map { step in
             IndeterminateRenderer.render(
                 width: 5, style: pair, filledColor: .green, emptyColor: .black, accentColor: .white,

@@ -30,8 +30,8 @@ extension TrackConfiguration {
     func resolvingColours(with palette: any Palette) -> Self {
         var resolved = self
         resolved.fillGradient = fillGradient?.resolvingStops(with: palette)
-        resolved.emptyGradient = emptyGradient?.resolvingStops(with: palette)
-        resolved.emptyColor = emptyColor?.resolve(with: palette)
+        resolved.backgroundGradient = backgroundGradient?.resolvingStops(with: palette)
+        resolved.backgroundColor = backgroundColor?.resolve(with: palette)
         return resolved
     }
 }
@@ -62,9 +62,9 @@ extension TrackStyle {
         switch self {
         case .shadeRamp(let ramp):
             .shadeRamp(gradient: ramp?.resolvingStops(with: palette))
-        case .threeSegment(let leading, let middle, let trailing, let emptyFill, let coloring):
+        case .threeSegment(let leading, let middle, let trailing, let backgroundPattern, let coloring):
             .threeSegment(
-                leading: leading, middle: middle, trailing: trailing, emptyFill: emptyFill,
+                leading: leading, middle: middle, trailing: trailing, backgroundPattern: backgroundPattern,
                 coloring: coloring.resolvingColours(with: palette))
         case .custom(let configuration):
             .custom(configuration.resolvingColours(with: palette))

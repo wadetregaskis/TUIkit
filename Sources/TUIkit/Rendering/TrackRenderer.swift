@@ -86,9 +86,9 @@ enum TrackRenderer {
             // terminal-distributed — right on Apple Terminal, wrong on kitty.
             let opaqueThroughout =
                 filledColor.isOpaque && emptyColor.isOpaque
-                && config.emptyColor?.isOpaque != false
+                && config.backgroundColor?.isOpaque != false
                 && config.fillGradient?.isOpaqueThroughout != false
-                && config.emptyGradient?.isOpaqueThroughout != false
+                && config.backgroundGradient?.isOpaqueThroughout != false
             if let graphics, config.isColourField, opaqueThroughout,
                 let row = renderPicture(
                     fraction: fraction, width: width, config: config,
@@ -254,25 +254,25 @@ extension TrackRenderer {
         let fillChars = Array(config.fill.isEmpty ? "█" : config.fill)
         let emptyChars: [Character]
         let paintsBackground: Bool
-        switch config.emptyStyle {
+        switch config.background {
         case .pattern(let pattern):
             emptyChars = Array(pattern.isEmpty ? " " : pattern)
             paintsBackground = false
-        case .background:
+        case .solid:
             emptyChars = []
             paintsBackground = true
         }
 
         // Any multi-cell character forces the coarse quantized mode. (The
-        // solid `.background` unfilled region is spaces, so only a patterned
-        // unfill constrains the quantum.) The ramp counts too: its glyph is
+        // `.solid` background is spaces, so only a patterned background
+        // constrains the quantum.) The ramp counts too: its glyph is
         // drawn INTO the boundary cell, so a two-cell ramp glyph over a
         // one-cell fill made the track a cell longer whenever a boundary cell
         // was drawn — and the bar's length then followed its value.
         let quantum = max(
             fillChars.map(\.terminalWidth).max() ?? 1,
             emptyChars.map(\.terminalWidth).max() ?? 1,
-            config.partialRamp?.map(\.terminalWidth).max() ?? 1)
+            config.leadingEdge?.map(\.terminalWidth).max() ?? 1)
         if quantum > 1 {
             return renderCoarsePattern(
                 fraction: fraction, width: width, quantum: quantum,
@@ -284,7 +284,7 @@ extension TrackRenderer {
 
         // A ramp of n glyphs gives n+1 sub-cell steps; no ramp means whole-cell
         // quantization (stepsPerCell == 1, so this reduces to a plain fill).
-        let ramp = config.partialRamp
+        let ramp = config.leadingEdge
         let stepsPerCell = (ramp?.count ?? 0) + 1
         let totalSteps = Int((fraction * Double(width) * Double(stepsPerCell)).rounded())
         let fullCells = totalSteps / stepsPerCell
@@ -293,7 +293,7 @@ extension TrackRenderer {
         let hasPartial = ramp != nil && partialStep > 0 && fullCells < width
         let litCellCount = min(width, fullCount + (hasPartial ? 1 : 0))
 
-        // `.background` paints backgrounds across the whole track. The empty
+        // `.solid` paints backgrounds across the whole track. The empty
         // region and the partial boundary cell sit on the EMPTY colour (a flat
         // unfilled remainder). Full cells paint their own FILL colour as the
         // background: terminals don't reliably cover the whole cell with a
@@ -307,7 +307,7 @@ extension TrackRenderer {
         // drawn AGAINST — the unfilled half of a bar is half of what it looks
         // like. `nil` keeps the control's own recessive colour, which is what
         // every built-in preset does.
-        let emptyColor = config.emptyColor ?? emptyColor
+        let emptyColor = config.backgroundColor ?? emptyColor
 
         // Optional per-cell colour fade. What it is measured across is the
         // caller's choice (``TrackGradientScaling``): the whole bar, so a
@@ -343,7 +343,7 @@ extension TrackRenderer {
         let emptyRegionStart = fullCount
         let emptySpan = emptyScaling == .track ? width : width - emptyRegionStart
         func emptyColour(at cell: Int) -> Color {
-            guard let gradient = config.emptyGradient, emptySpan > 1 else { return emptyColor }
+            guard let gradient = config.backgroundGradient, emptySpan > 1 else { return emptyColor }
             return gradientColor(
                 gradient, index: emptyScaling == .track ? cell : cell - emptyRegionStart,
                 span: emptySpan, fallback: emptyColor, depth: depth)
@@ -363,10 +363,10 @@ extension TrackRenderer {
             //
             // It is also the one cell in the framework whose INK and FIELD come from
             // different sources, which is what makes the two channels earn their
-            // keep: an opaque `█` fill with a translucent `TrackConfiguration
-            // .emptyColor` must resolve `inkOpacity == 1, fieldOpacity < 1` — the
-            // ramp glyph solid, the rest of the cell faded. One alpha per cell gets
-            // this cell wrong in both directions.
+            // keep: an opaque `█` fill with a translucent
+            // `TrackConfiguration.backgroundColor` must resolve `inkOpacity == 1,
+            // fieldOpacity < 1` — the ramp glyph solid, the rest of the cell faded.
+            // One alpha per cell gets this cell wrong in both directions.
             row.append(
                 String(ramp[partialStep - 1]), cells: 1, ink: fillColour(at: fullCount),
                 field: paintsBackground ? emptyColour(at: fullCount) : nil)
@@ -382,7 +382,7 @@ extension TrackRenderer {
                 }
                 return glyphs
             }
-            if config.emptyGradient != nil, emptySpan > 1 {
+            if config.backgroundGradient != nil, emptySpan > 1 {
                 for cell in litCellCount..<width {
                     let colour = emptyColour(at: cell)
                     row.append(
@@ -431,7 +431,7 @@ extension TrackRenderer {
         depth: ColorDepth
     ) -> ClaimingRow {
         // The style's own unfilled colour, if it named one — see the fine path.
-        let emptyColor = config.emptyColor ?? emptyColor
+        let emptyColor = config.backgroundColor ?? emptyColor
         let effectiveWidth = (width / quantum) * quantum
         guard effectiveWidth > 0 else { return ClaimingRow() }
         let steps = effectiveWidth / quantum
@@ -440,7 +440,7 @@ extension TrackRenderer {
         // arithmetic the fine path applies per cell, at block granularity.
         // Without one this reduces to whole-block quantization (the previous
         // behaviour exactly).
-        let ramp = config.partialRamp
+        let ramp = config.leadingEdge
         let stepsPerBlock = (ramp?.count ?? 0) + 1
         let totalSteps = Int((fraction * Double(steps) * Double(stepsPerBlock)).rounded())
         let litSteps = min(totalSteps / stepsPerBlock, steps)

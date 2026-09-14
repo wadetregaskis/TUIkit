@@ -252,15 +252,15 @@ struct ProgressViewStyleTests {
         #expect(shade.contains("░"), "plain shade still uses ░ for empty: '\(shade)'")
     }
 
-    @Test("A custom TrackConfiguration mixes any fill glyph with any unfilled treatment")
+    @Test("A custom TrackConfiguration mixes any fill glyph with any background treatment")
     func customConfigurationFlexibility() {
         // #4: the whole point of the config — a shade-ramp fill but with ░
         // blocks for the empty region (not · dots), a combination no named
         // preset provides, and the same fill with a solid background instead.
         let dotsForEmpty = TrackConfiguration(
-            fullGlyph: "█", partialRamp: ["░", "▒", "▓"], emptyStyle: .glyph("░"))
+            fullGlyph: "█", leadingEdge: ["░", "▒", "▓"], background: .glyph("░"))
         let bgForEmpty = TrackConfiguration(
-            fullGlyph: "█", partialRamp: ["░", "▒", "▓"], emptyStyle: .background)
+            fullGlyph: "█", leadingEdge: ["░", "▒", "▓"], background: .solid)
 
         let dotsBar = renderToBuffer(
             ProgressView(value: 0.3).progressViewStyle(.custom(dotsForEmpty)),

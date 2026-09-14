@@ -558,7 +558,7 @@ struct FocusIndicatorAnimationTests {
         // put the right arrow's run one column past the arrow, on the blank
         // before the read-out, where the loop replayed a second ▶ breathing out
         // of step with the real one.
-        let coarse = TrackStyle.custom(TrackConfiguration(fill: "😃", emptyStyle: .glyph("·")))
+        let coarse = TrackStyle.custom(TrackConfiguration(fill: "😃", background: .glyph("·")))
         for width in 12...48 {
             expectArrowsPinned(
                 focusedRender(Slider(value: .constant(0.5)).trackStyle(coarse), width: width),

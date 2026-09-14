@@ -42,7 +42,7 @@ public struct BorderStyle: Sendable, Hashable {
     /// second source of truth the pulse could not honour, and an animated wall
     /// would breathe over a frozen background. This says only "my glyph fills
     /// its cell; paint it in whatever colour you are drawing me in", which is
-    /// exactly what ``TrackConfiguration/EmptyStyle/background`` means.
+    /// exactly what ``TrackConfiguration/Background/solid`` means.
     ///
     /// True only for ``block``. `U+2588` does not cover its cell on every
     /// terminal — Terminal.app leaves hairline seams between adjacent full

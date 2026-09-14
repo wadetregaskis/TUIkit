@@ -278,7 +278,7 @@ struct ProgressViewPage: View {
             VStack(alignment: .leading, spacing: 0) {
                 Picker("page.progressView.gradientScaling", selection: $gradientScaling) {
                     Text("page.progressView.gradientScalingTrack").tag(TrackGradientScaling.track)
-                    Text("page.progressView.gradientScalingFill").tag(TrackGradientScaling.fill)
+                    Text("page.progressView.gradientScalingFill").tag(TrackGradientScaling.region)
                 }
                 Toggle("page.progressView.gradientGraphics", isOn: $gradientGraphics)
                     .disabled(!KittyGraphics.isSupported)
@@ -311,14 +311,14 @@ struct ProgressViewPage: View {
                         leading: "Sw",
                         middle: "i",
                         trailing: "ft",
-                        emptyFill: "·"
+                        backgroundPattern: "·"
                     )
                 )
                 // Segment colouring: one colour per segment…
                 determinateRow(
                     label: "threeSeg(per)",
                     style: .threeSegment(
-                        leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                        leading: "Sw", middle: "i", trailing: "ft", backgroundPattern: "·",
                         coloring: .perSegment(
                             leading: .rgb(255, 120, 60),
                             middle: .rgb(220, 220, 220),
@@ -329,21 +329,21 @@ struct ProgressViewPage: View {
                 determinateRow(
                     label: "threeSeg(gr) ",
                     style: .threeSegment(
-                        leading: "Sw", middle: "i", trailing: "ft", emptyFill: "·",
+                        leading: "Sw", middle: "i", trailing: "ft", backgroundPattern: "·",
                         coloring: .gradient(Gradient(colors: [
                             .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
                         ]))
                     )
                 )
                 // A hand-rolled `.custom` recipe: a shade-ramp fill with a
-                // solid background for the unfilled region — a combination
+                // solid background — a combination
                 // no named preset provides (showcasing TrackConfiguration).
                 determinateRow(
                     label: "custom       ",
                     style: .custom(
                         TrackConfiguration(
-                            fullGlyph: "█", partialRamp: ["░", "▒", "▓"],
-                            emptyStyle: .background))
+                            fullGlyph: "█", leadingEdge: ["░", "▒", "▓"],
+                            background: .solid))
                 )
             }
             .trackGradientScaling(gradientScaling)

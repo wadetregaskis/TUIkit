@@ -1084,7 +1084,7 @@ them among the three:
 | `.listRowBackground(…)` | one site — **fixed, §22** |
 | `Text` concatenation | **fixed, §14** |
 | translucent gradient stops | **background fixed, §15**, and its horizontal case, misclassified as per-cell — **fixed, §34.2**; `Text`'s ramped ink — **fixed, §34.1**; the shape that varies in both directions, and `Text`'s concatenated arm under a ramp — **fixed, §36.2 and §36.5** |
-| `TrackConfiguration(emptyColor:)`, `SegmentColoring` | `TrackRenderer` — nineteen sites, not three — plus `Slider`, `Gauge` and `ProgressView`: **fixed, §31**; the indeterminate sweep — **fixed, §36.7** |
+| `TrackConfiguration(emptyColor:)` (now `backgroundColor:`), `SegmentColoring` | `TrackRenderer` — nineteen sites, not three — plus `Slider`, `Gauge` and `ProgressView`: **fixed, §31**; the indeterminate sweep — **fixed, §36.7** |
 | `StatusBarState.highlightColor` / `.labelColor` | 2 sites — **fixed, §24** |
 | `.style(.text) { $0.foreground = … }` | the cascade's six non-`Text` readers — **fixed, §30** |
 | `.colorMultiply(…)` | a silent drop, not a trap — **fixed, §25** |
@@ -2004,7 +2004,7 @@ reason:
 
 ## 31. The track: nineteen emit sites that all knew their columns (2026-09-10)
 
-Row 8 of §16.1 — `TrackConfiguration(emptyColor:)` and `SegmentColoring` — said "3+
+Row 8 of §16.1 — `TrackConfiguration(emptyColor:)` (now `backgroundColor:`) and `SegmentColoring` — said "3+
 sites". It is **nineteen `ANSIRenderer.colorize` calls across six functions**, and the
 count is the least interesting thing about them: every one already tracked cells,
 because a track's whole job is to fill exactly `width` of them. What none of them did
@@ -2029,7 +2029,7 @@ and `drawnTrackWidth` now comes from `DrawnTrack.cells` rather than a
 `.blockFine`'s fractional boundary cell takes its **ink** from the fill and its
 **field** from the empty colour: the ramp glyph covers the filled fraction, and the
 unfilled colour shows through the rest of the cell. An opaque `█` fill with a
-translucent `TrackConfiguration.emptyColor` must resolve `inkOpacity == 1,
+translucent `TrackConfiguration.emptyColor` (now `backgroundColor`) must resolve `inkOpacity == 1,
 fieldOpacity < 1` — solid glyph, faded remainder.
 
 This is the cell that proves the two channels earn their keep. A single alpha per cell
@@ -2041,7 +2041,7 @@ gets it wrong in *both* directions, and `boundaryCellSplitsItsChannels` pins it.
 resolver's fold is a linear scan per column. A track is **one row**, so per-cell alpha
 is a run of one-cell rectangles rather than a grid — 10 to 40 of them, not 80 × the
 height. So `.threeSegment(coloring: .gradient(…))` with translucent stops is fully
-honoured, and so is a per-cell `emptyGradient`. A narrower result than §15's, and the
+honoured, and so is a per-cell `emptyGradient` (now `backgroundGradient`). A narrower result than §15's, and the
 narrowness is the point.
 
 ### 31.3 A disabled slider spends where an enabled one claims

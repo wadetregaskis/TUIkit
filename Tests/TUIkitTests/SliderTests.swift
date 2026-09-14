@@ -365,7 +365,7 @@ struct SliderArrowZoneTests {
         dispatcher.setActiveSupport(.full)
 
         let slider = Slider(value: binding, in: 0...100, step: 1)
-            .trackStyle(.custom(TrackConfiguration(fill: "😃", emptyStyle: .glyph("·"))))
+            .trackStyle(.custom(TrackConfiguration(fill: "😃", background: .glyph("·"))))
         let buffer = renderToBuffer(slider, context: context)
         dispatcher.setRegions(buffer.hitTestRegions)
 

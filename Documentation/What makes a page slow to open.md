@@ -117,7 +117,7 @@ redundant SGR on five of them and 0.3% on `progress`** (one escape, 20 bytes).
 
 A slider drag of 1,020 steps, before `589b557e`: plain track 72,355 bytes,
 gradient spanning the track 65,454, gradient scaled to the fill 166,810 — the
-same CPU (7.2–7.3 s) in all three. `TrackGradientScaling.fill` is the dear one
+same CPU (7.2–7.3 s) in all three. `TrackGradientScaling.fill` (now `.region`) is the dear one
 because rescaling the ramp changes every filled cell; `.track`, the default,
 holds each column's colour still and costs less than a plain track.
 

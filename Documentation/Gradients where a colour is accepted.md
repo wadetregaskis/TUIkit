@@ -566,7 +566,7 @@ claims slack and never demands any.
 - ~~**`TrackGradientScaling` vs `GradientExtent`.** Two vocabularies for "what
   does the ramp span" is one too many; `.in(_:)` may unify them.~~ Resolved as
   **not the same question**: `GradientExtent` says how many VIEWS a ramp spans,
-  while `TrackGradientScaling.fill` re-measures against a VALUE-dependent
+  while `TrackGradientScaling.fill` (now `.region`) re-measures against a VALUE-dependent
   sub-rectangle that changes every frame — which neither `GradientExtent` nor
   `.in(_:)` can express. Two knobs, two questions.
 - **What a real AppKit control does with `.tint(gradient)`** (§1). Blocks

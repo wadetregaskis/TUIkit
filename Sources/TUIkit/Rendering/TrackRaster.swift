@@ -52,7 +52,7 @@ enum TrackRaster {
         // steps, so 50% of an even width is exactly half.
         let lit = Int((fraction * Double(size.width)).rounded())
         let unlit = size.width - lit
-        let empty = config.emptyColor ?? emptyColor
+        let empty = config.backgroundColor ?? emptyColor
 
         // The fill's ramp spans the bar or the lit part, as the cells' does;
         // `TrackRenderer` says why a scale-meaning ramp must span the bar.
@@ -61,7 +61,7 @@ enum TrackRaster {
         // The unfilled ramp starts AT the boundary (the cells' rule for the
         // same reason), spanning the bar or the remainder.
         let emptySpan = emptyScaling == .track ? size.width : unlit
-        let emptyRamp = ramp(config.emptyGradient, span: emptySpan, fallback: empty)
+        let emptyRamp = ramp(config.backgroundGradient, span: emptySpan, fallback: empty)
 
         var bytes = [UInt8](repeating: 0, count: size.width * size.height * 3)
         var row = [UInt8](repeating: 0, count: size.width * 3)
@@ -100,7 +100,7 @@ enum TrackRaster {
 
 extension TrackConfiguration {
     /// Whether every cell of this track is a rectangle of one colour — a `█`
-    /// fill on a solid-background unfill, whatever the boundary ramp — and so
+    /// fill on a `.solid` background, whatever the leading edge — and so
     /// can be a picture without losing anything a person could see.
     ///
     /// The boundary ramp is not consulted: a picture puts the boundary on a
@@ -109,6 +109,6 @@ extension TrackConfiguration {
     /// the look — a shade, a dot pattern, braille — and those live in the
     /// fill and the unfill.
     var isColourField: Bool {
-        fill == "█" && emptyStyle == .background
+        fill == "█" && background == .solid
     }
 }

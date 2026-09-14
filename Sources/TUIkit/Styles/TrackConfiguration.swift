@@ -7,43 +7,43 @@
 // MARK: - Track Configuration
 
 /// A fully-configurable recipe for a "fill" track — the family of ``TrackStyle``
-/// that draws a run of full cells, an optional fractional boundary cell, and an
-/// unfilled remainder.
+/// that draws a run of full cells, an optional leading-edge cell, and a
+/// background.
 ///
 /// Most built-in fill styles are just presets of `TrackConfiguration` (see the
 /// static members below), so the named styles and a hand-rolled
 /// ``TrackStyle/custom(_:)`` share one renderer. This lets you mix any fill
-/// glyph with any unfilled treatment — e.g. a shade-ramp fill with `·` dots
-/// *or* `░` blocks for the empty region — without the framework predefining
+/// glyph with any background treatment — e.g. a shade-ramp fill with `·` dots
+/// *or* `░` blocks for the background — without the framework predefining
 /// every combination.
 ///
 /// ```swift
-/// // A shade-ramp fill, but with a solid background for the unfilled region:
+/// // A shade-ramp fill, but with a solid background:
 /// ProgressView(value: 0.6)
 ///     .progressViewStyle(.custom(
-///         TrackConfiguration(fullGlyph: "█", partialRamp: ["░", "▒", "▓"],
-///                            emptyStyle: .background)))
+///         TrackConfiguration(fullGlyph: "█", leadingEdge: ["░", "▒", "▓"],
+///                            background: .solid)))
 /// ```
 public struct TrackConfiguration: Sendable, Equatable {
-    /// How the unfilled region of a track is drawn.
-    public enum EmptyStyle: Sendable, Equatable {
-        /// Draw `pattern` cyclically across the unfilled cells in the empty
-        /// colour — a single character gives the classic look (`░`, `·`, `⠀`,
-        /// `─`); several repeat in sequence, anchored to the track (cell *j*
-        /// always shows the same pattern character, so the texture stays put
-        /// while the fill sweeps over it).
+    /// How a track's background — the cells the fill has not reached — is
+    /// drawn.
+    public enum Background: Sendable, Equatable {
+        /// Draw `pattern` cyclically across the background cells in the
+        /// background colour — a single character gives the classic look (`░`,
+        /// `·`, `⠀`, `─`); several repeat in sequence, anchored to the track
+        /// (cell *j* always shows the same pattern character, so the texture
+        /// stays put while the fill sweeps over it).
         case pattern(String)
 
-        /// Paint the ENTIRE track on the empty colour as a solid background,
-        /// with the unfilled cells reduced to spaces. Two benefits: the
-        /// unfilled region is one flat colour rather than a textured glyph, and
-        /// because the filled cells carry the same background, any inter-cell
-        /// gaps the terminal leaves in the fill show the bar's own colour
-        /// instead of the terminal background — so the bar always reads as one
-        /// solid unit.
-        case background
+        /// Paint the ENTIRE track on the background colour, with the
+        /// background cells reduced to spaces. Two benefits: the background is
+        /// one flat colour rather than a textured glyph, and because the
+        /// filled cells carry the same background, any inter-cell gaps the
+        /// terminal leaves in the fill show the bar's own colour instead of the
+        /// terminal background — so the bar always reads as one solid unit.
+        case solid
 
-        /// A single-character unfilled pattern — sugar for
+        /// A single-character background pattern — sugar for
         /// ``pattern(_:)`` with a one-character string.
         public static func glyph(_ glyph: Character) -> Self {
             .pattern(String(glyph))
@@ -58,135 +58,138 @@ public struct TrackConfiguration: Sendable, Equatable {
     /// Multi-cell characters (emoji, CJK) cannot be truncated mid-glyph:
     /// they coarsen the track's resolution to the widest character's cell
     /// width, and the track PERMANENTLY shrinks to a neat multiple of it —
-    /// the width must not change with the fill:unfilled ratio. In that coarse
-    /// mode the ``partialRamp`` subdivides the quantum *block* instead of a
-    /// cell: the partially-filled block renders as its ramp glyph repeated
-    /// across the block.
+    /// the width must not change with the fill:background ratio. In that
+    /// coarse mode the ``leadingEdge`` subdivides the quantum *block* instead
+    /// of a cell: the partially-filled block renders as its leading-edge glyph
+    /// repeated across the block.
     public var fill: String
 
-    /// The sub-cell ramp for the single fractional boundary cell, ordered
-    /// lightest → fullest (e.g. `▏▎▍▌▋▊▉` or `░▒▓`). `nil` quantizes the fill to
-    /// whole cells (no fractional boundary cell). A ramp of *n* glyphs gives
-    /// `n + 1` steps of sub-cell precision at the boundary (sub-block, for a
-    /// coarse multi-cell ``fill`` — see there).
-    public var partialRamp: [Character]?
+    /// The leading edge: the lightest → fullest sub-cell ramp for the single
+    /// partly-filled cell at the fill's front (e.g. `▏▎▍▌▋▊▉` or `░▒▓`). `nil`
+    /// quantizes the fill to whole cells (no leading-edge cell). A ramp of *n*
+    /// glyphs gives `n + 1` steps of sub-cell precision at the edge (sub-block,
+    /// for a coarse multi-cell ``fill`` — see there).
+    public var leadingEdge: [Character]?
 
-    /// How the unfilled region is rendered.
-    public var emptyStyle: EmptyStyle
+    /// How the background is drawn.
+    public var background: Background
 
     /// An optional per-cell colour gradient the lit cells fade across (the
     /// filled portion interpolates between the stops regardless of how many
     /// cells are lit). `nil` uses the flat filled colour.
     public var fillGradient: Gradient?
 
-    /// An optional colour for the UNFILLED region, overriding the one the
-    /// control would otherwise use.
+    /// An optional colour for the BACKGROUND, overriding the one the control
+    /// would otherwise use.
     ///
-    /// The unfilled part of a bar is half of what a bar looks like, and it was
+    /// The background of a bar is half of what a bar looks like, and it was
     /// the half a style could say nothing about: the control passed its own
     /// recessive colour and that was that. A style that has chosen a fill also
     /// wants a say in what the fill is drawn *against*. `nil` keeps the
     /// control's choice, which is what every built-in preset does.
-    public var emptyColor: Color?
+    public var backgroundColor: Color?
 
-    /// An optional per-cell colour gradient the unfilled cells fade across.
+    /// An optional per-cell colour gradient the background cells fade across.
     ///
     /// Measured the same way the fill's is (see ``TrackGradientScaling``): with
-    /// `.track` the empty cells take the part of the ramp their POSITION on the
-    /// bar names, so fill and empty gradients drawn from the same stops are one
-    /// continuous ramp interrupted by the boundary. With `.fill` the ramp is
-    /// compressed into the unfilled run, which is the decorative reading.
+    /// `.track` the background cells take the part of the ramp their POSITION
+    /// on the bar names, so fill and background gradients drawn from the same
+    /// stops are one continuous ramp interrupted by the leading edge. With
+    /// `.region` the ramp is compressed into the background, which is the
+    /// decorative reading.
     ///
-    /// The fractional boundary cell counts as the unfilled region's FIRST
-    /// cell either way: a ``partialRamp`` glyph covers only the filled part of
-    /// that cell and the unfilled colour shows through the rest, so it is a
-    /// cell the unfilled ramp reaches rather than one it steps over.
-    public var emptyGradient: Gradient?
+    /// The leading-edge cell counts as the background's FIRST cell either way:
+    /// a ``leadingEdge`` glyph covers only the filled part of that cell and the
+    /// background colour shows through the rest, so it is a cell the background
+    /// ramp reaches rather than one it steps over.
+    public var backgroundGradient: Gradient?
 
     /// Creates a track configuration.
     ///
     /// - Parameters:
     ///   - fill: The fill pattern, repeated cyclically along the lit region
     ///     (see ``fill``).
-    ///   - partialRamp: The lightest→fullest ramp for the fractional boundary
-    ///     cell, or `nil` to quantize to whole cells.
-    ///   - emptyStyle: How the unfilled region is drawn.
+    ///   - leadingEdge: The lightest→fullest ramp for the leading-edge cell,
+    ///     or `nil` to quantize to whole cells.
+    ///   - background: How the background is drawn.
     ///   - fillGradient: An optional colour gradient across the lit cells.
-    ///   - emptyColor: An optional colour for the unfilled region.
-    ///   - emptyGradient: An optional colour gradient across the unfilled cells.
+    ///   - backgroundColor: An optional colour for the background.
+    ///   - backgroundGradient: An optional colour gradient across the
+    ///     background cells.
     public init(
         fill: String,
-        partialRamp: [Character]? = nil,
-        emptyStyle: EmptyStyle,
+        leadingEdge: [Character]? = nil,
+        background: Background,
         fillGradient: Gradient? = nil,
-        emptyColor: Color? = nil,
-        emptyGradient: Gradient? = nil
+        backgroundColor: Color? = nil,
+        backgroundGradient: Gradient? = nil
     ) {
         self.fill = fill
-        self.partialRamp = partialRamp
-        self.emptyStyle = emptyStyle
+        self.leadingEdge = leadingEdge
+        self.background = background
         self.fillGradient = fillGradient
-        self.emptyColor = emptyColor
-        self.emptyGradient = emptyGradient
+        self.backgroundColor = backgroundColor
+        self.backgroundGradient = backgroundGradient
     }
 
     /// Creates a track configuration with a single-character fill — sugar
-    /// for ``init(fill:partialRamp:emptyStyle:fillGradient:emptyColor:emptyGradient:)``.
+    /// for ``init(fill:leadingEdge:background:fillGradient:backgroundColor:backgroundGradient:)``.
     public init(
         fullGlyph: Character,
-        partialRamp: [Character]? = nil,
-        emptyStyle: EmptyStyle,
+        leadingEdge: [Character]? = nil,
+        background: Background,
         fillGradient: Gradient? = nil,
-        emptyColor: Color? = nil,
-        emptyGradient: Gradient? = nil
+        backgroundColor: Color? = nil,
+        backgroundGradient: Gradient? = nil
     ) {
         self.init(
-            fill: String(fullGlyph), partialRamp: partialRamp,
-            emptyStyle: emptyStyle, fillGradient: fillGradient,
-            emptyColor: emptyColor, emptyGradient: emptyGradient)
+            fill: String(fullGlyph), leadingEdge: leadingEdge,
+            background: background, fillGradient: fillGradient,
+            backgroundColor: backgroundColor, backgroundGradient: backgroundGradient)
     }
 }
 
 // MARK: - Built-in Presets
 
 extension TrackConfiguration {
-    /// `█` full cells, solid-background empty — whole-cell quantized. Backs
-    /// ``TrackStyle/block``. The unfilled region is a background fill, not a `░`
-    /// shade glyph: mixing a full-cell solid block with a dithered shade makes
-    /// the filled run read TALLER than the empty run on terminals whose font
+    /// `█` full cells on a solid background — whole-cell quantized. Backs
+    /// ``TrackStyle/block``. The background is a solid fill, not a `░` shade
+    /// glyph: mixing a full-cell solid block with a dithered shade makes the
+    /// filled run read TALLER than the background on terminals whose font
     /// draws `░▒▓` as a sparse crosshatch (iTerm2) — see Terminal-compatibility.md.
     /// A uniform two-tone bar reads at a consistent height everywhere (same
     /// reasoning as ``blockFine``).
-    public static let block = TrackConfiguration(fullGlyph: "█", emptyStyle: .background)
+    public static let block = TrackConfiguration(fullGlyph: "█", background: .solid)
 
-    /// `▓` (dark shade) full cells, `░` empty — whole-cell quantized. Backs
-    /// ``TrackStyle/shade``. (Differs from ``block`` only in the fill glyph, so
-    /// on most fonts it reads similarly — ``shadeRamp(gradient:)`` is the
-    /// visibly "shaded" look.)
-    public static let shade = TrackConfiguration(fullGlyph: "▓", emptyStyle: .glyph("░"))
+    /// `▓` (dark shade) full cells on a `░` background — whole-cell quantized.
+    /// Backs ``TrackStyle/shade``. (Differs from ``block`` only in the fill
+    /// glyph, so on most fonts it reads similarly — ``shadeRamp(gradient:)`` is
+    /// the visibly "shaded" look.)
+    public static let shade = TrackConfiguration(fullGlyph: "▓", background: .glyph("░"))
 
-    /// `▌` full cells, `─` empty line. Backs ``TrackStyle/bar``.
-    public static let bar = TrackConfiguration(fullGlyph: "▌", emptyStyle: .glyph("─"))
+    /// `▌` full cells on a `─` line. Backs ``TrackStyle/bar``.
+    public static let bar = TrackConfiguration(fullGlyph: "▌", background: .glyph("─"))
 
-    /// `█` full cells with an eighth-block fractional boundary (`▏▎▍▌▋▊▉`, 8
-    /// steps/cell) and a solid background for the unfilled region. Backs
-    /// ``TrackStyle/blockFine``. The background keeps the boundary cell's
-    /// unfilled remainder the same colour as the empty run (no terminal-
-    /// background seam) and delineates the whole bar as one solid unit.
+    /// `█` full cells with a leading edge of eighth blocks (`▏▎▍▌▋▊▉`, 8
+    /// steps/cell) on a solid background. Backs ``TrackStyle/blockFine``. The
+    /// solid background keeps the rest of the leading-edge cell the same colour
+    /// as the background cells (no terminal-background seam) and delineates the
+    /// whole bar as one solid unit.
     public static let blockFine = TrackConfiguration(
-        fullGlyph: "█", partialRamp: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"], emptyStyle: .background)
+        fullGlyph: "█", leadingEdge: ["▏", "▎", "▍", "▌", "▋", "▊", "▉"], background: .solid)
 
-    /// `⣿` full cells with a braille-density fractional boundary (`⣀⣄⣤⣦⣶⣷⣿`, 8
-    /// steps/cell), `⠀` (braille blank) empty. Backs ``TrackStyle/braille``.
+    /// `⣿` full cells with a braille-density leading edge (`⣀⣄⣤⣦⣶⣷⣿`, 8
+    /// steps/cell) on a `⠀` (braille blank) background. Backs
+    /// ``TrackStyle/braille``.
     public static let braille = TrackConfiguration(
-        fullGlyph: "⣿", partialRamp: ["⣀", "⣄", "⣤", "⣦", "⣶", "⣷", "⣿"], emptyStyle: .glyph("⠀"))
+        fullGlyph: "⣿", leadingEdge: ["⣀", "⣄", "⣤", "⣦", "⣶", "⣷", "⣿"], background: .glyph("⠀"))
 
-    /// `█` full cells with a shade-ramp fractional boundary (`░▒▓`, 4
-    /// steps/cell), `·` empty, and an optional colour gradient. Backs
+    /// `█` full cells with a shade-ramp leading edge (`░▒▓`, 4 steps/cell) on a
+    /// `·` background, and an optional colour gradient. Backs
     /// ``TrackStyle/shadeRamp(gradient:)``.
     public static func shadeRamp(gradient: Gradient? = nil) -> TrackConfiguration {
         TrackConfiguration(
-            fullGlyph: "█", partialRamp: ["░", "▒", "▓"], emptyStyle: .glyph("·"),
+            fullGlyph: "█", leadingEdge: ["░", "▒", "▓"], background: .glyph("·"),
             fillGradient: gradient)
     }
 }
