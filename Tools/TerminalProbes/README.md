@@ -168,7 +168,10 @@ moves, but what colour the terminal actually paints for a name we emit. The
 sixteen ANSI colours are slots in the user's scheme, so `SGR 31` is "red" only
 by convention — and TUIkit's contrast floor and 256-colour quantiser both
 derive from a table of what those slots conventionally hold. Run it in each
-host and record the answers in the compatibility document.
+host and record the answers in the compatibility document. What it takes to
+ask those questions from inside an app (every host's reply spelling, latency,
+fence ordering, and what tmux does in between) is `osc_colour_probe.py`'s
+question; see its section below.
 
 Extend the battery in `advance_probe.py` rather than hand-rolling one-off
 probes, and record new results (with `TERM_PROGRAM_VERSION`) in the
@@ -316,3 +319,68 @@ was Warp-specific until bc9dc5b8 generalised it). Re-run when a Unicode version 
 when a terminal updates, or when one emoji misbehaves — the sweep costs
 seconds and answers for the whole block; extend `SWEEP` when new emoji land
 outside it.
+
+## `osc_colour_probe.py` + `tmux_colour_harness.py`: asking a terminal for its colours
+
+`palette_probe.py` records what a host says its colours are. These record what
+it takes to ask: whether each of OSC 10, OSC 11, OSC 4 and `CSI ? 996 n` is
+answered at all, how the reply is spelled and terminated, how long it takes,
+whether it can land after the `CSI 6n` / `CSI 5n` fence sent behind it, whether
+a batch costs one wait or one per query, and whether anything prints. Results
+and their versions are written up in `Documentation/Terminal-compatibility.md`,
+"What an ANSI colour actually paints". As with `palette_probe.py`, no records
+are kept in `data/`.
+
+Run the probe inside the terminal under test; it only queries and sets nothing:
+
+```sh
+PROBE_OUT=/tmp/osc.json PROBE_LABEL="Basic profile" python3 osc_colour_probe.py
+python3 osc_colour_probe.py --summarise /tmp/osc.json
+```
+
+`osc_colour_selftest.py` runs the probe against a scripted terminal on a pty in
+five modes (answering, BEL-only, late, silent, printing) and checks the record;
+it exits 1 on any mismatch and takes about 20 s. It checks the probe and
+measures no host. Run it after any change to the probe. It has been seen to
+fail: making the probe call every reply "before the fence" fails the `late`
+mode.
+
+`tmux_colour_harness.py` measures tmux itself: a real tmux on a private socket
+with no configuration, whose clients are ptys this script plays, with known
+answers and every forwarded query logged.
+
+```sh
+PROBE_OUT_DIR=/tmp/tc python3 tmux_colour_harness.py clients --order AB   # ~90 s
+PROBE_OUT_DIR=/tmp/tc python3 tmux_colour_harness.py clients --order BA
+PROBE_OUT_DIR=/tmp/tc python3 tmux_colour_harness.py batch --client silent
+PROBE_OUT_DIR=/tmp/tc python3 tmux_colour_harness.py batch --client answering
+```
+
+- `clients` attaches two clients with different colours, one silent on OSC 4,
+  and runs the probe in the pane four times (first alone; both, second attached
+  last; both, after the first typed; first alone again). It prints whose OSC
+  10/11 the pane saw, what `?996n` got, and which client OSC 4 went to. Run both
+  orders: "attached first" and "attached last" only separate when swapped.
+- `batch` writes the startup batch, fg/bg alone, one slot and the multi-pair
+  spelling, each fenced by `CSI 5n` with a marker line printed straight after.
+  It records when the fence reply reached the pane, what came back, when the
+  marker reached the client (whether tmux holds pane output while a query is
+  pending), and what was forwarded.
+
+**A scripted client must answer each query exactly once.** The throwaway
+harness these replaced kept an unconsumed buffer and re-sent a stale OSC 4
+reply whenever new bytes arrived, and that alone made the multi-pair spelling
+look broken under tmux 3.7c: one slot, after 0.5 s. With one answer per query,
+tmux forwards the spelling as three single queries and returns all three slots
+in under a millisecond.
+
+Two things these tools cannot do alone:
+
+- **Two real emulators on one session** need two windows: start
+  `tmux -L probe -f /dev/null new-session` in one terminal, run the probe in the
+  pane, `tmux -L probe attach` from a second terminal, and run it again.
+- **Some hosts need a person at the machine.** On 2026-09-14, launching Ghostty
+  with `-e` and launching a quarantined Hyper both stopped at a confirmation
+  dialog nobody clicked, so no probe ran. iTerm2 opened what looked like an
+  alert. A record from the same launcher is timestamped 07:48, well after the
+  attempt, and nobody noted who dismissed the window.
