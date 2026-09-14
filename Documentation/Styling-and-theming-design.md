@@ -219,6 +219,38 @@ extension View {
 `Text("x").bold()` keeps working unchanged (the method on the concrete `Text` type
 is preferred over the `View` extension and sets its own `TextStyle`).
 
+### 3.8 Indicator animation speeds — the same rule, per kind
+
+How fast an ambient indicator animates (a spinner, a text caret, a focused
+control's breath, an indeterminate bar) resolves by the rule in §3.4, with the
+indicator *kind* standing where a property does:
+
+```swift
+extension View {
+    func indicatorAnimationSpeed(_ speed: IndicatorAnimationSpeed,
+                                 for indicators: IndicatorAnimations = .all) -> some View
+}
+```
+
+- **Nearest wins, per kind.** `EnvironmentValues.indicatorAnimationSpeeds` holds
+  one speed per kind, and the modifier writes only the kinds it names (a
+  `transformEnvironment`, as `scrollIndicators(_:axes:)` does per axis). So an
+  outer `.spinners` 0.5 around an inner `.all` 2 gives spinners 2, the reverse
+  gives 0.5, and an inner `.textCursor` setting leaves the spinners at the outer
+  value. Specificity orders entries only inside one bundle, as in §3.4.
+- **Absolute, never multiplied.** A speed replaces what an ancestor set: 2 inside
+  2 is 2. A rate against the kind's standard speed is the only unit the kinds
+  share (a blink half, a breath, a glyph frame and a bar pass have nothing else
+  in common), which is why the value is a rate and not a duration.
+- **Not in `StyleAttributes`.** An indicator has no scope path to match, so the
+  cascade's scopes would have nothing to select on.
+- **Tolerance is in the rate's own units** (`2 ± 0.1`), like
+  `Timer.publish(every:tolerance:)`. Inside it, the framework may pick a duration
+  that is a whole number of `AnimationClock.baseTick`s, so indicators step
+  together. A tolerance of 0 is exact.
+- **Only spinners read it so far.** The caret, the focus emphasis and the
+  indeterminate bar follow in their own changes.
+
 ## 4. Tint (implemented **last** — wholly new)
 
 ```swift

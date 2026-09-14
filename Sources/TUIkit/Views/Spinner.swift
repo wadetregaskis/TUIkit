@@ -303,7 +303,8 @@ extension SpinnerStyle {
 /// The animation is not a task, and nothing starts or stops with the spinner
 /// appearing: the frame comes from the shared content clock, so every spinner of
 /// a style is in phase, and the spinner leaves one ``AnimatedCellRun`` over its
-/// own cells for the run loop to splice at the style's interval — no re-render,
+/// own cells for the run loop to splice at the style's interval (at the speed set
+/// for spinners, see below) — no re-render,
 /// no re-measure, nothing asked of this view (`99b91c0f`). Only a
 /// ``SpinnerStyle/custom(_:)`` sequence whose frames are not all one width
 /// escapes that, since a run must claim exactly the cells every frame fills; it
@@ -334,6 +335,18 @@ extension SpinnerStyle {
 /// Three of many, not the set: ``SpinnerStyle`` carries the rest, each with its
 /// own frames and interval, and ``SpinnerStyle/custom(_:)`` takes a sequence of
 /// your own.
+///
+/// # Speed
+///
+/// Those intervals are each style's standard speed.
+/// ``View/indicatorAnimationSpeed(_:for:)`` with ``IndicatorAnimations/spinners``
+/// sets another for a subtree, and it reaches the spinner a `refreshable` view
+/// draws too:
+///
+/// ```swift
+/// // .dots at 220ms a frame
+/// Spinner("Loading...").indicatorAnimationSpeed(.halfSpeed, for: .spinners)
+/// ```
 public struct Spinner: View {
     /// The optional label displayed after the spinner.
     let label: String?
@@ -470,10 +483,15 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // same clock; it used to need a branch of its own (§66), and a render with no
         // timer at all drew the run-backed spinner's first frame whatever the time.
         let elapsed = Double(context.environment.frameNowNanos) / 1_000_000_000
+        // The style's interval at the speed set for spinners here. One value for the
+        // frame drawn, the run left and the fallback's wake, so none of them can step
+        // at a different rate from the others.
+        let frameDuration = context.environment.indicatorAnimationSpeeds.speed(for: .spinners)
+            .frameDuration(standard: style.interval)
         // Through the conversion the run's own index uses, so the frame drawn here is
         // the frame the loop replays: a floor in seconds put a summed `.dots` clock one
         // step short at steps 27–40, and every render on such a wake stuttered back.
-        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: style.interval)
+        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: frameDuration)
         let count = Int64(max(1, cycle.count))
         let frameIndex = cycle.isEmpty ? 0 : Int(((step % count) + count) % count)
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
@@ -527,16 +545,14 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
             // occupy exactly the cells the run claims. A mixed-width
             // `.custom(_:)` sequence is the only way to get here, and it falls
             // back to re-rendering the whole screen: one render at the next step
-            // of the style's interval on the frame clock, the step it draws from,
+            // of its frame duration on the frame clock, the step it draws from,
             // and that render asks for the one after. It used to ask for a grid at
             // the style's rate, anchored at whichever frame first asked rather
             // than at the steps, so every render landed part-way through one.
             if !context.isMeasuring, cycle.count > 1 {
                 context.requestWake(
                     token: "spinner-\(context.identity.path)",
-                    atNanos: AnimationClock.stepEndNanos(
-                        atElapsed: Double(context.environment.frameNowNanos) / 1_000_000_000,
-                        frameDuration: style.interval))
+                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: frameDuration))
             }
             return buffer
         }
@@ -548,7 +564,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         buffer.animatedCells = [
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: width, frames: cycle,
-                frameDuration: style.interval, clock: .content)
+                frameDuration: frameDuration, clock: .content)
         ]
         return buffer
     }

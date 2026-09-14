@@ -397,6 +397,26 @@ struct RefreshableTests {
             "row: \(row.debugDescription)")
     }
 
+    /// The indicator is a `Spinner` composed inside the refreshable's subtree, so
+    /// the speed set for spinners there reaches it without anything of its own.
+    @Test("The indicator animates at the speed set for spinners")
+    func indicatorFollowsSpinnerSpeed() async {
+        let harness = Harness()
+        let gate = Latch()
+        let view = Text("abcdefghij")
+            .refreshable { while gate.isClosed { await Task.yield() } }
+            .indicatorAnimationSpeed(2, for: .spinners)
+
+        _ = harness.frame(view)
+        harness.press(.character("r"), ctrl: true)
+        await settle()
+        let busy = harness.frame(view)
+        gate.release()
+        await settle()
+        // `.dots` is 110 ms a frame at the standard speed.
+        #expect(busy.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) } == [55_000_000])
+    }
+
     @Test("A running refresh renders its content once")
     func runningRefreshDoesNotDoubleRenderContent() async {
         // The spinner is an OVERLAY on the content, and an overlay renders its

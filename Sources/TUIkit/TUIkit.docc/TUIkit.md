@@ -229,6 +229,9 @@ struct MyApp: App {
 - ``EveryMinuteTimelineSchedule``
 - ``ExplicitTimelineSchedule``
 - ``AnimationTimelineSchedule``
+- ``IndicatorAnimationSpeed``
+- ``IndicatorAnimations``
+- ``IndicatorAnimationSpeeds``
 
 ### Environment
 
