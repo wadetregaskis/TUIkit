@@ -43,7 +43,7 @@ public struct AnimatedRunAlpha: Sendable, Equatable {
     /// A span of the run's cells owing one pair of alphas.
     ///
     /// Ink and field only, and deliberately no layer channel. A layer's alpha nests and
-    /// ``OpacityFade`` has already folded every enclosing `.opacity(_:)` into the
+    /// `OpacityFade` has already folded every enclosing `.opacity(_:)` into the
     /// regions it carries up; it cannot see a payload riding on a run, so a layer value
     /// here would be one this type could never keep current. Ink and field do not nest,
     /// which is exactly why they can be stated here and multiplied in later.
