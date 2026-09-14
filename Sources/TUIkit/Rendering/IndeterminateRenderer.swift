@@ -175,17 +175,44 @@ enum IndeterminateRenderer {
         palette: any Palette, speed: IndicatorAnimationSpeed
     ) -> (frames: [String], frameTicks: Int) {
         let layout = layout(of: style, speed: speed)
+        let configuration = style.configuration
         // Sampled over the configuration's OWN period, whatever the speed: a faster
-        // bar shows the same motion in less time, not a different motion.
+        // bar shows the same motion in less time, not a different motion. A sweep's
+        // and a knightRider's frame i of F is their step ⌊i·N/F⌋, counted in
+        // integers (`step(ofFrame:of:states:)`); the other motions are still timed.
         let sample = period(of: style) / Double(layout.frameCount)
+        let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
         let frames = (0..<layout.frameCount).map { index in
-            render(
-                width: width, style: style, fillColor: fillColor,
-                backgroundColor: backgroundColor, accentColor: accentColor,
-                elapsed: Double(index) * sample, palette: palette
-            ).text
+            switch configuration.motion {
+            case .sweep, .knightRider:
+                render(
+                    width: width, style: style, fillColor: fillColor,
+                    backgroundColor: backgroundColor, accentColor: accentColor,
+                    position: .step(step(ofFrame: index, of: layout.frameCount, states: states)),
+                    palette: palette
+                ).text
+            case .barberPole, .pulse, .gradient:
+                render(
+                    width: width, style: style, fillColor: fillColor,
+                    backgroundColor: backgroundColor, accentColor: accentColor,
+                    elapsed: Double(index) * sample, palette: palette
+                ).text
+            }
         }
         return (frames, layout.frameTicks)
+    }
+
+    /// The step frame `frame` of a pass laid out in `frameCount` frames shows, of the
+    /// `states` its motion steps through: ⌊frame · states / frameCount⌋, in integers.
+    ///
+    /// Counted from the index rather than found by timing the frame, at
+    /// `frame × period / frameCount` seconds, and truncating its phase × `states`:
+    /// that product is a float, and on a frame that begins exactly on a state it can
+    /// come out a hair short and draw the state before. A 4-cell sweep's frame 36 of
+    /// 48 is three quarters of the way through its pass, and its phase × 4 was
+    /// 2.9999999999999996.
+    static func step(ofFrame frame: Int, of frameCount: Int, states: Int) -> Int {
+        frame * states / max(1, frameCount)
     }
 
     /// How one pass of `style` is laid out at `speed`: how many frames it is sampled

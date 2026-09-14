@@ -533,4 +533,60 @@ struct IndeterminateProgressViewTests {
         #expect(buffer.lines[0].contains("█"), "The sweeping segment is always present")
         #expect(buffer.lines[0].contains("░"), "The remainder of the track is visible")
     }
+
+    /// `style` as a bar `width` cells wide, drawn at the instant `tick` 1/60 s ticks
+    /// in: the frame of its pre-rendered cycle the loop would show then.
+    private func bar(_ style: IndeterminateStyle, width: Int, atTick tick: Int64) -> String {
+        var context = testContext(width: width)
+        context.environment.frameNowNanos = AnimationClock.nanoseconds(atTick: tick)
+        return renderToBuffer(ProgressView().indeterminateStyle(style), context: context).lines[0].stripped
+    }
+
+    /// Frame i of a pass of F frames shows state ⌊i·N/F⌋. A 4-cell sweep's pass is 48
+    /// frames of 2 ticks, so frame 36, at tick 72, is three quarters through: the head
+    /// on column 3. The frame used to be found by timing it, 36 × (1.6 s / 48), and
+    /// truncating its phase × 4, which is 2.9999999999999996, so it drew column 2.
+    @Test("A 4-cell sweep's frame 36 of 48 has its head on column 3")
+    func sweepFrameOnATieShowsItsOwnHead() {
+        #expect(bar(.sweep, width: 4, atTick: 72) == "░░░█")
+    }
+
+    /// A 31-cell knightRider's pass is 60 frames of 2 ticks and 60 steps, so frame 31
+    /// is step 31: the lead one cell back from the far wall, on column 29, with the
+    /// wall behind it. Timed and truncated, frame 31 read step 30, and the lead stood
+    /// on the wall for a second frame with its three-cell tail.
+    @Test("A 31-cell knightRider's frame 31 of 60 has turned back off the wall")
+    func knightRiderFrameOnATieShowsItsOwnStep() {
+        #expect(bar(.knightRider, width: 31, atTick: 62) == String(repeating: "░", count: 29) + "██")
+    }
+
+    /// The rule for every frame: at widths 1-40 and three speeds, frame i of a sweep's
+    /// or knightRider's cycle is the renderer's step ⌊i·N/F⌋, with N the motion's own
+    /// count, W and 2(W − 1), and F the cycle's frames.
+    @Test(
+        "Every frame of a sweep or knightRider cycle shows the step its index names",
+        arguments: [("sweep", IndeterminateStyle.sweep), ("knightRider", .knightRider)])
+    func everyFrameShowsItsIndexedStep(name: String, style: IndeterminateStyle) {
+        for rate in [1.0, 2.0, 0.5] {
+            for width in 1...40 {
+                let states = name == "sweep" ? width : max(1, 2 * (width - 1))
+                let frames = IndeterminateRenderer.cycle(
+                    width: width, style: style, fillColor: .rgb(150, 150, 150),
+                    backgroundColor: .rgb(80, 80, 80), accentColor: .rgb(0, 200, 255),
+                    palette: SystemPalette.green, speed: IndicatorAnimationSpeed(rate)
+                ).frames
+                let misdrawn = frames.indices.filter { index in
+                    frames[index]
+                        != IndeterminateRenderer.render(
+                            width: width, style: style, fillColor: .rgb(150, 150, 150),
+                            backgroundColor: .rgb(80, 80, 80), accentColor: .rgb(0, 200, 255),
+                            position: .step(index * states / frames.count), palette: SystemPalette.green
+                        ).text
+                }
+                #expect(
+                    misdrawn.isEmpty,
+                    "\(name) at \(rate)x, \(width) cells, \(frames.count) frames: frames \(misdrawn)")
+            }
+        }
+    }
 }
