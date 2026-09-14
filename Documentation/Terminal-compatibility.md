@@ -1879,13 +1879,13 @@ never touch a real session or the user's preferences.
 ## What an ANSI colour actually paints
 
 **Status: palettes MEASURED for Apple Terminal.app 455.1 (default "Basic"
-profile) on 2026-08-24, and for iTerm2 3.7.1 (profile "Default") on
-2026-09-14. Warp 0.2026.09.02 does not report its palette: it left OSC 4
-unanswered on 2026-09-14. Ghostty 1.3.1 was read from its own configuration on
-2026-09-01 and is not yet confirmed live. How each host answers the queries
-themselves, and what tmux and GNU screen do to them, was measured on
-2026-09-14; see "Asking the terminal for its colours" below. Ghostty and Hyper
-were not measured.**
+profile) on 2026-08-24, and for iTerm2 3.7.1 (profile "Default") and Ghostty
+1.3.1 (default config) on 2026-09-14. Ghostty's had been read from its own
+configuration on 2026-09-01, and the live answers matched it. Warp 0.2026.09.02
+does not report its palette: it left OSC 4 unanswered on 2026-09-14. How each
+host answers the queries themselves, and what tmux and GNU screen do to them,
+was measured on 2026-09-14; see "Asking the terminal for its colours" below.
+Hyper was not measured.**
 `Tools/TerminalProbes/palette_probe.py` asks a terminal directly (OSC 4 /
 OSC 10 / OSC 11) and writes the answer as JSON; run it in each host and record
 the results below. `osc_colour_probe.py` measures the exchange itself.
@@ -1948,9 +1948,11 @@ which resolve to RGB and are stated exactly.
 ### Ghostty 1.3.1, default theme — read from its own configuration
 
 **Provenance: `ghostty +show-config --default`, 2026-09-01, with the user's
-`config.ghostty` empty (0 bytes) so the defaults are what runs. NOT yet
-confirmed over OSC 4 in a live window — run `palette_probe.py` there to
-promote this from "what it ships" to "what it paints".**
+`config.ghostty` empty (0 bytes) so the defaults are what runs. Confirmed in a
+live window on 2026-09-14: over OSC 4, 10 and 11, a default-config Ghostty
+reported every value below, the eight slots not listed, and the background and
+foreground, exactly as configured (see "Asking the terminal for its
+colours").**
 
 Ghostty's stock scheme is Tomorrow Night, and it is muted on purpose. **Slot 0
 is not black**, which is the whole of why a near-black photograph renders
@@ -1987,33 +1989,65 @@ its own page, so those reach nothing an image draws.
 - macOS 15.7.9 (24G830), system appearance Light. The probe records are not
   committed (see the probes' README).
 - **Latency** runs from just before the write to the read that completed the
-  reply, and includes Python's `select` wake-ups. It is one run on one machine,
-  so read it as an order of magnitude.
-- The host runs predate the probe's batch and multi-pair sections. So for
-  native hosts, only single queries and the OSC 10 + 11 pair were measured.
+  reply, and includes Python's `select` wake-ups. It is one or two runs per host
+  on one machine, so read it as an order of magnitude.
+- **Two passes the same day.** The first measured Apple Terminal, iTerm2, Warp,
+  screen and tmux. The second measured Ghostty, and iTerm2 again, with the
+  same unchanged probe.
+- The host runs of both passes predate the probe's batch and multi-pair
+  sections. So for native hosts, only single queries and the OSC 10 + 11 pair
+  were measured.
+- The machine is a virtual Mac (`hw.model` VirtualMac2,1).
 
 **Not measured:**
-- **Ghostty 1.3.1** (bundle 15212). Three launches with `-e` never started the
-  probe. The binary contains the text `Allow Ghostty to execute "`, so a
-  confirmation dialog nobody clicked is the likely cause (inferred). Also
-  unmeasured for the same reason: Ghostty with `--background=000000`, where
-  `?996n` could be compared with OSC 11, and Ghostty as a tmux client.
-- **Hyper 3.4.1.** The bundle is quarantined, a Gatekeeper-style prompt
-  appeared, and nobody approved it.
+- **Hyper 3.4.1**, because it did not start on this machine. Gatekeeper no
+  longer blocked it, but all three launches (08:03, 08:12 and 09:13) crashed
+  within 0.4 s, before any window: `EXC_BREAKPOINT` in
+  `v8::internal::wasm::WasmCodeManager::WasmCodeManager()`, called from
+  `WasmEngine::InitializeOncePerProcess()` inside `v8::V8::Initialize`. That is
+  V8 setting up WebAssembly, before any JavaScript ran. This was observed on
+  this virtual Mac. Whether Hyper fails the same way elsewhere was not tested.
+- **Ghostty as a tmux client.** After the two runs below, Ghostty stopped
+  opening usable windows. Six launches produced either no window, or a window
+  whose log says `error initializing surface err=error.OutOfMemory`, with no
+  child started. The cause was not established.
+- **Ghostty's `?996n` under a Dark system appearance**, which would need a
+  system setting changed.
 - ssh, and Apple Terminal with a dark profile.
 
-**iTerm2 3.7.1: what is and isn't known about its run.** The launch
-(`open -a iTerm` on a `.command` file) first showed only a 276×312 window,
-probably an alert, and the probe did not run then. The record below came from
-the same launcher, timestamped 07:48, well after that attempt. It carries
-iTerm2's own environment: `TERM_PROGRAM=iTerm.app`, `TERM_PROGRAM_VERSION=3.7.1`,
-`ITERM_PROFILE=Default`, `TERM_FEATURES` and `COLORFGBG=0;15`. Nobody noted who
-dismissed the window, or when.
+**Launching Ghostty.** `open -na Ghostty.app --args -e <script>` ran the probe
+with no prompt, in both runs below. Running the `ghostty` binary directly with a
+bare script path did not. A stack sample shows AppKit passing the path to
+`application(_:openFile:)`, which put up a modal `NSAlert`. The first pass's
+failed direct launch fits that, but it was not sampled.
+
+**iTerm2 3.7.1: where its records came from.**
+- **First pass.** The launch (`open -a iTerm` on a `.command` file) first showed
+  only a 276×312 window, probably an alert, and the probe did not run then. The
+  record came from the same launcher, timestamped 07:48, well after that
+  attempt. It carries iTerm2's own environment: `TERM_PROGRAM=iTerm.app`,
+  `TERM_PROGRAM_VERSION=3.7.1`, `ITERM_PROFILE=Default`, `TERM_FEATURES` and
+  `COLORFGBG=0;15`. Nobody noted who dismissed the window, or when.
+- **Second pass.** Two more launches, one of a new `.command` file and one of
+  the file approved in the first pass, each put up another 276-wide window
+  (276×326 and 276×312) and did not run. Both probes ran at 09:02, 1.5 s apart, presumably once
+  someone approved the windows. So **iTerm2's alert has to be approved on every
+  `.command` launch**, even for a file approved before. Nobody saw the alert's
+  text, because screen capture returned only the wallpaper.
+- **The 09:02:12 record agrees with the 07:48 one** on every colour,
+  terminator, ordering and `?996n` result, and on latency (below).
+- **The other 09:02 record is set aside.** It started 1.5 s earlier in a second
+  iTerm2 window, so the two probes overlapped. While they did, its replies fell
+  up to a second behind. Three fence replies were counted as timed out and then
+  turned up in later exchanges. Once the other probe finished, it was back to
+  15–33 ms. That two sessions querying at once slowed each other is inferred.
 
 | Host | OSC 10 (fg) | OSC 11 (bg) | OSC 4, slots 0–15 | `?996n` | Reply terminator | Latency | Reply in the fence's read |
 |---|---|---|---|---|---|---|---|
 | Apple Terminal 455.1, default profile | 0, 0, 0 | 255, 255, 255 | all 16; byte for byte the Basic table above | silent | **always BEL**, even for an ST query (40 of 40) | ~0.1 ms (0.07–0.5) | 74 of 76 |
-| iTerm2 3.7.1, profile "Default" | 16, 16, 16 | 250, 250, 250 | all 16 (below) | `997;2` | **always ST**, even for a BEL query (36 of 36) | ~10 ms (3–32; fences 15–36) | none: an earlier read |
+| iTerm2 3.7.1, profile "Default" | 16, 16, 16 | 250, 250, 250 | all 16 (below) | `997;2` | **always ST**, even for a BEL query (36 of 36, in each of two runs) | **~15–20 ms**, median by query (2.8–33; fences 15–36): two orders of magnitude slower than any other host | none: an earlier read |
+| Ghostty 1.3.1, default config | 255, 255, 255 | 40, 44, 52 | all 16; the configured table above, byte for byte | `997;2` | mirrors the query | ~0.05 ms (0.03–0.13; fences 0.05–0.20) | none: an earlier read |
+| Ghostty 1.3.1, `--background=000000 --foreground=ffffff` | 255, 255, 255 | **0, 0, 0** | the same 16 | **`997;2` again** | mirrors the query | as above | none: an earlier read |
 | Warp v0.2026.09.02.08.27.stable_01, light theme | 17, 17, 17 | 255, 255, 255 | **silent** in all 64 exchanges; the fence still came back in ~0.1 ms | silent | mirrors the query | ~0.03 ms | all |
 | GNU screen 4.00.03, inside Apple Terminal | silent | silent | silent | silent | — | fences ~0.1–0.3 ms | — |
 | tmux 3.7c | a client's (see below) | a client's | forwarded to one client (see below) | answered by tmux | mirrors the query | ~0.1 ms when answered | all |
@@ -2038,12 +2072,24 @@ iTerm2's sixteen, as reported. They are not xterm's table either:
   There were no stray or late bytes, and nothing printed: the cursor never
   moved.
 - **Fences:** both `CSI 6n` and `CSI 5n` were answered in every exchange on every
-  host, including screen and Warp's unanswered OSC 4.
-- **Terminator:** a parser has to take BEL and ST whatever it sent. Apple
-  Terminal answers ST with BEL, and iTerm2 answers BEL with ST.
-- **`?996n`:** only iTerm2 answered it natively, and under tmux, tmux answers.
+  host, including screen and Warp's unanswered OSC 4. That holds for every
+  record used here; the one set-aside iTerm2 record is above.
+- **Terminator:** a parser has to take BEL and ST whatever it sent.
+  - mirrors the query: Ghostty, Warp and tmux;
+  - always BEL: Apple Terminal;
+  - always ST: iTerm2.
+- **`?996n`:** answered by Ghostty, iTerm2 and tmux (under tmux, tmux itself
+  answers). Apple Terminal, Warp and screen were silent. Both native answers
+  were `997;2`.
+- **Ghostty's `997` does not follow the background it paints.** It answered
+  `997;2` (light) on its default 40, 44, 52 and on 0, 0, 0 alike, while OSC 11
+  reported each background correctly. The system appearance was Light for both
+  runs, so Ghostty may follow that instead. *Inferred*, not measured: it needs a
+  run under Dark. iTerm2's `997;2` came with a light background, so it cannot
+  tell the two rules apart. Under tmux, `997` followed the client's background
+  (below).
 - **`COLORFGBG`:** only iTerm2 set it (`0;15`). It was unset in Apple Terminal,
-  in Warp, and in the screen and tmux panes.
+  Ghostty and Warp, and in the screen and tmux panes.
 - **screen:** its panes inherit `TERM_PROGRAM=Apple_Terminal` from the outer
   host, which is stale there.
 
