@@ -98,6 +98,31 @@ struct DimmedModifierTests {
         }
     }
 
+    /// Every other rebuild of a run must carry its per-frame alpha (a link's did not,
+    /// and a caret inside one stopped fading). The backdrop is the deliberate exception,
+    /// pinned so it is not "fixed": its frames are repainted in the wash's two colours,
+    /// so the payload describes colours that are no longer there, and the one field
+    /// claim over the whole backdrop is true of every frame. Kept, the resolver would
+    /// multiply it into that claim and fade the wash twice.
+    @Test("A backdrop's runs drop their per-frame alpha, and the wash's claim covers them")
+    func backdropSpendsRunAlpha() throws {
+        var page = FrameBuffer(lines: ["ab"])
+        let payload = AnimatedRunAlpha(
+            perFrame: [[], [AnimatedRunAlpha.Span(start: 0, cells: 1, field: 0.5)]], drawnIndex: 0)
+        page.animatedCells = [
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"], clock: .cursor, alpha: payload)
+        ]
+        try #require(payload.varies, "the premise: a payload no rectangle could replace")
+
+        let dimmed = page.dimmedAsBackdrop(foreground: .rgb(90, 90, 90), background: .rgb(0, 0, 40).opacity(0.5))
+        let run = try #require(dimmed.animatedCells.first, "the run keeps moving behind the modal")
+        #expect(run.alpha == nil)
+        let claim = try #require(dimmed.opacityRegions.first, "the wash claims its field")
+        #expect(dimmed.opacityRegions.count == 1)
+        #expect(claim.offsetX == 0 && claim.offsetY == 0 && claim.width >= run.width && claim.height >= 1)
+        #expect(claim.fieldOpacity < 1)
+    }
+
     @Test("A dimmed line terminates its persistent background (no rightward bleed)")
     func dimmedBackgroundIsTerminated() {
         // The backdrop's persistent background left ACTIVE at the line end

@@ -132,6 +132,14 @@ extension FrameBuffer {
     /// the 30 it managed with no dialog up, and every one of those ticks a whole
     /// re-render of page, dim and dialog.
     ///
+    /// A kept run's per-frame alpha (``AnimatedCellRun/alpha``) is dropped, and that
+    /// too is consumed rather than lost, unlike the rebuilds that must carry it. The
+    /// payload describes what the run's ORIGINAL colours owed, and the flatten repaints
+    /// every frame in the wash's two, so the one field claim below is true of every
+    /// frame. Kept, it would also sit under that claim, and the resolver multiplies a
+    /// payload into whatever covers it, so the wash's field would be faded twice on
+    /// every frame the payload spoke for.
+    ///
     /// A run whose frames all flatten to the SAME picture is dropped instead:
     /// the block glyphs an indeterminate bar animates in are ornaments, so a
     /// `.pulse` bar has nothing left to show once they are spaces, and keeping

@@ -4273,8 +4273,8 @@ on a host that honours OSC 8, and faded on one that does not. It passes the payl
 unchanged now: the escapes cost no cells and the spans are run-relative, so they are still
 true of the linked frames. `dimmedAsBackdrop` is the one rebuild that drops it deliberately.
 Its frames are washed in two new colours, and one static claim covers them (§68.5). The old
-payload describes colours that are no longer there, and keeping it beside that claim would
-break the XOR the resolver asserts.
+payload describes colours that are no longer there. The resolver multiplies a payload into
+whatever covers it (§70.3), so keeping it would fade the wash's field twice.
 
 ## 70. A run left outside the buffer that carries it (2026-09-12)
 
