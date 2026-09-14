@@ -2,11 +2,13 @@
 //  TrackStyleEditor.swift
 //
 //  An interactive TrackConfiguration builder shared by the ProgressView and
-//  Slider demo pages: three combo fields (text entry + a menu of pre-defined
-//  and recent values, via `.textInputSuggestions`) build a custom track style
-//  and preview it live with `.custom(_:)`. Values committed with Enter — or
-//  picked from a menu — are recorded in persistent app state, most recent
-//  first, and offered under a divider on the next visit.
+//  Slider demo pages: one row each for the track's Fill, Leading edge and
+//  Background. Each row is a combo field (text entry + a menu of pre-defined
+//  and recent values, via `.textInputSuggestions`); the Fill and Background
+//  rows add that part's colours. The style previews live with `.custom(_:)`.
+//  Values committed with Enter — or picked from a menu — are recorded in
+//  persistent app state, most recent first, and offered under a divider on the
+//  next visit.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -14,9 +16,10 @@
 import Foundation
 import TUIkit
 
-/// Builds a ``TrackConfiguration`` from three combo fields (fill glyph,
-/// fractional boundary ramp, unfilled treatment) plus a gradient toggle, and
-/// previews it live on a ``ProgressView`` or a ``Slider``.
+/// Builds a ``TrackConfiguration`` from three rows (the fill pattern, the
+/// leading edge's fractional ramp, and the background) plus the colours of the
+/// fill and of the background, and previews it live on a ``ProgressView`` or a
+/// ``Slider``.
 struct TrackStyleEditor: View {
     /// Which control the edited style is previewed on.
     enum PreviewControl {
@@ -33,27 +36,28 @@ struct TrackStyleEditor: View {
     @AppStorage("trackEditor.fill") private var fullGlyph = "█"
     @AppStorage("trackEditor.leadingEdge") private var leadingEdgeText = "▏▎▍▌▋▊▉"
     @AppStorage("trackEditor.background") private var backgroundName = "░"
+    /// Whether the fill has colours of its own.
     @AppStorage("trackEditor.fillColoured") private var fillColoured = false
-    /// The fill gradient's stops, persisted as comma-separated hex like the
+    /// The fill's stops, persisted as comma-separated hex like the
     /// ProgressView page's sweep gradient. Default: red → amber → green.
     @AppStorage("trackEditor.fillStops") private var fillStopsRaw = "FF5050,FFC850,50DC78"
-    /// What a gradient is measured across. The same control Progress & Gauges
-    /// has, because it is the same question and the answer changes what a
-    /// gradient MEANS — a scale, or a decoration.
+    /// What the fill's stops are measured across. The same control Progress &
+    /// Gauges has, because it is the same question and the answer changes what
+    /// a gradient MEANS — a scale, or a decoration.
     @AppStorage("trackEditor.fillSpan") private var fillSpansTrack = true
-    /// The same question for the unfilled half's ramp, answered on its own:
-    /// a fill that is a scale and a remainder that is a decoration is a
+    /// The same question for the background's stops, answered on its own:
+    /// a fill that is a scale and a background that is a decoration is a
     /// perfectly ordinary bar.
     @AppStorage("trackEditor.backgroundSpan") private var backgroundSpansTrack = true
-    /// Whether the unfilled half gets a colour of its own.
+    /// Whether the background has colours of its own.
     @AppStorage("trackEditor.backgroundColoured") private var backgroundColoured = false
-    /// Whether the unfilled half gets a gradient rather than a flat colour.
-    /// The unfilled gradient's stops. Default: a cool ramp, so it reads as the
-    /// other half of the bar rather than as more fill.
+    /// The background's stops. Default: a cool ramp, so it reads as the other
+    /// half of the bar rather than as more fill.
     @AppStorage("trackEditor.backgroundStops") private var backgroundStopsRaw = "203050,2A4A78,3C6EA5"
+    /// Whether the background's colour editor is up.
     @State private var editingBackgroundStops = false
     @State private var sliderValue = 0.6
-    /// Whether the gradient-editor dialog is up.
+    /// Whether the fill's colour editor is up.
     @State private var editingFillStops = false
 
     // The last hundred committed values per field, most recent first,
@@ -62,47 +66,55 @@ struct TrackStyleEditor: View {
     @AppStorage("trackEditor.recentLeadingEdges") private var recentLeadingEdgesJSON = "[]"
     @AppStorage("trackEditor.recentBackgrounds") private var recentBackgroundsJSON = "[]"
 
+    /// The row labels, in drawing order. The label column is as wide as the
+    /// longest of them in the language on screen, so the fields line up.
+    private static let rowLabels: [LocalizedStringKey] = [
+        "component.trackEditor.fill",
+        "component.trackEditor.leadingEdge",
+        "component.trackEditor.background",
+    ]
+
     /// Pre-defined fill glyphs — chosen to look distinct. The smiley combo
-    /// (fill 😃, ramp 🫥😶😐🙂, unfilled 〰️) is offered on both pages; the
-    /// Pac-Man combo (space fill — the eaten trail — with the ᗧ ramp head
-    /// chomping a • dot line) is progress-only, where the fraction only ever
-    /// advances. "␣" is the visible stand-in for a literal space fill, the
-    /// same convention as the unfilled field.
+    /// (fill 😃, leading edge 🫥😶😐🙂, background 〰️) is offered on both
+    /// pages; the Pac-Man combo (space fill — the eaten trail — with the ᗧ
+    /// leading edge chomping a • dot line) is progress-only, where the fraction
+    /// only ever advances. "␣" is the visible stand-in for a literal space
+    /// fill, the same convention as the background field.
     private var fullGlyphs: [String] {
         var glyphs = ["█", "▓", "▌", "■", "●", "━", "=", "#", "😃"]
         if preview == .progress { glyphs.append("␣") }
         return glyphs
     }
 
-    /// Pre-defined fractional-boundary ramps. The field's text IS the ramp
-    /// (darkest last), so free typing builds a custom ramp directly.
+    /// Pre-defined leading edges, each a fractional ramp. The field's text IS
+    /// the ramp (darkest last), so free typing builds a custom ramp directly.
     private var leadingEdges: [String] {
-        var leadingEdges = ["▏▎▍▌▋▊▉", "░▒▓", "⣀⣄⣤⣦⣶⣷⣿", "🫥😶😐🙂"]
-        if preview == .progress { leadingEdges.append("ᗧ") }
-        return leadingEdges
+        var edges = ["▏▎▍▌▋▊▉", "░▒▓", "⣀⣄⣤⣦⣶⣷⣿", "🫥😶😐🙂"]
+        if preview == .progress { edges.append("ᗧ") }
+        return edges
     }
 
-    /// Pre-defined unfilled glyphs; the solid-background mode is offered via
-    /// an explicit completion so its label can be localized while the stored
-    /// value stays the stable "solid" token.
+    /// Pre-defined background patterns; the solid-background mode is offered
+    /// via an explicit completion so its label can be localized while the
+    /// stored value stays the stable "solid" token.
     private var backgroundPatterns: [String] {
         var glyphs = ["░", "·", "─", "␣", "〰️"]
         if preview == .progress { glyphs.append("•") }
         return glyphs
     }
 
-    /// The fallback gradient (red → amber → green) when the persisted stops
+    /// The fallback fill stops (red → amber → green) when the persisted stops
     /// don't decode to at least two colours.
     private static let defaultFillStops = Gradient(colors: [
         .rgb(255, 80, 80), .rgb(255, 200, 80), .rgb(80, 220, 120),
     ])
 
-    /// The persisted stops decoded to a gradient.
+    /// The persisted fill stops decoded to a gradient.
     private var fillStops: Gradient {
         GradientStopsCodec.decode(fillStopsRaw, fallback: Self.defaultFillStops)
     }
 
-    /// The fallback unfilled gradient when the persisted stops are unusable.
+    /// The fallback background stops when the persisted stops are unusable.
     private static let defaultBackgroundStops = Gradient(colors: [
         .rgb(32, 48, 80), .rgb(42, 74, 120), .rgb(60, 110, 165),
     ])
@@ -117,7 +129,7 @@ struct TrackStyleEditor: View {
             set: { backgroundStopsRaw = GradientStopsCodec.encode($0) })
     }
 
-    /// The gradient editor's binding: decodes on read, re-encodes on write.
+    /// The fill's colour editor binding: decodes on read, re-encodes on write.
     private var fillStopsBinding: Binding<Gradient> {
         Binding(
             get: { fillStops },
@@ -125,7 +137,7 @@ struct TrackStyleEditor: View {
     }
 
     /// The configuration the fields currently describe. Both the fill and
-    /// the unfilled entries are PATTERNS: several characters repeat
+    /// the background entries are PATTERNS: several characters repeat
     /// cyclically along the track, and multi-cell characters (emoji, CJK)
     /// coarsen the resolution — see ``TrackConfiguration/fill``.
     private var configuration: TrackConfiguration {
@@ -137,7 +149,7 @@ struct TrackStyleEditor: View {
         default: background = .pattern(backgroundName)
         }
         // "␣" is the menu's visible stand-in for a literal space fill (the
-        // Pac-Man eaten trail), mirroring the unfilled field's convention.
+        // Pac-Man eaten trail), mirroring the background field's convention.
         let fill: String
         switch fullGlyph {
         case "␣": fill = " "
@@ -149,12 +161,9 @@ struct TrackStyleEditor: View {
             leadingEdge: leadingEdgeText.isEmpty ? nil : Array(leadingEdgeText),
             background: background,
             fillGradient: fillColoured ? fillStops : nil,
-            // The unfilled half is stylable too: a flat colour of the style's
-            // own, or a ramp across it. Its first stop doubles as the flat
-            // colour so the two controls agree about what "tinted" means.
-            // Its first stop doubles as the flat colour, for the paths that
-            // take no gradient at all (a coarse multi-cell fill, or a track
-            // one cell wide).
+            // A coloured background is its stops; the first stop doubles as
+            // the flat colour, for the paths that take no gradient at all (a
+            // coarse multi-cell fill, or a track one cell wide).
             backgroundColor: backgroundColoured ? backgroundStops.stops.first?.color : nil,
             backgroundGradient: backgroundColoured ? backgroundStops : nil)
     }
@@ -179,13 +188,27 @@ struct TrackStyleEditor: View {
     }
 
     var body: some View {
+        // Measured in cells, not characters: a CJK label is two cells a glyph.
+        let labelWidth = Self.rowLabels.map { key in key.localized.strippedLength }.max() ?? 0
         VStack(alignment: .leading, spacing: 1) {
+            // One line per row: its label, its field, then (Fill and Background
+            // only) its colour controls, which wrap onto further lines when the
+            // terminal is too narrow for them.
             HStack(alignment: .top, spacing: 2) {
+                Text("component.trackEditor.fill").frame(width: labelWidth)
                 comboField(
                     "component.trackEditor.fill", text: $fullGlyph, width: 9,
                     predefined: fullGlyphs, recentsJSON: $recentFillsJSON)
+                colourControls(coloured: $fillColoured, spansTrack: $fillSpansTrack) {
+                    editingFillStops = true
+                }
+            }
+            // The leading edge is drawn in the fill's colours, so it has no
+            // colour controls of its own.
+            HStack(alignment: .top, spacing: 2) {
+                Text("component.trackEditor.leadingEdge").frame(width: labelWidth)
                 comboField(
-                    "component.trackEditor.ramp", text: $leadingEdgeText, width: 14,
+                    "component.trackEditor.leadingEdge", text: $leadingEdgeText, width: 14,
                     predefined: leadingEdges, recentsJSON: $recentLeadingEdgesJSON,
                     extraCompletions: [""]
                 ) {
@@ -193,46 +216,24 @@ struct TrackStyleEditor: View {
                     // the empty string, which the configuration maps to nil.
                     Text("component.trackEditor.rampNone").textInputCompletion("")
                 }
+            }
+            HStack(alignment: .top, spacing: 2) {
+                Text("component.trackEditor.background").frame(width: labelWidth)
                 comboField(
-                    "component.trackEditor.unfilled", text: $backgroundName, width: 9,
+                    "component.trackEditor.background", text: $backgroundName, width: 9,
                     predefined: backgroundPatterns, recentsJSON: $recentBackgroundsJSON,
                     extraCompletions: ["solid"]
                 ) {
                     // The localized "solid background" option carries the
                     // stable token as its completion — a language switch must
                     // not strand the stored value.
-                    Text("component.trackEditor.background")
+                    Text("component.trackEditor.solidBackground")
                         .textInputCompletion("solid")
                 }
+                colourControls(coloured: $backgroundColoured, spansTrack: $backgroundSpansTrack) {
+                    editingBackgroundStops = true
+                }
             }
-            HStack(spacing: 2) {
-                Toggle("component.trackEditor.gradient", isOn: $fillColoured)
-                // Opens the modal gradient editor over the persisted stops.
-                // Only meaningful while the gradient is applied, so it
-                // disables with the toggle off.
-                Button("component.trackEditor.editGradient") { editingFillStops = true }
-                    .disabled(!fillColoured)
-                Toggle("component.trackEditor.gradientSpansTrack", isOn: $fillSpansTrack)
-                    .disabled(!fillColoured)
-            }
-            HStack(spacing: 2) {
-                // One toggle, not two. There used to be a "…with a gradient"
-                // beside this one, and all it did was choose between the
-                // stops and their FIRST colour — an Example-side gradient →
-                // flat conversion, not a different thing asked of the track.
-                // A one-stop gradient already IS a flat colour, everywhere
-                // from `GradientStopsCodec` to `TrackRenderer.gradientColor`,
-                // so the editor below expresses "flat" by holding one stop and
-                // the toggle has nothing left to say. This side now reads like
-                // the fill's row above it: tint or leave it to the control.
-                Toggle("component.trackEditor.emptyTinted", isOn: $backgroundColoured)
-                Button("component.trackEditor.editEmptyGradient") { editingBackgroundStops = true }
-                    .disabled(!backgroundColoured)
-                Toggle("component.trackEditor.emptyGradientSpansTrack", isOn: $backgroundSpansTrack)
-                    .disabled(!backgroundColoured)
-            }
-            Text("component.trackEditor.comboHint")
-                .foregroundStyle(.palette.foregroundSecondary)
 
             // Full width, not a fixed 36 cells: this is the one bar on either
             // page that the reader is editing, and a coarse fill (an emoji
@@ -272,13 +273,36 @@ struct TrackStyleEditor: View {
         }
     }
 
-    /// One labelled combo field: free text entry over a suggestions menu of
-    /// the pre-defined values, any extra options, and — under a divider — the
-    /// persisted recents. A value is recorded on Enter, on picking a
-    /// suggestion (which submits), and when the field loses focus — a custom
-    /// value applies live, so tabbing away must not lose it. Only genuinely
-    /// custom values are recorded: the pre-defined options (and any extra
-    /// options' completions) already have a home above the divider.
+    /// A Fill or Background row's colour controls: whether that part has
+    /// colours of its own, an editor for them, and what they are measured
+    /// across. The last two only mean something while the part is coloured,
+    /// so they disable with the toggle off.
+    ///
+    /// One toggle, not a flat-colour toggle and a gradient toggle: a one-stop
+    /// gradient already IS a flat colour, everywhere from `GradientStopsCodec`
+    /// to `TrackRenderer.gradientColor`, so the editor expresses "flat" by
+    /// holding one stop. Held in a ``Flow``, so a narrow terminal moves whole
+    /// controls onto the next line instead of clipping the last one.
+    private func colourControls(
+        coloured: Binding<Bool>, spansTrack: Binding<Bool>, edit: @escaping () -> Void
+    ) -> some View {
+        Flow(spacing: 2) {
+            Toggle("component.trackEditor.coloured", isOn: coloured)
+            Button("component.trackEditor.edit", action: edit)
+                .disabled(!coloured.wrappedValue)
+            Toggle("component.trackEditor.spanWholeTrack", isOn: spansTrack)
+                .disabled(!coloured.wrappedValue)
+        }
+    }
+
+    /// One combo field: free text entry over a suggestions menu of the
+    /// pre-defined values, any extra options, and — under a divider — the
+    /// persisted recents. The row supplies the visible label; `title` is the
+    /// field's prompt, shown while it is empty. A value is recorded on Enter,
+    /// on picking a suggestion (which submits), and when the field loses focus
+    /// — a custom value applies live, so tabbing away must not lose it. Only
+    /// genuinely custom values are recorded: the pre-defined options (and any
+    /// extra options' completions) already have a home above the divider.
     @ViewBuilder private func comboField(
         _ title: LocalizedStringKey,
         text: Binding<String>,
@@ -298,22 +322,19 @@ struct TrackStyleEditor: View {
             recentsJSON.wrappedValue = RecentValues.recording(
                 value, in: recentsJSON.wrappedValue)
         }
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title).dim()
-            TextField(title, text: text)
-                .onSubmit(record)
-                .onEditingChanged { began in
-                    if !began { record() }
+        TextField(title, text: text)
+            .onSubmit(record)
+            .onEditingChanged { began in
+                if !began { record() }
+            }
+            .textInputSuggestions {
+                ForEach(predefined, id: \.self) { Text($0) }
+                extraOptions()
+                if !recents.isEmpty {
+                    Divider()
+                    ForEach(recents, id: \.self) { Text($0) }
                 }
-                .textInputSuggestions {
-                    ForEach(predefined, id: \.self) { Text($0) }
-                    extraOptions()
-                    if !recents.isEmpty {
-                        Divider()
-                        ForEach(recents, id: \.self) { Text($0) }
-                    }
-                }
-                .frame(width: width)
-        }
+            }
+            .frame(width: width)
     }
 }

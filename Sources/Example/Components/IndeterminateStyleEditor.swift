@@ -72,7 +72,7 @@ struct IndeterminateStyleEditor: View {
 
     /// The configuration the controls currently describe. "␣" is the visible
     /// stand-in for a literal space, the same convention the track editor's
-    /// unfilled field uses.
+    /// background field uses.
     private var configuration: IndeterminateConfiguration {
         IndeterminateConfiguration(
             motion: motion,
@@ -99,7 +99,7 @@ struct IndeterminateStyleEditor: View {
                     "component.trackEditor.fill", text: $fillGlyph, width: 9,
                     predefined: fillGlyphs, recentsJSON: $recentFillsJSON)
                 comboField(
-                    "component.trackEditor.unfilled", text: $backgroundPattern, width: 9,
+                    "component.trackEditor.background", text: $backgroundPattern, width: 9,
                     predefined: backgroundPatterns, recentsJSON: $recentBackgroundsJSON)
             }
 
@@ -115,11 +115,9 @@ struct IndeterminateStyleEditor: View {
 
             HStack(spacing: 2) {
                 Toggle("component.indeterminateEditor.colors", isOn: $coloured)
-                Button("component.trackEditor.editGradient") { editingStops = true }
+                Button("component.trackEditor.edit") { editingStops = true }
                     .disabled(!coloured)
             }
-            Text("component.trackEditor.comboHint")
-                .foregroundStyle(.palette.foregroundSecondary)
 
             ProgressView()
                 .indeterminateStyle(.custom(configuration))

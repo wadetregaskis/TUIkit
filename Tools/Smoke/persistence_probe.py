@@ -8,8 +8,8 @@ process exits. That needs two processes and a config directory that outlives
 the first, which is what this does.
 
 The subject is the track-style editor (the Slider and Progress pages share
-one), and specifically its "Colour gradient" toggle: it defaults to off, it is
-one keypress to flip, and its state is legible on screen.
+one), and specifically its Fill row's "Coloured" toggle: it defaults to off,
+it is one click to flip, and its state is legible on screen.
 
 Three runs, because two cannot tell "it persisted" from "it always looks like
 that":
@@ -42,8 +42,11 @@ COLS, ROWS = 110, 34
 # The Sliders page, counted down the main menu (which omits the menu itself).
 SLIDERS_MENU_INDEX = 13
 
-# The toggle's English label, from `component.trackEditor.gradient`.
-TOGGLE_LABEL = "Colour gradient"
+# The Fill row's English label, from `component.trackEditor.coloured`. The
+# Background row carries the same label lower down; `line_containing` returns
+# the first match, which is the Fill row, and `toggle_is_on` reads that line's
+# first box. The field before it on the line draws no box.
+TOGGLE_LABEL = "Coloured"
 
 # What a `Toggle` draws when it is on, and when it is off.
 CHECKED, UNCHECKED = "■", "□"
