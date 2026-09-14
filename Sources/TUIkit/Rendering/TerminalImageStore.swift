@@ -89,14 +89,15 @@ struct TerminalImageSignature: Equatable {
     /// previous image before transmitting its next, so nothing accumulates in
     /// the terminal.
     ///
-    /// **A known cost, not fixed:** a view that renders one label several times
-    /// in ONE pass, each time under its own `.foregroundStyle` and at one
-    /// identity. A `.link` button's breath does exactly that
-    /// (`BreathingLabel.draw(ends:cycle:indicating:isMeasuring:render:)`). A mono
-    /// picture in a focused link's label re-transmits once per breath frame on
-    /// every pass that re-renders it, and the terminal is left holding the last
-    /// frame's colour, because the breath's runs replay identical placeholder
-    /// cells. The glyph path breathes correctly.
+    /// **A focus breath is not followed.** A `.link` button's breath renders its
+    /// label once per frame in ONE pass, each time under that frame's
+    /// `.foregroundStyle` and at one identity
+    /// (`BreathingLabel.draw(ends:cycle:indicating:isMeasuring:render:)`), and
+    /// the runs that replay those frames repeat one image id. Followed, a mono
+    /// picture there was sent once per frame on every pass that re-rendered the
+    /// label, and left in the last frame's ink. So the breath publishes a
+    /// ``PictureInkHold``, and the picture keeps the breath's bright end, the
+    /// label's resting colour, for the whole breath. Its glyphs still breathe.
     var monoInk: RGBA
     var monoPaper: RGBA
 }

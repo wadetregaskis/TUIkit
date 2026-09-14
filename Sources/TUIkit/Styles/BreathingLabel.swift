@@ -56,6 +56,12 @@ enum BreathingLabel {
     /// would have to reproduce all of it. That is `frames.count` renders of a
     /// short label, for the one control holding the focus, on the passes where
     /// it re-renders.
+    ///
+    /// A picture in the label does not breathe. Its pixels carry the ink, so
+    /// each frame would be a different picture to send, while the frames a run
+    /// replays name one image. `render` draws each frame through
+    /// `breathingForegroundStyle(_:holdingPicturesAt:)`, which keeps a picture
+    /// at `ends.bright`. See ``PictureInkHold``.
     @MainActor
     static func draw(
         ends: (dim: Color, bright: Color), cycle: SelectionEmphasisCycle,

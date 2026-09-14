@@ -455,9 +455,10 @@ extension View {
     /// control's dim, and a Toggle's or RadioButton's hover or disabled colour
     /// all reach a mono image in their label. Where the terminal draws pictures
     /// as pixels, each new ink re-sends the picture: once per state change, and
-    /// once per frame of a `withAnimation` fade. A focused link-style button
-    /// whose label holds one re-sends it once per breath frame on each
-    /// re-render, and leaves it in the last breath frame's colour.
+    /// once per frame of a `withAnimation` fade. A focus breath is the
+    /// exception. In a focused link's label the glyphs breathe, but a picture
+    /// keeps the label's resting colour, the bright end of the breath, so it is
+    /// sent once rather than once per frame.
     ///
     /// - Parameter colorMode: The color mode to use.
     /// - Returns: A modified view.

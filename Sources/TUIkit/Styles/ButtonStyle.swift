@@ -766,12 +766,15 @@ private struct _ButtonStyleBody: View, Renderable {
             // renders of a short label, for the one control that holds the
             // focus, on the passes where it re-renders.
             if appearance.indicatesFocusInLabel {
+                let ends = BorderRenderer.breathEnds(from: labelFg, on: surface)
                 return BreathingLabel.draw(
-                    ends: BorderRenderer.breathEnds(from: labelFg, on: surface),
+                    ends: ends,
                     cycle: cycle, indicating: indicating, isMeasuring: context.isMeasuring
                 ) { colour in
+                    // A picture in the label keeps the bright end while the
+                    // glyphs breathe. See ``PictureInkHold``.
                     TUIkit.renderToBuffer(
-                        labelView.foregroundStyle(colour),
+                        labelView.breathingForegroundStyle(colour, holdingPicturesAt: ends.bright),
                         context: context.withChildIdentity(
                             erasedType: type(of: labelView), index: 0))
                 }
