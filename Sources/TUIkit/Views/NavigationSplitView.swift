@@ -73,6 +73,13 @@
 /// }
 /// ```
 ///
+/// While a leading column is hidden, a one-cell edge column at the left shows
+/// ▶. A click on it, or Return or Space with it focused, brings back the
+/// nearest hidden column and writes the result through the binding: two
+/// columns go from `.detailOnly` to `.all`, three step from `.detailOnly` to
+/// `.doubleColumn` to `.all`. It is first in the Tab order, and the keyboard
+/// moves to the divider beside the revealed column afterwards.
+///
 /// ## Focus Navigation
 ///
 /// Each column registers as a separate focus section. Use Tab/Shift+Tab to
@@ -232,6 +239,14 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         guard !visibleColumns.isEmpty else {
             return FrameBuffer()
         }
+        let focusManager = context.environment.focusManager
+
+        // A hidden leading column leaves a ▶ edge column at the left, registered
+        // before the columns; they share what is left of the width.
+        let toggleState = resolveToggleState(context: context)
+        let (edge, columnsContext) = layOutEdge(
+            visibleColumns: visibleColumns, context: context,
+            focusManager: focusManager, toggleState: toggleState)
 
         // Resizable columns (the default) persist a user-chosen width per
         // non-trailing column and expose a draggable / focusable divider. This
@@ -250,7 +265,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         let columnWidths = self.columnWidths(
             visibleColumns: visibleColumns,
             style: style,
-            context: context,
+            context: columnsContext,
             widths: widths,
             writeBack: resizable && !context.isMeasuring
         )
@@ -260,7 +275,6 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         // One entry per gap between columns; drives the divider's look and its
         // drag hit-test region (see `combineColumns`).
         var dividerInfos: [DividerRenderInfo] = []
-        let focusManager = context.environment.focusManager
 
         for (index, column) in visibleColumns.enumerated() {
             let columnWidth = columnWidths[index]
@@ -340,6 +354,11 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         if !context.isMeasuring {
             focusManager?.registerSectionGroup(
                 visibleColumns.map { focusSectionID(for: $0, context: context) })
+            // Every section this split owns is registered now, so a handle
+            // pressed last frame can hand the keyboard to the one that undoes it.
+            activatePendingFocus(
+                toggleState: toggleState, visibleColumns: visibleColumns,
+                context: context, focusManager: focusManager)
         }
 
         // Ask for the cycle ONLY when a divider is focused/dragged or hovered,
@@ -348,12 +367,13 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         // and as a CYCLE rather than a live phase, so the divider's cells are
         // left as runs for the loop to advance instead of the whole split
         // re-rendering on every tick.
-        let anyDividerPulsing = dividerInfos.contains { $0.isActive || $0.isHovered }
+        let anyDividerPulsing = (dividerInfos + [edge?.info].compactMap { $0 })
+            .contains { $0.isActive || $0.isHovered }
         let cycle = context.environment.selectionEmphasis.cycle(anyDividerPulsing)
 
         // Combine buffers horizontally, inserting the (possibly resizable)
         // dividers between them.
-        return combineColumns(
+        let columns = combineColumns(
             buffers: buffers,
             columnWidths: columnWidths,
             dividerInfos: dividerInfos,
@@ -362,6 +382,9 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
             cycle: cycle,
             availableHeight: context.availableHeight
         )
+        guard let edge else { return columns }
+        return prependEdgeColumn(
+            edge, to: columns, palette: context.environment.palette, cycle: cycle)
     }
 }
 
@@ -370,21 +393,24 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
 /// ``_NavigationSplitViewCore``'s `StateStorage` slots at its own identity. Its
 /// columns render at child identities (`withChildIdentity`), so no caller
 /// content shares these and they keep the leaf range `0...`. At file scope
-/// because a generic type cannot hold static stored properties.
+/// because a generic type cannot hold static stored properties, and internal
+/// because the sidebar toggle's half lives in NavigationSplitViewToggle.swift.
 ///
 /// The divider handlers are stored per COLUMN, like the widths they write.
 /// Stored by the divider's position on screen, the first divider kept the
 /// handler it was built with in `.all`, which resizes the sidebar, and went on
 /// resizing the hidden sidebar under `.doubleColumn`.
-private enum SplitViewStateIndex {
+enum SplitViewStateIndex {
     /// The shared ``SplitViewWidths``.
     static let widths = 0
     /// The handler of the divider after the sidebar.
     static let sidebarDivider = 1
     /// The handler of the divider after the content column.
     static let contentDivider = 2
-    // 3 is kept free for a column visibility the split view holds itself, for
-    // a split with no `columnVisibility` binding.
+    /// The sidebar toggle's ``SplitViewToggleState``.
+    static let toggle = 3
+    /// The handler of the ▶ edge column shown while a leading column is hidden.
+    static let edge = 4
 
     /// The slot of the divider that follows `column`, or `nil` for the detail
     /// column, which is always trailing and has no divider after it.
@@ -463,14 +489,20 @@ extension _NavigationSplitViewCore {
     /// another's detail column) shared each column's section: Down walked from
     /// one split's sidebar into the other's, and Right from the second split's
     /// sidebar landed in the first split's detail column.
-    fileprivate func focusSectionID(
+    func focusSectionID(
         for column: NavigationSplitViewColumn, context: RenderContext
     ) -> String {
         "nav-split-\(sectionName(of: column))-\(context.identity.path)"
     }
 
+    /// The focus section ID of the divider that follows `column` — see
+    /// `wireDivider` for why it is named by the column.
+    func dividerSectionID(after column: NavigationSplitViewColumn, context: RenderContext) -> String {
+        "nav-split-divider-\(sectionName(of: column))-\(context.identity.path)"
+    }
+
     /// The column's name in the ids of the sections that belong to it.
-    fileprivate func sectionName(of column: NavigationSplitViewColumn) -> String {
+    func sectionName(of column: NavigationSplitViewColumn) -> String {
         switch column {
         case .sidebar: "sidebar"
         case .content: "content"
@@ -591,7 +623,7 @@ extension _NavigationSplitViewCore {
         // `.all` and the first in `.doubleColumn`, so hiding the sidebar while
         // that divider held the focus removed its section, and the focus fell
         // back to the first section on the page.
-        let sectionID = "nav-split-divider-\(sectionName(of: column))-\(context.identity.path)"
+        let sectionID = dividerSectionID(after: column, context: context)
 
         // The same gates every interactive view honours, which this direct
         // wiring bypassed: a `.disabled()` split's divider stayed a Tab stop

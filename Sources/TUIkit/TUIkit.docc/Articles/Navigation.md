@@ -125,6 +125,16 @@ one. Column widths follow the ``NavigationSplitViewStyle``, and the dividers
 between them can be dragged — or reached with <kbd>Tab</kbd> and resized with
 the arrow keys.
 
+When `columnVisibility` hides a leading column, a one-cell edge column appears
+at the split's left with ▶. Clicking it, or reaching it with <kbd>Tab</kbd> (it
+comes first) and pressing <kbd>Return</kbd> or <kbd>Space</kbd>, brings back
+the nearest hidden column and writes the new visibility through the binding: a
+two-column split goes to `.all`, a three-column one steps `.detailOnly` →
+`.doubleColumn` → `.all`. The keyboard then moves to the divider beside the
+column that came back. The edge column needs the split to be at least one cell
+wider than its visible columns; narrower than that it is left out, so it never
+pushes the columns' content out of the split.
+
 ```swift
 NavigationSplitView {
     List(categories, selection: $categoryID) { … }

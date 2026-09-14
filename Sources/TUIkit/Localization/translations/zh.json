@@ -88,6 +88,7 @@
   "statusbar.open": "打开",
   "statusbar.select": "选定",
   "statusbar.submit": "提交",
+  "statusbar.showColumn": "显示列",
   "statusbar.dismiss": "关闭",
   "statusbar.goBack": "返回",
   "statusbar.closePopover": "关闭弹出框",

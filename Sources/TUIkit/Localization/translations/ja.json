@@ -88,6 +88,7 @@
   "statusbar.open": "開く",
   "statusbar.select": "決定",
   "statusbar.submit": "送信",
+  "statusbar.showColumn": "列を表示",
   "statusbar.dismiss": "閉じる",
   "statusbar.goBack": "戻る",
   "statusbar.closePopover": "ポップオーバーを閉じる",

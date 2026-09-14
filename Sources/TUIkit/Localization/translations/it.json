@@ -88,6 +88,7 @@
   "statusbar.open": "apri",
   "statusbar.select": "seleziona",
   "statusbar.submit": "invia",
+  "statusbar.showColumn": "mostra colonna",
   "statusbar.dismiss": "chiudi",
   "statusbar.goBack": "indietro",
   "statusbar.closePopover": "chiudi il popover",

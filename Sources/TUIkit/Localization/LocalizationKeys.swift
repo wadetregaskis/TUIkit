@@ -192,6 +192,8 @@ public enum LocalizationKey {
         case select = "statusbar.select"
         /// A text field the caller gave something to submit to.
         case submit = "statusbar.submit"
+        /// A split view's ▶ edge column, which brings a hidden column back.
+        case showColumn = "statusbar.showColumn"
 
         // MARK: What Escape does over a surface or a mode
 

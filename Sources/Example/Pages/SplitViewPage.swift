@@ -202,9 +202,10 @@ struct SplitViewPage: View {
     }
 
     /// Which leading columns are showing — the `columnVisibility` binding. The
-    /// split view only reads it and never writes it back, so this group shows
-    /// what was picked, not what was drawn: Auto stays selected while all three
-    /// columns show, because the split view draws `.automatic` as `.all`.
+    /// split view writes it back only when the user brings a hidden column back
+    /// with the ▶ edge column. Otherwise this group shows what was picked, not
+    /// what was drawn: Auto stays selected while all three columns show, because
+    /// the split view draws `.automatic` as `.all`.
     ///
     /// Tagged with the visibility values themselves rather than with strings, as
     /// the style picker above has to be: `NavigationSplitViewVisibility` is
