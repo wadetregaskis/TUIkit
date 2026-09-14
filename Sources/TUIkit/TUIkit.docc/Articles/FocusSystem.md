@@ -252,6 +252,33 @@ suppression reads as a bug in whichever control kept shouting.
 with its focus effects off can be genuinely impossible to navigate by keyboard.
 That is the same trade SwiftUI's modifier makes, and it is the caller's to make.
 
+### When the view does not appear active
+
+A view whose ``EnvironmentValues/appearsActive`` is `false` hides its focus
+indication, as a macOS window does when another window takes input. That is
+the case whenever the scene is not ``ScenePhase/active`` (see ``ScenePhase``
+for what a terminal can report), and inside any subtree that sets
+`.environment(\.appearsActive, false)`. It goes through the same gate as
+``View/focusEffectDisabled(_:)``, so everything listed under "Turning it off"
+goes, the ● of an active focus section or split column included, and a
+subtree that sets `.environment(\.appearsActive, true)` gets its indication
+back.
+
+What stays:
+
+- **The focus itself.** Only the look changes. `\.isFocused` is still `true`,
+  Tab and the keys behave as before, and the focus is where the user left it
+  when input returns.
+- **Selection.** Being selected is not being focused. A `List`'s or `Table`'s
+  selected rows stay, drawn exactly as they are whenever the list is unfocused,
+  and ``View/unfocusedSelectionVisibility(_:)`` with `.hidden` hides them here
+  as it does there.
+- **A text cursor**, for the same reason it survives `focusEffectDisabled`.
+
+``RenderContext/indicatesFocus(_:)`` answers for both conditions, so a view
+that already asks it needs no change. A view that reads `\.isFocused` in its
+`body` should gate its look on `isFocused && appearsActive`.
+
 ## Focus in the Event Loop
 
 Focus dispatch happens in Layer 3 of the key event pipeline (see <doc:AppLifecycle> for the whole ladder, including the ESC pre-route and Layer 3.5):

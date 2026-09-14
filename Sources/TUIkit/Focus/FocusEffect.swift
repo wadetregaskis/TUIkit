@@ -35,10 +35,17 @@ extension RenderContext {
     /// "focused!" while its neighbours had gone quiet reads as a bug in that
     /// control rather than as a modifier working.
     ///
+    /// It answers `false` for two reasons: the focus effect is disabled, or
+    /// the view does not appear active (``EnvironmentValues/appearsActive``
+    /// is `false`, as when the scene is not `.active`). A macOS window stops
+    /// drawing its focus ring when another window takes input, and so does a
+    /// TUIkit view.
+    ///
     /// **Behaviour is not an effect.** This gates appearance only. A control
-    /// with its focus effect disabled still holds the focus, still takes the
-    /// keys, and still moves the cursor — which is what makes the modifier
-    /// usable at all, and what distinguishes it from `.disabled(true)`.
+    /// with its focus effect disabled, or in a view that does not appear
+    /// active, still holds the focus, still takes the keys, and still moves
+    /// the cursor — which is what makes the modifier usable at all, and what
+    /// distinguishes it from `.disabled(true)`.
     ///
     /// What deliberately survives it: a **text cursor**. A caret is the
     /// insertion point, not decoration — it says where TYPING will go, which
@@ -64,8 +71,12 @@ extension EnvironmentValues {
     /// style's body) has to ask the same question the same way, which is why
     /// this is the primitive and the context method forwards to it: the shape of
     /// `SelectionIndicator.resolve(isFocused:environment:)`.
+    ///
+    /// `appearsActive` is here, rather than folded into `focusEffectDisabled`
+    /// at the root, so that anything reading `focusEffectDisabled` still reads
+    /// what the app set.
     func indicatesFocus(_ isFocused: Bool) -> Bool {
-        isFocused && !focusEffectDisabled
+        isFocused && !focusEffectDisabled && appearsActive
     }
 }
 

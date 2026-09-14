@@ -207,6 +207,12 @@ struct MenusPage: View {
 /// whatever `.selectionIndicatorStyle` is in force — pulse, blink, or a static
 /// accent. Neither decision is made here.
 ///
+/// `\.appearsActive` is the one other thing to ask. `\.isFocused` stays true
+/// while the terminal window is not the one taking input, because the focus is
+/// still here when the user comes back; the built-in controls stop LOOKING
+/// focused meanwhile, and this does the same by breathing only for
+/// `isFocused && appearsActive`.
+///
 /// `animatedColor` rather than `emphasis(isFocused).color(…)`: the latter is
 /// this tick's colour and reads the clock to get it, so advancing the pulse
 /// means re-rendering the whole page. This hands `.border` every frame of the
@@ -216,6 +222,7 @@ private struct ContextMenuTarget: View {
     let title: LocalizedStringKey
 
     @Environment(\.isFocused) private var isFocused
+    @Environment(\.appearsActive) private var appearsActive
     @Environment(\.selectionEmphasis) private var emphasis
     @Environment(\.palette) private var palette
 
@@ -239,7 +246,7 @@ private struct ContextMenuTarget: View {
     /// accent's alpha would breathe between two alphas, and a border at two
     /// alphas cannot be blended — see the `AnimatingYourOwnView` article.
     private var borderColor: AnimatedColor {
-        guard isFocused else { return AnimatedColor(palette.border) }
+        guard isFocused && appearsActive else { return AnimatedColor(palette.border) }
         let ends = palette.accent.breathEnds(
             dimmedTo: ViewConstants.focusBorderDim, over: palette.background)
         return emphasis.animatedColor(true, dim: ends.dim, bright: ends.bright)
