@@ -1878,12 +1878,17 @@ never touch a real session or the user's preferences.
 
 ## What an ANSI colour actually paints
 
-**Status: MEASURED for Apple Terminal.app 455.1 (default "Basic" profile),
-2026-08-24. Ghostty 1.3.1 read from its own configuration 2026-09-01 but not
-yet confirmed live. iTerm2 and Warp pending.**
+**Status: palettes MEASURED for Apple Terminal.app 455.1 (default "Basic"
+profile) on 2026-08-24, and for iTerm2 3.7.1 (profile "Default") on
+2026-09-14. Warp 0.2026.09.02 does not report its palette: it left OSC 4
+unanswered on 2026-09-14. Ghostty 1.3.1 was read from its own configuration on
+2026-09-01 and is not yet confirmed live. How each host answers the queries
+themselves, and what tmux and GNU screen do to them, was measured on
+2026-09-14; see "Asking the terminal for its colours" below. Ghostty and Hyper
+were not measured.**
 `Tools/TerminalProbes/palette_probe.py` asks a terminal directly (OSC 4 /
 OSC 10 / OSC 11) and writes the answer as JSON; run it in each host and record
-the results below.
+the results below. `osc_colour_probe.py` measures the exchange itself.
 
 ### Apple Terminal.app 455.1, "Basic" — measured
 
@@ -1973,6 +1978,150 @@ Two consequences for a 16-colour image, and neither is a defect:
 
 Default background `#282c34` and foreground `#ffffff` — but a TUIkit app paints
 its own page, so those reach nothing an image draws.
+
+### Asking the terminal for its colours: OSC 10, 11, 4 and `?996n` — measured 2026-09-14
+
+**Provenance.**
+- Hosts: `Tools/TerminalProbes/osc_colour_probe.py`, run inside each host.
+- tmux: that probe run in a pane, plus `tmux_colour_harness.py`.
+- macOS 15.7.9 (24G830), system appearance Light. The probe records are not
+  committed (see the probes' README).
+- **Latency** runs from just before the write to the read that completed the
+  reply, and includes Python's `select` wake-ups. It is one run on one machine,
+  so read it as an order of magnitude.
+- The host runs predate the probe's batch and multi-pair sections. So for
+  native hosts, only single queries and the OSC 10 + 11 pair were measured.
+
+**Not measured:**
+- **Ghostty 1.3.1** (bundle 15212). Three launches with `-e` never started the
+  probe. The binary contains the text `Allow Ghostty to execute "`, so a
+  confirmation dialog nobody clicked is the likely cause (inferred). Also
+  unmeasured for the same reason: Ghostty with `--background=000000`, where
+  `?996n` could be compared with OSC 11, and Ghostty as a tmux client.
+- **Hyper 3.4.1.** The bundle is quarantined, a Gatekeeper-style prompt
+  appeared, and nobody approved it.
+- ssh, and Apple Terminal with a dark profile.
+
+**iTerm2 3.7.1: what is and isn't known about its run.** The launch
+(`open -a iTerm` on a `.command` file) first showed only a 276×312 window,
+probably an alert, and the probe did not run then. The record below came from
+the same launcher, timestamped 07:48, well after that attempt. It carries
+iTerm2's own environment: `TERM_PROGRAM=iTerm.app`, `TERM_PROGRAM_VERSION=3.7.1`,
+`ITERM_PROFILE=Default`, `TERM_FEATURES` and `COLORFGBG=0;15`. Nobody noted who
+dismissed the window, or when.
+
+| Host | OSC 10 (fg) | OSC 11 (bg) | OSC 4, slots 0–15 | `?996n` | Reply terminator | Latency | Reply in the fence's read |
+|---|---|---|---|---|---|---|---|
+| Apple Terminal 455.1, default profile | 0, 0, 0 | 255, 255, 255 | all 16; byte for byte the Basic table above | silent | **always BEL**, even for an ST query (40 of 40) | ~0.1 ms (0.07–0.5) | 74 of 76 |
+| iTerm2 3.7.1, profile "Default" | 16, 16, 16 | 250, 250, 250 | all 16 (below) | `997;2` | **always ST**, even for a BEL query (36 of 36) | ~10 ms (3–32; fences 15–36) | none: an earlier read |
+| Warp v0.2026.09.02.08.27.stable_01, light theme | 17, 17, 17 | 255, 255, 255 | **silent** in all 64 exchanges; the fence still came back in ~0.1 ms | silent | mirrors the query | ~0.03 ms | all |
+| GNU screen 4.00.03, inside Apple Terminal | silent | silent | silent | silent | — | fences ~0.1–0.3 ms | — |
+| tmux 3.7c | a client's (see below) | a client's | forwarded to one client (see below) | answered by tmux | mirrors the query | ~0.1 ms when answered | all |
+
+iTerm2's sixteen, as reported. They are not xterm's table either:
+
+| slot | reported | | slot | reported |
+|---|---|---|---|---|
+| 0 black | 21, 25, 30 | | 8 | 104, 104, 104 |
+| 1 red | 167, 69, 50 | | 9 | 208, 126, 120 |
+| 2 green | 87, 191, 56 | | 10 | 130, 228, 152 |
+| 3 yellow | 199, 196, 63 | | 11 | 234, 226, 74 |
+| 4 blue | 46, 67, 192 | | 12 | 167, 171, 237 |
+| 5 magenta | 177, 73, 184 | | 13 | 212, 131, 220 |
+| 6 cyan | 89, 194, 198 | | 14 | 142, 250, 253 |
+| 7 white | 199, 199, 199 | | 15 | 255, 255, 255 |
+
+**Across every measured host:**
+- **Reply form:** always `rgb:` with four hex digits per channel. There was no
+  `rgba:` and no shorter spelling.
+- **Order:** no reply arrived after the fence reply sent behind it, on any host.
+  There were no stray or late bytes, and nothing printed: the cursor never
+  moved.
+- **Fences:** both `CSI 6n` and `CSI 5n` were answered in every exchange on every
+  host, including screen and Warp's unanswered OSC 4.
+- **Terminator:** a parser has to take BEL and ST whatever it sent. Apple
+  Terminal answers ST with BEL, and iTerm2 answers BEL with ST.
+- **`?996n`:** only iTerm2 answered it natively, and under tmux, tmux answers.
+- **`COLORFGBG`:** only iTerm2 set it (`0;15`). It was unset in Apple Terminal,
+  in Warp, and in the screen and tmux panes.
+- **screen:** its panes inherit `TERM_PROGRAM=Apple_Terminal` from the outer
+  host, which is stale there.
+
+#### tmux 3.7c
+
+**Two sets of clients**, with a private socket and an empty config both times:
+- **Real ones.** Apple Terminal alone; Apple Terminal with Warp attached
+  second; then Warp alone after Apple Terminal detached.
+- **Scripted ones**, from `tmux_colour_harness.py`, whose answers are known and
+  whose logs show every query tmux forwarded:
+
+| client | fg | bg | OSC 4 | its own `?996n` report |
+|---|---|---|---|---|
+| A | ffffff | 000000 | answers | `997;1` |
+| B | abb2bf | 282c34 | silent | `997;2`, contradicting its own dark background |
+
+**OSC 10 and 11: tmux answers from what the client said at attach**, in
+0.02–0.8 ms. Each client was asked `OSC 10;?` and `OSC 11;?` twice at attach, and
+never again, however often the pane asked. The pane sees **the earliest-attached
+client that is still attached**:
+- Scripted runs: in both attach orders and all four configurations. That
+  includes a second client attached later, and one that typed more recently.
+- Real clients: OSC 10 stayed Apple Terminal's `0, 0, 0` while Warp, attached
+  second, was the pane's current client. It became Warp's `17, 17, 17` only once
+  Apple Terminal detached.
+- *Inferred:* "earliest attached" could equally be "first in tmux's client
+  list"; these runs cannot tell the two apart.
+
+**OSC 4 goes to exactly one client: the one attached or active most recently.**
+The other client's log shows no OSC 4 at all. So fg/bg and slots can come from
+different clients: with B attached first and A last, the pane got B's colours
+and A's slots.
+
+**When that client does not answer OSC 4**, no reply ever comes, and the fence
+reply behind the query is held about half a second:
+- **One query per exchange:** 503–552 ms each, over 312 exchanges across the
+  scripted runs and the real Warp client (median 522 ms with Warp). A probe asking slot by slot runs
+  out of its 20 s partway through the slots.
+- **A batch shares one wait:**
+  - the startup batch (OSC 10, OSC 11, OSC 4 for slots 0–15, then `CSI 5n`):
+    515–542 ms, with fg/bg still answered;
+  - one slot: 516–539 ms;
+  - the multi-pair spelling: 511–531 ms.
+- **Pane output is not held.** A line printed straight after each batch reached
+  the client 0.15–0.9 ms after the write, while the fence reply was still
+  waiting.
+- **For comparison:** fg/bg alone took 0.02–0.8 ms, and a client that answers
+  returned the startup batch, all 16 slots included, in 0.5–1.9 ms.
+- *Inferred:* tmux waits up to about 500 ms for a forwarded reply, and queues
+  the pane's later requests behind it. This was not read from tmux's source.
+
+**`?996n`: tmux answers it itself, even when the client does not.** The answer
+followed **the client's background, not the client's report**:
+- With only B attached, `997;1`. B reported `997;2`, and `list-clients` shows
+  B's `client_theme` as `light`.
+- For A (black), `997;1`.
+- For Apple Terminal and Warp (both white, and both silent on `?996n`
+  themselves), `997;2`.
+- With two clients attached, their backgrounds agreed in every run. So which
+  client it follows is unmeasured.
+- *Inferred:* under tmux, `997` restates a background the pane can already read
+  over OSC 11.
+
+**The multi-pair spelling `OSC 4;0;?;1;?;2;?` works.**
+- tmux forwards it as three single queries.
+- An answering client's three replies reached the pane in 0.16–1.0 ms.
+- A silent client held the fence once (511–531 ms, above).
+
+A throwaway run earlier the same day reported this spelling broken under tmux
+(one slot, after 0.51 s). **That was the harness.** Its client re-sent a stale
+OSC 4 reply alongside the fresh ones. The same script, changed only to answer
+each query once, got all three slots. That a stale reply makes tmux return one
+slot and hold the fence was observed; why was not established.
+
+**Sent to each client** (empty config):
+- at attach: `?2004h`, `?2031h`, `?996n`, DA1, DA2 and XTVERSION, then `OSC 10;?`
+  and `OSC 11;?` twice;
+- at detach: `?2004l`, `?1004l` and `?2031l`.
 
 ### A host may recolour a foreground it cannot read — measured 2026-09-01
 
