@@ -725,7 +725,10 @@ extension _NavigationSplitViewCore {
         // exactly this site.
         FocusRegistration.publishHelpText(context: context, focusID: sectionID)
 
-        let isActive = focusManager.isActiveSection(sectionID)
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. `isActive`
+        // breathes the divider's background and nothing else reads it: the drag
+        // and the keys go through the handler.
+        let isActive = context.indicatesFocus(focusManager.isActiveSection(sectionID))
 
         var mouseHandlerID: HitTestRegion.HandlerID?
         if let mouseDispatcher = context.environment.mouseEventDispatcher {

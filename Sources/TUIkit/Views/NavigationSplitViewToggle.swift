@@ -376,9 +376,11 @@ extension _NavigationSplitViewCore {
             }
         }
 
+        // Drawing only, as the divider's — see `RenderContext.indicatesFocus(_:)`.
         return EdgeWiring(
             info: DividerRenderInfo(
-                isActive: focusManager.isActiveSection(sectionID), isHovered: handler.isHovered,
+                isActive: context.indicatesFocus(focusManager.isActiveSection(sectionID)),
+                isHovered: handler.isHovered,
                 mouseHandlerID: mouseHandlerID, focusID: sectionID),
             handler: handler)
     }

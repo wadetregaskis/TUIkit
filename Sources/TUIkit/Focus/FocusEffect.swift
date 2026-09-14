@@ -81,7 +81,8 @@ extension View {
     /// Everything a control does to say "I am focused" goes: the pulse, the
     /// caps, the bold, the recoloured glyphs and arrows, the highlighted row,
     /// a scroll bar's breath, a colour grid's cursor mark, a `DatePicker`'s
-    /// active-field mark. A text cursor stays, and animates
+    /// active-field mark, a focus section's ●, a split divider's or resize
+    /// grip's breath. A text cursor stays, and animates
     /// as it always did.
     ///
     /// Be aware of what that costs. A terminal has no pointer to fall back on

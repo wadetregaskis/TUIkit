@@ -224,6 +224,11 @@ breath, a menu `Picker`'s accent value and breathing caps, the check mark on a
 `ColorPicker` grid's cursor swatch, and the breathing scrollbars and "N more"
 lines of a `ScrollView` or `TextEditor` (the bars stay, in their resting
 colours: where you are in the content is not which control has the keys).
+Handles and sections go the same way: the ● an active focus section or
+`NavigationSplitView` column draws in its border, the breathing background of
+a split's divider or edge column, and the breath of a `userResizable` view's
+grip. The divider's dots, its ◀ and the grip's marks stay, in their resting
+ink.
 
 Two things deliberately survive, and the rule behind them is worth stating
 because it decides the case this document has not seen:

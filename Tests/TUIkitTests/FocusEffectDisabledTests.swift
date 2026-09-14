@@ -75,7 +75,15 @@ struct FocusEffectDisabledTests {
             context.environment.focusManager?.endRenderPass()
             scheduler?.endFrame()
         }
+        return subjectPicture(of: buffer, skippingRows: skippingRows)
+    }
 
+    /// The subject's part of a frame that also holds the "sibling" button: its
+    /// lines, and its runs re-based on its first row.
+    ///
+    /// `skippingRows` drops the subject's first rows, lines and runs alike, for
+    /// a view that keeps something on them that is not a focus effect.
+    private func subjectPicture(of buffer: FrameBuffer, skippingRows: Int) -> [String] {
         // Lines AND runs. A control whose focus indication is a pulse puts it
         // in `animatedCells` — the still frame is identical either way — so a
         // comparison of lines alone reports `Toggle` and `RadioButtonGroup` as
@@ -91,14 +99,78 @@ struct FocusEffectDisabledTests {
         let siblingRow = buffer.lines.firstIndex { $0.stripped.contains("sibling") }
         let subjectRows = buffer.lines.indices.filter { $0 != siblingRow }
         let origin = subjectRows.first ?? 0
-        // `skippingRows` drops the subject's first rows, lines and runs alike,
-        // for a view that keeps something on them that is not a focus effect.
         let lines = subjectRows.dropFirst(skippingRows).map { buffer.lines[$0] }
         let runs = buffer.animatedCells
             .filter { $0.offsetY != siblingRow && $0.offsetY - origin >= skippingRows }
             .map { "run@\($0.offsetX),\($0.offsetY - origin)×\($0.width) \($0.frames)" }
             .sorted()
         return lines + runs
+    }
+
+    /// The same comparison for an indication that belongs to a focus SECTION —
+    /// a bordered section's ●, a split column's ●, a split's divider and edge —
+    /// rather than to a focusable. Which section is active is chosen outright:
+    /// the subject's own (`pick` finds its id among the registered sections), or
+    /// a sibling section holding a button, which is the genuinely inactive
+    /// baseline. Three frames: the first registers the sections, the second
+    /// renders after the activation, the third is the settled picture compared.
+    private func renderedWithSections(
+        _ subject: some View, activatingSubject: Bool, effectsDisabled: Bool,
+        pick: @escaping ([String]) -> String?
+    ) -> [String] {
+        let context = makeRenderContext(width: 44, height: 10) { environment, _ in
+            environment.animationScheduler = AnimationScheduler()
+            environment.volatileReadTracker = VolatileReadTracker()
+        }
+        guard let focus = context.environment.focusManager else { return ["no focus manager"] }
+        let scheduler = context.environment.animationScheduler
+        let view = VStack(spacing: 0) {
+            subject.focusEffectDisabled(effectsDisabled)
+            Button("sibling") {}.focusSection("sibling-section")
+        }
+        var buffer = FrameBuffer()
+        for pass in 0..<3 {
+            if pass == 1 {
+                let target = activatingSubject ? pick(focus.sectionIDs) : "sibling-section"
+                guard let target else { return ["the subject registered no section to activate"] }
+                focus.activateSection(id: target)
+            }
+            scheduler?.beginFrame()
+            context.stateStorage?.beginRenderPass()
+            focus.beginRenderPass()
+            buffer = renderToBuffer(view, context: context)
+            focus.endRenderPass()
+            context.stateStorage?.endRenderPass()
+            scheduler?.endFrame()
+        }
+        return subjectPicture(of: buffer, skippingRows: 0)
+    }
+
+    /// Both halves of the contract for a section's indication, as
+    /// `expectDistinguishable` and `expectIndistinguishable` state them for a
+    /// focusable's.
+    private func expectSectionIndicationSuppressed(
+        _ subject: some View, _ name: String, pick: @escaping ([String]) -> String?,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        let inactive = renderedWithSections(
+            subject, activatingSubject: false, effectsDisabled: false, pick: pick)
+        let active = renderedWithSections(
+            subject, activatingSubject: true, effectsDisabled: false, pick: pick)
+        let suppressed = renderedWithSections(
+            subject, activatingSubject: true, effectsDisabled: true, pick: pick)
+        #expect(
+            active != inactive,
+            "\(name) does not indicate an active section at all, so the suppression case proves nothing",
+            sourceLocation: sourceLocation)
+        #expect(
+            suppressed == inactive,
+            """
+            \(name) still indicates its active section with the effect disabled:
+              inactive    \(inactive.map(\.debugDescription).joined(separator: "\n              "))
+              suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
+            """,
+            sourceLocation: sourceLocation)
     }
 
     /// The whole contract, per control: focused-with-effects-off must be
@@ -308,6 +380,63 @@ struct FocusEffectDisabledTests {
         let grid = _Color256GridCore(selection: .constant(.palette(1)))
         expectDistinguishable(grid, "Color256Grid", height: 40)
         expectIndistinguishable(grid, "Color256Grid", height: 40)
+    }
+
+    /// A `.userResizable()` view's grip breathes while the view holds the
+    /// keyboard — the arrow keys resize it — so the breath goes. The marks stay
+    /// in their resting ink: that an edge can be grabbed is what you can do, not
+    /// where you are.
+    @Test("A resize grip")
+    func resizeGrip() {
+        let box = Text("hello").frame(width: 12, height: 3).border().userResizable()
+        expectDistinguishable(box, "resize grip")
+        expectIndistinguishable(box, "resize grip")
+    }
+
+    /// An active focus section breathes a ● into the first border inside it. It
+    /// announces where the keyboard is, as a focused control's own emphasis
+    /// does, so it goes too.
+    @Test("A focus section's ●")
+    func focusSectionIndicator() {
+        let section = Text("inside").border().focusSection("subject-section")
+        expectSectionIndicationSuppressed(section, "focus section ●") { ids in
+            ids.first { $0 == "subject-section" }
+        }
+    }
+
+    /// A `NavigationSplitView` column is a focus section of its own, and draws
+    /// the same ● into its first border when it is the active one.
+    @Test("A split view column's ●")
+    func splitColumnIndicator() {
+        let split = NavigationSplitView { Text("SIDE").border() } detail: { Text("DETAIL").border() }
+        expectSectionIndicationSuppressed(split, "split column ●") { ids in
+            ids.first { $0.hasPrefix("nav-split-sidebar-") }
+        }
+    }
+
+    /// A split's divider holding the keyboard breathes its whole column's
+    /// background. Its dots, and the ◀ that hides the sidebar, stay.
+    @Test("A split view divider")
+    func splitDivider() {
+        let split = NavigationSplitView { Text("SIDE") } detail: { Text("DETAIL") }
+        expectSectionIndicationSuppressed(split, "split divider") { ids in
+            ids.first { $0.hasPrefix("nav-split-divider-") }
+        }
+    }
+
+    /// With the sidebar hidden, the split's edge column (the ▶ that brings it
+    /// back) is a handle like a divider, and breathes the same way while it
+    /// holds the keyboard.
+    @Test("A split view's edge column")
+    func splitEdgeColumn() {
+        let split = NavigationSplitView(columnVisibility: .constant(.detailOnly)) {
+            Text("SIDE")
+        } detail: {
+            Text("DETAIL")
+        }
+        expectSectionIndicationSuppressed(split, "split edge column") { ids in
+            ids.first { $0.hasPrefix("nav-split-edge-") }
+        }
     }
 
     /// A `TextField` is the documented exception, and the exception is

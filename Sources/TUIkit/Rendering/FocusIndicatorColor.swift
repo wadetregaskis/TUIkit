@@ -22,9 +22,14 @@ extension AnimatedColor {
     /// The two endpoints are decided here, once, because both producers — a
     /// ``FocusSectionModifier`` and a ``NavigationSplitView`` column — want the
     /// same ●, and a second copy of the arithmetic is a second thing to drift.
+    ///
+    /// Gated through `EnvironmentValues.indicatesFocus(_:)`, here rather than at
+    /// each caller: the ● and a resize grip's breath announce where the keyboard
+    /// is, so under `focusEffectDisabled` they go, and every producer asks this
+    /// one function for them.
     @MainActor
     static func activeSection(_ isActive: Bool, in environment: EnvironmentValues) -> Self? {
-        guard isActive else { return nil }
+        guard environment.indicatesFocus(isActive) else { return nil }
         // Over the surface the section's border is drawn on, not the page:
         // inside a tab the page blend put the trough at the tab body's own
         // luminance (Homebrew: 1.009:1), the defect the button breath had.
