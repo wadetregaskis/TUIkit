@@ -31,26 +31,26 @@ struct TrackStyleEditor: View {
     // resumes the same custom style. Shared between the Slider and
     // ProgressView pages' editors, which deliberately edit one style.
     @AppStorage("trackEditor.fill") private var fullGlyph = "█"
-    @AppStorage("trackEditor.ramp") private var leadingEdgeText = "▏▎▍▌▋▊▉"
-    @AppStorage("trackEditor.unfilled") private var backgroundName = "░"
-    @AppStorage("trackEditor.gradient") private var fillColoured = false
+    @AppStorage("trackEditor.leadingEdge") private var leadingEdgeText = "▏▎▍▌▋▊▉"
+    @AppStorage("trackEditor.background") private var backgroundName = "░"
+    @AppStorage("trackEditor.fillColoured") private var fillColoured = false
     /// The fill gradient's stops, persisted as comma-separated hex like the
     /// ProgressView page's sweep gradient. Default: red → amber → green.
-    @AppStorage("trackEditor.gradientStops") private var fillStopsRaw = "FF5050,FFC850,50DC78"
+    @AppStorage("trackEditor.fillStops") private var fillStopsRaw = "FF5050,FFC850,50DC78"
     /// What a gradient is measured across. The same control Progress & Gauges
     /// has, because it is the same question and the answer changes what a
     /// gradient MEANS — a scale, or a decoration.
-    @AppStorage("trackEditor.gradientSpan") private var fillSpansTrack = true
+    @AppStorage("trackEditor.fillSpan") private var fillSpansTrack = true
     /// The same question for the unfilled half's ramp, answered on its own:
     /// a fill that is a scale and a remainder that is a decoration is a
     /// perfectly ordinary bar.
-    @AppStorage("trackEditor.emptyGradientSpan") private var backgroundSpansTrack = true
+    @AppStorage("trackEditor.backgroundSpan") private var backgroundSpansTrack = true
     /// Whether the unfilled half gets a colour of its own.
-    @AppStorage("trackEditor.emptyTinted") private var backgroundColoured = false
+    @AppStorage("trackEditor.backgroundColoured") private var backgroundColoured = false
     /// Whether the unfilled half gets a gradient rather than a flat colour.
     /// The unfilled gradient's stops. Default: a cool ramp, so it reads as the
     /// other half of the bar rather than as more fill.
-    @AppStorage("trackEditor.emptyStops") private var backgroundStopsRaw = "203050,2A4A78,3C6EA5"
+    @AppStorage("trackEditor.backgroundStops") private var backgroundStopsRaw = "203050,2A4A78,3C6EA5"
     @State private var editingBackgroundStops = false
     @State private var sliderValue = 0.6
     /// Whether the gradient-editor dialog is up.
@@ -59,8 +59,8 @@ struct TrackStyleEditor: View {
     // The last hundred committed values per field, most recent first,
     // persisted in app state (shared by the Slider and ProgressView pages).
     @AppStorage("trackEditor.recentFills") private var recentFillsJSON = "[]"
-    @AppStorage("trackEditor.recentRamps") private var recentLeadingEdgesJSON = "[]"
-    @AppStorage("trackEditor.recentUnfilled") private var recentBackgroundsJSON = "[]"
+    @AppStorage("trackEditor.recentLeadingEdges") private var recentLeadingEdgesJSON = "[]"
+    @AppStorage("trackEditor.recentBackgrounds") private var recentBackgroundsJSON = "[]"
 
     /// Pre-defined fill glyphs — chosen to look distinct. The smiley combo
     /// (fill 😃, ramp 🫥😶😐🙂, unfilled 〰️) is offered on both pages; the
@@ -84,7 +84,7 @@ struct TrackStyleEditor: View {
 
     /// Pre-defined unfilled glyphs; the solid-background mode is offered via
     /// an explicit completion so its label can be localized while the stored
-    /// value stays the stable "background" token.
+    /// value stays the stable "solid" token.
     private var backgroundPatterns: [String] {
         var glyphs = ["░", "·", "─", "␣", "〰️"]
         if preview == .progress { glyphs.append("•") }
@@ -132,7 +132,7 @@ struct TrackStyleEditor: View {
         let background: TrackConfiguration.Background
         switch backgroundName {
         case "␣": background = .glyph(" ")
-        case "background": background = .solid  // stable token; label is localized
+        case "solid": background = .solid  // stable token; label is localized
         case "": background = .glyph("░")
         default: background = .pattern(backgroundName)
         }
@@ -196,13 +196,13 @@ struct TrackStyleEditor: View {
                 comboField(
                     "component.trackEditor.unfilled", text: $backgroundName, width: 9,
                     predefined: backgroundPatterns, recentsJSON: $recentBackgroundsJSON,
-                    extraCompletions: ["background"]
+                    extraCompletions: ["solid"]
                 ) {
                     // The localized "solid background" option carries the
                     // stable token as its completion — a language switch must
                     // not strand the stored value.
                     Text("component.trackEditor.background")
-                        .textInputCompletion("background")
+                        .textInputCompletion("solid")
                 }
             }
             HStack(spacing: 2) {

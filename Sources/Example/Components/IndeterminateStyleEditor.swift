@@ -19,10 +19,10 @@ struct IndeterminateStyleEditor: View {
     /// index: reordering the enum must not silently repoint a saved setting.
     @AppStorage("indeterminateEditor.motion") private var motionName = "sweep"
     @AppStorage("indeterminateEditor.fill") private var fillGlyph = "█"
-    @AppStorage("indeterminateEditor.empty") private var backgroundPattern = "░"
+    @AppStorage("indeterminateEditor.background") private var backgroundPattern = "░"
     @AppStorage("indeterminateEditor.period") private var period = 1.6
     @AppStorage("indeterminateEditor.extent") private var extent = 1.0 / 3.0
-    @AppStorage("indeterminateEditor.tinted") private var coloured = false
+    @AppStorage("indeterminateEditor.coloured") private var coloured = false
     /// The ramp's stops, persisted as comma-separated hex like every other
     /// editable gradient on these pages. Default: the teal → violet demo.
     @AppStorage("indeterminateEditor.stops") private var stopsRaw = "3CC8BE,506EF0,AA46DC"
@@ -33,7 +33,7 @@ struct IndeterminateStyleEditor: View {
     // from the track editor's: a fill that reads well under a sweep is not the
     // one that reads well behind a boundary ramp.
     @AppStorage("indeterminateEditor.recentFills") private var recentFillsJSON = "[]"
-    @AppStorage("indeterminateEditor.recentEmpties") private var recentBackgroundsJSON = "[]"
+    @AppStorage("indeterminateEditor.recentBackgrounds") private var recentBackgroundsJSON = "[]"
 
     private static let defaultStops = Gradient(colors: [
         .rgb(60, 200, 190), .rgb(80, 110, 240), .rgb(170, 70, 220),
