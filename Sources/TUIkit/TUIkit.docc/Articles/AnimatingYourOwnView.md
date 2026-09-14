@@ -242,6 +242,14 @@ screen stops asking.
 Which means: if your own view is cheap and the page still re-renders on every
 tick, the reader is somewhere else.
 
+A frame with a reader is re-rendered at the next whole
+``AnimationClock/tickInterval`` of ``AnimationClock/cursor``, counted from that
+clock's zero, rather than one interval after the loop last woke. The cursor
+clock's zero is itself a whole number of intervals into
+``AnimationClock/content``, so a run on either clock whose frame duration is a
+whole multiple of the interval steps at the same instants as those renders, and
+one wake serves both.
+
 ## Topics
 
 ### Declaring animated cells

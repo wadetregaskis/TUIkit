@@ -17,6 +17,18 @@
 /// beside the replay it gates rather than beside the struct's properties, which
 /// also keeps `RenderLoop.swift` inside its file-length limit.
 extension RenderActivity {
+    /// The clocks among ``animatedClocks`` that the CHROME — the app header, the
+    /// status bar — left runs for.
+    ///
+    /// Those keep the clock live but can never be replayed: the replay patches the
+    /// content's lines at the content's start row, and the chrome is written by its
+    /// own passes at its own rows, so only a render advances a run up there. With
+    /// nothing to tell the two halves apart, a `Spinner` in the header froze the
+    /// moment the page ALSO left a run — any run, on any clock: a second spinner, a
+    /// focused control's breath, a caret — because the tick was replayed on the
+    /// strength of the page's run alone, reported served, and so never rendered.
+    var chromeClocks: Set<AnimationClock> { Set(chromeRuns.lazy.map(\.clock)) }
+
     /// Whether `clock` can be advanced without walking the view tree.
     func canReplay(_ clock: AnimationClock) -> Bool {
         animatedClocks.contains(clock) && !chromeClocks.contains(clock) && !usesPulse && !usesCursor
@@ -104,9 +116,20 @@ extension RenderLoop {
     /// at 1/30 s, and at neither more often than it asked.
     ///
     /// A frame where some view built its appearance from the phase *while
-    /// rendering* cannot say — only that view knows what it would draw next —
-    /// so those keep the clock's own interval, which is the one thing that
-    /// interval is still for.
+    /// rendering* cannot say — only that view knows what it would draw next. Its
+    /// phase formulas are defined on the cursor clock's ticks, so it can change
+    /// only at a whole tick of that clock, and the plan is the NEXT such boundary.
+    /// It used to be one interval from the wake, which put every render a wake's
+    /// lateness past its boundary and off the lattice every other 50 ms run on the
+    /// page steps on. The page's runs do not join the plan while a reader is
+    /// present: every wake then renders, and a render serves them.
+    ///
+    /// A run in the chrome is advanced only by a render, so its next change joins
+    /// the plan whether or not there is a reader. It used to keep the clock's
+    /// interval instead, because the chrome's runs were not kept to ask.
+    ///
+    /// The plan is the soonest of those. With none of them — nothing animating —
+    /// it is the clock's interval.
     ///
     /// This is also what makes the quantised pulse cheap on a 256-colour
     /// terminal: the ramp repeats each shade it can actually paint for two or
@@ -116,18 +139,29 @@ extension RenderLoop {
     ///   change is a question about ITS clock, and asking it in the cursor
     ///   clock's time would wake a progress bar on the focus's schedule.
     func timeUntilNextChange(elapsed: (AnimationClock) -> Double) -> Double {
-        let interval = AnimationClock.cursor.tickInterval
-        // A run in the chrome is advanced only by a render, and the chrome's runs
-        // are not kept here to ask — so, like a reader, it keeps the clock's own
-        // interval, which is what a page animating only in its header always had.
-        // Asking the page's runs alone would sleep to THEIR next change: a header
-        // spinner over a blinking caret would step at the blink's rate.
-        guard !lastActivity.usesPulse, !lastActivity.usesCursor, lastActivity.chromeClocks.isEmpty else {
-            return interval
+        let reads = lastActivity.usesPulse || lastActivity.usesCursor
+        func soonestChange(_ runs: [AnimatedCellRun]) -> Double? {
+            var soonest: Double?
+            for run in runs {
+                let change = run.timeUntilChange(afterElapsed: elapsed(run.clock))
+                soonest = min(soonest ?? change, change)
+            }
+            return soonest
         }
-        let runs = replayable?.runs ?? []
-        guard !runs.isEmpty else { return interval }
-        return runs.map { $0.timeUntilChange(afterElapsed: elapsed($0.clock)) }.min() ?? interval
+        let readerBoundary = reads ? Self.timeToNextTick(ofCursorClockAt: elapsed(.cursor)) : nil
+        let plan = [readerBoundary, soonestChange(lastActivity.chromeRuns), reads ? nil : soonestChange(replayable?.runs ?? [])]
+        return plan.compactMap { $0 }.min() ?? AnimationClock.cursor.tickInterval
+    }
+
+    /// Seconds from `elapsed` on ``AnimationClock/cursor`` to the end of the tick
+    /// showing there, counted in whole nanoseconds like every step boundary, so the
+    /// answer is never a tick late or a nanosecond early.
+    private static func timeToNextTick(ofCursorClockAt elapsed: Double) -> Double {
+        let tick = AnimationClock.cursor.tickInterval
+        let untilEnd =
+            AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: tick)
+            - AnimationClock.nanoseconds(elapsed)
+        return Double(untilEnd) / 1_000_000_000
     }
 
     /// Advances the animated cells of the frame already on screen, without

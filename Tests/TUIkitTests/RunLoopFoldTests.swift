@@ -216,11 +216,13 @@ struct RunLoopFoldTests {
         #expect(!headerRuns.isEmpty, "pre-condition: the header's spinner must leave a run")
         #expect(!pageRuns.isEmpty, "pre-condition: the page's spinner must leave a replayable run")
 
-        // Sleeping to the page's run would step the header at the page's rate, which
-        // is right only while the two happen to agree.
+        // Sleeping to the page's runs alone would step the header at the page's rate,
+        // which is right only while the two happen to agree. The plan counts the
+        // header's runs too, so it never sleeps past the header's own next change.
+        let headerChange = headerRuns.map { $0.timeUntilChange(afterElapsed: timer.elapsed(for: $0.clock)) }.min()
         #expect(
-            loop.timeUntilNextChange(elapsed: timer.elapsed) == AnimationClock.cursor.tickInterval,
-            "the header's run is not the page's to schedule")
+            loop.timeUntilNextChange(elapsed: timer.elapsed) <= headerChange ?? 0,
+            "the plan slept past the header's next change")
 
         AppState.shared.setNeedsAnimationTick(.content)
         AppState.shared.setNeedsAnimationTick(.cursor)

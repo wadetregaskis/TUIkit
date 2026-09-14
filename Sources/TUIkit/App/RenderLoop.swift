@@ -170,20 +170,16 @@ struct RenderActivity {
     /// a frozen indicator is worse than a wasted frame.
     let animatedClocks: Set<AnimationClock>
 
-    /// The clocks among ``animatedClocks`` that the CHROME — the app header, the
-    /// status bar — left runs for.
+    /// The animating runs the CHROME — the app header, the status bar — left.
     ///
-    /// Those keep the clock live but can never be replayed: the replay patches the
-    /// content's lines at the content's start row, and the chrome is written by its
-    /// own passes at its own rows, so only a render advances a run up there. With
-    /// nothing to tell the two halves apart, a `Spinner` in the header froze the
-    /// moment the page ALSO left a run — any run, on any clock: a second spinner, a
-    /// focused control's breath, a caret — because the tick was replayed on the
-    /// strength of the page's run alone, reported served, and so never rendered.
+    /// Kept whole rather than as their clocks, because the loop has to know WHEN
+    /// they change, not only that they animate: nothing but a render advances them,
+    /// so the planner wakes at their next change. See ``chromeClocks`` for why they
+    /// are kept apart from the content's runs at all.
     ///
     /// A `var` only so the memberwise initialiser defaults it: a frame whose chrome
     /// animates nothing need not say so.
-    var chromeClocks: Set<AnimationClock> = []
+    var chromeRuns: [AnimatedCellRun] = []
 }
 
 /// The height of the content area: whatever the terminal has left after the
@@ -1234,17 +1230,18 @@ extension RenderLoop {
     /// the content's, and the same spinner froze again the moment the page left a
     /// run of its own: the tick replayed the page's run and was reported served.
     /// So they are recorded twice — in the union, for liveness, and apart, so the
-    /// replay can refuse them. See `RenderActivity.chromeClocks`.
+    /// replay can refuse them and the planner can wake for them. See
+    /// `RenderActivity.chromeClocks` and `RenderActivity.chromeRuns`.
     private func recordActivity(
         usesPulse: Bool, usesCursor: Bool, chromeRuns: [AnimatedCellRun] = []
     ) -> RenderActivity {
         let content = (replayable?.runs ?? []).lazy.map(\.clock)
-        let chrome = Set(chromeRuns.lazy.filter(\.isAnimating).map(\.clock))
+        let chrome = chromeRuns.filter(\.isAnimating)
         lastActivity = RenderActivity(
             usesPulse: usesPulse,
             usesCursor: usesCursor,
-            animatedClocks: chrome.union(content),
-            chromeClocks: chrome)
+            animatedClocks: Set(chrome.map(\.clock)).union(content),
+            chromeRuns: chrome)
         return lastActivity
     }
 

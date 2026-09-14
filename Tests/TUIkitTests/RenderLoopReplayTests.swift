@@ -54,6 +54,31 @@ private struct PulseReadingProbe: View, Renderable {
     }
 }
 
+/// A page leaving a 110 ms run under an app header leaving a 75 ms one, both on
+/// ``AnimationClock/content``. Only a render advances the header's run, and the
+/// loop has to know when it is due to render it.
+private struct HeaderRunOverPageRunApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            Text("p")
+                .animatedCells([
+                    AnimatedCellRun(
+                        offsetX: 0, offsetY: 0, width: 1, frames: ["p", "q"],
+                        frameDuration: 0.11, clock: .content)
+                ])
+                .appHeader {
+                    Text("h").animatedCells([
+                        AnimatedCellRun(
+                            offsetX: 0, offsetY: 0, width: 1, frames: ["h", "i"],
+                            frameDuration: 0.075, clock: .content)
+                    ])
+                }
+        }
+    }
+}
+
 @MainActor
 @Suite("Animation replay: serving a tick by patching the frame on screen")
 struct RenderLoopReplayTests {
@@ -218,6 +243,56 @@ struct RenderLoopReplayTests {
         #expect(
             loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.cursor.tickInterval,
             "a one-second run does not license a one-second sleep here")
+    }
+
+    /// A frame with a reader is re-rendered at the cursor clock's next 50 ms
+    /// boundary: the lattice every 50 ms run on that clock steps on, and the one the
+    /// reader's own blink or breath is defined on. Planning 50 ms from the wake put
+    /// every render one wake's lateness past its boundary, and off the lattice the
+    /// page's other wakes land on.
+    ///
+    /// The page's runs do not join the plan while a reader is present: every wake
+    /// renders, and a render serves them.
+    @Test("A frame that read the phase plans to the cursor clock's next 50 ms boundary")
+    func readerPlansToTheCursorLattice() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(PulseReaderApp())
+        _ = loop.render()
+        #expect(loop.lastActivity.usesPulse, "the probe's read was tracked")
+        // A page run that changes 11 ms from now, sooner than the reader's boundary.
+        loop.replayable = ReplayableFrame(
+            contentLines: ["ab cd"], runs: [blink(clock: .content, frameDuration: 0.1)],
+            terminalWidth: 5, startRow: 1, backgroundCode: "")
+
+        let sleep = loop.timeUntilNextChange(elapsed: { $0 == .cursor ? 0.137 : 5.089 })
+
+        #expect(
+            AnimationClock.nanoseconds(sleep) == 13_000_000,
+            "0.137 s on the cursor clock is 13 ms from its 0.150 s boundary: \(sleep)")
+    }
+
+    /// A run in the app header is advanced only by a render, so the loop has to wake
+    /// when it changes, beside whatever the page's runs ask for.
+    @Test("A run in the app header plans at its own next change, and a sooner page run still wins")
+    func chromeRunPlansAtItsOwnChange() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(HeaderRunOverPageRunApp())
+        _ = loop.render(frameNowNanos: 1_030_000_000)
+        let headerRuns = harness.appHeader.contentBuffer?.animatedCells ?? []
+        let pageRuns = loop.replayable?.runs ?? []
+        #expect(!headerRuns.isEmpty, "pre-condition: the header must leave a run")
+        #expect(!pageRuns.isEmpty, "pre-condition: the page must leave a run")
+
+        // At 1.030 s the header's 75 ms run ends at 1.050 s, the page's 110 ms one at 1.100 s.
+        let beforeHeader = loop.timeUntilNextChange(elapsed: { _ in 1.030 })
+        #expect(
+            AnimationClock.nanoseconds(beforeHeader) == 20_000_000,
+            "the header is due at 1.050 s: \(beforeHeader)")
+        // At 1.095 s the page's run ends at 1.100 s, the header's at 1.125 s.
+        let beforePage = loop.timeUntilNextChange(elapsed: { _ in 1.095 })
+        #expect(
+            AnimationClock.nanoseconds(beforePage) == 5_000_000,
+            "the page is due at 1.100 s: \(beforePage)")
     }
 
     // MARK: - Which ticked clocks a frame owes a picture to
