@@ -199,6 +199,58 @@ struct RowShortcutsTests {
             reports == ["rowShortcuts binds ^E to both selectAll and extendSelection; selectAll, which RowAction declares first, keeps it"])
     }
 
+    // MARK: - What is advertised
+
+    /// A help section or a status-bar hint prints what `shortcuts(for:)` and
+    /// `hint(for:)` return, so a chord listed for an action has to be one that
+    /// reaches it. An override that takes a default's chord takes it out of the
+    /// default's list as well as out of its dispatch.
+    @Test("An override that takes a default's chord takes it out of that action's list and hint")
+    func takenDefaultIsNotAdvertised() {
+        let ctrlB = KeyboardShortcut("b", modifiers: .control)
+        let replaced = RowShortcuts([.extendSelection: [ctrlA]])
+        #expect(replaced.shortcuts(for: .selectAll).isEmpty, "Ctrl-A reaches extendSelection now")
+        #expect(replaced.hint(for: .selectAll) == nil)
+        #expect(replaced.shortcuts(for: .extendSelection) == [ctrlA])
+        #expect(replaced.hint(for: .extendSelection) == "^A")
+
+        let aliased = RowShortcuts([.selectAll: .default.and(ctrlB), .extendSelection: [ctrlA]])
+        #expect(aliased.shortcuts(for: .selectAll) == [ctrlB], "the alias is all it keeps")
+        #expect(
+            aliased.hint(for: .selectAll) == "^B",
+            "the stock chord is preferred only while it still reaches the action")
+    }
+
+    /// The loser of a clash keeps its other chords, and only those are listed.
+    /// Asking does not report the clash a second time: that is the list's job,
+    /// where it builds the table it dispatches through. (In a debug build, a
+    /// report here would stop this test.)
+    @Test(
+        "A chord lost to a clash is not advertised for the action that lost it",
+        arguments: [
+            (RowAction.extendSelection, RowAction.selectAll),
+            (RowAction.reverseSortOrder, RowAction.pickUpRow),
+        ])
+    func lostClashIsNotAdvertised(later: RowAction, earlier: RowAction) {
+        let ctrlX = KeyboardShortcut("x", modifiers: .control)
+        let table = RowShortcuts([later: [ctrlE, ctrlX], earlier: [ctrlE]])
+        #expect(table.shortcuts(for: earlier) == [ctrlE])
+        #expect(table.shortcuts(for: later) == [ctrlX])
+        #expect(table.hint(for: later) == "^X")
+
+        let spelled = RowShortcuts([later: [ctrlE], earlier: [KeyboardShortcut("e")]])
+        #expect(spelled.shortcuts(for: later).isEmpty, "⌘E is Ctrl-E, and the earlier action has it")
+        #expect(spelled.hint(for: later) == nil)
+    }
+
+    /// Two spellings of one chord on one action are one key, so they are listed
+    /// once, not as "^E, ^E".
+    @Test("An action's two spellings of one chord are listed once")
+    func oneChordListedOnce() {
+        let table = RowShortcuts([.selectAll: .only(KeyboardShortcut("e"), ctrlE)])
+        #expect(table.shortcuts(for: .selectAll) == [ctrlE])
+    }
+
     #if DEBUG
         /// The default report is a soft trap, so a debug build stops. In a child
         /// process, because a stop in this one would end the test run.

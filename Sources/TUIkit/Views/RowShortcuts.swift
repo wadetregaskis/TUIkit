@@ -156,6 +156,10 @@ public enum RowAction: Hashable, CaseIterable, Sendable {
 /// release build reports it once, and the action declared first in
 /// ``RowAction`` keeps the chord, whatever order the dictionary was written in.
 /// The other action keeps the rest of its bindings.
+///
+/// Either way, ``shortcuts(for:commandKey:)`` and ``hint(for:commandKey:)`` list
+/// only the chords an action keeps. A default that yielded, or an override that
+/// lost, is not advertised for a key that now reaches another action.
 public struct RowShortcuts: Hashable, Sendable {
     /// The app's changes, by action. Empty for the stock table.
     public let overrides: [RowAction: ShortcutSet]
@@ -167,8 +171,16 @@ public struct RowShortcuts: Hashable, Sendable {
         self.overrides = overrides
     }
 
-    /// The keys bound to `action`, in ``KeyboardShortcut``'s own order so every
-    /// caller that lists them — a help section, a status-bar hint — agrees.
+    /// The keys that reach `action`, each once, in ``KeyboardShortcut``'s own
+    /// order so every caller that lists them — a help section, a status-bar
+    /// hint — agrees.
+    ///
+    /// Only chords a key press would actually dispatch to `action` are listed,
+    /// so nothing advertises a key that does something else. A chord the action
+    /// names but does not get is left out: one an override took from this
+    /// action's defaults, and one this action's override lost to another's (see
+    /// "One chord, two actions"). Asking does not report such a clash; a list
+    /// reports it when it builds the table it dispatches through.
     ///
     /// - Parameters:
     ///   - action: The row action whose bound keys are wanted.
@@ -178,14 +190,21 @@ public struct RowShortcuts: Hashable, Sendable {
     public func shortcuts(
         for action: RowAction, commandKey: CommandKeyBinding = .control
     ) -> [KeyboardShortcut] {
-        let set = overrides[action] ?? .default
-        return set.resolved(defaults: action.defaultShortcuts)
-            .compactMap { $0.resolved(commandKey: commandKey) }
-            .sorted()
+        // The table a key is dispatched through, not a second copy of its rule:
+        // which chord goes to which action is decided in one place. Built
+        // without a report, so a help section is not a second place a debug
+        // build stops for a mistake the list itself reports.
+        let dispatch = lookup(commandKey: commandKey, onClash: { _ in })
+        let written = (overrides[action] ?? .default).resolved(defaults: action.defaultShortcuts)
+        // A Set, because two spellings (⌘E, Ctrl-E) resolve to one chord.
+        let resolved = Set(written.compactMap { $0.resolved(commandKey: commandKey) })
+        return resolved.filter { dispatch.action(for: $0.trigger) == action }.sorted()
     }
 
     /// The chord to *show* for `action` when there is only room for one — the
-    /// framework's own binding if it survived, else the first in order.
+    /// framework's own binding if it still reaches `action`, else the first in
+    /// order. Chosen from ``shortcuts(for:commandKey:)``, so it is never a key
+    /// that reaches another action.
     ///
     /// Adding an alias should not quietly rename the hint the user has learned.
     public func hint(
@@ -265,13 +284,20 @@ struct RowShortcutLookup: Sendable {
     /// several rows at a time" without every move action needing a second
     /// binding — the same shape the arrow keys already use for the cursor.
     func action(for event: KeyEvent) -> (action: RowAction, accelerated: Bool)? {
-        if let exact = KeyboardShortcut.trigger(for: event).flatMap({ byTrigger[$0] }) {
+        if let exact = KeyboardShortcut.trigger(for: event).flatMap(action(for:)) {
             return (exact, false)
         }
         guard event.shift else { return nil }
         let unshifted = KeyEvent(key: event.key, ctrl: event.ctrl, alt: event.alt)
-        return KeyboardShortcut.trigger(for: unshifted).flatMap { byTrigger[$0] }
+        return KeyboardShortcut.trigger(for: unshifted).flatMap(action(for:))
             .map { ($0, true) }
+    }
+
+    /// The action a resolved chord dispatches to, exactly, with no Shift
+    /// accelerator: what `RowShortcuts.shortcuts(for:commandKey:)` asks to decide
+    /// whether a chord is worth listing.
+    func action(for trigger: KeyboardShortcut.Trigger) -> RowAction? {
+        byTrigger[trigger]
     }
 }
 
