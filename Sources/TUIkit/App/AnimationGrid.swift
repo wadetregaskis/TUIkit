@@ -57,3 +57,49 @@ struct AnimationGrid: Equatable, Sendable {
         time >= anchor && (time - anchor).isMultiple(of: period)
     }
 }
+
+// MARK: - The base lattice
+
+extension AnimationGrid {
+    /// Every whole ``AnimationClock/baseTick`` from zero: the one lattice the
+    /// framework's own indicator durations are chosen on.
+    ///
+    /// Anchored at zero because that is where a run's steps are counted from, on
+    /// both clocks, so a duration that is a whole number of these ticks steps on
+    /// this grid wherever it is on screen.
+    static let base = AnimationGrid(
+        anchor: 0, period: AnimationClock.nanoseconds(AnimationClock.baseTick))
+
+    /// The frame duration to use for `duration` when its rate may move by up to
+    /// `frequencyTolerance` hertz either way: a whole number of base ticks when
+    /// one is inside that band, otherwise `duration` itself.
+    ///
+    /// This is the scheduler's lock (`resolve(_:lockingOnto:now:)`) with one
+    /// candidate that is always there, ``base``, spent once to choose a duration.
+    /// It deliberately does not lock onto the grids that are live this frame:
+    /// registering a request is a render side effect, which a memoized row cannot
+    /// replay, and the first request of a frame would decide the grid, so the
+    /// answer would depend on render order.
+    ///
+    /// With no tolerance, `duration` comes back bit for bit. Going through the
+    /// lock would round it to whole nanoseconds, so `1.0 / 30` would come back as
+    /// 0.033333333. The same holds when no base multiple is in the band.
+    ///
+    /// - Parameters:
+    ///   - duration: The frame duration asked for, in seconds.
+    ///   - frequencyTolerance: How far the rate (`1 / duration`) may move either
+    ///     way, in hertz.
+    /// - Returns: A duration whose rate is within the band.
+    static func latticeFrameDuration(_ duration: Double, frequencyTolerance: Double) -> Double {
+        guard frequencyTolerance > 0, frequencyTolerance.isFinite, duration.isFinite, duration > 0
+        else { return duration }
+        let request = AnimationRequest(
+            frequency: 1 / duration, frequencyTolerance: frequencyTolerance)
+        let grid = resolve(request, lockingOnto: [base], now: 0)
+        // A lock returns a whole number of base periods; no lock returns the
+        // nominal period. Either way, a grid at the nominal period is `duration`,
+        // and handing that back keeps it exact.
+        guard grid.period != request.nominalPeriod else { return duration }
+        return Double(grid.period) / 1_000_000_000
+    }
+}

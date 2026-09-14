@@ -58,6 +58,21 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
         }
     }
 
+    /// The tick animation frame durations are meant to be whole multiples of:
+    /// 25 ms.
+    ///
+    /// A run's steps are whole multiples of its frame duration from its clock's
+    /// zero, and the ``cursor`` clock's zero is floored to a whole 50 ms of the
+    /// ``content`` clock's. So two durations that are both whole multiples of this
+    /// tick step together wherever their multiples meet, on either clock, and the
+    /// run loop wakes once for both. Two that are not (110 ms and 120 ms, say)
+    /// step apart almost everywhere and each costs a wake of its own.
+    ///
+    /// A recommendation, not a grid anything is rounded to: a run keeps the frame
+    /// duration it names, whatever it is. Not every built-in indicator's standard
+    /// duration is a whole number of these ticks yet.
+    public static let baseTick: Double = 0.025
+
     /// The shortest gap the loop will wake on, whatever a run asks for.
     ///
     /// A safety floor rather than a policy: a producer naming a two-millisecond
