@@ -100,6 +100,17 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
         let quotient = time / duration
         return time % duration < 0 ? quotient - 1 : quotient
     }
+
+    /// When the step showing at `elapsed` ends, in whole nanoseconds on the same
+    /// clock as `elapsed`: the next whole multiple of `frameDuration`.
+    ///
+    /// Both sides are counted in nanoseconds, the unit ``step(atElapsed:frameDuration:)``
+    /// counts in, so the end is the end of the step actually showing, and never the
+    /// end of the one before. See `AnimatedCellRun.timeUntilChange(afterElapsed:)`
+    /// for why a seconds-based answer spun the run loop.
+    package static func stepEndNanos(atElapsed elapsed: Double, frameDuration: Double) -> Int64 {
+        nanoseconds(frameDuration) * (step(atElapsed: elapsed, frameDuration: frameDuration) + 1)
+    }
 }
 
 // MARK: - AnimatedCellRun
@@ -290,7 +301,6 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   fast one.
     public func timeUntilChange(afterElapsed elapsed: Double) -> Double {
         guard frames.count > 1 else { return frameDuration }
-        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: frameDuration)
         let index = index(atElapsed: elapsed)
         let current = frames[index]
         // Time to the end of the frame now showing, then whole frames after it
@@ -309,7 +319,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
         // reached by summing sleeps it picked the step before, whose end had already
         // passed, and answered ~1e-17 again.
         let untilStepEnds =
-            AnimationClock.nanoseconds(frameDuration) * (step + 1)
+            AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: frameDuration)
             - AnimationClock.nanoseconds(elapsed)
         var remaining = max(
             Self.shortestUsefulSleep, Double(untilStepEnds) / 1_000_000_000)
