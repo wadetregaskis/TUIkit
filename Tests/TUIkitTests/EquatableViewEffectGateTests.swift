@@ -64,6 +64,9 @@ struct EquatableViewEffectGateTests {
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
         environment.focusManager = FocusManager()
+        // Without one `.statusBarItems` registers nothing and declares nothing,
+        // so its case below would store whatever the gate did.
+        environment.statusBar = StatusBarState()
         environment.renderCache = RenderCache()
         environment.preferenceStorage = tuiContext.preferences
         return RenderContext(
@@ -127,6 +130,17 @@ struct EquatableViewEffectGateTests {
         // Its Ctrl-R handler is recorded and replayed like `onKeyPress`'s. What
         // proves the replay, and the spinner redrawing, is RefreshableMemoTests.
         #expect(storesBuffer { EffectLeaf(label: "x") { $0.refreshable {} }.equatable() })
+    }
+
+    @Test("Status bar items inside the subtree are stored, because a hit registers them again")
+    func statusBarItemsStore() {
+        // Replayed like `onKeyPress`. What proves the replay, the per-section
+        // precedence and the dimmed case is StatusBarItemsMemoTests.
+        #expect(
+            storesBuffer {
+                EffectLeaf(label: "x") { $0.statusBarItems { StatusBarItem(shortcut: "h", label: "help") } }
+                    .equatable()
+            })
     }
 
     @Test("Focus registration inside the subtree declines the cache")

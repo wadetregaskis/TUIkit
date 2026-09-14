@@ -55,40 +55,73 @@ extension StatusBarItemsModifier: Renderable {
     func renderToBuffer(context renderContext: RenderContext) -> FrameBuffer {
         // No status bar (a headless render, a test): nothing to register
         // into, and the content still draws.
-        guard let statusBar = renderContext.environment.statusBar else {
+        guard renderContext.environment.statusBar != nil else {
             return TUIkit.renderToBuffer(content, context: renderContext)
         }
 
-        // Declare the registration to any value-memoizing ancestor, exactly as
-        // the preference and `onKeyPress` modifiers do. The status bar's items
-        // are rebuilt from scratch every render pass (`beginRenderPass()`),
-        // so a subtree served from cache never re-registers and its items
-        // silently vanish from the bar — a disappearance nothing in the
-        // buffer reveals, since this modifier adds no hit region and reads no
-        // volatile value, so every other gate lets it through.
-        renderContext.environment.volatileReadTracker?.recordRenderSideEffect()
+        // Declared to any value-memoizing ancestor. The status bar's items are
+        // rebuilt from scratch every render pass (`beginRenderPass()`), so a
+        // subtree served from the cache that did not register again would lose
+        // its items from the bar, a disappearance nothing in the buffer reveals.
+        // Declared as REPLAYABLE, as `onKeyPress` is: the buffer memo stores the
+        // entry recorded below and registers the items again on every hit, at
+        // this position in the walk, so a section's last registration still
+        // replaces the ones before it.
+        renderContext.environment.volatileReadTracker?.recordReplayableEffect()
 
-        // Set the items silently (without triggering re-render) to avoid render loops.
-        // The modifier is called during rendering, so we must not trigger another render.
-        if let contextName = self.context {
-            // Legacy: push items to a named context
-            statusBar.pushSilently(context: contextName, items: items)
-        } else {
-            // Register items with the focus section's composition strategy.
-            // If inside a focus section, items are associated with that section.
-            // Otherwise, they become global items.
-            if let sectionID = renderContext.environment.activeFocusSectionID {
-                statusBar.registerSectionItems(
-                    sectionID: sectionID,
-                    items: items,
-                    composition: composition
-                )
-            } else {
-                statusBar.setItemsSilently(items)
-            }
+        let sectionID = renderContext.environment.activeFocusSectionID
+        StatusBarItemsRegistrar.register(
+            items: items, composition: composition, contextName: context,
+            sectionID: sectionID, context: renderContext)
+        if let journal = renderContext.recordingEffectJournal {
+            // Built only while a memo records. The section is captured, as
+            // `onKeyPress` captures it: the memo checks that the section where
+            // it is served is the one the items were registered in.
+            journal.append(
+                EffectJournal.Entry(
+                    kind: StatusBarItemsRegistrar.kind,
+                    channelToken: renderContext.environment.keyChannelToken
+                ) { [items, composition, context] replay in
+                    StatusBarItemsRegistrar.register(
+                        items: items, composition: composition, contextName: context,
+                        sectionID: sectionID, context: replay)
+                })
         }
 
         return TUIkit.renderToBuffer(content, context: renderContext)
+    }
+}
+
+// MARK: - Registration
+
+/// The one registration `.statusBarItems` makes, shared by the live render and
+/// by a value memo replaying it — see `EffectJournal`.
+enum StatusBarItemsRegistrar {
+    /// The journal kind of a `.statusBarItems` registration.
+    static let kind = EffectJournal.Kind("statusBarItems")
+
+    /// Registers `items` with `context`'s status bar, silently, because it runs
+    /// during a render and must not ask for another:
+    /// - pushed to `contextName`, for the legacy push/pop API;
+    /// - otherwise filed under `sectionID` with `composition`, inside a focus
+    ///   section;
+    /// - otherwise as the global items.
+    ///
+    /// It looks the status bar up in `context` rather than taking one, so a
+    /// replay registers into the bar of the frame that serves it.
+    @MainActor
+    static func register(
+        items: [any StatusBarItemProtocol], composition: StatusBarItemComposition,
+        contextName: String?, sectionID: String?, context: RenderContext
+    ) {
+        guard let statusBar = context.environment.statusBar else { return }
+        if let contextName {
+            statusBar.pushSilently(context: contextName, items: items)
+        } else if let sectionID {
+            statusBar.registerSectionItems(sectionID: sectionID, items: items, composition: composition)
+        } else {
+            statusBar.setItemsSilently(items)
+        }
     }
 }
 

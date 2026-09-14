@@ -42,8 +42,6 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   the frame's collection (and a cached observer stops firing);
     /// - `onChange(of:)` — the change detection is a per-frame comparison;
     ///   a cached row never compares, so changes go permanently unnoticed.
-    /// - `.statusBarItems` — the bar's section items are cleared and rebuilt
-    ///   every pass, so a cached subtree's items vanish from the bar.
     /// - `.focusSection` — focus sections are cleared and rebuilt every pass,
     ///   so a cached subtree's section vanishes from the ring, and the active
     ///   section's indicator it hands down keeps the focus state it was stored
@@ -65,6 +63,7 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// as a delta. Recorded by:
     /// - `onKeyPress`, once per registration on a render pass;
     /// - `.refreshable`, once per Ctrl-R binding on a render pass;
+    /// - `.statusBarItems`, once per registration with a status bar;
     /// - the buffer memo itself, once per hit that replays a stored subtree's
     ///   registrations, so an enclosing gate sees the same delta whether the
     ///   subtree rendered or was served.
