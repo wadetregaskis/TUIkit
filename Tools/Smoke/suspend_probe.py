@@ -34,6 +34,8 @@ BINARY = sys.argv[1] if len(sys.argv) > 1 else "./.build/debug/Example"
 ENTER_ALT = "\x1b[?1049h"
 EXIT_ALT = "\x1b[?1049l"
 SHOW_CURSOR = "\x1b[?25h"
+FOCUS_REPORTS_ON = "\x1b[?1004h"
+FOCUS_REPORTS_OFF = "\x1b[?1004l"
 
 failures: list[str] = []
 
@@ -77,6 +79,7 @@ def pump(seconds: float) -> None:
 pump(2.0)
 check(ENTER_ALT in captured, "startup enters the alternate screen")
 check("TUIkit" in captured, "the UI painted")
+check(FOCUS_REPORTS_ON in captured, "startup turns focus reporting on")
 
 # 2. Ctrl-Z: the app must restore the terminal, then stop.
 marker = len(captured)
@@ -93,6 +96,7 @@ check(stopped, "Ctrl-Z genuinely stops the process (WUNTRACED)")
 suspended_output = captured[marker:]
 check(EXIT_ALT in suspended_output, "the alternate screen was exited BEFORE stopping")
 check(SHOW_CURSOR in suspended_output, "the cursor was shown before stopping")
+check(FOCUS_REPORTS_OFF in suspended_output, "focus reporting was turned off before stopping")
 
 # 3. SIGCONT (fg): re-init + repaint.
 marker = len(captured)
@@ -101,6 +105,7 @@ pump(2.0)
 resumed_output = captured[marker:]
 check(ENTER_ALT in resumed_output, "resume re-enters the alternate screen")
 check("TUIkit" in resumed_output, "resume repaints the UI")
+check(FOCUS_REPORTS_ON in resumed_output, "resume turns focus reporting back on")
 
 # 4. Still alive and quits cleanly.
 os.write(fd, b"q")
@@ -115,6 +120,7 @@ while time.time() < deadline:
 check(exited, "the app quits cleanly after the round trip")
 final_output = captured[len(captured) - 4096 :]
 check(EXIT_ALT in final_output, "quitting leaves the alternate screen")
+check(FOCUS_REPORTS_OFF in final_output, "quitting turns focus reporting off")
 
 try:
     os.close(fd)

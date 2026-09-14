@@ -1864,6 +1864,10 @@ whether modifier bits survive that path.
   `ws_xpixel`/`ws_ypixel`, so `cellPixelAspect()` returns nil and callers keep
   their default. Not yet measured whether that default is right under tmux —
   and it cannot be right for every client at once when two are attached.
+- Focus reports: which real client terminals get `?1004h` from tmux. tmux
+  sends it only with `focus-events` on and a client that answered DA1
+  (measured with a harness client, see "Focus reporting (mode 1004)"). No real
+  client has been checked.
 
 **Reproduce:** `tmux -L probe new-session -d -x 120 -y 40 -e PROBE_OUT=/tmp/t.json
 'python3 Tools/TerminalProbes/advance_probe.py; sleep 2'` then read `/tmp/t.json`.
@@ -3253,6 +3257,83 @@ Not measured per terminal — this follows xterm's `ctlseqs` definition rather
 than an observation, and no terminal surveyed here was seen to send 8–11 during
 the probes (no five-button mouse was attached).
 
+## Focus reporting (mode 1004)
+
+**Status: tmux 3.7c MEASURED; every native host UNMEASURED.**
+
+**What TUIkit does.** Focus reporting is always on while an app runs.
+`Terminal.enableRawMode` writes `CSI ?1004h` straight after bracketed paste's
+`?2004h`, and `disableRawMode` writes `CSI ?1004l` just before `?2004l`. So a
+Ctrl-Z suspend and quitting both turn it off, and resuming turns it back on.
+`Tools/Smoke/suspend_probe.py` checks all four. A terminal reports
+`ESC [ I` when its window, tab or pane gains focus and `ESC [ O` when it loses
+it. The parser (`Terminal.finalize`) reads both as `TerminalInput.focusChanged`,
+never as a key, including directly behind an Escape. The run loop
+(`AppRunner.terminalFocusChanged`) then moves `ScenePhase` between `.active` and
+`.inactive`. Nothing is detected: a terminal without the mode ignores the
+request, sends nothing, and the phase stays `.active`.
+
+**The startup loss window.** `enableRawMode` runs before the identity query,
+Ghostty's DECRQM and the graphics query, which read stdin. The identity query
+hands an unrecognised CSI back to the parser (pinned in
+`TerminalIdentityQueryTests`), but the mode and graphics queries throw stray
+bytes away. So a report a terminal sends the instant reporting is enabled can
+be lost, and the phase then stays `.active` until the next focus change. That is
+harmless, and it is one more reason the docs tell apps not to depend on
+`.inactive`.
+
+**A crash leaves it on**, as it leaves the mouse modes on: the restore runs in
+the loop's cleanup and `Terminal.deinit`, which a crash skips. The mouse modes
+are the noisier leak, so this adds no new class.
+
+### tmux 3.7c — measured
+
+Measured while designing this feature, with a throwaway harness that is not
+yet committed. The harness used private `-L` sockets, a Python PTY as the tmux
+client, and an inner program in the pane logging its stdin. `focus-events` was
+set in a config file before the client attached.
+
+| `focus-events` | Client answers DA1 | tmux sends `?1004h` to the client | A pane with 1004 on gets injected `ESC[O` / `ESC[I` | `select-pane` away and back |
+|---|---|---|---|---|
+| off | either | never | yes | nothing |
+| on (set before attach) | no | no | yes | `ESC[O`, `ESC[I` |
+| on (set before attach) | yes | **yes** | yes | `ESC[O`, `ESC[I` |
+
+- tmux asks its client for focus reports (`?1004h`) only when `focus-events` is
+  on **and** the client answered Device Attributes (`ESC[c`, answered
+  `ESC[?62;22c` in the harness). With no answer it never did, and with the
+  option off it never did either way.
+- Every run, tmux sent its client `?1004l`, `?2031h`, `ESC[c`, `ESC[>q` and
+  `ESC]11;?` at startup.
+- Reports injected at the client reached a pane that had turned 1004 on, under
+  both settings.
+- The man page says clients must re-attach after the option changes, so
+  setting it in a running session does not reach a client already attached.
+- **Detection:** `tmux show-options -gv focus-events` answers read-only. DECRQM
+  from inside a pane (`CSI ? 1004 $ p`) reports only the pane's own mode, so it
+  cannot tell whether tmux will forward anything. TUIkit has no detection code,
+  because nothing would use the answer.
+- *Rejected:* tmux's `client-focus-*` / `pane-focus-*` hooks on the existing
+  SIGWINCH hook channel (see "Identifying the client terminal"). The pane hooks
+  need the option on (man page), tmux learns client focus only from reports it
+  requested with the option on (measured), and SIGWINCH carries no payload. So
+  the hooks add no coverage.
+
+### Native hosts — UNMEASURED
+
+No native host has been measured. The plan is a committed
+`Tools/TerminalProbes/focus_probe.py` that turns 1004 on, sends DECRQM and logs
+every byte with timestamps, driven by hand. Each row below stays UNMEASURED
+until that run records it, with the host's version.
+
+| Host | Window blur | Tab switch | Split switch | ⌘-Tab | Minimise | Report on enable | Focusing click also a mouse report | Motion while unfocused | Its own cursor unfocused |
+|---|---|---|---|---|---|---|---|---|---|
+| Apple Terminal | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| iTerm2 | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| Ghostty | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| Warp | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| tmux inside each, `focus-events` on and off | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+
 ## Where the adaptations live
 
 - `TerminalHost` — `TERM_PROGRAM` detection (`Apple_Terminal`,
@@ -3265,6 +3346,11 @@ the probes (no five-button mouse was attached).
   `Tools/TerminalProbes/data/` by `TerminalLedgerConformanceTests` (which
   also carries the known-divergence ledger), with spot batteries in
   `GhosttyWarpCompatibilityTests` / `StringTerminalWidthTests`.
+- `Terminal.enableRawMode` / `disableRawMode` — focus reporting (mode 1004)
+  on and off; `Terminal.finalize` reads the reports as
+  `TerminalInput.focusChanged`; `AppRunner.terminalFocusChanged` moves
+  `ScenePhase` between `.active` and `.inactive`. See "Focus reporting
+  (mode 1004)".
 - `KeyEvent.normalizingLegacyShiftedFunctionKeys()` +
   `Terminal.finalize` — Apple Terminal's shifted-function-key re-coding
   (F13…F20 read back as Shift+F5…F12), gated on `TerminalHost.isAppleTerminal`.

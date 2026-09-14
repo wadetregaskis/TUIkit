@@ -358,6 +358,16 @@ extension Terminal {
         // bulk operation instead of processing each character individually.
         writeImmediate("\u{1B}[?2004h")
 
+        // Ask for focus reports (mode 1004): `ESC [ I` when the window, tab or
+        // pane gains focus and `ESC [ O` when it loses it, which the run loop
+        // turns into `ScenePhase.inactive` and back. Always on. A terminal
+        // without the mode ignores the request and never reports, and neither
+        // does tmux without `focus-events on`, so the phase then simply stays
+        // `.active`. A report sent the moment this is enabled can be swallowed
+        // by the startup queries that read stdin next. See
+        // Documentation/Terminal-compatibility.md, "Focus reporting (mode 1004)".
+        writeImmediate("\u{1B}[?1004h")
+
         // Ask xterm-compatible terminals (iTerm2, Ghostty, kitty, wezterm,
         // gnome-terminal, …) to report modified cursor keys in canonical
         // `ESC[1;<mod><letter>` form so that combinations like
@@ -399,6 +409,10 @@ extension Terminal {
         writeImmediate("\u{1B}[?1002l")
         writeImmediate("\u{1B}[?1000l")
         appliedMouseMode = .none
+
+        // Focus reports off, so the shell (or whatever runs after a suspend or
+        // quit) is not sent `ESC [ I` / `ESC [ O` it never asked for.
+        writeImmediate("\u{1B}[?1004l")
 
         // Disable bracketed paste mode before restoring terminal state.
         writeImmediate("\u{1B}[?2004l")

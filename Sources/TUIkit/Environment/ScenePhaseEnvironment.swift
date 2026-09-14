@@ -24,25 +24,44 @@ import TUIkitCore
 ///
 /// ## What a terminal can actually tell you
 ///
-/// One transition is real here, and it is the one worth knowing about:
-/// **suspend**. <kbd>Ctrl</kbd>-<kbd>Z</kbd> (or an external `SIGTSTP`) stops
-/// the process and hands the terminal back to the shell; `fg` brings it back,
-/// by which time the working directory, the files, or the world may have
-/// changed underneath it. The phase goes ``background`` on the way down and
-/// ``active`` on the way back up, with a frame rendered at each so an
-/// `onChange` observer actually sees both.
+/// **Suspend** is always reported. <kbd>Ctrl</kbd>-<kbd>Z</kbd> (or an
+/// external `SIGTSTP`) stops the process and hands the terminal back to the
+/// shell; `fg` brings it back, by which time the working directory, the files,
+/// or the world may have changed underneath it. The phase goes ``background``
+/// on the way down and ``active`` on the way back up, with a frame rendered at
+/// each so an `onChange` observer actually sees both.
 ///
-/// ``inactive`` — SwiftUI's "on screen but not receiving events" — is never
-/// reported. Detecting it needs the terminal's focus-reporting mode
-/// (`CSI ?1004h`), which TUIkit does not enable; a value that could only ever
-/// be guessed at is worse than one that never appears. The case exists so the
-/// `switch` you would write against SwiftUI still compiles.
+/// **Focus** is reported only where the terminal reports it. While an app
+/// runs, TUIkit turns on the terminal's focus reporting (DEC private mode 1004,
+/// `CSI ?1004h`). The phase goes ``inactive`` when the terminal says its
+/// window, tab or pane lost focus, and ``active`` when it says focus came back.
+/// Many never say: a terminal without the mode, and tmux without its
+/// `focus-events` option set before the client attaches. A report sent the
+/// moment reporting is turned on can also be lost among the startup queries.
+/// So **do not build behaviour that depends on noticing an inactive window.**
+/// Treat ``inactive`` as a hint that arrived, never as one that is guaranteed
+/// to.
+///
+/// It differs from SwiftUI's ``inactive`` in two ways:
+/// - SwiftUI says a scene in this phase should pause timers and free any
+///   unnecessary resources. An unfocused terminal window is still on screen,
+///   so TUIkit keeps progress running: spinners, indeterminate progress bars
+///   and a refresh's indicator go on animating.
+/// - On macOS, SwiftUI's ``inactive`` is transitional. Here it lasts for as
+///   long as the terminal window is unfocused.
+///
+/// What an inactive scene changes is how it looks, through
+/// ``EnvironmentValues/appearsActive``: focus indicators hide, a text caret
+/// holds still and dims, and anything else that breathes holds still (see
+/// <doc:FocusSystem>). To draw a view of your own that way, read
+/// `appearsActive` rather than the phase.
 public enum ScenePhase: Comparable, Hashable, Sendable {
     /// The scene is not visible: for a terminal app, suspended.
     case background
 
-    /// The scene is visible but not receiving events. Never reported — see
-    /// the type's discussion.
+    /// The scene is visible but not receiving events: the terminal reported
+    /// that its window, tab or pane lost focus. Many terminals never report
+    /// it — see the type's discussion.
     case inactive
 
     /// The scene is running and taking input.
@@ -63,6 +82,11 @@ extension EnvironmentValues {
     /// Published each frame from the run loop's own state, so it is one source
     /// of truth rather than a value each view guesses at — the same treatment
     /// `\.locale` gets.
+    ///
+    /// ``ScenePhase/inactive`` arrives only where the terminal reports focus,
+    /// so do not build behaviour that depends on noticing it. See
+    /// ``ScenePhase`` for what a terminal reports and where TUIkit differs from
+    /// SwiftUI, and ``appearsActive`` for the look an inactive scene takes.
     public var scenePhase: ScenePhase {
         get { self[ScenePhaseKey.self] }
         set { self[ScenePhaseKey.self] = newValue }

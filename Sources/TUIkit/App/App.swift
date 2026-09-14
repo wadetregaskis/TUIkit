@@ -103,7 +103,9 @@ internal final class AppRunner<A: App> {
     private let paletteManager: ThemeManager
     private let statusBar: StatusBarState
     private let terminal: Terminal
-    private let tuiContext: TUIContext
+    /// Internal rather than private so a test can read and set the scene phase
+    /// the loop holds (see `terminalFocusChanged(isFocused:cursorTimer:)`).
+    let tuiContext: TUIContext
     private var isRunning = false
     private let signals = SignalManager()
 
@@ -636,6 +638,28 @@ extension AppRunner {
         renderer.invalidateDiffCache()
     }
 
+    /// Moves the scene between ``ScenePhase/active`` and ``ScenePhase/inactive``
+    /// on a focus report from the terminal (mode 1004, which `enableRawMode`
+    /// turns on).
+    ///
+    /// - While the scene is ``ScenePhase/background`` it does nothing: that
+    ///   phase belongs to the suspend, which sets `.active` again itself.
+    /// - A report of the phase the scene already has asks for no frame. A
+    ///   terminal may report focus in as reporting is enabled.
+    /// - Focus in restarts the focus breath and the caret, so they come back at
+    ///   their bright start rather than wherever the clock has run to.
+    /// - Otherwise it asks for a frame, which draws the new look. After a focus-out
+    ///   frame nothing reads the cursor clock or leaves runs on it, so the
+    ///   timer stops, or keeps running only for content animations.
+    func terminalFocusChanged(isFocused: Bool, cursorTimer: CursorTimer) {
+        guard tuiContext.scenePhase != .background else { return }
+        let phase: ScenePhase = isFocused ? .active : .inactive
+        guard tuiContext.scenePhase != phase else { return }
+        tuiContext.scenePhase = phase
+        if isFocused { cursorTimer.restartFocusPhase() }
+        appState.setNeedsRender()
+    }
+
     fileprivate func drainTerminalEvents(
         inputHandler: InputHandler,
         renderer: RenderLoop<A>,
@@ -681,11 +705,11 @@ extension AppRunner {
                     appState.setNeedsRender()
                 }
 
-            case .focusChanged:
-                // Read and not yet acted on. Deliberately no `noteInputSource`:
-                // a focus report is the terminal speaking, not the user
-                // choosing the keyboard or the pointer.
-                break
+            case .focusChanged(let isFocused):
+                // Deliberately no `noteInputSource`: a focus report is the
+                // terminal speaking, not the user choosing the keyboard or the
+                // pointer.
+                terminalFocusChanged(isFocused: isFocused, cursorTimer: cursorTimer)
             }
             eventsProcessed += 1
         }
