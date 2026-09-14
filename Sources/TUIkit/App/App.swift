@@ -355,8 +355,12 @@ extension AppRunner {
                 // process is still alive — an app that saves on the way down
                 // has no other moment. See ``ScenePhase``.
                 tuiContext.scenePhase = .background
-                renderer.render(pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer)
+                renderOutsidePacer(renderer: renderer, cursorTimer: cursorTimer)
                 suspendUntilContinued(renderer: renderer)
+                // The animation clocks are the monotonic clock, which ran on while
+                // the process was stopped: looping animations resume where it now
+                // is, and the caret and focus breath restart at their bright end.
+                cursorTimer.restartFocusPhase()
                 tuiContext.scenePhase = .active
                 pacer.requestRender()
             }
@@ -365,6 +369,8 @@ extension AppRunner {
             // nothing was torn down and nothing needs rebuilding — but the
             // screen may have been disturbed while the process slept.
             if signals.consumeContinueFlag() {
+                // The same long gap as Ctrl-Z's, so the same restart.
+                cursorTimer.restartFocusPhase()
                 renderer.invalidateDiffCache()
                 pacer.requestRender()
             }
@@ -501,6 +507,9 @@ extension AppRunner {
     ) -> FramePacer.Frame {
         scheduler.beginFrame()
         let frameNow = FrameClock.nowNanos
+        // Before the breath is read below, so the phase it passes and every clock
+        // read inside the frame are this frame's instant — see `CursorTimer.observe`.
+        cursorTimer.observe(nowNanos: UInt64(bitPattern: frameNow))
         let activity = renderer.render(
             pulsePhase: cursorTimer.breathPhase,
             cursorTimer: cursorTimer,
@@ -534,6 +543,16 @@ extension AppRunner {
         return FramePacer.Frame(
             renderedAtNanos: MonotonicClock.nowNanoseconds,
             animationDeadlineNanos: deadline)
+    }
+
+    /// A frame rendered outside the pacer — the one before a Ctrl-Z suspend, the
+    /// debug frame dump — stamped and shown to the clock the way `renderFrame`
+    /// does it: one reading, observed before the breath is read.
+    fileprivate func renderOutsidePacer(renderer: RenderLoop<A>, cursorTimer: CursorTimer) {
+        let frameNow = FrameClock.nowNanos
+        cursorTimer.observe(nowNanos: UInt64(bitPattern: frameNow))
+        renderer.render(
+            pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer, frameNowNanos: frameNow)
     }
 
     /// Reads and dispatches every terminal event currently pending (up to a
@@ -630,7 +649,7 @@ extension AppRunner {
                 // repaint first so the snapshot captures every line.
                 if keyEvent.key == .character("`"), frameDumpEnabled {
                     renderer.invalidateDiffCache()
-                    renderer.render(pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer)
+                    renderOutsidePacer(renderer: renderer, cursorTimer: cursorTimer)
                     terminal.dumpLastFrame()
                 }
                 if inputHandler.handle(keyEvent) {

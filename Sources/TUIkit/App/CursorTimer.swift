@@ -6,12 +6,26 @@
 
 import Foundation
 
-/// The app's one animation TIMER, and the two clocks it ticks: the
+/// The app's one animation TIMER, and the two clocks it serves: the
 /// focus-relative one the cursor's blink and every focus indicator's breath
 /// read, and the monotonic one a spinner's or an indeterminate bar's run replays
-/// on. One that declines its run reads the frame clock instead: this timer is
-/// stopped, and zeroed, on a page that leaves no runs and reads nothing (§66 of
-/// `Opacity as composition.md`).
+/// on. One that declines its run reads the frame clock instead (§66 of
+/// `Opacity as composition.md`); since every render shows this timer its frame
+/// time first, the two are the same instant (§74).
+///
+/// **Both clocks are measured, not counted.** ``AnimationClock/content`` is
+/// ``MonotonicClock`` itself, with no origin of its own, and
+/// ``AnimationClock/cursor`` is the same reading less the moment the focus last
+/// moved, floored to the 50 ms tick lattice. The timer keeps one snapshot of
+/// that clock, taken whenever a frame renders (``observe(nowNanos:)``) or the
+/// timer wakes (``creditWake(atNanos:)``), so every read inside one frame agrees.
+///
+/// It used to count instead: each wake added the sleep it had ASKED for. A wake
+/// is late — a `Task.sleep` resumed on the main actor overshoots by a median of
+/// 6–13 ms, whatever its length — and the lateness was never credited, so the
+/// clock ran slow by `1 + N·L` for `N` wakes a simulated second. The Spinners
+/// page wakes about 52 times a simulated second, and every spinner on it ran at
+/// about two thirds of its speed, all by the same factor.
 ///
 /// `CursorTimer` maintains two phase values for different animation styles:
 /// - `blinkVisible`: Boolean for sharp on/off blinking
@@ -26,7 +40,7 @@ import Foundation
 ///
 /// The timer is a single `@MainActor` `Task` that sleeps between ticks (the
 /// same pattern as ``AutoRepeatTimer``). Staying on the main actor means the
-/// tick counter is never mutated off-thread, so the phases read during render
+/// snapshot is never mutated off-thread, so the phases read during render
 /// are race-free.
 ///
 /// ## Animation Speeds
@@ -59,36 +73,70 @@ final class CursorTimer {
     /// written in.
     private static let tickIntervalMs = Int(AnimationClock.cursor.tickInterval * 1000)
 
-    /// Seconds of animation elapsed since the timer started.
-    ///
-    /// The source of truth, and in SECONDS rather than ticks because the sleeps
-    /// are no longer a fixed length: each is however long the frame on screen
-    /// says nothing can change for, so a run animating at 1/30 s and one at
-    /// 0.11 s each get exactly their own cadence. See
-    /// `RenderLoop.timeUntilNextChange(elapsed:)`, which takes a per-clock
-    /// lookup rather than one number because the clocks no longer share a zero
-    /// (`7c5514aa`, 2026-09-01).
-    private(set) var elapsedSeconds: Double = 0
+    /// The same, in whole nanoseconds — the lattice the focus epoch is floored to.
+    private static let tickNanos = UInt64(AnimationClock.nanoseconds(AnimationClock.cursor.tickInterval))
 
-    /// Where ``AnimationClock/cursor``'s zero currently sits, in
-    /// ``elapsedSeconds``.
-    ///
-    /// Moved forward to "now" whenever the focus moves, which is how the blink
-    /// and the focus breath restart at their bright end without disturbing
-    /// anything else. This used to be done by zeroing `elapsedSeconds` itself,
-    /// and every animation in the app read that one number: pressing Tab
-    /// restarted every indeterminate progress bar, every spinner and every
-    /// breathing label along with the cursor.
-    private var focusEpoch: Double = 0
+    /// Where a wake reads the time. The clock `FrameClock` reads too, which is
+    /// what makes a wake's reading and a frame's comparable at all; injectable
+    /// so a test can step it, as `MouseEventDispatcher.nowNanos` is.
+    var nowNanos: () -> UInt64 = { MonotonicClock.nowNanoseconds }
 
-    /// How far `clock` has run.
+    /// The latest instant this timer has been shown, in nanoseconds on
+    /// ``MonotonicClock``: the source of truth for both clocks.
     ///
-    /// The two clocks share one timer and differ only in where their zero is —
-    /// see ``AnimationClock``.
+    /// Only ever raised, so a reading older than one already seen (a wake queued
+    /// behind a render that stamped a later frame) cannot run the phases back.
+    private(set) var snapshotNanos: UInt64 = 0
+
+    /// Where ``AnimationClock/cursor``'s zero sits, on the tick lattice, or `nil`
+    /// until the next ``observe(nowNanos:)`` sets it.
+    ///
+    /// Cleared whenever the focus moves, which is how the blink and the focus
+    /// breath restart at their bright end without disturbing anything else. The
+    /// clear used to zero the one elapsed time every animation in the app read:
+    /// pressing Tab restarted every indeterminate progress bar, every spinner and
+    /// every breathing label along with the cursor.
+    ///
+    /// Set lazily, at the frame after the change, not at the change. See
+    /// ``restartFocusPhase()`` for what setting it early did. Floored to the
+    /// lattice so a caret's and a breath's changes land on the same 50 ms grid as
+    /// every other 50 ms run on the page, and the wakes coalesce — at the price of
+    /// a first half that can be up to one tick short: 300–350 ms of a 350 ms blink.
+    private var focusEpochNanos: UInt64?
+
+    /// Shows the timer the time: a frame's `frameNow`, before anything in that
+    /// frame reads a phase, or a wake's own reading.
+    ///
+    /// **One instant per frame, by convention rather than by construction.** A
+    /// render observes the time it stamps on the frame, so a same-width spinner
+    /// reading ``elapsed(for:)`` and a declined one reading `frameNowNanos` draw
+    /// the same step. That holds because every reading comes from
+    /// ``MonotonicClock`` — `FrameClock.nowNanos` and ``nowNanos`` both read it —
+    /// and because the snapshot only rises: a caller that passes a frame time
+    /// EARLIER than one the timer has already seen (a test, stamping its own
+    /// frames) keeps the later snapshot, and the two then differ.
+    func observe(nowNanos now: UInt64) {
+        snapshotNanos = max(snapshotNanos, now)
+        if focusEpochNanos == nil {
+            focusEpochNanos = snapshotNanos - snapshotNanos % Self.tickNanos
+        }
+    }
+
+    /// How far `clock` has run, at the last snapshot.
+    ///
+    /// The two clocks share one snapshot and differ only in where their zero is —
+    /// see ``AnimationClock``. `.content` has no zero of its own: it is the
+    /// monotonic reading, so every run on it is in phase with every other, and a
+    /// spinner that appears starts where the shared clock is rather than at its
+    /// first frame.
+    ///
+    /// In seconds, from whole nanoseconds. A `Double` holds those exactly for about
+    /// 48 days of uptime (2^22 s); past that, a nanosecond here and there can be
+    /// lost, but a render and a replay index the same `Double` and agree.
     func elapsed(for clock: AnimationClock) -> Double {
         switch clock {
-        case .cursor: max(0, elapsedSeconds - focusEpoch)
-        case .content: elapsedSeconds
+        case .content: Double(snapshotNanos) / 1_000_000_000
+        case .cursor: focusEpochNanos.map { Double(snapshotNanos - $0) / 1_000_000_000 } ?? 0
         }
     }
 
@@ -106,8 +154,8 @@ final class CursorTimer {
     func ticks(for clock: AnimationClock) -> Int {
         // Through the one conversion every step boundary shares, so the phase formulas
         // and the pre-rendered runs agree on which tick an instant is in — a floor in
-        // seconds put a summed 0.35 s in tick 6. Clamped rather than narrowed: `Int` is
-        // 32 bits on wasm32.
+        // seconds put a summed 0.35 s in tick 6, when this clock was a sum. Clamped
+        // rather than narrowed: `Int` is 32 bits on wasm32.
         Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameDuration: Self.tickInterval))
     }
 
@@ -165,7 +213,7 @@ final class CursorTimer {
     /// floor fixed beside `AnimationClock.step(atElapsed:frameDuration:)`, which is what
     /// made a blink's plans vary at all).
     ///
-    /// Asked here, after crediting the time just slept, the plan and the sleep are the
+    /// Asked here, after taking the time of the wake, the plan and the sleep are the
     /// same wake's, and no ordering between the task and the loop can come between them.
     /// `nil` leaves the sleep where ``advance(by:)`` last put it.
     var planner: (((AnimationClock) -> Double) -> Double)?
@@ -302,39 +350,52 @@ extension CursorTimer {
 
         task = Task { [weak self] in
             while !Task.isCancelled {
-                // Read per iteration: `creditWake(slept:)` planned it at the end of
-                // the previous pass, from the time that wake had just credited — or,
-                // for the first pass, a render set it through `advance(by:)`.
+                // Read per iteration: `creditWake(atNanos:)` planned it at the previous
+                // wake — or, for the first pass, a render set it through `advance(by:)`.
                 let seconds = self?.sleepSeconds ?? Self.tickInterval
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                    try await Task.sleep(nanoseconds: Self.sleepNanoseconds(seconds))
                 } catch {
                     return  // cancelled
                 }
                 // The sleep returning is NOT proof the task still wants this
-                // stride: `Task.sleep` throws only when the cancel beats the
+                // wake: `Task.sleep` throws only when the cancel beats the
                 // wake, so one whose deadline passed while the main actor was
                 // busy resumes normally even though `cancel()` has since been
-                // called. Crediting it then lands a whole stride on a clock
-                // `restartFocusPhase()` or `stop()` has already re-zeroed —
-                // precisely the jump those cancels exist to prevent.
+                // called. Taking it then would fix the cursor clock's new zero
+                // at this stale wake instead of the render the restart left it
+                // to, and would carry on looping beside the task that render
+                // starts — two timers, twice the wakes.
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
-                self.creditWake(slept: seconds)
+                self.creditWake(atNanos: self.nowNanos())
             }
         }
     }
 
-    /// Credits a wake that slept `seconds`, plans the sleep that follows it, and posts
-    /// the ticks — in that order, which is the point.
+    /// `seconds` as the nanoseconds a sleep asks for: ROUNDED, through the conversion
+    /// every step boundary uses.
     ///
-    /// The body of the timer's loop, separate so a test can step it without racing a
-    /// real `Task.sleep`.
-    func creditWake(slept seconds: Double) {
-        // Advanced by what was SLEPT, not by a grid step, which is what keeps
-        // `elapsedSeconds` a real elapsed time under a variable cadence — and therefore
-        // keeps every phase derived from it honest.
-        elapsedSeconds += seconds
+    /// `UInt64(seconds * 1_000_000_000)` truncated, and a plan of `n` nanoseconds that
+    /// has been through `Double(n) / 1e9` comes back one short on about 2% of plans. A
+    /// real wake is milliseconds late and hides that. A clock that advances by exactly
+    /// what was slept wakes 1 ns before the boundary, finds the change still 1 ns away,
+    /// and plans the 10 ms floor: a frame 10 ms late.
+    static func sleepNanoseconds(_ seconds: Double) -> UInt64 {
+        UInt64(clamping: AnimationClock.nanoseconds(seconds))
+    }
+
+    /// Takes a wake at `now`, plans the sleep that follows it, and posts the ticks — in
+    /// that order, which is the point.
+    ///
+    /// The body of the timer's loop, separate so a test can step it on a clock of its
+    /// own without racing a real `Task.sleep`.
+    func creditWake(atNanos now: UInt64) {
+        // What the clock READS, not what the sleep asked for. A wake is late by a few
+        // milliseconds, and crediting only the planned sleep lost that at every wake —
+        // every animation on a page ran slow by one shared factor, 1.48× on the
+        // Spinners page.
+        observe(nowNanos: now)
         // Planned BEFORE the ticks go out: see `planner` for what planning after them
         // did.
         if let planner {
@@ -348,33 +409,43 @@ extension CursorTimer {
     }
 
     /// Stops the cursor animation timer.
+    ///
+    /// ``AnimationClock/content`` is not reset, and cannot be: it is the monotonic
+    /// clock. A spinner that appears after a still stretch starts where the shared
+    /// clock is, in phase with every other spinner of its style, rather than at its
+    /// first frame. ``AnimationClock/cursor`` restarts at its bright end at the next
+    /// ``observe(nowNanos:)``.
     func stop() {
         task?.cancel()
         task = nil
-        elapsedSeconds = 0
-        focusEpoch = 0
+        focusEpochNanos = nil
         sleepSeconds = Self.tickInterval
     }
 
     /// Restarts ``AnimationClock/cursor`` at its bright end, leaving
     /// ``AnimationClock/content`` running.
     ///
-    /// Call this when the focus moves, so whatever has just taken it is
-    /// visible at once. It does NOT touch `elapsedSeconds`: a progress bar's
-    /// sweep and a breathing label are not about the focus and must not jump
-    /// when it changes.
+    /// Call this when the focus moves, so whatever has just taken it is visible at
+    /// once. The run loop also calls it when the process resumes from Ctrl-Z or an
+    /// external SIGSTOP: the monotonic clock ran on while it was stopped, and a caret
+    /// would otherwise come back mid-blink.
+    ///
+    /// **It reads no clock.** The new zero is taken at the next ``observe(nowNanos:)``
+    /// — the render that always follows — floored to the tick lattice, so that frame
+    /// is tick 0 by construction. Read here, the zero would be floored at INPUT time
+    /// and the render would come later (up to a frame at the pacer's cap, on top of up
+    /// to a tick of floor), so the first frame could already be tick 1 and miss the
+    /// bright start this exists to give; and the read would move `.content` between
+    /// two frames.
     func restartFocusPhase() {
-        focusEpoch = elapsedSeconds
+        focusEpochNanos = nil
         sleepSeconds = Self.tickInterval
-        // The in-flight sleep was sized for the OLD cadence: leaving it to
-        // finish would add that whole stride to a phase that has just been
-        // re-zeroed, so a focus change during a long sleep (the quantised
-        // pulse holds a shade for several ticks) jumped the clock past the
-        // bright start this exists to give it. Cancelling usually ends the
-        // sleep with a CancellationError the loop returns on; when the wake
-        // got there first the loop's own `Task.isCancelled` check catches it
-        // instead. The render that always follows a focus change starts the
-        // timer again.
+        // The in-flight sleep was sized for the OLD cadence, and its wake would set
+        // the new zero at the wake rather than at the render that follows the focus
+        // change. Cancelling usually ends the sleep with a CancellationError the loop
+        // returns on; when the wake got there first the loop's own `Task.isCancelled`
+        // check catches it instead. The render that always follows a focus change
+        // starts the timer again.
         task?.cancel()
         task = nil
     }

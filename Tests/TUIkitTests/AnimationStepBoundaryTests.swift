@@ -2,7 +2,7 @@
 //  AnimationStepBoundaryTests.swift
 //
 //  Which frame a run shows, and when it next changes, at the instants the clock
-//  actually reaches — which are sums of binary doubles, not the decimals they spell.
+//  actually reaches — binary doubles, not the decimals they spell.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -12,9 +12,10 @@ import Testing
 @testable import TUIkit
 @testable import TUIkitCore
 
-/// An animation clock counts elapsed time by ADDING what it slept, so the instant
-/// that should be exactly 0.35 s is `0.05` added seven times — and in binary that is
-/// one ulp under the boundary. `floor(0.35 / 0.05)` is 6, not 7; a clock summed from
+/// An animation clock used to count elapsed time by ADDING what it slept, so the
+/// instant that should be exactly 0.35 s was `0.05` added seven times — and in binary
+/// that is one ulp under the boundary. (It is measured now; the conversions below still
+/// have to be exact for any double they are handed.) `floor(0.35 / 0.05)` is 6, not 7; a clock summed from
 /// 0.05 s steps floors one step short at every step from 6 to 12.
 ///
 /// A flip due on that wake did not happen. `timeUntilChange` then answered ~5.6e-17
@@ -77,16 +78,21 @@ struct AnimationStepBoundaryTests {
     }
 
     /// A spinner draws its current frame itself AND leaves a run the loop replays, so
-    /// both must pick the same step. `.dots` at 0.11 s: summed, the clock lands one ulp
-    /// under its boundary at every step from 27 to 40, and a floor in seconds drew the
-    /// frame before the one the run replays there — a one-frame stutter on every render
-    /// that fell on such a wake.
-    @Test("A spinner draws the frame its run replays at every step of a summed clock")
+    /// both must pick the same step. `.dots` at 0.11 s: when the clock was a sum of
+    /// sleeps it landed one ulp under its boundary at every step from 27 to 40, and a
+    /// floor in seconds drew the frame before the one the run replays there — a
+    /// one-frame stutter on every render that fell on such a wake. The clock is measured
+    /// now, so its seconds are a nanosecond count divided by 1e9, a day and more into
+    /// the process: no more the decimal they spell than the sum was.
+    @Test("A spinner draws the frame its run replays at every step, deep into the clock")
     func spinnerDrawsTheFrameItsRunReplays() {
         let timer = CursorTimer(renderNotifier: AppState())
         let style = SpinnerStyle.dots
+        // 110,000 s: a whole million 110 ms steps, so step `k` from here shows frame `k`.
+        let base: UInt64 = 110_000 * 1_000_000_000
         var wrong: [(step: Int, drawn: String, replayed: String, due: String)] = []
         for step in 0..<60 {
+            timer.creditWake(atNanos: base + UInt64(step) * 110_000_000)
             var context = RenderContext(
                 availableWidth: 10, availableHeight: 1, tuiContext: TUIContext()
             ).isolatingRenderCache()
@@ -102,7 +108,6 @@ struct AnimationStepBoundaryTests {
             if drawn != replayed || drawn != due {
                 wrong.append((step, drawn, replayed, due))
             }
-            timer.creditWake(slept: style.interval)
         }
         #expect(wrong.isEmpty, "steps whose drawn frame was not the replayed one: \(wrong)")
     }

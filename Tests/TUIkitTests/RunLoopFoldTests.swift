@@ -237,16 +237,19 @@ struct RunLoopFoldTests {
     /// the serve did re-base, correctly, and too late: the timer had already begun its
     /// next sleep with the value planned one wake earlier. What the timer sleeps next is
     /// the only thing that matters, so that is what is asserted.
-    @Test("A wake plans the sleep that follows it, from the time it just credited")
+    @Test("A wake plans the sleep that follows it, from the time it just took")
     func aWakePlansTheSleepAfterIt() {
         let harness = Harness()
         let loop = harness.loop(SpinningProbeApp())
         let timer = CursorTimer(renderNotifier: AppState.shared)
-        _ = loop.render(cursorTimer: timer)
+        // A frame time of the test's own, past any real reading, so the wake below is
+        // later than the frame; a whole number of the spinner's 110 ms steps.
+        let frameNow: UInt64 = 90_090 * 1_000_000_000
+        _ = loop.render(cursorTimer: timer, frameNowNanos: Int64(frameNow))
         timer.planner = { [loop] elapsed in loop.timeUntilNextChange(elapsed: elapsed) }
         #expect(timer.sleepSeconds == AnimationClock.cursor.tickInterval, "the clock starts on its own grid")
 
-        timer.creditWake(slept: AnimationClock.cursor.tickInterval)
+        timer.creditWake(atNanos: frameNow + 50_000_000)
 
         // The run's own cadence from where the clock now is (a `.dots` spinner's), not
         // the 0.05 s grid, and not a plan made a wake earlier.
@@ -263,14 +266,15 @@ struct RunLoopFoldTests {
         // Long while the clock is young, short after: a planner whose answer depends on
         // WHEN it is asked, so a plan answered for the wrong wake cannot pass.
         timer.planner = { elapsed in elapsed(.content) < 0.2 ? 0.07 : 0.03 }
-        var slept = AnimationClock.cursor.tickInterval
+        // A clock of the test's own that advances by exactly what the timer slept.
+        var now: UInt64 = 0
         var plans: [Double] = []
         for _ in 0..<6 {
-            timer.creditWake(slept: slept)
+            now += CursorTimer.sleepNanoseconds(timer.sleepSeconds)
+            timer.creditWake(atNanos: now)
             let owed = timer.elapsed(for: .content) < 0.2 ? 0.07 : 0.03
             #expect(abs(timer.sleepSeconds - owed) < 1e-9, "after \(timer.elapsed(for: .content)) s")
             plans.append(timer.sleepSeconds)
-            slept = timer.sleepSeconds
         }
         let changedOnce = plans.contains(0.07) && plans.contains(0.03)
         #expect(changedOnce, "the plan must actually vary for this to prove anything: \(plans)")

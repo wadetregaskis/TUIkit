@@ -137,37 +137,73 @@ struct FocusClockUnityTests {
         }
     }
 
-    @Test("Both clocks start together")
-    func clocksAgreeBeforeAnyFocusChange() async {
+    /// 100,000 s of uptime, on the 50 ms lattice: far past any real reading of the
+    /// monotonic clock in a test process, so the times a test shows the timer are
+    /// the ones it keeps.
+    private let base: UInt64 = 100_000 * 1_000_000_000
+
+    @Test("A late wake credits the time that passed, not the sleep it asked for")
+    func aLateWakeCreditsWhatPassed() async {
         let timer = CursorTimer(renderNotifier: AppState())
         timer.start()
         await awaitFirstTick(timer)
-        #expect(timer.elapsed(for: .content) > 0, "the timer ran at all")
-        #expect(timer.elapsed(for: .cursor) == timer.elapsed(for: .content))
+        let before = timer.elapsed(for: .content)
+
+        // Hold the main actor far past the 50 ms sleep, busy rather than asleep, the
+        // shape of `expiredSleepDoesNotCreditAfterRestart`: the wake is due and
+        // cannot run until this lets go.
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(250))
+        while ContinuousClock.now < deadline {}
+        for _ in 0..<2000 where timer.elapsed(for: .content) == before {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+
+        // The clock added the sleep it had ASKED for — 0.05 s, however late the wake
+        // was — so every wake lost its lateness, and every animation ran slow.
+        let credited = timer.elapsed(for: .content) - before
+        #expect(credited >= 0.2, "a 250 ms stall credited \(credited) s")
         timer.stop()
     }
 
-    @Test("A focus change restarts the cursor clock and leaves the content clock running")
-    func focusRestartLeavesTheContentClockAlone() async {
+    @Test("The content clock is the monotonic clock, and the cursor clock starts at the first observe")
+    func cursorClockStartsAtTheFirstObserve() {
         let timer = CursorTimer(renderNotifier: AppState())
-        timer.start()
-        await awaitFirstTick(timer)
-        // Read before restarting, and with no `await` between: this is the
-        // main actor, so the timer's task cannot advance the clock in here.
+        let now = base + 1_234_000_000
+        timer.observe(nowNanos: now)
+        #expect(timer.elapsed(for: .content) == Double(now) / 1_000_000_000)
+        // Bright at once, on the tick lattice: 1.234 s is 34 ms past the 1.200 s tick.
+        #expect(timer.ticks(for: .cursor) == 0)
+        #expect(abs(timer.elapsed(for: .cursor) - 0.034) < 1e-9)
+        // The two used to share a zero until the first focus change. `.content` no
+        // longer has one of its own.
+        #expect(timer.elapsed(for: .cursor) != timer.elapsed(for: .content))
+    }
+
+    @Test("A focus change restarts the cursor clock at the next frame and leaves the content clock alone")
+    func focusRestartLeavesTheContentClockAlone() {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.observe(nowNanos: base + 1_234_000_000)
+        timer.observe(nowNanos: base + 4_234_000_000)
         let content = timer.elapsed(for: .content)
-        #expect(content > 0, "the timer ran at all")
+        #expect(timer.ticks(for: .cursor) == 60, "three seconds of blink, 34 ms past a tick")
 
         timer.restartFocusPhase()
 
-        // The blink and the focus breath start over, so whatever just took the
-        // focus is at its bright end.
-        #expect(timer.elapsed(for: .cursor) == 0)
-        // Everything else does not. This is the whole point: pressing Tab used
-        // to zero `elapsedSeconds`, which is the number every indeterminate
-        // bar, spinner and breathing label derives its phase from, so they all
-        // jumped back to the start of their cycle.
+        // It reads no clock. Everything that is not about the focus stays where it
+        // was: pressing Tab used to zero the one elapsed time every indeterminate bar,
+        // spinner and breathing label derives its phase from, so they all jumped back
+        // to the start of their cycle.
         #expect(timer.elapsed(for: .content) == content)
-        timer.stop()
+        #expect(timer.elapsed(for: .cursor) == 0)
+
+        // The frame that follows comes 56 ms later, more than a tick. It is still tick
+        // 0 — the zero is taken HERE, floored to 4.250 s — where a zero floored when the
+        // focus moved (4.234 s → 4.200 s) would already have been tick 1, and the newly
+        // focused control would have missed its bright start.
+        timer.observe(nowNanos: base + 4_290_000_000)
+        #expect(timer.ticks(for: .cursor) == 0)
+        timer.observe(nowNanos: base + 4_340_000_000)
+        #expect(timer.ticks(for: .cursor) == 1)
     }
 
     @Test("A sleep that expired before the focus moved does not credit the re-zeroed clock")
@@ -195,23 +231,31 @@ struct FocusClockUnityTests {
         for _ in 0..<4 { await Task.yield() }
 
         // The stale task's cancel lost the race with its own wake, so it woke
-        // "successfully" and credited its whole 0.2 s stride to a clock whose
-        // zero had just been moved to now — the breath jumped from its bright
-        // end to mid-cycle, one tick after taking the focus.
+        // "successfully". When the clock was a sum of sleeps, that credited its
+        // whole 0.2 s stride to a clock whose zero had just been moved to now — the
+        // breath jumped from its bright end to mid-cycle, one tick after taking the
+        // focus. Measured, the same wake would fix the new zero at the stale wake
+        // rather than at the render that follows the focus change.
         #expect(
             timer.elapsed(for: .cursor) == 0,
             "credited \(timer.elapsed(for: .cursor))s to a clock just re-zeroed")
         timer.stop()
     }
 
-    @Test("Stopping puts both clocks back to zero")
-    func stopZeroesBoth() async {
+    @Test("Stopping restarts the cursor clock and leaves the content clock on the monotonic clock")
+    func stopRestartsOnlyTheCursorClock() {
         let timer = CursorTimer(renderNotifier: AppState())
-        timer.start()
-        await awaitFirstTick(timer)
-        timer.restartFocusPhase()
+        timer.observe(nowNanos: base + 1_234_000_000)
+        timer.observe(nowNanos: base + 5_000_000_000)
+        #expect(timer.ticks(for: .cursor) == 76)
+
         timer.stop()
-        #expect(timer.elapsed(for: .content) == 0)
-        #expect(timer.elapsed(for: .cursor) == 0)
+        let later = base + 9_876_000_000
+        timer.observe(nowNanos: later)
+
+        // Not zeroed, and not frozen where it stopped: a spinner that appears on a
+        // page that has been still starts where the shared clock is.
+        #expect(timer.elapsed(for: .content) == Double(later) / 1_000_000_000)
+        #expect(timer.ticks(for: .cursor) == 0, "the cursor clock restarts at its bright end")
     }
 }

@@ -380,6 +380,9 @@ extension RenderLoop {
         animationScheduler: AnimationScheduler? = nil,
         frameNowNanos: Int64 = FrameClock.nowNanos
     ) -> RenderActivity {
+        // This frame's instant, before anything reads a phase from the clock. The run
+        // loop has already shown it; a render called any other way has not.
+        cursorTimer?.observe(nowNanos: UInt64(bitPattern: frameNowNanos))
         // Drag auto-scroll: drive ONE tick against the PREVIOUS frame's zones
         // and region rects — before `beginRenderPass()` clears the dispatcher's
         // regions and before the tree re-registers this frame's zones. The drag

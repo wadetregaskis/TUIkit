@@ -68,12 +68,14 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// `seconds` as whole nanoseconds, rounded to the nearest.
     ///
     /// The one conversion every animation step boundary goes through. A clock's
-    /// elapsed time is a SUM of the sleeps it credited, and a sum of binary doubles is
-    /// not the decimal it spells: seven 0.05 s sleeps add to one ulp under 0.35, so a
-    /// floor taken in seconds selects the step BEFORE the one that is due — at every
-    /// step from 6 to 12 of a 50 ms grid, and at the literal `0.35 / 0.05` too. A flip
-    /// due on that wake did not happen, the time to the next change came out ~1e-17 s,
-    /// and a steady blink turned into a skipped half and a double flip.
+    /// elapsed time is a binary double, and a double is not the decimal it spells. The
+    /// clock used to be a SUM of the sleeps it credited: seven 0.05 s sleeps add to one
+    /// ulp under 0.35, so a floor taken in seconds selected the step BEFORE the one that
+    /// was due — at every step from 6 to 12 of a 50 ms grid, and at the literal
+    /// `0.35 / 0.05` too. A flip due on that wake did not happen, the time to the next
+    /// change came out ~1e-17 s, and a steady blink turned into a skipped half and a
+    /// double flip. The clock is measured now, a nanosecond count divided by 1e9, and
+    /// those seconds are no more exact than the sum was, so the rounding stays.
     ///
     /// Nanoseconds are far finer than any frame and exact in an `Int64` for centuries,
     /// so rounding there and dividing in integers puts every boundary on its own step.

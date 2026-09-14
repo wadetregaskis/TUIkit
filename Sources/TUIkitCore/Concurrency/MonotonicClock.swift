@@ -10,7 +10,8 @@
 /// fixed at process start.
 ///
 /// Every part of the framework that measures an *interval* reads this: the run
-/// loop's frame pacing, the animation clocks, auto-repeat's awake-time gate,
+/// loop's frame pacing, the animation clocks (whose content clock IS this reading,
+/// so its zero is wherever the process first read it), auto-repeat's awake-time gate,
 /// the mouse dispatcher's double-click window, the scroll animator, and the
 /// hyperlink activation gate. None of them care what time it is — only how much
 /// has passed — which is the whole reason a monotonic reading is the right one:

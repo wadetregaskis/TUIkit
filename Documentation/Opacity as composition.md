@@ -4645,3 +4645,37 @@ from the raw `FadedAll` palette while the views read the grounded one through th
 environment; they now take it from `GroundedPalette.grounding(_:)`, with the environment
 assignment left raw so the boundary is what they exercise. The ground's own commit should
 have carried these. Its targeted test run did not include those suites; the full suite did.
+
+## 74. The run and its fallback read one instant (2026-09-13)
+
+§66 left two clocks behind one picture. A spinner or indeterminate bar that leaves a run
+took its frame from the cursor timer's content clock, because that is what the loop
+replays the run on; one that declines its run took the frame clock, because nothing keeps
+the timer running on a page of nothing else. The two did not agree. The timer's clock was
+a sum of the sleeps it had asked for, zeroed whenever the loop stopped it, while the frame
+clock is `MonotonicClock`. Two spinners side by side, one on each path, could draw
+different steps in the same frame, and a bar that moved between the paths (a tint fading
+it) jumped.
+
+The timer is now measured. `.content` is `MonotonicClock` itself, with no origin of its
+own; `.cursor` is that reading less the moment the focus last moved, floored to the 50 ms
+lattice. Every render shows the timer its `frameNowNanos` before anything in the frame
+reads a phase (`CursorTimer.observe(nowNanos:)`, called by the run loop before it reads the
+breath and again at the top of `RenderLoop.render`), and a replay reads the snapshot its
+wake took. So at render time `elapsed(.content) == frameNowNanos / 1e9`, and the run path
+and the fallback draw the same step.
+
+**One instant by convention, not by construction.** The snapshot is taken with `max`, so
+it never runs backwards. That keeps a wake queued behind a later render from rewinding the
+phases, and it also means a caller that stamps a frame EARLIER than a time the timer has
+already seen keeps the later one, and the two clocks then differ. Production cannot do
+that: `FrameClock.nowNanos` and the timer's own `nowNanos` both read `MonotonicClock`, and
+each frame observes its own stamp first. A test stamping frames by hand has to keep them
+ahead of anything the timer has seen.
+
+The test renders a same-width `.custom("ab")` beside a mixed-width `.custom("-你")`, both
+at 0.12 s, through `RenderLoop` at six advancing frame times, and requires the two to show
+the same frame index every time. Before, with the timer never started as a unit test
+leaves it, the run-backed one drew `a` in every frame while the other stepped. The §66
+branch in `Spinner` and `ProgressView` is still there in this commit; with the clocks
+agreeing it has nothing left to choose between.

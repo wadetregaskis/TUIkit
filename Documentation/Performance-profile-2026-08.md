@@ -2932,6 +2932,15 @@ plan made one wake earlier, because the loop re-planned only after serving the t
 is fixed beside it by planning at the wake (`CursorTimer.planner`); after both, 53 of 53
 holds, 366–377 ms.
 
+**Follow-up, 2026-09-13: those holds were long because the clock was slow.** A 350 ms
+half held 366–377 ms because each wake credited the sleep it asked for, not the time that
+passed, and every wake is several milliseconds late — a `Task.sleep` resumed on the main
+actor overshoots by a median of 6–13 ms. The whole clock ran slow by `1 + N·L` for `N`
+wakes a second of lateness `L`: 5–7% on the focused field above, 1.48× on the Spinners page. The
+clock now reads `MonotonicClock` at every wake and every render, so a half is 350 ms of
+wall clock, give or take one wake's lateness; the commit that made the change carries the
+measurements.
+
 ### The indeterminate progress bar
 
 The last live-clock producer, and the most expensive: it read `Date()` while

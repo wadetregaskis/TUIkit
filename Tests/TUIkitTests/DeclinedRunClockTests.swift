@@ -4,9 +4,10 @@
 //  A view that declines its run — a translucent indeterminate bar, a spinner
 //  whose frames differ in width — is re-rendered by the scheduler, and must draw
 //  a new frame each time. It took its frame from the cursor timer, which the run
-//  loop stops, and zeroes, on a page that leaves no runs and reads nothing: so
-//  alone on a page it drew frame zero forever (§66). Driven through `RenderLoop`
-//  itself, with the timer as the loop leaves it there.
+//  loop stopped, and then zeroed, on a page that leaves no runs and reads nothing:
+//  so alone on a page it drew frame zero forever (§66). Driven through `RenderLoop`
+//  itself, with the timer as the loop leaves it there. And the run path and the
+//  declined path must agree on the step at any one frame (§74).
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -75,6 +76,54 @@ struct DeclinedRunClockTests {
         #expect(run.idleTimer, "something else kept the timer alive, so this is not the case under test")
         #expect(run.scheduled, "nothing asked the loop to come back")
         #expect(Set(run.pictures).count > 1, "every frame drew the same picture: \(run.pictures)")
+    }
+
+    /// A same-width spinner, which leaves a run, beside a mixed-width one, which
+    /// declines it: two `.custom` sequences of two frames at the one interval every
+    /// `.custom` runs at, so at any instant both are due the same frame index.
+    private struct RunBesideDeclinedApp: App {
+        init() {}
+
+        var body: some Scene {
+            WindowGroup {
+                HStack(spacing: 1) {
+                    Spinner(style: .custom("ab"))
+                    Spinner(style: .custom("-你"))
+                }
+            }
+        }
+    }
+
+    /// The run path reads the cursor timer and the declined path the frame clock, and
+    /// they have to be one instant: a render shows the timer its frame time first.
+    ///
+    /// Before, the timer counted its own wakes from wherever it had last been zeroed —
+    /// here, never started, it stood at zero — so the run-backed spinner drew frame 0 at
+    /// every frame while the declined one, beside it, stepped.
+    @Test("A spinner that leaves a run and one that declines it draw the same step in one frame")
+    func runAndDeclinedRunReadOneInstant() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(RunBesideDeclinedApp())
+        let timer = CursorTimer(renderNotifier: harness.appState)
+        let scheduler = AnimationScheduler()
+        // 90,090 s, a whole number of 120 ms steps, and past any real clock reading.
+        let base: Int64 = 90_090 * 1_000_000_000
+        var mismatches: [(frame: Int, picture: String)] = []
+        for frame in 0..<6 {
+            // 1 ms into each step, so both spinners are due frame index `frame % 2`.
+            let now = base + Int64(frame) * 120_000_000 + 1_000_000
+            scheduler.beginFrame()
+            loop.render(cursorTimer: timer, animationScheduler: scheduler, frameNowNanos: now)
+            scheduler.endFrame()
+            #expect(timer.elapsed(for: .content) == Double(now) / 1_000_000_000)
+            let picture = (loop.replayable?.contentLines ?? []).map(\.stripped).joined()
+            let runIndex = picture.contains("b") ? 1 : 0
+            let declinedIndex = picture.contains("你") ? 1 : 0
+            if runIndex != frame % 2 || declinedIndex != frame % 2 {
+                mismatches.append((frame, picture))
+            }
+        }
+        #expect(mismatches.isEmpty, "frames where the two spinners disagreed: \(mismatches)")
     }
 
     @Test("A translucent indeterminate bar alone on a page moves from frame to frame")
