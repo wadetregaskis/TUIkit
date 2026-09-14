@@ -82,9 +82,9 @@ struct FocusSectionMembershipTests {
         // split's identity path so two splits in one frame stay distinct
         // (`wireDivider`). The ring ORDER is what this test is about.
         let expectedForward = [
-            "nav-split-sidebar", "nav-split-divider-0", "nav-split-content",
-            "nav-split-divider-1", "__default__",
-            "nav-split-sidebar", "nav-split-divider-0", "nav-split-content",
+            "nav-split-sidebar", "nav-split-divider-sidebar", "nav-split-content",
+            "nav-split-divider-content", "__default__",
+            "nav-split-sidebar", "nav-split-divider-sidebar", "nav-split-content",
         ]
         for (press, expected) in expectedForward.enumerated() {
             focusManager.focusNext()
@@ -97,8 +97,8 @@ struct FocusSectionMembershipTests {
 
         // Backward from the current position mirrors the ring exactly.
         let expectedBackward = [
-            "nav-split-divider-0", "nav-split-sidebar", "__default__",
-            "nav-split-divider-1", "nav-split-content", "nav-split-divider-0",
+            "nav-split-divider-sidebar", "nav-split-sidebar", "__default__",
+            "nav-split-divider-content", "nav-split-content", "nav-split-divider-sidebar",
         ]
         for (press, expected) in expectedBackward.enumerated() {
             focusManager.focusPrevious()

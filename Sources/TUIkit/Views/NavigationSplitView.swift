@@ -324,7 +324,6 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
             if index < visibleColumns.count - 1 {
                 dividerInfos.append(
                     wireDivider(
-                        index: index,
                         column: column,
                         resizable: resizable,
                         widths: widths,
@@ -467,14 +466,17 @@ extension _NavigationSplitViewCore {
     fileprivate func focusSectionID(
         for column: NavigationSplitViewColumn, context: RenderContext
     ) -> String {
-        let name: String
+        "nav-split-\(sectionName(of: column))-\(context.identity.path)"
+    }
+
+    /// The column's name in the ids of the sections that belong to it.
+    fileprivate func sectionName(of column: NavigationSplitViewColumn) -> String {
         switch column {
-        case .sidebar: name = "sidebar"
-        case .content: name = "content"
-        case .detail: name = "detail"
-        default: name = "unknown"
+        case .sidebar: "sidebar"
+        case .content: "content"
+        case .detail: "detail"
+        default: "unknown"
         }
-        return "nav-split-\(name)-\(context.identity.path)"
     }
 
     /// Renders a single column.
@@ -553,17 +555,16 @@ extension _NavigationSplitViewCore {
         var focusID: String?
     }
 
-    /// Sets up the divider that follows `column`, the `index`th visible column: registers its focus
+    /// Sets up the divider that follows `column`: registers its focus
     /// section + handler (so Tab reaches it and the arrow keys resize it), and
     /// registers the mouse handler that drags it. Returns the info
     /// `combineColumns` needs to draw and hit-test it. A no-op (returns an
     /// inert divider) while measuring or when the split isn't resizable.
     ///
-    /// `currentWidth` is the width column `index` is rendering at THIS frame,
+    /// `currentWidth` is the width `column` is rendering at THIS frame,
     /// and is what every resize steps from (see
     /// ``_SplitDividerHandler/currentWidth``).
     fileprivate func wireDivider(
-        index: Int,
         column: NavigationSplitViewColumn,
         resizable: Bool,
         widths: SplitViewWidths?,
@@ -584,7 +585,13 @@ extension _NavigationSplitViewCore {
         // column, or two side by side — registered their dividers into ONE
         // shared section, so focusing either divider made both look focused and
         // the section's cycling walked another split's handle.
-        let sectionID = "nav-split-divider-\(index)-\(context.identity.path)"
+        //
+        // Named by the column on its left, not by its position among the gaps.
+        // Named by position, the content column's divider was the second gap in
+        // `.all` and the first in `.doubleColumn`, so hiding the sidebar while
+        // that divider held the focus removed its section, and the focus fell
+        // back to the first section on the page.
+        let sectionID = "nav-split-divider-\(sectionName(of: column))-\(context.identity.path)"
 
         // The same gates every interactive view honours, which this direct
         // wiring bypassed: a `.disabled()` split's divider stayed a Tab stop
@@ -611,10 +618,6 @@ extension _NavigationSplitViewCore {
                 minimumColumnWidth: minimumColumnWidth
             )
         ).value
-        // The section is positional and the handler is not: re-point the id
-        // before the ring files it, as `FocusRegistration.register` does for
-        // every other persisted handler.
-        handler.focusID = sectionID
         handler.canBeFocused = true
         handler.currentWidth = currentWidth
         focusManager.register(handler, inSection: sectionID)

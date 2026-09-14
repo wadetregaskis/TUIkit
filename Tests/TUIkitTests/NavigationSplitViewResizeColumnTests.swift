@@ -124,7 +124,7 @@ struct NavigationSplitViewResizeColumnTests {
     }
 
     @Test("After .doubleColumn, the second divider in .all is its own Tab stop and resizes the content column")
-    func dividerIdsFollowTheirPosition() {
+    func dividerIdsFollowTheirColumn() {
         var visibility = NavigationSplitViewVisibility.doubleColumn
         let binding = Binding(get: { visibility }, set: { visibility = $0 })
         let view = threeColumns(binding)
@@ -157,5 +157,34 @@ struct NavigationSplitViewResizeColumnTests {
         let dividerIDs = buffer.hitTestRegions.compactMap(\.focusID)
             .filter { $0.hasPrefix("nav-split-divider-") }
         #expect(dividerIDs.count == 2 && Set(dividerIDs).count == 2, "distinct divider ids: \(dividerIDs)")
+    }
+
+    /// A divider belongs to the column on its left. Named by its position, the
+    /// content column's divider was `…-divider-1-…` in `.all` and `…-divider-0-…`
+    /// in `.doubleColumn`, so hiding the sidebar while it held the focus removed
+    /// its section, and the focus fell back to the first section on the page.
+    @Test("A focused divider keeps the focus when the sidebar to its left hides")
+    func focusedDividerSurvivesHidingTheSidebar() {
+        var visibility = NavigationSplitViewVisibility.all
+        let binding = Binding(get: { visibility }, set: { visibility = $0 })
+        let view = VStack(spacing: 0) {
+            Toggle("above", isOn: .constant(false)).focusID("above")
+            threeColumns(binding)
+        }
+        let context = resizeContext()
+        let focusManager = context.environment.focusManager!
+
+        _ = frame(view, context)
+        guard let contentDivider = dividerSectionID(in: focusManager, index: 1) else {
+            Issue.record("expected two divider sections"); return
+        }
+        focusManager.activateSection(id: contentDivider)
+        _ = frame(view, context)
+        #expect(focusManager.currentFocusedID == contentDivider, "sanity")
+
+        visibility = .doubleColumn
+        _ = frame(view, context)
+        #expect(focusManager.activeSectionIdentifier == contentDivider)
+        #expect(focusManager.currentFocusedID == contentDivider)
     }
 }

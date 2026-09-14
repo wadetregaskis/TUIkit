@@ -187,14 +187,12 @@ final class SplitViewWidths {
 /// arrow keys always step from the real current width. A consumed key /
 /// mouse event makes the run loop repaint, so no explicit render request is
 /// needed here (same model as ``ItemListHandler``).
-final class _SplitDividerHandler: PersistedFocusable {
-    /// The id of the divider's focus section, re-pointed by the split view
-    /// every render. The section is named by the divider's position on screen,
-    /// the Nth gap in the Tab order, while the handler persists per column.
-    /// Hiding the sidebar moves the content column's divider from the second gap
-    /// to the first. Kept at the id it was built with, it went on answering to
-    /// its old position, and could share an id with the sidebar's divider.
-    var focusID: String
+final class _SplitDividerHandler: Focusable {
+    /// The id of the divider's focus section. Named by the column the divider
+    /// resizes, as the handler is stored, so the two cannot disagree: hiding the
+    /// sidebar moves the content column's divider from the second gap to the
+    /// first, and its handler and its section both go with it.
+    let focusID: String
 
     /// The column this divider resizes (the one on its left). A column, not a
     /// position: the handler is persisted per column, so under `.doubleColumn`

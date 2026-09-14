@@ -740,14 +740,17 @@ struct NavigationSplitViewResizeTests {
 
         let buffer = renderToBuffer(view, context: context)
         #expect(gripX(buffer) == nil, "no grip handle when not resizable")
-        #expect(fm.section(id: "nav-split-divider-0") == nil, "no divider focus section when not resizable")
+        #expect(fm.section(withPrefix: "nav-split-divider") == nil, "no divider focus section when not resizable")
     }
 }
 
-/// The divider's focus-section id, whose suffix is the split's identity path
-/// (so two splits in one frame stay distinct — see `wireDivider`). Tests drive
-/// the divider by looking it up rather than by spelling the whole id.
+/// The id of the `index`th divider's focus section, counted left to right
+/// among the dividers registered this frame. The id itself names the column on
+/// the divider's left and ends in the split's identity path (see
+/// `wireDivider`), so tests drive a divider by where it is rather than by
+/// spelling the whole id.
 @MainActor
 func dividerSectionID(in manager: FocusManager, index: Int = 0) -> String? {
-    manager.section(withPrefix: "nav-split-divider-\(index)")?.id
+    let dividers = manager.sectionIDs.filter { $0.hasPrefix("nav-split-divider-") }
+    return dividers.indices.contains(index) ? dividers[index] : nil
 }
