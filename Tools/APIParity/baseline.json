@@ -413,7 +413,6 @@
   "EmptyVisualEffect.init()",
   "EnabledTextSelectability",
   "EnabledTextSelectability.allowsSelection",
-  "EnvironmentValues.appearsActive",
   "EnvironmentValues.autocorrectionDisabled",
   "EnvironmentValues.backgroundMaterial",
   "EnvironmentValues.backgroundProminence",
