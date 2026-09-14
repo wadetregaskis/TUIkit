@@ -44,6 +44,10 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   a cached row never compares, so changes go permanently unnoticed.
     /// - `.statusBarItems` — the bar's section items are cleared and rebuilt
     ///   every pass, so a cached subtree's items vanish from the bar.
+    /// - `.focusSection` — focus sections are cleared and rebuilt every pass,
+    ///   so a cached subtree's section vanishes from the ring, and the active
+    ///   section's indicator it hands down keeps the focus state it was stored
+    ///   with.
     ///
     /// The pattern is the same each time: a **per-frame registry** the render
     /// loop empties and the view tree refills. Anything that writes to one

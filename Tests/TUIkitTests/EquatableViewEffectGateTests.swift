@@ -131,13 +131,52 @@ struct EquatableViewEffectGateTests {
             })
     }
 
+    @Test("A focus section inside the subtree declines the cache")
+    func focusSectionDeclines() {
+        #expect(!storesBuffer { EffectLeaf(label: "x") { $0.focusSection("rows") }.equatable() })
+    }
+
+    @Test("A focus section inside the subtree is still registered on every later frame")
+    func focusSectionSurvivesLaterFrames() {
+        // Sections are rebuilt every pass (`FocusManager.beginSceneRender`), so a
+        // memo that served `.focusSection` from cache left the frame with no
+        // section at all: the controls under it had nowhere to register, and the
+        // ● the modifier hands its subtree kept whatever focus state it was
+        // stored with. Nothing else in this subtree declares, so the section's
+        // own declaration is the only thing standing between it and the cache.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        func frame() -> [String] {
+            var environment = EnvironmentValues()
+            environment.focusManager = focusManager
+            environment.applyRuntimeServices(from: tuiContext)
+            let context = RenderContext(
+                availableWidth: 40, availableHeight: 10,
+                environment: environment, tuiContext: tuiContext)
+            tuiContext.stateStorage.beginRenderPass()
+            tuiContext.renderCache.beginRenderPass()
+            focusManager.beginRenderPass()
+            _ = renderToBuffer(
+                EffectLeaf(label: "x") { $0.focusSection("rows") }.equatable(), context: context)
+            let sections = focusManager.sectionIDs
+            focusManager.endRenderPass()
+            tuiContext.stateStorage.endRenderPass()
+            tuiContext.renderCache.removeInactive()
+            return sections
+        }
+
+        for number in 1...3 {
+            #expect(frame() == ["rows"], "frame \(number) lost the section")
+        }
+    }
+
     /// Every decline condition above, run through the OTHER memo wrapper too.
     ///
     /// `EquatableView` and `_MemoizedRow` are one implementation now
     /// (`renderValueMemoized`), and the reason they are is that written twice
     /// they drifted: `_MemoizedRow` was missing the uncomparable-environment
     /// clause its twin had. This is what would notice a wrapper that stopped
-    /// going through the shared path — the eight conditions asserted once are
+    /// going through the shared path — the nine conditions asserted once are
     /// asserted for both.
     ///
     /// The row arm keys on a CONSTANT element, so the memo always wants to hit
@@ -145,7 +184,7 @@ struct EquatableViewEffectGateTests {
     /// would be indistinguishable from a miss.
     @Test(
         "Every gate condition holds through both memo wrappers",
-        arguments: [0, 1], 0..<8)
+        arguments: [0, 1], 0..<9)
     func gateHoldsThroughBothWrappers(wrapper: Int, condition: Int) {
         @MainActor func wrapped<V: View & Equatable>(_ inner: V) -> AnyView {
             wrapper == 0
@@ -174,6 +213,11 @@ struct EquatableViewEffectGateTests {
                 )
             case 6:
                 ("focus registration inside", wrapped(EffectLeaf(label: "x") { $0.focusable() }), false)
+            case 7:
+                (
+                    "a focus section inside",
+                    wrapped(EffectLeaf(label: "x") { $0.focusSection("rows") }), false
+                )
             default:
                 (
                     "a preference write inside",

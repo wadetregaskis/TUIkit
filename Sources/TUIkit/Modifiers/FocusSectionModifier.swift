@@ -53,8 +53,18 @@ extension FocusSectionModifier: Renderable {
         let sectionID = declaredSectionID ?? "section-\(context.identity.path)"
 
         // Register the section with the focus manager (idempotent, skip during measurement).
-        if !context.isMeasuring {
-            focusManager?.registerSection(id: sectionID)
+        //
+        // A per-frame side effect, twice over, so it is declared to any
+        // value-memoizing ancestor. Sections are rebuilt every pass
+        // (`FocusManager.beginSceneRender`), so a subtree served from the cache
+        // left the frame with no section: whatever registers under it had
+        // nowhere to go, and the ● handed down below is drawn from whether the
+        // section is active, which the memo's key never sees. Only with a focus
+        // manager present, because without one neither happens and the
+        // subtree is as cacheable as its content.
+        if !context.isMeasuring, let focusManager {
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
+            focusManager.registerSection(id: sectionID)
         }
 
         // Create a child context with the active section ID set,
