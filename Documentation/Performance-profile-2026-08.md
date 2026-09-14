@@ -4051,6 +4051,10 @@ refuses, so a future removal degrades to today's behaviour rather than breaking;
 the whole change is one file; and the nightly-toolchain CI lanes are where SPI
 breakage would surface first.
 
+**Superseded by §58:** the first of those was never true on Xcode. Apple's SDKs
+build `Swift` from its public interface, which carries no SPI, so this did not
+compile with Xcode's toolchain at all and has been taken back out.
+
 ## 56. A button was drawn to be measured, and drawn again to be seen (2026-09-06, later)
 
 §55 optimised the hottest thing on the menu path. This one asks the question that
@@ -4248,3 +4252,99 @@ plan named two harness modes — `shades256` and `optimal64` — that
 `ImageHarness` does not accept. Both were the reason to re-derive rather than
 apply, and both were real.
 
+## 58. The key paths §55 cached were never visible to Xcode (2026-09-14)
+
+§55 swapped the per-render `Mirror` walk in `resolveEnvironmentProperties` for
+key paths found once with the standard library's `_forEachFieldWithKeyPath`.
+It named the risk: the function is `@_spi(Reflection)`. A removal would only
+fall back to `Mirror`, it said, and the nightly lanes would catch any break
+first. Neither held. Nothing was removed and no nightly moved. Xcode's own
+toolchain has never been able to see the function.
+
+### What the compiler says
+
+Xcode 26.3's toolchain (`swiftlang-6.2.4.1.4`, MacOSX26.2 SDK) fails
+`TUIkitView` in **debug** as well as release:
+
+    EnvironmentProperty.swift:7:2: warning: '@_spi' import of 'Swift' will not
+      include any SPI symbols; 'Swift' was built from the public interface at
+      …/MacOSX26.2.sdk/usr/lib/swift/Swift.swiftmodule/arm64e-apple-macos.swiftinterface
+    EnvironmentProperty.swift:261:18: error: cannot find '_forEachFieldWithKeyPath' in scope
+
+The warning is the whole explanation. That SDK's `Swift.swiftmodule` holds a
+`.swiftinterface` per architecture and nothing else. There is no
+`.private.swiftinterface` and no binary module, and the public interface has
+no `@_spi` declaration in it at all (`grep -c @_spi` finds 0). The Command Line
+Tools SDKs on this machine (14, 14.5, 15, 15.5) are laid out the same way. The
+symbol itself is present: it is in the SDK's `libswiftCore.tbd` and exported
+from `/usr/lib/swift/libswiftCore.dylib`. Only the declaration is withheld.
+
+swift.org toolchains ship their own stdlib, with the private interface and a
+binary module. That covers the swiftly 6.3.3 toolchain every local build and
+gate here has been using, and the static-Linux and WASI SDKs as well. All of
+them compile the call. That is why nothing noticed. **So this was not a Swift
+6.2 incompatibility.** swiftly 6.3.3 compiles the call against the same Xcode
+SDK. The split is Xcode's toolchain against swift.org's, whatever the version.
+
+Minimal repro, `swiftc -typecheck`:
+
+    @_spi(Reflection) import Swift
+    struct S { var a = 1; var b = "x" }
+    @available(macOS 11.3, *)
+    func walk() -> Bool { _forEachFieldWithKeyPath(of: S.self) { _, _ in true } }
+
+Xcode 26.3's toolchain fails with the error above. swiftly 6.3.3 against the
+same SDK is clean, with or without `-O`.
+
+**CI never saw it.** `ee3d422f` is not on `origin/main`. Once pushed, both
+released macOS lanes would have failed at `TUIkitView`: they run Xcode 26's
+`swift` on `macos-15` and `macos-26`. That holds for `macos-26`'s Xcode 26.6
+only if its SDK is laid out like 26.3's, which is inferred and not checked.
+The two snapshot lanes use swift.org toolchains and would have passed. So would
+Linux, Windows and WASI. So would any package consumer building with
+swift.org's toolchain, and no consumer building in Xcode.
+
+### Why not keep it where it compiles
+
+- No `#if` asks whether SPI is visible. `canImport(Darwin)` stands in for
+  "Apple SDK", and it also turns the fast path off in swift.org macOS builds,
+  which can compile it. It would leave the key-path branch compiled only on
+  Linux, Windows and WASI, which is code this machine never type-checks.
+- `@_silgen_name` onto the exported symbol means spelling the signature without
+  its types. Its `options` parameter is `_EachFieldOptions`, a stdlib struct
+  that is not `@frozen`, so library evolution passes it indirectly. Faking that
+  is an ABI guess.
+- No public API yields the key path of a stored property.
+
+So `resolveEnvironmentProperties` goes back to its form before §55: a
+per-type negative memo, then a `Mirror` walk for any type that has
+`@Environment` properties.
+
+### What that costs now
+
+§55's −11.6% came from `_MenuItemRow`, and on the `menu` tree it was the only
+view that reflected. Later on 2026-09-06, `8284610a` removed that row's
+`@Environment` properties: its parent is `Renderable` and passes the three
+values in. So the win's main customer had already gone before this change.
+
+`ab_bench.py`, full sweep, 15 reps, the release `Stress` at `c33f8054` against
+this change, both built with swiftly 6.3.3 (load 2.76):
+
+    scenario        old µs    new µs   change   95% CI          verdict
+    menus           2061.0    2045.2    -0.8%   -1.4% … +0.5%   indistinguishable
+    kitchensink      468.9     474.8    -0.2%   -1.4% … +1.8%   indistinguishable
+    deep           13747.6   13728.8    +0.0%   -0.7% … +0.7%   indistinguishable
+    fanout          4180.0    4230.7    +1.1%   +0.1% … +2.0%   slower
+    gradients      15310.3   15400.8    +1.2%   +0.4% … +3.6%   slower
+    (the other 15)                              all indistinguishable
+
+The two "slower" rows did not survive a second look. With the old binary run
+against a byte-identical copy of itself, at 15 reps, the floor was
+`fanout` +0.3% [-0.8, +1.2] and `gradients` +0.2% [-0.4, +0.5]. Old against new
+again at 30 reps gave `fanout` +0.4% [-0.6, +1.2] and `gradients` -0.3%
+[-0.7, +0.2], both indistinguishable. Neither scenario names a view type that
+declares `@Environment`, and a type with none takes the same `Set` test before
+and after. So no scenario in the sweep is being claimed to move. That is a
+statement about today's sweep, not about reflection being free: a view that
+does declare `@Environment` pays a `Mirror` walk per render again, as it did
+before §55. §55 measured that walk at about 3.4 µs.

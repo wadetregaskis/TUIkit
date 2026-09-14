@@ -160,6 +160,14 @@ support in 0.64.0.
 # Build
 swift build
 
+# Build with Xcode's own toolchain too, if `swift` on your PATH is a swift.org
+# one (swiftly puts itself first, and DEVELOPER_DIR does not change that). The
+# two differ by more than version: Apple's SDKs build the standard library from
+# its PUBLIC interface, so an `@_spi` import of `Swift` sees nothing there, and
+# the macOS CI lanes use Xcode's. A separate scratch path keeps the two builds
+# from invalidating each other.
+xcrun --toolchain XcodeDefault swift build --build-tests --scratch-path .build/xcode
+
 # Run all tests (~6,300 tests, Swift Testing framework)
 swift test
 

@@ -55,8 +55,9 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
     /// a `ButtonStyle`'s body does not — and the row sits directly inside it
     /// with no modifier between, so the values are the same ones it would have
     /// resolved for itself. What it saves is the resolution: three
-    /// `EnvironmentBox` allocations, three key-path projections through `Any`
-    /// and three existential casts, per row, on every measure and every render.
+    /// `EnvironmentBox` allocations, a reflective walk over the row's fields
+    /// that hands each back as `Any`, and three existential casts, per row, on
+    /// every measure and every render.
     /// On the `menus` stress scenario `resolveEnvironmentProperties`'s inner
     /// loop was **5.9% of the frame** and `Environment.wrappedValue` another
     /// **5.0%**, and every reflecting view on that path was this row.
