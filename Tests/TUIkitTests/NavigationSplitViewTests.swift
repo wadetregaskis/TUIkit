@@ -733,7 +733,7 @@ struct NavigationSplitViewResizeTests {
         }
     }
 
-    @Test("navigationSplitViewResizable(false) removes the handle and divider section")
+    @Test("navigationSplitViewResizable(false) removes the grip dots and keeps only the ◀ toggle")
     func optOut() {
         let context = resizeContext()
         let fm = context.environment.focusManager!
@@ -741,8 +741,9 @@ struct NavigationSplitViewResizeTests {
             .navigationSplitViewResizable(false)
 
         let buffer = renderToBuffer(view, context: context)
-        #expect(gripX(buffer) == nil, "no grip handle when not resizable")
-        #expect(fm.section(withPrefix: "nav-split-divider") == nil, "no divider focus section when not resizable")
+        #expect(!buffer.lines.contains { $0.stripped.contains("◦") }, "no grip dots when not resizable")
+        #expect(buffer.lines[buffer.height / 2].stripped.contains("◀"), "the toggle stays")
+        #expect(fm.section(withPrefix: "nav-split-divider-sidebar") != nil, "and is a Tab stop")
     }
 }
 

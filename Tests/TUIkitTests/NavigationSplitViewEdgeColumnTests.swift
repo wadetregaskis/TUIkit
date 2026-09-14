@@ -256,8 +256,10 @@ struct NavigationSplitViewEdgeColumnTests {
         }
     }
 
-    @Test("A split that cannot resize hands the keyboard to the revealed column instead")
-    func revealWithoutDividerFocusesTheColumn() {
+    /// A split that cannot resize still has its leftmost divider, kept for the ◀
+    /// toggle, so the keyboard goes there as it does on a resizable split.
+    @Test("A split that cannot resize hands the keyboard to its ◀ toggle")
+    func revealWithoutResizingFocusesTheToggle() {
         let context = splitContext()
         let focusManager = context.environment.focusManager!
         let box = Box(.detailOnly)
@@ -272,7 +274,7 @@ struct NavigationSplitViewEdgeColumnTests {
         _ = focusManager.dispatchKeyEvent(KeyEvent(key: .enter))
         _ = frame(view, context)
         #expect(box.visibility == .all)
-        #expect(focusManager.currentFocusedID == "side")
+        #expect(focusManager.activeSectionIdentifier?.hasPrefix("nav-split-divider-sidebar") == true)
     }
 
     @Test("A focused edge says Return shows a column")

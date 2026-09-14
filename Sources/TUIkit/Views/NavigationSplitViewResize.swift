@@ -30,8 +30,9 @@ extension View {
     /// columns resized.
     ///
     /// Split views are resizable by default. Pass `false` to pin the columns
-    /// to their configured widths (no divider handle, no drag, no keyboard
-    /// resize). This is a terminal-specific affordance — SwiftUI's split
+    /// to their configured widths (no grip dots, no drag, no keyboard resize).
+    /// The leftmost divider keeps its ◀, which hides the column to its left, and
+    /// stays a Tab stop for it; every other divider is a plain space. This is a terminal-specific affordance — SwiftUI's split
     /// columns are always resizable — so it is a modifier rather than an
     /// `init` parameter, keeping ``NavigationSplitView``'s initializer matched
     /// to SwiftUI.
@@ -201,8 +202,11 @@ final class _SplitDividerHandler: Focusable {
     /// sidebar.
     let column: NavigationSplitViewColumn
 
-    /// Shared, persisted column widths.
-    let widths: SplitViewWidths
+    /// Shared, persisted column widths, refreshed every render. `nil` while the
+    /// split cannot resize (`navigationSplitViewResizable(false)`): the divider
+    /// is then the leftmost one, kept only for its ◀ toggle, and the arrow keys
+    /// and drags resize nothing.
+    var widths: SplitViewWidths?
 
     /// The smallest a column may become.
     let minimumColumnWidth: Int
@@ -235,7 +239,7 @@ final class _SplitDividerHandler: Focusable {
 
     /// The width a resize steps from: the stored (clamped, written-back) width
     /// when there is one, else the width the column is currently showing.
-    var resizeBaseWidth: Int { widths.value(for: column) ?? currentWidth }
+    var resizeBaseWidth: Int { widths?.value(for: column) ?? currentWidth }
 
     /// Whether the cursor is currently over the divider. Drives the subtle
     /// hover pulse of the grip dots. Set on `.entered`/`.exited`.
@@ -254,7 +258,7 @@ final class _SplitDividerHandler: Focusable {
     init(
         focusID: String,
         column: NavigationSplitViewColumn,
-        widths: SplitViewWidths,
+        widths: SplitViewWidths?,
         minimumColumnWidth: Int,
         canBeFocused: Bool = true
     ) {
@@ -267,6 +271,14 @@ final class _SplitDividerHandler: Focusable {
     }
 
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
+        if event.key == .enter || event.key == .space {
+            guard let hide else { return false }
+            hide()
+            return true
+        }
+        // A split that cannot resize declines the rest, so Left and Right move
+        // to the columns either side (`FocusManager.registerSectionGroup`).
+        guard let widths else { return false }
         let step = event.shift ? 5 : 1
         let current = resizeBaseWidth
         switch event.key {
@@ -283,10 +295,6 @@ final class _SplitDividerHandler: Focusable {
         case .end:
             // Widest — a large value the render clamp pins to the layout max.
             widths.set(Int.max / 4, for: column)
-            return true
-        case .enter, .space:
-            guard let hide else { return false }
-            hide()
             return true
         default:
             return false

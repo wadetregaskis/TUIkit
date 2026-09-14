@@ -287,4 +287,21 @@ struct NavigationSplitViewDividerToggleTests {
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
         #expect(box.visibility == .all)
     }
+
+    /// One cell per visible column leaves no room for the ▶ edge column (see
+    /// NavigationSplitViewEdgeColumnTests' size sweep), so the keyboard has no
+    /// ▶ to go to and lands on the column that is left.
+    @Test("Hiding a column in a split too narrow for the edge hands the keyboard to the remaining column")
+    func hideWithoutRoomForTheEdge() {
+        let context = splitContext(width: 1)
+        let focusManager = context.environment.focusManager!
+        let box = Box(.all)
+        let view = split(box, three: false)
+        _ = frame(view, context)
+        focusManager.activateSection(id: dividerSectionID(in: focusManager) ?? "")
+        _ = focusManager.dispatchKeyEvent(KeyEvent(key: .enter))
+        _ = frame(view, context)
+        #expect(box.visibility == .detailOnly)
+        #expect(focusManager.activeSectionIdentifier?.hasPrefix("nav-split-detail") == true)
+    }
 }

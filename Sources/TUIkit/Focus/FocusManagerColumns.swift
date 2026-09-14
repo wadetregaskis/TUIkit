@@ -26,10 +26,22 @@ extension FocusManager {
     /// columns, in left-to-right order, so Left and Right move focus between them.
     /// Call it after the columns have rendered: the sections registered since
     /// then are what a column with no control of its own hands the focus to.
-    func registerSectionGroup(_ ids: [String]) {
+    ///
+    /// `dividers[i]`, when not `nil`, is the section of the divider between
+    /// column `i` and column `i + 1`. A divider is not a column: Left and Right
+    /// from the columns pass over it. From the divider itself they reach the
+    /// columns either side, when its own handler has not used them to resize.
+    func registerSectionGroup(_ ids: [String], dividers: [String?] = []) {
         guard ids.count > 1 else { return }
         let group = SectionGroup(ids: ids, end: sections.count)
         for id in ids { sectionGroups[id] = group }
+        for (index, divider) in dividers.enumerated() where index + 1 < ids.count {
+            guard let divider else { continue }
+            // The row of columns with this divider standing between its two.
+            var row = ids
+            row.insert(divider, at: index + 1)
+            sectionGroups[divider] = SectionGroup(ids: row, end: group.end)
+        }
     }
 
     /// Left or Right, moved to the neighbouring column when the active section is one

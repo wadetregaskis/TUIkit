@@ -84,7 +84,8 @@ import TUIkitCore
 /// left shows ▶, which brings back the nearest hidden column the same way, one
 /// step at a time. The edge column is first in the Tab order. After either, the
 /// keyboard moves to the handle that undoes it, so Return, Return goes there
-/// and back.
+/// and back. A split that cannot resize (``View/navigationSplitViewResizable(_:)``)
+/// keeps the ◀ alone on its leftmost divider.
 ///
 /// ## Focus Navigation
 ///
@@ -361,7 +362,8 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         // them. The dividers are not members — Tab and the mouse reach those.
         if !context.isMeasuring {
             focusManager?.registerSectionGroup(
-                visibleColumns.map { focusSectionID(for: $0, context: context) })
+                visibleColumns.map { focusSectionID(for: $0, context: context) },
+                dividers: dividerInfos.map(\.focusID))
             // Every section this split owns is registered now, so a handle
             // pressed last frame can hand the keyboard to the one that undoes it.
             activatePendingFocus(
@@ -606,7 +608,8 @@ extension _NavigationSplitViewCore {
     /// section + handler (so Tab reaches it and the arrow keys resize it), and
     /// registers the mouse handler that drags it. Returns the info
     /// `combineColumns` needs to draw and hit-test it. A no-op (returns an
-    /// inert divider) while measuring or when the split isn't resizable.
+    /// inert divider) while measuring, and when the split isn't resizable
+    /// unless this is the leftmost divider, which keeps its ◀ toggle.
     ///
     /// `currentWidth` is the width `column` is rendering at THIS frame,
     /// and is what every resize steps from (see
@@ -621,7 +624,7 @@ extension _NavigationSplitViewCore {
         context: RenderContext,
         focusManager: FocusManager?
     ) -> DividerRenderInfo {
-        guard resizable, !context.isMeasuring, let widths, let focusManager,
+        guard resizable || togglesColumn, !context.isMeasuring, let focusManager,
             let stateStorage = context.stateStorage, let toggleState,
             let handlerSlot = SplitViewStateIndex.divider(after: column)
         else {
@@ -670,6 +673,7 @@ extension _NavigationSplitViewCore {
             )
         ).value
         handler.canBeFocused = true
+        handler.widths = widths
         handler.currentWidth = currentWidth
         // Only the leftmost divider hides a column; Return on the others falls
         // through, as it did before the toggle.
@@ -738,7 +742,7 @@ extension _NavigationSplitViewCore {
                     // stranding the column where it last moved.
                     captureHandler.dragMoved = captureHandler.dragMoved || event.x != 0
                     if captureHandler.dragMoved, let start = captureHandler.dragStartWidth {
-                        captureWidths.set(start + event.x, for: column)
+                        captureWidths?.set(start + event.x, for: column)
                     }
                     if event.phase == .released {
                         // A still click on ◀ hides the column: pressed and
@@ -791,7 +795,8 @@ extension _NavigationSplitViewCore {
         cycle: SelectionEmphasisCycle
     ) -> FrameBuffer {
         let h = max(0, height)
-        guard resizable, info.isInteractive, h > 0 else {
+        // A split that cannot resize keeps only the leftmost divider's ◀.
+        guard resizable || info.togglesColumn, info.isInteractive, h > 0 else {
             return FrameBuffer(lines: Array(repeating: " ", count: h))
         }
 
@@ -801,7 +806,7 @@ extension _NavigationSplitViewCore {
         return buildHandleColumn(info: info, height: h, palette: palette, cycle: cycle) { row in
             // The leftmost divider's middle dot is its ◀ toggle.
             if info.togglesColumn, row == center { return TerminalSymbols.leftArrow }
-            return gripRows.contains(row) ? "◦" : nil
+            return resizable && gripRows.contains(row) ? "◦" : nil
         }
     }
 

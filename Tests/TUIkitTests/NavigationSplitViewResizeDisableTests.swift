@@ -112,19 +112,18 @@ struct NavigationSplitViewResizeDisableTests {
             "size-to-fit registers a divider focus section")
     }
 
-    @Test("resizable(false) removes the divider even under a size-to-fit style")
+    @Test("resizable(false) removes the grip even under a size-to-fit style, keeping the ◀ toggle")
     func resizableFalseDisablesSizeToFitDivider() {
         let context = resizeContext()
-        let fm = context.environment.focusManager!
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
             .navigationSplitViewStyle(.sizeToFitFromLeft)
             .navigationSplitViewResizable(false)
 
         let buffer = renderToBuffer(view, context: context)
-        #expect(gripX(buffer) == nil, "resizable(false) draws no grip under size-to-fit")
         #expect(
-            fm.section(withPrefix: "nav-split-divider-sidebar") == nil,
-            "resizable(false) registers no divider focus section under size-to-fit")
+            !buffer.lines.contains { $0.stripped.contains("◦") },
+            "resizable(false) draws no grip dots under size-to-fit")
+        #expect(buffer.lines.contains { $0.stripped.contains("◀") }, "only the toggle")
     }
 
     @Test("The default (proportional) style keeps its resize handle and focus section")
@@ -154,10 +153,18 @@ struct NavigationSplitViewResizeDisableTests {
             .navigationSplitViewStyle(.balanced)
             .navigationSplitViewResizable(false)
         let offBuffer = renderToBuffer(off, context: offContext)
-        #expect(gripX(offBuffer) == nil, "resizable(false) draws no grip handle")
         #expect(
-            offFM.section(withPrefix: "nav-split-divider-sidebar") == nil,
-            "resizable(false) registers no divider focus section")
+            !offBuffer.lines.contains { $0.stripped.contains("◦") },
+            "resizable(false) draws no grip dots")
+        // The section stays for the ◀ toggle, whose handler resizes nothing.
+        let offDivider = offFM.section(withPrefix: "nav-split-divider-sidebar")
+        #expect(offDivider != nil, "the ◀ toggle stays a Tab stop")
+        if let offDivider {
+            offFM.activateSection(id: offDivider.id)
+            let before = gripX(offBuffer)
+            _ = offFM.currentFocused?.handleKeyEvent(KeyEvent(key: .end))
+            #expect(gripX(renderToBuffer(off, context: offContext)) == before, "and End resizes nothing")
+        }
 
         let onContext = resizeContext()
         let onFM = onContext.environment.focusManager!
