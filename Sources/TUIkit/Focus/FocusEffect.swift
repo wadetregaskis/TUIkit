@@ -51,7 +51,21 @@ extension RenderContext {
     /// control is focused, so the mark announces focus exactly as a `Button`'s
     /// bold does. It goes.
     public func indicatesFocus(_ isFocused: Bool) -> Bool {
-        isFocused && !environment.focusEffectDisabled
+        environment.indicatesFocus(isFocused)
+    }
+}
+
+extension EnvironmentValues {
+    /// The environment-only answer to `RenderContext.indicatesFocus(_:)`, and
+    /// the one place the question is decided.
+    ///
+    /// A `RenderContext` adds nothing to it — only its environment is read — and
+    /// a site that holds an environment but no context (a border's focus ●, a
+    /// style's body) has to ask the same question the same way, which is why
+    /// this is the primitive and the context method forwards to it: the shape of
+    /// `SelectionIndicator.resolve(isFocused:environment:)`.
+    func indicatesFocus(_ isFocused: Bool) -> Bool {
+        isFocused && !focusEffectDisabled
     }
 }
 
