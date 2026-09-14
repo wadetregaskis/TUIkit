@@ -85,6 +85,15 @@ public struct GradientEditorPanel: View {
     /// persisted app-wide — see ``encodeRecents(_:)`` for the format.
     @AppStorage("tuikit.gradientEditor.recents") private var recentsRaw = ""
 
+    /// Which of ◀ and ▶ holds the keyboard, bound only so each can name the other
+    /// as where its focus goes when it disables itself: see ``actionRow``.
+    @FocusState private var stopMoveFocus: StopMove?
+
+    /// ◀ and ▶, as ``stopMoveFocus`` names them.
+    private enum StopMove: Hashable {
+        case left, right
+    }
+
     /// The preview strip's width in cells — also the wrap budget for the stop
     /// and gradient chips, so no row grows the dialog past the preview.
     private static let previewWidth = 36
@@ -315,6 +324,15 @@ public struct GradientEditorPanel: View {
     static let stopChipWidth = _ColorSwatchButtonStyle.width
 
     /// Insert / remove / reorder controls for the selected stop.
+    ///
+    /// ◀ and ▶ disable themselves at the ends of the stops, and each hands the
+    /// keyboard to the other when it does. The default would send ▶ to its
+    /// neighbour ⇄, one Return from flipping the whole ramp. ◀'s default happens to
+    /// be ▶ already, but saying so means reordering the row cannot break it. The
+    /// handoff is declared rather than done in the actions because the actions are
+    /// not the only way in: dragging the selected chip to the end disables ▶
+    /// without ▶'s action running. The row only shows with two or more stops, so
+    /// the two are never disabled together.
     private var actionRow: some View {
         let ramp = gradient.wrappedValue
         let selection = clampedSelection
@@ -336,12 +354,16 @@ public struct GradientEditorPanel: View {
                 selectedStop = selected
             }
             .disabled(selection == 0)
+            .focused($stopMoveFocus, equals: .left)
+            .focusHandoff($stopMoveFocus, .right)
             Button("▶") {
                 let (updated, selected) = Self.movingStop(ramp, at: selection, by: 1)
                 gradient.wrappedValue = updated
                 selectedStop = selected
             }
             .disabled(selection >= ramp.stops.count - 1)
+            .focused($stopMoveFocus, equals: .right)
+            .focusHandoff($stopMoveFocus, .left)
             Button("⇄") {
                 let (updated, selected) = Self.flippingStops(ramp, at: selection)
                 gradient.wrappedValue = updated

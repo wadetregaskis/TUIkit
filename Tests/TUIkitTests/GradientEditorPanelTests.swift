@@ -620,3 +620,143 @@ struct GradientEditorPanelRecentsTests {
         #expect(raw.contains("38;2;0;40;120"), "Ocean's first stop is drawn")
     }
 }
+
+// MARK: - ◀ ▶ and the keyboard
+
+/// One gradient editor rendered frame after frame the way the run loop does, with a
+/// real focus manager, so a key press and the focus recovery after it both happen.
+@MainActor
+private final class StopMoveFixture {
+    var ramp: Gradient
+    var presented = true
+    let tui = TUIContext()
+    let manager = FocusManager()
+
+    init(stops: Int) {
+        let colours: [Color] = [.rgb(255, 0, 0), .rgb(0, 255, 0), .rgb(0, 0, 255)]
+        ramp = Gradient(colors: Array(colours.prefix(stops)))
+        tui.mouseEventDispatcher.setActiveSupport(.standard)
+    }
+
+    @discardableResult
+    func render() -> FrameBuffer {
+        let panel = GradientEditorPanel(
+            gradient: Binding(get: { self.ramp }, set: { self.ramp = $0 }),
+            isPresented: Binding(get: { self.presented }, set: { self.presented = $0 }))
+        var environment = EnvironmentValues()
+        environment.focusManager = manager
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 70, availableHeight: 45, environment: environment, tuiContext: tui)
+        tui.mouseEventDispatcher.beginRenderPass()
+        tui.keyEventDispatcher.clearHandlers()
+        tui.stateStorage.beginRenderPass()
+        tui.renderCache.beginRenderPass()
+        manager.beginRenderPass()
+        let buffer = renderToBuffer(panel, context: context)
+        manager.endRenderPass()
+        tui.stateStorage.endRenderPass()
+        tui.renderCache.removeInactive()
+        return buffer
+    }
+
+    /// Return, delivered to the focused control, and the frame it causes.
+    @discardableResult
+    func pressReturn() -> FrameBuffer {
+        manager.dispatchKeyEvent(KeyEvent(key: .enter))
+        return render()
+    }
+
+    /// The focus id of the action-row button drawn as `glyph`, found by where it is
+    /// drawn: a button's focus id comes from its place in the tree, so a test cannot
+    /// spell it. Read only from a frame where the button is enabled.
+    static func actionButtonID(_ glyph: String, in buffer: FrameBuffer) -> String? {
+        for (row, line) in buffer.lines.map(\.stripped).enumerated() {
+            guard let range = line.range(of: "▐ \(glyph) ▌") else { continue }
+            let column = line.distance(from: line.startIndex, to: range.lowerBound) + 2
+            return buffer.hitTestRegions.last {
+                $0.focusID != nil
+                    && ($0.offsetX..<$0.offsetX + $0.width).contains(column)
+                    && ($0.offsetY..<$0.offsetY + $0.height).contains(row)
+            }?.focusID
+        }
+        return nil
+    }
+}
+
+/// ◀ and ▶ disable themselves at the ends of the stop list. Reported by the owner: ▶
+/// pressed until its stop reached the end sent the keyboard first to the toggle at the
+/// top of the dialog, then (with the neighbour rule) to ⇄. Each now hands its focus to
+/// the other with `.focusHandoff(_:_:)`.
+@MainActor
+@Suite("GradientEditorPanel — ◀ ▶ keep the keyboard")
+struct GradientEditorStopMoveFocusTests {
+
+    private let red = Color.rgb(255, 0, 0)
+    private let green = Color.rgb(0, 255, 0)
+    private let blue = Color.rgb(0, 0, 255)
+
+    @Test("▶ pressed until its stop reaches the end hands the keyboard to ◀")
+    func rightToTheEndLandsOnLeft() throws {
+        let fixture = StopMoveFixture(stops: 3)
+        let right = try #require(StopMoveFixture.actionButtonID("▶", in: fixture.render()))
+        fixture.manager.focus(id: right)
+
+        let atMiddle = fixture.pressReturn()
+        let left = try #require(StopMoveFixture.actionButtonID("◀", in: atMiddle), "◀ is enabled at stop 1")
+        #expect(fixture.manager.currentFocusedID == right, "▶ keeps the focus while it can move")
+        fixture.pressReturn()
+
+        try #require(fixture.ramp.stops.map(\.color) == [green, blue, red], "red reached the end")
+        #expect(fixture.manager.currentFocusedID == left, "focused: \(fixture.manager.currentFocusedID ?? "nil")")
+    }
+
+    /// With two stops ◀ was disabled on the frame ▶ was pressed, and enables on the
+    /// same frame ▶ disables.
+    @Test("With two stops, ▶ hands the keyboard to the ◀ that enabled on the same frame")
+    func twoStopsLandOnLeft() throws {
+        let fixture = StopMoveFixture(stops: 2)
+        let right = try #require(StopMoveFixture.actionButtonID("▶", in: fixture.render()))
+        fixture.manager.focus(id: right)
+
+        let atEnd = fixture.pressReturn()
+
+        let left = try #require(StopMoveFixture.actionButtonID("◀", in: atEnd))
+        #expect(fixture.manager.currentFocusedID == left, "focused: \(fixture.manager.currentFocusedID ?? "nil")")
+    }
+
+    @Test("◀ pressed until its stop reaches the start hands the keyboard to ▶")
+    func leftToTheStartLandsOnRight() throws {
+        let fixture = StopMoveFixture(stops: 3)
+        let right = try #require(StopMoveFixture.actionButtonID("▶", in: fixture.render()))
+        fixture.manager.focus(id: right)
+        fixture.pressReturn()
+        let atEnd = fixture.pressReturn()
+        let left = try #require(StopMoveFixture.actionButtonID("◀", in: atEnd))
+        fixture.manager.focus(id: left)
+
+        fixture.pressReturn()
+        fixture.pressReturn()
+
+        try #require(fixture.ramp.stops.map(\.color) == [red, green, blue], "red is back at the start")
+        #expect(fixture.manager.currentFocusedID == right, "focused: \(fixture.manager.currentFocusedID ?? "nil")")
+    }
+
+    /// Stands in for dragging the selected chip to the end while ▶ has the keyboard:
+    /// the chip's drag handle never touches the focus, so ▶'s own action is not what
+    /// disabled it, and only a handoff declared on ▶ can catch it.
+    @Test("▶ disabled by the stops shrinking under it hands the keyboard to ◀")
+    func stopsShrunkThroughTheBindingLandOnLeft() throws {
+        let fixture = StopMoveFixture(stops: 3)
+        let right = try #require(StopMoveFixture.actionButtonID("▶", in: fixture.render()))
+        fixture.manager.focus(id: right)
+        let atMiddle = fixture.pressReturn()
+        let left = try #require(StopMoveFixture.actionButtonID("◀", in: atMiddle))
+        try #require(fixture.manager.currentFocusedID == right)
+
+        fixture.ramp = fixture.ramp.withStops(Array(fixture.ramp.stops.prefix(2)))
+        fixture.render()
+
+        #expect(fixture.manager.currentFocusedID == left, "focused: \(fixture.manager.currentFocusedID ?? "nil")")
+    }
+}
