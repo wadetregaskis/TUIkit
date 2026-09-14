@@ -115,7 +115,7 @@ extension _NavigationSplitViewCore {
 
     /// Measures a column's content: its natural width and whether it's
     /// width-flexible (fills its column).
-    private func measureColumn(
+    func measureColumn(
         _ column: NavigationSplitViewColumn, proposal: ProposedSize, context: RenderContext
     ) -> ViewSize {
         switch column {

@@ -788,6 +788,12 @@
     },
     "AnyTransition.push(from:)": {
       "why": "Moves the incoming view in while pushing the outgoing one out, which requires both to be laid out at once. A removed view here is a buffer left behind in the slot it vacated, not a view still participating in layout — see `DepartureStore`. `.move(edge:)` is the half of this that a departing buffer can express."
+    },
+    "ToolbarDefaultItemKind.title": {
+      "why": "Removes the default title item SwiftUI puts in a window's toolbar. TUIkit draws no default title to remove: there is no toolbar, the terminal owns the window title, and the in-grid `.appHeader` is content the app writes itself. `ToolbarDefaultItemKind.sidebarToggle` is implemented (Sources/TUIkit/Modifiers/ToolbarRemovalModifier.swift)."
+    },
+    "ToolbarDefaultItemKind.search": {
+      "why": "Removes the search field SwiftUI places in a window's toolbar by default. TUIkit has no toolbar for a search item to sit in: `.searchable` draws its field at the top of the searchable subtree, where the app put the modifier (Sources/TUIkit/Extensions/View+Searchable.swift), so there is no framework-placed item to take away. `ToolbarDefaultItemKind.sidebarToggle` is implemented (Sources/TUIkit/Modifiers/ToolbarRemovalModifier.swift)."
     }
   },
   "differentShape": {
@@ -994,10 +1000,6 @@
     "ToolbarContentBuilder": {
       "how": "@StatusBarItemBuilder",
       "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/StatusBar/StatusBarItemBuilder.swift (result builder), consumed by `.statusBarItems(@StatusBarItemBuilder _:)` at /Users/robot/Documents/TUIkit/Sources/TUIkit/Extensions/View+Events.swift:535."
-    },
-    "ToolbarDefaultItemKind": {
-      "how": "SystemStatusBarItem + .statusBarSystemItems(theme:appearance:)",
-      "why": "/Users/robot/Documents/TUIkit/Sources/TUIkit/StatusBar/SystemStatusBarItem.swift:18-60 names the framework-provided items (`.quit`, `.appearance`, `.theme`) and /Users/robot/Documents/TUIkit/Sources/TUIkit/Modifiers/StatusBarSystemItemsModifier.swift:88 is the include/omit contro"
     },
     "ToolbarItemPlacement": {
       "how": "StatusBarItemOrder + StatusBarAlignment",

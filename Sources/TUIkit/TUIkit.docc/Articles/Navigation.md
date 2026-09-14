@@ -137,6 +137,8 @@ either, the keyboard is on the handle that undoes it, so <kbd>Return</kbd>,
 <kbd>Return</kbd> goes there and back. A split made fixed with
 ``View/navigationSplitViewResizable(_:)`` keeps the ◀ without the grip dots,
 and <kbd>Left</kbd> and <kbd>Right</kbd> on it move to the columns either side.
+``View/toolbar(removing:)`` with `.sidebarToggle` takes both handles away, on the
+split, above it or inside one of its columns.
 The edge column needs the split to be at
 least one cell wider than its visible columns; narrower than that it is left
 out, so it never pushes the columns' content out of the split.

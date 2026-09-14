@@ -97,6 +97,12 @@ final class SplitViewToggleState {
     /// How many focus sections were registered when the current render began,
     /// so its end can tell which sections the split registered.
     var sectionsAtRenderStart = 0
+
+    /// Whether each column removed the toggle with `.toolbar(removing:)` the last
+    /// time it was measured or rendered. Kept per column because a hidden column
+    /// is neither, and a sidebar that removed the toggle must not bring back the
+    /// ▶ the moment it hides. A column not yet seen has no entry.
+    var removedByColumn: [NavigationSplitViewColumn: Bool] = [:]
 }
 
 // MARK: - Edge handler
@@ -162,7 +168,8 @@ extension _NavigationSplitViewCore {
     /// The edge column for this render, if there is one, and the context the
     /// columns lay out in beside it.
     ///
-    /// There is one while a leading column is hidden. It is wired here, before
+    /// There is one while a leading column is hidden, unless
+    /// `.toolbar(removing: .sidebarToggle)` took it away. It is wired here, before
     /// any column registers, so Tab reaches it first, and the columns share what
     /// is left of the width. Leading chrome yields its cell when the columns
     /// would be left none to draw in: at one cell per visible column or fewer,
@@ -171,7 +178,9 @@ extension _NavigationSplitViewCore {
         visibleColumns: [NavigationSplitViewColumn], context: RenderContext,
         focusManager: FocusManager?, toggleState: SplitViewToggleState?
     ) -> (EdgeWiring?, RenderContext) {
-        guard visibleColumns.count < (isThreeColumn ? 3 : 2),
+        probeToggleRemoval(visibleColumns: visibleColumns, context: context, toggleState: toggleState)
+        guard showsToggle(context: context, toggleState: toggleState),
+            visibleColumns.count < (isThreeColumn ? 3 : 2),
             context.availableWidth > visibleColumns.count
         else { return (nil, context) }
         let edge = wireEdge(context: context, focusManager: focusManager, toggleState: toggleState)
@@ -179,6 +188,48 @@ extension _NavigationSplitViewCore {
             width: RenderContext.extent(context.availableWidth, insideChrome: 1),
             height: context.availableHeight)
         return (edge, columnsContext)
+    }
+
+    /// Whether the split shows its toggle handles: no `.toolbar(removing:
+    /// .sidebarToggle)` on or above it, and none in any column as last seen.
+    func showsToggle(context: RenderContext, toggleState: SplitViewToggleState?) -> Bool {
+        !context.environment.sidebarToggleRemoved
+            && !(toggleState?.removedByColumn.values.contains(true) ?? false)
+    }
+
+    /// Measures each visible column the split has not seen yet, to learn whether
+    /// it removes the toggle before the handles are laid out. The split already
+    /// measures its leading columns for their widths, but not the trailing one
+    /// under a proportional style, and a modifier in the detail column of a split
+    /// that starts hidden would otherwise draw ▶ on the first frame. Once seen, a
+    /// column is kept current by its render (`renderColumn`), so this costs one
+    /// measure per column per split.
+    func probeToggleRemoval(
+        visibleColumns: [NavigationSplitViewColumn], context: RenderContext,
+        toggleState: SplitViewToggleState?
+    ) {
+        guard let toggleState, !context.isMeasuring,
+            let preferences = context.environment.preferenceStorage
+        else { return }
+        for column in visibleColumns where toggleState.removedByColumn[column] == nil {
+            preferences.push()
+            _ = measureColumn(column, proposal: ProposedSize(width: nil, height: nil), context: context)
+            recordToggleRemoval(of: column, from: preferences.pop(), toggleState: toggleState)
+        }
+    }
+
+    /// Records whether `column` removed the toggle, from the preferences it just
+    /// published. A change to a column already seen can only be learnt after the
+    /// handles were laid out for this frame, so it asks for another frame.
+    func recordToggleRemoval(
+        of column: NavigationSplitViewColumn, from scope: PreferenceValues,
+        toggleState: SplitViewToggleState
+    ) {
+        let removed = scope[SidebarToggleRemovedKey.self]
+        let previous = toggleState.removedByColumn.updateValue(removed, forKey: column)
+        if let previous, previous != removed {
+            AppState.shared.setNeedsRender()
+        }
     }
 
     /// The edge column's focus section ID.

@@ -387,6 +387,12 @@ models that directly. (A `keyboardShortcut`-style modifier for non-status-bar
 actions is a fair §4a request, but the toolbar *container* concept does not
 transfer.)
 
+`.toolbar(removing: .sidebarToggle)` is the one `toolbar`-spelled API TUIkit has,
+and it is a **removal**, not a container: it takes away `NavigationSplitView`'s
+own toggle handles (the ◀ on the leftmost divider and the ▶ edge column), which
+stand in for SwiftUI's toolbar sidebar button. `ToolbarDefaultItemKind.title` is
+not provided, because TUIkit draws no default title item to remove.
+
 ### 2.7 Fixed-`frame` default alignment is `.topLeading`, not `.center`
 
 ```swift

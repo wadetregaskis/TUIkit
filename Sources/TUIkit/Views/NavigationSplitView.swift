@@ -85,7 +85,8 @@ import TUIkitCore
 /// step at a time. The edge column is first in the Tab order. After either, the
 /// keyboard moves to the handle that undoes it, so Return, Return goes there
 /// and back. A split that cannot resize (``View/navigationSplitViewResizable(_:)``)
-/// keeps the ◀ alone on its leftmost divider.
+/// keeps the ◀ alone on its leftmost divider. `.toolbar(removing: .sidebarToggle)`
+/// (``View/toolbar(removing:)``) takes both handles away.
 ///
 /// ## Focus Navigation
 ///
@@ -306,7 +307,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
                 !columnContext.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false),
                 in: context.environment)
 
-            var buffer = renderColumn(column, context: sectionContext)
+            var buffer = renderColumn(column, context: sectionContext, toggleState: toggleState)
 
             // Click anywhere on a column activates that column's focus
             // section. Registered last (= innermost), so any child
@@ -349,7 +350,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
                 dividerInfos.append(
                     wireDivider(
                         column: column,
-                        togglesColumn: index == 0,
+                        togglesColumn: index == 0 && showsToggle(context: context, toggleState: toggleState),
                         toggleState: toggleState,
                         resizable: resizable,
                         widths: widths,
@@ -522,8 +523,21 @@ extension _NavigationSplitViewCore {
         }
     }
 
-    /// Renders a single column.
-    fileprivate func renderColumn(_ column: NavigationSplitViewColumn, context: RenderContext) -> FrameBuffer {
+    /// Renders a single column, noting whether it removed the toggle with
+    /// `.toolbar(removing:)` (see ``SplitViewToggleState/removedByColumn``).
+    fileprivate func renderColumn(
+        _ column: NavigationSplitViewColumn, context: RenderContext, toggleState: SplitViewToggleState?
+    ) -> FrameBuffer {
+        guard let toggleState, !context.isMeasuring, let preferences = context.environment.preferenceStorage
+        else { return renderColumnContent(column, context: context) }
+        preferences.push()
+        let buffer = renderColumnContent(column, context: context)
+        recordToggleRemoval(of: column, from: preferences.pop(), toggleState: toggleState)
+        return buffer
+    }
+
+    /// Renders a single column's content.
+    fileprivate func renderColumnContent(_ column: NavigationSplitViewColumn, context: RenderContext) -> FrameBuffer {
         switch column {
         case .sidebar:
             return TUIkit.renderToBuffer(sidebar, context: context.withChildIdentity(type: type(of: sidebar)))
