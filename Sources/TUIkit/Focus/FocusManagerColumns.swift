@@ -8,12 +8,28 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+/// One row of column sections, as ``FocusManager/registerSectionGroup(_:)``
+/// declared it.
+struct SectionGroup {
+    /// The columns' section ids, left to right.
+    let ids: [String]
+
+    /// How many sections were registered when the group was declared, which is
+    /// after every column rendered. With the first column's position it bounds
+    /// the sections registered while the columns rendered, a nested split's
+    /// among them.
+    let end: Int
+}
+
 extension FocusManager {
     /// Declares `ids` — sections already registered this frame — as one row of
     /// columns, in left-to-right order, so Left and Right move focus between them.
+    /// Call it after the columns have rendered: the sections registered since
+    /// then are what a column with no control of its own hands the focus to.
     func registerSectionGroup(_ ids: [String]) {
         guard ids.count > 1 else { return }
-        for id in ids { sectionGroups[id] = ids }
+        let group = SectionGroup(ids: ids, end: sections.count)
+        for id in ids { sectionGroups[id] = group }
     }
 
     /// Left or Right, moved to the neighbouring column when the active section is one
@@ -31,12 +47,32 @@ extension FocusManager {
     ///   ordinary arrow fallback runs.
     func moveBetweenColumns(for event: KeyEvent) -> Bool? {
         guard event.key == .left || event.key == .right, let active = activeSectionIdentifier,
-            let group = sectionGroups[active], let index = group.firstIndex(of: active)
+            let group = sectionGroups[active], let index = group.ids.firstIndex(of: active)
         else { return nil }
         let target = index + (event.key == .right ? 1 : -1)
-        guard group.indices.contains(target) else { return false }
+        guard group.ids.indices.contains(target) else { return false }
         // The section's remembered focus, as a click on that column restores it.
-        activateSection(id: group[target])
+        activateSection(id: entrySection(ofColumn: target, in: group))
         return true
+    }
+
+    /// The section Left or Right enters for column `column` of `group`: the
+    /// column's own, unless nothing in it can take the focus and a section
+    /// registered while it rendered can — a split view nested in a detail
+    /// column, whose own columns are sections of their own. Entering the empty
+    /// column's section left nothing focused.
+    private func entrySection(ofColumn column: Int, in group: SectionGroup) -> String {
+        let id = group.ids[column]
+        guard let start = sections.firstIndex(where: { $0.id == id }),
+            !sections[start].focusables.contains(where: { $0.canBeFocused })
+        else { return id }
+        // The column's sections run up to the next column's, or for the last
+        // column to the end of the group.
+        let next = group.ids.indices.contains(column + 1)
+            ? sections.firstIndex { $0.id == group.ids[column + 1] } : nil
+        let end = min(next ?? group.end, sections.count)
+        guard start + 1 < end else { return id }
+        return sections[(start + 1)..<end]
+            .first { $0.focusables.contains(where: { $0.canBeFocused }) }?.id ?? id
     }
 }

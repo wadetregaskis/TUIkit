@@ -267,7 +267,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
             let columnContext = context.withAvailableSize(width: columnWidth, height: context.availableHeight)
 
             // Register focus section for this column (skip during measurement)
-            let sectionID = focusSectionID(for: column)
+            let sectionID = focusSectionID(for: column, context: context)
             if !columnContext.isMeasuring {
                 focusManager?.registerSection(id: sectionID)
             }
@@ -339,7 +339,8 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
         // The columns are one row, for the arrow keys: Left and Right move between
         // them. The dividers are not members — Tab and the mouse reach those.
         if !context.isMeasuring {
-            focusManager?.registerSectionGroup(visibleColumns.map { focusSectionID(for: $0) })
+            focusManager?.registerSectionGroup(
+                visibleColumns.map { focusSectionID(for: $0, context: context) })
         }
 
         // Ask for the cycle ONLY when a divider is focused/dragged or hovered,
@@ -457,17 +458,23 @@ extension _NavigationSplitViewCore {
     }
 
     /// Returns the focus section ID for a column.
-    fileprivate func focusSectionID(for column: NavigationSplitViewColumn) -> String {
+    ///
+    /// Namespaced by this split's identity, like its dividers' sections. Named
+    /// by the column alone, two splits in one frame (side by side, or one in
+    /// another's detail column) shared each column's section: Down walked from
+    /// one split's sidebar into the other's, and Right from the second split's
+    /// sidebar landed in the first split's detail column.
+    fileprivate func focusSectionID(
+        for column: NavigationSplitViewColumn, context: RenderContext
+    ) -> String {
+        let name: String
         switch column {
-        case .sidebar:
-            return "nav-split-sidebar"
-        case .content:
-            return "nav-split-content"
-        case .detail:
-            return "nav-split-detail"
-        default:
-            return "nav-split-unknown"
+        case .sidebar: name = "sidebar"
+        case .content: name = "content"
+        case .detail: name = "detail"
+        default: name = "unknown"
         }
+        return "nav-split-\(name)-\(context.identity.path)"
     }
 
     /// Renders a single column.

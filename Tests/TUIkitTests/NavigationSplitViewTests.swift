@@ -378,8 +378,8 @@ struct NavigationSplitViewFocusSectionTests {
         _ = renderToBuffer(splitView, context: context)
 
         // Both sections should be registered
-        #expect(focusManager.sectionIDs.contains("nav-split-sidebar"))
-        #expect(focusManager.sectionIDs.contains("nav-split-detail"))
+        #expect(focusManager.section(withPrefix: "nav-split-sidebar") != nil)
+        #expect(focusManager.section(withPrefix: "nav-split-detail") != nil)
     }
 
     @Test("Three-column split view registers three focus sections")
@@ -406,9 +406,9 @@ struct NavigationSplitViewFocusSectionTests {
         _ = renderToBuffer(splitView, context: context)
 
         // All three sections should be registered
-        #expect(focusManager.sectionIDs.contains("nav-split-sidebar"))
-        #expect(focusManager.sectionIDs.contains("nav-split-content"))
-        #expect(focusManager.sectionIDs.contains("nav-split-detail"))
+        #expect(focusManager.section(withPrefix: "nav-split-sidebar") != nil)
+        #expect(focusManager.section(withPrefix: "nav-split-content") != nil)
+        #expect(focusManager.section(withPrefix: "nav-split-detail") != nil)
     }
 
     @Test("Hidden columns do not register focus sections")
@@ -436,8 +436,8 @@ struct NavigationSplitViewFocusSectionTests {
         _ = renderToBuffer(splitView, context: context)
 
         // Only detail section should be registered
-        #expect(!focusManager.sectionIDs.contains("nav-split-sidebar"))
-        #expect(focusManager.sectionIDs.contains("nav-split-detail"))
+        #expect(focusManager.section(withPrefix: "nav-split-sidebar") == nil)
+        #expect(focusManager.section(withPrefix: "nav-split-detail") != nil)
     }
 }
 

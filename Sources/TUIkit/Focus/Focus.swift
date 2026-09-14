@@ -55,7 +55,7 @@ public final class FocusManager: @unchecked Sendable {
     /// id, in left-to-right order — so Left and Right can move between them. Posted
     /// every frame by the container that lays them out, through
     /// `registerSectionGroup(_:)`, and cleared with the sections themselves.
-    var sectionGroups: [String: [String]] = [:]
+    var sectionGroups: [String: SectionGroup] = [:]
 
     /// Last frame's sections — see ``beginRenderPass()``. Read when the focused
     /// element is not registered in the CURRENT frame's ring: by

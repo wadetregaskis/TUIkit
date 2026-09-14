@@ -39,19 +39,24 @@ struct SplitViewColumnArrowTests {
         return focusManager
     }
 
+    /// A column's section id, which ends in the split's identity path.
+    private func section(_ column: String, in focusManager: FocusManager) -> String {
+        focusManager.section(withPrefix: "nav-split-\(column)")?.id ?? "missing \(column)"
+    }
+
     @Test("Right moves to the next column, and Left back")
     func rightAndLeftCrossColumns() {
         let focusManager = splitView()
-        focusManager.activateSection(id: "nav-split-sidebar")
-        #expect(focusManager.isActiveSection("nav-split-sidebar"), "sanity")
+        focusManager.activateSection(id: section("sidebar", in: focusManager))
+        #expect(focusManager.isActiveSection(section("sidebar", in: focusManager)), "sanity")
 
         let movedRight = focusManager.dispatchKeyEvent(KeyEvent(key: .right))
         #expect(movedRight)
-        #expect(focusManager.isActiveSection("nav-split-detail"), "Right reaches the detail column")
+        #expect(focusManager.isActiveSection(section("detail", in: focusManager)), "Right reaches the detail column")
 
         let movedLeft = focusManager.dispatchKeyEvent(KeyEvent(key: .left))
         #expect(movedLeft)
-        #expect(focusManager.isActiveSection("nav-split-sidebar"), "Left comes back")
+        #expect(focusManager.isActiveSection(section("sidebar", in: focusManager)), "Left comes back")
     }
 
     /// At an end there is no column to go to, and the key is left for whatever
@@ -59,9 +64,9 @@ struct SplitViewColumnArrowTests {
     @Test("Past the last column the key is not handled")
     func endColumnDeclines() {
         let focusManager = splitView()
-        focusManager.activateSection(id: "nav-split-detail")
+        focusManager.activateSection(id: section("detail", in: focusManager))
         let handled = focusManager.dispatchKeyEvent(KeyEvent(key: .right))
         #expect(!handled)
-        #expect(focusManager.isActiveSection("nav-split-detail"))
+        #expect(focusManager.isActiveSection(section("detail", in: focusManager)))
     }
 }
