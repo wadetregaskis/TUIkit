@@ -19,8 +19,9 @@ There is already one rule, and it is nearly universal:
 
 > **Focus is a pulsing accent applied to whichever cells the control owns.**
 
-`SelectionIndicatorStyle` (`.none` / `.blink` / `.pulse`, plus a speed) already
-cascades through the environment and every affordance below resolves through
+`SelectionIndicatorStyle` (`.none` / `.blink` / `.pulse`) already cascades
+through the environment, with its speed set apart from it by
+`.indicatorAnimationSpeed(_:for: .focusEmphasis)`, and every affordance below resolves through
 `SelectionEmphasis`, so *how* focus animates is configurable already. What
 differs between controls is only *which cells* the accent lands on — and that is
 decided by what each control has spare:

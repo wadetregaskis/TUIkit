@@ -215,8 +215,13 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     /// A text field's caret, blinking or pulsing. Not yet read by the caret.
     public static let textCursor = Self(rawValue: 1 << 0)
 
-    /// The breath a focused control draws itself with. Not yet read by the
-    /// focus emphasis.
+    /// The breath or blink a focused control draws itself with, whatever
+    /// ``SelectionIndicatorStyle`` it has.
+    ///
+    /// A blink is two frames that stretch: each half is 350 ms at the standard
+    /// rate, divided by the rate. A breath is a ramp: its 800 ms cycle is divided
+    /// by the rate and still sampled every 50 ms, so a slow breath stays smooth.
+    /// Within the speed's tolerance the breath may move onto whole 50 ms frames.
     public static let focusEmphasis = Self(rawValue: 1 << 1)
 
     /// ``Spinner``, including the one a `refreshable` view draws while it

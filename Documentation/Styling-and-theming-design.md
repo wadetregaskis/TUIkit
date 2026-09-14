@@ -251,13 +251,17 @@ extension View {
   at the standard durations as they are, that moves only the 120 ms and 130 ms
   spinner styles, to 125 ms. An explicit speed is exact unless it names a
   tolerance.
-- **Spinners and the indeterminate bar read it so far.** A spinner's frames are
-  a sequence, so each lasts its standard duration divided by the rate. A bar's
-  pass is a ramp: it takes its period divided by the rate, and is still sampled
-  at 30 frames a second. A named preset's pass may move within the tolerance
-  onto whole frames, which moves nothing while those frames are 1/30 s. A period
-  the app sets through `.custom` stays exact. The caret and the focus emphasis
-  follow in their own changes.
+- **Spinners, the indeterminate bar and the focus emphasis read it so far.** A
+  spinner's frames are a sequence, so each lasts its standard duration divided
+  by the rate. A bar's pass is a ramp: it takes its period divided by the rate,
+  and is still sampled at 30 frames a second. A named preset's pass may move
+  within the tolerance onto whole frames, which moves nothing while those frames
+  are 1/30 s. A period the app sets through `.custom` stays exact. The focus
+  emphasis has both kinds: a blink is two frames of 350 ms at the standard rate,
+  which stretch, and a breath is an 800 ms ramp sampled every 50 ms, which may
+  move within the tolerance onto whole 50 ms frames (at 800 ms it already is).
+  `SelectionIndicatorStyle` no longer carries a speed of its own. The caret
+  follows in its own change.
 
 ## 4. Tint (implemented **last** — wholly new)
 

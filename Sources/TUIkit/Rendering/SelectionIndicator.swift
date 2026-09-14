@@ -13,30 +13,30 @@ import TUIkitStyling
 /// How a focused selection indicator (a swatch-grid cursor, and any control that
 /// adopts this convention) animates to show it holds the keyboard focus.
 ///
-/// Reuses the text cursor's ``TextCursorStyle/Animation`` cases and
-/// ``TextCursorStyle/Speed`` so the convention reads the same as the cursor — but
-/// it defaults to ``TextCursorStyle/Animation/pulse`` (a focused selection should
-/// breathe), and is configured independently via ``View/selectionIndicatorStyle(_:)``.
+/// Reuses the text cursor's ``TextCursorStyle/Animation`` cases so the convention
+/// reads the same as the cursor — but it defaults to
+/// ``TextCursorStyle/Animation/pulse`` (a focused selection should breathe), and is
+/// configured independently via
+/// ``View/selectionIndicatorStyle(_:)-(SelectionIndicatorStyle)``.
 ///
 /// In the ``TextCursorStyle/Animation/none`` case there is no animation, so focus
 /// is shown by colour / bold alone.
+///
+/// How fast it animates is not part of the style. It is the speed set for
+/// ``IndicatorAnimations/focusEmphasis`` with
+/// ``View/indicatorAnimationSpeed(_:for:)``: a 700 ms blink and an 800 ms breath at
+/// the standard rate, each divided by the rate.
 ///
 /// TUI-specific: SwiftUI has no equivalent.
 public struct SelectionIndicatorStyle: Equatable, Sendable {
     /// The animation applied to a focused indicator.
     public var animation: TextCursorStyle.Animation
 
-    /// The animation rate — shared with the text cursor's speed scale.
-    public var speed: TextCursorStyle.Speed
-
     /// Creates a selection-indicator style.
     ///
-    /// - Parameters:
-    ///   - animation: `none`, `blink`, or `pulse` (default `pulse`).
-    ///   - speed: the animation rate (default `regular`).
-    public init(animation: TextCursorStyle.Animation = .pulse, speed: TextCursorStyle.Speed = .regular) {
+    /// - Parameter animation: `none`, `blink`, or `pulse` (default `pulse`).
+    public init(animation: TextCursorStyle.Animation = .pulse) {
         self.animation = animation
-        self.speed = speed
     }
 }
 
@@ -55,23 +55,28 @@ extension EnvironmentValues {
 extension View {
     /// Sets how focused selection indicators animate (the swatch-grid cursor, etc.).
     ///
-    /// TUI-specific: SwiftUI has no equivalent.
+    /// TUI-specific: SwiftUI has no equivalent. Set how fast they animate with
+    /// ``View/indicatorAnimationSpeed(_:for:)`` for
+    /// ``IndicatorAnimations/focusEmphasis``.
     public func selectionIndicatorStyle(_ style: SelectionIndicatorStyle) -> some View {
         environment(\.selectionIndicatorStyle, style)
     }
 
-    /// Sets the selection-indicator animation and (optionally) speed.
-    public func selectionIndicatorStyle(
-        _ animation: TextCursorStyle.Animation, speed: TextCursorStyle.Speed = .regular
-    ) -> some View {
-        environment(\.selectionIndicatorStyle, SelectionIndicatorStyle(animation: animation, speed: speed))
+    /// Sets the selection-indicator animation: `.none`, `.blink` or `.pulse`.
+    ///
+    /// TUI-specific: SwiftUI has no equivalent. Set how fast it animates with
+    /// ``View/indicatorAnimationSpeed(_:for:)`` for
+    /// ``IndicatorAnimations/focusEmphasis``.
+    public func selectionIndicatorStyle(_ animation: TextCursorStyle.Animation) -> some View {
+        environment(\.selectionIndicatorStyle, SelectionIndicatorStyle(animation: animation))
     }
 }
 
 // MARK: - Resolver
 
 /// Resolves the per-frame colour of a focused selection indicator, honouring the
-/// ``SelectionIndicatorStyle`` (none / blink / pulse) at the configured rate.
+/// ``SelectionIndicatorStyle`` (none / blink / pulse) at the speed set for
+/// ``IndicatorAnimations/focusEmphasis``.
 ///
 /// Resolve once per render (the animation phase is shared across cells); then call
 /// ``Resolution/color(dim:bright:)`` per element with that element's own dim/bright
@@ -99,8 +104,11 @@ enum SelectionIndicator {
                 isFocused: isFocused, animation: style.animation, phase: 1, blinkOn: true)
         }
         let timer = environment.cursorTimer
-        let phase = timer?.pulsePhase(for: style.speed) ?? environment.pulsePhase
-        let blinkOn = timer?.blinkVisible(for: style.speed) ?? true
+        // The same speed `SelectionEmphasisClock.cycle(_:)` lays its runs out at, so
+        // a render that reads the clock and a replay agree at every speed.
+        let speed = environment.indicatorAnimationSpeeds.speed(for: .focusEmphasis)
+        let phase = timer?.pulsePhase(for: speed) ?? environment.pulsePhase
+        let blinkOn = timer?.blinkVisible(for: speed) ?? true
         return SelectionEmphasis(
             isFocused: isFocused, animation: style.animation, phase: phase, blinkOn: blinkOn)
     }
@@ -435,7 +443,8 @@ extension SelectionEmphasisClock {
                 ],
                 step: 0)
         }
-        let layout = CursorTimer.cycleLayout(of: style.animation, speed: style.speed)
+        let layout = CursorTimer.cycleLayout(
+            of: style.animation, speed: environment.indicatorAnimationSpeeds.speed(for: .focusEmphasis))
         let frames = (0..<layout.frameCount).map { frame in
             // Each frame states only its own animation: a blink's phase is 1 and a
             // pulse's blink is on, as `SelectionEmphasis` documents for the animation
@@ -465,7 +474,8 @@ extension EnvironmentValues {
     ///
     /// Every built-in control resolves through this, so anything an app builds
     /// keeps step with them and honours
-    /// ``View/selectionIndicatorStyle(_:)`` for free. TUI-specific:
+    /// ``View/selectionIndicatorStyle(_:)-(SelectionIndicatorStyle)`` and the
+    /// speed set for ``IndicatorAnimations/focusEmphasis`` for free. TUI-specific:
     /// SwiftUI has no equivalent, because it has no shared terminal-wide pulse.
     public var selectionEmphasis: SelectionEmphasisClock {
         SelectionEmphasisClock(environment: self)

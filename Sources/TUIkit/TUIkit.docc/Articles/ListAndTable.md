@@ -103,8 +103,9 @@ shift every value in the table sideways. `List` reserves nothing to give
 back — it draws its mark in the single pad cell its rows already had.
 
 How the pulse animates is a separate setting again:
-`.selectionIndicatorStyle(.none | .blink | .pulse)`, with a speed. It governs
-the emphasis, not which cells carry it.
+`.selectionIndicatorStyle(.none | .blink | .pulse)`, and its speed is
+`.indicatorAnimationSpeed(_:for: .focusEmphasis)`. Both govern the emphasis, not
+which cells carry it.
 
 ## Table
 

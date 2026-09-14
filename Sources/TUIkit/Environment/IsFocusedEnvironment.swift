@@ -24,7 +24,7 @@ extension EnvironmentValues {
     ///
     /// Pair it with ``EnvironmentValues/selectionEmphasis`` to get an
     /// affordance that keeps step with every built-in control and honours
-    /// ``View/selectionIndicatorStyle(_:)`` — pulse, blink or a
+    /// ``View/selectionIndicatorStyle(_:)-(SelectionIndicatorStyle)`` — pulse, blink or a
     /// static accent — without deciding any of that yourself:
     ///
     /// ```swift

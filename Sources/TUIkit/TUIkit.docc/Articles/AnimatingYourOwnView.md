@@ -41,8 +41,10 @@ thing, so how does it show that it has the focus?
 ``EnvironmentValues/isFocused`` to its content so the view can say so.
 ``EnvironmentValues/selectionEmphasis`` turns that into the same affordance
 every built-in control uses, on the same clock, honouring whatever
-``View/selectionIndicatorStyle(_:speed:)`` is in force — pulse, blink, or a
-static accent. Neither decision is yours to make:
+``View/selectionIndicatorStyle(_:)-(SelectionIndicatorStyle)`` is in force —
+pulse, blink, or a static accent — at whatever speed
+``View/indicatorAnimationSpeed(_:for:)`` sets for
+``IndicatorAnimations/focusEmphasis``. Neither decision is yours to make:
 
 ```swift
 struct Target: View {
@@ -272,7 +274,8 @@ one wake serves both.
 - ``SelectionEmphasisClock``
 - ``SelectionEmphasisCycle``
 - ``SelectionEmphasis``
-- ``View/selectionIndicatorStyle(_:speed:)``
+- ``View/selectionIndicatorStyle(_:)-(SelectionIndicatorStyle)``
+- ``View/indicatorAnimationSpeed(_:for:)``
 
 ### Assembling cells by hand
 

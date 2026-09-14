@@ -36,8 +36,9 @@ import Foundation
 /// having two was a bug rather than a feature: they ran at different rates from
 /// different formulas, so the same focus pulse breathed at 2 s on a section's
 /// border and 0.8 s on the controls inside it, depending only on which route
-/// the view took. One clock and one formula now serve both, with the cadence
-/// chosen per element by ``SelectionIndicatorStyle``.
+/// the view took. One clock and one formula now serve both, with the animation
+/// chosen per element by ``SelectionIndicatorStyle`` and its speed by
+/// ``View/indicatorAnimationSpeed(_:for:)``.
 ///
 /// The timer is a single `@MainActor` `Task` that sleeps between ticks (the
 /// same pattern as ``AutoRepeatTimer``). Staying on the main actor means the
@@ -46,14 +47,16 @@ import Foundation
 ///
 /// ## Animation Speeds
 ///
-/// The blink speed is controlled by ``TextCursorStyle/Speed``. A blink is two
-/// frames, visible then hidden, each shown for half the cycle:
-/// - `.slow`: 1000ms cycle (visible 500ms, hidden 500ms)
-/// - `.regular`: 700ms cycle (visible 350ms, hidden 350ms)
-/// - `.fast`: 400ms cycle (visible 200ms, hidden 200ms)
+/// A blink is two frames, visible then hidden, each shown for half the cycle. A
+/// pulse is a cosine sampled once per 50 ms tick. See ``cycleLayout(of:speed:)``.
 ///
-/// A pulse is a cosine sampled once per 50 ms tick: 24, 16 or 10 frames. See
-/// ``cycleLayout(of:speed:)``.
+/// The focus emphasis runs at an ``IndicatorAnimationSpeed``: a 700 ms blink
+/// (``standardBlinkCycle``) and an 800 ms breath (``standardPulseCycle``) at the
+/// standard rate, each divided by the rate. The caret still has its own table,
+/// ``TextCursorStyle/Speed``:
+/// - `.slow`: 1000ms blink, 1200ms pulse
+/// - `.regular`: 700ms blink, 800ms pulse
+/// - `.fast`: 400ms blink, 500ms pulse
 ///
 /// ## Usage
 ///
@@ -61,10 +64,10 @@ import Foundation
 /// let cursor = CursorTimer(renderNotifier: appState)
 /// cursor.start()
 /// // In render code:
-/// if cursor.blinkVisible(for: .regular) {
+/// if cursor.blinkVisible(for: .automatic) {
 ///     // show cursor
 /// }
-/// let phase = cursor.pulsePhase(for: .regular)
+/// let phase = cursor.pulsePhase(for: .automatic)
 /// ```
 @MainActor
 final class CursorTimer {
@@ -237,27 +240,39 @@ final class CursorTimer {
 // MARK: - Phase Computation
 
 extension CursorTimer {
-    /// Returns whether the cursor should be visible for blink animation.
+    /// Returns whether a blink is in its visible half now.
     ///
-    /// - Parameter speed: The cursor speed setting.
-    /// - Returns: `true` if cursor should be visible, `false` if hidden.
-    func blinkVisible(for speed: TextCursorStyle.Speed) -> Bool {
+    /// - Parameter speed: The speed of the indicator that blinks.
+    /// - Returns: `true` if the blink is visible, `false` if hidden.
+    func blinkVisible(for speed: IndicatorAnimationSpeed) -> Bool {
         didReadThisFrame = true
         return Self.blinkVisible(atFrame: Self.cycleLayout(of: .blink, speed: speed).timing.step(on: self))
     }
+
+    /// A blink's cycle at the standard speed, visible then hidden: 700 ms, 350 ms
+    /// each, a whole number of base ticks.
+    nonisolated static let standardBlinkCycle: TimeInterval = 0.7
+
+    /// A breath's cycle at the standard speed, bright to dim to bright: 800 ms.
+    nonisolated static let standardPulseCycle: TimeInterval = 0.8
 
     /// How a cycle of `animation` at `speed` is laid out: how many frames it has,
     /// and how long each is shown, on which clock.
     ///
     /// Two kinds of cycle, laid out differently on purpose:
-    /// - **A blink is discrete.** The caret is visible, then hidden: two frames,
-    ///   each shown for half the cycle. It used to be one frame per 50 ms tick,
-    ///   seven visible and seven hidden at `.regular`. That holds only while a half
-    ///   is a whole number of ticks, and it makes a slower blink more frames rather
-    ///   than longer ones.
-    /// - **A pulse is continuous.** A cosine sampled at its standard frame, one
-    ///   cursor tick: `max(2, round(cycle / tick))` frames, each `cycle / count`
-    ///   long, so the cycle is exactly its declared length.
+    /// - **A blink is discrete.** Visible, then hidden: two frames, each shown for
+    ///   ``standardBlinkCycle``'s half at the standard rate, and for
+    ///   ``IndicatorAnimationSpeed/frameDuration(standard:)`` of it at `speed`. It
+    ///   used to be one frame per 50 ms tick, seven visible and seven hidden. That
+    ///   holds only while a half is a whole number of ticks, and it makes a slower
+    ///   blink more frames rather than longer ones.
+    /// - **A pulse is continuous.** ``standardPulseCycle`` divided by the rate,
+    ///   sampled at its standard frame, one cursor tick: `max(2, round(cycle / tick))`
+    ///   frames, each `cycle / count` long, so the cycle is exactly that length. A
+    ///   slowed breath stays as smooth, and a quickened one wakes the loop no more
+    ///   often. Within `speed`'s tolerance the cycle may move onto whole ticks
+    ///   (``IndicatorAnimationSpeed/rampLayout(standardCycle:framesPerSecond:snapping:)``);
+    ///   at the standard 800 ms it already is.
     /// - `.none` is one frame, a still picture.
     ///
     /// Both animate on the focus-relative clock. The whole cycle is built from this
@@ -265,9 +280,27 @@ extension CursorTimer {
     /// same layout, so a replayed run and a render that reads the clock show the
     /// same frame at the same instant: one layout, not two that can drift apart.
     ///
-    /// `nonisolated`: it is arithmetic on two constants and reads no timer.
+    /// `nonisolated`: it is arithmetic on constants and reads no timer.
+    nonisolated static func cycleLayout(
+        of animation: TextCursorStyle.Animation, speed: IndicatorAnimationSpeed
+    ) -> CycleLayout {
+        cycleLayout(of: animation, blinkCycle: standardBlinkCycle, pulseCycle: standardPulseCycle, speed: speed)
+    }
+
+    /// The caret's layout, from its own ``TextCursorStyle/Speed`` table: the cycles
+    /// that table names, at exactly the standard rate.
     nonisolated static func cycleLayout(
         of animation: TextCursorStyle.Animation, speed: TextCursorStyle.Speed
+    ) -> CycleLayout {
+        cycleLayout(
+            of: animation, blinkCycle: Double(speed.blinkCycleMs) / 1000,
+            pulseCycle: Double(speed.pulseCycleMs) / 1000, speed: .standard)
+    }
+
+    /// The layout of a blink of `blinkCycle` or a pulse of `pulseCycle`, at `speed`.
+    nonisolated private static func cycleLayout(
+        of animation: TextCursorStyle.Animation, blinkCycle: TimeInterval, pulseCycle: TimeInterval,
+        speed: IndicatorAnimationSpeed
     ) -> CycleLayout {
         switch animation {
         case .none:
@@ -276,13 +309,15 @@ extension CursorTimer {
             return CycleLayout(
                 frameCount: 2,
                 timing: IndicatorCycleTiming(
-                    frameDuration: Double(speed.blinkCycleMs) / 2 / 1000, clock: .cursor))
+                    frameDuration: speed.frameDuration(standard: blinkCycle / 2), clock: .cursor))
         case .pulse:
-            let cycle = Double(speed.pulseCycleMs) / 1000
-            let count = max(2, Int((cycle / AnimationClock.cursor.tickInterval).rounded()))
+            // The framework's own cycle, so the tolerance may move it: snapping.
+            let ramp = speed.rampLayout(
+                standardCycle: pulseCycle, framesPerSecond: 1 / AnimationClock.cursor.tickInterval,
+                snapping: true)
             return CycleLayout(
-                frameCount: count,
-                timing: IndicatorCycleTiming(frameDuration: cycle / Double(count), clock: .cursor))
+                frameCount: ramp.frameCount,
+                timing: IndicatorCycleTiming(frameDuration: ramp.frameDuration, clock: .cursor))
         }
     }
 
@@ -317,9 +352,9 @@ extension CursorTimer {
     /// its dim end left the newly focused control looking unfocused for a third
     /// of a second — the moment it most needs to be visible.
     ///
-    /// - Parameter speed: The cursor speed setting.
+    /// - Parameter speed: The speed of the indicator that pulses.
     /// - Returns: Phase value between 0 and 1.
-    func pulsePhase(for speed: TextCursorStyle.Speed) -> Double {
+    func pulsePhase(for speed: IndicatorAnimationSpeed) -> Double {
         didReadThisFrame = true
         return pulsePhaseNow(speed: speed)
     }
@@ -331,12 +366,16 @@ extension CursorTimer {
     /// ``SelectionEmphasis`` — there is one clock and one formula behind both.
     /// (Demand is tracked at the seam's own getter, which is why this one must
     /// not set `didReadThisFrame`.)
+    ///
+    /// At ``IndicatorAnimationSpeed/automatic``, the focus emphasis's speed where
+    /// nothing sets one: the seam is one value for the whole frame, and cannot see
+    /// a subtree's `indicatorAnimationSpeed(_:for:)`.
     var breathPhase: Double {
-        pulsePhaseNow(speed: .regular)
+        pulsePhaseNow(speed: .automatic)
     }
 
     /// The pulse phase at the last snapshot, read through the pulse's own layout.
-    private func pulsePhaseNow(speed: TextCursorStyle.Speed) -> Double {
+    private func pulsePhaseNow(speed: IndicatorAnimationSpeed) -> Double {
         let layout = Self.cycleLayout(of: .pulse, speed: speed)
         return Self.pulsePhase(atFrame: layout.timing.step(on: self), of: layout.frameCount)
     }
@@ -468,11 +507,11 @@ extension CursorTimer {
 // MARK: - Speed Cycle Durations
 
 extension TextCursorStyle.Speed {
-    /// The blink cycle duration in milliseconds (on + off).
+    /// The caret's blink cycle duration in milliseconds (on + off).
     ///
     /// Each half is one frame of the blink's run, so a replayed blink holds it
     /// exactly, whatever its length: see ``CursorTimer/cycleLayout(of:speed:)``. A
-    /// view that reads ``CursorTimer/blinkVisible(for:)`` as it renders is
+    /// view that reads the blink as it renders is
     /// re-rendered on the 50 ms cursor lattice, though, so for that view a half
     /// that is not a whole number of ticks still flips up to a tick late. All three
     /// are whole ticks. `.regular` was once 660 ms, and its live blink wobbled
@@ -485,7 +524,7 @@ extension TextCursorStyle.Speed {
         }
     }
 
-    /// The pulse cycle duration in milliseconds (dim → bright → dim).
+    /// The caret's pulse cycle duration in milliseconds (dim → bright → dim).
     ///
     /// A pulse is sampled one 50 ms tick a frame, and each of these is a whole
     /// number of ticks, so every frame is exactly one tick.

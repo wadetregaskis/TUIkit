@@ -56,13 +56,13 @@ struct AnimationClockGatingTests {
         timer.beginFrameReadTracking()
         #expect(!timer.didReadThisFrame)  // fresh frame: nothing read yet
 
-        _ = timer.pulsePhase(for: .regular)
+        _ = timer.pulsePhase(for: .standard)
         #expect(timer.didReadThisFrame)  // a text field consulted the cursor clock
 
         timer.beginFrameReadTracking()
         #expect(!timer.didReadThisFrame)  // reset for the next frame
 
-        _ = timer.blinkVisible(for: .regular)
+        _ = timer.blinkVisible(for: .standard)
         #expect(timer.didReadThisFrame)  // blink path also counts
     }
 }
