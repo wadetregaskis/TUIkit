@@ -1222,7 +1222,10 @@ extension Equatable {
     ///
     /// The standard opening move for comparing two `any Equatable`s: open one
     /// existential so `Self` is concrete, then downcast the other to it.
-    fileprivate func isEqual(to other: Any) -> Bool {
+    ///
+    /// Module-wide rather than file-private because `Palette.isSamePalette(as:)`
+    /// asks the same question of a palette.
+    func isEqual(to other: Any) -> Bool {
         guard let other = other as? Self else { return false }
         return self == other
     }

@@ -25,6 +25,16 @@
 /// // Use palette colors in views
 /// Text("Hello").foregroundStyle(.palette.foreground)
 /// ```
+///
+/// # Changing a palette's colours
+///
+/// TUIkit keeps what it drew under one frame's palette for later frames, so it
+/// has to notice when the palette changes. A palette that is `Equatable` is
+/// compared by value: one edited in place — a theme editor that keeps a
+/// preset's `id` while the user adjusts its colours — redraws in the new
+/// colours on the next frame. A palette that is not `Equatable` is known only
+/// by its ``Cyclable/id``, so if its colours can change, conform it to
+/// `Equatable` or give it a new `id` whenever they do.
 public protocol Palette: Cyclable {
     // MARK: - Background Colors
 

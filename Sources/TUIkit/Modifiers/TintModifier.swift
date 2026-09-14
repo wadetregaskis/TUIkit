@@ -30,9 +30,12 @@ import TUIkitView
 /// `StyleCascadeCoverageTests` asserts all of them, driven by a table it
 /// cross-checks against a palette that states every role, so the omission
 /// fails a test instead of quietly changing a colour.
-struct TintedPalette: Palette {
+struct TintedPalette: DerivedPalette {
     let base: any Palette
     let tint: Color
+
+    /// The tint is the only field this adds; the bases are compared by the caller.
+    func hasSameDerivation(as other: Self) -> Bool { tint == other.tint }
 
     var id: String { base.id }
     var name: String { base.name }

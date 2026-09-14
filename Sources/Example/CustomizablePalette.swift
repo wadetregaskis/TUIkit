@@ -14,6 +14,11 @@ import TUIkit
 /// the app header, and the status bar live. Presets are loaded by snapshotting a
 /// built-in ``SystemPalette`` into this editable form; the theme page's
 /// `ColorPicker`s then mutate individual colours.
+///
+/// An edit keeps the preset's `id`, and the `Hashable` conformance is what makes
+/// that safe: the framework compares an `Equatable` palette by value, so a colour
+/// changed under the same id still redraws memoized views. Without it, every edit
+/// would need a new id.
 struct CustomizablePalette: Palette, Hashable {
     var id: String
     var name: String

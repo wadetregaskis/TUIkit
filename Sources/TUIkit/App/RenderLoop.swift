@@ -38,8 +38,11 @@ enum FrameClock {
 /// missing from here is a class of "changed but stale subtrees keep the old
 /// look" bug, and it is invisible in headless single-render tests.
 internal struct EnvironmentSnapshot: Equatable {
-    /// The active palette identifier.
-    let paletteID: String
+    /// The active palette, compared by value where it can be (`isSamePalette(as:)`).
+    /// Its id was not enough: the Example's Theme page edits its palette in place
+    /// under the preset's id, so an edit changed no field here and memoized
+    /// subtrees kept drawing the colours from before it.
+    let palette: ComparablePalette
 
     /// The active appearance identifier.
     let appearanceID: String
@@ -63,7 +66,7 @@ internal struct EnvironmentSnapshot: Equatable {
 
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
-        self.paletteID = environment.palette.id
+        self.palette = ComparablePalette(environment.palette)
         self.appearanceID = environment.appearance.id
         self.resolvedAutomaticToggleCharacterSet = environment.resolvedAutomaticToggleCharacterSet
         self.localeIdentifier = environment.locale.identifier
@@ -1271,12 +1274,13 @@ extension RenderLoop {
 
     /// Clears the render cache when environment values affecting visual output changed.
     ///
-    /// Compares the current palette and appearance identifiers with the previous
-    /// frame's snapshot. On mismatch, all `EquatableView`-cached subtrees are
-    /// invalidated so they re-render with the new theme/appearance.
+    /// Compares this frame's `EnvironmentSnapshot` with the previous frame's. On
+    /// mismatch, all `EquatableView`-cached subtrees are invalidated so they
+    /// re-render with the new palette, appearance, glyphs or locale.
     ///
-    /// This runs once per frame (two string comparisons) and ensures
-    /// developers never need to manually invalidate the cache after theme changes.
+    /// This runs once per frame (a palette comparison and three small ones) and
+    /// ensures developers never need to manually invalidate the cache after theme
+    /// changes — including a palette whose colours were edited under the same id.
     fileprivate func invalidateCacheIfEnvironmentChanged(environment: EnvironmentValues) {
         let currentSnapshot = EnvironmentSnapshot(from: environment)
         if let lastSnapshot = lastEnvironmentSnapshot, lastSnapshot != currentSnapshot {

@@ -70,8 +70,11 @@ extension EnvironmentValues {
 /// an omitted role silently recomputes from this palette's other roles instead of taking
 /// the base's (the trap `TintedPalette` documents from experience). Adding a role to
 /// ``Palette`` means adding a line here; `StyleCascadeCoverageTests` asserts all of them.
-package struct GroundedPalette: Palette {
+package struct GroundedPalette: DerivedPalette {
     package let base: any Palette
+
+    /// A grounding has no fields of its own, so two of the same base are one palette.
+    package func hasSameDerivation(as other: Self) -> Bool { true }
 
     /// `palette` as the environment should hold it.
     ///
