@@ -487,7 +487,7 @@ struct FadedPaletteRenderTests {
         // too — and that is not what this is about.
         let ground = Color.rgb(10, 10, 20)
         let drawn = renderToBuffer(
-            TextField("label", text: .constant("abc")),
+            TextField("label", text: .constant("abc")).textCursor(.block, animation: .blink),
             context: context(palette: palette, width: 20, height: 3) {
                 $0.focusManager = FocusManager()
             })
@@ -568,7 +568,7 @@ struct FadedPaletteRenderTests {
         let palette = FadedAll()
         let drawn = renderToBuffer(
             List(selection: .constant(Int?.none)) {
-                TextField("label", text: .constant("abc"))
+                TextField("label", text: .constant("abc")).textCursor(.block, animation: .blink)
             },
             context: context(palette: palette, width: 24, height: 5) {
                 // Its own focus manager, or nothing is focused and the caret never

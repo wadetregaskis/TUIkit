@@ -3744,9 +3744,9 @@ it could not be a rectangle, and it stands; what changed is that it no longer ha
 one. The frames painted the well's opaque spelling and claimed nothing, so under a
 translucent well the caret's cell showed the well at full strength. Whether one claim
 could fit turns on the frames: a bar or underscore off a selection shows the well in every
-frame, and a pulsing block shows only its own opaque colour; but a blinking block — the
-default — and a blinking bar on a selected cell alternate between the well and an opaque
-colour, and no one claim fits them.
+frame, and a pulsing block shows only its own opaque colour; but a blinking block (the
+default then; `.pulse` is now) and a blinking bar on a selected cell alternate between the
+well and an opaque colour, and no one claim fits them.
 
 The way out was not the one considered here. Declining their runs, as §36.7 does, would
 re-render the page every tick while the editor or field is focused over a faded well — the

@@ -130,7 +130,8 @@ struct TextEditorCaretRunTests {
         // precede it would become the caret's. Every frame therefore opens by
         // stating its own styling and closes by resetting it — including the
         // blink-OFF frame, which used to coalesce with its neighbours.
-        let buffer = render(editor("hello"))
+        let buffer = render(
+            editor("hello", cursor: TextCursorStyle(shape: .block, animation: .blink)))
         guard let frames = buffer.animatedCells.first?.frames else {
             Issue.record("no caret run")
             return

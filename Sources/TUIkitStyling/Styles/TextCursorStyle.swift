@@ -27,7 +27,7 @@
 /// |-----------|-------------|
 /// | `none` | Static cursor, no animation |
 /// | `blink` | Classic on/off blinking |
-/// | `pulse` | Smooth color pulsing between dim and bright |
+/// | `pulse` | Smooth color pulsing between dim and bright (default) |
 ///
 /// ## Animation Speed
 ///
@@ -76,8 +76,8 @@ public struct TextCursorStyle: Equatable, Sendable {
     ///
     /// - Parameters:
     ///   - shape: The cursor shape. Defaults to `.block`.
-    ///   - animation: The cursor animation. Defaults to `.blink`.
-    public init(shape: Shape = .block, animation: Animation = .blink) {
+    ///   - animation: The cursor animation. Defaults to `.pulse`.
+    public init(shape: Shape = .block, animation: Animation = .pulse) {
         self.shape = shape
         self.animation = animation
     }
@@ -140,12 +140,12 @@ extension TextCursorStyle {
 // MARK: - Convenience Initializers
 
 extension TextCursorStyle {
-    /// A block cursor with blink animation (the default style).
-    public static let block = TextCursorStyle(shape: .block, animation: .blink)
+    /// A block cursor with the default pulse animation (the default style).
+    public static let block = TextCursorStyle(shape: .block)
 
-    /// A bar cursor with blink animation.
-    public static let bar = TextCursorStyle(shape: .bar, animation: .blink)
+    /// A bar cursor with the default pulse animation.
+    public static let bar = TextCursorStyle(shape: .bar)
 
-    /// An underscore cursor with blink animation.
-    public static let underscore = TextCursorStyle(shape: .underscore, animation: .blink)
+    /// An underscore cursor with the default pulse animation.
+    public static let underscore = TextCursorStyle(shape: .underscore)
 }

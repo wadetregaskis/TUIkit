@@ -128,7 +128,9 @@ struct LinkHyperlinkTests {
             ).isolatingRenderCache()
             // A URL mode, so the label is not wrapped in a button and the field is the
             // one focusable thing on the page.
-            let view = Link(destination: url) { TextField("label", text: .constant("abc")) }
+            let view = Link(destination: url) {
+                TextField("label", text: .constant("abc")).textCursor(.block, animation: .blink)
+            }
                 .linkDisplay(.urlInParentheses)
             return renderToBuffer(view, context: context)
         }
