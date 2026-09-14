@@ -89,6 +89,7 @@
   "statusbar.select": "markieren",
   "statusbar.submit": "absenden",
   "statusbar.showColumn": "Spalte einblenden",
+  "statusbar.hideColumn": "Spalte ausblenden",
   "statusbar.dismiss": "schließen",
   "statusbar.goBack": "zurück",
   "statusbar.closePopover": "Popover schließen",

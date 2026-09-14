@@ -89,6 +89,7 @@
   "statusbar.select": "select",
   "statusbar.submit": "submit",
   "statusbar.showColumn": "show column",
+  "statusbar.hideColumn": "hide column",
   "statusbar.dismiss": "dismiss",
   "statusbar.goBack": "go back",
   "statusbar.closePopover": "close popover",

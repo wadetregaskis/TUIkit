@@ -32,7 +32,8 @@ struct NavigationSplitViewResizeAnchorTests {
     private func gripX(_ buffer: FrameBuffer) -> Int? {
         guard buffer.height > 0 else { return nil }
         let mid = buffer.lines[buffer.height / 2].stripped
-        guard let r = mid.firstIndex(of: "◦") else { return nil }
+        // The leftmost divider's centre row is its ◀ toggle.
+        guard let r = mid.firstIndex(where: { $0 == "◦" || $0 == "◀" }) else { return nil }
         return mid.distance(from: mid.startIndex, to: r)
     }
 
@@ -63,8 +64,10 @@ struct NavigationSplitViewResizeAnchorTests {
 
         // Press and release on the divider with no motion in between: the
         // classic "click the handle to see what it does" gesture. `event.x` is
-        // localised to the press, so both events carry a delta of zero.
-        let y = first.height / 2
+        // localised to the press, so both events carry a delta of zero. On a
+        // grip dot, above the centre row: a still click on the centre row's ◀
+        // hides the sidebar.
+        let y = first.height / 2 - 1
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: before, y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: before, y: y))
 
@@ -84,7 +87,8 @@ struct NavigationSplitViewResizeAnchorTests {
         guard let x = gripX(first) else { Issue.record("expected a divider grip"); return }
         dispatcher.setRegions(first.hitTestRegions)
 
-        let y = first.height / 2
+        // A grip dot, not the centre row's ◀, whose still click hides the sidebar.
+        let y = first.height / 2 - 1
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: x, y: y))
 

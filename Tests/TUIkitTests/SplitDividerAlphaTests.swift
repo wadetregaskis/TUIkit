@@ -45,6 +45,12 @@ struct SplitDividerAlphaTests {
         NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
     }
 
+    /// The grip's cells, top to bottom: two dots and, between them, the ◀ that
+    /// toggles the sidebar, all drawn in the dots' ink.
+    private func grip(in drawn: FrameBuffer) -> [(column: Int, row: Int)] {
+        (cells(of: "◦", in: drawn) + cells(of: "◀", in: drawn)).sorted { $0.row < $1.row }
+    }
+
     /// The claims covering the divider's column.
     private func onTheDivider(_ drawn: FrameBuffer, column: Int) -> [OpacityRegion] {
         drawn.opacityRegions.filter { $0.offsetX <= column && column < $0.offsetX + $0.width }
@@ -57,7 +63,7 @@ struct SplitDividerAlphaTests {
         let palette = FadedAll()
         try #require(!palette.foregroundTertiary.isOpaque, "the premise")
         let drawn = frame(split, context(palette: palette))
-        let dots = cells(of: "◦", in: drawn)
+        let dots = grip(in: drawn)
         try #require(dots.count == 3, "\(drawn.lines.map(\.stripped))")
         for (column, row) in dots {
             let owes = owed(atColumn: column, row: row, in: drawn)
@@ -85,7 +91,7 @@ struct SplitDividerAlphaTests {
         dispatcher.setActiveSupport(MouseSupport(clicks: true, scrolling: true, drag: true, motion: true))
         let resting = frame(view, context)
         dispatcher.setRegions(resting.hitTestRegions)
-        let dots = cells(of: "◦", in: resting)
+        let dots = grip(in: resting)
         try #require(dots.count == 3, "\(resting.lines.map(\.stripped))")
         let centre = dots[1]
         _ = dispatcher.dispatch(MouseEvent(button: .left, phase: .moved, x: centre.column, y: centre.row))
@@ -111,7 +117,7 @@ struct SplitDividerAlphaTests {
         let drawn = frame(split, context)
         #expect(!drawn.animatedCells.isEmpty, "the focused divider breathes")
         expectReplayIsIdentity(drawn, "a divider run moved the cells")
-        let dots = cells(of: "◦", in: drawn)
+        let dots = grip(in: drawn)
         try #require(dots.count == 3, "\(drawn.lines.map(\.stripped))")
         for (column, row) in dots {
             let owes = owed(atColumn: column, row: row, in: drawn)
@@ -131,7 +137,7 @@ struct SplitDividerAlphaTests {
         focus.activateSection(id: section)
         let focused = frame(split, context)
         for drawn in [resting, focused] {
-            let column = try #require(cells(of: "◦", in: drawn).first?.column)
+            let column = try #require(grip(in: drawn).first?.column)
             let claims = onTheDivider(drawn, column: column)
             #expect(claims.isEmpty, "\(claims)")
         }

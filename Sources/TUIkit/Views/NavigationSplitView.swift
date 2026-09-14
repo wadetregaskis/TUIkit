@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import TUIkitCore
+
 // MARK: - NavigationSplitView
 
 /// A view that presents views in two or three columns, where selections in
@@ -73,12 +75,16 @@
 /// }
 /// ```
 ///
-/// While a leading column is hidden, a one-cell edge column at the left shows
-/// ▶. A click on it, or Return or Space with it focused, brings back the
-/// nearest hidden column and writes the result through the binding: two
-/// columns go from `.detailOnly` to `.all`, three step from `.detailOnly` to
-/// `.doubleColumn` to `.all`. It is first in the Tab order, and the keyboard
-/// moves to the divider beside the revealed column afterwards.
+/// The user can hide and show columns too, and the split view writes what they
+/// chose through the binding (or keeps it itself when there is none). The
+/// leftmost divider's middle grip dot is a ◀: a still click on it, or Return or
+/// Space with the divider focused, hides the column to its left — `.all` to
+/// `.detailOnly` with two columns, `.all` to `.doubleColumn` to `.detailOnly`
+/// with three. While a leading column is hidden, a one-cell edge column at the
+/// left shows ▶, which brings back the nearest hidden column the same way, one
+/// step at a time. The edge column is first in the Tab order. After either, the
+/// keyboard moves to the handle that undoes it, so Return, Return goes there
+/// and back.
 ///
 /// ## Focus Navigation
 ///
@@ -232,7 +238,8 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let style = context.environment.navigationSplitViewStyle
-        let visibility = resolveVisibility()
+        let toggleState = resolveToggleState(context: context)
+        let visibility = resolveVisibility(toggleState: toggleState)
 
         // Calculate visible columns based on visibility
         let visibleColumns = calculateVisibleColumns(visibility: visibility)
@@ -243,7 +250,6 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
 
         // A hidden leading column leaves a ▶ edge column at the left, registered
         // before the columns; they share what is left of the width.
-        let toggleState = resolveToggleState(context: context)
         let (edge, columnsContext) = layOutEdge(
             visibleColumns: visibleColumns, context: context,
             focusManager: focusManager, toggleState: toggleState)
@@ -339,6 +345,8 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
                 dividerInfos.append(
                     wireDivider(
                         column: column,
+                        togglesColumn: index == 0,
+                        toggleState: toggleState,
                         resizable: resizable,
                         widths: widths,
                         currentWidth: columnWidth,
@@ -424,17 +432,13 @@ enum SplitViewStateIndex {
 }
 
 extension _NavigationSplitViewCore {
-    /// Resolves the effective visibility from the binding or defaults to `.all`.
-    fileprivate func resolveVisibility() -> NavigationSplitViewVisibility {
-        if let binding = columnVisibility {
-            let value = binding.wrappedValue
-            // Resolve .automatic to .all
-            if value == .automatic {
-                return .all
-            }
-            return value
-        }
-        return .all
+    /// Resolves the effective visibility from the binding, else from what the
+    /// split's own handles last wrote (see ``SplitViewToggleState/visibility``),
+    /// else `.all`.
+    fileprivate func resolveVisibility(toggleState: SplitViewToggleState?) -> NavigationSplitViewVisibility {
+        let value = columnVisibility?.wrappedValue ?? toggleState?.visibility ?? .all
+        // Resolve .automatic to .all
+        return value == .automatic ? .all : value
     }
 
     /// Calculates which columns should be visible based on visibility setting.
@@ -544,6 +548,11 @@ extension _NavigationSplitViewCore {
 
         var result = FrameBuffer()
 
+        // The ◀ toggle's row, so a still click there can be told from one on a dot.
+        for info in dividerInfos where info.togglesColumn {
+            info.handler?.arrowRow = maxHeight / 2
+        }
+
         for (index, buffer) in buffers.enumerated() {
             // Pad buffer to full height and width
             let targetWidth = index < columnWidths.count ? columnWidths[index] : buffer.width
@@ -585,6 +594,12 @@ extension _NavigationSplitViewCore {
         /// The divider's focus identity, stamped onto its hit region so an
         /// enclosing ScrollView can scroll a focused divider into view.
         var focusID: String?
+        /// Whether this is the leftmost divider, whose centre row is the ◀ that
+        /// hides the column to its left. Glyphs only, so a measuring pass sets
+        /// it too.
+        var togglesColumn = false
+        /// The divider's handler, when it is wired.
+        var handler: _SplitDividerHandler?
     }
 
     /// Sets up the divider that follows `column`: registers its focus
@@ -598,6 +613,8 @@ extension _NavigationSplitViewCore {
     /// ``_SplitDividerHandler/currentWidth``).
     fileprivate func wireDivider(
         column: NavigationSplitViewColumn,
+        togglesColumn: Bool,
+        toggleState: SplitViewToggleState?,
         resizable: Bool,
         widths: SplitViewWidths?,
         currentWidth: Int,
@@ -605,10 +622,11 @@ extension _NavigationSplitViewCore {
         focusManager: FocusManager?
     ) -> DividerRenderInfo {
         guard resizable, !context.isMeasuring, let widths, let focusManager,
-            let stateStorage = context.stateStorage,
+            let stateStorage = context.stateStorage, let toggleState,
             let handlerSlot = SplitViewStateIndex.divider(after: column)
         else {
-            return DividerRenderInfo(isActive: false, isHovered: false, mouseHandlerID: nil)
+            return DividerRenderInfo(
+                isActive: false, isHovered: false, mouseHandlerID: nil, togglesColumn: togglesColumn)
         }
 
         // Namespaced by this split's identity, like every other per-instance
@@ -634,7 +652,8 @@ extension _NavigationSplitViewCore {
         let isInteractive = !isDisabled && !context.environment.isFocusSuppressed
         guard isInteractive else {
             return DividerRenderInfo(
-                isActive: false, isHovered: false, mouseHandlerID: nil, isInteractive: false)
+                isActive: false, isHovered: false, mouseHandlerID: nil, isInteractive: false,
+                togglesColumn: togglesColumn)
         }
         focusManager.registerSection(id: sectionID)
 
@@ -652,6 +671,14 @@ extension _NavigationSplitViewCore {
         ).value
         handler.canBeFocused = true
         handler.currentWidth = currentWidth
+        // Only the leftmost divider hides a column; Return on the others falls
+        // through, as it did before the toggle.
+        handler.hide = togglesColumn ? hideAction(toggleState: toggleState) : nil
+        if togglesColumn {
+            FocusRegistration.publishActivationLabel(
+                LocalizationService.shared.string(for: LocalizationKey.StatusBar.hideColumn),
+                context: context, isFocused: focusManager.isFocused(id: sectionID))
+        }
         focusManager.register(handler, inSection: sectionID)
         // The one focusable in the framework that does NOT go through
         // `FocusRegistration.register` — it registers into a section this view
@@ -696,6 +723,7 @@ extension _NavigationSplitViewCore {
                     // is active.
                     captureHandler.dragStartWidth = captureHandler.resizeBaseWidth
                     captureHandler.dragMoved = false
+                    captureHandler.pressRow = event.y
                     captureFocus.activateSection(id: sectionID)
                     return true
                 case .dragged, .released:
@@ -713,8 +741,18 @@ extension _NavigationSplitViewCore {
                         captureWidths.set(start + event.x, for: column)
                     }
                     if event.phase == .released {
+                        // A still click on ◀ hides the column: pressed and
+                        // released on the arrow's own cell with no movement in
+                        // between. Anything else was a resize, or nothing.
+                        if !captureHandler.dragMoved, let hide = captureHandler.hide,
+                            let arrow = captureHandler.arrowRow,
+                            captureHandler.pressRow == arrow, event.y == arrow
+                        {
+                            hide()
+                        }
                         captureHandler.dragStartWidth = nil
                         captureHandler.dragMoved = false
+                        captureHandler.pressRow = nil
                     }
                     return true
                 default:
@@ -725,7 +763,7 @@ extension _NavigationSplitViewCore {
 
         return DividerRenderInfo(
             isActive: isActive, isHovered: handler.isHovered, mouseHandlerID: mouseHandlerID,
-            focusID: handler.focusID)
+            focusID: handler.focusID, togglesColumn: togglesColumn, handler: handler)
     }
 
     /// Builds the one-column divider buffer for a gap.
@@ -761,7 +799,9 @@ extension _NavigationSplitViewCore {
         let center = h / 2
         let gripRows = Set([center - 1, center, center + 1].filter { $0 >= 0 && $0 < h })
         return buildHandleColumn(info: info, height: h, palette: palette, cycle: cycle) { row in
-            gripRows.contains(row) ? "◦" : nil
+            // The leftmost divider's middle dot is its ◀ toggle.
+            if info.togglesColumn, row == center { return TerminalSymbols.leftArrow }
+            return gripRows.contains(row) ? "◦" : nil
         }
     }
 

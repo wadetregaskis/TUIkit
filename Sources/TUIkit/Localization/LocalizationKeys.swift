@@ -194,6 +194,8 @@ public enum LocalizationKey {
         case submit = "statusbar.submit"
         /// A split view's ▶ edge column, which brings a hidden column back.
         case showColumn = "statusbar.showColumn"
+        /// A split view's leftmost divider, whose ◀ hides the column to its left.
+        case hideColumn = "statusbar.hideColumn"
 
         // MARK: What Escape does over a surface or a mode
 

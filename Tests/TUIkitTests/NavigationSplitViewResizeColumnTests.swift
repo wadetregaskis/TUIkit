@@ -44,7 +44,8 @@ struct NavigationSplitViewResizeColumnTests {
     private func gripXs(_ buffer: FrameBuffer) -> [Int] {
         guard buffer.height > 0 else { return [] }
         let mid = Array(buffer.lines[buffer.height / 2].stripped)
-        return mid.indices.filter { mid[$0] == "◦" }
+        // The leftmost divider's centre row is its ◀ toggle.
+        return mid.indices.filter { mid[$0] == "◦" || mid[$0] == "◀" }
     }
 
     private func threeColumns(_ visibility: Binding<NavigationSplitViewVisibility>) -> some View {

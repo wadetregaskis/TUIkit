@@ -2,9 +2,10 @@
 //  NavigationSplitViewToggle.swift
 //
 //  The sidebar toggle of ``NavigationSplitView``: the ▶ edge column that brings
-//  a hidden leading column back, the visibility steps behind it, and the focus
-//  hand-over between a handle and the one that undoes it. Split out of
-//  `NavigationSplitView.swift`, which holds the columns and dividers.
+//  a hidden leading column back, the ◀ on the leftmost divider that hides one,
+//  the visibility steps behind both, and the focus hand-over between a handle
+//  and the one that undoes it. Split out of `NavigationSplitView.swift`, which
+//  holds the columns and dividers.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -15,10 +16,26 @@ import TUIkitCore
 
 /// The visibility changes the split view's own handles make.
 ///
-/// The handles STEP, one column at a time: ▶ brings back the nearest hidden
-/// column. Every function takes the value as the binding holds it and reads
-/// `.automatic` as `.all`, as the split view draws it.
+/// The handles STEP, one column at a time: ◀ hides the leftmost visible column,
+/// ▶ brings back the nearest hidden one. Every function takes the value as the
+/// binding holds it and reads `.automatic` as `.all`, as the split view draws it.
 enum SplitViewToggle {
+    /// The visibility after ◀ hides the leftmost visible column, or `nil` when
+    /// only the detail column is showing.
+    ///
+    /// Two columns: `.all` → `.detailOnly` (a two-column split draws
+    /// `.doubleColumn` as `.all` too). Three columns: `.all` → `.doubleColumn` →
+    /// `.detailOnly`.
+    static func hidingLeading(
+        _ visibility: NavigationSplitViewVisibility, isThreeColumn: Bool
+    ) -> NavigationSplitViewVisibility? {
+        switch visibility {
+        case .detailOnly: nil
+        case .doubleColumn: .detailOnly
+        default: isThreeColumn ? .doubleColumn : .detailOnly
+        }
+    }
+
     /// The visibility after ▶ reveals the nearest hidden column, or `nil` when
     /// no column is hidden.
     ///
@@ -43,11 +60,18 @@ enum SplitViewFocusTarget {
     /// The divider that follows the leftmost visible column — whose ◀ hides that
     /// column again — else that column itself.
     case leadingDivider
+    /// The ▶ edge column, which brings the hidden column back, else the leftmost
+    /// visible column.
+    case edge
 }
 
 /// What the sidebar toggle keeps between frames, at
 /// ``SplitViewStateIndex/toggle``.
 final class SplitViewToggleState {
+    /// The visibility of a split with no `columnVisibility` binding, which the
+    /// handles write here instead. A split with a binding never reads it.
+    var visibility = NavigationSplitViewVisibility.all
+
     /// The handle the keyboard moves to on the split's next render.
     ///
     /// A handle's change cannot move the focus when it happens: the section it
@@ -222,17 +246,38 @@ extension _NavigationSplitViewCore {
             handler: handler)
     }
 
-    /// What ▶ does: write the next visibility through the binding, and send the
-    /// keyboard to the divider that hides the column again.
+    /// What ▶ does: write the next visibility, and send the keyboard to the
+    /// divider that hides the column again.
     private func revealAction(toggleState: SplitViewToggleState) -> () -> Void {
+        stepAction(toggleState: toggleState, focus: .leadingDivider, step: SplitViewToggle.revealing)
+    }
+
+    /// What ◀ does: write the next visibility, and send the keyboard to the ▶
+    /// that brings the column back.
+    func hideAction(toggleState: SplitViewToggleState) -> () -> Void {
+        stepAction(toggleState: toggleState, focus: .edge, step: SplitViewToggle.hidingLeading)
+    }
+
+    /// A handle's action: `step` the visibility the split is drawing and write
+    /// the result through the binding, or into the split's own state when there
+    /// is none, recording where the keyboard goes once it is drawn. Reads the
+    /// visibility when it runs, not when the handle was drawn, so several key
+    /// presses in one input batch each take a step.
+    private func stepAction(
+        toggleState: SplitViewToggleState, focus: SplitViewFocusTarget,
+        step: @escaping (NavigationSplitViewVisibility, Bool) -> NavigationSplitViewVisibility?
+    ) -> () -> Void {
         let binding = columnVisibility
         let isThreeColumn = isThreeColumn
         return {
-            guard let binding,
-                let next = SplitViewToggle.revealing(binding.wrappedValue, isThreeColumn: isThreeColumn)
-            else { return }
-            toggleState.pendingFocus = .leadingDivider
-            binding.wrappedValue = next
+            let current = binding?.wrappedValue ?? toggleState.visibility
+            guard let next = step(current, isThreeColumn) else { return }
+            toggleState.pendingFocus = focus
+            if let binding {
+                binding.wrappedValue = next
+            } else {
+                toggleState.visibility = next
+            }
         }
     }
 
@@ -255,8 +300,9 @@ extension _NavigationSplitViewCore {
     /// Activates the section a handle pressed last frame asked for (see
     /// ``SplitViewToggleState/pendingFocus``), now that this render has
     /// registered every section the split owns. The first of its candidates
-    /// that registered wins: a split that cannot resize has no divider, and its
-    /// column takes the keyboard instead.
+    /// that registered wins: a split that cannot resize has no divider, and a
+    /// split too narrow for the edge has no edge, so the column takes the
+    /// keyboard instead.
     func activatePendingFocus(
         toggleState: SplitViewToggleState?, visibleColumns: [NavigationSplitViewColumn],
         context: RenderContext, focusManager: FocusManager?
@@ -272,6 +318,8 @@ extension _NavigationSplitViewCore {
                 dividerSectionID(after: leading, context: context),
                 focusSectionID(for: leading, context: context),
             ]
+        case .edge:
+            candidates = [edgeSectionID(context: context), focusSectionID(for: leading, context: context)]
         }
         guard let id = candidates.first(where: { focusManager.section(id: $0) != nil }) else { return }
         focusManager.activateSection(id: id)

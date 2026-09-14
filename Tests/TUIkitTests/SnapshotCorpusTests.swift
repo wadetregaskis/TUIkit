@@ -85,5 +85,18 @@ struct SnapshotCorpusTests {
         // of ViewThatFits editors + swatch grids, centred content, footer).
         assertSnapshot("colorpicker-rgb", width: 64, height: 30, of:
             ColorPickerPanel("Accent", selection: .constant(.rgb(80, 160, 255)), isPresented: .constant(true)))
+
+        // The split view's sidebar toggle: ◀ in place of the leftmost divider's
+        // middle grip dot, and the ▶ edge column while a leading column is hidden.
+        assertSnapshot("navigationsplit-toggle-all", width: 40, height: 7, of:
+            NavigationSplitView { Text("Side") } content: { Text("List") } detail: { Text("Detail") })
+        assertSnapshot("navigationsplit-toggle-doublecolumn", width: 40, height: 7, of:
+            NavigationSplitView(columnVisibility: .constant(.doubleColumn)) {
+                Text("Side")
+            } content: {
+                Text("List")
+            } detail: {
+                Text("Detail")
+            })
     }
 }

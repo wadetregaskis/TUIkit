@@ -304,11 +304,13 @@ CJK control `漢` claims two cells and overhangs neither flank on any host, and
 the calibration rows read as described everywhere, so the readings under them
 stand.
 
-Chrome glyph selection that rests on these rows: `NavigationSplitView`'s edge
-column (2026-09-13), shown while a leading column is hidden, draws `▶` (U+25B6)
-alone in a one-cell column, as `Stepper` draws it, with no VS-15. It is chosen
-because this reading has it advancing one cell with its ink contained on all
-four hosts; a glyph that overhung would paint into the first column's content.
+Chrome glyph selection that rests on these rows: `NavigationSplitView`'s
+sidebar toggle (2026-09-13). The edge column, shown while a leading column is
+hidden, draws `▶` (U+25B6) alone in a one-cell column, and the leftmost divider
+draws `◀` (U+25C0) in place of its middle grip dot, both as `Stepper` draws them,
+with no VS-15. They are chosen because this reading has both advancing one cell
+with their ink contained on all four hosts; a glyph that overhung would paint
+into the neighbouring column's content.
 
 **Recorded caveat: the FONT was not captured with this reading.** Overhang is a
 font property at least as much as a host one, and the card's own instructions

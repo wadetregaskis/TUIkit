@@ -30,7 +30,8 @@ struct NavigationSplitViewResizeDisableTests {
     private func gripX(_ buffer: FrameBuffer) -> Int? {
         guard buffer.height > 0 else { return nil }
         let mid = buffer.lines[buffer.height / 2].stripped
-        guard let r = mid.firstIndex(of: "◦") else { return nil }
+        // The leftmost divider's centre row is its ◀ toggle.
+        guard let r = mid.firstIndex(where: { $0 == "◦" || $0 == "◀" }) else { return nil }
         return mid.distance(from: mid.startIndex, to: r)
     }
 

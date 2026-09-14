@@ -54,7 +54,9 @@ struct NavigationSplitViewColumnWidthTests {
         let buffer = renderToBuffer(view, context: context)
         guard buffer.height > 0 else { return nil }
         let middle = buffer.lines[buffer.height / 2].stripped
-        return middle.firstIndex(of: "◦").map { middle.distance(from: middle.startIndex, to: $0) }
+        // The leftmost divider's centre row is its ◀ toggle.
+        return middle.firstIndex(where: { $0 == "◦" || $0 == "◀" })
+            .map { middle.distance(from: middle.startIndex, to: $0) }
     }
 
     @Test("A fixed column width is the width the column gets")
@@ -118,7 +120,8 @@ struct NavigationSplitViewColumnWidthTests {
             availableWidth: 80, availableHeight: 12, environment: environment,
             tuiContext: TUIContext())
         let middle = renderToBuffer(view, context: context).lines[6].stripped
-        let grip = middle.firstIndex(of: "◦").map { middle.distance(from: middle.startIndex, to: $0) }
+        let grip = middle.firstIndex(where: { $0 == "◦" || $0 == "◀" })
+            .map { middle.distance(from: middle.startIndex, to: $0) }
         #expect(grip == 26, "the sidebar keeps the style's share, got \(grip as Int?)")
     }
 }

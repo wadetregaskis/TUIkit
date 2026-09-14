@@ -551,7 +551,8 @@ struct NavigationSplitViewResizeTests {
     private func gripX(_ buffer: FrameBuffer) -> Int? {
         guard buffer.height > 0 else { return nil }
         let mid = buffer.lines[buffer.height / 2].stripped
-        guard let r = mid.firstIndex(of: "◦") else { return nil }
+        // The leftmost divider's centre row is its ◀ toggle.
+        guard let r = mid.firstIndex(where: { $0 == "◦" || $0 == "◀" }) else { return nil }
         return mid.distance(from: mid.startIndex, to: r)
     }
 
@@ -629,7 +630,7 @@ struct NavigationSplitViewResizeTests {
             "dragging right by 5 should widen the sidebar by 5 and survive the GC (before \(x0), after \(String(describing: x1)))")
     }
 
-    @Test("The divider grip is three stacked dots at its centre")
+    @Test("The divider grip is three stacked marks at its centre: two dots around the ◀ toggle")
     func gripIsThreeDots() {
         let context = resizeContext(width: 60, height: 12)
         let view = NavigationSplitView { Text("SIDEBAR") } detail: { Text("DETAIL") }
@@ -637,7 +638,8 @@ struct NavigationSplitViewResizeTests {
         let dots = buffer.lines.reduce(0) { sum, line in
             sum + line.stripped.filter { $0 == "◦" }.count
         }
-        #expect(dots == 3, "one divider should show three grip dots, got \(dots)")
+        #expect(dots == 2, "the leftmost divider shows two grip dots, got \(dots)")
+        #expect(buffer.lines[6].stripped.contains("◀"), "and ◀ between them")
     }
 
     @Test("Hovering the divider changes the grip rendering")

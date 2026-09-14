@@ -177,7 +177,8 @@ final class SplitViewWidths {
 /// As a ``Focusable`` it is reachable in the Tab order (each divider lives in
 /// its own focus section, interleaved between the column sections) and resizes
 /// the column to its left with the arrow keys: ←/→ by one cell (Shift by five),
-/// Home/End to the narrowest / widest the layout allows. It also carries the
+/// Home/End to the narrowest / widest the layout allows. On the leftmost
+/// divider, Return and Space hide that column instead (``hide``). It also carries the
 /// drag anchor for the mouse path — the split view's divider hit-test region
 /// reads ``dragStartWidth`` so a drag adjusts the column relative to where the
 /// press began.
@@ -240,6 +241,16 @@ final class _SplitDividerHandler: Focusable {
     /// hover pulse of the grip dots. Set on `.entered`/`.exited`.
     var isHovered: Bool = false
 
+    /// Hides the column to the divider's left — the ◀ toggle — or `nil` on a
+    /// divider that is not the leftmost. Rebuilt every render.
+    var hide: (() -> Void)?
+
+    /// The row the current mouse press landed on, local to the divider, and the
+    /// row ◀ is drawn on: a press and release on the arrow with no movement is a
+    /// click on it rather than the start of a resize.
+    var pressRow: Int?
+    var arrowRow: Int?
+
     init(
         focusID: String,
         column: NavigationSplitViewColumn,
@@ -272,6 +283,10 @@ final class _SplitDividerHandler: Focusable {
         case .end:
             // Widest — a large value the render clamp pins to the layout max.
             widths.set(Int.max / 4, for: column)
+            return true
+        case .enter, .space:
+            guard let hide else { return false }
+            hide()
             return true
         default:
             return false
