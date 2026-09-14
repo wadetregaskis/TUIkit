@@ -41,23 +41,48 @@ extension KeyPressModifier: Renderable {
         }
         context.environment.volatileReadTracker?.recordRenderSideEffect()
 
-        // Register the key handler
-        context.environment.keyEventDispatcher!.addHandler(
-            sectionID: context.environment.activeFocusSectionID
-        ) { [keys, handler] event in
-            // Check if we should handle this key
-            if let allowedKeys = keys {
-                guard allowedKeys.contains(event.key) else {
-                    return false
-                }
-            }
-
-            // Call handler and return whether it consumed the event
-            return handler(event)
+        let sectionID = context.environment.activeFocusSectionID
+        KeyPressRegistrar.register(keys: keys, handler: handler, sectionID: sectionID, context: context)
+        if let journal = context.recordingEffectJournal {
+            // Built only while a memo records, so the live path allocates no
+            // second closure. The section is captured, not looked up: it is
+            // what this registration was made in, and the memo checks that the
+            // section where it is served is the same one.
+            journal.append(
+                EffectJournal.Entry(
+                    kind: KeyPressRegistrar.kind, channelToken: context.environment.keyChannelToken
+                ) { [keys, handler] replay in
+                    KeyPressRegistrar.register(
+                        keys: keys, handler: handler, sectionID: sectionID, context: replay)
+                })
         }
 
-        // Render the content
         return TUIkit.renderToBuffer(content, context: context)
+    }
+}
+
+// MARK: - Registration
+
+/// The one registration `onKeyPress` makes, shared by the live render and by a
+/// value memo replaying it — see `EffectJournal`.
+enum KeyPressRegistrar {
+    /// The journal kind of an `onKeyPress` registration.
+    static let kind = EffectJournal.Kind("onKeyPress")
+
+    /// Adds a handler for `keys` (all keys when `nil`) to `context`'s key
+    /// dispatcher, in `sectionID`.
+    ///
+    /// It looks the dispatcher up in `context` rather than taking one, so a
+    /// replay registers into the channels of the frame that serves it.
+    @MainActor
+    static func register(
+        keys: Set<Key>?, handler: @escaping (KeyEvent) -> Bool, sectionID: String?,
+        context: RenderContext
+    ) {
+        context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
+            if let keys, !keys.contains(event.key) { return false }
+            return handler(event)
+        }
     }
 }
 

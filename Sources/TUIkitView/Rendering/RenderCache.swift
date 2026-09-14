@@ -460,6 +460,10 @@ public final class RenderCache: @unchecked Sendable {
     /// Stats snapshot taken at the start of each render pass (for per-frame deltas).
     private var statsAtFrameStart = Stats()
 
+    /// The registrations the value memos record while they render, so a cache
+    /// hit can make them again — see `EffectJournal`.
+    package let effectJournal = EffectJournal()
+
     /// Whether debug logging is enabled via the `TUIKIT_DEBUG_RENDER` environment variable.
     public static let debugEnabled: Bool = {
         ProcessInfo.processInfo.environment["TUIKIT_DEBUG_RENDER"] == "1"

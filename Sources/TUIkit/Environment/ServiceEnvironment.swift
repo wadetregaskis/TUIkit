@@ -103,13 +103,6 @@ private struct TerminalImageStoreKey: EnvironmentKey {
     static let defaultValue: TerminalImageStore? = nil
 }
 
-// MARK: - Active Focus Section
-
-/// EnvironmentKey for the focus section that child views should register in.
-private struct ActiveFocusSectionKey: EnvironmentKey {
-    static let defaultValue: String? = nil
-}
-
 // MARK: - EnvironmentValues Extensions
 
 extension EnvironmentValues {
@@ -132,9 +125,16 @@ extension EnvironmentValues {
     }
 
     /// Key event handler registration and dispatch.
+    ///
+    /// Setting it also sets `keyChannelToken`, which the value memos compare to
+    /// tell a subtree's registrations into these channels from ones made into
+    /// throwaways swapped in below.
     var keyEventDispatcher: KeyEventDispatcher? {
         get { self[KeyEventDispatcherKey.self] }
-        set { self[KeyEventDispatcherKey.self] = newValue }
+        set {
+            self[KeyEventDispatcherKey.self] = newValue
+            keyChannelToken = newValue.map(ObjectIdentifier.init)
+        }
     }
 
     /// Dispatches a synthesised ``KeyEvent`` through the full
@@ -211,12 +211,6 @@ extension EnvironmentValues {
     var focusIndicator: AnimatedColor? {
         get { self[FocusIndicatorKey.self] }
         set { self[FocusIndicatorKey.self] = newValue }
-    }
-
-    /// The ID of the focus section that child views should register in.
-    var activeFocusSectionID: String? {
-        get { self[ActiveFocusSectionKey.self] }
-        set { self[ActiveFocusSectionKey.self] = newValue }
     }
 }
 

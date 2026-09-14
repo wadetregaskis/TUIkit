@@ -59,9 +59,21 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// buffer and so are gated directly).
     public private(set) var sideEffects: Int = 0
 
+    /// Monotonic count of per-frame registrations the buffer memo can make
+    /// again on a cache hit, because the registrar also recorded them in the
+    /// render cache's effect journal. Like ``sideEffects``, only ever compared
+    /// as a delta.
+    ///
+    /// Counted apart from ``sideEffects`` so that only a gate that replays can
+    /// leave it out. Every other gate reads ``cacheUnsafeCount``, which
+    /// includes it: the measure memo, `List`'s hug-width memo and the size
+    /// half of the value memo replay nothing, so a registration has to stop
+    /// them exactly as it did before it became replayable.
+    public private(set) var replayableEffects: Int = 0
+
     /// The combined count a value-memoizing view snapshots around a scoped
     /// render: any delta means the subtree is unsafe to cache.
-    public var cacheUnsafeCount: Int { reads &+ sideEffects }
+    public var cacheUnsafeCount: Int { reads &+ sideEffects &+ replayableEffects }
 
     /// Creates a tracker with zero counts.
     public init() {}
@@ -77,6 +89,12 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// cache the subtree that performed it.
     public func recordRenderSideEffect() {
         sideEffects &+= 1
+    }
+
+    /// Records a per-frame registration the buffer memo can replay — see
+    /// ``replayableEffects``.
+    public func recordReplayableEffect() {
+        replayableEffects &+= 1
     }
 }
 
