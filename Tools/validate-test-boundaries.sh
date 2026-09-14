@@ -23,11 +23,16 @@ cd "$(dirname "$0")/.."
 # framework dependencies. (Foundation / Testing / Dispatch etc. are never flagged
 # — only TUIkit* modules are checked.) A `case` keeps this portable to macOS's
 # stock bash 3.2 (no associative arrays).
+#
+# This table is a copy of the library targets' `dependencies:` in Package.swift
+# and must be edited with them. TUIkitView has depended on TUIkitStyling since
+# `Color: View` moved into the module that owns `View` (see the comment on that
+# target), so a TUIkitView test may name a `Color`.
 allowed_for() {
     case "$1" in
         TUIkitCoreTests) echo "TUIkitCore" ;;
         TUIkitStylingTests) echo "TUIkitStyling" ;;
-        TUIkitViewTests) echo "TUIkitView TUIkitCore" ;;
+        TUIkitViewTests) echo "TUIkitView TUIkitCore TUIkitStyling" ;;
         TUIkitImageTests) echo "TUIkitImage TUIkitStyling" ;;
     esac
 }
