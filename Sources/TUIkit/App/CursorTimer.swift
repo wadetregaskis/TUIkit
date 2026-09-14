@@ -201,7 +201,8 @@ final class CursorTimer {
     /// (`RenderLoop.timeUntilNextChange(elapsed:)`), and the clock then sleeps
     /// precisely that long instead of waking to compare identical pictures —
     /// or, for a run asking for a rate finer than the interval, sooner than the
-    /// interval.
+    /// interval. Never shorter than the time to the next 1/60 s tick instant after the
+    /// snapshot it was planned at (see ``advance(by:)``).
     /// Readable rather than fully private so a test can assert that a served
     /// animation replay re-based the sleep — the value never leaves this class
     /// otherwise, and the run loop only ever writes it through ``advance(by:)``.
@@ -212,16 +213,29 @@ final class CursorTimer {
     /// For a RENDER, which has just replaced the runs and may be about to start the
     /// timer: `start()` reads this for its first sleep. A running timer replans at
     /// every wake through ``planner`` and does not depend on it.
+    ///
+    /// Never shorter than ``secondsToNextTick``, whatever it is asked for.
     func advance(by seconds: Double) {
-        sleepSeconds = max(Self.shortestSleepSeconds, seconds)
+        sleepSeconds = max(secondsToNextTick, seconds)
     }
 
-    /// The shortest sleep ``advance(by:)`` plans, whatever it is asked for: 10 ms.
+    /// The shortest sleep ``advance(by:)`` plans: from the snapshot to the instant the
+    /// next 1/60 s tick begins, at most a tick.
     ///
-    /// A safety floor rather than a policy, so a plan of nothing cannot spin a core. A
-    /// run can no longer ask for a frame this short (a frame is at least one tick,
-    /// 16.7 ms), so it binds only on a plan that is already due.
-    nonisolated private static let shortestSleepSeconds = 0.01
+    /// A safety floor rather than a policy, so a plan of nothing cannot spin a core.
+    /// Every change a plan can be for — a run's step, the reader's boundary, a
+    /// stand-in's wake — begins on a tick instant strictly after the snapshot, so this
+    /// binds only on a plan that is already due, and it ends that plan on the lattice
+    /// every run changes on. It used to be 10 ms: a wake is late by a few
+    /// milliseconds, so the change after a late wake could be due sooner than that,
+    /// and was drawn late, off the lattice — a 1-tick run woken 12 ms after its
+    /// boundary slept 10 ms for a change 4,666,667 ns away. Not "one tick from now"
+    /// either, which is off the lattice whenever the wake is.
+    private var secondsToNextTick: Double {
+        let snapshot = Int64(clamping: snapshotNanos)
+        let next = AnimationClock.nanoseconds(ofNextTickMultiple: 1, after: snapshot)
+        return Double(next - snapshot) / 1_000_000_000
+    }
 
     /// How the NEXT sleep is chosen, asked at the moment the timer wakes.
     ///
@@ -441,7 +455,8 @@ extension CursorTimer {
     /// has been through `Double(n) / 1e9` comes back one short on about 2% of plans. A
     /// real wake is milliseconds late and hides that. A clock that advances by exactly
     /// what was slept wakes 1 ns before the boundary, finds the change still 1 ns away,
-    /// and plans the 10 ms floor: a frame 10 ms late.
+    /// and wakes again for it: two wakes for one change. (Under the 10 ms floor this
+    /// sleep once had, it was a frame 10 ms late.)
     static func sleepNanoseconds(_ seconds: Double) -> UInt64 {
         UInt64(clamping: AnimationClock.nanoseconds(seconds))
     }

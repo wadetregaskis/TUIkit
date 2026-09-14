@@ -19,7 +19,7 @@ import Testing
 /// 0.05 s steps floors one step short at every step from 6 to 12.
 ///
 /// A flip due on that wake did not happen. `timeUntilChange` then answered ~5.6e-17
-/// seconds, which the loop raises to its 10 ms floor, so a steady 350 ms blink turned
+/// seconds, which the loop raised to its then 10 ms floor, so a steady 350 ms blink turned
 /// into plans alternating 0.35 → 0.01 → 0.34 s. Together with the timer sleeping on the
 /// PREVIOUS wake's plan that became the owner's "complex period": holds of ~370, ~700
 /// and ~45 ms, repeating every ~1.1 s.

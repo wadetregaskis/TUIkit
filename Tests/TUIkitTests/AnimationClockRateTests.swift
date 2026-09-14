@@ -103,15 +103,13 @@ struct AnimationClockRateTests {
     /// Truncated, a plan that has been through `Double(n) / 1e9` comes back 1 ns short on
     /// about 2% of plans. A real wake is milliseconds late and hides it; a clock that
     /// advances by exactly the sleep wakes 1 ns before its boundary, finds the change still
-    /// 1 ns away and plans the 10 ms floor. Whole-millisecond gaps never show it, so the mix
+    /// 1 ns away and wakes again. Whole-millisecond gaps never show it, so the mix
     /// includes an indeterminate bar's 2-tick frames.
     @Test("A clock that advances by exactly what was slept lands on every boundary it planned")
     func exactSleepsLandOnTheirBoundaries() {
         let timer = CursorTimer(renderNotifier: AppState())
         let ticks = Self.spinnerTicks + [2]
         timer.planner = Self.planner(Self.runs(ticks: ticks))
-        // The timer's floor on a plan, 10 ms.
-        let floor: UInt64 = 10_000_000
         // Off every boundary, so the first plan is an odd length too.
         var now = Self.base + 7_000_001
         var ideal = now
@@ -119,11 +117,12 @@ struct AnimationClockRateTests {
         var divergence: (wake: Int, now: UInt64, ideal: UInt64)?
         for wake in 0..<1000 {
             // The schedule in integers: the soonest tick instant that begins a step of any
-            // run, or the floor.
-            let boundaries = ticks.map {
-                UInt64(AnimationClock.nanoseconds(ofNextTickMultiple: $0, after: Int64(ideal))) - ideal
+            // run, or the timer's floor on a plan, the next tick instant.
+            let untilNext = { (multiple: Int) in
+                UInt64(AnimationClock.nanoseconds(ofNextTickMultiple: multiple, after: Int64(ideal))) - ideal
             }
-            ideal += max(floor, boundaries.min() ?? floor)
+            let floor = untilNext(1)
+            ideal += max(floor, ticks.map(untilNext).min() ?? floor)
             now += CursorTimer.sleepNanoseconds(timer.sleepSeconds)
             guard now == ideal else {
                 divergence = (wake, now, ideal)
@@ -132,5 +131,28 @@ struct AnimationClockRateTests {
             timer.creditWake(atNanos: now)
         }
         #expect(divergence == nil, "woke off the planned boundary: \(String(describing: divergence))")
+    }
+
+    /// A wake is late by a few milliseconds, so the change after it can be due sooner
+    /// than any fixed floor. A 1-tick run, woken 12 ms after the boundary at 90,090 s
+    /// (tick 5,405,400), changes next when tick 5,405,401 begins, 4,666,667 ns later.
+    /// The timer used to floor every plan at 10 ms and draw that change 5.3 ms late.
+    @Test("A 1-tick run woken 12 ms after its boundary sleeps to its next tick, 4,666,667 ns away")
+    func aLateWakeSleepsToTheNextTick() {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.planner = Self.planner(Self.runs(ticks: [1]))
+        timer.creditWake(atNanos: Self.base + 12_000_000)
+        #expect(CursorTimer.sleepNanoseconds(timer.sleepSeconds) == 4_666_667)
+    }
+
+    /// The floor on a plan is the next tick instant after the timer's snapshot: a plan of
+    /// nothing, 5 ms into a tick, sleeps the tick's remaining 11,666,667 ns, and ends on
+    /// the lattice rather than a fixed time from now.
+    @Test("A plan of nothing sleeps to the next tick instant")
+    func aPlanOfNothingSleepsToTheNextTick() {
+        let timer = CursorTimer(renderNotifier: AppState())
+        timer.observe(nowNanos: Self.base + 5_000_000)
+        timer.advance(by: 0)
+        #expect(CursorTimer.sleepNanoseconds(timer.sleepSeconds) == 11_666_667)
     }
 }

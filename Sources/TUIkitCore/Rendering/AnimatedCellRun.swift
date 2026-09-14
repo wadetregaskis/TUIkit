@@ -467,25 +467,17 @@ public struct AnimatedCellRun: Sendable, Equatable {
         // answered ~1e-17 again. The end is a tick's instant computed from its index, not
         // a frame's length added once per frame held, so nothing accumulates; and it is
         // after `elapsed` by the inverse pair of `AnimationClock.nanoseconds(atTick:)`
-        // and `tick(atNanoseconds:)`.
+        // and `tick(atNanoseconds:)`, so the answer is at least a nanosecond: asked at the
+        // exact instant a frame ends, it is the whole of the next frame, never zero, and
+        // a caller that sleeps for it cannot wake immediately and ask again.
         let endTick = (step + held).multipliedReportingOverflow(by: Int64(frameTicks))
         let end = endTick.overflow ? Int64.max : AnimationClock.nanoseconds(atTick: endTick.partialValue)
         let untilChange = end.subtractingReportingOverflow(AnimationClock.nanoseconds(elapsed))
-        return max(
-            Self.shortestUsefulSleep,
-            Double(untilChange.overflow ? Int64.max : untilChange.partialValue) / 1_000_000_000)
+        return Double(untilChange.overflow ? Int64.max : untilChange.partialValue) / 1_000_000_000
     }
 
     /// How many ticks of 1/60 s one full cycle lasts: every frame's ``frameTicks``.
     public var cycleTicks: Int64 { Int64(frames.count) * Int64(frameTicks) }
-
-    /// The floor on ``timeUntilChange(afterElapsed:)``'s answer.
-    ///
-    /// Guards the one degenerate case: asked at the exact instant a frame ends,
-    /// the honest answer is zero, and a caller that sleeps for it wakes
-    /// immediately and asks again. A microsecond is far below anything a
-    /// terminal can show and far above zero.
-    private static let shortestUsefulSleep: Double = 0.000_001
 
     /// A copy sitting on `row`, whatever row it was built for.
     ///
