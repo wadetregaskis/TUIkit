@@ -217,20 +217,18 @@ private struct MemoizedSpinner: View, Equatable {
 @MainActor
 @Suite("Indicator animation speed on spinners")
 struct IndicatorAnimationSpeedSpinnerTests {
-    /// The frame duration of every run `view` leaves, in nanoseconds, in order.
-    private func runNanos(_ view: some View) -> [Int64] {
+    /// The frame length of every run `view` leaves, in ticks of 1/60 s, in order.
+    private func runTicks(_ view: some View) -> [Int] {
         let context = RenderContext(availableWidth: 40, availableHeight: 4, tuiContext: TUIContext())
             .isolatingRenderCache()
-        return renderToBuffer(view, context: context).animatedCells.map {
-            AnimationClock.nanoseconds($0.frameDuration)
-        }
+        return renderToBuffer(view, context: context).animatedCells.map(\.frameTicks)
     }
 
     /// `.automatic` is 1 ± 0.05, so 7 ticks accepts 6.67 to 7.37 ticks, which holds
     /// nothing divisible by 2 or 3.
     @Test("Unset, a .dots spinner shows each frame for its style's 7 ticks, 116,666,667 ns")
     func unsetIsTheStyleInterval() {
-        #expect(runNanos(Spinner(style: .dots)) == [116_666_667])
+        #expect(runTicks(Spinner(style: .dots)) == [7])
     }
 
     /// `.pie` was 120 ms, which `.automatic` moved to 125 ms. It is 7 ticks now, which
@@ -238,20 +236,20 @@ struct IndicatorAnimationSpeedSpinnerTests {
     @Test("Unset, a .pie spinner is its style's 116,666,667 ns at .automatic and at .standard")
     func automaticMovesNoStandardInterval() {
         #expect(IndicatorAnimationSpeed.automatic == IndicatorAnimationSpeed(1, tolerance: 0.05))
-        #expect(runNanos(Spinner(style: .pie)) == [116_666_667])
-        #expect(runNanos(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [116_666_667])
+        #expect(runTicks(Spinner(style: .pie)) == [7])
+        #expect(runTicks(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [7])
     }
 
     /// 7 ticks at twice the speed are 3.5, and a half rounds up.
     @Test("A .dots spinner at twice the speed shows each frame for 4 ticks, 66,666,667 ns")
     func doubleSpeed() {
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)) == [66_666_667])
+        #expect(runTicks(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)) == [4])
     }
 
     /// 7 ticks at 1.1 are 6.36. It was exactly 106,060,606 ns, which no display can hold.
     @Test("A .dots spinner at 1.1 shows each frame for the nearest whole ticks to its interval divided by 1.1, 6")
     func exactRate() {
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(1.1, for: .spinners)) == [100_000_000])
+        #expect(runTicks(Spinner(style: .dots).indicatorAnimationSpeed(1.1, for: .spinners)) == [6])
     }
 
     /// 1.05 ± 0.05 on 7 ticks accepts 6.36 to 7 ticks, which holds nothing divisible by
@@ -259,7 +257,7 @@ struct IndicatorAnimationSpeedSpinnerTests {
     @Test("A .dots spinner at 1.05 ± 0.05 with nothing divisible by 2 or 3 in reach shows the nearest ticks, 7")
     func toleranceWithNothingInReachIsTheNearest() {
         let speed = IndicatorAnimationSpeed(1.05, tolerance: 0.05)
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [116_666_667])
+        #expect(runTicks(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [7])
     }
 
     /// 1 ± 0.2 on 7 ticks accepts 5.83 to 8.75 ticks, and 8 (a rate of 0.875) is nearer
@@ -267,27 +265,27 @@ struct IndicatorAnimationSpeedSpinnerTests {
     @Test("A .dots spinner at 1 ± 0.2 shows each frame for 8 ticks, 133,333,333 ns")
     func toleranceMovesOntoTwosAndThrees() {
         let speed = IndicatorAnimationSpeed(1, tolerance: 0.2)
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [133_333_333])
+        #expect(runTicks(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [8])
     }
 
     @Test("The nearest setting for spinners wins, and replaces the one above rather than multiplying it")
     func nearestWins() {
         // Inner `.all` at 2 inside outer `.spinners` at 0.5.
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(0.5, for: .spinners))
-                == [66_666_667])
+            runTicks(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(0.5, for: .spinners))
+                == [4])
         // Inner `.spinners` at 0.5 inside outer `.all` at 2.
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(0.5, for: .spinners).indicatorAnimationSpeed(2))
-                == [233_333_333])
+            runTicks(Spinner(style: .dots).indicatorAnimationSpeed(0.5, for: .spinners).indicatorAnimationSpeed(2))
+                == [14])
         // 2 inside 2 is 2, not 4.
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(2)) == [66_666_667])
+            runTicks(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(2)) == [4])
         // A nearer setting for another kind leaves spinners at the one above.
         #expect(
-            runNanos(
+            runTicks(
                 Spinner(style: .dots).indicatorAnimationSpeed(2, for: .textCursor)
-                    .indicatorAnimationSpeed(0.5, for: .spinners)) == [233_333_333])
+                    .indicatorAnimationSpeed(0.5, for: .spinners)) == [14])
     }
 
     @Test("A setting reaches only its own subtree, not a sibling")
@@ -296,7 +294,7 @@ struct IndicatorAnimationSpeedSpinnerTests {
             Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)
             Spinner(style: .dots)
         }
-        #expect(runNanos(view).sorted() == [66_666_667, 116_666_667])
+        #expect(runTicks(view).sorted() == [4, 7])
     }
 
     /// At three and a half times the speed a `.custom` sequence's 7 ticks are 2, a
@@ -328,21 +326,21 @@ struct IndicatorAnimationSpeedSpinnerTests {
         let context = RenderContext(
             availableWidth: 20, availableHeight: 2, environment: environment,
             identity: ViewIdentity(path: "Root"))
-        func frame(_ speed: IndicatorAnimationSpeed) -> [Int64] {
+        func frame(_ speed: IndicatorAnimationSpeed) -> [Int] {
             cache.beginRenderPass()
             let buffer = renderToBuffer(
                 MemoizedSpinner().equatable().indicatorAnimationSpeed(speed, for: .spinners), context: context)
             cache.removeInactive()
-            return buffer.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) }
+            return buffer.animatedCells.map(\.frameTicks)
         }
 
-        #expect(frame(1) == [116_666_667])
+        #expect(frame(1) == [7])
         let before = cache.stats
-        #expect(frame(1) == [116_666_667])
+        #expect(frame(1) == [7])
         #expect(
             cache.stats.delta(since: before).hits >= 1,
             "the spinner was not served from the memo, so this is not the case under test")
-        #expect(frame(2) == [66_666_667])
+        #expect(frame(2) == [4])
     }
 }
 
@@ -433,11 +431,10 @@ struct IndicatorAnimationSpeedBarTests {
         let doubled = try #require(
             bar(ProgressView().indeterminateStyle(.sweep).indicatorAnimationSpeed(2, for: .indeterminateProgress))
                 .animatedCells.first)
-        #expect(AnimationClock.nanoseconds(standard.cycleDuration) == 1_600_000_000)
-        #expect(AnimationClock.nanoseconds(doubled.cycleDuration) == 800_000_000)
+        #expect(standard.cycleTicks == 96)
+        #expect(doubled.cycleTicks == 48)
         #expect(doubled.frames.count == 24)
-        #expect(
-            AnimationClock.nanoseconds(doubled.frameDuration) == AnimationClock.nanoseconds(standard.frameDuration))
+        #expect(doubled.frameTicks == standard.frameTicks)
     }
 
     /// `.gradient()`'s 2.4 s at twice the speed is 1.2 s, 36 frames, whichever path
@@ -452,7 +449,7 @@ struct IndicatorAnimationSpeedBarTests {
         #expect(placeholders(glyphs) == 0, "the glyph path drew pictures")
         for buffer in [pictures, glyphs] {
             let run = try #require(buffer.animatedCells.first)
-            #expect(AnimationClock.nanoseconds(run.cycleDuration) == 1_200_000_000)
+            #expect(run.cycleTicks == 72)
             #expect(run.frames.count == 36)
         }
     }
@@ -474,8 +471,8 @@ struct IndicatorAnimationSpeedBarTests {
             ).animatedCells.first)
         #expect(preset.frames.count == 47)
         #expect(custom.frames.count == 47)
-        #expect(AnimationClock.nanoseconds(preset.frameDuration) == 33_333_333)
-        #expect(AnimationClock.nanoseconds(custom.frameDuration) == 33_333_333)
+        #expect(preset.frameTicks == 2)
+        #expect(custom.frameTicks == 2)
     }
 
     /// 1.73 s is 103.8 ticks, which is 51.9 frames of 2 ticks and rounds to 52: a pass
@@ -486,7 +483,7 @@ struct IndicatorAnimationSpeedBarTests {
             bar(ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 1.73))))
                 .animatedCells.first)
         #expect(run.frames.count == 52)
-        #expect(AnimationClock.nanoseconds(run.frameDuration) == 33_333_333)
+        #expect(run.frameTicks == 2)
     }
 
     /// 1.6 s at 1.1 is 1.4545 s, 87.3 ticks, which is 43.6 frames of 2 ticks and rounds
@@ -532,17 +529,17 @@ struct IndicatorAnimationSpeedBarTests {
     @Test("A change of speed alone rebuilds a bar's kept cycle")
     func speedChangeRebuildsTheCycle() throws {
         let tui = Self.freshContext()
-        func cycleNanos(_ speed: IndicatorAnimationSpeed) throws -> Int64 {
+        func cycleTicks(_ speed: IndicatorAnimationSpeed) throws -> Int64 {
             let run = try #require(
                 bar(
                     ProgressView().indeterminateStyle(.sweep)
                         .indicatorAnimationSpeed(speed, for: .indeterminateProgress),
                     tui: tui
                 ).animatedCells.first)
-            return AnimationClock.nanoseconds(run.cycleDuration)
+            return run.cycleTicks
         }
-        #expect(try cycleNanos(1) == 1_600_000_000)
-        #expect(try cycleNanos(2) == 800_000_000)
+        #expect(try cycleTicks(1) == 96)
+        #expect(try cycleTicks(2) == 48)
     }
 
     /// Each frame of a picture bar is an image in the terminal under its own token. The
@@ -575,8 +572,8 @@ struct IndicatorAnimationSpeedBarTests {
             bar(ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 3600))))
                 .animatedCells.first)
         #expect(run.frames.count == 1000)
-        #expect(AnimationClock.nanoseconds(run.frameDuration) == 3_600_000_000)
-        #expect(AnimationClock.nanoseconds(run.cycleDuration) == 3_600_000_000_000)
+        #expect(run.frameTicks == 216)
+        #expect(run.cycleTicks == 216_000)
         // Sampled across the whole hour, not its first 33 s: the head of a 20-cell
         // sweep stands on every column.
         #expect(Set(run.frames).count == 20)
@@ -597,8 +594,8 @@ struct IndicatorAnimationSpeedBarTests {
         for buffer in [pictures, glyphs] {
             let run = try #require(buffer.animatedCells.first)
             #expect(run.frames.count == 900)
-            #expect(AnimationClock.nanoseconds(run.frameDuration) == 66_666_667)
-            #expect(AnimationClock.nanoseconds(run.cycleDuration) == 60_000_000_000)
+            #expect(run.frameTicks == 4)
+            #expect(run.cycleTicks == 3_600)
         }
     }
 

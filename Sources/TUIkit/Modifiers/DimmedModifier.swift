@@ -161,7 +161,7 @@ extension FrameBuffer {
             let dimmed = AnimatedCellRun(
                 offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
                 frames: run.frames.map { wrap($0, toWidth: run.width) },
-                frameDuration: run.frameDuration, clock: run.clock)
+                frameTicks: run.frameTicks, clock: run.clock)
             return dimmed.isAnimating ? dimmed : nil
         }
         // One rectangle, over everything the wash covers — the runs included, whose

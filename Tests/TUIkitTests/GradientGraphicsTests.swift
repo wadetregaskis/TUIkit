@@ -308,9 +308,7 @@ struct GradientPictureTests {
         #expect(placeholders(glyphs.buffer) == 0, "the glyph path drew pictures")
         let pictureRun = try #require(pictures.buffer.animatedCells.first)
         let glyphRun = try #require(glyphs.buffer.animatedCells.first)
-        #expect(
-            AnimationClock.nanoseconds(pictureRun.frameDuration)
-                == AnimationClock.nanoseconds(glyphRun.frameDuration))
+        #expect(pictureRun.frameTicks == glyphRun.frameTicks)
         #expect(pictureRun.frames.count == glyphRun.frames.count)
     }
 

@@ -428,7 +428,7 @@ struct RefreshableTests {
         gate.release()
         await settle()
         // `.dots` is 7 ticks a frame at the standard speed; at twice it, 3.5 rounds to 4.
-        #expect(busy.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) } == [66_666_667])
+        #expect(busy.animatedCells.map { $0.frameTicks } == [4])
     }
 
     @Test("A running refresh renders its content once")

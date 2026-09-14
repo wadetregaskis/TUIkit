@@ -95,7 +95,7 @@ extension RenderContext {
     ///
     /// The counterpart of ``requestWake(token:afterSeconds:)`` for a view that
     /// already knows the instant in whole nanoseconds: a run's next step boundary,
-    /// from `AnimationClock.stepEndNanos(atElapsed:frameDuration:)`. Asked in
+    /// from `AnimationClock.stepEndNanos(atElapsed:frameTicks:)`. Asked in
     /// seconds, that boundary would go through a `Double` and back, and one that
     /// comes back a nanosecond early is a render that finds the step not yet
     /// changed — the trap `CursorTimer.sleepNanoseconds(_:)` exists for.

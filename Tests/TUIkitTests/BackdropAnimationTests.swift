@@ -27,13 +27,13 @@ private struct AnimatedPage: View {
                 .animatedCells([
                     AnimatedCellRun(
                         offsetX: 0, offsetY: 0, width: 4, frames: ["░░░░", "▒▒▒▒"],
-                        frameDuration: 0.1, clock: .cursor)
+                        frameTicks: 6, clock: .cursor)
                 ])
             Text("████")
                 .animatedCells([
                     AnimatedCellRun(
                         offsetX: 0, offsetY: 0, width: 4, frames: ["█▀██", "██▄█"],
-                        frameDuration: 0.1, clock: .cursor)
+                        frameTicks: 6, clock: .cursor)
                 ])
             Text("page")
         }

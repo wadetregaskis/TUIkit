@@ -39,7 +39,7 @@ struct AnimationStepBoundaryTests {
         AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 2,
             frames: (0..<40).map { $0 < 10 ? "0\($0)" : "\($0)" },
-            frameDuration: 0.05, clock: .cursor)
+            frameTicks: 3, clock: .cursor)
     }
 
     @Test("Every step of a summed clock selects its own frame")
@@ -70,7 +70,7 @@ struct AnimationStepBoundaryTests {
         let blink = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1,
             frames: Array(repeating: "█", count: 7) + Array(repeating: " ", count: 7),
-            frameDuration: 0.05, clock: .cursor)
+            frameTicks: 3, clock: .cursor)
         let atOff = blink.timeUntilChange(afterElapsed: summed(0.05, 7))
         #expect(abs(atOff - 0.35) < 1e-9, "at the off flip: \(atOff) s")
         let atOn = blink.timeUntilChange(afterElapsed: summed(0.05, 14))
@@ -115,5 +115,13 @@ struct AnimationStepBoundaryTests {
             }
         }
         #expect(wrong.isEmpty, "steps whose drawn frame was not the replayed one: \(wrong)")
+    }
+
+    /// A step of a run is a whole number of nanoseconds: its frame's length, rounded to
+    /// the nearest. Two ticks round to 33,333,333 ns, so 1.037 s is in step 31, and the
+    /// step ends at 32 of them, 11 ns before the 1/60 s tick 64 begins.
+    @Test("A 2-tick step showing at 1.037 s ends at 32 whole steps of 33,333,333 ns")
+    func stepEndIsAWholeNumberOfRoundedFrames() {
+        #expect(AnimationClock.stepEndNanos(atElapsed: 1.037, frameTicks: 2) == 1_066_666_656)
     }
 }

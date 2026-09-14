@@ -372,8 +372,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                     speed: context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress))
                 context.requestWake(
                     token: "progress-\(context.identity.path)",
-                    atNanos: AnimationClock.stepEndNanos(
-                        atElapsed: elapsed, frameDuration: AnimationClock.seconds(forTicks: layout.frameTicks)))
+                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: layout.frameTicks))
                 // In the motion's own time, which is what the run's frames are sampled
                 // in: a bar at twice the speed draws what it shows at twice the elapsed
                 // time. At the standard rate the scale is exactly 1.
@@ -485,7 +484,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                         speed: speed, pictures: true, frames: rows,
                         run: AnimatedCellRun(
                             offsetX: 0, offsetY: 0, width: width, frames: rows,
-                            frameDuration: AnimationClock.seconds(forTicks: layout.frameTicks), clock: .content),
+                            frameTicks: layout.frameTicks, clock: .content),
                         pictureCount: pictureCount)
                 }
             }
@@ -497,7 +496,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 speed: speed, pictures: false, frames: built.frames,
                 run: AnimatedCellRun(
                     offsetX: 0, offsetY: 0, width: width, frames: built.frames,
-                    frameDuration: built.frameDuration, clock: .content),
+                    frameTicks: built.frameTicks, clock: .content),
                 pictureCount: pictureCount)
         }
 

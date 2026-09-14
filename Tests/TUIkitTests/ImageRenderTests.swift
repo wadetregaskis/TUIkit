@@ -93,15 +93,15 @@ struct ImageRenderTests {
         return (lines[row].prefix { $0 == " " }.count, row)
     }
 
-    /// The frame duration of every run `buffer` leaves, in nanoseconds.
-    private func runNanos(_ buffer: FrameBuffer) -> [Int64] {
-        buffer.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) }
+    /// The frame length of every run `buffer` leaves, in ticks of 1/60 s.
+    private func runTicks(_ buffer: FrameBuffer) -> [Int] {
+        buffer.animatedCells.map(\.frameTicks)
     }
 
     @Test("The loading placeholder's spinner animates, over its own cell, at the .dots interval")
     func placeholderSpinnerAnimates() throws {
         let buffer = renderToBuffer(Image(.file("/nope.png")), context: createTestContext())
-        #expect(runNanos(buffer) == [AnimationClock.nanoseconds(SpinnerStyle.dots.interval)])
+        #expect(runTicks(buffer) == [AnimationClock.frameTicks(forSeconds: SpinnerStyle.dots.interval)])
         let run = try #require(buffer.animatedCells.first)
         let cell = try #require(spinnerCell(in: buffer))
         #expect(run.offsetX == cell.column && run.offsetY == cell.row, "the run sits on the glyph")
@@ -113,7 +113,7 @@ struct ImageRenderTests {
         let buffer = renderToBuffer(
             Image(.file("/nope.png")).indicatorAnimationSpeed(2, for: .spinners),
             context: createTestContext())
-        #expect(runNanos(buffer) == [66_666_667], ".dots' 7 ticks at twice the speed are 3.5, which rounds to 4 ticks")
+        #expect(runTicks(buffer) == [4], ".dots' 7 ticks at twice the speed are 3.5, which rounds to 4 ticks")
     }
 
     @Test("With the spinner off, the placeholder leaves no run")

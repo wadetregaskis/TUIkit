@@ -198,6 +198,6 @@ struct PublicAnimationAPITests {
         let buffer = renderToBuffer(
             Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners),
             context: makeRenderContext(width: 20, height: 2))
-        #expect(buffer.animatedCells.map { AnimationClock.nanoseconds($0.frameDuration) } == [100_000_000])
+        #expect(buffer.animatedCells.map { $0.frameTicks } == [6])
     }
 }

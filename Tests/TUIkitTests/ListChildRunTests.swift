@@ -38,14 +38,14 @@ struct ListChildRunTests {
     ///
     /// At a rate deliberately UNLIKE the clock's own, so a container that
     /// rebuilds the run with the defaults is caught rather than flattered.
-    private static let childRate = 0.11
+    private static let childFrameTicks = 7
 
     private func blinker(_ text: String) -> some View {
         Text(text).animatedCells([
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: 1,
                 frames: ["\u{1B}[31m*\u{1B}[0m", "\u{1B}[32m+\u{1B}[0m"],
-                frameDuration: Self.childRate, clock: .cursor)
+                frameTicks: Self.childFrameTicks, clock: .cursor)
         ])
     }
 
@@ -87,7 +87,7 @@ struct ListChildRunTests {
         let (tui, context) = harness()
         let buffer = render(List { blinker("one"); blinker("two") }, tui: tui, context: context)
         for run in buffer.animatedCells {
-            #expect(run.frameDuration == Self.childRate, "retimed to \(run.frameDuration)")
+            #expect(run.frameTicks == Self.childFrameTicks, "retimed to \(run.frameTicks) ticks")
         }
         #expect(!buffer.animatedCells.isEmpty)
     }
@@ -194,7 +194,10 @@ struct ListChildRunTests {
         let schedule = breathingRowSchedule(
             HStack { Text("row"); Spinner(style: .dots) }, nowNanos: 1_000_000_000)
         #expect(
-            schedule.runs.count == 1 && !schedule.runs.contains { $0.frameDuration == SpinnerStyle.dots.interval },
+            schedule.runs.count == 1
+                && !schedule.runs.contains {
+                    $0.frameTicks == AnimationClock.frameTicks(forSeconds: SpinnerStyle.dots.interval)
+                },
             "pre-condition: only the row's breath is left, the spinner's run is dropped: \(schedule.runs)")
         #expect(schedule.grids == 0, "a grid was registered for the dropped run")
         #expect(
@@ -206,33 +209,33 @@ struct ListChildRunTests {
     func droppedRunsWakeAtTheSoonestStep() {
         let row = Text("row").animatedCells([
             AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: 1, frames: ["r", "R"], frameDuration: 0.11, clock: .content),
+                offsetX: 0, offsetY: 0, width: 1, frames: ["r", "R"], frameTicks: 6, clock: .content),
             AnimatedCellRun(
-                offsetX: 1, offsetY: 0, width: 1, frames: ["o", "O"], frameDuration: 0.12, clock: .content),
+                offsetX: 1, offsetY: 0, width: 1, frames: ["o", "O"], frameTicks: 8, clock: .content),
         ])
         let schedule = breathingRowSchedule(row, nowNanos: 1_000_000_000)
         #expect(schedule.runs.count == 1, "pre-condition: both runs are dropped: \(schedule.runs)")
         #expect(schedule.grids == 0, "a grid was registered for the dropped runs")
         #expect(
-            schedule.nextRender == 1_080_000_000,
-            "at 1.000 s the 120 ms run steps at 1.080 s, before the 110 ms one at 1.100 s")
+            schedule.nextRender == 1_066_666_664,
+            "at 1.000 s the 8-tick run steps 8 steps of 133,333,333 ns in, before the 6-tick one at 1.100 s")
     }
 
     /// Each dropped run is asked on its own clock. The cursor clock's zero is the
-    /// focus epoch, floored to 50 ms: at 1.030 s it is 1.000 s, so a 110 ms run on
-    /// that clock steps at 1.110 s, where the same run on the content clock would
-    /// step at 1.100 s.
+    /// focus epoch, floored to 50 ms: at 1.030 s it is 1.000 s, so a 7-tick run on
+    /// that clock steps at 1,116,666,667 ns, where the same run on the content clock
+    /// would step at 1,050,000,003.
     @Test("A dropped run on the cursor clock wakes the loop at that clock's next step")
     func droppedCursorRunWakesOnItsClock() {
         let row = Text("row").animatedCells([
             AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: 1, frames: ["r", "R"], frameDuration: 0.11, clock: .cursor)
+                offsetX: 0, offsetY: 0, width: 1, frames: ["r", "R"], frameTicks: 7, clock: .cursor)
         ])
         let schedule = breathingRowSchedule(
             row, nowNanos: 1_030_000_000, cursorTimer: CursorTimer(renderNotifier: AppState()))
         #expect(schedule.runs.count == 1, "pre-condition: the run is dropped: \(schedule.runs)")
         #expect(schedule.grids == 0, "a grid was registered for the dropped run")
-        #expect(schedule.nextRender == 1_110_000_000, "the cursor clock is 0.030 s in, so 80 ms to go")
+        #expect(schedule.nextRender == 1_116_666_667, "the cursor clock is 0.030 s in, so 86,666,667 ns to go")
     }
 
     @Test("A measure pass leaves no runs behind")

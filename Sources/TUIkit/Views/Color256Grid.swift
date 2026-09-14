@@ -344,7 +344,7 @@ struct _Color256GridCore: View, Renderable {
                             index: placement.index, cellWidth: cellWidth,
                             mark: (color: $0, isBold: cycle.isFocused), showNumbers: showNumbers)
                     },
-                    frameDuration: cycle.frameDuration, clock: cycle.clock)
+                    frameTicks: cycle.frameTicks, clock: cycle.clock)
             ]
         }
 

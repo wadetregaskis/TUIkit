@@ -27,10 +27,10 @@ struct StandardAnimationDuration: Sendable, CustomTestStringConvertible {
 @Suite("Standard animation durations")
 struct StandardAnimationDurationTests {
     /// Every standard duration: each spinner style's interval, the caret blink's
-    /// half, the focus pulse's frame and cycle, and each indeterminate preset's bar
-    /// frame and pass at two widths.
+    /// half, the focus pulse's frame and cycle, each indeterminate preset's bar
+    /// frame and pass at two widths, the standard frame and the focus clock's floor.
     static let durations: [StandardAnimationDuration] =
-        spinnerDurations + cursorDurations + barDurations
+        spinnerDurations + cursorDurations + barDurations + clockDurations
 
     private static let spinnerDurations: [StandardAnimationDuration] = [
         ("dots", SpinnerStyle.dots), ("line", .line), ("dancingLine", .dancingLine),
@@ -46,10 +46,10 @@ struct StandardAnimationDurationTests {
         let blink = CursorTimer.cycleLayout(of: .blink, speed: .standard)
         let pulse = CursorTimer.cycleLayout(of: .pulse, speed: .standard)
         return [
-            StandardAnimationDuration(name: "blinkHalf", seconds: blink.timing.frameDuration),
-            StandardAnimationDuration(name: "pulseFrame", seconds: pulse.timing.frameDuration),
+            StandardAnimationDuration(name: "blinkHalf", seconds: AnimationClock.seconds(forTicks: blink.timing.frameTicks)),
+            StandardAnimationDuration(name: "pulseFrame", seconds: AnimationClock.seconds(forTicks: pulse.timing.frameTicks)),
             StandardAnimationDuration(
-                name: "pulseCycle", seconds: Double(pulse.frameCount) * pulse.timing.frameDuration),
+                name: "pulseCycle", seconds: AnimationClock.seconds(forTicks: pulse.frameCount * pulse.timing.frameTicks)),
         ]
     }()
 
@@ -67,14 +67,25 @@ struct StandardAnimationDurationTests {
                     width: width, style: style, fillColor: .green, backgroundColor: .blue,
                     accentColor: .red, palette: SystemPalette.green, speed: .standard)
                 return [
-                    StandardAnimationDuration(name: "\(name)BarFrame(\(width))", seconds: cycle.frameDuration),
+                    StandardAnimationDuration(
+                        name: "\(name)BarFrame(\(width))", seconds: AnimationClock.seconds(forTicks: cycle.frameTicks)),
                     StandardAnimationDuration(
                         name: "\(name)BarPass(\(width))",
-                        seconds: Double(cycle.frames.count) * cycle.frameDuration),
+                        seconds: AnimationClock.seconds(forTicks: cycle.frames.count * cycle.frameTicks)),
                 ]
             }
         }
     }()
+
+    /// The frame a view that reads the phase as it renders is re-rendered at, which is
+    /// also every run's default frame, and the lattice the focus-relative clock's zero is
+    /// floored to, so the caret's and the breath's steps land where other runs' do.
+    private static let clockDurations: [StandardAnimationDuration] = [
+        StandardAnimationDuration(
+            name: "standardFrame", seconds: AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)),
+        StandardAnimationDuration(
+            name: "focusEpochFloor", seconds: Double(CursorTimer.standardFrameNanos) / 1_000_000_000),
+    ]
 
     /// Within 1e-9 of a tick, because a duration is a binary `Double`: 0.1 s is
     /// 6.000000000000001 ticks.

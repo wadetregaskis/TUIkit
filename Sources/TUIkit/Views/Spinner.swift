@@ -509,13 +509,12 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // The style's interval at the speed set for spinners here. One value for the
         // frame drawn, the run left and the fallback's wake, so none of them can step
         // at a different rate from the others.
-        let frameDuration = AnimationClock.seconds(
-            forTicks: context.environment.indicatorAnimationSpeeds.speed(for: .spinners)
-                .frameTicks(standard: style.interval))
+        let frameTicks = context.environment.indicatorAnimationSpeeds.speed(for: .spinners)
+            .frameTicks(standard: style.interval)
         // Through the conversion the run's own index uses, so the frame drawn here is
         // the frame the loop replays: a floor in seconds put a summed `.dots` clock one
         // step short at steps 27–40, and every render on such a wake stuttered back.
-        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: frameDuration)
+        let step = AnimationClock.step(atElapsed: elapsed, frameTicks: frameTicks)
         let count = Int64(max(1, cycle.count))
         let frameIndex = cycle.isEmpty ? 0 : Int(((step % count) + count) % count)
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
@@ -576,7 +575,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
             if !context.isMeasuring, cycle.count > 1 {
                 context.requestWake(
                     token: "spinner-\(context.identity.path)",
-                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: frameDuration))
+                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: frameTicks))
             }
             return buffer
         }
@@ -588,7 +587,7 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         buffer.animatedCells = [
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: width, frames: cycle,
-                frameDuration: frameDuration, clock: .content)
+                frameTicks: frameTicks, clock: .content)
         ]
         return buffer
     }

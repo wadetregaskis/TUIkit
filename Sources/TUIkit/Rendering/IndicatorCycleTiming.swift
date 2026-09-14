@@ -11,13 +11,13 @@ import TUIkitCore
 ///
 /// The cycle carries it (`SelectionEmphasisCycle`, `TextFieldContentRenderer.CursorCycle`,
 /// `AnimatedColor`), and every run built from a cycle takes both from it. Producers
-/// used to write `clock: .cursor` and leave the frame duration to the run's default,
+/// used to write `clock: .cursor` and leave the frame length to the run's default,
 /// which is right only while every cycle is laid out one cursor tick a frame.
 /// Nothing on a producer's side of a cycle should know what its frames are laid out
 /// on.
 struct IndicatorCycleTiming: Equatable, Sendable {
-    /// How long each frame is shown, in seconds.
-    var frameDuration: Double
+    /// How many ticks of 1/60 s each frame is shown for.
+    var frameTicks: Int
 
     /// The clock the steps are counted on, and the one a run built from the cycle
     /// replays on.
@@ -25,13 +25,12 @@ struct IndicatorCycleTiming: Equatable, Sendable {
 
     /// One cursor tick a frame, on the focus-relative clock: a still cycle's timing,
     /// and a pulse's standard frame.
-    static let cursorTick = Self(
-        frameDuration: AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), clock: .cursor)
+    static let cursorTick = Self(frameTicks: AnimationClock.standardFrameTicks, clock: .cursor)
 
     /// Which frame of a cycle laid out on this timing shows at `timer`'s last
     /// snapshot, or 0 without a timer.
     ///
-    /// Counted through `AnimationClock.step(atElapsed:frameDuration:)`, the one
+    /// Counted through `AnimationClock.step(atElapsed:frameTicks:)`, the one
     /// conversion a run's own frame index goes through, so the frame a render draws
     /// and the frame a replay splices at the same instant are the same frame. A plain
     /// read: it does not mark the frame as having consulted the clock, so a producer
@@ -42,7 +41,7 @@ struct IndicatorCycleTiming: Equatable, Sendable {
         // Clamped rather than narrowed: `Int` is 32 bits on wasm32.
         return Int(
             clamping: AnimationClock.step(
-                atElapsed: timer.elapsed(for: clock), frameDuration: frameDuration))
+                atElapsed: timer.elapsed(for: clock), frameTicks: frameTicks))
     }
 }
 

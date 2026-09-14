@@ -60,9 +60,9 @@ public struct AnimatedColor: Sendable, Equatable {
     /// The clock that advances it.
     public let clock: AnimationClock
 
-    /// How long each frame is shown, in seconds: the rate a run built from this
-    /// colour steps at, on ``clock``.
-    public let frameDuration: Double
+    /// How many ticks of 1/60 s each frame is shown for, at least 1: the rate a run
+    /// built from this colour steps at, on ``clock``.
+    public let frameTicks: Int
 
     /// One colour per frame of a full cycle. Never empty.
     ///
@@ -80,7 +80,7 @@ public struct AnimatedColor: Sendable, Equatable {
         storage = .constant(color)
         step = 0
         clock = .cursor
-        frameDuration = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
+        frameTicks = AnimationClock.standardFrameTicks
     }
 
     /// A colour given as every frame of its cycle.
@@ -90,11 +90,12 @@ public struct AnimatedColor: Sendable, Equatable {
     ///     terminal-default frame rather than trapping — a colour is not the
     ///     place to take an app down.
     ///   - step: Which frame is showing now.
-    ///   - frameDuration: How long each frame is shown, in seconds. Defaults to
-    ///     ``AnimationClock/standardFrameTicks`` ticks, 50 ms.
+    ///   - frameTicks: How many ticks of 1/60 s each frame is shown for. Defaults to
+    ///     ``AnimationClock/standardFrameTicks``, 50 ms, and a count below 1 is
+    ///     taken as 1, as ``AnimatedCellRun`` takes it.
     ///   - clock: The clock that advances it.
     public init(
-        frames: [Color], step: Int, frameDuration: Double? = nil, clock: AnimationClock = .cursor
+        frames: [Color], step: Int, frameTicks: Int? = nil, clock: AnimationClock = .cursor
     ) {
         switch frames.count {
         case 0: storage = .constant(.default)
@@ -103,7 +104,7 @@ public struct AnimatedColor: Sendable, Equatable {
         }
         self.step = step
         self.clock = clock
-        self.frameDuration = frameDuration ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
+        self.frameTicks = max(1, frameTicks ?? AnimationClock.standardFrameTicks)
     }
 
     /// The colour to draw in the frame being rendered now.
@@ -160,7 +161,7 @@ public struct AnimatedColor: Sendable, Equatable {
         case .cycle(let frames):
             Self(
                 frames: frames.map { $0.resolve(with: palette) }, step: step,
-                frameDuration: frameDuration, clock: clock)
+                frameTicks: frameTicks, clock: clock)
         }
     }
 
@@ -186,7 +187,7 @@ public struct AnimatedColor: Sendable, Equatable {
         guard let first = drawn.first else { return nil }
         return AnimatedCellRun(
             offsetX: offsetX, offsetY: offsetY, width: first.strippedLength,
-            frames: drawn, frameDuration: frameDuration, clock: clock)
+            frames: drawn, frameTicks: frameTicks, clock: clock)
     }
 }
 
@@ -232,6 +233,6 @@ extension SelectionEmphasisCycle {
     public func animatedColor(dim: Color, bright: Color) -> AnimatedColor {
         AnimatedColor(
             frames: colors(dim: dim, bright: bright), step: step,
-            frameDuration: timing.frameDuration, clock: timing.clock)
+            frameTicks: timing.frameTicks, clock: timing.clock)
     }
 }

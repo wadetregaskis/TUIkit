@@ -42,7 +42,7 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// RENDERS is re-rendered, in ticks of 1/60 s: 3 ticks, 50 ms.
     ///
     /// This is not the rate anything replayed moves at. A pre-rendered cycle
-    /// carries its own ``AnimatedCellRun/frameDuration`` and the loop wakes on
+    /// carries its own ``AnimatedCellRun/frameTicks`` and the loop wakes on
     /// whatever mix of those is on screen — see
     /// ``AnimatedCellRun/timeUntilChange(afterElapsed:)``. This interval binds
     /// only the paths that cannot say in advance what they would draw next: a
@@ -58,13 +58,6 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     /// them, not one. In seconds it is `seconds(forTicks: standardFrameTicks)`, which
     /// is bit for bit `0.05`.
     public static let standardFrameTicks = 3
-
-    /// The shortest gap the loop will wake on, whatever a run asks for.
-    ///
-    /// A safety floor rather than a policy: a producer naming a two-millisecond
-    /// frame would otherwise spin a core to animate cells no terminal can
-    /// repaint that fast.
-    public static let minimumFrameDuration: Double = 0.01
 
     /// `seconds` as whole nanoseconds, rounded to the nearest.
     ///
@@ -87,15 +80,19 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
         Int64((seconds * 1_000_000_000).rounded())
     }
 
-    /// Whole `frameDuration` steps in `elapsed`, counted at nanosecond resolution —
-    /// see ``nanoseconds(_:)``.
+    /// Whole steps of `frameTicks` ticks in `elapsed`, counted at nanosecond
+    /// resolution — see ``nanoseconds(_:)``. A `frameTicks` below 1 is step 0.
+    ///
+    /// A step lasts `frameNanoseconds(ticks:)`: the whole number of nanoseconds
+    /// nearest `frameTicks` sixtieths of a second, which is not a whole number of
+    /// nanoseconds unless `frameTicks` is a multiple of 3.
     ///
     /// `Int64` rather than `Int`, which is 32 bits on wasm32: a step count is bounded by
     /// elapsed time, not by anything this can clamp, and a narrowing conversion that
     /// traps there has shipped in this codebase before. Floor division, so a negative
     /// elapsed steps backwards rather than towards zero.
-    public static func step(atElapsed elapsed: Double, frameDuration: Double) -> Int64 {
-        let duration = nanoseconds(frameDuration)
+    public static func step(atElapsed elapsed: Double, frameTicks: Int) -> Int64 {
+        let duration = frameNanoseconds(ticks: frameTicks)
         guard duration > 0 else { return 0 }
         let time = nanoseconds(elapsed)
         let quotient = time / duration
@@ -103,14 +100,30 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     }
 
     /// When the step showing at `elapsed` ends, in whole nanoseconds on the same
-    /// clock as `elapsed`: the next whole multiple of `frameDuration`.
+    /// clock as `elapsed`: the next whole multiple of a `frameTicks`-tick step.
     ///
-    /// Both sides are counted in nanoseconds, the unit ``step(atElapsed:frameDuration:)``
+    /// Both sides are counted in nanoseconds, the unit ``step(atElapsed:frameTicks:)``
     /// counts in, so the end is the end of the step actually showing, and never the
     /// end of the one before. See `AnimatedCellRun.timeUntilChange(afterElapsed:)`
     /// for why a seconds-based answer spun the run loop.
-    package static func stepEndNanos(atElapsed elapsed: Double, frameDuration: Double) -> Int64 {
-        nanoseconds(frameDuration) * (step(atElapsed: elapsed, frameDuration: frameDuration) + 1)
+    package static func stepEndNanos(atElapsed elapsed: Double, frameTicks: Int) -> Int64 {
+        frameNanoseconds(ticks: frameTicks) * (step(atElapsed: elapsed, frameTicks: frameTicks) + 1)
+    }
+
+    /// `ticks` ticks as whole nanoseconds, rounded to the nearest: ⌊(ticks·50,000,000 + 1)/3⌋,
+    /// or 0 for a count below 1.
+    ///
+    /// In integers, and equal to rounding `seconds(forTicks: ticks)` through
+    /// ``nanoseconds(_:)`` for every count under 62.9 million ticks, past which that
+    /// `Double` no longer holds the product exactly. The division by 3 leaves no
+    /// remainder, or a third or two thirds of a nanosecond, never a half, so the
+    /// rounding has no ties. Saturates to `Int64.max` for a count whose length does not
+    /// fit.
+    static func frameNanoseconds(ticks: Int) -> Int64 {
+        guard ticks > 0 else { return 0 }
+        let product = Int64(ticks).multipliedReportingOverflow(by: 50_000_000)
+        guard !product.overflow else { return .max }
+        return product.partialValue / 3 + (product.partialValue % 3 == 2 ? 1 : 0)
     }
 }
 
@@ -290,21 +303,29 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// blink, twenty is a breath, forty-seven is a gradient sweeping a bar.
     public let frames: [String]
 
-    /// How long each frame is shown.
+    /// How many ticks of 1/60 s each frame is shown for: at least 1.
     ///
-    /// The run's own rate, in seconds — NOT a multiple of some grid the loop
-    /// imposes. The loop wakes on whatever mix of durations is on screen, so a
-    /// 0.11 s spinner and a 1/30 s progress bar each keep their own cadence and
-    /// neither is resampled onto the other's.
+    /// The run's own rate, NOT a multiple of some coarser grid the loop imposes.
+    /// The loop wakes on whatever mix of rates is on screen, so a 7-tick spinner
+    /// and a 2-tick progress bar each keep their own cadence and neither is
+    /// resampled onto the other's. A grid coarser than the tick forces a choice
+    /// between a visible limp (frames of 2, 2, 3, 2, 2, 3 grid steps) and a changed
+    /// speed, and it caps every animation at the grid's rate.
     ///
-    /// That matters more than it sounds. Sampling onto a fixed grid forces a
-    /// choice between a visible limp (frames of 2, 2, 3, 2, 2, 3 ticks) and a
-    /// changed speed (rounding 0.11 s to 0.10), and it caps every animation at
-    /// the grid's rate however fine the producer's own timing was.
+    /// A count of ticks, not a length in seconds, because the tick is the grid a
+    /// frame is shown on anyway: a terminal's paint ends up on a display that
+    /// refreshes 60 times a second. A frame that lasts anything else is held for a
+    /// different number of refreshes from one frame to the next, the same limp, and
+    /// runs whose frames are not whole ticks change on different refreshes and wake
+    /// the loop apart. A length in seconds let a run ask for such a frame; a count
+    /// of ticks cannot. A duration an app chooses in seconds becomes one through
+    /// ``AnimationClock/frameTicks(forSeconds:)``.
     ///
-    /// Defaults to ``AnimationClock/standardFrameTicks`` ticks, 50 ms, which is
-    /// what every producer written before this assumed.
-    public let frameDuration: Double
+    /// At least 1, so no run asks the loop to wake more often than the display can
+    /// show a change: a count below 1 is taken as 1. Defaults to
+    /// ``AnimationClock/standardFrameTicks``, 50 ms, which is what every producer
+    /// written before runs carried their own rate assumed.
+    public let frameTicks: Int
 
     /// The clock that advances this run.
     public let clock: AnimationClock
@@ -326,24 +347,22 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   - width: Visible width in cells; every frame must match it.
     ///   - frames: The cycle, already styled. Fewer than two frames is not an
     ///     animation and is rejected by ``isAnimating``.
-    ///   - frameDuration: How long each frame is shown. Defaults to the clock's
-    ///     own interval, and is floored at ``AnimationClock/minimumFrameDuration``.
+    ///   - frameTicks: How many ticks of 1/60 s each frame is shown for. Defaults to
+    ///     ``AnimationClock/standardFrameTicks``, and a count below 1 is taken as 1.
     ///   - clock: Which clock advances it.
     ///   - alpha: What the cells owe per frame, for the rare run whose frames disagree
     ///     about alpha. Defaults to `nil`, which is a run that owes nothing beyond
     ///     whatever regions cover it.
     public init(
         offsetX: Int, offsetY: Int, width: Int, frames: [String],
-        frameDuration: Double? = nil, clock: AnimationClock,
+        frameTicks: Int? = nil, clock: AnimationClock,
         alpha: AnimatedRunAlpha? = nil
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.width = width
         self.frames = frames
-        self.frameDuration = max(
-            AnimationClock.minimumFrameDuration,
-            frameDuration ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
+        self.frameTicks = max(1, frameTicks ?? AnimationClock.standardFrameTicks)
         self.clock = clock
         self.alpha = alpha
     }
@@ -377,7 +396,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// animation.
     public func index(atElapsed elapsed: Double) -> Int {
         guard frames.count > 1 else { return 0 }
-        let step = AnimationClock.step(atElapsed: elapsed, frameDuration: frameDuration)
+        let step = AnimationClock.step(atElapsed: elapsed, frameTicks: frameTicks)
         let index = Int(step % Int64(frames.count))
         return index < 0 ? index + frames.count : index
     }
@@ -415,7 +434,8 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///   grid, and a slow run costs nothing extra for sharing a screen with a
     ///   fast one.
     public func timeUntilChange(afterElapsed elapsed: Double) -> Double {
-        guard frames.count > 1 else { return frameDuration }
+        let frameSeconds = AnimationClock.seconds(forTicks: frameTicks)
+        guard frames.count > 1 else { return frameSeconds }
         let index = index(atElapsed: elapsed)
         let current = frames[index]
         // Time to the end of the frame now showing, then whole frames after it
@@ -434,7 +454,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
         // reached by summing sleeps it picked the step before, whose end had already
         // passed, and answered ~1e-17 again.
         let untilStepEnds =
-            AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: frameDuration)
+            AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: frameTicks)
             - AnimationClock.nanoseconds(elapsed)
         var remaining = max(
             Self.shortestUsefulSleep, Double(untilStepEnds) / 1_000_000_000)
@@ -447,15 +467,15 @@ public struct AnimatedCellRun: Sendable, Equatable {
             let next = (index + offset) % frames.count
             if frames[next] != current { return remaining }
             if let currentSpans, alpha?.spans(atFrame: next) != currentSpans { return remaining }
-            remaining += frameDuration
+            remaining += frameSeconds
         }
         // Every frame identical: nothing will ever change, so the caller may
         // wait a whole cycle (it will find the same answer again).
         return remaining
     }
 
-    /// How long one full cycle lasts.
-    public var cycleDuration: Double { Double(frames.count) * frameDuration }
+    /// How many ticks of 1/60 s one full cycle lasts: every frame's ``frameTicks``.
+    public var cycleTicks: Int64 { Int64(frames.count) * Int64(frameTicks) }
 
     /// The floor on ``timeUntilChange(afterElapsed:)``'s answer.
     ///
@@ -505,7 +525,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
                 $0.ansiAwareSlice(
                     visibleStart: window.lowerBound - offsetX, visibleCount: window.count)
             },
-            frameDuration: frameDuration, clock: clock,
+            frameTicks: frameTicks, clock: clock,
             // Sliced in the same breath as the frames, and to the same window, so a cut
             // run's spans describe the cells the cut actually kept.
             alpha: alpha?.sliced(toRunColumns: kept))

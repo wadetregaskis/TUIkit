@@ -56,7 +56,7 @@ enum CycleRunProducer: String, CaseIterable, Sendable, CustomTestStringConvertib
 @Suite("Focus and caret runs take their timing from their cycle")
 struct IndicatorCycleTimingTests {
     /// Neither the cursor tick nor the cursor clock.
-    static let forced = IndicatorCycleTiming(frameDuration: 0.075, clock: .content)
+    static let forced = IndicatorCycleTiming(frameTicks: 5, clock: .content)
 
     @Test(
         "Every producer builds its runs with the frame duration and clock its cycle carries",
@@ -66,9 +66,8 @@ struct IndicatorCycleTimingTests {
         #expect(!runs.isEmpty, "the producer left no run, so nothing was checked")
         for run in runs {
             #expect(
-                AnimationClock.nanoseconds(run.frameDuration)
-                    == AnimationClock.nanoseconds(Self.forced.frameDuration),
-                "the run on row \(run.offsetY) steps every \(run.frameDuration) s")
+                run.frameTicks == Self.forced.frameTicks,
+                "the run on row \(run.offsetY) steps every \(run.frameTicks) ticks")
             #expect(run.clock == Self.forced.clock, "the run on row \(run.offsetY) is on \(run.clock)")
         }
     }
@@ -76,7 +75,7 @@ struct IndicatorCycleTimingTests {
     @Test("Nothing forces a cycle's timing unless a test does, and the cursor tick is 50 ms on the cursor clock")
     func nothingForcesATiming() {
         #expect(EnvironmentValues().indicatorCycleTiming == nil)
-        #expect(AnimationClock.nanoseconds(IndicatorCycleTiming.cursorTick.frameDuration) == 50_000_000)
+        #expect(IndicatorCycleTiming.cursorTick.frameTicks == AnimationClock.standardFrameTicks)
         #expect(IndicatorCycleTiming.cursorTick.clock == .cursor)
     }
 
@@ -86,9 +85,9 @@ struct IndicatorCycleTimingTests {
         let timer = CursorTimer(renderNotifier: AppState())
         // The focus clock's zero floors to 1.000 s, a whole 50 ms of the content clock.
         timer.observe(nowNanos: 1_037_000_000)
-        #expect(Self.forced.step(on: timer) == 13, "1.037 s is 13 whole 75 ms frames")
+        #expect(Self.forced.step(on: timer) == 12, "1.037 s is 12 whole 5-tick frames of 83,333,333 ns")
         #expect(
-            IndicatorCycleTiming(frameDuration: 0.075, clock: .cursor).step(on: timer) == 0,
+            IndicatorCycleTiming(frameTicks: 5, clock: .cursor).step(on: timer) == 0,
             "37 ms since the focus moved")
         #expect(IndicatorCycleTiming.cursorTick.step(on: timer) == timer.elapsedSteps)
     }
@@ -96,15 +95,15 @@ struct IndicatorCycleTimingTests {
     @Test("An animated colour keeps its frame duration and clock through resolving, and into its run")
     func animatedColourCarriesItsTiming() throws {
         let colour = AnimatedColor(
-            frames: [.palette.accent, .palette.border], step: 0, frameDuration: 0.075, clock: .content)
+            frames: [.palette.accent, .palette.border], step: 0, frameTicks: 5, clock: .content)
         let resolved = colour.resolved(with: SystemPalette(.green))
-        #expect(resolved.frameDuration == 0.075)
+        #expect(resolved.frameTicks == 5)
         #expect(resolved.clock == .content)
         let run = try #require(
             resolved.run(offsetX: 0, offsetY: 0) { ANSIRenderer.colorize("x", foreground: $0) })
-        #expect(AnimationClock.nanoseconds(run.frameDuration) == 75_000_000)
+        #expect(run.frameTicks == 5)
         #expect(run.clock == .content)
-        #expect(AnimatedColor(.red).frameDuration == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
+        #expect(AnimatedColor(.red).frameTicks == AnimationClock.standardFrameTicks)
     }
 
     // MARK: - The producers

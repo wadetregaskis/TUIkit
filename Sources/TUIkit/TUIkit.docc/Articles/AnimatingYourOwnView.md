@@ -105,7 +105,7 @@ For an element whose appearance is more than a foreground colour, the
 ``SelectionEmphasis``, if two things pulse at once) and take back the finished
 cells.
 
-A cycle carries its own ``SelectionEmphasisCycle/frameDuration`` and
+A cycle carries its own ``SelectionEmphasisCycle/frameTicks`` and
 ``SelectionEmphasisCycle/clock``, and every `run` overload builds its run with
 both. If you build an ``AnimatedCellRun`` yourself from
 ``SelectionEmphasisCycle/colors(dim:bright:)``, pass both on. A run that leaves

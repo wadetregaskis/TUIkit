@@ -65,8 +65,8 @@ enum IndeterminateRenderer {
         }
     }
 
-    /// Every frame of `style`'s cycle at `speed`, already styled, and how long each
-    /// is shown.
+    /// Every frame of `style`'s cycle at `speed`, already styled, and how many ticks
+    /// of 1/60 s each is shown for.
     ///
     /// Frames of `frameTicks` ticks, a thirtieth of a second — the rate these bars used
     /// to ask to be re-rendered at — so the animation looks as it did, at any speed,
@@ -78,7 +78,7 @@ enum IndeterminateRenderer {
         width: Int, style: IndeterminateStyle,
         fillColor: Color, backgroundColor: Color, accentColor: Color,
         palette: any Palette, speed: IndicatorAnimationSpeed
-    ) -> (frames: [String], frameDuration: Double) {
+    ) -> (frames: [String], frameTicks: Int) {
         let layout = layout(of: style, speed: speed)
         // Sampled over the configuration's OWN period, whatever the speed: a faster
         // bar shows the same motion in less time, not a different motion.
@@ -90,7 +90,7 @@ enum IndeterminateRenderer {
                 elapsed: Double(index) * sample, palette: palette
             ).text
         }
-        return (frames, AnimationClock.seconds(forTicks: layout.frameTicks))
+        return (frames, layout.frameTicks)
     }
 
     /// How one pass of `style` is laid out at `speed`: how many frames it is sampled

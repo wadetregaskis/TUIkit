@@ -544,7 +544,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             if cycle.cursor.isAnimating {
                 caretRun = AnimatedCellRun(
                     offsetX: outputCells, offsetY: 0, width: cells, frames: drawn.frames,
-                    frameDuration: cycle.cursor.timing.frameDuration,
+                    frameTicks: cycle.cursor.timing.frameTicks,
                     clock: cycle.cursor.timing.clock, alpha: drawn.alpha)
             }
             cellX += cells

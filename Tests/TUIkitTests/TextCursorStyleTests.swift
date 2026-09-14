@@ -175,7 +175,7 @@ struct TextCursorStyleTests {
         for (name, unstyled, pulsing) in fields {
             let run = try #require(caretRun(unstyled), "\(name): a focused field hands over its caret")
             #expect(run.frames.count == pulse.frameCount, "\(name): \(run.frames.count) frames")
-            #expect(run.frameDuration == pulse.timing.frameDuration, "\(name): \(run.frameDuration) s")
+            #expect(run.frameTicks == pulse.timing.frameTicks, "\(name): \(run.frameTicks) ticks")
             #expect(run.frames == caretRun(pulsing)?.frames, "\(name): not the explicit pulse's frames")
         }
     }
@@ -194,7 +194,7 @@ struct TextCursorStyleTests {
             let byPreset = caretRun(TextField("Name", text: text).textCursor(preset))
             #expect(byShape != nil, "\(shape): the caret animates")
             #expect(byShape?.frames == byPreset?.frames, "\(shape)")
-            #expect(byShape?.frameDuration == byPreset?.frameDuration, "\(shape)")
+            #expect(byShape?.frameTicks == byPreset?.frameTicks, "\(shape)")
         }
     }
 

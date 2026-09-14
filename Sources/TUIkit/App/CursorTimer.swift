@@ -75,7 +75,9 @@ final class CursorTimer {
     nonisolated private static let standardFrameSeconds = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
 
     /// The same, in whole nanoseconds — the lattice the focus epoch is floored to.
-    nonisolated private static let standardFrameNanos = UInt64(AnimationClock.nanoseconds(standardFrameSeconds))
+    /// Internal rather than private so the spec for the framework's standard durations
+    /// can check it.
+    nonisolated static let standardFrameNanos = UInt64(AnimationClock.nanoseconds(standardFrameSeconds))
 
     /// Where a wake reads the time. The clock `FrameClock` reads too, which is
     /// what makes a wake's reading and a frame's comparable at all; injectable
@@ -159,7 +161,7 @@ final class CursorTimer {
         // and the pre-rendered runs agree on which step an instant is in — a floor in
         // seconds put a summed 0.35 s in step 6, when this clock was a sum. Clamped
         // rather than narrowed: `Int` is 32 bits on wasm32.
-        Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameDuration: Self.standardFrameSeconds))
+        Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameTicks: AnimationClock.standardFrameTicks))
     }
 
     /// Whether the cursor clock was read during the current render frame.
@@ -199,8 +201,15 @@ final class CursorTimer {
     /// timer: `start()` reads this for its first sleep. A running timer replans at
     /// every wake through ``planner`` and does not depend on it.
     func advance(by seconds: Double) {
-        sleepSeconds = max(AnimationClock.minimumFrameDuration, seconds)
+        sleepSeconds = max(Self.shortestSleepSeconds, seconds)
     }
+
+    /// The shortest sleep ``advance(by:)`` plans, whatever it is asked for: 10 ms.
+    ///
+    /// A safety floor rather than a policy, so a plan of nothing cannot spin a core. A
+    /// run can no longer ask for a frame this short (a frame is at least one tick,
+    /// 16.7 ms), so it binds only on a plan that is already due.
+    nonisolated private static let shortestSleepSeconds = 0.01
 
     /// How the NEXT sleep is chosen, asked at the moment the timer wakes.
     ///
@@ -213,7 +222,7 @@ final class CursorTimer {
     /// at different rates on one page, a quantised pulse holding a shade — each sleep was
     /// the previous wake's: a change was slept through, and the next landed on top of it.
     /// It was half of the owner's "complex period" blink (the other half being the step
-    /// floor fixed beside `AnimationClock.step(atElapsed:frameDuration:)`, which is what
+    /// floor fixed beside `AnimationClock.step(atElapsed:frameTicks:)`, which is what
     /// made a blink's plans vary at all).
     ///
     /// Asked here, after taking the time of the wake, the plan and the sleep are the
@@ -298,16 +307,13 @@ extension CursorTimer {
             return CycleLayout(
                 frameCount: 2,
                 timing: IndicatorCycleTiming(
-                    frameDuration: AnimationClock.seconds(
-                        forTicks: speed.frameTicks(standard: standardBlinkCycle / 2)),
-                    clock: .cursor))
+                    frameTicks: speed.frameTicks(standard: standardBlinkCycle / 2), clock: .cursor))
         case .pulse:
             let ramp = speed.rampLayout(
                 standardCycle: standardPulseCycle, frameTicks: AnimationClock.standardFrameTicks)
             return CycleLayout(
                 frameCount: ramp.frameCount,
-                timing: IndicatorCycleTiming(
-                    frameDuration: AnimationClock.seconds(forTicks: ramp.frameTicks), clock: .cursor))
+                timing: IndicatorCycleTiming(frameTicks: ramp.frameTicks, clock: .cursor))
         }
     }
 

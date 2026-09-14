@@ -72,15 +72,20 @@ struct CursorBlinkRegularityTests {
         let cycle = caretCycle(speed)
         return AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 3, frames: cycle.states.map { $0.visible ? "on " : "off" },
-            frameDuration: cycle.timing.frameDuration, clock: cycle.timing.clock)
+            frameTicks: cycle.timing.frameTicks, clock: cycle.timing.clock)
     }
 
     /// A blink's standard half, 21 ticks (350 ms), at `speed`'s rate, as the nearest
-    /// whole number of ticks, in nanoseconds: 11 ticks at twice the speed, 14 at 1.5.
-    /// Every speed under test is exact but the default, whose 21 ticks are already
-    /// divisible by 3, so its tolerance moves nothing.
+    /// whole number of ticks: 11 ticks at twice the speed, 14 at 1.5. Every speed under
+    /// test is exact but the default, whose 21 ticks are already divisible by 3, so its
+    /// tolerance moves nothing.
+    private func halfTicks(_ speed: IndicatorAnimationSpeed) -> Int {
+        Int((21 / speed.rate).rounded())
+    }
+
+    /// The same half in nanoseconds, the unit a run's holds are measured in.
     private func halfNanos(_ speed: IndicatorAnimationSpeed) -> Int64 {
-        AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: Int((21 / speed.rate).rounded())))
+        AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: halfTicks(speed)))
     }
 
     /// The first `count` things `run` shows from the start of its cycle, and how
@@ -152,7 +157,7 @@ struct CursorBlinkRegularityTests {
         let run = try #require(cycle.run(offsetX: 0, offsetY: 0) { "\($0.phase)" })
         let count = max(2, Int((0.8 / speed.rate * 20).rounded()))
         #expect(run.frames.count == count)
-        #expect(AnimationClock.nanoseconds(run.frameDuration) == 50_000_000)
+        #expect(run.frameTicks == 3)
     }
 
     @Test("A render that reads the breath sees the phase the replayed run shows, at every instant", arguments: speeds)
@@ -180,16 +185,16 @@ struct CursorBlinkRegularityTests {
     func emphasisCyclesAreLaidOutByKind() {
         let blink = emphasisCycle(.blink, .automatic)
         #expect(blink.frames.count == 2)
-        #expect(AnimationClock.nanoseconds(blink.frameDuration) == 350_000_000)
+        #expect(blink.frameTicks == 21)
         let breath = emphasisCycle(.pulse, .automatic)
         #expect(breath.frames.count == 16)
-        #expect(AnimationClock.nanoseconds(breath.frameDuration) == 50_000_000)
+        #expect(breath.frameTicks == 3)
     }
 
     @Test("A caret blink is two frames of half its cycle", arguments: speeds)
     func caretCycleIsLaidOutByKind(_ speed: IndicatorAnimationSpeed) {
         let caret = caretCycle(speed)
         #expect(caret.states.count == 2)
-        #expect(AnimationClock.nanoseconds(caret.timing.frameDuration) == halfNanos(speed))
+        #expect(caret.timing.frameTicks == halfTicks(speed))
     }
 }

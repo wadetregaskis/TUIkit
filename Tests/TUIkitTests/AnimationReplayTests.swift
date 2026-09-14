@@ -335,37 +335,39 @@ struct AnimationTickStrideTests {
     func runsKeepTheirOwnRate() {
         let fast = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"],
-            frameDuration: 1.0 / 30, clock: .cursor)
+            frameTicks: 2, clock: .cursor)
         let slow = AnimatedCellRun(
             offsetX: 0, offsetY: 1, width: 1, frames: ["x", "y"],
-            frameDuration: 0.11, clock: .cursor)
-        expect(fast.timeUntilChange(afterElapsed: 0), 1.0 / 30, "fast")
-        expect(slow.timeUntilChange(afterElapsed: 0), 0.11, "slow")
+            frameTicks: 7, clock: .cursor)
+        expect(fast.timeUntilChange(afterElapsed: 0), AnimationClock.seconds(forTicks: 2), "fast")
+        expect(slow.timeUntilChange(afterElapsed: 0), AnimationClock.seconds(forTicks: 7), "slow")
         // Together, the loop takes the soonest — so the fast one is not slowed
         // and the slow one is not woken for frames it does not have.
         let soonest = [fast, slow].map { $0.timeUntilChange(afterElapsed: 0) }.min()!
-        expect(soonest, 1.0 / 30, "soonest")
+        expect(soonest, AnimationClock.seconds(forTicks: 2), "soonest")
         // A third of a second in, the fast run has moved ten times and the slow
-        // one three; neither has been resampled onto the other.
+        // one twice; neither has been resampled onto the other.
         #expect(fast.index(atElapsed: 1.0 / 3) == 10 % 2)
-        #expect(slow.index(atElapsed: 1.0 / 3) == 3 % 2)
+        #expect(slow.index(atElapsed: 1.0 / 3) == 2 % 2)
     }
 
-    @Test("A frame duration finer than the floor is clamped, not honoured")
+    @Test("A frame of fewer than one tick is clamped to one, not honoured")
     func absurdRatesAreFloored() {
-        // A producer naming a two-millisecond frame would spin a core to animate
-        // cells no terminal repaints that fast.
-        let silly = AnimatedCellRun(
-            offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"],
-            frameDuration: 0.002, clock: .cursor)
-        #expect(silly.frameDuration == AnimationClock.minimumFrameDuration)
+        // A producer naming a frame of no ticks would ask the loop to wake more often
+        // than any display can show a change.
+        for ticks in [0, -3, Int.min] {
+            let silly = AnimatedCellRun(
+                offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"],
+                frameTicks: ticks, clock: .cursor)
+            #expect(silly.frameTicks == 1, "asked for \(ticks)")
+        }
     }
 
     @Test("A run that names no rate gets the clock's own")
     func defaultRateIsTheClock() {
         let plain = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["a", "b"], clock: .cursor)
-        #expect(plain.frameDuration == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
+        #expect(plain.frameTicks == AnimationClock.standardFrameTicks)
     }
 
     @Test("Frames that are all the same picture are not an animation")
@@ -388,6 +390,8 @@ struct AnimationTickStrideTests {
         // loop sees them) — the answer must still be finite.
         let still = AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["a", "a"], clock: .cursor)
-        expect(still.timeUntilChange(afterElapsed: 0), still.cycleDuration, "a still run")
+        expect(
+            still.timeUntilChange(afterElapsed: 0),
+            Double(still.cycleTicks) / Double(AnimationClock.ticksPerSecond), "a still run")
     }
 }

@@ -20,26 +20,25 @@ import Testing
 @MainActor
 @Suite("Indicator animation speed on the focus emphasis")
 struct IndicatorAnimationSpeedFocusTests {
-    /// Each run a focused `view` leaves, as (frames, frame duration in ns, cycle in ns).
-    private func runs(_ view: some View) -> [(frames: Int, frameNanos: Int64, cycleNanos: Int64)] {
+    /// Each run a focused `view` leaves, as (frames, frame ticks, cycle ticks).
+    private func runs(_ view: some View) -> [(frames: Int, frameTicks: Int, cycleTicks: Int64)] {
         focusedRender(view).animatedCells.map {
             (
-                $0.frames.count, AnimationClock.nanoseconds($0.frameDuration),
-                AnimationClock.nanoseconds($0.cycleDuration)
+                $0.frames.count, $0.frameTicks, $0.cycleTicks
             )
         }
     }
 
-    /// Every run of a focused button's caps breathes a cycle of `cycleNanos`, in
-    /// frames of `frameNanos`, and there are two of them.
+    /// Every run of a focused button's caps breathes a cycle of `cycleTicks`, in
+    /// frames of `frameTicks`, and there are two of them.
     private func expectCaps(
-        _ view: some View, cycleNanos: Int64, frameNanos: Int64,
+        _ view: some View, cycleTicks: Int64, frameTicks: Int,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let seen = runs(view)
         #expect(seen.count == 2, "a focused button leaves one run per cap", sourceLocation: sourceLocation)
         #expect(
-            seen.allSatisfy { $0.cycleNanos == cycleNanos && $0.frameNanos == frameNanos },
+            seen.allSatisfy { $0.cycleTicks == cycleTicks && $0.frameTicks == frameTicks },
             "\(seen)", sourceLocation: sourceLocation)
     }
 
@@ -49,14 +48,14 @@ struct IndicatorAnimationSpeedFocusTests {
     func breathAtDoubleSpeed() {
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(2, for: .focusEmphasis),
-            cycleNanos: 400_000_000, frameNanos: 50_000_000)
+            cycleTicks: 24, frameTicks: 3)
     }
 
     @Test("A focused button's caps breathe in 1.6 s at half the speed, in 50 ms frames")
     func breathAtHalfSpeed() {
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(.halfSpeed, for: .focusEmphasis),
-            cycleNanos: 1_600_000_000, frameNanos: 50_000_000)
+            cycleTicks: 96, frameTicks: 3)
         #expect(runs(Button("Save") {}.indicatorAnimationSpeed(.halfSpeed, for: .focusEmphasis)).first?.frames == 32)
     }
 
@@ -65,13 +64,13 @@ struct IndicatorAnimationSpeedFocusTests {
     @Test("A focused button's caps blink in 11-tick halves, 183,333,333 ns, at twice the speed")
     func blinkAtDoubleSpeed() {
         let view = Button("Save") {}.selectionIndicatorStyle(.blink).indicatorAnimationSpeed(2, for: .focusEmphasis)
-        expectCaps(view, cycleNanos: 366_666_667, frameNanos: 183_333_333)
+        expectCaps(view, cycleTicks: 22, frameTicks: 11)
         #expect(runs(view).allSatisfy { $0.frames == 2 })
     }
 
     @Test("Unset, a focused button's caps breathe in the standard 0.8 s")
     func unsetIsTheStandardBreath() {
-        expectCaps(Button("Save") {}, cycleNanos: 800_000_000, frameNanos: 50_000_000)
+        expectCaps(Button("Save") {}, cycleTicks: 48, frameTicks: 3)
     }
 
     @Test("The nearest setting for the focus emphasis wins, and a setting for another kind leaves it alone")
@@ -79,18 +78,18 @@ struct IndicatorAnimationSpeedFocusTests {
         // A speed for spinners does not reach the focus emphasis.
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(2, for: .spinners),
-            cycleNanos: 800_000_000, frameNanos: 50_000_000)
+            cycleTicks: 48, frameTicks: 3)
         // `.all` does.
         expectCaps(
-            Button("Save") {}.indicatorAnimationSpeed(2), cycleNanos: 400_000_000, frameNanos: 50_000_000)
+            Button("Save") {}.indicatorAnimationSpeed(2), cycleTicks: 24, frameTicks: 3)
         // Inner `.focusEmphasis` at 0.5 inside outer `.all` at 2.
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(0.5, for: .focusEmphasis).indicatorAnimationSpeed(2),
-            cycleNanos: 1_600_000_000, frameNanos: 50_000_000)
+            cycleTicks: 96, frameTicks: 3)
         // A nearer setting for spinners leaves the outer `.all` in force.
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(0.5, for: .spinners).indicatorAnimationSpeed(2),
-            cycleNanos: 400_000_000, frameNanos: 50_000_000)
+            cycleTicks: 24, frameTicks: 3)
     }
 
     /// 0.8 s at 1.5 is 0.5333 s, 32 ticks, which is 10.67 frames of 3 ticks and rounds
@@ -101,10 +100,10 @@ struct IndicatorAnimationSpeedFocusTests {
     func breathIsWholeFramesOfThreeTicks() {
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(1.5, for: .focusEmphasis),
-            cycleNanos: 550_000_000, frameNanos: 50_000_000)
+            cycleTicks: 33, frameTicks: 3)
         #expect(runs(Button("Save") {}.indicatorAnimationSpeed(1.5, for: .focusEmphasis)).first?.frames == 11)
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(IndicatorAnimationSpeed(1.5, tolerance: 0.1), for: .focusEmphasis),
-            cycleNanos: 550_000_000, frameNanos: 50_000_000)
+            cycleTicks: 33, frameTicks: 3)
     }
 }

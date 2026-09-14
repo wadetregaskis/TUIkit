@@ -296,7 +296,7 @@ private struct TerminalHyperlinkModifier: ViewModifier {
         result.animatedCells = result.animatedCells.map { run in
             AnimatedCellRun(
                 offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-                frames: run.frames.map(linked), frameDuration: run.frameDuration, clock: run.clock,
+                frames: run.frames.map(linked), frameTicks: run.frameTicks, clock: run.clock,
                 alpha: run.alpha)
         }
         return result

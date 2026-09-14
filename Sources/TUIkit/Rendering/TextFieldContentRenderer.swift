@@ -488,7 +488,7 @@ struct TextFieldContentRenderer {
             if cycle.isAnimating {
                 caret = AnimatedCellRun(
                     offsetX: outputCells, offsetY: 0, width: cells, frames: drawn.frames,
-                    frameDuration: cycle.timing.frameDuration, clock: cycle.timing.clock,
+                    frameTicks: cycle.timing.frameTicks, clock: cycle.timing.clock,
                     alpha: drawn.alpha)
             }
             (cellX, outputCells) = (cellX + cells, outputCells + cells)

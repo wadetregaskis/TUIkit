@@ -88,7 +88,7 @@ enum BreathingLabel {
             guard rowFrames.count == framed.count, let first = rowFrames.first else { return nil }
             return AnimatedCellRun(
                 offsetX: 0, offsetY: row, width: first.strippedLength,
-                frames: rowFrames, frameDuration: cycle.frameDuration, clock: cycle.clock)
+                frames: rowFrames, frameTicks: cycle.frameTicks, clock: cycle.clock)
         }
         return buffer
     }

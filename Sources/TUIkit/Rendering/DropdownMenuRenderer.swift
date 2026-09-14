@@ -584,7 +584,7 @@ enum DropdownMenu {
             let frames = perStep.map { $0[row] }
             let run = AnimatedCellRun(
                 offsetX: 0, offsetY: row, width: drawn[row].strippedLength,
-                frames: frames, frameDuration: cycle.frameDuration, clock: cycle.clock)
+                frames: frames, frameTicks: cycle.frameTicks, clock: cycle.clock)
             // A divider or an unhighlighted row whose border happens to
             // quantise to one colour is a still picture; the loop drops those
             // anyway, and not emitting them keeps the buffer honest.

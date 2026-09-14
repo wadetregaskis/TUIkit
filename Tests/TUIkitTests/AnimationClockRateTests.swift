@@ -17,24 +17,24 @@ import Testing
 @Suite("An animation clock keeps wall-clock time")
 struct AnimationClockRateTests {
 
-    /// The distinct `SpinnerStyle` intervals on the Spinners page, in milliseconds.
-    private static let spinnerIntervals: [UInt64] = [80, 90, 100, 110, 120, 125, 130, 140, 150]
+    /// The distinct `SpinnerStyle` intervals on the Spinners page, in ticks of 1/60 s.
+    private static let spinnerTicks = [5, 6, 7, 8, 9]
 
     /// 90,090 s of uptime: far past any real monotonic reading in a test process, so the
-    /// timer keeps the test's own times, and a whole number of every interval above.
+    /// timer keeps the test's own times.
     private static let base: UInt64 = 90_090 * 1_000_000_000
 
     /// One run per interval, each frame different from the next, so every step is a change.
-    private static func runs(intervals: [Double]) -> [AnimatedCellRun] {
-        intervals.map {
+    private static func runs(ticks: [Int]) -> [AnimatedCellRun] {
+        ticks.map {
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: 1, frames: ["0", "1", "2", "3"],
-                frameDuration: $0, clock: .content)
+                frameTicks: $0, clock: .content)
         }
     }
 
     private static var spinnerRuns: [AnimatedCellRun] {
-        runs(intervals: spinnerIntervals.map { Double($0) / 1000 })
+        runs(ticks: spinnerTicks)
     }
 
     /// What `RenderLoop.timeUntilNextChange(elapsed:)` answers for a frame holding only `runs`.
@@ -49,8 +49,9 @@ struct AnimationClockRateTests {
     ///
     /// It used to add the sleep it had asked for. Every wake on the Spinners page is late
     /// by about 9 ms (a `Task.sleep` resumed on the main actor), the page wakes about 52
-    /// times a second, and every spinner ran at 1 / 1.48 of its speed — in this scenario,
-    /// about 507 steps a minute where 750 are due.
+    /// times a second, and every spinner ran at 1 / 1.48 of its speed — in this scenario as it
+    /// was then, with the page's 80 to 150 ms intervals, the 80 ms run made about 507 steps a
+    /// minute where 750 were due.
     @Test("Wakes 9.3 ms late for a minute: the runs still step at their own rates")
     func lateWakesKeepTheRate() {
         let timer = CursorTimer(renderNotifier: AppState())
@@ -69,14 +70,13 @@ struct AnimationClockRateTests {
             wakes += 1
         }
         let finished = timer.elapsed(for: .content)
-        func steps(_ milliseconds: UInt64) -> Int64 {
-            let duration = Double(milliseconds) / 1000
-            return AnimationClock.step(atElapsed: finished, frameDuration: duration)
-                - AnimationClock.step(atElapsed: started, frameDuration: duration)
+        func steps(_ ticks: Int) -> Int64 {
+            AnimationClock.step(atElapsed: finished, frameTicks: ticks)
+                - AnimationClock.step(atElapsed: started, frameTicks: ticks)
         }
         #expect(wakes > 1000, "the scenario must actually wake at the page's rate: \(wakes)")
-        #expect(abs(steps(80) - 750) <= 1, "the 80 ms run stepped \(steps(80)) times in a minute")
-        #expect(abs(steps(140) - 428) <= 1, "the 140 ms run stepped \(steps(140)) times in a minute")
+        #expect(abs(steps(5) - 720) <= 1, "the 5-tick run stepped \(steps(5)) times in a minute")
+        #expect(abs(steps(8) - 450) <= 1, "the 8-tick run stepped \(steps(8)) times in a minute")
     }
 
     /// Ctrl-Z, an external SIGSTOP, a long stall: the clock jumps, and the wake after it is
@@ -92,7 +92,7 @@ struct AnimationClockRateTests {
 
         timer.creditWake(atNanos: Self.base + 10_037_000_000)
 
-        let longestCycle = runs.map(\.cycleDuration).max() ?? 0
+        let longestCycle = runs.map { Double($0.cycleTicks) / Double(AnimationClock.ticksPerSecond) }.max() ?? 0
         #expect(timer.sleepSeconds <= longestCycle, "planned \(timer.sleepSeconds) s")
         #expect(appState.consumePendingAnimationClocks() == Set(AnimationClock.allCases))
         #expect(appState.consumePendingAnimationClocks().isEmpty, "one wake, one tick per clock")
@@ -104,14 +104,15 @@ struct AnimationClockRateTests {
     /// about 2% of plans. A real wake is milliseconds late and hides it; a clock that
     /// advances by exactly the sleep wakes 1 ns before its boundary, finds the change still
     /// 1 ns away and plans the 10 ms floor. Whole-millisecond gaps never show it, so the mix
-    /// includes an indeterminate bar's 1/30 s frames.
+    /// includes an indeterminate bar's 2-tick frames.
     @Test("A clock that advances by exactly what was slept lands on every boundary it planned")
     func exactSleepsLandOnTheirBoundaries() {
         let timer = CursorTimer(renderNotifier: AppState())
-        let intervals = Self.spinnerIntervals.map { Double($0) / 1000 } + [1.0 / 30]
-        timer.planner = Self.planner(Self.runs(intervals: intervals))
-        let durations = intervals.map { UInt64(AnimationClock.nanoseconds($0)) }
-        let floor = UInt64(AnimationClock.nanoseconds(AnimationClock.minimumFrameDuration))
+        let ticks = Self.spinnerTicks + [2]
+        timer.planner = Self.planner(Self.runs(ticks: ticks))
+        let durations = ticks.map { UInt64(AnimationClock.frameNanoseconds(ticks: $0)) }
+        // The timer's floor on a plan, 10 ms.
+        let floor: UInt64 = 10_000_000
         // Off every boundary, so the first plan is an odd length too.
         var now = Self.base + 7_000_001
         var ideal = now

@@ -157,9 +157,8 @@ extension RenderLoop {
     /// step showing there, counted in whole nanoseconds like every step boundary, so
     /// the answer is never a step late or a nanosecond early.
     private static func timeToNextStep(ofCursorClockAt elapsed: Double) -> Double {
-        let step = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
         let untilEnd =
-            AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: step)
+            AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: AnimationClock.standardFrameTicks)
             - AnimationClock.nanoseconds(elapsed)
         return Double(untilEnd) / 1_000_000_000
     }

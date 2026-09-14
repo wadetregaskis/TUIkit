@@ -54,7 +54,7 @@ private struct PulseReadingProbe: View, Renderable {
     }
 }
 
-/// A page leaving a 110 ms run under an app header leaving a 75 ms one, both on
+/// A page leaving a 6-tick (100 ms) run under an app header leaving a 5-tick one, both on
 /// ``AnimationClock/content``. Only a render advances the header's run, and the
 /// loop has to know when it is due to render it.
 private struct HeaderRunOverPageRunApp: App {
@@ -66,13 +66,13 @@ private struct HeaderRunOverPageRunApp: App {
                 .animatedCells([
                     AnimatedCellRun(
                         offsetX: 0, offsetY: 0, width: 1, frames: ["p", "q"],
-                        frameDuration: 0.11, clock: .content)
+                        frameTicks: 6, clock: .content)
                 ])
                 .appHeader {
                     Text("h").animatedCells([
                         AnimatedCellRun(
                             offsetX: 0, offsetY: 0, width: 1, frames: ["h", "i"],
-                            frameDuration: 0.075, clock: .content)
+                            frameTicks: 5, clock: .content)
                     ])
                 }
         }
@@ -83,10 +83,10 @@ private struct HeaderRunOverPageRunApp: App {
 @Suite("Animation replay: serving a tick by patching the frame on screen")
 struct RenderLoopReplayTests {
     /// A two-frame blink on the given clock, one cell wide at the top-left.
-    private func blink(clock: AnimationClock, frameDuration: Double = 0.1) -> AnimatedCellRun {
+    private func blink(clock: AnimationClock, frameTicks: Int = 6) -> AnimatedCellRun {
         AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: 1, frames: ["x", "y"],
-            frameDuration: frameDuration, clock: clock)
+            frameTicks: frameTicks, clock: clock)
     }
 
     /// A loop that has rendered once (so the diff writer knows what is on
@@ -200,15 +200,17 @@ struct RenderLoopReplayTests {
         #expect(loop.timeUntilNextChange(elapsed: { _ in 0 }) == AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks))
     }
 
-    /// The point of asking the runs: a 0.11 s spinner is not resampled onto the
-    /// 0.05 s grid, and the loop wakes when the run itself next changes.
+    /// The point of asking the runs: a 7-tick spinner is not resampled onto the
+    /// 3-tick grid, and the loop wakes when the run itself next changes.
     @Test("A run's own frame duration sets the sleep, not the clock's interval")
     func runsSetTheSleep() {
         let harness = RenderLoopHarness()
-        let loop = primedLoop(harness, runs: [blink(clock: .content, frameDuration: 0.11)])
+        let loop = primedLoop(harness, runs: [blink(clock: .content, frameTicks: 7)])
 
         let sleep = loop.timeUntilNextChange(elapsed: { _ in 0 })
-        #expect(abs(sleep - 0.11) < 1e-9, "woke at the run's own rate, not the grid's: \(sleep)")
+        #expect(
+            abs(sleep - AnimationClock.seconds(forTicks: 7)) < 1e-9,
+            "woke at the run's own rate, not the grid's: \(sleep)")
         #expect(sleep > AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks), "and not on the clock's interval")
     }
 
@@ -218,12 +220,12 @@ struct RenderLoopReplayTests {
         let loop = primedLoop(
             harness,
             runs: [
-                blink(clock: .content, frameDuration: 0.5),
-                blink(clock: .content, frameDuration: 0.11),
+                blink(clock: .content, frameTicks: 30),
+                blink(clock: .content, frameTicks: 7),
             ])
 
         let sleep = loop.timeUntilNextChange(elapsed: { _ in 0 })
-        #expect(abs(sleep - 0.11) < 1e-9, "the sooner run set it: \(sleep)")
+        #expect(abs(sleep - AnimationClock.seconds(forTicks: 7)) < 1e-9, "the sooner run set it: \(sleep)")
     }
 
     /// A frame where some view built its appearance from the phase as it
@@ -237,7 +239,7 @@ struct RenderLoopReplayTests {
         #expect(loop.lastActivity.usesPulse, "the probe's read was tracked")
 
         loop.replayable = ReplayableFrame(
-            contentLines: ["ab cd"], runs: [blink(clock: .content, frameDuration: 1)],
+            contentLines: ["ab cd"], runs: [blink(clock: .content, frameTicks: 60)],
             terminalWidth: 5, startRow: 1, backgroundCode: "")
 
         #expect(
@@ -261,7 +263,7 @@ struct RenderLoopReplayTests {
         #expect(loop.lastActivity.usesPulse, "the probe's read was tracked")
         // A page run that changes 11 ms from now, sooner than the reader's boundary.
         loop.replayable = ReplayableFrame(
-            contentLines: ["ab cd"], runs: [blink(clock: .content, frameDuration: 0.1)],
+            contentLines: ["ab cd"], runs: [blink(clock: .content, frameTicks: 6)],
             terminalWidth: 5, startRow: 1, backgroundCode: "")
 
         let sleep = loop.timeUntilNextChange(elapsed: { $0 == .cursor ? 0.137 : 5.089 })
@@ -283,12 +285,13 @@ struct RenderLoopReplayTests {
         #expect(!headerRuns.isEmpty, "pre-condition: the header must leave a run")
         #expect(!pageRuns.isEmpty, "pre-condition: the page must leave a run")
 
-        // At 1.030 s the header's 75 ms run ends at 1.050 s, the page's 110 ms one at 1.100 s.
+        // At 1.030 s the header's 5-tick run ends at 1,083,333,329 ns, 13 steps of 83,333,333,
+        // and the page's 6-tick one at 1.100 s.
         let beforeHeader = loop.timeUntilNextChange(elapsed: { _ in 1.030 })
         #expect(
-            AnimationClock.nanoseconds(beforeHeader) == 20_000_000,
-            "the header is due at 1.050 s: \(beforeHeader)")
-        // At 1.095 s the page's run ends at 1.100 s, the header's at 1.125 s.
+            AnimationClock.nanoseconds(beforeHeader) == 53_333_329,
+            "the header is due at 1,083,333,329 ns: \(beforeHeader)")
+        // At 1.095 s the page's run ends at 1.100 s, the header's at 1,166,666,662 ns.
         let beforePage = loop.timeUntilNextChange(elapsed: { _ in 1.095 })
         #expect(
             AnimationClock.nanoseconds(beforePage) == 5_000_000,

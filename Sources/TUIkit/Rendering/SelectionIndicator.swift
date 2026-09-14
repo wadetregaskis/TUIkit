@@ -245,19 +245,19 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// Where the clock is now — the index to draw immediately.
     public let step: Int
 
-    /// How long each of ``frames`` is shown, in seconds.
+    /// How many ticks of 1/60 s each of ``frames`` is shown for.
     ///
     /// The `run` overloads build their run at this rate. A view that builds its
     /// own ``AnimatedCellRun`` from ``colors(dim:bright:)`` passes it on, with
     /// ``clock``, or its run steps at the clock's default interval whatever this
     /// cycle is laid out on.
-    public var frameDuration: Double { timing.frameDuration }
+    public var frameTicks: Int { timing.frameTicks }
 
     /// The clock ``step`` is counted on, and the one a run built from this cycle
     /// replays on.
     public var clock: AnimationClock { timing.clock }
 
-    /// `frameDuration` and `clock`, as the cycle carries them.
+    /// `frameTicks` and `clock`, as the cycle carries them.
     let timing: IndicatorCycleTiming
 
     /// A cycle of `frames`, showing `step` now, laid out on `timing`.
@@ -411,7 +411,7 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
             // The cycle's own frame duration and clock, because those are what its
             // frames were laid out on: a run handed any other would advance at a
             // different rate than it was built for.
-            frameDuration: timing.frameDuration, clock: timing.clock)
+            frameTicks: timing.frameTicks, clock: timing.clock)
     }
 }
 

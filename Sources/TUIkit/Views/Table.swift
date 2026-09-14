@@ -2539,7 +2539,7 @@ where Value.ID: Hashable {
             guard y >= topOffset, y < lineCount, let first = run.frames.first else { return nil }
             return AnimatedCellRun(
                 offsetX: 0, offsetY: y, width: first.strippedLength, frames: run.frames,
-                frameDuration: run.timing.frameDuration, clock: run.timing.clock)
+                frameTicks: run.timing.frameTicks, clock: run.timing.clock)
         }
     }
 

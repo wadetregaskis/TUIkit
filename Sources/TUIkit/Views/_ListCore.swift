@@ -1312,7 +1312,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 pulseRuns += pulseFrames.enumerated().map {
                     RowRun(
                         y: yStart + $0.offset, x: 0, width: rowWidth, frames: $0.element,
-                        frameDuration: timing.frameDuration, clock: timing.clock)
+                        frameTicks: timing.frameTicks, clock: timing.clock)
                 }
             }
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
@@ -1440,7 +1440,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             guard !run.frames.isEmpty else { return nil }
             return AnimatedCellRun(
                 offsetX: run.x, offsetY: y + topOffset, width: run.width,
-                frames: run.frames, frameDuration: run.frameDuration, clock: run.clock,
+                frames: run.frames, frameTicks: run.frameTicks, clock: run.clock,
                 alpha: run.alpha)
         }
     }
@@ -1615,7 +1615,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         RowRun(
                             y: yStart + offset, x: 0, width: contentRowWidth,
                             frames: frames.map(fitted),
-                            frameDuration: timing.frameDuration, clock: timing.clock))
+                            frameTicks: timing.frameTicks, clock: timing.clock))
                 }
             }
             // The row's own runs need no `fitted` pass — they were already
@@ -3237,7 +3237,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             runs.append(
                 RowRun(
                     y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
-                    frameDuration: run.frameDuration, clock: run.clock, alpha: run.alpha))
+                    frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha))
         }
         return (runs, droppedClaims)
     }
@@ -3263,7 +3263,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     case .content: content
                     case .cursor: cursor
                     }
-                return AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: run.frameDuration)
+                return AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: run.frameTicks)
                     - AnimationClock.nanoseconds(elapsed)
             }.min() ?? 0
         return now &+ untilSoonest
@@ -3291,11 +3291,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// a frame (`.dots` then asked for 0.110 s) got the clock's own 0.05 s, so
         /// a spinner inside a List ran 2.2x too fast — and looked, in a
         /// screenshot, exactly right.
-        var frameDuration: Double
+        var frameTicks: Int
         var clock: AnimationClock
 
         /// What the run's cells owe per frame, carried for the same reason
-        /// `frameDuration` is: rebuilding a child's run without it silently drops the
+        /// `frameTicks` is: rebuilding a child's run without it silently drops the
         /// alpha, so a `TextField`'s caret over a faded well inside a List row would
         /// render at full strength while the same field outside one did not.
         var alpha: AnimatedRunAlpha?

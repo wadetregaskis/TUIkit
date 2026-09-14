@@ -966,7 +966,7 @@ enum ScrollbarRenderer {
             guard Set(cells).count > 1 else { return nil }
             return AnimatedCellRun(
                 offsetX: 0, offsetY: row, width: cells[0].strippedLength, frames: cells,
-                frameDuration: pulse.cycle.frameDuration, clock: pulse.cycle.clock)
+                frameTicks: pulse.cycle.frameTicks, clock: pulse.cycle.clock)
         }
     }
 
@@ -994,7 +994,7 @@ enum ScrollbarRenderer {
         guard let first = frames.first, Set(frames).count > 1 else { return nil }
         return AnimatedCellRun(
             offsetX: 0, offsetY: 0, width: first.strippedLength, frames: frames,
-            frameDuration: pulse.cycle.frameDuration, clock: pulse.cycle.clock)
+            frameTicks: pulse.cycle.frameTicks, clock: pulse.cycle.clock)
     }
 
     /// A horizontal scrollbar `width` cells wide: a `◀`/`▶` arrow assembly at each

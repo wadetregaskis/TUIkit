@@ -441,7 +441,7 @@ extension FrameBuffer {
         // on). Same reason the regions themselves are cleared.
         return AnimatedCellRun(
             offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-            frames: fadedFrames, frameDuration: run.frameDuration, clock: run.clock,
+            frames: fadedFrames, frameTicks: run.frameTicks, clock: run.clock,
             alpha: nil)
     }
 
