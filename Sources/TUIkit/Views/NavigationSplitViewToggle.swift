@@ -273,21 +273,29 @@ extension _NavigationSplitViewCore {
         for column in visibleColumns where toggleState.removedByColumn[column] == nil {
             preferences.push()
             _ = measureColumn(column, proposal: ProposedSize(width: nil, height: nil), context: context)
-            recordToggleRemoval(of: column, from: preferences.pop(), toggleState: toggleState)
+            recordToggleRemoval(
+                of: column, from: preferences.pop(), toggleState: toggleState, context: context)
         }
     }
 
     /// Records whether `column` removed the toggle, from the preferences it just
     /// published. A change to a column already seen can only be learnt after the
     /// handles were laid out for this frame, so it asks for another frame.
+    ///
+    /// It asks the way a `@State` write does: it invalidates the split's identity
+    /// through the context's render cache, which asks the run loop for a frame
+    /// and, at that frame's start, drops the cached buffers of the split and of
+    /// everything above it, so no memo serves the handles drawn this frame.
+    /// Under `TUIKIT_DIAGNOSE_BODY_MUTATION` this is reported as a write during
+    /// the walk, which it is; it happens once per change of answer, not per frame.
     func recordToggleRemoval(
         of column: NavigationSplitViewColumn, from scope: PreferenceValues,
-        toggleState: SplitViewToggleState
+        toggleState: SplitViewToggleState, context: RenderContext
     ) {
         let removed = scope[SidebarToggleRemovedKey.self]
         let previous = toggleState.removedByColumn.updateValue(removed, forKey: column)
         if let previous, previous != removed {
-            AppState.shared.setNeedsRender()
+            context.renderCache?.invalidateRender(for: context.identity)
         }
     }
 

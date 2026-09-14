@@ -543,7 +543,8 @@ extension _NavigationSplitViewCore {
         else { return renderColumnContent(column, context: context) }
         preferences.push()
         let buffer = renderColumnContent(column, context: context)
-        recordToggleRemoval(of: column, from: preferences.pop(), toggleState: toggleState)
+        recordToggleRemoval(
+            of: column, from: preferences.pop(), toggleState: toggleState, context: context)
         return buffer
     }
 

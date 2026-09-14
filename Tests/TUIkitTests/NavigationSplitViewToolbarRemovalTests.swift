@@ -173,4 +173,42 @@ struct NavigationSplitViewToolbarRemovalTests {
         _ = frame(view(), context)
         #expect(has("◀", frame(view(), context)))
     }
+
+    /// A column's change can be learnt after that frame's handles were laid out,
+    /// so the split has to ask for the next frame, and ask through its own
+    /// context: an invalidation on the context's render cache, which the next
+    /// frame applies as it starts (`beginRenderPass`) and which is what requests
+    /// that frame from the run loop. Counted as the subtree clears the start of
+    /// the next pass applies; a process-wide traits change there would count as
+    /// a whole-cache clear instead, so it cannot stand in for one.
+    @Test("A column that changes its answer asks its render cache for the next frame, which draws ◀")
+    func changedAnswerRequestsTheNextFrame() {
+        let context = splitContext()
+        let cache = context.renderCache!
+        var removes = true
+        func view() -> some View {
+            NavigationSplitView {
+                Text("S").toolbar(removing: removes ? .sidebarToggle : nil)
+            } detail: {
+                Text("D")
+            }
+        }
+        /// Renders a frame, then starts the next pass and counts what it drained.
+        func invalidationsAppliedAfter(_ render: () -> FrameBuffer) -> (FrameBuffer, Int) {
+            let buffer = render()
+            let before = cache.stats.subtreeClears
+            cache.beginRenderPass()
+            return (buffer, cache.stats.subtreeClears - before)
+        }
+
+        _ = invalidationsAppliedAfter { frame(view(), context) }
+        let (steady, steadyRequests) = invalidationsAppliedAfter { frame(view(), context) }
+        #expect(!has("◀", steady))
+        #expect(steadyRequests == 0, "a column that keeps its answer asks for nothing")
+
+        removes = false
+        let (_, requests) = invalidationsAppliedAfter { frame(view(), context) }
+        #expect(requests > 0, "the change asks the context's render cache for another frame")
+        #expect(has("◀", frame(view(), context)), "and that frame draws ◀")
+    }
 }
