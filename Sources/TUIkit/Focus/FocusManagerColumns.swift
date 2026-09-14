@@ -68,6 +68,17 @@ extension FocusManager {
         return true
     }
 
+    /// The active section's id, if it was registered at or after position
+    /// `start` in this frame's ring — by a view that began rendering when `start`
+    /// sections were registered and has just finished. `nil` when the keyboard
+    /// is in a section registered before that, or in none.
+    func activeSectionID(registeredSince start: Int) -> String? {
+        guard let active = activeSectionIdentifier, start >= 0, start < sections.count,
+            sections[start...].contains(where: { $0.id == active })
+        else { return nil }
+        return active
+    }
+
     /// The section Left or Right enters for column `column` of `group`: the
     /// column's own, unless nothing in it can take the focus and a section
     /// registered while it rendered can — a split view nested in a detail

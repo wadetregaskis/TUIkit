@@ -91,6 +91,9 @@ import TUIkitCore
 ///
 /// Each column registers as a separate focus section. Use Tab/Shift+Tab to
 /// move between columns, and Up/Down arrows to navigate within each column.
+/// Hiding the column that holds the keyboard, from code or from the handles,
+/// moves the keyboard to the leftmost column still showing, rather than out of
+/// the split.
 ///
 /// ## TUI-Specific Behavior
 ///
@@ -365,8 +368,10 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
                 visibleColumns.map { focusSectionID(for: $0, context: context) },
                 dividers: dividerInfos.map(\.focusID))
             // Every section this split owns is registered now, so a handle
-            // pressed last frame can hand the keyboard to the one that undoes it.
-            activatePendingFocus(
+            // pressed last frame can hand the keyboard to the one that undoes
+            // it, and a column hidden with the keyboard in it can hand the
+            // keyboard to the leftmost visible column.
+            settleFocus(
                 toggleState: toggleState, visibleColumns: visibleColumns,
                 context: context, focusManager: focusManager)
         }

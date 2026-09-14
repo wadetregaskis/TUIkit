@@ -82,6 +82,21 @@ final class SplitViewToggleState {
     /// vanished handle's section made `endRenderPass` fall back to the first
     /// section on the page.
     var pendingFocus: SplitViewFocusTarget?
+
+    /// The section that held the keyboard when the split's last render ended,
+    /// if the split registered it: a column, a section inside one, a divider or
+    /// the edge column. `nil` when the keyboard was elsewhere.
+    ///
+    /// A column hidden while it holds the keyboard — `columnVisibility` written
+    /// from outside, or a chord — takes its sections with it, and
+    /// `endRenderPass` then sends the focus to the first section on the page,
+    /// which is usually outside the split. Remembering the section lets the next
+    /// render see it has gone and keep the keyboard in the split.
+    var heldFocusSectionID: String?
+
+    /// How many focus sections were registered when the current render began,
+    /// so its end can tell which sections the split registered.
+    var sectionsAtRenderStart = 0
 }
 
 // MARK: - Edge handler
@@ -134,10 +149,14 @@ extension _NavigationSplitViewCore {
     func resolveToggleState(context: RenderContext) -> SplitViewToggleState? {
         guard let stateStorage = context.stateStorage else { return nil }
         stateStorage.markActive(context.identity)
-        return stateStorage.storage(
+        let state = stateStorage.storage(
             for: StateStorage.StateKey(identity: context.identity, propertyIndex: SplitViewStateIndex.toggle),
             default: SplitViewToggleState()
         ).value
+        if !context.isMeasuring, let focusManager = context.environment.focusManager {
+            state.sectionsAtRenderStart = focusManager.sections.count
+        }
+        return state
     }
 
     /// The edge column for this render, if there is one, and the context the
@@ -297,19 +316,36 @@ extension _NavigationSplitViewCore {
         return result
     }
 
-    /// Activates the section a handle pressed last frame asked for (see
-    /// ``SplitViewToggleState/pendingFocus``), now that this render has
-    /// registered every section the split owns. The first of its candidates
-    /// that registered wins: a split that cannot resize has no divider, and a
-    /// split too narrow for the edge has no edge, so the column takes the
-    /// keyboard instead.
-    func activatePendingFocus(
+    /// Settles where the keyboard is, now that this render has registered every
+    /// section the split owns.
+    ///
+    /// - A handle pressed last frame asked for the handle that undoes it (see
+    ///   ``SplitViewToggleState/pendingFocus``). The first of its candidates
+    ///   that registered wins: a split too narrow for the edge has no edge, so
+    ///   the column takes the keyboard instead.
+    /// - Otherwise, if a section of this split held the keyboard at the end of
+    ///   the last render and is gone now — its column was hidden — the leftmost
+    ///   visible column takes it (see ``SplitViewToggleState/heldFocusSectionID``).
+    ///
+    /// Either way it then records which of this split's sections holds the
+    /// keyboard, for the next render.
+    func settleFocus(
         toggleState: SplitViewToggleState?, visibleColumns: [NavigationSplitViewColumn],
         context: RenderContext, focusManager: FocusManager?
     ) {
-        guard let toggleState, let target = toggleState.pendingFocus, let focusManager,
-            let leading = visibleColumns.first
-        else { return }
+        guard let toggleState, let focusManager, let leading = visibleColumns.first else { return }
+        defer {
+            toggleState.heldFocusSectionID = focusManager.activeSectionID(
+                registeredSince: toggleState.sectionsAtRenderStart)
+        }
+        guard let target = toggleState.pendingFocus else {
+            if let held = toggleState.heldFocusSectionID,
+                focusManager.activeSectionIdentifier == held, focusManager.section(id: held) == nil
+            {
+                focusManager.activateSection(id: focusSectionID(for: leading, context: context))
+            }
+            return
+        }
         toggleState.pendingFocus = nil
         let candidates: [String]
         switch target {
