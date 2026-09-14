@@ -89,7 +89,7 @@ public struct AppleTerminalPalette: Palette, Hashable {
     public init(_ profile: Profile) {
         let spec = Self.spec(for: profile)
         self.init(
-            id: "terminal.\(profile.rawValue)",
+            id: "appleTerminal.\(profile.rawValue)",
             name: profile.displayName,
             background: spec.background,
             foreground: spec.foreground,

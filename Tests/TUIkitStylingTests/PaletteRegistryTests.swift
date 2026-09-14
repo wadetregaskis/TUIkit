@@ -30,7 +30,7 @@ struct PaletteRegistryTests {
         #expect(PaletteRegistry.all[4].id == "blue")
         #expect(PaletteRegistry.all[5].id == "white")
         // Terminal.app profiles follow.
-        #expect(PaletteRegistry.all[6].id == "terminal.basic")
+        #expect(PaletteRegistry.all[6].id == "appleTerminal.basic")
     }
 
     @Test("Registry finds palette by ID")

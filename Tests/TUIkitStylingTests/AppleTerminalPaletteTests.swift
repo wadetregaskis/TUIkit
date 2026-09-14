@@ -134,13 +134,16 @@ struct AppleTerminalPaletteTests {
         #expect(PaletteRegistry.terminalProfiles.count == 10)
         #expect(PaletteRegistry.all.count == 16)
         // Phosphor presets come first, then the Terminal profiles.
-        #expect(PaletteRegistry.all.prefix(6).allSatisfy { !$0.id.hasPrefix("terminal.") })
-        #expect(PaletteRegistry.all.suffix(10).allSatisfy { $0.id.hasPrefix("terminal.") })
+        #expect(PaletteRegistry.all.prefix(6).allSatisfy { !$0.id.hasPrefix("appleTerminal.") })
+        #expect(PaletteRegistry.all.suffix(10).allSatisfy { $0.id.hasPrefix("appleTerminal.") })
+        // No built-in palette claims the bare "terminal." namespace: it is kept
+        // for a palette that follows the running terminal's own colours.
+        #expect(!PaletteRegistry.all.contains { $0.id.hasPrefix("terminal.") })
 
         // IDs are unique and names match the Terminal display names.
         let ids = PaletteRegistry.all.map(\.id)
         #expect(Set(ids).count == ids.count)
-        #expect(PaletteRegistry.palette(withName: "Man Page")?.id == "terminal.manPage")
-        #expect(PaletteRegistry.palette(withName: "Homebrew")?.id == "terminal.homebrew")
+        #expect(PaletteRegistry.palette(withName: "Man Page")?.id == "appleTerminal.manPage")
+        #expect(PaletteRegistry.palette(withName: "Homebrew")?.id == "appleTerminal.homebrew")
     }
 }

@@ -224,16 +224,16 @@ Inspired by vintage vacuum fluorescent displays (VFDs). The characteristic brigh
 
 | Profile | Case | ID |
 |---------|------|----|
-| Basic | ``AppleTerminalPalette/Profile/basic`` | `"terminal.basic"` |
-| Grass | ``AppleTerminalPalette/Profile/grass`` | `"terminal.grass"` |
-| Homebrew | ``AppleTerminalPalette/Profile/homebrew`` | `"terminal.homebrew"` |
-| Man Page | ``AppleTerminalPalette/Profile/manPage`` | `"terminal.manPage"` |
-| Novel | ``AppleTerminalPalette/Profile/novel`` | `"terminal.novel"` |
-| Ocean | ``AppleTerminalPalette/Profile/ocean`` | `"terminal.ocean"` |
-| Pro | ``AppleTerminalPalette/Profile/pro`` | `"terminal.pro"` |
-| Red Sands | ``AppleTerminalPalette/Profile/redSands`` | `"terminal.redSands"` |
-| Silver Aerogel | ``AppleTerminalPalette/Profile/silverAerogel`` | `"terminal.silverAerogel"` |
-| Solid Colors | ``AppleTerminalPalette/Profile/solidColors`` | `"terminal.solidColors"` |
+| Basic | ``AppleTerminalPalette/Profile/basic`` | `"appleTerminal.basic"` |
+| Grass | ``AppleTerminalPalette/Profile/grass`` | `"appleTerminal.grass"` |
+| Homebrew | ``AppleTerminalPalette/Profile/homebrew`` | `"appleTerminal.homebrew"` |
+| Man Page | ``AppleTerminalPalette/Profile/manPage`` | `"appleTerminal.manPage"` |
+| Novel | ``AppleTerminalPalette/Profile/novel`` | `"appleTerminal.novel"` |
+| Ocean | ``AppleTerminalPalette/Profile/ocean`` | `"appleTerminal.ocean"` |
+| Pro | ``AppleTerminalPalette/Profile/pro`` | `"appleTerminal.pro"` |
+| Red Sands | ``AppleTerminalPalette/Profile/redSands`` | `"appleTerminal.redSands"` |
+| Silver Aerogel | ``AppleTerminalPalette/Profile/silverAerogel`` | `"appleTerminal.silverAerogel"` |
+| Solid Colors | ``AppleTerminalPalette/Profile/solidColors`` | `"appleTerminal.solidColors"` |
 
 ```swift
 environment.paletteManager.setCurrent(AppleTerminalPalette(.homebrew))
