@@ -128,6 +128,119 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     }
 }
 
+// MARK: - The 1/60 s tick
+
+/// The tick every animation frame is meant to be a whole number of: 1/60 s.
+///
+/// A terminal's paint ends up on a display that refreshes 60 (or 120) times a
+/// second, so a frame that lasts anything other than a whole number of sixtieths
+/// is held for a different number of refreshes from one frame to the next, and
+/// two animations on different ticks change on different refreshes.
+///
+/// A sixtieth of a second is not a whole number of nanoseconds, so a tick is
+/// named by its INDEX, counted in integers, and its instant is computed from the
+/// index every time, never accumulated. Tick `k` begins at ⌈k·10⁹/60⌉ ns, and the
+/// instant `t` is in tick ⌊t·60/10⁹⌋. Instants round up and indexes round down
+/// because that is the only choice that makes the two an exact inverse pair:
+/// `nanoseconds(atTick: k) <= t` exactly when `k <= tick(atNanoseconds: t)`. So a
+/// wake landing exactly on a tick's instant reads as that tick. Rounding the
+/// instant down would read the tick before at two ticks in three, and rounding it
+/// to the nearest at one in three: a frame drawn a tick late.
+extension AnimationClock {
+    /// How many ticks make a second.
+    public static let ticksPerSecond = 60
+
+    /// Nanoseconds in three ticks, the smallest whole number of ticks that is a
+    /// whole number of nanoseconds. Both conversions go through it, so neither
+    /// multiplies an instant by 60 and neither can overflow doing so.
+    private static let nanosecondsPerThreeTicks: Int64 = 50_000_000
+
+    /// The tick the instant `nanoseconds` falls in: ⌊nanoseconds·60/10⁹⌋.
+    ///
+    /// Defined for every `Int64`, including `.min` and `.max`. Floored, so an
+    /// instant before zero is in a tick before zero.
+    public static func tick(atNanoseconds nanoseconds: Int64) -> Int64 {
+        // t = q·50,000,000 + r with 0 <= r < 50,000,000, so ⌊t·3/50,000,000⌋ is
+        // 3q + ⌊3r/50,000,000⌋, and neither term overflows.
+        var quotient = nanoseconds / nanosecondsPerThreeTicks
+        var remainder = nanoseconds % nanosecondsPerThreeTicks
+        if remainder < 0 {
+            quotient -= 1
+            remainder += nanosecondsPerThreeTicks
+        }
+        return 3 * quotient + 3 * remainder / nanosecondsPerThreeTicks
+    }
+
+    /// The instant tick `tick` begins: ⌈tick·10⁹/60⌉ nanoseconds.
+    ///
+    /// Consecutive instants are 16,666,666 or 16,666,667 ns apart. See the
+    /// discussion above for why the instant rounds up.
+    ///
+    /// Saturating: past ±553,402,322,211 ticks, about 292 years, the instant is not
+    /// an `Int64`, and the answer is `Int64.max` or `Int64.min`. An instant that far
+    /// out is never reached, and a wake planned for it is a wake that never comes,
+    /// which a saturated value still says. Trapping would take the process down for
+    /// the arithmetic of an animation.
+    public static func nanoseconds(atTick tick: Int64) -> Int64 {
+        // k = 3a + b with 0 <= b < 3: ⌈k·50,000,000/3⌉ is a·50,000,000 + ⌈b·50,000,000/3⌉.
+        var threes = tick / 3
+        var extra = tick % 3
+        if extra < 0 {
+            threes -= 1
+            extra += 3
+        }
+        let whole = threes.multipliedReportingOverflow(by: nanosecondsPerThreeTicks)
+        let partial = (extra * nanosecondsPerThreeTicks + 2) / 3
+        let sum = whole.partialValue.addingReportingOverflow(partial)
+        guard !whole.overflow, !sum.overflow else { return tick < 0 ? .min : .max }
+        return sum.partialValue
+    }
+
+    /// The whole number of ticks nearest to `seconds`, for a frame that lasts about
+    /// that long: at least 1 and at most `Int32.max`.
+    ///
+    /// Halves round away from zero, so 0.125 s (7.5 ticks) is 8. A duration that is
+    /// not finite, or not greater than zero, is 1 tick: the shortest frame there is.
+    public static func frameTicks(forSeconds seconds: Double) -> Int {
+        guard seconds.isFinite, seconds > 0 else { return 1 }
+        let ticks = (seconds * Double(ticksPerSecond)).rounded()
+        // Compared as a Double, which holds Int32.max exactly: converting first
+        // would trap for a duration longer than an `Int` of ticks.
+        guard ticks < Double(Int32.max) else { return Int(Int32.max) }
+        return max(1, Int(ticks))
+    }
+
+    /// `ticks` ticks in seconds: `ticks / 60`.
+    ///
+    /// A correctly rounded division, so a count that is a decimal number of seconds
+    /// comes back as that decimal's own `Double`: 3 ticks is bit for bit `0.05`, and
+    /// 21 ticks is `0.35`.
+    public static func seconds(forTicks ticks: Int) -> Double {
+        Double(ticks) / Double(ticksPerSecond)
+    }
+
+    /// The first instant strictly after `nanoseconds` that begins a tick whose index
+    /// is a whole multiple of `multiple`.
+    ///
+    /// A lattice of every `multiple`-th tick from tick zero, which is where grids of
+    /// that period fire. Every such lattice shares tick zero, so two lattices meet
+    /// wherever their multiples do. Strictly after, so an instant already on the
+    /// lattice asks for the next one. A `multiple` below 1 is taken as 1, and an
+    /// instant whose next lattice tick is past `Int64` saturates to `Int64.max`, as
+    /// ``nanoseconds(atTick:)`` does.
+    public static func nanoseconds(ofNextTickMultiple multiple: Int, after nanoseconds: Int64) -> Int64 {
+        let period = Int64(max(1, multiple))
+        let current = tick(atNanoseconds: nanoseconds)
+        // Floored, so the next multiple of a tick before zero is still after it.
+        var multiples = current / period
+        if current % period < 0 { multiples -= 1 }
+        let start = multiples.multipliedReportingOverflow(by: period)
+        let next = start.partialValue.addingReportingOverflow(period)
+        guard !start.overflow, !next.overflow else { return .max }
+        return Self.nanoseconds(atTick: next.partialValue)
+    }
+}
+
 // MARK: - AnimatedCellRun
 
 /// A short run of cells that animates on its own, without the view that drew it.
