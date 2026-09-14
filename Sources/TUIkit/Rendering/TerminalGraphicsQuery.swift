@@ -235,7 +235,16 @@ extension Terminal {
         // measured — that is the point of a handshake — with the request's own
         // erase as the guard for the ones that share the gap.
         guard !TerminalHost.isAppleTerminal else { return TerminalGraphicsQuery.Answers() }
+        return askGraphicsSupport(timeout: timeout)
+    }
 
+    /// The exchange behind ``queryGraphicsSupport(timeout:)``, without its
+    /// guards.
+    ///
+    /// Apart so a test can run the exchange through ``readSource`` and
+    /// ``exchangeTransport``: the guards want a real TTY in raw mode and a host
+    /// that is not Apple Terminal, and a test process may have neither.
+    func askGraphicsSupport(timeout: Double) -> TerminalGraphicsQuery.Answers {
         let collected = fencedExchange(
             request: TerminalGraphicsQuery.request, timeout: timeout,
             sawFence: TerminalGraphicsQuery.sawFence)

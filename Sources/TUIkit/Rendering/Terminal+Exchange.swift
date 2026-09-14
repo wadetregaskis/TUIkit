@@ -44,7 +44,11 @@ extension Terminal {
     func fencedExchange(
         request: String, timeout: Double, sawFence: ([UInt8]) -> Bool
     ) -> [UInt8] {
-        writeImmediate(request)
+        if let exchangeTransport {
+            exchangeTransport.send(request)
+        } else {
+            writeImmediate(request)
+        }
 
         var collected: [UInt8] = []
         var chunk = [UInt8](repeating: 0, count: 512)
@@ -52,7 +56,10 @@ extension Terminal {
         while !sawFence(collected) {
             // EINTR-aware, and against the same deadline throughout — see
             // ``Terminal/waitForInput(on:until:)``.
-            guard Terminal.waitForInput(until: deadline) else { break }
+            let ready =
+                exchangeTransport?.waitForInput(deadline)
+                ?? Terminal.waitForInput(until: deadline)
+            guard ready else { break }
             let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
             guard read > 0 else { break }
             collected.append(contentsOf: chunk[0..<read])
@@ -71,5 +78,17 @@ extension Terminal {
         input.append(addingCount: bytes.count) { (span: inout OutputSpan<UInt8>) in
             for byte in bytes { span.append(byte) }
         }
+    }
+
+    /// A scripted terminal for ``fencedExchange(request:timeout:sawFence:)``:
+    /// see ``Terminal/exchangeTransport``. The replies themselves still come
+    /// through ``Terminal/readSource``.
+    struct ExchangeTransport {
+        /// Receives the request instead of stdout.
+        var send: (String) -> Void
+        /// Whether input is ready before the deadline, instead of `poll` on
+        /// stdin. Answering `true` with nothing staged is safe: the read then
+        /// returns 0, which ends the exchange.
+        var waitForInput: (Date) -> Bool
     }
 }

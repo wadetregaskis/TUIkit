@@ -145,7 +145,15 @@ extension Terminal {
     /// window at startup.
     func queryMode(_ mode: Int, timeout: Double = 0.5) -> TerminalModeQuery.State? {
         guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
+        return askMode(mode, timeout: timeout)
+    }
 
+    /// The exchange behind ``queryMode(_:timeout:)``, without its guard.
+    ///
+    /// Apart so a test can run the exchange through ``readSource`` and
+    /// ``exchangeTransport``: the guard wants a real TTY in raw mode, which a
+    /// test process does not have.
+    func askMode(_ mode: Int, timeout: Double) -> TerminalModeQuery.State? {
         let collected = fencedExchange(
             request: TerminalModeQuery.request(mode: mode), timeout: timeout,
             sawFence: TerminalModeQuery.sawFence)

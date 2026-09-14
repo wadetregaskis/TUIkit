@@ -178,6 +178,16 @@ final class Terminal: TerminalProtocol {
         }
     }
 
+    /// Where a startup exchange sends its request and waits for the reply, or
+    /// `nil` for the real terminal: stdout, and `poll` on stdin.
+    ///
+    /// The other half of ``readSource`` for
+    /// ``fencedExchange(request:timeout:sawFence:)``, which reads through that
+    /// closure but writes and waits on the real descriptors. A test sets both,
+    /// so an exchange runs against scripted replies without a TTY, and without
+    /// printing a query to the console the tests run in.
+    var exchangeTransport: ExchangeTransport?
+
     /// The original terminal settings, on a platform that has them.
     ///
     /// WebAssembly's wasip1 has no `termios`: a wasm program is handed a stream
