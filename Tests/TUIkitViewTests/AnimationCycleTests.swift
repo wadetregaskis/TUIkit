@@ -22,7 +22,7 @@ struct AnimationCycleTests {
         let animation = Animation.linear(duration: 0.4).repeatForever(autoreverses: true)
         let cycle = AnimationCycle<Double>(
             animation: animation, from: 0, to: 1,
-            startNanos: 0, nowNanos: 0, tick: 0, clock: clock)
+            startNanos: 0, nowNanos: 0, step: 0, clock: clock)
         #expect(cycle != nil, "a delay-free forever fade should pre-render")
         #expect(cycle?.values.contains { $0 > 0.5 } == true, "the cycle moves")
     }
@@ -38,7 +38,7 @@ struct AnimationCycleTests {
             .delay(1.0)
         let cycle = AnimationCycle<Double>(
             animation: animation, from: 0, to: 1,
-            startNanos: 0, nowNanos: 0, tick: 0, clock: clock)
+            startNanos: 0, nowNanos: 0, step: 0, clock: clock)
         #expect(cycle == nil, "a delayed forever fade must not pre-render")
     }
 }

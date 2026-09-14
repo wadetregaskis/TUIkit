@@ -26,12 +26,16 @@ public struct AnimationFrame: Sendable, Equatable {
     /// query and the grids agree exactly rather than by a clock read apart.
     public var nowNanos: Int64 = 0
 
-    /// The replay clock's tick count for this frame.
+    /// How many whole standard animation frames of the replay clock have passed
+    /// at this frame: ``AnimationClock/standardFrameTicks`` ticks of 1/60 s, 50 ms,
+    /// each.
     ///
     /// What an ``AnimatedCellRun``'s frames are indexed by, so a producer that
     /// pre-renders a cycle can lay its frames out to match what the run loop
     /// will replay. See ``AnimationCycle``.
-    public var tick: Int = 0
+    ///
+    /// A step, not a tick: a tick is 1/60 s, and one step is three of them.
+    public var step: Int = 0
 
     /// Whether this render can be followed by more of them on a timer.
     ///
@@ -44,9 +48,9 @@ public struct AnimationFrame: Sendable, Equatable {
 
     /// Creates a frame description. The defaults describe a one-off render at
     /// the start of time, which is what a headless render is.
-    public init(nowNanos: Int64 = 0, tick: Int = 0, canAnimate: Bool = false) {
+    public init(nowNanos: Int64 = 0, step: Int = 0, canAnimate: Bool = false) {
         self.nowNanos = nowNanos
-        self.tick = tick
+        self.step = step
         self.canAnimate = canAnimate
     }
 }
@@ -69,10 +73,10 @@ extension EnvironmentValues {
         set { animationFrame.nowNanos = newValue }
     }
 
-    /// The replay clock's tick count for this frame. See ``AnimationFrame/tick``.
-    public var animationTick: Int {
-        get { animationFrame.tick }
-        set { animationFrame.tick = newValue }
+    /// The replay clock's step count for this frame. See ``AnimationFrame/step``.
+    public var animationStep: Int {
+        get { animationFrame.step }
+        set { animationFrame.step = newValue }
     }
 
     /// Whether a change may animate at all. See ``AnimationFrame/canAnimate``.

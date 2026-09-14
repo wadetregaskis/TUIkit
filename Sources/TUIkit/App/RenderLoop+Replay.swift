@@ -117,8 +117,8 @@ extension RenderLoop {
     ///
     /// A frame where some view built its appearance from the phase *while
     /// rendering* cannot say — only that view knows what it would draw next. Its
-    /// phase formulas are defined on the cursor clock's ticks, so it can change
-    /// only at a whole tick of that clock, and the plan is the NEXT such boundary.
+    /// phase formulas are defined on the cursor clock's 50 ms steps, so it can change
+    /// only at a whole step of that clock, and the plan is the NEXT such boundary.
     /// It used to be one interval from the wake, which put every render a wake's
     /// lateness past its boundary and off the lattice every other 50 ms run on the
     /// page steps on. The page's runs do not join the plan while a reader is
@@ -148,18 +148,18 @@ extension RenderLoop {
             }
             return soonest
         }
-        let readerBoundary = reads ? Self.timeToNextTick(ofCursorClockAt: elapsed(.cursor)) : nil
+        let readerBoundary = reads ? Self.timeToNextStep(ofCursorClockAt: elapsed(.cursor)) : nil
         let plan = [readerBoundary, soonestChange(lastActivity.chromeRuns), reads ? nil : soonestChange(replayable?.runs ?? [])]
         return plan.compactMap { $0 }.min() ?? AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
     }
 
-    /// Seconds from `elapsed` on ``AnimationClock/cursor`` to the end of the tick
-    /// showing there, counted in whole nanoseconds like every step boundary, so the
-    /// answer is never a tick late or a nanosecond early.
-    private static func timeToNextTick(ofCursorClockAt elapsed: Double) -> Double {
-        let tick = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
+    /// Seconds from `elapsed` on ``AnimationClock/cursor`` to the end of the 50 ms
+    /// step showing there, counted in whole nanoseconds like every step boundary, so
+    /// the answer is never a step late or a nanosecond early.
+    private static func timeToNextStep(ofCursorClockAt elapsed: Double) -> Double {
+        let step = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
         let untilEnd =
-            AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: tick)
+            AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: step)
             - AnimationClock.nanoseconds(elapsed)
         return Double(untilEnd) / 1_000_000_000
     }

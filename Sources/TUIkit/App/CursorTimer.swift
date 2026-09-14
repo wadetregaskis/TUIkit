@@ -17,7 +17,7 @@ import Foundation
 /// **Both clocks are measured, not counted.** ``AnimationClock/content`` is
 /// ``MonotonicClock`` itself, with no origin of its own, and
 /// ``AnimationClock/cursor`` is the same reading less the moment the focus last
-/// moved, floored to the 50 ms tick lattice. The timer keeps one snapshot of
+/// moved, floored to the 50 ms step lattice. The timer keeps one snapshot of
 /// that clock, taken whenever a frame renders (``observe(nowNanos:)``) or the
 /// timer wakes (``creditWake(atNanos:)``), so every read inside one frame agrees.
 ///
@@ -48,7 +48,7 @@ import Foundation
 /// ## Animation Speeds
 ///
 /// A blink is two frames, visible then hidden, each shown for half the cycle. A
-/// pulse is a cosine sampled once per 50 ms tick. See ``cycleLayout(of:speed:)``.
+/// pulse is a cosine sampled once per 50 ms step. See ``cycleLayout(of:speed:)``.
 ///
 /// The caret and the focus emphasis each run at an ``IndicatorAnimationSpeed``,
 /// the one set for ``IndicatorAnimations/textCursor`` or
@@ -89,7 +89,7 @@ final class CursorTimer {
     /// behind a render that stamped a later frame) cannot run the phases back.
     private(set) var snapshotNanos: UInt64 = 0
 
-    /// Where ``AnimationClock/cursor``'s zero sits, on the tick lattice, or `nil`
+    /// Where ``AnimationClock/cursor``'s zero sits, on the 50 ms step lattice, or `nil`
     /// until the next ``observe(nowNanos:)`` sets it.
     ///
     /// Cleared whenever the focus moves, which is how the blink and the focus
@@ -102,7 +102,7 @@ final class CursorTimer {
     /// ``restartFocusPhase()`` for what setting it early did. Floored to the
     /// lattice so a caret's and a breath's changes land on the same 50 ms grid as
     /// every other 50 ms run on the page, and the wakes coalesce — at the price of
-    /// a first half that can be up to one tick short: 300–350 ms of a 350 ms blink.
+    /// a first half that can be up to one step short: 300–350 ms of a 350 ms blink.
     private var focusEpochNanos: UInt64?
 
     /// Shows the timer the time: a frame's `frameNow`, before anything in that
@@ -141,7 +141,8 @@ final class CursorTimer {
         }
     }
 
-    /// Elapsed ticks, for the phase formulas that are still defined on a grid.
+    /// Elapsed standard steps, for the phase formulas that are still defined on a
+    /// grid: whole ``AnimationClock/standardFrameTicks``-tick frames, 50 ms each.
     ///
     /// Derived rather than counted, so a variable sleep keeps every phase's
     /// wall-clock meaning: a breath is a breath whether the loop woke six times
@@ -149,13 +150,14 @@ final class CursorTimer {
     ///
     /// Focus-relative: every formula that reads this is a
     /// ``AnimationClock/cursor`` one.
-    var elapsedTicks: Int { ticks(for: .cursor) }
+    var elapsedSteps: Int { steps(for: .cursor) }
 
-    /// ``elapsed(for:)`` on the tick grid the phase formulas are written in.
-    func ticks(for clock: AnimationClock) -> Int {
+    /// ``elapsed(for:)`` on the 50 ms step grid the phase formulas are written in.
+    /// Steps, not ticks: a tick is 1/60 s, and a step is three of them.
+    func steps(for clock: AnimationClock) -> Int {
         // Through the one conversion every step boundary shares, so the phase formulas
-        // and the pre-rendered runs agree on which tick an instant is in — a floor in
-        // seconds put a summed 0.35 s in tick 6, when this clock was a sum. Clamped
+        // and the pre-rendered runs agree on which step an instant is in — a floor in
+        // seconds put a summed 0.35 s in step 6, when this clock was a sum. Clamped
         // rather than narrowed: `Int` is 32 bits on wasm32.
         Int(clamping: AnimationClock.step(atElapsed: elapsed(for: clock), frameDuration: Self.standardFrameSeconds))
     }
@@ -268,11 +270,11 @@ extension CursorTimer {
     /// - **A blink is discrete.** Visible, then hidden: two frames, each shown for
     ///   ``standardBlinkCycle``'s half at the standard rate, and for
     ///   ``IndicatorAnimationSpeed/frameDuration(standard:)`` of it at `speed`. It
-    ///   used to be one frame per 50 ms tick, seven visible and seven hidden. That
+    ///   used to be one frame per 50 ms step, seven visible and seven hidden. That
     ///   holds only while a half is a whole number of ticks, and it makes a slower
     ///   blink more frames rather than longer ones.
     /// - **A pulse is continuous.** ``standardPulseCycle`` divided by the rate,
-    ///   sampled at its standard frame, one cursor tick: `max(2, round(cycle / tick))`
+    ///   sampled at its standard frame, one cursor step: `max(2, round(cycle / step))`
     ///   frames, at most `RampLayout.maximumFrameCount`, each `cycle / count` long,
     ///   so the cycle is exactly that length. A
     ///   slowed breath stays as smooth, and a quickened one wakes the loop no more
@@ -472,10 +474,10 @@ extension CursorTimer {
     /// would otherwise come back mid-blink.
     ///
     /// **It reads no clock.** The new zero is taken at the next ``observe(nowNanos:)``
-    /// — the render that always follows — floored to the tick lattice, so that frame
-    /// is tick 0 by construction. Read here, the zero would be floored at INPUT time
+    /// — the render that always follows — floored to the step lattice, so that frame
+    /// is step 0 by construction. Read here, the zero would be floored at INPUT time
     /// and the render would come later (up to a frame at the pacer's cap, on top of up
-    /// to a tick of floor), so the first frame could already be tick 1 and miss the
+    /// to a step of floor), so the first frame could already be step 1 and miss the
     /// bright start this exists to give; and the read would move `.content` between
     /// two frames.
     func restartFocusPhase() {

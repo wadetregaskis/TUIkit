@@ -99,10 +99,10 @@ struct OpacityOverFloatedContentTests {
                 animation: .linear(duration: 0.4).repeatForever(autoreverses: true))
         }
 
-        func render(_ opacity: Double, atTick tick: Int) -> FrameBuffer {
-            context.environment.animationTick = tick
+        func render(_ opacity: Double, atStep step: Int) -> FrameBuffer {
+            context.environment.animationStep = step
             context.environment.frameNowNanos =
-                Int64(Double(tick) * AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks) * 1_000_000_000)
+                Int64(Double(step) * AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks) * 1_000_000_000)
             let storage = context.environment.stateStorage!
             storage.beginRenderPass()
             defer { storage.endRenderPass() }
@@ -123,8 +123,8 @@ struct OpacityOverFloatedContentTests {
         // phases where the layer lands, which is the first place what is behind
         // the layer is known.
         let screen = Cycling()
-        _ = screen.render(1, atTick: 0)
-        let buffer = screen.render(0.2, atTick: 0)
+        _ = screen.render(1, atStep: 0)
+        let buffer = screen.render(0.2, atStep: 0)
 
         guard let layer = buffer.overlays.first(where: { !$0.isScreenLevel }) else {
             Issue.record("precondition: the offset child produced a layer")
@@ -144,7 +144,7 @@ struct OpacityOverFloatedContentTests {
             "a frame set that never changes is a still picture")
         #expect(
             composed.animatedCells.allSatisfy { $0.frames.count == 16 },
-            "0.4s out and back is sixteen ticks of the replay clock")
+            "0.4s out and back is sixteen steps of the replay clock")
     }
 
     @Test("…and the loop then stops rendering for it")
@@ -153,8 +153,8 @@ struct OpacityOverFloatedContentTests {
         // a fade that never ends, served by re-rendering, costs a render pass
         // for as long as the view is on screen.
         let screen = Cycling()
-        _ = screen.render(1, atTick: 0)
-        _ = screen.render(0.2, atTick: 0)
+        _ = screen.render(1, atStep: 0)
+        _ = screen.render(0.2, atStep: 0)
         let animations = screen.context.environment.stateStorage!.animations
         #expect(
             !animations.hasLiveAnimations(at: 400 * 1_000_000),

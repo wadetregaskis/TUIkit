@@ -90,7 +90,7 @@ struct IndicatorCycleTimingTests {
         #expect(
             IndicatorCycleTiming(frameDuration: 0.075, clock: .cursor).step(on: timer) == 0,
             "37 ms since the focus moved")
-        #expect(IndicatorCycleTiming.cursorTick.step(on: timer) == timer.elapsedTicks)
+        #expect(IndicatorCycleTiming.cursorTick.step(on: timer) == timer.elapsedSteps)
     }
 
     @Test("An animated colour keeps its frame duration and clock through resolving, and into its run")

@@ -159,7 +159,7 @@ extension _OpacityView: Renderable {
             let cycle: AnimationCycle<Double> = storage.animations.cycle(
                 for: key,
                 nowNanos: context.environment.frameNowNanos,
-                tick: context.environment.animationTick)
+                step: context.environment.animationStep)
         else { return nil }
         // Told now rather than after the bake: the bake happens at the
         // compositor, frames later in the same pass and out of this view's

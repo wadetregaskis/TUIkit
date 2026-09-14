@@ -521,24 +521,24 @@ extension FrameBuffer {
             // the rest hold at the value they were drawn at: frozen, but frozen
             // identically on every tick, which is the whole difference from two
             // runs fighting over one row.
-            let merged = Self.combinedTicks(of: onClock)
-            let ticks = merged ?? cycle.phases.count
+            let merged = Self.combinedSteps(of: onClock)
+            let steps = merged ?? cycle.phases.count
             var phases: [[String]] = []
-            phases.reserveCapacity(ticks)
-            for tick in 0..<ticks {
+            phases.reserveCapacity(steps)
+            for step in 0..<steps {
                 let rebuilt = rebuild(
                     row, lines[row],
                     { region in
                         // Asked of the region itself rather than by searching the
                         // merged list: `rebuild` already narrowed `covering` to
                         // this row, so "has a cycle, on this clock" IS membership
-                        // — and this closure runs once per COLUMN per tick, where
+                        // — and this closure runs once per COLUMN per step, where
                         // an `OpacityRegion ==` costs a phase-array walk.
                         guard let values = region.cycle?.phases, values.count >= 2,
                             region.cycle?.clock == cycle.clock,
                             merged != nil || region == innermost
                         else { return region.cellAlpha }
-                        // Its OWN phase at this one tick. Pinning the others at
+                        // Its OWN phase at this one step. Pinning the others at
                         // `opacity` — which is what a per-region run did — is
                         // exactly what let the run applied second revert the
                         // first's cells.
@@ -548,7 +548,7 @@ extension FrameBuffer {
                         // fresh region per frame through the ordinary render
                         // path), so the other two ride along unchanged.
                         return FrameBuffer.CellAlpha(
-                            layer: values[tick % values.count],
+                            layer: values[step % values.count],
                             ink: region.inkOpacity, field: region.fieldOpacity)
                     })
                 phases.append([rebuilt ?? lines[row]])
@@ -565,27 +565,27 @@ extension FrameBuffer {
         return runs
     }
 
-    /// The smallest number of ticks every cycle in `regions` divides into, so one
-    /// run can hold all of them: at tick `t` each region reads
+    /// The smallest number of steps every cycle in `regions` divides into, so one
+    /// run can hold all of them: at step `t` each region reads
     /// `phases[t % phases.count]`, and a common multiple is what keeps that the
     /// index the render drew with — `(t % N) % n == t % n` exactly when `n`
     /// divides `N`.
     ///
-    /// `nil` past ``AnimationCycle/maximumTicks``, the budget one cycle is
+    /// `nil` past ``AnimationCycle/maximumSteps``, the budget one cycle is
     /// already held to, for the same reason: a run holds one finished string per
-    /// tick per row.
+    /// step per row.
     ///
-    /// Walked up in steps of the longest cycle rather than through a GCD: at most
-    /// `maximumTicks / longest` remainders, no second copy of
+    /// Walked up in strides of the longest cycle rather than through a GCD: at most
+    /// `maximumSteps / longest` remainders, no second copy of
     /// `GradientRaster.greatestCommonDivisor`, and it stops AT the budget instead
     /// of first computing a product that overshoots it by orders of magnitude.
-    private static func combinedTicks(of regions: [OpacityRegion]) -> Int? {
+    private static func combinedSteps(of regions: [OpacityRegion]) -> Int? {
         let counts = regions.compactMap { $0.cycle?.phases.count }
         guard let longest = counts.max(), longest > 0 else { return nil }
-        var ticks = longest
-        while ticks <= AnimationCycle<Double>.maximumTicks {
-            if counts.allSatisfy({ ticks.isMultiple(of: $0) }) { return ticks }
-            ticks += longest
+        var steps = longest
+        while steps <= AnimationCycle<Double>.maximumSteps {
+            if counts.allSatisfy({ steps.isMultiple(of: $0) }) { return steps }
+            steps += longest
         }
         return nil
     }

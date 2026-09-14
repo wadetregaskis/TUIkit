@@ -222,7 +222,7 @@ let replayed = buffer.composited(
 The two are the same machinery seen from opposite ends, and they meet at
 ``Animation/repeatForever(autoreverses:)``.
 
-A repeating animation has a finite cycle — at the 50 ms replay clock, a 0.8 s
+A repeating animation has a finite cycle — at the replay clock's 50 ms step, a 0.8 s
 breath is sixteen distinct values — so it *can* be pre-rendered, and where the
 animated value only re-styles a buffer the content already produced, the
 framework does exactly that and hands the loop the frames. ``View/opacity(_:)``

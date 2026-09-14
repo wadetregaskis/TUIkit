@@ -284,9 +284,10 @@ extension AnimationStore {
     /// - Parameters:
     ///   - key: The animating value's place in the tree.
     ///   - nowNanos: This frame's timestamp.
-    ///   - tick: The replay clock's tick count for this frame.
+    ///   - step: The replay clock's step count for this frame. See
+    ///     ``AnimationFrame/step``.
     public func cycle<D: VectorArithmetic & Sendable>(
-        for key: Key, nowNanos: Int64, tick: Int
+        for key: Key, nowNanos: Int64, step: Int
     ) -> AnimationCycle<D>? {
         guard let record = records[key],
             let animation = record.animation, animation.repeatsForever,
@@ -294,7 +295,7 @@ extension AnimationStore {
         else { return nil }
         return AnimationCycle<D>(
             animation: animation, from: from, to: target,
-            startNanos: record.startNanos, nowNanos: nowNanos, tick: tick)
+            startNanos: record.startNanos, nowNanos: nowNanos, step: step)
     }
 
     /// Declares that this frame handed the run loop the whole cycle at `key`,

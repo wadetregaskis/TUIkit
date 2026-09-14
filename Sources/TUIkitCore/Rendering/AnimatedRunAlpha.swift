@@ -27,7 +27,7 @@
 /// their alphas impossible to misalign: they are the same array, in the same order, on
 /// the same value. A parallel list of phases keyed by index is the shape
 /// ``OpacityCycle`` needs for a *layer* fade, where the phases genuinely belong to
-/// something else and `combinedTicks` has to reconcile two clocks. Here they belong to
+/// something else and `combinedSteps` has to reconcile two clocks. Here they belong to
 /// the run, so there is nothing to reconcile and nothing to drift.
 ///
 /// ## Coordinates

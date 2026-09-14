@@ -95,7 +95,7 @@ public enum AnimationClock: String, Sendable, Equatable, Hashable, CaseIterable 
     ///
     /// Nanoseconds are far finer than any frame and exact in an `Int64` for centuries,
     /// so rounding there and dividing in integers puts every boundary on its own step.
-    /// `AnimatedCellRun`'s frame index, its time-to-change and `CursorTimer`'s tick
+    /// `AnimatedCellRun`'s frame index, its time-to-change and `CursorTimer`'s step
     /// count all ask this, so what the render draws and what a replay splices cannot
     /// disagree about which step an instant is in.
     public static func nanoseconds(_ seconds: Double) -> Int64 {

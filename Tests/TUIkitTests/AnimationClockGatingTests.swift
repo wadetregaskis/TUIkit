@@ -173,8 +173,8 @@ struct FocusClockUnityTests {
         let now = base + 1_234_000_000
         timer.observe(nowNanos: now)
         #expect(timer.elapsed(for: .content) == Double(now) / 1_000_000_000)
-        // Bright at once, on the tick lattice: 1.234 s is 34 ms past the 1.200 s tick.
-        #expect(timer.ticks(for: .cursor) == 0)
+        // Bright at once, on the step lattice: 1.234 s is 34 ms past the 1.200 s step.
+        #expect(timer.steps(for: .cursor) == 0)
         #expect(abs(timer.elapsed(for: .cursor) - 0.034) < 1e-9)
         // The two used to share a zero until the first focus change. `.content` no
         // longer has one of its own.
@@ -187,7 +187,7 @@ struct FocusClockUnityTests {
         timer.observe(nowNanos: base + 1_234_000_000)
         timer.observe(nowNanos: base + 4_234_000_000)
         let content = timer.elapsed(for: .content)
-        #expect(timer.ticks(for: .cursor) == 60, "three seconds of blink, 34 ms past a tick")
+        #expect(timer.steps(for: .cursor) == 60, "three seconds of blink, 34 ms past a step")
 
         timer.restartFocusPhase()
 
@@ -198,14 +198,14 @@ struct FocusClockUnityTests {
         #expect(timer.elapsed(for: .content) == content)
         #expect(timer.elapsed(for: .cursor) == 0)
 
-        // The frame that follows comes 56 ms later, more than a tick. It is still tick
+        // The frame that follows comes 56 ms later, more than a step. It is still step
         // 0 — the zero is taken HERE, floored to 4.250 s — where a zero floored when the
-        // focus moved (4.234 s → 4.200 s) would already have been tick 1, and the newly
+        // focus moved (4.234 s → 4.200 s) would already have been step 1, and the newly
         // focused control would have missed its bright start.
         timer.observe(nowNanos: base + 4_290_000_000)
-        #expect(timer.ticks(for: .cursor) == 0)
+        #expect(timer.steps(for: .cursor) == 0)
         timer.observe(nowNanos: base + 4_340_000_000)
-        #expect(timer.ticks(for: .cursor) == 1)
+        #expect(timer.steps(for: .cursor) == 1)
     }
 
     @Test("A sleep that expired before the focus moved does not credit the re-zeroed clock")
@@ -249,7 +249,7 @@ struct FocusClockUnityTests {
         let timer = CursorTimer(renderNotifier: AppState())
         timer.observe(nowNanos: base + 1_234_000_000)
         timer.observe(nowNanos: base + 5_000_000_000)
-        #expect(timer.ticks(for: .cursor) == 76)
+        #expect(timer.steps(for: .cursor) == 76)
 
         timer.stop()
         let later = base + 9_876_000_000
@@ -258,6 +258,6 @@ struct FocusClockUnityTests {
         // Not zeroed, and not frozen where it stopped: a spinner that appears on a
         // page that has been still starts where the shared clock is.
         #expect(timer.elapsed(for: .content) == Double(later) / 1_000_000_000)
-        #expect(timer.ticks(for: .cursor) == 0, "the cursor clock restarts at its bright end")
+        #expect(timer.steps(for: .cursor) == 0, "the cursor clock restarts at its bright end")
     }
 }

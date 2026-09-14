@@ -17,14 +17,17 @@ import TUIkitCore
 /// a 0.8 s breath is sixteen distinct values. Small enough to compute all of
 /// them, draw all of them, and hand the loop the finished frames.
 ///
-/// ``values`` is indexed **by clock tick**, not from the animation's start, so
-/// `values[tick % count]` is what to draw at that tick — which is precisely how
+/// ``values`` is indexed **by clock step**, not from the animation's start, so
+/// `values[step % count]` is what to draw at that step — which is precisely how
 /// ``AnimatedCellRun`` indexes its frames. The phase offset is baked in at
 /// construction, so an animation that started at an arbitrary moment is not
 /// snapped to a global grid: it keeps its own phase, and the array is simply
 /// rotated to match.
+///
+/// A step is ``AnimationClock/standardFrameTicks`` ticks of 1/60 s, 50 ms: a
+/// step, not a tick, because a tick is the 1/60 s unit and a step is three.
 public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sendable {
-    /// One value per tick of the cycle, indexed by `tick % count`.
+    /// One value per step of the cycle, indexed by `step % count`.
     public let values: [Value]
 
     /// The index of the value to draw in the frame being rendered now.
@@ -36,12 +39,12 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
     /// The clock these are indexed against.
     public let clock: AnimationClock
 
-    /// The longest cycle that is worth pre-rendering, in ticks.
+    /// The longest cycle that is worth pre-rendering, in steps.
     ///
     /// Six seconds. Past that the frames outweigh what they save — a run holds
-    /// one finished string per tick per row — and an animation slow enough to
+    /// one finished string per step per row — and an animation slow enough to
     /// need it is one whose re-renders are rare anyway.
-    public static var maximumTicks: Int { 120 }
+    public static var maximumSteps: Int { 120 }
 
     /// Samples `animation` onto `clock`, or `nil` if it does not repeat forever
     /// or its cycle is too long to be worth holding.
@@ -52,7 +55,8 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
     ///   - to: The value it is heading for.
     ///   - startNanos: When it began, on the frame clock.
     ///   - nowNanos: This frame's timestamp.
-    ///   - tick: The clock's tick count for this frame.
+    ///   - step: The clock's step count for this frame. See
+    ///     ``AnimationFrame/step``.
     ///   - clock: Which clock will replay it.
     public init?(
         animation: Animation,
@@ -60,7 +64,7 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
         to: Value,
         startNanos: Int64,
         nowNanos: Int64,
-        tick: Int,
+        step: Int,
         clock: AnimationClock = .cursor
     ) {
         guard let period = animation.cyclePeriod, period > 0 else { return nil }
@@ -76,32 +80,32 @@ public struct AnimationCycle<Value: VectorArithmetic>: Sendable where Value: Sen
         // One value per standard animation frame, 50 ms, on either clock.
         let frame = AnimationClock.seconds(forTicks: AnimationClock.standardFrameTicks)
         let count = Int((period / frame).rounded())
-        guard count >= 2, count <= Self.maximumTicks else { return nil }
+        guard count >= 2, count <= Self.maximumSteps else { return nil }
 
-        // Which tick the animation began on. The current tick is `tick` and the
+        // Which step the animation began on. The current step is `step` and the
         // animation has been running `nowNanos - startNanos`, so counting back
         // gives the start — and every value below is then a function of the
-        // tick alone, which is what makes them replayable.
+        // step alone, which is what makes them replayable.
         let elapsed = Double(nowNanos - startNanos) / 1_000_000_000
-        let startTick = tick - Int((elapsed / frame).rounded())
+        let startStep = step - Int((elapsed / frame).rounded())
 
         var values: [Value] = []
         values.reserveCapacity(count)
         for index in 0..<count {
-            // The tick at or after `startTick` whose index is `index`, so the
-            // array reads correctly under `tick % count` at every tick.
-            let offset = (index - startTick).modulo(count)
+            // The step at or after `startStep` whose index is `index`, so the
+            // array reads correctly under `step % count` at every step.
+            let offset = (index - startStep).modulo(count)
             let fraction = animation.fraction(at: Double(offset) * frame)
             values.append(from.interpolated(towards: to, amount: fraction))
         }
         self.values = values
-        self.currentIndex = tick.modulo(count)
+        self.currentIndex = step.modulo(count)
         self.clock = clock
     }
 }
 
 extension Int {
-    /// A non-negative remainder. `%` keeps the sign of the dividend, and a tick
+    /// A non-negative remainder. `%` keeps the sign of the dividend, and a step
     /// count that has been counted backwards past zero is negative.
     fileprivate func modulo(_ divisor: Int) -> Int {
         guard divisor > 0 else { return 0 }
