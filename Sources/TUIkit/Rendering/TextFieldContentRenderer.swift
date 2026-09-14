@@ -97,6 +97,7 @@ struct TextFieldContentRenderer {
         palette: any Palette,
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
+        cursorTiming: IndicatorCycleTiming = .cursorTick,
         contentWidth: Int
     ) -> FieldContent {
         let isEmpty = text.isEmpty
@@ -126,6 +127,7 @@ struct TextFieldContentRenderer {
                 palette: palette,
                 cursorStyle: cursorStyle,
                 cursorTimer: cursorTimer,
+                cursorTiming: cursorTiming,
                 background: backgroundColor,
                 width: contentWidth,
                 foregroundOverride: Self.promptColor(palette: palette, on: backgroundColor),
@@ -141,6 +143,7 @@ struct TextFieldContentRenderer {
                 palette: palette,
                 cursorStyle: cursorStyle,
                 cursorTimer: cursorTimer,
+                cursorTiming: cursorTiming,
                 background: backgroundColor,
                 width: contentWidth
             )
@@ -378,6 +381,7 @@ struct TextFieldContentRenderer {
         palette: any Palette,
         cursorStyle: TextCursorStyle,
         cursorTimer: CursorTimer?,
+        cursorTiming: IndicatorCycleTiming = .cursorTick,
         background: Color?,
         width: Int,
         foregroundOverride: Color? = nil,
@@ -443,7 +447,7 @@ struct TextFieldContentRenderer {
         let (cycle, colors) = Self.caretSetup(
             palette: palette, background: background, textForeground: textForeground,
             selection: (selectionForeground, selectionBackground),
-            cursorStyle: cursorStyle, cursorTimer: cursorTimer)
+            cursorStyle: cursorStyle, cursorTimer: cursorTimer, timing: cursorTiming)
         var caret: AnimatedCellRun?
 
         func emitCaret(cells: Int, underlying: Character, isSelected: Bool) {
@@ -466,8 +470,9 @@ struct TextFieldContentRenderer {
             runs.appendVerbatim(drawn.frames[drawn.drawnIndex])
             if cycle.isAnimating {
                 caret = AnimatedCellRun(
-                    offsetX: outputCells, offsetY: 0, width: cells,
-                    frames: drawn.frames, clock: .cursor, alpha: drawn.alpha)
+                    offsetX: outputCells, offsetY: 0, width: cells, frames: drawn.frames,
+                    frameDuration: cycle.timing.frameDuration, clock: cycle.timing.clock,
+                    alpha: drawn.alpha)
             }
             (cellX, outputCells) = (cellX + cells, outputCells + cells)
         }
@@ -525,7 +530,7 @@ struct TextFieldContentRenderer {
     static func caretSetup(
         palette: any Palette, background: Color?, textForeground: Color,
         selection: (foreground: Color, background: Color),
-        cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?
+        cursorStyle: TextCursorStyle, cursorTimer: CursorTimer?, timing: IndicatorCycleTiming
     ) -> (cycle: CursorCycle, colors: CaretColors) {
         // The whole cycle, not just this tick's frame: the caret's cells are the
         // only thing that changes while a focused field sits still, and
@@ -539,7 +544,7 @@ struct TextFieldContentRenderer {
         let cycle = Self.computeCursorCycle(
             baseColor: palette.cursorColor, over: ground,
             animation: cursorStyle.animation, speed: cursorStyle.speed,
-            cursorTimer: cursorTimer)
+            cursorTimer: cursorTimer, timing: timing)
         return (
             cycle,
             CaretColors(
@@ -731,11 +736,15 @@ struct TextFieldContentRenderer {
     /// Example's Forms page that was 41% of a core to emit two writes per second
     /// (`Documentation/Performance-profile-2026-08.md` §9).
     struct CursorCycle {
-        /// One caret state per tick of a full cycle.
+        /// One caret state per frame of a full cycle.
         let states: [(visible: Bool, color: Color)]
 
         /// Where the clock is now — the state to draw immediately.
         let step: Int
+
+        /// How long each state is shown, and the clock `step` is counted on: what the
+        /// caret's run is built with.
+        let timing: IndicatorCycleTiming
 
         /// Whether the caret actually moves. A `.none` animation is one frame:
         /// a still picture the ordinary render already drew.
@@ -751,17 +760,18 @@ struct TextFieldContentRenderer {
         over surface: Color,
         animation: TextCursorStyle.Animation,
         speed: TextCursorStyle.Speed,
-        cursorTimer: CursorTimer?
+        cursorTimer: CursorTimer?,
+        timing: IndicatorCycleTiming = .cursorTick
     ) -> CursorCycle {
         let states = (0..<CursorTimer.cycleTicks(for: speed, animation: animation)).map { tick in
             caretState(
                 atTick: tick, baseColor: baseColor, over: surface,
                 animation: animation, speed: speed)
         }
-        // `elapsedTicks` is a plain read: unlike `blinkVisible(for:)` it does not
-        // mark the frame as having consulted the clock, so a producer that uses
-        // it stays replayable.
-        return CursorCycle(states: states, step: cursorTimer?.elapsedTicks ?? 0)
+        // `step(on:)` is a plain read: unlike `blinkVisible(for:)` it does not mark
+        // the frame as having consulted the clock, so a producer that uses it stays
+        // replayable.
+        return CursorCycle(states: states, step: timing.step(on: cursorTimer), timing: timing)
     }
 
     /// The caret's visibility and colour at one tick of the cycle, from the

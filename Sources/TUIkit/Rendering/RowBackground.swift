@@ -71,6 +71,13 @@ enum RowBackground {
         return cycle.colors(dim: dim, bright: bright)
     }
 
+    /// The frame duration and clock ``pulseColors`` step on, or `nil` exactly when
+    /// that is `nil`: what a run built from those colours is built with.
+    var pulseTiming: IndicatorCycleTiming? {
+        guard case .pulsing(let cycle, _, _) = self, cycle.isAnimating else { return nil }
+        return cycle.timing
+    }
+
     /// Which colour of ``pulseColors`` the frame being rendered now shows.
     @MainActor
     var stepNow: Int {

@@ -103,6 +103,13 @@ For an element whose appearance is more than a foreground colour, the
 ``SelectionEmphasis``, if two things pulse at once) and take back the finished
 cells.
 
+A cycle carries its own ``SelectionEmphasisCycle/frameDuration`` and
+``SelectionEmphasisCycle/clock``, and every `run` overload builds its run with
+both. If you build an ``AnimatedCellRun`` yourself from
+``SelectionEmphasisCycle/colors(dim:bright:)``, pass both on. A run that leaves
+them to their defaults steps at the clock's own interval, whatever the cycle's
+frames are laid out on. ``AnimatedColor`` carries them the same way.
+
 ## Let the modifier place them
 
 Both of those need the view to know where its own cells are. Often it does not:

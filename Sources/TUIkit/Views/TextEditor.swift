@@ -218,7 +218,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             let setup = TextFieldContentRenderer.caretSetup(
                 palette: palette, background: fieldBackground, textForeground: styling.text,
                 selection: styling.selection, cursorStyle: cursorStyle,
-                cursorTimer: context.environment.cursorTimer)
+                cursorTimer: context.environment.cursorTimer,
+                timing: context.environment.indicatorCycleTiming)
             caret = RowCaret(
                 column: cursorDisplayColumn,
                 cycle: .init(shape: cursorStyle.shape, cursor: setup.cycle, colors: setup.colors))
@@ -537,8 +538,9 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             runs.appendVerbatim(drawn.frames[drawn.drawnIndex])
             if cycle.cursor.isAnimating {
                 caretRun = AnimatedCellRun(
-                    offsetX: outputCells, offsetY: 0, width: cells,
-                    frames: drawn.frames, clock: .cursor, alpha: drawn.alpha)
+                    offsetX: outputCells, offsetY: 0, width: cells, frames: drawn.frames,
+                    frameDuration: cycle.cursor.timing.frameDuration,
+                    clock: cycle.cursor.timing.clock, alpha: drawn.alpha)
             }
             cellX += cells
             outputCells += cells

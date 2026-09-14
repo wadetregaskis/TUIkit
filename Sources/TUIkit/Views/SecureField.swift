@@ -393,6 +393,7 @@ private struct _SecureFieldCore: View, Renderable, Layoutable {
             palette: palette,
             cursorStyle: cursorStyle,
             cursorTimer: context.environment.cursorTimer,
+            cursorTiming: context.environment.indicatorCycleTiming,
             contentWidth: contentWidth
         )
 

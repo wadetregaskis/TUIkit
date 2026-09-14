@@ -465,6 +465,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             palette: palette,
             cursorStyle: cursorStyle,
             cursorTimer: context.environment.cursorTimer,
+            cursorTiming: context.environment.indicatorCycleTiming,
             contentWidth: textWidth
         )
 

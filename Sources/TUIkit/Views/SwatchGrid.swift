@@ -205,7 +205,7 @@ struct _SwatchGridCore: View, Renderable {
                             entries[handler.cursor], cellWidth: cellWidth, palette: palette,
                             mark: (color: $0, isBold: cycle.isFocused))
                     },
-                    clock: .cursor)
+                    frameDuration: cycle.frameDuration, clock: cycle.clock)
             ]
         }
 

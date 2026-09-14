@@ -60,7 +60,11 @@ public struct AnimatedColor: Sendable, Equatable {
     /// The clock that advances it.
     public let clock: AnimationClock
 
-    /// One colour per tick of a full cycle. Never empty.
+    /// How long each frame is shown, in seconds: the rate a run built from this
+    /// colour steps at, on ``clock``.
+    public let frameDuration: Double
+
+    /// One colour per frame of a full cycle. Never empty.
     ///
     /// Materialised on demand: prefer ``current`` and ``isAnimating``, which
     /// answer without building an array.
@@ -76,17 +80,22 @@ public struct AnimatedColor: Sendable, Equatable {
         storage = .constant(color)
         step = 0
         clock = .cursor
+        frameDuration = AnimationClock.cursor.tickInterval
     }
 
     /// A colour given as every frame of its cycle.
     ///
     /// - Parameters:
-    ///   - frames: One colour per tick. An empty array is treated as a single
+    ///   - frames: One colour per frame. An empty array is treated as a single
     ///     terminal-default frame rather than trapping — a colour is not the
     ///     place to take an app down.
     ///   - step: Which frame is showing now.
+    ///   - frameDuration: How long each frame is shown, in seconds. Defaults to
+    ///     `clock`'s own interval.
     ///   - clock: The clock that advances it.
-    public init(frames: [Color], step: Int, clock: AnimationClock = .cursor) {
+    public init(
+        frames: [Color], step: Int, frameDuration: Double? = nil, clock: AnimationClock = .cursor
+    ) {
         switch frames.count {
         case 0: storage = .constant(.default)
         case 1: storage = .constant(frames[0])
@@ -94,6 +103,7 @@ public struct AnimatedColor: Sendable, Equatable {
         }
         self.step = step
         self.clock = clock
+        self.frameDuration = frameDuration ?? clock.tickInterval
     }
 
     /// The colour to draw in the frame being rendered now.
@@ -148,7 +158,9 @@ public struct AnimatedColor: Sendable, Equatable {
         switch storage {
         case .constant(let colour): Self(colour.resolve(with: palette))
         case .cycle(let frames):
-            Self(frames: frames.map { $0.resolve(with: palette) }, step: step, clock: clock)
+            Self(
+                frames: frames.map { $0.resolve(with: palette) }, step: step,
+                frameDuration: frameDuration, clock: clock)
         }
     }
 
@@ -174,7 +186,7 @@ public struct AnimatedColor: Sendable, Equatable {
         guard let first = drawn.first else { return nil }
         return AnimatedCellRun(
             offsetX: offsetX, offsetY: offsetY, width: first.strippedLength,
-            frames: drawn, clock: clock)
+            frames: drawn, frameDuration: frameDuration, clock: clock)
     }
 }
 
@@ -207,8 +219,7 @@ extension SelectionEmphasisClock {
     @MainActor
     public func animatedColor(_ isFocused: Bool, dim: Color, bright: Color) -> AnimatedColor {
         let cycle = self.cycle(isFocused)
-        return AnimatedColor(
-            frames: cycle.colors(dim: dim, bright: bright), step: cycle.step, clock: .cursor)
+        return cycle.animatedColor(dim: dim, bright: bright)
     }
 }
 
@@ -219,6 +230,8 @@ extension SelectionEmphasisCycle {
     /// produces, for a caller that already has the cycle in hand.
     @MainActor
     public func animatedColor(dim: Color, bright: Color) -> AnimatedColor {
-        AnimatedColor(frames: colors(dim: dim, bright: bright), step: step, clock: .cursor)
+        AnimatedColor(
+            frames: colors(dim: dim, bright: bright), step: step,
+            frameDuration: timing.frameDuration, clock: timing.clock)
     }
 }

@@ -1308,11 +1308,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 budget: budget)
             let yStart = rowLines.count
             rowLines.append(contentsOf: styledLines)
-            if let pulseFrames {
+            if let pulseFrames, let timing = rendered.pulseTiming {
                 pulseRuns += pulseFrames.enumerated().map {
                     RowRun(
                         y: yStart + $0.offset, x: 0, width: rowWidth, frames: $0.element,
-                        frameDuration: AnimationClock.cursor.tickInterval, clock: .cursor)
+                        frameDuration: timing.frameDuration, clock: timing.clock)
                 }
             }
             pulseRuns += childRuns.map { $0.moved(to: yStart + $0.y) }
@@ -1610,12 +1610,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
             for (offset, rowLine) in styledLines.enumerated() {
                 lines.append(fitted(rowLine))
-                if let frames = pulseFrames?[offset] {
+                if let frames = pulseFrames?[offset], let timing = rendered.pulseTiming {
                     pulseRuns.append(
                         RowRun(
                             y: yStart + offset, x: 0, width: contentRowWidth,
                             frames: frames.map(fitted),
-                            frameDuration: AnimationClock.cursor.tickInterval, clock: .cursor))
+                            frameDuration: timing.frameDuration, clock: timing.clock))
                 }
             }
             // The row's own runs need no `fitted` pass — they were already
@@ -3152,6 +3152,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return RenderedRow(
             lines: perStep[step],
             pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } },
+            pulseTiming: cycle.timing,
             claims: claims(over: nil),
             droppedRunClaims: droppedRunClaims + childRuns.flatMap(\.leftBehind))
     }
@@ -3163,6 +3164,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let lines: [String]
         /// `pulseFrames[line][step]`, or `nil` for a row that does not animate.
         let pulseFrames: [[String]]?
+        /// The frame duration and clock `pulseFrames` step on: the cycle's, carried
+        /// to where the runs are built rather than assumed there.
+        var pulseTiming: IndicatorCycleTiming?
         /// Runs the row's OWN content left behind — a spinner, a blinking
         /// cursor, a pulsing badge — with `line` an index into ``lines`` and `x`
         /// already past the row's leading pad. Empty for the overwhelming

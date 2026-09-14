@@ -244,11 +244,33 @@ public struct SelectionEmphasisClock {
 /// second route legal: nothing about this frame's appearance depends on *when*
 /// it was rendered, so it can be reproduced without rendering.
 public struct SelectionEmphasisCycle: Sendable, Equatable {
-    /// One emphasis per tick of a full cycle.
+    /// One emphasis per frame of a full cycle.
     public let frames: [SelectionEmphasis]
 
     /// Where the clock is now — the index to draw immediately.
     public let step: Int
+
+    /// How long each of ``frames`` is shown, in seconds.
+    ///
+    /// The `run` overloads build their run at this rate. A view that builds its
+    /// own ``AnimatedCellRun`` from ``colors(dim:bright:)`` passes it on, with
+    /// ``clock``, or its run steps at the clock's default interval whatever this
+    /// cycle is laid out on.
+    public var frameDuration: Double { timing.frameDuration }
+
+    /// The clock ``step`` is counted on, and the one a run built from this cycle
+    /// replays on.
+    public var clock: AnimationClock { timing.clock }
+
+    /// `frameDuration` and `clock`, as the cycle carries them.
+    let timing: IndicatorCycleTiming
+
+    /// A cycle of `frames`, showing `step` now, laid out on `timing`.
+    init(frames: [SelectionEmphasis], step: Int, timing: IndicatorCycleTiming = .cursorTick) {
+        self.frames = frames
+        self.step = step
+        self.timing = timing
+    }
 
     /// Whether this actually animates. A `.none` style, or an unfocused
     /// element, is a single frame: a still picture, not an animation.
@@ -391,10 +413,10 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
             offsetY: offsetY,
             width: first.strippedLength,
             frames: drawn,
-            // The cursor clock, because that is the one this cycle's frames were
-            // laid out on (`CursorTimer.cycleTicks`) — a run handed to the pulse
-            // clock would advance at a different rate than it was built for.
-            clock: .cursor)
+            // The cycle's own frame duration and clock, because those are what its
+            // frames were laid out on: a run handed any other would advance at a
+            // different rate than it was built for.
+            frameDuration: timing.frameDuration, clock: timing.clock)
     }
 }
 
@@ -421,10 +443,14 @@ extension SelectionEmphasisClock {
                 phase: CursorTimer.pulsePhase(atTick: tick, speed: style.speed),
                 blinkOn: CursorTimer.blinkVisible(atTick: tick, speed: style.speed))
         }
-        // `elapsedTicks` is a plain read: unlike `pulsePhase(for:)` it does not
-        // mark the frame as having consulted the clock, so a producer that uses
-        // it stays replayable.
-        return SelectionEmphasisCycle(frames: frames, step: environment.cursorTimer?.elapsedTicks ?? 0)
+        // Read only where the cycle animates: a still cycle is one frame, and no
+        // timing moves it.
+        let timing = environment.indicatorCycleTiming
+        // `step(on:)` is a plain read: unlike `pulsePhase(for:)` it does not mark
+        // the frame as having consulted the clock, so a producer that uses it stays
+        // replayable.
+        return SelectionEmphasisCycle(
+            frames: frames, step: timing.step(on: environment.cursorTimer), timing: timing)
     }
 }
 

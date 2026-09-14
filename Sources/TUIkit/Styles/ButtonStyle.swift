@@ -681,8 +681,8 @@ private struct _ButtonStyleBody: View, Renderable {
             buffer.animatedCells = [
                 AnimatedCellRun(
                     offsetX: 0, offsetY: 0,
-                    width: BorderRenderer.focusIndicatorWidth,
-                    frames: prefixes, clock: .cursor)
+                    width: BorderRenderer.focusIndicatorWidth, frames: prefixes,
+                    frameDuration: cycle.frameDuration, clock: cycle.clock)
             ]
         }
         // §18.4 lists the focus ● as an open question, and it is now ANSWERED
@@ -816,8 +816,8 @@ private struct _ButtonStyleBody: View, Renderable {
                 buffer.animatedCells += body.lines.indices.map { row in
                     AnimatedCellRun(
                         offsetX: 0, offsetY: row,
-                        width: BorderRenderer.focusIndicatorWidth,
-                        frames: prefixes, clock: .cursor)
+                        width: BorderRenderer.focusIndicatorWidth, frames: prefixes,
+                        frameDuration: cycle.frameDuration, clock: cycle.clock)
                 }
             }
             return buffer
