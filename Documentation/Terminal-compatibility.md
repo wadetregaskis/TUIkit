@@ -3177,29 +3177,59 @@ Sidebar) and ⌥⌘S (Toggle Sidebar), through `commandKey`. Under the default
 | Chord | Resolves to | Bytes | Decodes to |
 |---|---|---|---|
 | ⌃⌘S | ⌃S | `0x13` | `.character("s")`, ctrl |
-| ⌥⌘S | ⌥⌃S | `ESC 0x13` (Esc+ mode) | `.character("s")`, ctrl + alt |
+| ⌥⌘S | ⌥⌃S | `ESC 0x13` (where Option is sent as ESC) | `.character("s")`, ctrl + alt |
 
 **⌘S and ⌃⌘S collapse.** Removing ⌘ and inserting ⌃ turns an app's plain ⌘S
 (Save) into ⌃S as well, so the two are one trigger. The chords therefore register
 in the shortcut registry's framework-default tier, which any app shortcut beats
 whatever the registration order; on a screen that binds Save, ⌃S saves and ⌥⌃S
-still toggles the sidebar.
+still toggles the sidebar, but only in a terminal that sends ⌥⌃S as `ESC 0x13`.
+Of the four measured below, that is Ghostty alone.
 
-**Why `cat -v` shows nothing for ⌃S, and why that is not a measurement.** The
-owner ran `cat -v` in Apple Terminal and pressed ⌃S and ⌃⌥S: nothing appeared.
-That is expected and says nothing about Terminal.app. `cat` runs with the tty in
-cooked mode, where IXON flow control takes ^S as XOFF and pauses output instead of
-delivering the byte (^Q resumes), and ICANON holds input back until Return in any
-case. TUIkit's raw mode clears IXON and ICANON (`Terminal.enableRawMode`), so
-`0x13` reaches the parser; `NavigationSplitViewSidebarChordTests` pins that
-through the `readSource` seam, and pins `ESC 0x13` too. A real measurement needs
-the tty in raw mode without IXON, `stty raw -echo -ixon; od -c`, or a PTY probe.
+**Why plain `cat -v` showed nothing for ⌃S.** The owner first ran `cat -v` in
+Apple Terminal and pressed ⌃S and ⌃⌥S: nothing appeared. The tty was to blame,
+not the terminal: IXON flow control takes ^S as XOFF and pauses output instead of
+delivering the byte (^Q resumes). ICANON also holds input back from `cat` until
+Return, but the tty echoes each byte as it arrives, so with IXON cleared that
+echo is a reading. TUIkit's raw mode clears IXON and ICANON
+(`Terminal.enableRawMode`), so `0x13` reaches the parser;
+`NavigationSplitViewSidebarChordTests` pins that through the `readSource` seam,
+and pins `ESC 0x13` too.
 
-*Not yet captured:* **what ⌥⌃S sends.** That depends on each terminal's Option
-setting, as the ⌥⌃A table above does: `ESC 0x13` in Esc+ mode, which the chord
-matches; the high bit in Meta mode, or whatever Normal mode composes, neither of
-which reaches it. Measure it with the raw-mode method above, in Terminal.app,
-iTerm2, Ghostty and Warp.
+**What the terminals send.** Measured 2026-09-13 by the owner, `stty -ixon; cat -v`,
+reading the echo. The terminal versions and Option-key settings were not
+recorded.
+
+| Pressed | Apple Terminal | Ghostty | iTerm2 | Warp |
+|---|---|---|---|---|
+| ⌃S | `^S` | `^S` | `^S` | `^S` |
+| ⌥⌃S | `^S` | `^[^S` | `^S` | `^S` |
+
+The echo (ECHOCTL) spells a C0 byte and ESC faithfully, `^S` for `0x13` and `^[`
+for ESC, so the readings are `0x13` and `ESC 0x13`. It does not spell a
+Meta-mode high-bit byte that way: a macOS PTY with `-ixon` echoes `0x13` as `^S`
+and `ESC 0x13` as `^[^S` before any Return, but echoes `0x93` back as the raw
+byte (checked 2026-09-14). So a `^S` reading is `0x13`, not a Meta byte, and a
+Meta-mode reading needs raw mode: `stty raw -echo -ixon; od -c`, or a PTY probe.
+
+At those settings ⌃S arrives as ⌃S everywhere. ⌥⌃S arrives as ⌥⌃S (Alt+Ctrl+S,
+`ESC 0x13`) only in Ghostty. Apple Terminal, iTerm2 and Warp drop the Option and
+send plain `0x13`, which is ⌃S, the show-sidebar chord. On a bare split view the
+difference is invisible, since both chords toggle. It matters where the app binds
+⌃S: there ⌥⌃S toggles the sidebar in Ghostty and runs the app's shortcut in the
+other three. Under `.commandKey(.option)`, which binds ⌥⌃S and ⌥S but not ⌃S, the
+other three's ⌥⌃S toggles nothing.
+
+Ghostty's reading matches its documentation. The `macos-option-as-alt` entry in
+its ghostty.5 man page (the copy shipped in Ghostty 1.3.1) says an Option
+sequence that produces no printable character is treated as Alt whatever that
+setting is. Its example is `alt+ctrl+a`, the ⌥⌃A select-all chord above, which
+still has not been measured.
+
+*Not yet captured:* **whether an Option setting changes the other three.** Apple
+Terminal's "Use Option as Meta key" and iTerm2's per-profile Esc+/Meta/Normal
+choice may make ⌥⌃S send `ESC 0x13` or a high-bit byte, and Warp has its own
+setting. Record each terminal's version and setting with the reading.
 
 ### Shifted function keys are re-coded (Apple Terminal)
 
