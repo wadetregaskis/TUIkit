@@ -131,7 +131,7 @@ struct AppleTerminalPaletteTests {
     @Test("Registry exposes the phosphor presets plus the 10 Terminal profiles")
     func registry() {
         #expect(PaletteRegistry.phosphorPresets.count == 6)
-        #expect(PaletteRegistry.terminalProfiles.count == 10)
+        #expect(PaletteRegistry.appleTerminalProfiles.count == 10)
         #expect(PaletteRegistry.all.count == 16)
         // Phosphor presets come first, then the Terminal profiles.
         #expect(PaletteRegistry.all.prefix(6).allSatisfy { !$0.id.hasPrefix("appleTerminal.") })

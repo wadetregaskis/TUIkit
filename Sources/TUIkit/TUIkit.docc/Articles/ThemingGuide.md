@@ -26,7 +26,7 @@ colours those profiles ship with.
 
 ``PaletteRegistry/all`` lists every built-in palette (the six presets followed by
 the ten profiles); ``PaletteRegistry/phosphorPresets`` and
-``PaletteRegistry/terminalProfiles`` expose the two groups separately.
+``PaletteRegistry/appleTerminalProfiles`` expose the two groups separately.
 
 ## Using Palettes
 

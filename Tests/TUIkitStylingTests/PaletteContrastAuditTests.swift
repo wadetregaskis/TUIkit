@@ -301,7 +301,7 @@ extension PaletteContrastAuditTests {
 
     @Test("Report: key derived colours (hex) for the Terminal profiles")
     func hexReport() {
-        for palette in PaletteRegistry.terminalProfiles {
+        for palette in PaletteRegistry.appleTerminalProfiles {
             print(
                 "\(palette.name): bg \(Self.hex(palette.background)) accent \(Self.hex(palette.accent)) "
                     + "statusBar \(Self.hex(palette.statusBarBackground)) appHeader \(Self.hex(palette.appHeaderBackground)) "

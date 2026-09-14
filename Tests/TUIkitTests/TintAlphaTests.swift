@@ -84,7 +84,7 @@ struct TintAlphaTests {
     @Test("The hovered face is opaque under every faint tint")
     func hoveredFaceIsOpaqueUnderFaintTints() {
         var fellBack = 0
-        for base in PaletteRegistry.phosphorPresets + PaletteRegistry.terminalProfiles {
+        for base in PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles {
             for step in stride(from: 0, through: 48, by: 4) {
                 let tinted = TintedPalette(base: base, tint: Color.red.opacity(Double(step) / 255))
                 let face = tinted.hoveredControlFace

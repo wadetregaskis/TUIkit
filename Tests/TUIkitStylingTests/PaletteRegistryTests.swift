@@ -16,7 +16,7 @@ struct PaletteRegistryTests {
     func registryCount() {
         // 6 phosphor presets + 10 Terminal.app profiles = 16.
         #expect(PaletteRegistry.phosphorPresets.count == 6)
-        #expect(PaletteRegistry.terminalProfiles.count == 10)
+        #expect(PaletteRegistry.appleTerminalProfiles.count == 10)
         #expect(PaletteRegistry.all.count == 16)
     }
 

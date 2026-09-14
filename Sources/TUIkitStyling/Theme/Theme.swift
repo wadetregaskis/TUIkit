@@ -879,13 +879,13 @@ public struct PaletteRegistry {
     ///
     /// Order: Basic → Grass → Homebrew → Man Page → Novel → Ocean → Pro →
     /// Red Sands → Silver Aerogel → Solid Colors
-    public static let terminalProfiles: [any Palette] = AppleTerminalPalette.Profile.allCases.map {
+    public static let appleTerminalProfiles: [any Palette] = AppleTerminalPalette.Profile.allCases.map {
         AppleTerminalPalette($0)
     }
 
     /// All built-in palettes in cycling order: the phosphor presets first, then
     /// the Terminal.app profiles.
-    public static let all: [any Palette] = phosphorPresets + terminalProfiles
+    public static let all: [any Palette] = phosphorPresets + appleTerminalProfiles
 
     /// Finds a palette by ID.
     public static func palette(withId id: String) -> (any Palette)? {
