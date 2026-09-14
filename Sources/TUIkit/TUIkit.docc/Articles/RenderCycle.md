@@ -4,7 +4,7 @@ Understand how TUIkit turns your view tree into terminal output: one frame at a 
 
 ## Overview
 
-Every frame in TUIkit follows the same synchronous pipeline: **clear per-frame state → build environment → render the view tree → diff against previous frame → flush to terminal → track lifecycle**. The view tree is fully re-evaluated each frame, but only **changed terminal lines** are written: and all writes are collected in a frame buffer and flushed as a **single `write()` syscall**.
+Every frame in TUIkit follows the same synchronous pipeline: **clear per-frame state → build environment → render the view tree → diff against previous frame → flush to terminal → track lifecycle**. Each frame evaluates `app.body` again and walks the view tree from the root, but not every body runs: a memoized subtree whose cached buffer is still valid (an `.equatable()` view, or a `ForEach` row over an `Equatable` element) is served from `RenderCache`, and nothing below it is visited (see <doc:RenderCycle#Subtree-Memoization>). Only **changed terminal lines** are written, and all writes are collected in a frame buffer and flushed as a **single `write()` syscall**.
 
 ## What Triggers a Frame
 
@@ -140,7 +140,7 @@ The status bar renders in a separate pass but writes into the **same frame buffe
 Three managers finalize the frame:
 
 - The **`LifecycleManager`** compares the current frame's tokens with the previous frame's. Disappeared views (tokens present last frame but absent now) fire their `onDisappear` callbacks; their tokens are removed from the appeared set, allowing future `onAppear` if they return.
-- The **`StateStorage`** performs garbage collection: any state whose view identity was not marked active during this render pass is removed. This prevents memory leaks from views that have been permanently removed.
+- The **`StateStorage`** performs garbage collection: any state whose view identity was not marked active during this render pass, and is not under a subtree retained for the pass (the rows a lazy stack, `List` or `Table` left out of its window, a collapsed `DisclosureGroup`'s content, a memoized subtree served from the cache), is removed. This prevents memory leaks from views that have been permanently removed.
 - The **`RenderCache`** removes inactive entries (subtrees no longer in the view tree) and optionally logs per-frame cache statistics.
 
 All state changes inside the lifecycle manager are `NSLock`-protected. Callbacks execute **outside** the lock to prevent deadlocks.

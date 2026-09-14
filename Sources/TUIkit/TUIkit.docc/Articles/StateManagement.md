@@ -156,9 +156,13 @@ path. Directory creation, loads, encodes and writes are all reported.
 
 ## How State Survives Re-Rendering
 
-TUIkit re-evaluates the entire view tree on every frame. When `body` is called, views are
-reconstructed from scratch. Despite this, `@State` values persist: they are never reset
-to their initial value.
+Each frame TUIkit renders evaluates `app.body` again and walks the view tree from the root,
+so the views it meets are new values, built again by their parents' bodies. Not every body
+runs, though. A memoized subtree whose cached buffer is still valid, such as an
+`.equatable()` view or a `ForEach` row over an `Equatable` element, is served from the
+render cache, and nothing below it is visited. A lazy stack in a `ScrollView`, a `List` or
+a `Table` renders only the rows in its window. Either way, `@State` values persist: while a view stays in the
+tree, its state is never reset to its initial value.
 
 ### Structural Identity
 
@@ -209,8 +213,29 @@ When a ``State`` value changes:
 
 ### Garbage Collection
 
-Views that disappear from the tree (e.g., a conditional branch switches) have their state
-automatically cleaned up at the end of each render pass. `ConditionalView` also immediately
-invalidates the inactive branch's state to prevent stale values.
+At the end of each render pass, `StateStorage` drops the state of every identity that was
+not marked active during the pass. A composite view marks its identity as it renders, so
+the state of a view that has left the tree is dropped at the end of the first pass that
+does not render it.
 
-This is simple and predictable: the view tree is fully re-evaluated each frame (no virtual DOM), with persistent state. Terminal output is then diffed at the line level: only changed lines are written. See <doc:RenderCycle> for details on the output optimization pipeline.
+Some views stay in the tree without rendering, and their state is kept. The view above them
+declares a retained subtree for the pass, and nothing under a retained root is dropped:
+- a lazy stack, `List` or `Table`, for the rows outside its window
+- a collapsed `DisclosureGroup`, for its content
+- a memoized subtree served from the render cache, for everything below it
+
+The declaration is made again on each pass that renders the declaring view, so once that
+view leaves the tree its subtree is dropped too. A row deleted from a windowed container's
+data is not dropped by itself: its state stays as long as the container keeps retaining its
+subtree, which for a `List` or `Table` is as long as it renders.
+
+`ConditionalView` drops the inactive branch's state itself, but only on a render pass where
+it renders a different branch from the one it rendered last, and never while measuring.
+Outside a retained root the end-of-pass prune would drop that state anyway; under one, this
+is what drops it. A conditional that is not rendered, in a row outside the window or in a
+memoized subtree served from the cache, notices the change on the next pass that renders
+it, not on the frame the condition changed.
+
+There is no virtual DOM to diff: each rendered frame walks the view tree again and draws it
+into a buffer, with state kept in `StateStorage` and memoized subtrees served from the
+render cache. Terminal output is then diffed at the line level: only changed lines are written. See <doc:RenderCycle> for details on the output optimization pipeline.
