@@ -72,6 +72,7 @@ enum Scenarios {
         GradientsScenario.descriptor,
         AlphaRampsScenario.descriptor,
         MenuBarScenario.descriptor,
+        KeyRowsScenario.descriptor,
         KitchenSinkScenario.descriptor,
     ]
 
