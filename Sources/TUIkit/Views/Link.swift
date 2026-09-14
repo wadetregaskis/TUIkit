@@ -288,10 +288,16 @@ private struct TerminalHyperlinkModifier: ViewModifier {
         // stripped the hyperlink from exactly the link the user had selected,
         // on the first tick, until focus moved away and a full render repainted
         // the row.
+        //
+        // The per-frame alpha comes along unchanged: the escapes cost no cells and
+        // its spans are run-relative, so it is still true of the linked frames. It
+        // is also the only statement of what those cells owe, so rebuilt without
+        // it, a caret over a faded well inside a link replayed at full strength.
         result.animatedCells = result.animatedCells.map { run in
             AnimatedCellRun(
                 offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-                frames: run.frames.map(linked), frameDuration: run.frameDuration, clock: run.clock)
+                frames: run.frames.map(linked), frameDuration: run.frameDuration, clock: run.clock,
+                alpha: run.alpha)
         }
         return result
     }

@@ -4265,6 +4265,17 @@ the slot. Both now append the runs' drawn-frame regions after each buffer's clai
 buffer's coordinates, and the slot's buffer carries them to `attachRowOpacity` like any
 row's content regions.
 
+A sixth dropped nothing and lost the payload anyway, `RowRun`'s omission in a different file.
+`Link`'s OSC 8 modifier rebuilds every run under it so each frame carries its own link pair
+(a splice closes whatever link is open at the cut), and it rebuilt them field by field
+without `alpha`. So a `TextField` in a link's label drew its blink-off well at full strength
+on a host that honours OSC 8, and faded on one that does not. It passes the payload through
+unchanged now: the escapes cost no cells and the spans are run-relative, so they are still
+true of the linked frames. `dimmedAsBackdrop` is the one rebuild that drops it deliberately.
+Its frames are washed in two new colours, and one static claim covers them (§68.5). The old
+payload describes colours that are no longer there, and keeping it beside that claim would
+break the XOR the resolver asserts.
+
 ## 70. A run left outside the buffer that carries it (2026-09-12)
 
 `OverlayLayer`'s leading cut (`cutting(_:leadingColumns:rows:)`) moves every payload

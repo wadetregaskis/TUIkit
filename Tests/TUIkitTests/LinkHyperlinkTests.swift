@@ -105,6 +105,46 @@ struct LinkHyperlinkTests {
         }
     }
 
+    /// A run can carry what its cells owe per frame (`AnimatedRunAlpha`), and when it
+    /// does the run is the ONLY thing saying so: a blinking caret over a faded well has
+    /// no rectangle true of both its frames. The link rebuilds every run to give its
+    /// frames their own pair, and rebuilt field by field it dropped that payload — so a
+    /// text field in a link's label replayed its well at full strength on a host that
+    /// honours OSC 8, and faded correctly on one that does not.
+    ///
+    /// The oracle is the same view without the hyperlink: the escapes cost no cells and
+    /// the spans are run-relative, so the payload must come through unchanged.
+    @Test("A label's run keeps its per-frame alpha through the hyperlink")
+    func runAlphaSurvivesTheLink() throws {
+        func drawn() -> FrameBuffer {
+            let tui = TUIContext()
+            var environment = EnvironmentValues()
+            environment.palette = FadedAll()
+            environment.applyRuntimeServices(from: tui)
+            // Its own focus manager, or the field is not focused and has no caret.
+            environment.focusManager = FocusManager()
+            let context = RenderContext(
+                availableWidth: 40, availableHeight: 3, environment: environment, tuiContext: tui
+            ).isolatingRenderCache()
+            // A URL mode, so the label is not wrapped in a button and the field is the
+            // one focusable thing on the page.
+            let view = Link(destination: url) { TextField("label", text: .constant("abc")) }
+                .linkDisplay(.urlInParentheses)
+            return renderToBuffer(view, context: context)
+        }
+        let plain = TerminalHyperlink.withSupport(false) { drawn() }
+        let linked = TerminalHyperlink.withSupport(true) { drawn() }
+
+        let expected = try #require(
+            plain.animatedCells.first { $0.alpha != nil },
+            "the premise: the caret's run states its alpha when nothing rebuilds it")
+        let caret = try #require(
+            linked.animatedCells.first { $0.offsetX == expected.offsetX && $0.offsetY == expected.offsetY },
+            "the caret still animates: \(linked.animatedCells.map { ($0.offsetX, $0.offsetY) })")
+        #expect(caret.frames.allSatisfy { $0.contains("\u{1B}]8;;https://") }, "the premise: it was rebuilt")
+        #expect(caret.alpha == expected.alpha, "the payload came through: \(String(describing: caret.alpha))")
+    }
+
     /// A terminal-owned ⌘-click goes to the system opener over the top of
     /// ``OpenURLAction``, so an app that intercepts its own scheme needs a way
     /// to keep every URL for itself.
