@@ -490,6 +490,27 @@ struct IndicatorAnimationSpeedBarTests {
         #expect(try cycleNanos(2) == 800_000_000)
     }
 
+    /// Each frame of a picture bar is an image in the terminal under its own token. The
+    /// bar's disappear handler is replaced at every render and knows only the newest
+    /// frame count, so a rebuild with fewer frames has to give back the tokens past it
+    /// itself: nothing else ever will.
+    @Test("A picture bar rebuilt with fewer frames gives the terminal back the pictures it no longer names")
+    func rebuildWithFewerPicturesReleasesTheRest() throws {
+        let tui = Self.freshContext()
+        func frameCount(_ speed: IndicatorAnimationSpeed) throws -> Int {
+            let buffer = bar(
+                ProgressView().indeterminateStyle(.gradient())
+                    .indicatorAnimationSpeed(speed, for: .indeterminateProgress),
+                pictures: true, tui: tui)
+            #expect(placeholders(buffer) == 20, "the picture path was not taken")
+            return try #require(buffer.animatedCells.first).frames.count
+        }
+        #expect(try frameCount(1) == 72)
+        #expect(tui.terminalImageStore.imageCount == 72)
+        #expect(try frameCount(2) == 36)
+        #expect(tui.terminalImageStore.imageCount == 36)
+    }
+
     /// At 30 frames a second an hour is 108,000 frames, every one built at the first
     /// render and held for as long as the bar is on screen.
     @Test("An hour-long pass is a thousand frames of 3.6 s, and lasts exactly an hour")

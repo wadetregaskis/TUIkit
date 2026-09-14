@@ -423,6 +423,10 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let pictures: Bool
         let frames: [String]
         let run: AnimatedCellRun
+        /// How many frame tokens the build asked the image store for: the frame
+        /// count when it was built with a graphics context, and 0 when it was not.
+        /// A rebuild gives back the ones its replacement does not name.
+        let pictureCount: Int
 
         func matches(
             width: Int, style: IndeterminateStyle, filled: Color, empty: Color, accent: Color,
@@ -451,10 +455,12 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // count the glyph cycle is sampled at, so a bar steps at one rate
         // whichever path draws it.
         let frameCount = layout.frameCount
+        let pictureToken = "track-\(context.identity.path)"
         let graphics =
             configuration.motion == .gradient && configuration.fill == "█"
-            ? context.gradientGraphics(token: "track-\(context.identity.path)", frames: frameCount)
+            ? context.gradientGraphics(token: pictureToken, frames: frameCount)
             : nil
+        let pictureCount = graphics == nil ? 0 : frameCount
 
         func build() -> CachedCycle {
             if let graphics,
@@ -478,7 +484,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                         speed: speed, pictures: true, frames: rows,
                         run: AnimatedCellRun(
                             offsetX: 0, offsetY: 0, width: width, frames: rows,
-                            frameDuration: layout.frameDuration, clock: .content))
+                            frameDuration: layout.frameDuration, clock: .content),
+                        pictureCount: pictureCount)
                 }
             }
             let built = IndeterminateRenderer.cycle(
@@ -489,7 +496,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 speed: speed, pictures: false, frames: built.frames,
                 run: AnimatedCellRun(
                     offsetX: 0, offsetY: 0, width: width, frames: built.frames,
-                    frameDuration: built.frameDuration, clock: .content))
+                    frameDuration: built.frameDuration, clock: .content),
+                pictureCount: pictureCount)
         }
 
         guard let stateStorage = context.stateStorage else { return build() }
@@ -509,6 +517,24 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             return cached
         }
         let built = build()
+        // The bar's disappear handler is replaced at every render, and releases only
+        // the frames of the cycle that render asked for. So the frames the old cycle
+        // put in the store and the new one does not name are given back here, or
+        // nothing ever gives them back. After the build, not before, so a new frame
+        // that shares an old picture keeps it. A frame stays named only if it has
+        // the same index and the same spelling, which depends on the count.
+        if let stale = box.value, stale.pictureCount > 0,
+            let store = context.environment.terminalImageStore
+        {
+            for index in 0..<stale.pictureCount {
+                let old = GradientGraphicsContext.token(pictureToken, forFrame: index, of: stale.pictureCount)
+                if index >= built.pictureCount
+                    || old != GradientGraphicsContext.token(pictureToken, forFrame: index, of: built.pictureCount)
+                {
+                    store.release(token: old)
+                }
+            }
+        }
         box.value = built
         return built
     }

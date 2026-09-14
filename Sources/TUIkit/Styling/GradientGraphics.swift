@@ -83,6 +83,16 @@ struct GradientGraphicsContext {
     /// The store token for frame `index` of a cycle; the token itself for a
     /// single picture.
     func token(forFrame index: Int) -> String {
+        Self.token(token, forFrame: index, of: frames)
+    }
+
+    /// The store token for frame `index` of a cycle of `frames` pictures owned by
+    /// `token`, without a context to ask.
+    ///
+    /// For an owner giving back pictures a context no longer describes: the
+    /// spelling depends on the count, so a token has to be spelled with the count
+    /// it was put in the store under, not the count the owner has now.
+    static func token(_ token: String, forFrame index: Int, of frames: Int) -> String {
         frames == 1 ? token : "\(token)/\(index)"
     }
 }
