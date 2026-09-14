@@ -9,7 +9,8 @@ import TUIkitCore
 // MARK: - A moving ramp as pictures
 
 /// The indeterminate `.gradient` motion as a cycle of pictures — one per
-/// frame, each a window onto the same ramp one step further along.
+/// frame, each a window onto the same ramp slid a whole number of pixels
+/// further along.
 ///
 /// The cell renderer draws this motion by sampling the ramp four times a cell
 /// and re-colouring every cell every frame: forty SGR runs a frame, thirty
@@ -51,15 +52,19 @@ enum IndeterminateRaster {
         }
         guard samples.count == steps + 1 else { return nil }
         return (0..<count).map { frame in
-            let phase = Double(frame) / Double(count)
+            // Frame i of `count` is the ramp shifted by ⌊i·P/count⌋ whole pixels,
+            // counted as the glyph cycle counts its frames' steps, so every pixel of
+            // a frame moves by the same amount and the ramp slides rather than
+            // shimmering. Each pixel used to round its own float position in the
+            // ramp, and on a tie pixels of one frame rounded different ways.
+            let shift = IndeterminateRenderer.step(ofFrame: frame, of: count, states: steps)
             var row = [UInt8](repeating: 0, count: size.width * 3)
             for x in 0..<size.width {
-                // The cells' arithmetic, per pixel: each pixel samples at its
-                // own offset in the ramp minus the frame's shift, wrapped, so
-                // the pattern scrolls rightward.
-                let raw = ((Double(x) + 0.5) / Double(size.width) - phase + 1)
-                    .truncatingRemainder(dividingBy: 1)
-                let (r, g, b) = samples[min(steps, Int((raw * Double(steps)).rounded()))]
+                // Pixel x shows sample x + 1 − shift, wrapped, so the pattern
+                // scrolls rightward. The + 1 is where rounding the pixel's centre,
+                // x + ½, lands at a whole shift.
+                let sample: Int = ((x + 1 - shift) % steps + steps) % steps
+                let (r, g, b) = samples[sample]
                 row[x * 3] = r
                 row[x * 3 + 1] = g
                 row[x * 3 + 2] = b

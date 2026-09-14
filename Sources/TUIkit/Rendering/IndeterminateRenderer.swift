@@ -120,11 +120,10 @@ enum IndeterminateRenderer {
                 width: width, configuration: configuration, empty: backgroundColor,
                 accent: accentColor, step: min(states - 1, Int(phase * Double(states))))
         case (.gradient, .step(let step)):
-            return renderGradient(
-                width: width, configuration: configuration,
-                phase: Double(wrapped(step)) / Double(states))
+            return renderGradient(width: width, configuration: configuration, shift: wrapped(step))
         case (.gradient, .phase(let phase)):
-            return renderGradient(width: width, configuration: configuration, phase: phase)
+            return renderGradient(
+                width: width, configuration: configuration, shift: wrapped(Int(phase * Double(states))))
         }
     }
 
@@ -177,21 +176,22 @@ enum IndeterminateRenderer {
         let layout = layout(of: style, speed: speed)
         let configuration = style.configuration
         // Sampled over the configuration's OWN period, whatever the speed: a faster
-        // bar shows the same motion in less time, not a different motion. A sweep's
-        // and a knightRider's frame i of F is their step ⌊i·N/F⌋, counted in
-        // integers (`step(ofFrame:of:states:)`); the other motions are still timed.
+        // bar shows the same motion in less time, not a different motion. A sweep's,
+        // a knightRider's and a gradient's frame i of F is their step ⌊i·N/F⌋,
+        // counted in integers (`step(ofFrame:of:states:)`); a barberPole's and a
+        // pulse's are still timed.
         let sample = period(of: style) / Double(layout.frameCount)
         let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
         let frames = (0..<layout.frameCount).map { index in
             switch configuration.motion {
-            case .sweep, .knightRider:
+            case .sweep, .knightRider, .gradient:
                 render(
                     width: width, style: style, fillColor: fillColor,
                     backgroundColor: backgroundColor, accentColor: accentColor,
                     position: .step(step(ofFrame: index, of: layout.frameCount, states: states)),
                     palette: palette
                 ).text
-            case .barberPole, .pulse, .gradient:
+            case .barberPole, .pulse:
                 render(
                     width: width, style: style, fillColor: fillColor,
                     backgroundColor: backgroundColor, accentColor: accentColor,
@@ -559,12 +559,18 @@ extension IndeterminateRenderer {
     /// period — produces a fluid, OS-style "indeterminate busy" feel
     /// without ever leaving an empty cell.
     ///
-    /// Scrolls left-to-right: subtracting `phase` from each cell's
+    /// Scrolls left-to-right: subtracting `shift` from each cell's
     /// position means a given colour (say amber) reappears at a higher
     /// index as time passes, so the eye reads the gradient as moving
     /// rightward.
+    ///
+    /// `shift` is a whole number of samples, in `0..<samplesPerCell × width`, and cell
+    /// c shows sample (`samplesPerCell` · c − shift), wrapped: every cell of a frame
+    /// moves by the same amount, so one frame is the next one's ramp slid along. Each
+    /// cell used to round its own float position in the ramp, and where that
+    /// position was a tie the cells of one frame rounded different ways.
     private static func renderGradient(
-        width: Int, configuration: IndeterminateConfiguration, phase: Double
+        width: Int, configuration: IndeterminateConfiguration, shift: Int
     ) -> ClaimingRow {
         let ramp = cyclic(configuration.gradient)
         let fill = Array(configuration.fill)
@@ -573,17 +579,14 @@ extension IndeterminateRenderer {
         // `Color.quantisedRamp`, which is what keeps a 256-colour host from
         // banding. Sampling `ramp.color(at:)` per cell went to the cube one
         // cell at a time and reversed four times across a 40-cell track.
+        // Sampled `steps + 1` times, so that sample `steps` is the wrap back to
+        // the first colour, and each sample sits where it always has; a frame
+        // reads the first `steps` of them.
         let steps = samplesPerCell * max(1, width)
         let samples = Color.quantisedRamp(ramp, count: steps + 1, depth: ColorDepth.current)
         return laid(width: width) { column in
-            // Each cell samples at its own offset in the ramp, minus a
-            // global time-dependent shift so the pattern scrolls
-            // rightward. We add 1.0 before the wrap so the subtraction
-            // never produces a negative value (Swift's
-            // `truncatingRemainder` keeps the sign of the dividend).
-            let raw = (Double(column) / Double(max(1, width)) - phase + 1.0)
-                .truncatingRemainder(dividingBy: 1.0)
-            return (glyph(fill, at: column), samples[min(steps, Int((raw * Double(steps)).rounded()))])
+            let sample: Int = ((samplesPerCell * column - shift) % steps + steps) % steps
+            return (glyph(fill, at: column), samples[sample])
         }
     }
 
