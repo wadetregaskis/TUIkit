@@ -19,10 +19,13 @@ extension Color {
     ///   grayscale ramp entry (232–255) is reachable only by a near-neutral
     ///   color: one with a hue of its own may land only on an entry that has a
     ///   hue too, or on black, so a fading accent never steps through gray.
+    /// - `.terminalForeground` and `.terminalBackground` are returned unchanged.
+    ///   Each is SGR 39 or 49 in its own slot and its RGB in the other, and this
+    ///   does not know the slot; the emitter quantises the other slot's RGB.
     /// - `.semantic` must be resolved before calling this method.
     public func downsampledToPalette256() -> Color {
         switch value {
-        case .standard, .bright, .palette256:
+        case .standard, .bright, .palette256, .terminalForeground, .terminalBackground:
             return self
         case .rgb(let red, let green, let blue):
             let index = Self.nearestPalette256Index(red: red, green: green, blue: blue)
@@ -39,10 +42,12 @@ extension Color {
     ///   indices 16–255 are converted via their RGB representation.
     /// - `.rgb` is matched to the closest of the 16 standard/bright
     ///   ANSI colors using Euclidean distance in RGB space.
+    /// - `.terminalForeground` and `.terminalBackground` are returned unchanged,
+    ///   as in ``downsampledToPalette256()``.
     /// - `.semantic` must be resolved before calling this method.
     public func downsampledToANSI16() -> Color {
         switch value {
-        case .standard, .bright:
+        case .standard, .bright, .terminalForeground, .terminalBackground:
             return self
         case .palette256(let index):
             return Self.palette256ToANSI16(index).carryingAlpha(of: self)

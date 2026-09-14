@@ -79,6 +79,12 @@ extension Color {
         case .bright(let ansi): return ["\(ansi.brightForegroundCode)"]
         case .palette256(let index): return ["38", "5", "\(index)"]
         case .rgb(let red, let green, let blue): return ["38", "2", "\(red)", "\(green)", "\(blue)"]
+        case .terminalForeground: return ["\(ANSIColor.default.foregroundCode)"]
+        // No SGR names the default BACKGROUND as a foreground, so this slot gets
+        // the RGB it carries, quantised as an `.rgb` of it would be. `downsampled`
+        // left it alone above because it cannot see the slot.
+        case .terminalBackground(let red, let green, let blue):
+            return Color.rgb(red, green, blue).foregroundCodes(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
@@ -136,6 +142,11 @@ extension Color {
         case .bright(let ansi): return ["\(ansi.brightBackgroundCode)"]
         case .palette256(let index): return ["48", "5", "\(index)"]
         case .rgb(let red, let green, let blue): return ["48", "2", "\(red)", "\(green)", "\(blue)"]
+        case .terminalBackground: return ["\(ANSIColor.default.backgroundCode)"]
+        // The twin of the foreground's arm: no SGR names the default foreground
+        // as a background, so this is the carried RGB, quantised.
+        case .terminalForeground(let red, let green, let blue):
+            return Color.rgb(red, green, blue).backgroundCodes(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."

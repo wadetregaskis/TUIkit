@@ -121,4 +121,38 @@ struct SGRStateColourSetterTests {
             }
         }
     }
+
+    /// `.terminalForeground` and `.terminalBackground` through the blend's front
+    /// door. Not in `colours`: `settersMatchApply` compares against `apply`, which
+    /// reads 39 as a CLEARED slot where a stated colour is `.named(39)`, the same
+    /// split `Color.default` already has. So the oracle here is `Color.default`
+    /// itself in the carried colour's own slot, and the `.rgb` of the same
+    /// components in the other, beside the parameter-list route at every depth.
+    @Test("A carried terminal colour states the default in its own slot and its RGB in the other")
+    func carriedColoursStateTheDefaultOrTheirRGB() {
+        let ink = Color(value: .terminalForeground(red: 171, green: 178, blue: 191))
+        let paper = Color(value: .terminalBackground(red: 40, green: 44, blue: 52))
+        var decorated = SGRState()
+        decorated.apply("\u{1B}[1;4;7;31;44m")  // bold, underline, inverse, red on blue
+        for depth in [ColorDepth.truecolor, .palette256, .basic16, .noColor] {
+            for base in [SGRState(), decorated] {
+                #expect(base.settingForeground(ink, depth: depth) == base.settingForeground(.default, depth: depth))
+                #expect(base.settingBackground(paper, depth: depth) == base.settingBackground(.default, depth: depth))
+                #expect(
+                    base.settingBackground(ink, depth: depth)
+                        == base.settingBackground(.rgb(171, 178, 191), depth: depth), "ink as bg @\(depth)")
+                #expect(
+                    base.settingForeground(paper, depth: depth)
+                        == base.settingForeground(.rgb(40, 44, 52), depth: depth), "paper as fg @\(depth)")
+                for colour in [ink, paper] {
+                    var expectedForeground = base
+                    expectedForeground.setForeground(parameters: colour.foregroundCodes(depth: depth))
+                    #expect(base.settingForeground(colour, depth: depth) == expectedForeground, "fg \(colour) @\(depth)")
+                    var expectedBackground = base
+                    expectedBackground.setBackground(parameters: colour.backgroundCodes(depth: depth))
+                    #expect(base.settingBackground(colour, depth: depth) == expectedBackground, "bg \(colour) @\(depth)")
+                }
+            }
+        }
+    }
 }

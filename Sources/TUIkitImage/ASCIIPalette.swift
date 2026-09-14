@@ -429,6 +429,14 @@ public struct ASCIIPalette: Sendable, Equatable {
         switch colors[index].value {
         case .rgb(let red, let green, let blue):
             return "\(background ? 48 : 38);2;\(red);\(green);\(blue)"
+        // The terminal's own colour in its own slot, and its triple in the other.
+        // The triple is NOT quantised: this module has no depth when it spells a
+        // colour, and ``downsampled(to:)`` leaves a carried entry alone, because
+        // one entry serves both slots.
+        case .terminalForeground(let red, let green, let blue):
+            return background ? "48;2;\(red);\(green);\(blue)" : "39"
+        case .terminalBackground(let red, let green, let blue):
+            return background ? "49" : "38;2;\(red);\(green);\(blue)"
         case .palette256(let value):
             return "\(background ? 48 : 38);5;\(value)"
         case .standard(let ansi):
@@ -455,12 +463,16 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// `.semantic` cannot survive ``resolved(with:)``, and where one somehow
     /// does ``sgrParameters(at:background:)`` spells it as a triple, so it is
     /// safe by the same rule as ``Color/rgb``.
+    ///
+    /// `.terminalForeground` is SGR 39 as ink, the default foreground, so it
+    /// counts as unsafe exactly as `.default` does. `.terminalBackground` as ink
+    /// is spelled as a triple, so it is safe.
     var foregroundSurvivesBold: Bool {
         colors.allSatisfy { color in
             switch color.value {
-            case .rgb, .semantic: return true
+            case .rgb, .semantic, .terminalBackground: return true
             case .palette256(let index): return index >= 16
-            case .standard, .bright: return false
+            case .standard, .bright, .terminalForeground: return false
             }
         }
     }

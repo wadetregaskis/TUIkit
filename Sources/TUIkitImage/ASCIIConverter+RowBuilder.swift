@@ -280,15 +280,21 @@ struct ANSIRowBuilder {
         bytes.append(0x5B)
         switch color.value {
         case .rgb(let red, let green, let blue):
-            appendNumber(background ? 48 : 38)
-            bytes.append(0x3B)
-            bytes.append(0x32)  // "2"
-            bytes.append(0x3B)
-            appendNumber(Int(red))
-            bytes.append(0x3B)
-            appendNumber(Int(green))
-            bytes.append(0x3B)
-            appendNumber(Int(blue))
+            appendTriple(introducer: background ? 48 : 38, red: red, green: green, blue: blue)
+        // The terminal's own colour: 39 or 49 in its own slot and its triple in the
+        // other, exactly as `ASCIIPalette.sgrParameters(at:background:)` spells it.
+        case .terminalForeground(let red, let green, let blue):
+            if background {
+                appendTriple(introducer: 48, red: red, green: green, blue: blue)
+            } else {
+                appendNumber(39)
+            }
+        case .terminalBackground(let red, let green, let blue):
+            if background {
+                appendNumber(49)
+            } else {
+                appendTriple(introducer: 38, red: red, green: green, blue: blue)
+            }
         case .palette256(let index):
             appendNumber(background ? 48 : 38)
             bytes.append(0x3B)
@@ -306,6 +312,19 @@ struct ANSIRowBuilder {
             appendNumber(background ? 49 : 39)
         }
         bytes.append(0x6D)
+    }
+
+    /// `introducer;2;r;g;b`, the 24-bit form of either slot.
+    private mutating func appendTriple(introducer: Int, red: UInt8, green: UInt8, blue: UInt8) {
+        appendNumber(introducer)
+        bytes.append(0x3B)
+        bytes.append(0x32)  // "2"
+        bytes.append(0x3B)
+        appendNumber(Int(red))
+        bytes.append(0x3B)
+        appendNumber(Int(green))
+        bytes.append(0x3B)
+        appendNumber(Int(blue))
     }
 
     /// A non-negative decimal, at most three digits — every SGR parameter

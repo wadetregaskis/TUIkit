@@ -579,7 +579,8 @@ extension Color {
     ///
     /// The same answer ``foregroundCodes(depth:)`` spells — same downsample,
     /// same codes — without the parameter list in between. The slot matters
-    /// only for the NAMED colours (30–37 and 90–97 against 40–47 and 100–107);
+    /// only for the NAMED colours (30–37 and 90–97 against 40–47 and 100–107)
+    /// and for the two carried terminal colours (39 or 49 in their own slot);
     /// the 256-colour and 24-bit forms carry their 38/48 introducer at render
     /// time, from whichever slot they were stored in, so they are the same
     /// value either way.
@@ -597,6 +598,10 @@ extension Color {
         case .bright(let ansi): return .named(Int(ansi.brightForegroundCode))
         case .palette256(let index): return .indexed(Int(index))
         case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
+        case .terminalForeground: return .named(Int(ANSIColor.default.foregroundCode))
+        // The other slot: the carried RGB, quantised, as `foregroundCodes` spells it.
+        case .terminalBackground(let red, let green, let blue):
+            return Color.rgb(red, green, blue).sgrForeground(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
@@ -621,6 +626,10 @@ extension Color {
         case .bright(let ansi): return .named(Int(ansi.brightBackgroundCode))
         case .palette256(let index): return .indexed(Int(index))
         case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
+        case .terminalBackground: return .named(Int(ANSIColor.default.backgroundCode))
+        // The other slot: the carried RGB, quantised, as `backgroundCodes` spells it.
+        case .terminalForeground(let red, let green, let blue):
+            return Color.rgb(red, green, blue).sgrBackground(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."

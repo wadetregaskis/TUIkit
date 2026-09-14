@@ -32,8 +32,9 @@ public struct Color: Sendable, Hashable {
     ///
     /// ## Why a byte and not a `Double`
     ///
-    /// `ColorValue`'s widest payload is `.rgb(UInt8, UInt8, UInt8)`, so `Color`
-    /// is four bytes at alignment 1. A `UInt8` makes it five, still with no
+    /// `ColorValue`'s widest payloads are three `UInt8`s (`.rgb` and the two
+    /// terminal colours), so `Color` is four bytes at alignment 1. A `UInt8`
+    /// makes it five, still with no
     /// padding; a `Double` makes it sixteen, aligned to eight, WITH padding
     /// bytes — and `viewValueHash` hashes the raw bytes of every view struct,
     /// where padding is undefined. A `Double` alpha would make the render memo's
@@ -119,6 +120,27 @@ public struct Color: Sendable, Hashable {
         case palette256(UInt8)
         case rgb(red: UInt8, green: UInt8, blue: UInt8)
         case semantic(SemanticColor)
+        /// The terminal's own default foreground, SGR 39, carrying the RGB it
+        /// paints.
+        ///
+        /// As a foreground it is 39 at every depth that has colour, whatever the
+        /// components say: the terminal paints its own colour, and the components
+        /// are what a blend, a contrast check or a surface walk measures. That is
+        /// the difference from `Color.default`, which is also 39 but measures as
+        /// xterm's grey 229.
+        ///
+        /// As a BACKGROUND no SGR names the default foreground, so it is spelled as
+        /// its RGB, quantised for the depth as a `.rgb` of the same components is.
+        ///
+        /// Downsampling returns it unchanged, because `downsampledToPalette256()`
+        /// does not know which slot a colour is for; the emitter makes the choice.
+        /// So something measuring it as a fill at 256 or 16 colours reads the exact
+        /// RGB where the terminal is shown the quantised one.
+        case terminalForeground(red: UInt8, green: UInt8, blue: UInt8)
+        /// The terminal's own default background, SGR 49, carrying the RGB it
+        /// paints: 49 as a background, its quantised RGB as a foreground. The twin
+        /// of `terminalForeground(red:green:blue:)`.
+        case terminalBackground(red: UInt8, green: UInt8, blue: UInt8)
     }
 
     /// A colour that is fully transparent — SwiftUI's `Color.clear`.
@@ -347,10 +369,13 @@ public struct Color: Sendable, Hashable {
     /// - `.rgb` — returned directly
     /// - `.standard` / `.bright` — mapped to xterm standard RGB values
     /// - `.palette256` — mapped to xterm 256-color palette RGB values
+    /// - `.terminalForeground` / `.terminalBackground` — the RGB they carry
     /// - `.semantic` — returns nil (must be resolved first via ``resolve(with:)``)
     public var rgbComponents: (red: UInt8, green: UInt8, blue: UInt8)? {
         switch value {
-        case .rgb(let red, let green, let blue):
+        case .rgb(let red, let green, let blue),
+            .terminalForeground(let red, let green, let blue),
+            .terminalBackground(let red, let green, let blue):
             return (red, green, blue)
         case .standard(let ansi):
             return ansi.rgbValues
@@ -360,6 +385,25 @@ public struct Color: Sendable, Hashable {
             return Self.palette256ToRGB(index)
         case .semantic:
             return nil
+        }
+    }
+
+    /// Whether the TERMINAL decides what this colour paints, rather than its
+    /// components: the eight ANSI names and their bright twins, `.default`,
+    /// 256-colour indices 0-15 (the same sixteen slots, spelled by index), and
+    /// the two carried cases, SGR 39 and 49.
+    ///
+    /// `.bright(.default)` is not one: its codes come out as 99 and 109, which
+    /// are not SGR. Indices 16-255, the cube and the grey ramp, count as ordinary
+    /// RGB, being conventionally fixed; see "What an ANSI colour actually paints"
+    /// in `Documentation/Terminal-compatibility.md`. A semantic colour is not one
+    /// until it is resolved.
+    package var isTerminalDefined: Bool {
+        switch value {
+        case .standard, .terminalForeground, .terminalBackground: return true
+        case .bright(let ansi): return ansi != .default
+        case .palette256(let index): return index < 16
+        case .rgb, .semantic: return false
         }
     }
 }
