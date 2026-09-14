@@ -3041,12 +3041,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 || backgroundColor?.isOpaque == false
                 || !badgeColumns.isEmpty
             else { return [] }
-            return (0..<row.buffer.lines.count).flatMap { line in
-                SelectableRowClaims.claims(
-                    line: line, width: rowWidth,
-                    cells: line == 0 ? badgeColumns : 0..<0,
-                    ink: line == 0 && !badgeColumns.isEmpty ? palette.foregroundTertiary : nil,
-                    mark: line == 0 && !indicator.isBlank ? indicator.color : nil,
+            return (0..<row.buffer.lines.count).flatMap { line -> [OpacityRegion] in
+                // Named and typed one at a time, not written inline as arguments.
+                // Inline, three ternaries whose arms are `0..<0` and `nil` left
+                // Swift 6.2's type checker to solve them together, and it gave up
+                // ("unable to type-check this expression in reasonable time"). 6.3
+                // manages it, but the package has to build on 6.2.
+                let isFirst = line == 0
+                let cells: Range<Int> = isFirst ? badgeColumns : 0..<0
+                let ink: Color? = isFirst && !badgeColumns.isEmpty ? palette.foregroundTertiary : nil
+                let mark: Color? = isFirst && !indicator.isBlank ? indicator.color : nil
+                return SelectableRowClaims.claims(
+                    line: line, width: rowWidth, cells: cells, ink: ink, mark: mark,
                     fill: backgroundColor)
             }
         }
