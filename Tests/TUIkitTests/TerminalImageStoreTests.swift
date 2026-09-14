@@ -312,6 +312,88 @@ struct TerminalImageStoreTests {
         #expect(store.imageCount == 2)
     }
 
+    // MARK: - Finding a picture among many
+
+    /// A view alone on its image that asks for a new box gets a placement, and
+    /// the image is then in THAT box: a view asking for the picture there
+    /// shares it, and one asking for the old box gets an image of its own.
+    @Test("A picture re-placed in a new box is shared in that box, and not in the old one")
+    func replacedImageIsSharedInItsNewBox() {
+        let store = TerminalImageStore()
+        var built = 0
+        func draw(_ token: String, columns: Int, rows: Int) -> [String]? {
+            store.placeholderRows(
+                token: token, signature: signature("s"), columns: columns, rows: rows,
+                pixels: {
+                    built += 1
+                    return (pixels(64), .rgba, 8, 8)
+                })
+        }
+        let first = draw("a", columns: 4, rows: 2)
+        let moved = draw("a", columns: 8, rows: 4)
+        #expect(built == 1, "the move was a placement")
+        _ = store.takePending()
+
+        let shared = draw("b", columns: 8, rows: 4)
+        #expect(built == 1, "b shares a's image in its new box")
+        #expect(shared == moved)
+        #expect(store.takePending().isEmpty)
+        #expect(store.imageCount == 1)
+
+        let fresh = draw("c", columns: 4, rows: 2)
+        #expect(built == 2, "nothing is drawn in the old box any more, so c transmits")
+        #expect(fresh != first, "c's cells name a new id")
+        #expect(store.imageCount == 2)
+    }
+
+    /// Two images can hold one picture in one box. b transmits the picture in a
+    /// box a is not in, then a, alone on its own image, moves to b's box with a
+    /// placement. A view that arrives after that shares the OLDER image, a's.
+    @Test("Of two images of one picture in one box, a view that arrives later shares the older")
+    func duplicateImagesShareTheOlder() {
+        let store = TerminalImageStore()
+        func draw(_ token: String, columns: Int, rows: Int) -> [String]? {
+            store.placeholderRows(
+                token: token, signature: signature("s"), columns: columns, rows: rows,
+                pixels: { (pixels(64), .rgba, 8, 8) })
+        }
+        _ = draw("a", columns: 4, rows: 2)
+        let newer = draw("b", columns: 8, rows: 4)
+        let older = draw("a", columns: 8, rows: 4)
+        #expect(store.imageCount == 2)
+        #expect(older != newer, "two images, two ids")
+        _ = store.takePending()
+
+        #expect(draw("c", columns: 8, rows: 4) == older)
+        #expect(store.takePending().isEmpty, "shared, not transmitted")
+        #expect(store.imageCount == 2)
+    }
+
+    /// Nothing in the terminal cares what order a shutdown's deletes come in,
+    /// but the bytes should be the same on every run. So they come in the order
+    /// the images were put in: a re-placed image keeps its place, and an image
+    /// transmitted after one was freed goes last.
+    @Test("Releasing everything deletes each image once, in the order they were put in")
+    func releaseAllDeletesInOrderOfArrival() {
+        let store = TerminalImageStore()
+        func draw(_ token: String, _ label: String, columns: Int = 4, rows: Int = 2) {
+            _ = store.placeholderRows(
+                token: token, signature: signature(label), columns: columns, rows: rows,
+                pixels: { (pixels(64), .rgba, 8, 8) })
+        }
+        for index in 0..<10 { draw("t\(index)", "s\(index)") }
+        draw("t0", "s0", columns: 8, rows: 4)
+        store.release(token: "t3")
+        draw("t10", "s10")
+        _ = store.takePending()
+
+        store.releaseAll()
+        let deleted = store.takePending().components(separatedBy: "a=d,d=I,q=2,i=").dropFirst()
+            .map { Int($0.prefix(while: \.isNumber)) }
+        #expect(deleted == [1, 2, 3, 5, 6, 7, 8, 9, 10, 11])
+        #expect(store.imageCount == 0)
+    }
+
     @Test("An extent the protocol cannot address is declined, not truncated")
     func oversizeRequestsAreDeclined() {
         let store = TerminalImageStore()

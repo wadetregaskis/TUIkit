@@ -188,3 +188,11 @@ struct GradientImageSignature: Equatable {
     var width: Int
     var height: Int
 }
+
+extension GradientImageSignature: ImageStoreSignature {
+    /// Where the box sits in its extent, and the picture's size: each row of a
+    /// list under one `.gradientExtent(.subtree)` ramp is a bucket of its own.
+    var storeBucket: [Int] {
+        [frame.originX, frame.originY, frame.width, frame.height, width, height]
+    }
+}

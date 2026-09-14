@@ -81,3 +81,9 @@ struct IndeterminateFrameSignature: Equatable {
     var frame: Int
     var count: Int
 }
+
+extension IndeterminateFrameSignature: ImageStoreSignature {
+    /// Which frame of how many, at what size: a cycle's thousand frames are a
+    /// thousand buckets.
+    var storeBucket: [Int] { [frame, count, width, height] }
+}

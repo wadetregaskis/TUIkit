@@ -788,3 +788,9 @@ struct TrackImageSignature: Equatable {
     var height: Int
     var lit: Int
 }
+
+extension TrackImageSignature: ImageStoreSignature {
+    /// The boundary pixel and the picture's size: each step of a slider being
+    /// dragged is a bucket of its own.
+    var storeBucket: [Int] { [lit, width, height] }
+}

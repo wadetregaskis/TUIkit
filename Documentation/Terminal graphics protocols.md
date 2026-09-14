@@ -793,7 +793,13 @@ the opposite of what one would guess:
 so a column of identical bars, or a list of one icon, transmits once and
 frees when the last holder goes. The signature is type-erased
 (`AnyImageSignature`) so a picture's, a ramp's, a track's and a frame's
-signatures each stay a typed struct of the fields that decide them.
+signatures each stay a typed struct of the fields that decide them. Finding a
+picture does not compare it against every image the store holds. Each
+signature also gives a `storeBucket` (`ImageStoreSignature`), a hashable
+projection of some of its fields that two equal signatures always share: an
+image's path, a ramp's place in its extent, a track's boundary pixel, a frame's
+index. The store files each image under its bucket and cell box, and compares a
+request only against the images filed there.
 
 **Lifetime** is `Image`'s: `RenderContext.gradientGraphics(token:frames:)`
 records the owner as appeared and registers a disappear that releases every
