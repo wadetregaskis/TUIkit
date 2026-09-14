@@ -173,6 +173,20 @@ enum TerminalGraphicsQuery {
     static func sawFence(_ bytes: [UInt8]) -> Bool {
         TerminalModeQuery.sawFence(bytes)
     }
+
+    /// Whether one complete escape sequence is a Kitty graphics reply,
+    /// `ESC _ G … ST`, whichever id it names. No key sends one.
+    static func isReply(_ sequence: ArraySlice<UInt8>) -> Bool {
+        sequence.count >= 3 && sequence.first == 0x1B
+            && sequence[sequence.startIndex + 1] == 0x5F  // '_'
+            && sequence[sequence.startIndex + 2] == 0x47  // 'G'
+    }
+
+    /// Whether one complete escape sequence is the fence: the mode query's
+    /// test, for the same DSR fence.
+    static func isFence(_ sequence: ArraySlice<UInt8>) -> Bool {
+        TerminalModeQuery.isFence(sequence)
+    }
 }
 
 // MARK: - Asking
@@ -219,11 +233,10 @@ extension Terminal {
     /// until the DSR fence lands or the deadline passes.
     ///
     /// Bytes that arrive during the round trip and are not replies — a
-    /// keystroke typed while the app was starting — are discarded, as
-    /// ``queryMode(_:timeout:)`` discards them, rather than handed back
-    /// through ``enqueue(input:)``. ``TerminalIdentityQuery`` is the one
-    /// exchange that does preserve them, and it is the one that runs before a
-    /// host is known at all. A sub-millisecond window at startup is the price.
+    /// keystroke typed while the app was starting, or a focus report sent the
+    /// moment `enableRawMode` turned reporting on — go back to the input
+    /// parser through ``handBackUnconsumed(from:isReply:isFence:)``, as every
+    /// startup exchange hands them back.
     ///
     /// - Returns: `true` only for a terminal that acknowledged the placement.
     ///   Silence, an error reply, no tty, and a host measured to print APC all
@@ -248,6 +261,9 @@ extension Terminal {
         let collected = fencedExchange(
             request: TerminalGraphicsQuery.request, timeout: timeout,
             sawFence: TerminalGraphicsQuery.sawFence)
+        handBackUnconsumed(
+            from: collected, isReply: TerminalGraphicsQuery.isReply,
+            isFence: TerminalGraphicsQuery.isFence)
         return TerminalGraphicsQuery.parse(collected)
     }
 }

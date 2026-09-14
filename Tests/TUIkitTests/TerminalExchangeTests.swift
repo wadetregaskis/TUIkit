@@ -79,4 +79,152 @@ struct TerminalExchangeTests {
         #expect(script.readCount == 2, "the read after the fence belongs to the input parser")
         #expect(script.reads == [Array("later".utf8)])
     }
+
+    // MARK: - What is not a reply reaches the input parser
+
+    /// Every event the parser produces in `pumps` calls, nils dropped.
+    private func events(_ terminal: Terminal, pumps: Int = 12) -> [TerminalInput] {
+        (0..<pumps).compactMap { _ in terminal.readEvent() }
+    }
+
+    /// The two exchanges that used to discard what they read, each with a
+    /// reply it credits.
+    enum Exchange: String, CaseIterable, Sendable {
+        case mode, graphics
+
+        var reply: String {
+            switch self {
+            case .mode: "\u{1B}[?2027;2$y"
+            case .graphics: "\u{1B}_Gi=\(TerminalGraphicsQuery.probeID);OK\u{1B}\\"
+            }
+        }
+
+        /// Runs the exchange, and whether it credited the reply.
+        @MainActor
+        func run(on terminal: Terminal) -> Bool {
+            switch self {
+            case .mode: terminal.askMode(2027, timeout: 5) == .reset
+            case .graphics: terminal.askGraphicsSupport(timeout: 5).placement
+            }
+        }
+    }
+
+    private static let focusIn = "\u{1B}[I"
+    private static let focusOut = "\u{1B}[O"
+
+    /// A terminal can send a focus report the instant `enableRawMode` turns
+    /// reporting on, and a user can type while the app starts. Both land on
+    /// stdin during whichever exchange is reading it, and both are the input
+    /// parser's.
+    @Test(
+        "A keystroke and a focus report during the exchange reach the parser",
+        arguments: Exchange.allCases)
+    func interleavedInputReachesTheParser(exchange: Exchange) {
+        let (terminal, _) = makeTerminal(
+            reads: ["q" + exchange.reply + Self.focusIn + Self.fence])
+        #expect(exchange.run(on: terminal), "the reply is still read")
+        #expect(
+            events(terminal) == [
+                .key(KeyEvent(character: "q")), .focusChanged(isFocused: true),
+            ])
+    }
+
+    @Test(
+        "Input split across the exchange's reads still reaches the parser in order",
+        arguments: Exchange.allCases)
+    func splitInputReachesTheParser(exchange: Exchange) {
+        let reply = Array(exchange.reply)
+        let half = reply.count / 2
+        let (terminal, _) = makeTerminal(reads: [
+            Self.focusOut + String(reply[..<half]),
+            String(reply[half...]) + "\u{1B}",
+            "[A" + Self.focusIn + Self.fence,
+        ])
+        #expect(exchange.run(on: terminal))
+        #expect(
+            events(terminal) == [
+                .focusChanged(isFocused: false), .key(KeyEvent(key: .up)),
+                .focusChanged(isFocused: true),
+            ])
+    }
+
+    @Test(
+        "What arrives behind the fence in the same read reaches the parser",
+        arguments: Exchange.allCases)
+    func inputBehindTheFenceReachesTheParser(exchange: Exchange) {
+        let (terminal, _) = makeTerminal(
+            reads: [exchange.reply + Self.fence + Self.focusIn + "x"])
+        #expect(exchange.run(on: terminal))
+        #expect(
+            events(terminal) == [
+                .focusChanged(isFocused: true), .key(KeyEvent(character: "x")),
+            ])
+    }
+
+    @Test("Replies and the fence never reach the parser", arguments: Exchange.allCases)
+    func repliesStayWithTheExchange(exchange: Exchange) {
+        let (terminal, _) = makeTerminal(reads: [exchange.reply, Self.fence])
+        #expect(exchange.run(on: terminal))
+        #expect(events(terminal).isEmpty)
+        #expect(!terminal.hasPendingInput)
+    }
+
+    @Test(
+        "A keystroke still reaches the parser when the fence never comes",
+        arguments: Exchange.allCases)
+    func inputReachesTheParserWithoutAFence(exchange: Exchange) {
+        let (terminal, _) = makeTerminal(reads: [exchange.reply + "q"])
+        #expect(exchange.run(on: terminal))
+        #expect(events(terminal) == [.key(KeyEvent(character: "q"))])
+    }
+
+    // MARK: - The split itself
+
+    private static func unconsumed(_ stream: String) -> String {
+        let kept = TerminalQueryReplies.unconsumed(
+            Array(stream.utf8), isReply: TerminalModeQuery.isReply,
+            isFence: TerminalModeQuery.isFence)
+        return String(bytes: kept, encoding: .utf8) ?? "<not UTF-8>"
+    }
+
+    @Test("Keys, Alt chords and a trailing bare ESC are kept byte for byte")
+    func keysAreKeptVerbatim() {
+        let reply = "\u{1B}[?2027;1$y"
+        let keys = "\u{1B}[A" + reply + "\u{1B}x" + "\u{1B}\u{1B}[B" + "é" + "\u{1B}"
+        #expect(Self.unconsumed(keys) == "\u{1B}[A\u{1B}x\u{1B}\u{1B}[Bé\u{1B}")
+    }
+
+    @Test("A sequence that is not this exchange's reply is kept, for the parser's own rules")
+    func otherSequencesAreKept() {
+        let osc = "\u{1B}]11;rgb:0000/0000/0000\u{1B}\\"
+        let apc = "\u{1B}_Gi=1;OK\u{07}"
+        #expect(Self.unconsumed(osc + apc + Self.fence) == osc + apc)
+    }
+
+    @Test("A sequence the bytes cut short is kept, with whatever the timeout left")
+    func truncatedSequencesAreKept() {
+        #expect(Self.unconsumed("\u{1B}[?2027;1$y" + "\u{1B}[24;") == "\u{1B}[24;")
+        #expect(Self.unconsumed("\u{1B}]11;rgb:00") == "\u{1B}]11;rgb:00")
+    }
+
+    @Test("A string sequence a new ESC interrupts keeps its prefix, and the fence behind it counts")
+    func interruptedStringSequenceKeepsItsPrefix() {
+        #expect(Self.unconsumed("\u{1B}_Gi=1;O" + Self.fence + "z") == "\u{1B}_Gi=1;Oz")
+    }
+
+    @Test("The mode exchange's replies are DECRPM, and its fence a cursor report")
+    func modeRepliesAndFence() {
+        #expect(TerminalModeQuery.isReply(Array("\u{1B}[?2027;2$y".utf8)[...]))
+        #expect(!TerminalModeQuery.isReply(Array(Self.focusIn.utf8)[...]))
+        #expect(TerminalModeQuery.isFence(Array(Self.fence.utf8)[...]))
+        #expect(!TerminalModeQuery.isFence(Array("\u{1B}[A".utf8)[...]))
+    }
+
+    @Test("The graphics exchange's replies are Kitty acknowledgements, and nothing else")
+    func graphicsReplies() {
+        #expect(TerminalGraphicsQuery.isReply(Array("\u{1B}_Gi=1;OK\u{1B}\\".utf8)[...]))
+        #expect(!TerminalGraphicsQuery.isReply(Array("\u{1B}]11;rgb:0/0/0\u{07}".utf8)[...]))
+        #expect(!TerminalGraphicsQuery.isReply(Array(Self.focusIn.utf8)[...]))
+        #expect(TerminalGraphicsQuery.isFence(Array(Self.fence.utf8)[...]))
+    }
 }

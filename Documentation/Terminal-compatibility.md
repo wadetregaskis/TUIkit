@@ -3452,14 +3452,21 @@ never as a key, including directly behind an Escape. The run loop
 `.inactive`. Nothing is detected: a terminal without the mode ignores the
 request, sends nothing, and the phase stays `.active`.
 
-**The startup loss window.** `enableRawMode` runs before the identity query,
-Ghostty's DECRQM and the graphics query, which read stdin. The identity query
-hands an unrecognised CSI back to the parser (pinned in
-`TerminalIdentityQueryTests`), but the mode and graphics queries throw stray
-bytes away. So a report a terminal sends the instant reporting is enabled can
-be lost, and the phase then stays `.active` until the next focus change. That is
-harmless, and it is one more reason the docs tell apps not to depend on
-`.inactive`.
+**No startup loss window.** `enableRawMode` runs before the identity query,
+Ghostty's DECRQM and the graphics query, which read stdin. A report a terminal
+sends the instant reporting is enabled lands in whichever of them is reading,
+and each hands every byte that is not its own reply or the fence back to the
+parser:
+- the identity query through its own walk, pinned in
+  `TerminalIdentityQueryTests`;
+- the mode and graphics queries through `TerminalQueryReplies.unconsumed`,
+  pinned in `TerminalExchangeTests` with a keystroke and `ESC [ I` interleaved
+  in each.
+
+The mode query runs again on resume, under the same rule. A report that comes
+after an exchange has stopped reading reaches the parser the ordinary way. The
+mode and graphics queries used to throw stray bytes away, so such a report could
+be lost and the phase stayed `.active` until the next focus change.
 
 **A crash leaves it on**, as it leaves the mouse modes on: the restore runs in
 the loop's cleanup and `Terminal.deinit`, which a crash skips. The mouse modes

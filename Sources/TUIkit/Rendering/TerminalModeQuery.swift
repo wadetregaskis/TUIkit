@@ -126,6 +126,22 @@ enum TerminalModeQuery {
         }
         return false
     }
+
+    /// Whether one complete escape sequence is a DECRPM reply,
+    /// `CSI ? Ps ; Pm $ y`, about any mode. No key sends one.
+    static func isReply(_ sequence: ArraySlice<UInt8>) -> Bool {
+        sequence.count >= 4 && sequence.first == 0x1B
+            && sequence[sequence.startIndex + 1] == 0x5B
+            && sequence[sequence.endIndex - 2] == 0x24 && sequence.last == 0x79  // '$' 'y'
+    }
+
+    /// Whether one complete escape sequence is a cursor-position report: the
+    /// fence. ``sawFence(_:)`` asks it of a whole buffer; this asks it of one
+    /// sequence the hand-back walk has already delimited.
+    static func isFence(_ sequence: ArraySlice<UInt8>) -> Bool {
+        sequence.count >= 3 && sequence.first == 0x1B
+            && sequence[sequence.startIndex + 1] == 0x5B && sequence.last == 0x52  // 'R'
+    }
 }
 
 // MARK: - Asking, and pinning
@@ -137,12 +153,12 @@ extension Terminal {
     ///
     /// The same exchange as ``queryIdentity(timeout:)``,
     /// ``fencedExchange(request:timeout:sawFence:)``: one write, then read
-    /// until the DSR fence comes back or the deadline passes. Unlike it, a
-    /// keystroke that arrives during the round trip is DISCARDED with the
-    /// reply rather than handed back through ``enqueue(input:)``. Only the
-    /// identity exchange preserves them, and it is the one that runs before a
-    /// host is known at all; this one runs on Ghostty alone, a sub-millisecond
-    /// window at startup.
+    /// until the DSR fence comes back or the deadline passes. And the same
+    /// policy on what else arrives: a keystroke typed during the round trip,
+    /// or a focus report sent the moment `enableRawMode` turned reporting on,
+    /// goes back to the input parser through
+    /// ``handBackUnconsumed(from:isReply:isFence:)``. That matters beyond
+    /// startup: this runs again on resume from a suspend.
     func queryMode(_ mode: Int, timeout: Double = 0.5) -> TerminalModeQuery.State? {
         guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
         return askMode(mode, timeout: timeout)
@@ -157,6 +173,9 @@ extension Terminal {
         let collected = fencedExchange(
             request: TerminalModeQuery.request(mode: mode), timeout: timeout,
             sawFence: TerminalModeQuery.sawFence)
+        handBackUnconsumed(
+            from: collected, isReply: TerminalModeQuery.isReply,
+            isFence: TerminalModeQuery.isFence)
         return TerminalModeQuery.parse(collected, mode: mode)
     }
 
