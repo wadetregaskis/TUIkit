@@ -536,7 +536,7 @@ extension _NavigationSplitViewCore {
     }
 
     /// Per-gap divider state passed from `renderToBuffer` to `combineColumns`.
-    fileprivate struct DividerRenderInfo {
+    struct DividerRenderInfo {
         /// Whether this divider's focus section is active (focused or being
         /// dragged) — its background pulses.
         let isActive: Bool
@@ -728,7 +728,24 @@ extension _NavigationSplitViewCore {
         // Three grip dots centred vertically (fewer if the divider is short).
         let center = h / 2
         let gripRows = Set([center - 1, center, center + 1].filter { $0 >= 0 && $0 < h })
+        return buildHandleColumn(info: info, height: h, palette: palette, cycle: cycle) { row in
+            gripRows.contains(row) ? "◦" : nil
+        }
+    }
 
+    /// Draws a one-cell handle column `height` rows tall: `glyph(row)` on the
+    /// rows that have one, a blank cell on the rest, animated as
+    /// ``buildDividerColumn(info:height:resizable:palette:cycle:)`` describes —
+    /// the glyphs pulse while `info.isHovered`, the whole column's background
+    /// while `info.isActive` — with `info.mouseHandlerID`'s hit region over
+    /// the full height.
+    func buildHandleColumn(
+        info: DividerRenderInfo,
+        height h: Int,
+        palette: any Palette,
+        cycle: SelectionEmphasisCycle,
+        glyph: (Int) -> String?
+    ) -> FrameBuffer {
         // Both ends of the hovered dot's breath come from `breathEnds`, so both spend
         // a faded accent. A dim end composited over the page beside a bright end
         // that kept the accent's alpha breathed between two alphas — §29's pair.
@@ -744,7 +761,7 @@ extension _NavigationSplitViewCore {
         /// the background while focused or dragging — and the runs below have
         /// to reproduce exactly what was drawn here, not an approximation of it.
         func cell(row: Int, at emphasis: SelectionEmphasis) -> ClaimingRow {
-            let isGrip = gripRows.contains(row)
+            let mark = glyph(row)
             // Grip foreground: a quiet dot, pulsing toward the accent while
             // hovered.
             let dotColor = info.isHovered
@@ -763,7 +780,7 @@ extension _NavigationSplitViewCore {
             // end of the line. Through `ClaimingRow`, so the bytes state the
             // opaque spelling and the alpha travels as the claim.
             var drawn = ClaimingRow()
-            drawn.append(isGrip ? "◦" : " ", cells: 1, ink: isGrip ? dotColor : nil, field: background)
+            drawn.append(mark ?? " ", cells: 1, ink: mark == nil ? nil : dotColor, field: background)
             return drawn
         }
 
