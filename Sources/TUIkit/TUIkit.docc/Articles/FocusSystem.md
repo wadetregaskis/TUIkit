@@ -256,13 +256,22 @@ That is the same trade SwiftUI's modifier makes, and it is the caller's to make.
 
 A view whose ``EnvironmentValues/appearsActive`` is `false` hides its focus
 indication, as a macOS window does when another window takes input. That is
-the case whenever the scene is not ``ScenePhase/active`` (see ``ScenePhase``
-for what a terminal can report), and inside any subtree that sets
+the case whenever the scene is not ``ScenePhase/active``: while the terminal
+window, tab or pane the app runs in has lost focus, and on the frame rendered
+on the way into a suspend. It is also the case inside any subtree that sets
 `.environment(\.appearsActive, false)`. It goes through the same gate as
 ``View/focusEffectDisabled(_:)``, so everything listed under "Turning it off"
 goes, the ● of an active focus section or split column included, and a
 subtree that sets `.environment(\.appearsActive, true)` gets its indication
 back.
+
+Losing focus is noticed only where the terminal reports it. While an app runs,
+TUIkit turns on the terminal's focus reporting (DEC private mode 1004). A
+terminal without that mode never reports focus, tmux reports it only when its
+`focus-events` option is on before the client attaches, and a report sent as
+reporting is turned on can be lost among the startup queries. So treat the
+inactive look as a courtesy that may never arrive, and do not build behaviour
+on it. ``ScenePhase`` has the details.
 
 What stays:
 
@@ -286,6 +295,10 @@ hover, each at its bright end, as under `.selectionIndicatorStyle(.none)`.
 still frame there and reads no clock, so an inactive window does not keep the
 run loop waking to animate it. A view that asks it for its own emphasis holds
 still the same way.
+
+Progress does not stop. An unfocused terminal window is still on screen, so
+spinners, indeterminate progress bars and a refresh's indicator go on
+animating, where SwiftUI advises pausing timers in an inactive scene.
 
 ``RenderContext/indicatesFocus(_:)`` answers for both conditions, so a view
 that already asks it needs no change. A view that reads `\.isFocused` in its
