@@ -65,44 +65,59 @@ enum IndeterminateRenderer {
         }
     }
 
-    /// Every frame of `style`'s cycle, already styled.
+    /// Every frame of `style`'s cycle at `speed`, already styled, and how long each
+    /// is shown.
     ///
-    /// Sampled at 30 frames a second — the rate these bars used to ask to be
-    /// re-rendered at — so the animation looks exactly as it did. Frames that
+    /// Sampled at 30 frames a second shown — the rate these bars used to ask to be
+    /// re-rendered at — so the animation looks as it did, at any speed. Frames that
     /// come out identical cost nothing at replay: ``AnimatedCellRun`` skips
     /// straight past them.
     static func cycle(
         width: Int, style: IndeterminateStyle,
         fillColor: Color, backgroundColor: Color, accentColor: Color,
-        palette: any Palette
+        palette: any Palette, speed: IndicatorAnimationSpeed
     ) -> (frames: [String], frameDuration: Double) {
-        let period = period(of: style)
-        let count = frameCount(of: style)
-        let duration = period / Double(count)
-        let frames = (0..<count).map { index in
+        let layout = layout(of: style, speed: speed)
+        // Sampled over the configuration's OWN period, whatever the speed: a faster
+        // bar shows the same motion in less time, not a different motion.
+        let sample = period(of: style) / Double(layout.frameCount)
+        let frames = (0..<layout.frameCount).map { index in
             render(
                 width: width, style: style, fillColor: fillColor,
                 backgroundColor: backgroundColor, accentColor: accentColor,
-                elapsed: Double(index) * duration, palette: palette
+                elapsed: Double(index) * sample, palette: palette
             ).text
         }
-        return (frames, duration)
+        return (frames, layout.frameDuration)
     }
 
-    /// How many frames one pass is sampled at — and therefore the rate the
-    /// FALLBACK path asks to be re-rendered at, so a bar that cannot be
-    /// pre-rendered still animates at exactly the speed one that can does.
-    /// `ProgressView`'s cycle of pictures is sampled at it too.
+    /// How one pass of `style` is laid out at `speed`: how many frames it is sampled
+    /// at, how long each is shown, and how fast the motion's own time runs. That is
+    /// also when the FALLBACK path asks to be re-rendered, so a bar that cannot be
+    /// pre-rendered animates at exactly the speed one that can does, and what
+    /// `ProgressView`'s cycle of pictures is laid out by.
     ///
-    /// These numbers used to be a literal 30 in three places, which is the shape
+    /// A pass takes the configuration's period divided by the rate, sampled at
+    /// ``framesPerSecond`` (`IndicatorAnimationSpeed.rampLayout`). A named preset's
+    /// period is the framework's, so the speed's tolerance may move the pass onto
+    /// whole frames. A `.custom` configuration's period is the app's, and stays
+    /// exact.
+    ///
+    /// The frame count used to be a literal 30 in three places, which is the shape
     /// a divergence arrives in.
-    static func frameCount(of style: IndeterminateStyle) -> Int {
-        max(2, Int((period(of: style) * framesPerSecond).rounded()))
+    static func layout(
+        of style: IndeterminateStyle, speed: IndicatorAnimationSpeed
+    ) -> IndicatorAnimationSpeed.RampLayout {
+        let isTheAppsPeriod: Bool
+        if case .custom = style { isTheAppsPeriod = true } else { isTheAppsPeriod = false }
+        return speed.rampLayout(
+            standardCycle: period(of: style), framesPerSecond: framesPerSecond,
+            snapping: !isTheAppsPeriod)
     }
 
-    /// The sampling rate of a pre-rendered cycle, in hertz — the rate these bars
-    /// asked the run loop to re-render them at before `AnimatedCellRun` existed,
-    /// kept so the animation looks exactly as it did.
+    /// The sampling rate of a pre-rendered cycle, in frames per second shown — the
+    /// rate these bars asked the run loop to re-render them at before
+    /// `AnimatedCellRun` existed, kept so the animation looks as it did.
     static let framesPerSecond: Double = 30
 
     /// Whether every colour this bar could paint is opaque.
@@ -162,8 +177,7 @@ enum IndeterminateRenderer {
     ///
     /// One rule for every reader, because there used to be two copies of
     /// `period > 0 ? period : 1.6`, and neither rejected infinity, which passes
-    /// `> 0` and then traps in `frameCount(of:)` converting the frame count to
-    /// an `Int`.
+    /// `> 0` and then trapped converting the frame count to an `Int`.
     ///
     /// The default report is a soft trap: an assertion failure in a debug build,
     /// a report once per distinct message in a release build. The parameter

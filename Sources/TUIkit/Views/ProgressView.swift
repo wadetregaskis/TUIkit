@@ -365,19 +365,23 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 fillColor: palette.foregroundSecondary, backgroundColor: palette.foregroundTertiary,
                 accentColor: palette.accent, palette: palette)
         guard fractionCompleted == nil, !context.isMeasuring, width > 0, canPreRender else {
+            var barElapsed = elapsed
             if fractionCompleted == nil, !context.isMeasuring, width > 0 {
-                let style = context.environment.indeterminateStyle
+                let layout = IndeterminateRenderer.layout(
+                    of: context.environment.indeterminateStyle,
+                    speed: context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress))
                 context.requestWake(
                     token: "progress-\(context.identity.path)",
-                    atNanos: AnimationClock.stepEndNanos(
-                        atElapsed: elapsed,
-                        frameDuration: IndeterminateRenderer.period(of: style)
-                            / Double(IndeterminateRenderer.frameCount(of: style))))
+                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: layout.frameDuration))
+                // In the motion's own time, which is what the run's frames are sampled
+                // in: a bar at twice the speed draws what it shows at twice the elapsed
+                // time. At the standard rate the scale is exactly 1.
+                barElapsed = elapsed * layout.timeScale
             }
             // The scheduler drives this path, not the cursor timer, which nothing keeps
             // running on a page holding only this (§66). The frame comes from the same
             // clock as the run path's.
-            let bar = renderBarLine(width: width, palette: palette, context: context, elapsed: elapsed)
+            let bar = renderBarLine(width: width, palette: palette, context: context, elapsed: barElapsed)
             lines.append(bar.text)
             var buffer = FrameBuffer(lines: lines)
             // Down to the row the bar landed on. Nothing is composited over this
@@ -402,14 +406,17 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// Worth keeping because it is the one real cost of this approach: a
     /// 36-cell `.gradient` cycle is 47 frames of ~840 bytes, and rebuilding
     /// that on every render would move work onto the render path in exchange
-    /// for taking it off the animation path. Every frame is a pure function of
-    /// these five inputs, so anything else may change freely.
+    /// for taking it off the animation path. Every frame, and how long it is shown,
+    /// is a pure function of these inputs, so anything else may change freely.
     private struct CachedCycle {
         let width: Int
         let style: IndeterminateStyle
         let filled: Color
         let empty: Color
         let accent: Color
+        /// The bar's speed. A pass at another speed has other frames and another
+        /// frame duration, so a cycle built at one must not be served at another.
+        let speed: IndicatorAnimationSpeed
         /// Whether the frames are pictures. A cycle of cells built for a
         /// glyph terminal must not be served where pictures are drawn, nor
         /// the other way round, so it is part of what the cache is keyed on.
@@ -419,10 +426,11 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
         func matches(
             width: Int, style: IndeterminateStyle, filled: Color, empty: Color, accent: Color,
-            pictures: Bool
+            speed: IndicatorAnimationSpeed, pictures: Bool
         ) -> Bool {
             self.width == width && self.style == style && self.filled == filled
-                && self.empty == empty && self.accent == accent && self.pictures == pictures
+                && self.empty == empty && self.accent == accent && self.speed == speed
+                && self.pictures == pictures
         }
     }
 
@@ -433,6 +441,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let filled = palette.foregroundSecondary
         let empty = palette.foregroundTertiary
         let accent = palette.accent
+        let speed = context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress)
+        let layout = IndeterminateRenderer.layout(of: style, speed: speed)
         let configuration = style.configuration.resolvingColours(with: palette)
         // The `.gradient` motion over a solid fill is a colour field, and a
         // colour field can be pictures where the terminal draws them — see
@@ -440,7 +450,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // own, so every frame's picture is released when the bar goes. The
         // count the glyph cycle is sampled at, so a bar steps at one rate
         // whichever path draws it.
-        let frameCount = IndeterminateRenderer.frameCount(of: style)
+        let frameCount = layout.frameCount
         let graphics =
             configuration.motion == .gradient && configuration.fill == "█"
             ? context.gradientGraphics(token: "track-\(context.identity.path)", frames: frameCount)
@@ -465,19 +475,18 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 if rows.count == frameCount {
                     return CachedCycle(
                         width: width, style: style, filled: filled, empty: empty, accent: accent,
-                        pictures: true, frames: rows,
+                        speed: speed, pictures: true, frames: rows,
                         run: AnimatedCellRun(
                             offsetX: 0, offsetY: 0, width: width, frames: rows,
-                            frameDuration: IndeterminateRenderer.period(of: style) / Double(frameCount),
-                            clock: .content))
+                            frameDuration: layout.frameDuration, clock: .content))
                 }
             }
             let built = IndeterminateRenderer.cycle(
                 width: width, style: style, fillColor: filled,
-                backgroundColor: empty, accentColor: accent, palette: palette)
+                backgroundColor: empty, accentColor: accent, palette: palette, speed: speed)
             return CachedCycle(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
-                pictures: false, frames: built.frames,
+                speed: speed, pictures: false, frames: built.frames,
                 run: AnimatedCellRun(
                     offsetX: 0, offsetY: 0, width: width, frames: built.frames,
                     frameDuration: built.frameDuration, clock: .content))
@@ -495,7 +504,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         if let cached = box.value,
             cached.matches(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
-                pictures: graphics != nil)
+                speed: speed, pictures: graphics != nil)
         {
             return cached
         }

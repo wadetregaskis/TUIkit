@@ -251,8 +251,13 @@ extension View {
   at the standard durations as they are, that moves only the 120 ms and 130 ms
   spinner styles, to 125 ms. An explicit speed is exact unless it names a
   tolerance.
-- **Only spinners read it so far.** The caret, the focus emphasis and the
-  indeterminate bar follow in their own changes.
+- **Spinners and the indeterminate bar read it so far.** A spinner's frames are
+  a sequence, so each lasts its standard duration divided by the rate. A bar's
+  pass is a ramp: it takes its period divided by the rate, and is still sampled
+  at 30 frames a second. A named preset's pass may move within the tolerance
+  onto whole frames, which moves nothing while those frames are 1/30 s. A period
+  the app sets through `.custom` stays exact. The caret and the focus emphasis
+  follow in their own changes.
 
 ## 4. Tint (implemented **last** — wholly new)
 

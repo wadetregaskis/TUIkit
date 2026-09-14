@@ -62,8 +62,7 @@ struct StandardAnimationDurationTests {
     ].map {
         StandardAnimationDuration(
             name: "\($0.0)BarFrame",
-            seconds: IndeterminateRenderer.period(of: $0.1)
-                / Double(IndeterminateRenderer.frameCount(of: $0.1)))
+            seconds: IndeterminateRenderer.layout(of: $0.1, speed: .standard).frameDuration)
     }
 
     /// The entries whose durations are not yet on the lattice, and will not be

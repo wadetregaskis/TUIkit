@@ -138,6 +138,67 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     }
 }
 
+// MARK: - Ramps
+
+extension IndicatorAnimationSpeed {
+    /// A continuous ramp's layout at a speed: how many frames it is sampled at, how
+    /// long each is shown, and how many of the ramp's own seconds pass in each second
+    /// shown.
+    struct RampLayout: Equatable, Sendable {
+        let frameCount: Int
+        let frameDuration: TimeInterval
+
+        /// ``IndicatorAnimationSpeed/rate``, or the rate a cycle moved onto whole
+        /// frames runs at. A view that draws the ramp at an arbitrary instant, rather
+        /// than from its frames, draws it at the clock's elapsed time times this.
+        let timeScale: Double
+    }
+
+    /// How a continuous ramp (an indeterminate bar's pass) is laid out at this
+    /// speed: over its cycle divided by the rate, sampled as often as at the
+    /// standard rate.
+    ///
+    /// Frames are not stretched or squeezed, the way a sequence's are
+    /// (``frameDuration(standard:)``). The frame count is the cycle times
+    /// `framesPerSecond`, rounded, at least two, and each frame lasts the cycle over
+    /// the count. So a slowed ramp stays smooth, and a quickened one does not wake
+    /// the loop more often than a standard one does.
+    ///
+    /// With `snapping` and a tolerance, a cycle of whole frames
+    /// (`count / framesPerSecond`) is used instead, when its rate is within the
+    /// tolerance and it moves the cycle by at least a nanosecond. Every frame then
+    /// lasts `1 / framesPerSecond`, and steps with every other ramp sampled at that
+    /// rate. A caller asks for no snapping for a cycle the app chose, which stays
+    /// exact.
+    ///
+    /// - Parameters:
+    ///   - standardCycle: The cycle at the standard rate, in seconds. Greater than
+    ///     zero.
+    ///   - framesPerSecond: How often the ramp is sampled, per second shown.
+    ///   - snapping: Whether the tolerance may move the cycle onto whole frames.
+    func rampLayout(
+        standardCycle: TimeInterval, framesPerSecond: Double, snapping: Bool
+    ) -> RampLayout {
+        let cycle = standardCycle / rate
+        // Capped so `Int(_:)` cannot trap on a rate small enough to ask for more
+        // frames than an `Int32` holds; nobody watches a ramp that slow move.
+        let count = max(2, Int(min((cycle * framesPerSecond).rounded(), Double(Int32.max))))
+        if snapping, tolerance > 0 {
+            let whole = Double(count) / framesPerSecond
+            let fastest = standardCycle / (rate + tolerance)
+            let slowest = standardCycle / (rate - tolerance)
+            if whole >= fastest, whole <= slowest,
+                AnimationClock.nanoseconds(whole) != AnimationClock.nanoseconds(cycle)
+            {
+                return RampLayout(
+                    frameCount: count, frameDuration: 1 / framesPerSecond,
+                    timeScale: standardCycle / whole)
+            }
+        }
+        return RampLayout(frameCount: count, frameDuration: cycle / Double(count), timeScale: rate)
+    }
+}
+
 // MARK: - Kinds
 
 /// Which ambient indicators a speed applies to.
@@ -162,7 +223,12 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     /// refreshes.
     public static let spinners = Self(rawValue: 1 << 2)
 
-    /// An indeterminate ``ProgressView``'s bar. Not yet read by the bar.
+    /// An indeterminate ``ProgressView``'s bar: one pass of its motion takes its
+    /// period divided by the rate.
+    ///
+    /// A named ``IndeterminateStyle`` preset's pass may move within the speed's
+    /// tolerance onto whole frames of the bar's 30 frames a second. A period an app
+    /// sets, through ``IndeterminateStyle/custom(_:)``, stays exact.
     public static let indeterminateProgress = Self(rawValue: 1 << 3)
 
     /// Every kind.

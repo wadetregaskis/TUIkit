@@ -87,6 +87,12 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// How long one full pass takes, in seconds. Must be finite and greater
     /// than zero.
     ///
+    /// That is the pass at the standard speed.
+    /// ``View/indicatorAnimationSpeed(_:for:)`` for
+    /// ``IndicatorAnimations/indeterminateProgress`` divides it by the rate. A period
+    /// set here, through ``IndeterminateStyle/custom(_:)``, stays exact at any
+    /// tolerance; only a named preset's pass may move within one.
+    ///
     /// Any other value is a mistake in the app. A debug build stops with an
     /// assertion failure. A release build reports it once and uses 1.6 seconds,
     /// the ``sweep`` preset's period, whichever preset the configuration was

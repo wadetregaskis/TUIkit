@@ -111,10 +111,10 @@ struct IndeterminateConfigurationTests {
         #expect(IndeterminateRenderer.period(of: quick) == 1)
         let slowCycle = IndeterminateRenderer.cycle(
             width: 12, style: slow, fillColor: filled, backgroundColor: empty, accentColor: accent,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green, speed: .standard)
         let quickCycle = IndeterminateRenderer.cycle(
             width: 12, style: quick, fillColor: filled, backgroundColor: empty, accentColor: accent,
-            palette: SystemPalette.green)
+            palette: SystemPalette.green, speed: .standard)
         #expect(slowCycle.frames.count == 4 * quickCycle.frames.count)
     }
 

@@ -2,7 +2,8 @@
 //  IndicatorAnimationSpeedTests.swift
 //
 //  `IndicatorAnimationSpeed` and the environment value and modifier that carry
-//  it, checked through the one indicator that reads it so far: `Spinner`.
+//  it, checked through the indicators that read it so far: `Spinner` and an
+//  indeterminate `ProgressView`.
 //  Durations are compared in whole nanoseconds, the unit a run's steps are
 //  counted in.
 //
@@ -254,5 +255,192 @@ struct IndicatorAnimationSpeedSpinnerTests {
             cache.stats.delta(since: before).hits >= 1,
             "the spinner was not served from the memo, so this is not the case under test")
         #expect(frame(2) == [55_000_000])
+    }
+}
+
+// MARK: - Indeterminate bars
+
+/// A translucent `.sweep` bar, which no run can carry, at the standard speed.
+private struct StandardTranslucentSweepApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+                .indicatorAnimationSpeed(.standard, for: .indeterminateProgress)
+        }
+    }
+}
+
+/// The same bar at twice the speed.
+private struct DoubleSpeedTranslucentSweepApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+                .indicatorAnimationSpeed(2, for: .indeterminateProgress)
+        }
+    }
+}
+
+/// The same bar at 1.1 times the speed.
+private struct QuickTranslucentSweepApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+                .indicatorAnimationSpeed(1.1, for: .indeterminateProgress)
+        }
+    }
+}
+
+@MainActor
+@Suite("Indicator animation speed on indeterminate bars")
+struct IndicatorAnimationSpeedBarTests {
+    private static func freshContext() -> TUIContext {
+        TUIContext(
+            lifecycle: LifecycleManager(firesEffects: false), keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage(), stateStorage: StateStorage())
+    }
+
+    /// `view` as a one-line bar 20 cells wide, drawn as pictures where `pictures`
+    /// says the terminal can, keeping its state in `tui`.
+    private func bar(_ view: some View, pictures: Bool = false, tui: TUIContext? = nil) -> FrameBuffer {
+        let tui = tui ?? Self.freshContext()
+        var environment = EnvironmentValues()
+        environment.focusManager = FocusManager()
+        environment.applyRuntimeServices(from: tui)
+        environment.imageCellPixels = TerminalCellPixels(width: 16, height: 34)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 1, environment: environment,
+            tuiContext: tui, identity: ViewIdentity(path: "Root"))
+        tui.stateStorage.beginRenderPass()
+        defer { tui.stateStorage.endRenderPass() }
+        guard pictures else { return renderToBuffer(view, context: context) }
+        return KittyGraphics.withSupport(true) { renderToBuffer(view, context: context) }
+    }
+
+    private func placeholders(_ buffer: FrameBuffer) -> Int {
+        buffer.lines.reduce(0) { $0 + $1.unicodeScalars.filter { $0 == .terminalImagePlaceholder }.count }
+    }
+
+    /// 1.6 s at twice the speed is 0.8 s, still sampled at 30 frames a second: 24
+    /// frames of 1/30 s.
+    @Test("A .sweep bar at twice the speed passes in 0.8 s, at the same frame rate")
+    func sweepAtDoubleSpeed() throws {
+        let standard = try #require(bar(ProgressView().indeterminateStyle(.sweep)).animatedCells.first)
+        let doubled = try #require(
+            bar(ProgressView().indeterminateStyle(.sweep).indicatorAnimationSpeed(2, for: .indeterminateProgress))
+                .animatedCells.first)
+        #expect(AnimationClock.nanoseconds(standard.cycleDuration) == 1_600_000_000)
+        #expect(AnimationClock.nanoseconds(doubled.cycleDuration) == 800_000_000)
+        #expect(doubled.frames.count == 24)
+        #expect(
+            AnimationClock.nanoseconds(doubled.frameDuration) == AnimationClock.nanoseconds(standard.frameDuration))
+    }
+
+    /// `.gradient()`'s 2.4 s at twice the speed is 1.2 s, 36 frames, whichever path
+    /// draws it.
+    @Test("A .gradient bar at twice the speed passes in 1.2 s as pictures and as glyphs")
+    func gradientAtDoubleSpeedOnBothPaths() throws {
+        let view = ProgressView().indeterminateStyle(.gradient())
+            .indicatorAnimationSpeed(2, for: .indeterminateProgress)
+        let pictures = bar(view, pictures: true)
+        let glyphs = bar(view)
+        #expect(placeholders(pictures) == 20, "the picture path was not taken")
+        #expect(placeholders(glyphs) == 0, "the glyph path drew pictures")
+        for buffer in [pictures, glyphs] {
+            let run = try #require(buffer.animatedCells.first)
+            #expect(AnimationClock.nanoseconds(run.cycleDuration) == 1_200_000_000)
+            #expect(run.frames.count == 36)
+        }
+    }
+
+    /// 1.6 s at 1.02 is 1.5686 s, which samples to 47 frames. 47 whole frames of
+    /// 1/30 s is 1.5667 s, a rate of 1.0213, inside 1.02 ± 0.05. The preset's pass
+    /// moves onto them; the same configuration set by the app does not.
+    @Test("Within a tolerance a preset's pass moves onto whole frames, and the same pass set by the app stays exact")
+    func toleranceMovesOnlyAPresetsPass() throws {
+        let speed = IndicatorAnimationSpeed(1.02, tolerance: 0.05)
+        let preset = try #require(
+            bar(ProgressView().indeterminateStyle(.sweep).indicatorAnimationSpeed(speed, for: .indeterminateProgress))
+                .animatedCells.first)
+        let custom = try #require(
+            bar(
+                ProgressView().indeterminateStyle(.custom(.sweep))
+                    .indicatorAnimationSpeed(speed, for: .indeterminateProgress)
+            ).animatedCells.first)
+        #expect(preset.frames.count == 47)
+        #expect(custom.frames.count == 47)
+        #expect(AnimationClock.nanoseconds(preset.frameDuration) == AnimationClock.nanoseconds(1.0 / 30))
+        #expect(AnimationClock.nanoseconds(custom.frameDuration) == AnimationClock.nanoseconds(1.6 / 1.02 / 47))
+    }
+
+    /// `.automatic` is 1 ± 0.05. 1.73 s samples to 52 frames, and 52 whole frames of
+    /// 1/30 s is 1.7333 s, a rate of 0.998, well inside it: a preset's pass would move.
+    @Test("A period the app sets passes in exactly that time at the default speed")
+    func customPeriodStaysExact() throws {
+        let run = try #require(
+            bar(ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 1.73))))
+                .animatedCells.first)
+        #expect(run.frames.count == 52)
+        #expect(AnimationClock.nanoseconds(run.frameDuration) == AnimationClock.nanoseconds(1.73 / 52))
+    }
+
+    /// 1.6 s at 1.1 is 1.4545 s: 44 frames of 33,057,851 ns. At 1.037 s that is frame
+    /// 31, which ends at 1,057,851,232 ns. At the standard speed the frame would end
+    /// at 1,066,666,656 ns.
+    @Test("A translucent bar asks for its next render at the frame its speed lays out")
+    func fallbackWakesAtTheSpeedsFrame() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(QuickTranslucentSweepApp())
+        let scheduler = AnimationScheduler()
+        let now: Int64 = 1_037_000_000
+        scheduler.beginFrame()
+        loop.render(animationScheduler: scheduler, frameNowNanos: now)
+        scheduler.endFrame()
+        #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
+        #expect(scheduler.nextFiring(after: now) == 1_057_851_232)
+    }
+
+    /// A declined bar draws one frame per render, at an instant rather than from its
+    /// frames, so it has to draw in the motion's own time as the run's frames are
+    /// sampled: at twice the speed, 1.2 s in is what the standard bar shows 2.4 s in.
+    @Test("A translucent bar at twice the speed draws at twice the elapsed time")
+    func fallbackDrawsInTheMotionsTime() {
+        func picture<A: App>(_ app: A, at now: Int64) -> [String] {
+            let harness = RenderLoopHarness()
+            let loop = harness.loop(app)
+            let scheduler = AnimationScheduler()
+            scheduler.beginFrame()
+            loop.render(animationScheduler: scheduler, frameNowNanos: now)
+            scheduler.endFrame()
+            return loop.replayable?.contentLines ?? []
+        }
+        let doubled = picture(DoubleSpeedTranslucentSweepApp(), at: 1_200_000_000)
+        #expect(doubled == picture(StandardTranslucentSweepApp(), at: 2_400_000_000))
+        #expect(
+            doubled != picture(StandardTranslucentSweepApp(), at: 1_200_000_000),
+            "the standard bar draws the same at 1.2 s and 2.4 s, so this shows nothing")
+    }
+
+    /// A bar builds its cycle once and keeps it in state, keyed on what its frames
+    /// depend on. A speed change alone has to rebuild it.
+    @Test("A change of speed alone rebuilds a bar's kept cycle")
+    func speedChangeRebuildsTheCycle() throws {
+        let tui = Self.freshContext()
+        func cycleNanos(_ speed: IndicatorAnimationSpeed) throws -> Int64 {
+            let run = try #require(
+                bar(
+                    ProgressView().indeterminateStyle(.sweep)
+                        .indicatorAnimationSpeed(speed, for: .indeterminateProgress),
+                    tui: tui
+                ).animatedCells.first)
+            return AnimationClock.nanoseconds(run.cycleDuration)
+        }
+        #expect(try cycleNanos(1) == 1_600_000_000)
+        #expect(try cycleNanos(2) == 800_000_000)
     }
 }
