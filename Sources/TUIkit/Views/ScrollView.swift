@@ -517,9 +517,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
         visibleBuffer = applyOverscroll(to: visibleBuffer, handler: handler, width: contentWidth)
 
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. The bars and
+        // the "N more" lines breathe as the scroll view's focus indication, so
+        // they get the gated answer; the keys and the mouse never read it. The
+        // bar memo is keyed on this value too, so a change of it redraws.
         applyScrollChrome(
             to: &visibleBuffer, handler: handler, contentWidth: contentWidth,
-            chrome: chrome, isFocused: isFocused, focusID: persistedFocusID,
+            chrome: chrome, isFocused: context.indicatesFocus(isFocused), focusID: persistedFocusID,
             context: context)
 
         attachViewportMouseHandler(

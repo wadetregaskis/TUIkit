@@ -233,10 +233,13 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
 
         var bar: (runs: [AnimatedCellRun], claims: [OpacityRegion]) = ([], [])
         if hasVerticalOverflow {
+            // Drawing only — see `RenderContext.indicatesFocus(_:)`. The bar's
+            // breath is a focus indication and goes with the effect; the caret
+            // above is the insertion point and reads the raw `isFocused`.
             bar = appendScrollbar(
                 to: &output, height: height, extent: displayLines.count,
                 offset: handler.scrollLine, barColumn: contentWidth,
-                isFocused: isFocused, context: context)
+                isFocused: context.indicatesFocus(isFocused), context: context)
         }
 
         var buffer = FrameBuffer(lines: output)
