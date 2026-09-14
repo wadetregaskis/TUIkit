@@ -65,6 +65,11 @@ struct InputSplitInvarianceTests {
             ("mouse-release", esc + Array("[<0;10;5m".utf8)),
             ("mouse-wheel", esc + Array("[<64;3;4M".utf8)),
             ("focus-in", esc + Array("[I".utf8)),
+            ("focus-out", esc + Array("[O".utf8)),
+            ("focus-in-then-text", esc + Array("[I".utf8) + Array("a".utf8)),
+            // Escape pressed as the window loses focus. The meta-prefix rule
+            // would read the pair as one Option+Escape chord.
+            ("escape-then-focus-out", esc + esc + Array("[O".utf8)),
             ("paste", esc + Array("[200~hi".utf8) + esc + Array("[201~".utf8)),
             ("ascii", Array("abc".utf8)),
             ("utf8-2byte", Array("é".utf8)),

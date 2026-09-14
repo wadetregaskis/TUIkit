@@ -9,8 +9,14 @@ import Foundation
 // MARK: - Turning bytes from stdin into events
 
 /// The input parser: bracketed paste, CSI / SS3 / meta sequences, mouse
-/// reports, typed UTF-8, and the Escape-versus-sequence disambiguation that
-/// holds a lone `ESC` for a round rather than committing it.
+/// reports, focus reports, typed UTF-8, and the Escape-versus-sequence
+/// disambiguation that holds a lone `ESC` for a round rather than committing
+/// it.
+///
+/// A focus report (`ESC [ I` / `ESC [ O`, mode 1004) is delivered as
+/// `TerminalInput.focusChanged`, never as a key. Behind an Escape it would
+/// otherwise be read as one meta-prefixed chord — see the `ESC ESC` branch of
+/// ``tryExtractRegularEvent()``.
 ///
 /// Split out of `Terminal.swift` because that file had reached its length
 /// limit and this is the coherent half to lift: everything here reads and
@@ -30,6 +36,13 @@ extension Terminal {
     private static let pasteEnd: [UInt8] = [
         0x1B, 0x5B, 0x32, 0x30, 0x31, 0x7E,
     ]
+
+    /// The focus-in report (`ESC [ I`), sent while focus reporting (mode 1004)
+    /// is on when the terminal window, tab or pane gains focus.
+    private static let focusIn: [UInt8] = [0x1B, 0x5B, 0x49]
+
+    /// The focus-out report (`ESC [ O`), its counterpart for losing focus.
+    private static let focusOut: [UInt8] = [0x1B, 0x5B, 0x4F]
 
     /// Maximum bytes we'll accumulate while waiting for a paste end
     /// marker. Anything beyond this is treated as a misbehaving
@@ -114,8 +127,20 @@ extension Terminal {
             // Extract the INNER event and re-attach the meta prefix; if the
             // inner sequence hasn't fully arrived, put the prefix back and
             // wait (the stale-partial machinery handles a dead one).
+            //
+            // Except a focus report. Nothing prefixes one with a meta ESC: an
+            // ESC in front of one is the Escape key, pressed as the window lost
+            // or gained focus. Re-attached, the pair would reach `KeyEvent.parse`
+            // as Option+Escape — no Escape, and a chord nobody pressed. So the
+            // report goes back to the head of the buffer, and the ESC goes out
+            // alone. The deferred-`ESC ESC` re-attach in `readEvent()` arrives
+            // here too, so this covers a split read as well.
             consume(1)
             if let inner = tryExtractRegularEvent() {
+                if inner == Self.focusIn || inner == Self.focusOut {
+                    input.insert(copying: inner, at: 0)
+                    return [0x1B]
+                }
                 return [0x1B] + inner
             }
             input.insert(0x1B, at: 0)
@@ -670,6 +695,11 @@ extension Terminal {
             return tryExtractPaste()
         }
 
+        // Focus reports, before the key parser: it models neither final byte
+        // and would drop them.
+        if bytes == Self.focusIn { return .focusChanged(isFocused: true) }
+        if bytes == Self.focusOut { return .focusChanged(isFocused: false) }
+
         if let key = KeyEvent.parse(bytes) {
             // Apple Terminal encodes Shift on a function key by sending a
             // DIFFERENT function key (Shift+F5…F12 → the VT220 F13…F20
@@ -686,9 +716,9 @@ extension Terminal {
     /// ``TerminalProtocol`` interface. New code should call
     /// ``readEvent()`` and switch on the returned ``TerminalInput``.
     ///
-    /// If the next event is a mouse event it is consumed and `nil`
-    /// is returned — the legacy interface has nowhere to surface it.
-    /// Callers that care about mouse events must use `readEvent()`.
+    /// If the next event is a mouse event or a focus report it is consumed
+    /// and `nil` is returned — the legacy interface has nowhere to surface
+    /// it. Callers that care about either must use `readEvent()`.
     func readKeyEvent() -> KeyEvent? {
         guard let event = readEvent() else { return nil }
         if case .key(let key) = event { return key }

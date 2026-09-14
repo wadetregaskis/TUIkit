@@ -580,7 +580,8 @@ struct TerminalReplySwallowingTests {
     ///
     /// Deliberately asserted on the FIRST call, not by pumping until nil: a
     /// quiet-limited drain tolerates exactly this, which is why `focus-in`
-    /// already sat in the split-invariance corpus without failing.
+    /// sat in the split-invariance corpus without failing back when it was
+    /// dropped too. (It is delivered now — see ``TerminalFocusReportTests``.)
     @Test("A real keypress behind a CSI device reply still arrives")
     func keyAfterCSIReplyArrives() {
         for reply in [
@@ -588,7 +589,6 @@ struct TerminalReplySwallowingTests {
             "\u{1B}[>1;4000;0c",  // a DA2 answer
             "\u{1B}[24;80R",  // a late DSR cursor-position answer
             "\u{1B}[?2026;2$y",  // a DECRPM answer to the synchronised-update query
-            "\u{1B}[I",  // focus-in
         ] {
             let (terminal, stage) = makeTerminal()
             stage(Array(reply.utf8) + Array("q".utf8))
@@ -659,5 +659,125 @@ struct TerminalReplySwallowingTests {
         let (terminal, stage) = makeTerminal()
         stage(Array("\u{1B}_Gi=7;OK".utf8) + [0x1B, 0x5B, 0x42])  // truncated, then Down
         #expect(terminal.readEvent() == .key(KeyEvent(key: .down)))
+    }
+}
+
+// MARK: - Focus reports
+//
+// A terminal with focus reporting (DEC private mode 1004) on sends `ESC [ I`
+// when its window, tab or pane gains focus and `ESC [ O` when it loses it.
+// Neither is a keystroke, and `O` is the trap: behind an Escape the parser's
+// meta-prefix rule reads `ESC ESC [ O` as one chord, and `KeyEvent.parse`
+// then spells that chord Option+Escape — a keystroke nobody pressed, eaten
+// together with the Escape somebody did.
+
+@MainActor
+@Suite("Terminal focus reports")
+struct TerminalFocusReportTests {
+
+    private func makeTerminal() -> (Terminal, ([UInt8]) -> Void) {
+        let terminal = Terminal()
+        let box = ByteBox()
+        terminal.readSource = { buffer in
+            guard !box.bytes.isEmpty else { return 0 }
+            let count = min(box.bytes.count, buffer.count)
+            for index in 0..<count { buffer[index] = box.bytes[index] }
+            box.bytes.removeFirst(count)
+            return count
+        }
+        return (terminal, { box.bytes.append(contentsOf: $0) })
+    }
+
+    private final class ByteBox { var bytes: [UInt8] = [] }
+
+    private static let focusIn = Array("\u{1B}[I".utf8)
+    private static let focusOut = Array("\u{1B}[O".utf8)
+
+    /// Every event `terminal` produces in `pumps` calls, nils dropped.
+    private func events(_ terminal: Terminal, pumps: Int = 12) -> [TerminalInput] {
+        (0..<pumps).compactMap { _ in terminal.readEvent() }
+    }
+
+    @Test("A focus report is a focus event, in and out")
+    func reportsAreFocusEvents() {
+        let (terminal, stage) = makeTerminal()
+        stage(Self.focusIn)
+        #expect(terminal.readEvent() == .focusChanged(isFocused: true))
+        stage(Self.focusOut)
+        #expect(terminal.readEvent() == .focusChanged(isFocused: false))
+        #expect(terminal.readEvent() == nil, "and nothing is left over")
+    }
+
+    @Test("A key behind a focus report arrives after it")
+    func keyBehindAReportArrives() {
+        let (terminal, stage) = makeTerminal()
+        stage(Self.focusIn + Array("a".utf8))
+        #expect(terminal.readEvent() == .focusChanged(isFocused: true))
+        #expect(terminal.readEvent() == .key(KeyEvent(character: "a")))
+    }
+
+    @Test("A report whose ESC arrived in an earlier read is still a focus event")
+    func splitReportIsAFocusEvent() {
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B])
+        #expect(terminal.readEvent() == nil)  // stale frame 1
+        #expect(terminal.readEvent() == nil)  // stale frame 2 → ESC deferred
+        stage(Array("[O".utf8))
+        #expect(events(terminal) == [.focusChanged(isFocused: false)])
+    }
+
+    /// The meta-prefix trap in one read: Escape pressed as the window loses
+    /// focus. Before, this was one alt+escape and no Escape at all.
+    @Test("Escape then a focus report in one read is Escape, then the report", arguments: [false, true])
+    func escapeThenReportInOneRead(isFocused: Bool) {
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B] + (isFocused ? Self.focusIn : Self.focusOut))
+        #expect(
+            events(terminal) == [.key(KeyEvent(key: .escape)), .focusChanged(isFocused: isFocused)])
+    }
+
+    /// The same trap by the `pendingAltEsc` route: `ESC ESC` goes stale and is
+    /// held as a chord, then the report's tail turns up and the held pair is
+    /// re-attached in front of it.
+    @Test("A deferred ESC ESC followed by a report's tail is Escape, then the report")
+    func deferredDoubledEscapeThenReportTail() {
+        let (terminal, stage) = makeTerminal()
+        stage([0x1B, 0x1B])
+        #expect(terminal.readEvent() == nil)  // stale frame 1
+        #expect(terminal.readEvent() == nil)  // stale frame 2 → deferred
+        stage(Array("[O".utf8))
+        #expect(events(terminal) == [.key(KeyEvent(key: .escape)), .focusChanged(isFocused: false)])
+    }
+
+    /// Wherever the read boundary lands, a report never surfaces as a key —
+    /// the only key in any of these is the Escape that was really there. With
+    /// an Escape in front, a split after the second byte is the `pendingAltEsc`
+    /// route and one after the third is the meta branch waiting for its inner
+    /// sequence. (Two Escapes in front are not a question about reports: an
+    /// `ESC ESC` in one read is Option+Escape by the parser's documented trade.)
+    @Test("No focus report is ever read as a key")
+    func noReportIsEverAKey() {
+        for report in [Self.focusIn, Self.focusOut] {
+            for prefix in [[], [0x1B]] as [[UInt8]] {
+                let bytes = prefix + report
+                for splitAt in 1...bytes.count {
+                    let (terminal, stage) = makeTerminal()
+                    stage(Array(bytes[..<splitAt]))
+                    // Two pumps: long enough to defer a held ESC or ESC ESC,
+                    // not long enough to commit it — a third would commit a
+                    // lone ESC ESC as the Option+Escape it then really is.
+                    var seen = events(terminal, pumps: 2)
+                    stage(Array(bytes[splitAt...]))
+                    seen += events(terminal)
+                    let keys = seen.filter { if case .key = $0 { return true } else { return false } }
+                    let expected = prefix.isEmpty ? 0 : 1
+                    #expect(
+                        keys.count == expected
+                            && keys.allSatisfy { $0 == .key(KeyEvent(key: .escape)) },
+                        "\(bytes) split@\(splitAt) gave \(seen)")
+                    #expect(seen.contains(.focusChanged(isFocused: report == Self.focusIn)))
+                }
+            }
+        }
     }
 }

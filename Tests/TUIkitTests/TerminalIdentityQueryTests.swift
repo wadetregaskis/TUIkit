@@ -111,6 +111,19 @@ struct TerminalIdentityQueryTests {
         #expect(identity.unconsumed == Array("q\u{1B}[B".utf8))
     }
 
+    /// A terminal can send a focus report (`ESC[O`, `ESC[I`) the moment focus
+    /// reporting is enabled, which is before this exchange runs. The walk is
+    /// not the place to read it: it hands it back, like any CSI it did not ask
+    /// for, so the input parser sees it.
+    @Test("A focus report during the exchange is handed back, and the fence still ends it")
+    func focusReportIsHandedBack() {
+        let stream = "\u{1B}[?1;2c" + "\u{1B}[O" + "\u{1B}[>1;95;0c" + Self.fence
+        let identity = Self.parse(stream)
+        #expect(identity.sawFence)
+        #expect(TerminalHost.nameFromDeviceAttributes(identity) == "Apple_Terminal")
+        #expect(identity.unconsumed == Array("\u{1B}[O".utf8))
+    }
+
     @Test("Everything after the fence belongs to the input parser")
     func bytesAfterTheFenceAreNotOurs() {
         let identity = Self.parse(Self.appleTerminal + "hello")

@@ -680,6 +680,12 @@ extension AppRunner {
                 if tuiContext.mouseEventDispatcher.dispatch(translated) {
                     appState.setNeedsRender()
                 }
+
+            case .focusChanged:
+                // Read and not yet acted on. Deliberately no `noteInputSource`:
+                // a focus report is the terminal speaking, not the user
+                // choosing the keyboard or the pointer.
+                break
             }
             eventsProcessed += 1
         }
