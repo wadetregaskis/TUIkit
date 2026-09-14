@@ -197,6 +197,37 @@ struct DeclinedRunClockTests {
         #expect(Set(pictures).count > 1, "every frame drew the same picture: \(pictures)")
     }
 
+    /// A translucent `.sweep` bar, its style stated rather than left to the default.
+    private struct TranslucentSweepApp: App {
+        init() {}
+
+        var body: some Scene {
+            WindowGroup {
+                ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+            }
+        }
+    }
+
+    /// The bar's twin of the spinner's: one render at the cycle's next frame, a whole
+    /// multiple of `period / frameCount` on the frame clock, not a grid anchored at
+    /// whichever frame first asked.
+    @Test("A translucent indeterminate bar asks for one render at its next frame, and registers no grid")
+    func translucentBarWakesAtItsNextFrame() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(TranslucentSweepApp())
+        let scheduler = AnimationScheduler()
+        let now: Int64 = 1_037_000_000
+        scheduler.beginFrame()
+        loop.render(animationScheduler: scheduler, frameNowNanos: now)
+        scheduler.endFrame()
+        let frame = AnimationClock.nanoseconds(
+            IndeterminateRenderer.period(of: .sweep) / Double(IndeterminateRenderer.frameCount(of: .sweep)))
+        #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
+        #expect(
+            scheduler.nextFiring(after: now) == (now / frame + 1) * frame,
+            "the next multiple of the \(frame) ns frame after \(now) ns")
+    }
+
     @Test("A translucent indeterminate bar alone on a page moves from frame to frame")
     func translucentBarMoves() {
         let run = frames(of: TranslucentBarApp(), step: 0.1)

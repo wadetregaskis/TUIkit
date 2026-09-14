@@ -355,6 +355,10 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // cycle's own sampling rate, where each frame states its own exact claim.
         // Same shape as `Spinner`'s fallback for a mixed-width cycle, and for the
         // same reason: the run cannot express it, so the run is not used. §36.7.
+        // Like that fallback, it asks for one render at the cycle's next frame on
+        // the frame clock (a whole multiple of `period / frameCount`), and that
+        // render asks for the one after. It used to ask for a grid at that rate,
+        // anchored at whichever frame first asked rather than at the frames.
         let canPreRender =
             IndeterminateRenderer.isOpaqueThroughout(
                 style: context.environment.indeterminateStyle,
@@ -363,10 +367,12 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         guard fractionCompleted == nil, !context.isMeasuring, width > 0, canPreRender else {
             if fractionCompleted == nil, !context.isMeasuring, width > 0 {
                 let style = context.environment.indeterminateStyle
-                context.requestAnimation(
+                context.requestWake(
                     token: "progress-\(context.identity.path)",
-                    frequency: Double(IndeterminateRenderer.frameCount(of: style))
-                        / IndeterminateRenderer.period(of: style))
+                    atNanos: AnimationClock.stepEndNanos(
+                        atElapsed: elapsed,
+                        frameDuration: IndeterminateRenderer.period(of: style)
+                            / Double(IndeterminateRenderer.frameCount(of: style))))
             }
             // The scheduler drives this path, not the cursor timer, which nothing keeps
             // running on a page holding only this (§66). The frame comes from the same
