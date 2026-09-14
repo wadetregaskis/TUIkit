@@ -261,6 +261,8 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
             // screens, so nothing else sees depth 0's name, and the crumb trail
             // would start with an anonymous "…" no matter how wide the terminal.
             let preferences = backdrop.environment.preferenceStorage
+            // Declared like the screen's collection in `renderScreen`.
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
             preferences?.push()
             _ = TUIkit.renderToBuffer(
                 root, context: backdrop.withChildIdentity(type: type(of: root)))
@@ -299,7 +301,10 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         let sectionID = Self.sectionID(base: base, depth: depth)
         // Registration is per-frame presence: sections are rebuilt every pass,
         // so the section has to be declared again each time or its controls
-        // have nowhere to register.
+        // have nowhere to register. For the same reason it is declared to any
+        // value-memoizing ancestor, as `.focusSection` declares its own: a stack
+        // served from the cache registers no section at all.
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
         focusManager.registerSection(id: sectionID)
         // Activation is NOT. It is a transition — it remembers the section it
         // leaves, drops the focus, and restores this one's memory — so calling
@@ -339,6 +344,13 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // Collect the screen's own preferences so the bar can read the title it
         // set — and only the title IT set, not one an ancestor published.
         let preferences = screenContext.environment.preferenceStorage
+        // Collecting observes this pass's preferences, as `onPreferenceChange`
+        // does, and is declared to any value-memoizing ancestor for the same
+        // reason: a served buffer runs no collection. Render passes only, like
+        // every declaration.
+        if !context.isMeasuring {
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
+        }
         preferences?.push()
         var content =
             coordinator.destination(for: top).map {
@@ -396,6 +408,11 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         if !context.isMeasuring, barContext.environment.statusBar?.escapeLabelOverride == nil,
             barContext.environment.focusManager?.activeSectionIsModal != true
         {
+            // The claim and the handler are both per-frame: the render loop
+            // resets the label and empties the dispatcher before every pass, so a
+            // stack served from a value memo left Escape unclaimed and unhandled.
+            // Declared, as every other writer to those registries is.
+            barContext.environment.volatileReadTracker?.recordRenderSideEffect()
             barContext.environment.statusBar?.escapeLabelOverride =
                 LocalizationService.shared.string(for: LocalizationKey.StatusBar.goBack)
             barContext.environment.statusBar?.escapeClaimGrabsInput = false

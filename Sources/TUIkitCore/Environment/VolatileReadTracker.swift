@@ -48,6 +48,9 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   so a cached subtree's section vanishes from the ring, and the active
     ///   section's indicator it hands down keeps the focus state it was stored
     ///   with.
+    /// - `NavigationStack`, while a screen is pushed — that depth's focus
+    ///   section, the Escape handler and its status-bar claim, and the
+    ///   collections that read the root's and the screen's titles.
     ///
     /// The pattern is the same each time: a **per-frame registry** the render
     /// loop empties and the view tree refills. Anything that writes to one
