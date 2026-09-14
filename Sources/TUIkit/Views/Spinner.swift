@@ -161,8 +161,23 @@ public enum SpinnerStyle: Sendable {
         }
     }
 
-    /// The fixed animation interval for this style.
-    var interval: TimeInterval {
+    /// How long each frame of this style is shown at the standard speed, in
+    /// seconds.
+    ///
+    /// A spinner shows each frame for this long under
+    /// ``IndicatorAnimationSpeed/standard``. Under another speed set with
+    /// ``View/indicatorAnimationSpeed(_:for:)`` it shows each frame for
+    /// ``IndicatorAnimationSpeed/frameDuration(standard:)`` of this interval. So
+    /// to show a style's frames for a duration of your choosing, set the speed to
+    /// this interval divided by that duration:
+    ///
+    /// ```swift
+    /// // .dots, whose standard interval is 110 ms, at 4 base ticks (100 ms) a frame
+    /// let speed = IndicatorAnimationSpeed(
+    ///     SpinnerStyle.dots.interval / (4 * AnimationClock.baseTick))
+    /// Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)
+    /// ```
+    public var interval: TimeInterval {
         switch self {
         case .dots: return 0.110
         case .line: return 0.140
