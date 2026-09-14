@@ -283,7 +283,7 @@ struct GradientPictureTests {
         let run = buffer.animatedCells.first
         #expect(run != nil)
         let frames = run?.frames ?? []
-        #expect(frames.count == 72, "2.4 s at 30 fps")
+        #expect(frames.count == 72, "2.4 s in frames of 2 ticks")
         #expect(store.imageCount == frames.count, "every frame is its own picture")
         #expect(Set(frames).count == frames.count, "…named by a different id in every frame")
         #expect(frames.allSatisfy { $0.unicodeScalars.filter { $0 == .terminalImagePlaceholder }.count == 20 })

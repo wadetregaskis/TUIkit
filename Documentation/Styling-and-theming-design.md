@@ -244,27 +244,31 @@ extension View {
   in common), which is why the value is a rate and not a duration.
 - **Not in `StyleAttributes`.** An indicator has no scope path to match, so the
   cascade's scopes would have nothing to select on.
+- **Whole ticks at any rate.** Every frame lasts a whole number of 1/60 s ticks,
+  because a display holds a frame of any other length for an uneven number of
+  refreshes. A rate is met as nearly as whole ticks allow.
 - **Tolerance is in the rate's own units** (`2 ± 0.1`), like
-  `Timer.publish(every:tolerance:)`. Inside it, the framework may pick a duration
-  that is a whole number of `AnimationClock.baseTick`s, so indicators step
-  together. A tolerance of 0 is exact. The default, `.automatic`, is `1 ± 0.05`;
-  at the standard durations as they are, that moves none of them (the spinner
-  intervals are whole 1/60 s ticks, 5 to 9 of them, and none has a 25 ms
-  multiple within 0.05 of its rate other than itself). An explicit speed is
-  exact unless it names a tolerance.
+  `Timer.publish(every:tolerance:)`, and applies to sequences. A sequence's frame
+  is the whole number of ticks nearest its standard duration divided by the rate;
+  inside the tolerance it may instead take a tick count divisible by 2 or 3 (the
+  counts bars, breaths and the framework's 50 ms animations step on), the one
+  nearest in rate, the larger on a tie, so indicators step together. A tolerance
+  of 0 is the nearest ticks. The default, `.automatic`, is `1 ± 0.05`; at the
+  standard durations that moves none of them (the spinner intervals are 5 to 9
+  ticks and the blink half 21, and the 5- and 7-tick ones have no such count
+  within 0.05 of their rate). An explicit speed has no tolerance unless it names
+  one.
 - **Every kind reads it.** A spinner's frames are a sequence, so each lasts its
-  standard duration divided by the rate. A bar's pass is a ramp: it takes its
-  period divided by the rate, and is still sampled at 30 frames a second, up to
-  1,000 frames a pass; a longer pass keeps 1,000 frames, each longer, so its cycle
-  stays exact and costs no more to build than a 33 s one. A named
-  preset's pass may move within the tolerance onto whole frames, which moves
-  nothing while those frames are 1/30 s. A period the app sets through `.custom`
-  stays exact. The focus emphasis and the caret have both kinds, laid out alike:
-  a blink is two frames of 350 ms at the standard rate, which stretch, and a
-  breath or pulse is an 800 ms ramp sampled every 50 ms (up to 1,000 frames a
-  cycle, by the same rule), which may move within
-  the tolerance onto whole 50 ms frames (at 800 ms it already is). Neither
-  the selection indicator's animation nor `TextCursorStyle` carries a speed of its own.
+  standard duration divided by the rate, in whole ticks. A bar's pass is a ramp: it
+  takes its period divided by the rate, in frames of 2 ticks, as many as come
+  nearest, up to 1,000 frames a pass; past that each frame is the fewest whole
+  2-tick frames that bring the count to 1,000 or fewer, so a long pass costs no
+  more to build than a 33 s one. A named preset's period and one the app sets
+  through `.custom` are laid out alike. The focus emphasis and the caret have both
+  kinds, laid out alike: a blink is two frames of 21 ticks (350 ms) at the standard
+  rate, which stretch, and a breath or pulse is an 800 ms ramp in frames of 3
+  ticks (50 ms), by the same rule. Neither the selection indicator's animation nor
+  `TextCursorStyle` carries a speed of its own.
 - **A theme can set them too**, with `Theme.indicatorAnimationSpeeds` (§6).
 
 ## 4. Tint (implemented **last** — wholly new)

@@ -356,7 +356,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // Same shape as `Spinner`'s fallback for a mixed-width cycle, and for the
         // same reason: the run cannot express it, so the run is not used. §36.7.
         // Like that fallback, it asks for one render at the cycle's next frame on
-        // the frame clock (a whole multiple of `period / frameCount`), and that
+        // the frame clock (a whole multiple of its frame of whole ticks), and that
         // render asks for the one after. It used to ask for a grid at that rate,
         // anchored at whichever frame first asked rather than at the frames.
         let canPreRender =
@@ -372,7 +372,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                     speed: context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress))
                 context.requestWake(
                     token: "progress-\(context.identity.path)",
-                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameDuration: layout.frameDuration))
+                    atNanos: AnimationClock.stepEndNanos(
+                        atElapsed: elapsed, frameDuration: AnimationClock.seconds(forTicks: layout.frameTicks)))
                 // In the motion's own time, which is what the run's frames are sampled
                 // in: a bar at twice the speed draws what it shows at twice the elapsed
                 // time. At the standard rate the scale is exactly 1.
@@ -484,7 +485,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                         speed: speed, pictures: true, frames: rows,
                         run: AnimatedCellRun(
                             offsetX: 0, offsetY: 0, width: width, frames: rows,
-                            frameDuration: layout.frameDuration, clock: .content),
+                            frameDuration: AnimationClock.seconds(forTicks: layout.frameTicks), clock: .content),
                         pictureCount: pictureCount)
                 }
             }

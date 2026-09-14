@@ -25,18 +25,27 @@ import Foundation
 ///     .indicatorAnimationSpeed(.halfSpeed, for: .spinners)
 /// ```
 ///
+/// ## Whole ticks
+///
+/// Every frame an indicator shows lasts a whole number of 1/60 s ticks, at any
+/// rate. A terminal's paint is shown on a display that refreshes 60 times a
+/// second, and a frame of any other length is held for an uneven number of
+/// refreshes. So a rate is met as nearly as whole ticks allow: a spinner's 7-tick
+/// frames are 4 ticks at twice the speed, not 3.5.
+///
 /// ## Tolerance
 ///
 /// `tolerance` is how far the rate may move either way, in the rate's own units:
 /// `IndicatorAnimationSpeed(2, tolerance: 0.1)` accepts anything from 1.9 to
-/// 2.1. Within that band the framework may choose a frame duration that is a
-/// whole number of ``AnimationClock/baseTick``s, so this indicator steps at the
-/// same instants as others and the run loop wakes once for all of them. With a
-/// tolerance of 0 the rate is exact.
+/// 2.1. Within that band the framework may give a spinner's or a blink's frames a
+/// tick count divisible by 2 or 3, the counts indeterminate bars, breaths and the
+/// framework's other animations step on, so this indicator changes on the same
+/// ticks as they do and the run loop wakes once for all of them. With a tolerance
+/// of 0 a frame is the nearest whole number of ticks.
 ///
 /// The presets are recommendations, not the only choices. Any positive rate
-/// works, but indicators whose durations share a whole-tick multiple step
-/// together, and ones that do not each cost wakes of their own.
+/// works, but indicators whose frames share a multiple of ticks step together,
+/// and ones that do not each cost wakes of their own.
 public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLiteral,
     ExpressibleByIntegerLiteral
 {
@@ -45,7 +54,7 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     public let rate: Double
 
     /// How far ``rate`` may move either way, in the rate's own units: at least
-    /// zero, and less than the rate. Zero means exact.
+    /// zero, and less than the rate. Zero means the nearest whole number of ticks.
     public let tolerance: Double
 
     /// Creates a speed.
@@ -59,7 +68,7 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     /// - Parameters:
     ///   - rate: The rate against the standard speed.
     ///   - tolerance: How far the rate may move either way, in its own units.
-    ///     Defaults to 0, exact.
+    ///     Defaults to 0, the nearest whole number of ticks.
     public init(_ rate: Double, tolerance: Double = 0) {
         self.init(rate, tolerance: tolerance, onRejection: { SoftTrap.report($0) })
     }
@@ -89,12 +98,12 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
         self.tolerance = tolerance
     }
 
-    /// Creates an exact speed from a literal: `.indicatorAnimationSpeed(1.5)`.
+    /// Creates a speed from a literal, with no tolerance: `.indicatorAnimationSpeed(1.5)`.
     public init(floatLiteral value: Double) {
         self.init(value)
     }
 
-    /// Creates an exact speed from a literal: `.indicatorAnimationSpeed(2)`.
+    /// Creates a speed from a literal, with no tolerance: `.indicatorAnimationSpeed(2)`.
     public init(integerLiteral value: Int) {
         self.init(Double(value))
     }
@@ -102,39 +111,81 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     /// The speed every indicator has unless something sets another: the
     /// standard rate, allowed to move by up to 0.05 either way.
     ///
-    /// Inside that band the framework picks a frame duration that is a whole
-    /// number of ``AnimationClock/baseTick``s when there is one, so indicators on
-    /// one screen step together and the run loop wakes once for them. At the
-    /// standard durations as they are, that moves none of them: each is a whole
-    /// number of 1/60 s ticks, and none has a whole number of base ticks within
-    /// 0.05 of its rate other than itself. Use ``standard`` for the exact rate.
+    /// Inside that band a spinner's or a blink's frame may move onto a tick count
+    /// divisible by 2 or 3 when there is one, so indicators on one screen step
+    /// together and the run loop wakes once for them. At the standard durations
+    /// that moves none of them: every spinner interval is 5 to 9 ticks and the blink
+    /// half is 21, and of those, the 5- and 7-tick ones have no such count within
+    /// 0.05 of their rate while the others are such a count already. Use
+    /// ``standard`` for no tolerance.
     public static let automatic = Self(1, tolerance: 0.05)
 
-    /// The standard rate, exactly.
+    /// The standard rate, with no tolerance.
     public static let standard = Self(1)
 
-    /// Half the standard rate, exactly.
+    /// Half the standard rate, with no tolerance.
     public static let halfSpeed = Self(0.5)
 
-    /// Twice the standard rate, exactly.
+    /// Twice the standard rate, with no tolerance.
     public static let doubleSpeed = Self(2)
 
-    /// How long each frame of a sequence is shown at this speed, for a sequence
-    /// whose frames are shown for `standard` seconds at the standard rate.
+    /// How many 1/60 s ticks each frame of a sequence is shown for at this speed,
+    /// for a sequence whose frames are shown for `standard` seconds at the standard
+    /// rate.
     ///
-    /// `standard / rate`, exactly, when ``tolerance`` is 0. Otherwise the whole
-    /// number of ``AnimationClock/baseTick``s nearest to that whose rate is within
-    /// the tolerance, or `standard / rate` when there is none.
+    /// The whole number of ticks nearest `standard / rate`, a half rounding up, and
+    /// at least 1: a sequence of 7-tick frames is 4 ticks at twice the speed, and 6
+    /// at 1.1. Whole ticks because a display holds a frame of any other length for
+    /// an uneven number of refreshes.
+    ///
+    /// With a ``tolerance``, when that nearest count is divisible by neither 2 nor 3,
+    /// the frame may be a count that is, whose rate is within the tolerance: of
+    /// those, the one nearest in rate, and the larger on a tie. Indeterminate bars
+    /// step in frames of 2 ticks, and breaths and the framework's other animations
+    /// in frames of 3, so a frame of such a count changes on ticks theirs do. 7 ticks
+    /// at 1 ± 0.2 is 8 ticks, a rate of 0.875. With no such count in reach the frame
+    /// is the nearest.
     ///
     /// - Parameter standard: The frame duration at the standard rate, in seconds.
     ///   Must be greater than zero.
-    /// - Returns: The frame duration at this speed, in seconds.
-    public func frameDuration(standard: TimeInterval) -> TimeInterval {
-        let exact = standard / rate
-        guard tolerance > 0 else { return exact }
-        // The rate band in hertz of this sequence: its frequency is
-        // `rate / standard`, so a tolerance in rate units is `tolerance / standard` Hz.
-        return AnimationGrid.latticeFrameDuration(exact, frequencyTolerance: tolerance / standard)
+    /// - Returns: The frame at this speed, in ticks of 1/60 s: at least 1, and at
+    ///   most `Int32.max`.
+    public func frameTicks(standard: TimeInterval) -> Int {
+        let ticksPerSecond = Double(AnimationClock.ticksPerSecond)
+        let exact = standard * ticksPerSecond / rate
+        // A standard that is not finite, or not greater than zero, is the shortest frame
+        // there is, as `AnimationClock.frameTicks(forSeconds:)` has it.
+        guard exact.isFinite, exact > 0 else { return 1 }
+        // Compared as a Double, which holds Int32.max exactly: converting first would
+        // trap, and so would the candidate one past the count rounded up, below, on a
+        // 32-bit `Int`.
+        guard exact.rounded(.up) < Double(Int32.max) else { return Int(Int32.max) }
+        let nearest = max(1, Int(exact.rounded()))
+        guard tolerance > 0, !Self.isDivisibleByTwoOrThree(nearest) else { return nearest }
+        // A frame's rate falls as its count rises, so the candidate nearest in rate is
+        // the largest count below `exact` or the smallest above it that qualifies, and
+        // of any two consecutive counts one is even. Above first, so a tie keeps the
+        // larger count.
+        let floor = Int(exact.rounded(.down))
+        let ceiling = Int(exact.rounded(.up))
+        let above = Self.isDivisibleByTwoOrThree(ceiling) ? ceiling : ceiling + 1
+        let below = Self.isDivisibleByTwoOrThree(floor) ? floor : floor - 1
+        var chosen = nearest
+        var chosenDistance = Double.infinity
+        for candidate in [above, below] where candidate >= 1 {
+            let distance = abs(standard * ticksPerSecond / Double(candidate) - rate)
+            if distance <= tolerance, distance < chosenDistance {
+                chosen = candidate
+                chosenDistance = distance
+            }
+        }
+        return chosen
+    }
+
+    /// Whether a frame of `ticks` ticks shares the 2- or 3-tick lattice the framework's
+    /// own frames step on.
+    private static func isDivisibleByTwoOrThree(_ ticks: Int) -> Bool {
+        ticks.isMultiple(of: 2) || ticks.isMultiple(of: 3)
     }
 }
 
@@ -142,19 +193,23 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
 
 extension IndicatorAnimationSpeed {
     /// A continuous ramp's layout at a speed: how many frames it is sampled at, how
-    /// long each is shown, and how many of the ramp's own seconds pass in each second
-    /// shown.
+    /// many ticks each is shown for, and how many of the ramp's own seconds pass in
+    /// each second shown.
     struct RampLayout: Equatable, Sendable {
         let frameCount: Int
-        let frameDuration: TimeInterval
 
-        /// ``IndicatorAnimationSpeed/rate``, or the rate a cycle moved onto whole
-        /// frames runs at. A view that draws the ramp at an arbitrary instant, rather
-        /// than from its frames, draws it at the clock's elapsed time times this.
+        /// How many 1/60 s ticks each frame is shown for: a whole number of the ramp's
+        /// lattice.
+        let frameTicks: Int
+
+        /// The standard cycle over the cycle these whole frames last, which is the
+        /// rate a cycle of whole frames runs at. A view that draws the ramp at an
+        /// arbitrary instant, rather than from its frames, draws it at the clock's
+        /// elapsed time times this.
         let timeScale: Double
 
         /// The most frames a ramp's cycle is sampled at. A longer cycle keeps this
-        /// many, each longer.
+        /// many or fewer, each longer.
         ///
         /// Every frame of a cycle is built at its first render and held while it is on
         /// screen: an indeterminate bar's styled row, or its picture sent to the
@@ -167,53 +222,54 @@ extension IndicatorAnimationSpeed {
         static let maximumFrameCount = 1000
     }
 
-    /// How a continuous ramp (an indeterminate bar's pass) is laid out at this
-    /// speed: over its cycle divided by the rate, sampled as often as at the
-    /// standard rate, up to ``RampLayout/maximumFrameCount`` frames.
+    /// How a continuous ramp (an indeterminate bar's pass, a breath) is laid out at
+    /// this speed: in frames of `lattice` ticks, as many as come nearest its cycle
+    /// divided by the rate, at least two and at most ``RampLayout/maximumFrameCount``.
     ///
     /// Frames are not stretched or squeezed, the way a sequence's are
-    /// (``frameDuration(standard:)``). The frame count is the cycle times
-    /// `framesPerSecond`, rounded, at least two and at most
-    /// ``RampLayout/maximumFrameCount``, and each frame lasts the cycle over the
-    /// count. So a slowed ramp stays smooth, a quickened one does not wake the loop
-    /// more often than a standard one does, and a very slow one costs no more to
-    /// build than one of a thousand frames. The cycle lasts exactly its length
-    /// whichever bound applies.
+    /// (``frameTicks(standard:)``). Each lasts the lattice, so a slowed ramp stays
+    /// smooth, a quickened one does not wake the loop more often than a standard one
+    /// does, and every frame changes on a tick every other ramp on that lattice
+    /// changes on. The cycle is the whole number of frames nearest its length, so one
+    /// that is not a whole number of frames moves by up to half a frame: 1.73 s in
+    /// 2-tick frames is 52 of them, 1.7333 s.
     ///
-    /// With `snapping` and a tolerance, a cycle of whole frames
-    /// (`count / framesPerSecond`) is used instead, when its rate is within the
-    /// tolerance and it moves the cycle by at least a nanosecond. Every frame then
-    /// lasts `1 / framesPerSecond`, and steps with every other ramp sampled at that
-    /// rate. A caller asks for no snapping for a cycle the app chose, which stays
-    /// exact.
+    /// Past ``RampLayout/maximumFrameCount`` frames, each frame is the fewest whole
+    /// lattice frames that bring the count to that bound or fewer, and the count is the
+    /// nearest to the cycle in those frames: an hour in 2-tick frames is a thousand of
+    /// 216 ticks, and a minute is 900 of 4. So a very slow ramp costs no more to build
+    /// than one of a thousand frames.
+    ///
+    /// The tolerance plays no part. It lets a sequence move onto a lattice, and every
+    /// frame of a ramp is on one already.
     ///
     /// - Parameters:
     ///   - standardCycle: The cycle at the standard rate, in seconds. Greater than
     ///     zero.
-    ///   - framesPerSecond: How often the ramp is sampled, per second shown.
-    ///   - snapping: Whether the tolerance may move the cycle onto whole frames.
-    func rampLayout(
-        standardCycle: TimeInterval, framesPerSecond: Double, snapping: Bool
-    ) -> RampLayout {
-        let cycle = standardCycle / rate
-        // Bounded in `Double` before `Int(_:)`, which would trap on a count too large
-        // for an `Int`. Past the bound the frames lengthen instead (`cycle / count`
-        // below), so the cycle stays exact.
-        let count = max(
-            2, Int(min((cycle * framesPerSecond).rounded(), Double(RampLayout.maximumFrameCount))))
-        if snapping, tolerance > 0 {
-            let whole = Double(count) / framesPerSecond
-            let fastest = standardCycle / (rate + tolerance)
-            let slowest = standardCycle / (rate - tolerance)
-            if whole >= fastest, whole <= slowest,
-                AnimationClock.nanoseconds(whole) != AnimationClock.nanoseconds(cycle)
-            {
-                return RampLayout(
-                    frameCount: count, frameDuration: 1 / framesPerSecond,
-                    timeScale: standardCycle / whole)
-            }
+    ///   - lattice: How many 1/60 s ticks a frame is, at least 1: 2 for an
+    ///     indeterminate bar, 3 for a breath.
+    func rampLayout(standardCycle: TimeInterval, frameTicks lattice: Int) -> RampLayout {
+        let lattice = max(1, lattice)
+        let ticksPerSecond = Double(AnimationClock.ticksPerSecond)
+        let cycleTicks = standardCycle * ticksPerSecond / rate
+        // Counted in `Double` until bounded: `Int(_:)` traps on a count or a frame too
+        // large for an `Int`, which a rate of 1e-9 reaches. A cycle too long to count at
+        // all (not finite) takes the bounded path too, because the comparison is false.
+        let limit = Double(RampLayout.maximumFrameCount)
+        let wholeFrames = (cycleTicks / Double(lattice)).rounded()
+        var frameTicks = lattice
+        var count = wholeFrames
+        if !(wholeFrames <= limit) {
+            let multiple = (wholeFrames / limit).rounded(.up)
+            // The largest multiple of the lattice an `Int32` holds, past which a frame
+            // is never reached anyway.
+            let longest = Int(Int32.max) / lattice
+            frameTicks = multiple < Double(longest) ? Int(multiple) * lattice : longest * lattice
+            count = (cycleTicks / Double(frameTicks)).rounded()
         }
-        return RampLayout(frameCount: count, frameDuration: cycle / Double(count), timeScale: rate)
+        let frameCount = count >= limit ? RampLayout.maximumFrameCount : (count >= 2 ? Int(count) : 2)
+        let shown = Double(frameCount) * Double(frameTicks) / ticksPerSecond
+        return RampLayout(frameCount: frameCount, frameTicks: frameTicks, timeScale: standardCycle / shown)
     }
 }
 
@@ -233,21 +289,21 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     /// The caret of a ``TextField``, a ``SecureField`` or a ``TextEditor``,
     /// whatever ``TextCursorStyle`` it has.
     ///
-    /// A blink is two frames that stretch: each half is 350 ms at the standard
-    /// rate, divided by the rate. A pulse is a ramp: its 800 ms cycle is divided by
-    /// the rate and still sampled every 50 ms, up to a thousand frames a cycle, past
-    /// which the frames lengthen. Within the speed's tolerance the
-    /// pulse may move onto whole 50 ms frames.
+    /// A blink is two frames that stretch: each half is 21 ticks of 1/60 s (350 ms)
+    /// at the standard rate, divided by the rate and rounded to whole ticks. A pulse
+    /// is a ramp: its 800 ms cycle is divided by the rate and still shown in frames of
+    /// 3 ticks (50 ms), as many as come nearest, up to a thousand frames a cycle, past
+    /// which each frame is several of those.
     public static let textCursor = Self(rawValue: 1 << 0)
 
     /// The breath or blink a focused control draws itself with, whatever
     /// animation ``View/selectionIndicatorStyle(_:)`` gives it.
     ///
-    /// A blink is two frames that stretch: each half is 350 ms at the standard
-    /// rate, divided by the rate. A breath is a ramp: its 800 ms cycle is divided
-    /// by the rate and still sampled every 50 ms, so a slow breath stays smooth, up
-    /// to a thousand frames a cycle, past which the frames lengthen.
-    /// Within the speed's tolerance the breath may move onto whole 50 ms frames.
+    /// A blink is two frames that stretch: each half is 21 ticks of 1/60 s (350 ms)
+    /// at the standard rate, divided by the rate and rounded to whole ticks. A breath
+    /// is a ramp: its 800 ms cycle is divided by the rate and still shown in frames of
+    /// 3 ticks (50 ms), as many as come nearest, so a slow breath stays smooth, up to
+    /// a thousand frames a cycle, past which each frame is several of those.
     public static let focusEmphasis = Self(rawValue: 1 << 1)
 
     /// ``Spinner``, including the one a `refreshable` view draws while it
@@ -255,13 +311,12 @@ public struct IndicatorAnimations: OptionSet, Hashable, Sendable {
     public static let spinners = Self(rawValue: 1 << 2)
 
     /// An indeterminate ``ProgressView``'s bar: one pass of its motion takes its
-    /// period divided by the rate, sampled at 30 frames a second, up to a thousand
-    /// frames a pass. A longer pass keeps a thousand frames, each longer, and still
-    /// takes exactly that time.
+    /// period divided by the rate, in frames of 2 ticks of 1/60 s, as many as come
+    /// nearest, up to a thousand frames a pass. A longer pass keeps a thousand frames
+    /// or fewer, each a whole number of 2-tick frames.
     ///
-    /// A named ``IndeterminateStyle`` preset's pass may move within the speed's
-    /// tolerance onto whole frames of the bar's 30 frames a second. A period an app
-    /// sets, through ``IndeterminateStyle/custom(_:)``, stays exact.
+    /// A named ``IndeterminateStyle`` preset's period and one an app sets, through
+    /// ``IndeterminateStyle/custom(_:)``, are laid out alike.
     public static let indeterminateProgress = Self(rawValue: 1 << 3)
 
     /// Every kind.
@@ -372,9 +427,9 @@ extension View {
     ///     .indicatorAnimationSpeed(.doubleSpeed, for: .spinners)
     /// ```
     ///
-    /// Prefer rates whose durations share whole ``AnimationClock/baseTick``s with
-    /// the rest of the screen, such as the presets, so indicators step together
-    /// and the run loop wakes once for all of them.
+    /// Prefer rates whose frames come out as tick counts that share multiples with
+    /// the rest of the screen, such as the presets, or give the speed a tolerance, so
+    /// indicators step together and the run loop wakes once for all of them.
     ///
     /// - Parameters:
     ///   - speed: The speed.

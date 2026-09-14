@@ -173,8 +173,9 @@ public enum SpinnerStyle: Sendable {
     /// ``IndicatorAnimationSpeed/standard``, and under the default,
     /// ``IndicatorAnimationSpeed/automatic``, which moves none of these intervals.
     /// Under another speed set with ``View/indicatorAnimationSpeed(_:for:)`` it
-    /// shows each frame for ``IndicatorAnimationSpeed/frameDuration(standard:)`` of
-    /// this interval. So to show a style's frames for a duration of your choosing,
+    /// shows each frame for ``IndicatorAnimationSpeed/frameTicks(standard:)`` of
+    /// this interval: the whole number of ticks nearest this interval divided by the
+    /// rate. So to show a style's frames for a whole number of ticks of your choosing,
     /// set the speed to this interval divided by that duration:
     ///
     /// ```swift
@@ -508,8 +509,9 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // The style's interval at the speed set for spinners here. One value for the
         // frame drawn, the run left and the fallback's wake, so none of them can step
         // at a different rate from the others.
-        let frameDuration = context.environment.indicatorAnimationSpeeds.speed(for: .spinners)
-            .frameDuration(standard: style.interval)
+        let frameDuration = AnimationClock.seconds(
+            forTicks: context.environment.indicatorAnimationSpeeds.speed(for: .spinners)
+                .frameTicks(standard: style.interval))
         // Through the conversion the run's own index uses, so the frame drawn here is
         // the frame the loop replays: a floor in seconds put a summed `.dots` clock one
         // step short at steps 27–40, and every render on such a wake stuttered back.

@@ -89,19 +89,21 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     ///
     /// That is the pass at the standard speed.
     /// ``View/indicatorAnimationSpeed(_:for:)`` for
-    /// ``IndicatorAnimations/indeterminateProgress`` divides it by the rate. A period
-    /// set here, through ``IndeterminateStyle/custom(_:)``, stays exact at any
-    /// tolerance; only a named preset's pass may move within one.
+    /// ``IndicatorAnimations/indeterminateProgress`` divides it by the rate.
     ///
     /// Any other value is a mistake in the app. A debug build stops with an
     /// assertion failure. A release build reports it once and uses 1.6 seconds,
     /// the ``sweep`` preset's period, whichever preset the configuration was
     /// built from.
     ///
-    /// A pass is drawn from frames built ahead, 30 a second, up to a thousand. A
-    /// pass longer than a thousand thirtieths of a second (about 33 seconds) keeps a
-    /// thousand frames, each shown for a thousandth of the pass, so a very slow bar
-    /// costs no more to build and hold than a 33-second one.
+    /// A pass is drawn from frames built ahead, each shown for 2 ticks of 1/60 s, a
+    /// thirtieth of a second, as many as come nearest the pass: a display holds a
+    /// frame of any other length for an uneven number of refreshes. So a pass that is
+    /// not a whole number of those frames takes the nearest that is, the same for a
+    /// period set here as for a named preset's: 1.73 seconds is 52 frames, 1.7333
+    /// seconds. Up to a thousand frames: a pass longer than that (about 33 seconds)
+    /// keeps a thousand frames or fewer, each a whole number of 2-tick frames, so a
+    /// very slow bar costs no more to build and hold than a 33-second one.
     public var period: Double
 
     /// The lit run's length as a fraction of the track, for the two motions

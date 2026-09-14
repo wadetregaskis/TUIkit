@@ -5,7 +5,7 @@
 //  License: MIT
 //
 //  Translation fragment for the Spinners page's Speed section: the catalogue's
-//  speed, per-style frame durations in base ticks, and the readouts under the
+//  speed, per-style frame durations in 1/60 s ticks, and the readouts under the
 //  page. Its own fragment rather than an addition to `Strings_g3`, which holds
 //  the page's other strings and is past the 600-line limit.
 //
@@ -19,7 +19,7 @@ extension ExampleStrings {
     static let g15: [String: [String: String]] = [
         "en": [
             "page.spinners.speedSection": "Speed",
-            "page.spinners.speedHint": "Automatic is what an app gets when it sets no speed: the standard rate, free to move ±0.05 onto whole 25 ms ticks. An override shows one style's frames for a whole number of ticks, exactly. Each row shows its frame duration, and the foot of the page lists them all.",
+            "page.spinners.speedHint": "Automatic is what an app gets when it sets no speed: the standard rate, free to move ±0.05 onto a whole number of 1/60 s ticks divisible by 2 or 3, which at the standard durations moves nothing. An override shows one style's frames for a whole number of ticks, exactly. Each row shows its frame duration, and the foot of the page lists them all.",
             "page.spinners.speed": "Speed",
             "page.spinners.speedAutomatic": "Automatic (1 ± 0.05)",
             "page.spinners.speedHalf": "Half (0.5)",
@@ -38,7 +38,7 @@ extension ExampleStrings {
 
         "de": [
             "page.spinners.speedSection": "Geschwindigkeit",
-            "page.spinners.speedHint": "Automatisch bekommt eine App, die keine Geschwindigkeit festlegt: die Standardrate, die sich um ±0.05 auf ganze 25-ms-Takte verschieben darf. Eine Überschreibung zeigt die Bilder eines Stils exakt für eine ganze Zahl von Takten. Jede Zeile zeigt ihre Bilddauer, und unten auf der Seite stehen alle.",
+            "page.spinners.speedHint": "Automatisch bekommt eine App, die keine Geschwindigkeit festlegt: die Standardrate, die sich um ±0.05 auf eine durch 2 oder 3 teilbare ganze Zahl von 1/60-s-Takten verschieben darf, was bei den Standarddauern nichts verschiebt. Eine Überschreibung zeigt die Bilder eines Stils exakt für eine ganze Zahl von Takten. Jede Zeile zeigt ihre Bilddauer, und unten auf der Seite stehen alle.",
             "page.spinners.speed": "Geschwindigkeit",
             "page.spinners.speedAutomatic": "Automatisch (1 ± 0.05)",
             "page.spinners.speedHalf": "Halb (0.5)",
@@ -57,7 +57,7 @@ extension ExampleStrings {
 
         "fr": [
             "page.spinners.speedSection": "Vitesse",
-            "page.spinners.speedHint": "Automatique est ce qu'obtient une application qui ne fixe aucune vitesse : la vitesse standard, libre de bouger de ±0.05 pour tomber sur des tics entiers de 25 ms. Une surcharge montre les images d'un style pendant un nombre entier de tics, exactement. Chaque ligne affiche sa durée d'image, et le bas de la page les liste toutes.",
+            "page.spinners.speedHint": "Automatique est ce qu'obtient une application qui ne fixe aucune vitesse : la vitesse standard, libre de bouger de ±0.05 pour tomber sur un nombre entier de tics de 1/60 s divisible par 2 ou 3, ce qui ne déplace aucune des durées standard. Une surcharge montre les images d'un style pendant un nombre entier de tics, exactement. Chaque ligne affiche sa durée d'image, et le bas de la page les liste toutes.",
             "page.spinners.speed": "Vitesse",
             "page.spinners.speedAutomatic": "Automatique (1 ± 0.05)",
             "page.spinners.speedHalf": "Moitié (0.5)",
@@ -76,7 +76,7 @@ extension ExampleStrings {
 
         "it": [
             "page.spinners.speedSection": "Velocità",
-            "page.spinners.speedHint": "Automatica è ciò che ottiene un'app che non imposta alcuna velocità: la velocità standard, libera di spostarsi di ±0.05 su tick interi da 25 ms. Una sostituzione mostra i fotogrammi di uno stile per un numero intero di tick, esattamente. Ogni riga mostra la durata del suo fotogramma, e in fondo alla pagina sono elencate tutte.",
+            "page.spinners.speedHint": "Automatica è ciò che ottiene un'app che non imposta alcuna velocità: la velocità standard, libera di spostarsi di ±0.05 su un numero intero di tick da 1/60 s divisibile per 2 o 3, il che non sposta nessuna delle durate standard. Una sostituzione mostra i fotogrammi di uno stile per un numero intero di tick, esattamente. Ogni riga mostra la durata del suo fotogramma, e in fondo alla pagina sono elencate tutte.",
             "page.spinners.speed": "Velocità",
             "page.spinners.speedAutomatic": "Automatica (1 ± 0.05)",
             "page.spinners.speedHalf": "Metà (0.5)",
@@ -95,7 +95,7 @@ extension ExampleStrings {
 
         "es": [
             "page.spinners.speedSection": "Velocidad",
-            "page.spinners.speedHint": "Automática es lo que obtiene una app que no fija ninguna velocidad: la velocidad estándar, libre de moverse ±0.05 hasta ticks enteros de 25 ms. Una anulación muestra los fotogramas de un estilo durante un número entero de ticks, exactamente. Cada fila muestra la duración de su fotograma, y al pie de la página aparecen todas.",
+            "page.spinners.speedHint": "Automática es lo que obtiene una app que no fija ninguna velocidad: la velocidad estándar, libre de moverse ±0.05 hasta un número entero de ticks de 1/60 s divisible por 2 o 3, lo que no mueve ninguna de las duraciones estándar. Una anulación muestra los fotogramas de un estilo durante un número entero de ticks, exactamente. Cada fila muestra la duración de su fotograma, y al pie de la página aparecen todas.",
             "page.spinners.speed": "Velocidad",
             "page.spinners.speedAutomatic": "Automática (1 ± 0.05)",
             "page.spinners.speedHalf": "Mitad (0.5)",
@@ -114,7 +114,7 @@ extension ExampleStrings {
 
         "zh": [
             "page.spinners.speedSection": "速度",
-            "page.spinners.speedHint": "“自动”是应用未设置速度时得到的速度：标准速率，可偏移 ±0.05 以落在整数个 25 ms 节拍上。覆盖让某一样式的每帧精确显示整数个节拍。每行显示其帧时长，页面底部列出全部时长。",
+            "page.spinners.speedHint": "“自动”是应用未设置速度时得到的速度：标准速率，可偏移 ±0.05 以落在能被 2 或 3 整除的整数个 1/60 s 节拍上，在标准时长下这不会改变任何时长。覆盖让某一样式的每帧精确显示整数个节拍。每行显示其帧时长，页面底部列出全部时长。",
             "page.spinners.speed": "速度",
             "page.spinners.speedAutomatic": "自动（1 ± 0.05）",
             "page.spinners.speedHalf": "半速（0.5）",
@@ -133,7 +133,7 @@ extension ExampleStrings {
 
         "ja": [
             "page.spinners.speedSection": "速度",
-            "page.spinners.speedHint": "「自動」は、アプリが速度を指定しないときの速度です。標準の速度で、25 ms の整数ティックに揃うよう ±0.05 までずれることがあります。上書きすると、そのスタイルの各フレームを整数ティックぴったり表示します。各行にフレーム時間を表示し、ページの下にすべてを並べます。",
+            "page.spinners.speedHint": "「自動」は、アプリが速度を指定しないときの速度です。標準の速度で、2 または 3 で割り切れる整数個の 1/60 s ティックに揃うよう ±0.05 までずれることがありますが、標準の時間ではどれも変わりません。上書きすると、そのスタイルの各フレームを整数ティックぴったり表示します。各行にフレーム時間を表示し、ページの下にすべてを並べます。",
             "page.spinners.speed": "速度",
             "page.spinners.speedAutomatic": "自動（1 ± 0.05）",
             "page.spinners.speedHalf": "半分（0.5）",

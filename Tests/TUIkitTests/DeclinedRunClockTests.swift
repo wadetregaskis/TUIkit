@@ -223,7 +223,7 @@ struct DeclinedRunClockTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         let frame = AnimationClock.nanoseconds(
-            IndeterminateRenderer.layout(of: .sweep, speed: .automatic).frameDuration)
+            AnimationClock.seconds(forTicks: IndeterminateRenderer.layout(of: .sweep, speed: .automatic).frameTicks))
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
         #expect(
             scheduler.nextFiring(after: now) == (now / frame + 1) * frame,

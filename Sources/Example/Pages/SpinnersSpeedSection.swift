@@ -187,11 +187,11 @@ struct SpinnerSpeedSettings {
         return IndicatorAnimationSpeed(style.style.interval / AnimationClock.seconds(forTicks: ticks))
     }
 
-    /// How long `style` shows each frame on the page, in nanoseconds: the same
-    /// `frameDuration(standard:)` the spinner itself asks of the nearest speed.
+    /// How long `style` shows each frame on the page, in nanoseconds: where the
+    /// `frameTicks(standard:)` the spinner itself asks of the nearest speed ends.
     func frameNanoseconds(_ style: SpinnerStyle, choice: SpinnerStyleChoice?) -> Int64 {
         let speed = overrideSpeed(for: choice) ?? catalogueSpeed
-        return AnimationClock.nanoseconds(speed.frameDuration(standard: style.interval))
+        return AnimationClock.nanoseconds(atTick: Int64(speed.frameTicks(standard: style.interval)))
     }
 
     // MARK: Stored values
@@ -257,7 +257,7 @@ struct SpinnerSpeedSettings {
     /// every non-empty subset of ±1 / lcm(subset), odd subsets added and even
     /// ones taken away. The terms are collected by their lcm, so a set on one
     /// lattice collapses to a handful of terms: seventeen durations of 1 to 17
-    /// base ticks leave one, 25 ms. A term whose lcm does not fit in 64 bits of
+    /// whole 25 ms steps leave one, 25 ms. A term whose lcm does not fit in 64 bits of
     /// nanoseconds is dropped, which is under 1.1e-10 of an instant a second.
     ///
     /// A real loop wakes less often than this: a wake that arrives a few

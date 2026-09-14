@@ -61,7 +61,7 @@ struct ThemeIndicatorAnimationSpeedTests {
         ]
         for entries in orders {
             #expect(runNanos(Spinner(style: .dots).theme(theme(entries))) == [233_333_333], "\(entries)")
-            #expect(caretNanos { $0.theme(theme(entries)) } == [175_000_000], "\(entries)")
+            #expect(caretNanos { $0.theme(theme(entries)) } == [183_333_333], "\(entries)")
         }
     }
 
@@ -69,7 +69,7 @@ struct ThemeIndicatorAnimationSpeedTests {
     func tiesKeepArrayOrder() {
         #expect(
             runNanos(Spinner(style: .dots).theme(theme([Entry(0.5, for: .spinners), Entry(2, for: .spinners)])))
-                == [58_333_333])
+                == [66_666_667])
         #expect(
             runNanos(Spinner(style: .dots).theme(theme([Entry(2, for: .spinners), Entry(0.5, for: .spinners)])))
                 == [233_333_333])
@@ -79,7 +79,7 @@ struct ThemeIndicatorAnimationSpeedTests {
     func nearerWins() {
         let slow = theme([Entry(0.5, for: .spinners)])
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners).theme(slow)) == [58_333_333])
+            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners).theme(slow)) == [66_666_667])
         #expect(
             runNanos(Spinner(style: .dots).theme(slow).indicatorAnimationSpeed(2, for: .spinners)) == [233_333_333])
     }
@@ -88,7 +88,7 @@ struct ThemeIndicatorAnimationSpeedTests {
     func unnamedKindsAreInherited() {
         let view = Spinner(style: .dots).theme(theme([Entry(0.5, for: .textCursor)]))
             .indicatorAnimationSpeed(2, for: .spinners)
-        #expect(runNanos(view) == [58_333_333])
+        #expect(runNanos(view) == [66_666_667])
         #expect(runNanos(Spinner(style: .dots).theme(theme([]))) == [116_666_667])
     }
 
@@ -116,6 +116,6 @@ struct ThemeIndicatorAnimationSpeedTests {
         #expect(
             cache.stats.delta(since: before).hits >= 1,
             "the spinner was not served from the memo, so this is not the case under test")
-        #expect(frame([Entry(2, for: .spinners)]) == [58_333_333])
+        #expect(frame([Entry(2, for: .spinners)]) == [66_666_667])
     }
 }

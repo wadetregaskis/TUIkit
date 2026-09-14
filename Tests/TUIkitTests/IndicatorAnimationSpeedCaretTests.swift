@@ -31,16 +31,17 @@ struct IndicatorAnimationSpeedCaretTests {
         TextField("Name", text: Binding.constant("Ada")).textCursor(.block, animation: .blink)
     }
 
-    /// A blink is a sequence of two frames, so its frames stretch: 350 ms halves at
-    /// the standard speed are 175 ms at twice it.
-    @Test("A text field's caret blinks in 175 ms halves at twice the speed")
+    /// A blink is a sequence of two frames, so its frames stretch: 21-tick (350 ms)
+    /// halves at the standard speed are 10.5 ticks at twice it, which rounds to 11.
+    @Test("A text field's caret blinks in 11-tick halves, 183,333,333 ns, at twice the speed")
     func blinkAtDoubleSpeed() throws {
         let seen = try #require(caret(blinkingField().indicatorAnimationSpeed(2, for: .textCursor)))
         #expect(seen.frames == 2)
-        #expect(seen.frameNanos == 175_000_000)
+        #expect(seen.frameNanos == 183_333_333)
     }
 
-    /// A pulse is a ramp sampled every 50 ms, so half as fast is twice as many frames.
+    /// A pulse is a ramp of 3-tick (50 ms) frames, so half as fast is twice as many
+    /// frames.
     @Test("A text field's pulsing caret takes 1.6 s at half the speed, in 50 ms frames")
     func pulseAtHalfSpeed() throws {
         let field = TextField("Name", text: Binding.constant("Ada")).textCursor(.block, animation: .pulse)
@@ -62,7 +63,7 @@ struct IndicatorAnimationSpeedCaretTests {
             .textCursor(.block, animation: .blink).indicatorAnimationSpeed(2, for: .textCursor)
         let editor = TextEditor(text: Binding.constant("hello"))
             .textCursor(.block, animation: .blink).indicatorAnimationSpeed(0.5, for: .textCursor)
-        #expect(try #require(caret(secure)).frameNanos == 175_000_000)
+        #expect(try #require(caret(secure)).frameNanos == 183_333_333)
         #expect(try #require(caret(editor)).frameNanos == 700_000_000)
     }
 
@@ -73,7 +74,7 @@ struct IndicatorAnimationSpeedCaretTests {
             try #require(caret(blinkingField().indicatorAnimationSpeed(2, for: .focusEmphasis))).frameNanos
                 == 350_000_000)
         // `.all` does.
-        #expect(try #require(caret(blinkingField().indicatorAnimationSpeed(2))).frameNanos == 175_000_000)
+        #expect(try #require(caret(blinkingField().indicatorAnimationSpeed(2))).frameNanos == 183_333_333)
         // Inner `.textCursor` at 0.5 inside outer `.all` at 2.
         #expect(
             try #require(

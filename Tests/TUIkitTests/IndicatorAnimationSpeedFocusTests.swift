@@ -60,12 +60,12 @@ struct IndicatorAnimationSpeedFocusTests {
         #expect(runs(Button("Save") {}.indicatorAnimationSpeed(.halfSpeed, for: .focusEmphasis)).first?.frames == 32)
     }
 
-    /// A blink is a sequence of two frames, so its frames stretch: 350 ms halves at
-    /// the standard speed are 175 ms at twice it.
-    @Test("A focused button's caps blink in 175 ms halves at twice the speed")
+    /// A blink is a sequence of two frames, so its frames stretch: 21-tick (350 ms)
+    /// halves at the standard speed are 10.5 ticks at twice it, which rounds to 11.
+    @Test("A focused button's caps blink in 11-tick halves, 183,333,333 ns, at twice the speed")
     func blinkAtDoubleSpeed() {
         let view = Button("Save") {}.selectionIndicatorStyle(.blink).indicatorAnimationSpeed(2, for: .focusEmphasis)
-        expectCaps(view, cycleNanos: 350_000_000, frameNanos: 175_000_000)
+        expectCaps(view, cycleNanos: 366_666_667, frameNanos: 183_333_333)
         #expect(runs(view).allSatisfy { $0.frames == 2 })
     }
 
@@ -93,14 +93,16 @@ struct IndicatorAnimationSpeedFocusTests {
             cycleNanos: 400_000_000, frameNanos: 50_000_000)
     }
 
-    /// 0.8 s at 1.5 is 0.5333 s, which samples to 11 frames. Exact, each is
-    /// 48,484,848 ns. At 1.5 ± 0.1, 11 whole 50 ms frames (0.55 s, a rate of 1.4545)
-    /// are inside the band, so the breath moves onto them.
-    @Test("Within a tolerance the breath moves onto whole cursor ticks, and an exact speed stays exact")
-    func toleranceMovesTheBreathOntoTicks() {
-        let exact = runs(Button("Save") {}.indicatorAnimationSpeed(1.5, for: .focusEmphasis))
-        #expect(exact.count == 2)
-        #expect(exact.allSatisfy { $0.frames == 11 && $0.frameNanos == 48_484_848 }, "\(exact)")
+    /// 0.8 s at 1.5 is 0.5333 s, 32 ticks, which is 10.67 frames of 3 ticks and rounds
+    /// to 11. Every frame is a whole 3 ticks, so the pass is 33 ticks, 0.55 s, a rate
+    /// of 1.4545, whatever the tolerance. It used to be 11 frames of 48,484,848 ns
+    /// at an exact 1.5, and moved onto whole 50 ms frames only within a tolerance.
+    @Test("A breath at 1.5 is 11 frames of 3 ticks, with or without a tolerance")
+    func breathIsWholeFramesOfThreeTicks() {
+        expectCaps(
+            Button("Save") {}.indicatorAnimationSpeed(1.5, for: .focusEmphasis),
+            cycleNanos: 550_000_000, frameNanos: 50_000_000)
+        #expect(runs(Button("Save") {}.indicatorAnimationSpeed(1.5, for: .focusEmphasis)).first?.frames == 11)
         expectCaps(
             Button("Save") {}.indicatorAnimationSpeed(IndicatorAnimationSpeed(1.5, tolerance: 0.1), for: .focusEmphasis),
             cycleNanos: 550_000_000, frameNanos: 50_000_000)

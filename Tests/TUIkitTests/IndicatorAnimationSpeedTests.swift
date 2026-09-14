@@ -20,23 +20,61 @@ import Testing
 
 @Suite("Indicator animation speed values")
 struct IndicatorAnimationSpeedValueTests {
-    @Test("At tolerance 0 a frame lasts the standard duration divided by the rate, bit for bit")
-    func exactDuration() {
-        for (rate, standard) in [(2.0, 0.11), (1.1, 0.11), (0.5, 0.12), (3.0, 1.0 / 30), (1.5, 0.13)] {
-            let duration = IndicatorAnimationSpeed(rate).frameDuration(standard: standard)
-            #expect(duration.bitPattern == (standard / rate).bitPattern, "rate \(rate), standard \(standard)")
+    /// A standard of `ticks` ticks, in seconds.
+    private static func standard(_ ticks: Int) -> Double {
+        AnimationClock.seconds(forTicks: ticks)
+    }
+
+    /// A sequence's frame is its standard duration divided by the rate, as the
+    /// nearest whole number of 1/60 s ticks, and at least one. Halves round up: 7
+    /// ticks at 2 is 3.5, and 21 ticks at 2 is 10.5.
+    @Test("At tolerance 0 a frame is the whole number of ticks nearest the standard divided by the rate")
+    func exactIsTheNearestTick() {
+        let cases: [(standard: Int, rate: Double, ticks: Int)] = [
+            (7, 2, 4), (7, 1.1, 6), (7, 0.5, 14),
+            (21, 2, 11), (21, 1.1, 19), (21, 0.5, 42),
+            (7, 400, 1),
+        ]
+        for (standard, rate, ticks) in cases {
+            #expect(
+                IndicatorAnimationSpeed(rate).frameTicks(standard: Self.standard(standard)) == ticks,
+                "\(standard) ticks at \(rate)")
         }
     }
 
-    /// 110 ms at 1.05 ± 0.05 accepts 100 ms to 110 ms, and 100 ms is the tick multiple in it.
-    @Test("A tolerance, in the rate's own units, lets a duration move onto a tick multiple")
-    func toleranceIsInRateUnits() {
-        let speed = IndicatorAnimationSpeed(1.05, tolerance: 0.05)
-        #expect(AnimationClock.nanoseconds(speed.frameDuration(standard: 0.11)) == 100_000_000)
-        // 2 ± 0.1 is 1.9 to 2.1, so 110 ms goes to 52.4 ms to 57.9 ms, which holds
-        // no 25 ms multiple. As a fraction of the rate (2 ± 0.2) it would reach 50 ms.
-        let two = IndicatorAnimationSpeed(2, tolerance: 0.1)
-        #expect(AnimationClock.nanoseconds(two.frameDuration(standard: 0.11)) == 55_000_000)
+    /// 7 ticks at 1 ± 0.2 accepts 5.83 to 8.75 ticks. Of 6 (a rate of 1.167) and 8
+    /// (0.875), 8 is nearer in rate. 5 ticks at 1 ± 0.25 accepts 4 to 6.67, and 6
+    /// (0.833) is nearer than 4 (1.25).
+    @Test("Within a tolerance, in the rate's own units, a frame moves onto the nearest ticks divisible by 2 or 3")
+    func toleranceMovesOntoTwosAndThrees() {
+        #expect(IndicatorAnimationSpeed(1, tolerance: 0.2).frameTicks(standard: Self.standard(7)) == 8)
+        #expect(IndicatorAnimationSpeed(1, tolerance: 0.25).frameTicks(standard: Self.standard(5)) == 6)
+        // 7 ticks at 2 is 3.5, whose nearest, 4, is divisible by 2 already.
+        #expect(IndicatorAnimationSpeed(2, tolerance: 0.1).frameTicks(standard: Self.standard(7)) == 4)
+        // 7 ticks at 1.05 ± 0.05 accepts 6.36 to 7 ticks, which holds nothing divisible
+        // by 2 or 3, so the frame is the nearest.
+        #expect(IndicatorAnimationSpeed(1.05, tolerance: 0.05).frameTicks(standard: Self.standard(7)) == 7)
+        // In the rate's units, not a fraction of it: 7 ticks at 1.4 is 5, and 1.4 ± 0.2
+        // accepts 4.38 to 5.83 ticks, which holds nothing divisible by 2 or 3. As a
+        // fraction of the rate (1.4 ± 0.28) it would reach 6 ticks, a rate of 1.167.
+        #expect(IndicatorAnimationSpeed(1.4, tolerance: 0.2).frameTicks(standard: Self.standard(7)) == 5)
+    }
+
+    /// `.automatic` is 1 ± 0.05. A 5-tick frame accepts 4.76 to 5.26 ticks and a 7-tick
+    /// one 6.67 to 7.37, which hold nothing divisible by 2 or 3, and the others already
+    /// are divisible.
+    @Test(".automatic moves no standard duration: every spinner interval and the blink half keep their ticks")
+    func automaticMovesNoStandardDuration() {
+        let styles: [SpinnerStyle] = [
+            .dots, .line, .dancingLine, .bouncing, .pie, .beachball, .box, .curve, .column, .bar,
+            .shade, .blockWedge, .spinningTriangle, .moon, .earth, .clock, .custom("ab"),
+        ]
+        for style in styles {
+            #expect(
+                IndicatorAnimationSpeed.automatic.frameTicks(standard: style.interval)
+                    == AnimationClock.frameTicks(forSeconds: style.interval), "\(style)")
+        }
+        #expect(IndicatorAnimationSpeed.automatic.frameTicks(standard: CursorTimer.standardBlinkCycle / 2) == 21)
     }
 
     @Test(
@@ -73,38 +111,41 @@ struct IndicatorAnimationSpeedValueTests {
         }
     }
 
-    /// A ramp is sampled at its frame rate until that would be more than a thousand
-    /// frames. A longer cycle keeps a thousand, each longer, so it costs no more to
-    /// build than a 33 s bar and still lasts exactly as long. Before, an hour was
-    /// 108,000 frames, and a rate of 1e-9 asked for `Int32.max` of them.
-    @Test("A ramp longer than a thousand frames is sampled at a thousand, and its cycle stays exact")
-    func rampFrameCountIsBounded() {
-        let cases: [(standardCycle: Double, speed: IndicatorAnimationSpeed, framesPerSecond: Double, frames: Int)] = [
-            (20, 1, 30, 600),
-            (1000.0 / 30, 1, 30, 1000),
-            (40, 1, 30, 1000),
-            (3600, 1, 30, 1000),
-            (1.6, 0.001, 30, 1000),
-            (0.8, 0.0001, 20, 1000),
-            (1.6, IndicatorAnimationSpeed(1e-9), 30, 1000),
+    /// A ramp is laid out in frames of its lattice, 2 ticks for a bar and 3 for a
+    /// breath, as many as come nearest its pass, until that would be more than a
+    /// thousand frames. Past that each frame is as many lattice frames as bring the
+    /// count back to a thousand or fewer, so a very slow ramp costs no more to build
+    /// than a thousand frames, and its pass is the nearest those frames allow. Before,
+    /// an hour was 108,000 frames, and a rate of 1e-9 asked for `Int32.max` of them.
+    @Test("A ramp is whole frames of its lattice, and past a thousand of them each frame is several")
+    func rampIsWholeLatticeFrames() {
+        let cases: [(standardCycle: Double, speed: IndicatorAnimationSpeed, lattice: Int, frames: Int, ticks: Int)] = [
+            (1.73, 1, 2, 52, 2),
+            (0.8, 1.5, 3, 11, 3),
+            (20, 1, 2, 600, 2),
+            (1000.0 / 30, 1, 2, 1000, 2),
+            (40, 1, 2, 600, 4),
+            (60, 1, 2, 900, 4),
+            (3600, 1, 2, 1000, 216),
+            (1.6, 0.001, 2, 1000, 96),
+            (0.8, 0.0001, 3, 1000, 480),
         ]
-        for (standardCycle, speed, framesPerSecond, frames) in cases {
-            for snapping in [false, true] {
-                let layout = speed.rampLayout(
-                    standardCycle: standardCycle, framesPerSecond: framesPerSecond, snapping: snapping)
-                let label = "\(standardCycle) s at \(speed.rate), \(framesPerSecond) fps, snapping \(snapping)"
-                #expect(layout.frameCount == frames, "\(label)")
-                #expect(
-                    AnimationClock.nanoseconds(Double(layout.frameCount) * layout.frameDuration)
-                        == AnimationClock.nanoseconds(standardCycle / speed.rate), "\(label)")
-            }
+        for (standardCycle, speed, lattice, frames, ticks) in cases {
+            let layout = speed.rampLayout(standardCycle: standardCycle, frameTicks: lattice)
+            let label = "\(standardCycle) s at \(speed.rate) on \(lattice) ticks"
+            #expect(layout.frameCount == frames && layout.frameTicks == ticks, "\(label): \(layout)")
         }
-        // A tolerance cannot lift the bound: 1,600 s at 0.001 ± 0.0005 has no whole
-        // number of 1/30 s frames in its band that a thousand frames reach.
-        let tolerant = IndicatorAnimationSpeed(0.001, tolerance: 0.0005)
-            .rampLayout(standardCycle: 1.6, framesPerSecond: 30, snapping: true)
-        #expect(tolerant.frameCount == 1000)
-        #expect(AnimationClock.nanoseconds(tolerant.frameDuration) == 1_600_000_000)
+        // No trap, however slow: a thousand frames of whole lattice frames.
+        for rate in [1e-9, 1e-300] {
+            let slowest = IndicatorAnimationSpeed(rate).rampLayout(standardCycle: 1.6, frameTicks: 2)
+            #expect(slowest.frameCount >= 2 && slowest.frameCount <= 1000, "\(rate): \(slowest)")
+            #expect(slowest.frameTicks >= 2 && slowest.frameTicks <= Int(Int32.max), "\(rate): \(slowest)")
+        }
+        #expect(IndicatorAnimationSpeed(1e-9).rampLayout(standardCycle: 1.6, frameTicks: 2).frameCount == 1000)
+        // A tolerance is for sequences, and leaves a ramp's layout alone.
+        #expect(
+            IndicatorAnimationSpeed(0.001, tolerance: 0.0005).rampLayout(standardCycle: 1.6, frameTicks: 2)
+                == IndicatorAnimationSpeed(0.001).rampLayout(standardCycle: 1.6, frameTicks: 2))
     }
 
     @Test("The presets and literals are the rates they name, exact")
@@ -185,8 +226,8 @@ struct IndicatorAnimationSpeedSpinnerTests {
         }
     }
 
-    /// `.automatic` is 1 ± 0.05, so 7 ticks (116.7 ms) accepts 111.1 ms to 122.8 ms,
-    /// which holds no whole number of 25 ms base ticks.
+    /// `.automatic` is 1 ± 0.05, so 7 ticks accepts 6.67 to 7.37 ticks, which holds
+    /// nothing divisible by 2 or 3.
     @Test("Unset, a .dots spinner shows each frame for its style's 7 ticks, 116,666,667 ns")
     func unsetIsTheStyleInterval() {
         #expect(runNanos(Spinner(style: .dots)) == [116_666_667])
@@ -201,22 +242,32 @@ struct IndicatorAnimationSpeedSpinnerTests {
         #expect(runNanos(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [116_666_667])
     }
 
-    @Test("A .dots spinner at twice the speed shows each frame for 58,333,333 ns")
+    /// 7 ticks at twice the speed are 3.5, and a half rounds up.
+    @Test("A .dots spinner at twice the speed shows each frame for 4 ticks, 66,666,667 ns")
     func doubleSpeed() {
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)) == [58_333_333])
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)) == [66_666_667])
     }
 
-    @Test("A .dots spinner at 1.1 shows each frame for exactly its interval divided by 1.1")
+    /// 7 ticks at 1.1 are 6.36. It was exactly 106,060,606 ns, which no display can hold.
+    @Test("A .dots spinner at 1.1 shows each frame for the nearest whole ticks to its interval divided by 1.1, 6")
     func exactRate() {
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(1.1, for: .spinners)) == [106_060_606])
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(1.1, for: .spinners)) == [100_000_000])
     }
 
-    /// 1.05 ± 0.05 on 7 ticks accepts 106.1 ms to 116.7 ms, which holds no whole number
-    /// of 25 ms base ticks, so the duration is the exact one.
-    @Test("A .dots spinner at 1.05 ± 0.05 with no base tick in reach shows each frame for exactly 111,111,111 ns")
-    func toleranceWithNothingInReachIsExact() {
+    /// 1.05 ± 0.05 on 7 ticks accepts 6.36 to 7 ticks, which holds nothing divisible by
+    /// 2 or 3, so the frame is the nearest. It was exactly 111,111,111 ns.
+    @Test("A .dots spinner at 1.05 ± 0.05 with nothing divisible by 2 or 3 in reach shows the nearest ticks, 7")
+    func toleranceWithNothingInReachIsTheNearest() {
         let speed = IndicatorAnimationSpeed(1.05, tolerance: 0.05)
-        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [111_111_111])
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [116_666_667])
+    }
+
+    /// 1 ± 0.2 on 7 ticks accepts 5.83 to 8.75 ticks, and 8 (a rate of 0.875) is nearer
+    /// than 6 (1.167). On 25 ms base ticks it was 125 ms.
+    @Test("A .dots spinner at 1 ± 0.2 shows each frame for 8 ticks, 133,333,333 ns")
+    func toleranceMovesOntoTwosAndThrees() {
+        let speed = IndicatorAnimationSpeed(1, tolerance: 0.2)
+        #expect(runNanos(Spinner(style: .dots).indicatorAnimationSpeed(speed, for: .spinners)) == [133_333_333])
     }
 
     @Test("The nearest setting for spinners wins, and replaces the one above rather than multiplying it")
@@ -224,14 +275,14 @@ struct IndicatorAnimationSpeedSpinnerTests {
         // Inner `.all` at 2 inside outer `.spinners` at 0.5.
         #expect(
             runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(0.5, for: .spinners))
-                == [58_333_333])
+                == [66_666_667])
         // Inner `.spinners` at 0.5 inside outer `.all` at 2.
         #expect(
             runNanos(Spinner(style: .dots).indicatorAnimationSpeed(0.5, for: .spinners).indicatorAnimationSpeed(2))
                 == [233_333_333])
         // 2 inside 2 is 2, not 4.
         #expect(
-            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(2)) == [58_333_333])
+            runNanos(Spinner(style: .dots).indicatorAnimationSpeed(2).indicatorAnimationSpeed(2)) == [66_666_667])
         // A nearer setting for another kind leaves spinners at the one above.
         #expect(
             runNanos(
@@ -245,7 +296,7 @@ struct IndicatorAnimationSpeedSpinnerTests {
             Spinner(style: .dots).indicatorAnimationSpeed(2, for: .spinners)
             Spinner(style: .dots)
         }
-        #expect(runNanos(view).sorted() == [58_333_333, 116_666_667])
+        #expect(runNanos(view).sorted() == [66_666_667, 116_666_667])
     }
 
     /// At three and a half times the speed a `.custom` sequence's 7 ticks are 2, a
@@ -291,7 +342,7 @@ struct IndicatorAnimationSpeedSpinnerTests {
         #expect(
             cache.stats.delta(since: before).hits >= 1,
             "the spinner was not served from the memo, so this is not the case under test")
-        #expect(frame(2) == [58_333_333])
+        #expect(frame(2) == [66_666_667])
     }
 }
 
@@ -375,8 +426,7 @@ struct IndicatorAnimationSpeedBarTests {
         buffer.lines.reduce(0) { $0 + $1.unicodeScalars.filter { $0 == .terminalImagePlaceholder }.count }
     }
 
-    /// 1.6 s at twice the speed is 0.8 s, still sampled at 30 frames a second: 24
-    /// frames of 1/30 s.
+    /// 1.6 s at twice the speed is 0.8 s, still in frames of 2 ticks: 24 of them.
     @Test("A .sweep bar at twice the speed passes in 0.8 s, at the same frame rate")
     func sweepAtDoubleSpeed() throws {
         let standard = try #require(bar(ProgressView().indeterminateStyle(.sweep)).animatedCells.first)
@@ -407,11 +457,12 @@ struct IndicatorAnimationSpeedBarTests {
         }
     }
 
-    /// 1.6 s at 1.02 is 1.5686 s, which samples to 47 frames. 47 whole frames of
-    /// 1/30 s is 1.5667 s, a rate of 1.0213, inside 1.02 ± 0.05. The preset's pass
-    /// moves onto them; the same configuration set by the app does not.
-    @Test("Within a tolerance a preset's pass moves onto whole frames, and the same pass set by the app stays exact")
-    func toleranceMovesOnlyAPresetsPass() throws {
+    /// 1.6 s at 1.02 is 1.5686 s, 94.1 ticks, which is 47 frames of 2 ticks. The
+    /// tolerance is for sequences and moves nothing here, and a preset's pass and the
+    /// same pass set by the app are laid out alike. The app's used to stay exact, in
+    /// frames of 33,375,052 ns.
+    @Test("A preset's pass and the same pass set by the app are both 47 frames of 2 ticks at 1.02 ± 0.05")
+    func presetAndCustomPassAreLaidOutAlike() throws {
         let speed = IndicatorAnimationSpeed(1.02, tolerance: 0.05)
         let preset = try #require(
             bar(ProgressView().indeterminateStyle(.sweep).indicatorAnimationSpeed(speed, for: .indeterminateProgress))
@@ -423,25 +474,26 @@ struct IndicatorAnimationSpeedBarTests {
             ).animatedCells.first)
         #expect(preset.frames.count == 47)
         #expect(custom.frames.count == 47)
-        #expect(AnimationClock.nanoseconds(preset.frameDuration) == AnimationClock.nanoseconds(1.0 / 30))
-        #expect(AnimationClock.nanoseconds(custom.frameDuration) == AnimationClock.nanoseconds(1.6 / 1.02 / 47))
+        #expect(AnimationClock.nanoseconds(preset.frameDuration) == 33_333_333)
+        #expect(AnimationClock.nanoseconds(custom.frameDuration) == 33_333_333)
     }
 
-    /// `.automatic` is 1 ± 0.05. 1.73 s samples to 52 frames, and 52 whole frames of
-    /// 1/30 s is 1.7333 s, a rate of 0.998, well inside it: a preset's pass would move.
-    @Test("A period the app sets passes in exactly that time at the default speed")
-    func customPeriodStaysExact() throws {
+    /// 1.73 s is 103.8 ticks, which is 51.9 frames of 2 ticks and rounds to 52: a pass
+    /// of 1.7333 s. It used to be exactly 1.73 s, in frames of 33,269,231 ns.
+    @Test("A period the app sets is the nearest whole number of 2-tick frames: 1.73 s is 52 of them")
+    func customPeriodIsWholeFrames() throws {
         let run = try #require(
             bar(ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 1.73))))
                 .animatedCells.first)
         #expect(run.frames.count == 52)
-        #expect(AnimationClock.nanoseconds(run.frameDuration) == AnimationClock.nanoseconds(1.73 / 52))
+        #expect(AnimationClock.nanoseconds(run.frameDuration) == 33_333_333)
     }
 
-    /// 1.6 s at 1.1 is 1.4545 s: 44 frames of 33,057,851 ns. At 1.037 s that is frame
-    /// 31, which ends at 1,057,851,232 ns. At the standard speed the frame would end
-    /// at 1,066,666,656 ns.
-    @Test("A translucent bar asks for its next render at the frame its speed lays out")
+    /// 1.6 s at 1.1 is 1.4545 s, 87.3 ticks, which is 43.6 frames of 2 ticks and rounds
+    /// to 44. A frame is 2 ticks at any speed, so at 1.037 s it is step 31 of
+    /// 33,333,333 ns steps, which ends at 1,066,666,656 ns. It used to be 44 frames of
+    /// 33,057,851 ns, ending at 1,057,851,232 ns.
+    @Test("A translucent bar asks for its next render at the end of its 2-tick frame, at any speed")
     func fallbackWakesAtTheSpeedsFrame() {
         let harness = RenderLoopHarness()
         let loop = harness.loop(QuickTranslucentSweepApp())
@@ -451,7 +503,7 @@ struct IndicatorAnimationSpeedBarTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
-        #expect(scheduler.nextFiring(after: now) == 1_057_851_232)
+        #expect(scheduler.nextFiring(after: now) == 1_066_666_656)
     }
 
     /// A declined bar draws one frame per render, at an instant rather than from its
@@ -514,9 +566,10 @@ struct IndicatorAnimationSpeedBarTests {
         #expect(tui.terminalImageStore.imageCount == 36)
     }
 
-    /// At 30 frames a second an hour is 108,000 frames, every one built at the first
-    /// render and held for as long as the bar is on screen.
-    @Test("An hour-long pass is a thousand frames of 3.6 s, and lasts exactly an hour")
+    /// In frames of 2 ticks an hour is 108,000 frames, every one built at the first
+    /// render and held for as long as the bar is on screen. A thousand frames of 216
+    /// ticks (3.6 s) is exactly an hour.
+    @Test("An hour-long pass is a thousand frames of 216 ticks, 3.6 s, and lasts exactly an hour")
     func hourLongPassIsBounded() throws {
         let run = try #require(
             bar(ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 3600))))
@@ -530,8 +583,10 @@ struct IndicatorAnimationSpeedBarTests {
     }
 
     /// As pictures, each frame is also an image sent to the terminal: 1,800 of them
-    /// for a minute at 30 frames a second.
-    @Test("A minute-long .gradient pass is a thousand frames of 60 ms as pictures and as glyphs")
+    /// for a minute in frames of 2 ticks. Past a thousand, a frame is whole 2-tick
+    /// frames, as few as bring the count to a thousand or fewer: 4 ticks, 900 frames. It
+    /// used to be a thousand frames of 60 ms, which is not a whole number of ticks.
+    @Test("A minute-long .gradient pass is 900 frames of 4 ticks as pictures and as glyphs")
     func minuteLongGradientIsBoundedOnBothPaths() throws {
         let view = ProgressView().indeterminateStyle(
             .custom(IndeterminateConfiguration(motion: .gradient, period: 60)))
@@ -541,8 +596,8 @@ struct IndicatorAnimationSpeedBarTests {
         #expect(placeholders(glyphs) == 0, "the glyph path drew pictures")
         for buffer in [pictures, glyphs] {
             let run = try #require(buffer.animatedCells.first)
-            #expect(run.frames.count == 1000)
-            #expect(AnimationClock.nanoseconds(run.frameDuration) == 60_000_000)
+            #expect(run.frames.count == 900)
+            #expect(AnimationClock.nanoseconds(run.frameDuration) == 66_666_667)
             #expect(AnimationClock.nanoseconds(run.cycleDuration) == 60_000_000_000)
         }
     }

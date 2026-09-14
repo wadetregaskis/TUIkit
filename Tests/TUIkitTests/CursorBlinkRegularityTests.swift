@@ -75,11 +75,12 @@ struct CursorBlinkRegularityTests {
             frameDuration: cycle.timing.frameDuration, clock: cycle.timing.clock)
     }
 
-    /// A blink's standard half, 350 ms, at `speed`'s rate, in nanoseconds. Every
-    /// speed under test is exact but the default, whose 350 ms is already a whole
-    /// number of base ticks.
+    /// A blink's standard half, 21 ticks (350 ms), at `speed`'s rate, as the nearest
+    /// whole number of ticks, in nanoseconds: 11 ticks at twice the speed, 14 at 1.5.
+    /// Every speed under test is exact but the default, whose 21 ticks are already
+    /// divisible by 3, so its tolerance moves nothing.
     private func halfNanos(_ speed: IndicatorAnimationSpeed) -> Int64 {
-        AnimationClock.nanoseconds(0.35 / speed.rate)
+        AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: Int((21 / speed.rate).rounded())))
     }
 
     /// The first `count` things `run` shows from the start of its cycle, and how
@@ -142,15 +143,16 @@ struct CursorBlinkRegularityTests {
         #expect(disagreements.isEmpty, "\(speed): the live blink and the run disagree at \(disagreements) ms")
     }
 
-    /// 0.8 s at the speed's rate, sampled one 50 ms cursor tick a frame as nearly as
-    /// a whole number of frames allows.
-    @Test("A focus breath lasts exactly its cycle, sampled once a cursor tick, at every speed", arguments: speeds)
+    /// 0.8 s at the speed's rate, in frames of one 3-tick (50 ms) cursor step each: as
+    /// many as come nearest to the cycle, so the cycle is a whole number of those
+    /// frames.
+    @Test("A focus breath is the whole number of 3-tick frames nearest its cycle, at every speed", arguments: speeds)
     func breathLastsItsCycle(_ speed: IndicatorAnimationSpeed) throws {
         let cycle = emphasisCycle(.pulse, speed)
         let run = try #require(cycle.run(offsetX: 0, offsetY: 0) { "\($0.phase)" })
         let count = max(2, Int((0.8 / speed.rate * 20).rounded()))
         #expect(run.frames.count == count)
-        #expect(AnimationClock.nanoseconds(run.frameDuration) == AnimationClock.nanoseconds(0.8 / speed.rate / Double(count)))
+        #expect(AnimationClock.nanoseconds(run.frameDuration) == 50_000_000)
     }
 
     @Test("A render that reads the breath sees the phase the replayed run shows, at every instant", arguments: speeds)

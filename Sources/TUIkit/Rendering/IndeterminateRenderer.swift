@@ -68,10 +68,10 @@ enum IndeterminateRenderer {
     /// Every frame of `style`'s cycle at `speed`, already styled, and how long each
     /// is shown.
     ///
-    /// Sampled at 30 frames a second shown — the rate these bars used to ask to be
-    /// re-rendered at — so the animation looks as it did, at any speed, up to
-    /// `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` frames, past which each
-    /// lasts longer. Frames that come out identical cost nothing at replay:
+    /// Frames of `frameTicks` ticks, a thirtieth of a second — the rate these bars used
+    /// to ask to be re-rendered at — so the animation looks as it did, at any speed,
+    /// up to `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` frames, past which
+    /// each lasts longer. Frames that come out identical cost nothing at replay:
     /// ``AnimatedCellRun`` skips straight past them. They still cost their building
     /// and their memory, which is what the bound is for.
     static func cycle(
@@ -90,37 +90,33 @@ enum IndeterminateRenderer {
                 elapsed: Double(index) * sample, palette: palette
             ).text
         }
-        return (frames, layout.frameDuration)
+        return (frames, AnimationClock.seconds(forTicks: layout.frameTicks))
     }
 
     /// How one pass of `style` is laid out at `speed`: how many frames it is sampled
-    /// at, how long each is shown, and how fast the motion's own time runs. That is
-    /// also when the FALLBACK path asks to be re-rendered, so a bar that cannot be
-    /// pre-rendered animates at exactly the speed one that can does, and what
-    /// `ProgressView`'s cycle of pictures is laid out by.
+    /// at, how many ticks each is shown, and how fast the motion's own time runs.
+    /// That is also when the FALLBACK path asks to be re-rendered, so a bar that
+    /// cannot be pre-rendered animates at exactly the speed one that can does, and
+    /// what `ProgressView`'s cycle of pictures is laid out by.
     ///
-    /// A pass takes the configuration's period divided by the rate, sampled at
-    /// ``framesPerSecond`` (`IndicatorAnimationSpeed.rampLayout`). A named preset's
-    /// period is the framework's, so the speed's tolerance may move the pass onto
-    /// whole frames. A `.custom` configuration's period is the app's, and stays
-    /// exact.
+    /// A pass takes the configuration's period divided by the rate, in whole frames
+    /// of `frameTicks` ticks, as many as come nearest
+    /// (`IndicatorAnimationSpeed.rampLayout`). A named preset's period and a `.custom`
+    /// configuration's are laid out alike, so every bar's frames change on the same
+    /// 2-tick lattice.
     ///
     /// The frame count used to be a literal 30 in three places, which is the shape
     /// a divergence arrives in.
     static func layout(
         of style: IndeterminateStyle, speed: IndicatorAnimationSpeed
     ) -> IndicatorAnimationSpeed.RampLayout {
-        let isTheAppsPeriod: Bool
-        if case .custom = style { isTheAppsPeriod = true } else { isTheAppsPeriod = false }
-        return speed.rampLayout(
-            standardCycle: period(of: style), framesPerSecond: framesPerSecond,
-            snapping: !isTheAppsPeriod)
+        speed.rampLayout(standardCycle: period(of: style), frameTicks: frameTicks)
     }
 
-    /// The sampling rate of a pre-rendered cycle, in frames per second shown — the
-    /// rate these bars asked the run loop to re-render them at before
-    /// `AnimatedCellRun` existed, kept so the animation looks as it did.
-    static let framesPerSecond: Double = 30
+    /// How many 1/60 s ticks a frame of a pre-rendered cycle is shown for: 2, the
+    /// thirtieth of a second these bars asked the run loop to re-render them at
+    /// before `AnimatedCellRun` existed, kept so the animation looks as it did.
+    static let frameTicks = 2
 
     /// Whether every colour this bar could paint is opaque.
     ///

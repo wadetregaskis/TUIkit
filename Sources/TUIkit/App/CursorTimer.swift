@@ -250,12 +250,12 @@ extension CursorTimer {
     }
 
     /// A blink's cycle at the standard speed, visible then hidden: 700 ms, 350 ms
-    /// each, a whole number of base ticks.
+    /// each, 21 ticks of 1/60 s.
     ///
     /// Each half is one frame of the blink's run, so a replayed blink holds it
     /// exactly, whatever its length. A view that reads the blink as it renders is
-    /// re-rendered on the 50 ms cursor lattice, though, so for that view a half that
-    /// is not a whole number of ticks still flips up to a tick late. The standard
+    /// re-rendered on the 50 ms cursor steps, though, so for that view a half that
+    /// is not a whole number of steps still flips up to a step late. The standard
     /// blink was once 660 ms, and its live blink wobbled between a 600 ms and a
     /// 700 ms period.
     nonisolated static let standardBlinkCycle: TimeInterval = 0.7
@@ -268,19 +268,18 @@ extension CursorTimer {
     ///
     /// Two kinds of cycle, laid out differently on purpose:
     /// - **A blink is discrete.** Visible, then hidden: two frames, each shown for
-    ///   ``standardBlinkCycle``'s half at the standard rate, and for
-    ///   ``IndicatorAnimationSpeed/frameDuration(standard:)`` of it at `speed`. It
-    ///   used to be one frame per 50 ms step, seven visible and seven hidden. That
-    ///   holds only while a half is a whole number of ticks, and it makes a slower
-    ///   blink more frames rather than longer ones.
-    /// - **A pulse is continuous.** ``standardPulseCycle`` divided by the rate,
-    ///   sampled at its standard frame, one cursor step: `max(2, round(cycle / step))`
-    ///   frames, at most `RampLayout.maximumFrameCount`, each `cycle / count` long,
-    ///   so the cycle is exactly that length. A
-    ///   slowed breath stays as smooth, and a quickened one wakes the loop no more
-    ///   often. Within `speed`'s tolerance the cycle may move onto whole ticks
-    ///   (``IndicatorAnimationSpeed/rampLayout(standardCycle:framesPerSecond:snapping:)``);
-    ///   at the standard 800 ms it already is.
+    ///   ``standardBlinkCycle``'s half, 21 ticks, at the standard rate, and for
+    ///   `IndicatorAnimationSpeed.frameTicks(standard:)` of it at `speed`, the
+    ///   nearest whole ticks. It used to be one frame per 50 ms step, seven visible
+    ///   and seven hidden. That holds only while a half is a whole number of steps,
+    ///   and it makes a slower blink more frames rather than longer ones.
+    /// - **A pulse is continuous.** ``standardPulseCycle`` divided by the rate, in
+    ///   frames of one cursor step (`AnimationClock.standardFrameTicks` ticks), as
+    ///   many as come nearest, at least two and at most `RampLayout.maximumFrameCount`,
+    ///   past which each frame is several steps
+    ///   (`IndicatorAnimationSpeed.rampLayout(standardCycle:frameTicks:)`). A slowed
+    ///   breath stays as smooth, a quickened one wakes the loop no more often, and
+    ///   every frame changes on a cursor step. At the standard 800 ms it is 16 frames.
     /// - `.none` is one frame, a still picture.
     ///
     /// Both animate on the focus-relative clock. The whole cycle is built from this
@@ -299,15 +298,16 @@ extension CursorTimer {
             return CycleLayout(
                 frameCount: 2,
                 timing: IndicatorCycleTiming(
-                    frameDuration: speed.frameDuration(standard: standardBlinkCycle / 2), clock: .cursor))
+                    frameDuration: AnimationClock.seconds(
+                        forTicks: speed.frameTicks(standard: standardBlinkCycle / 2)),
+                    clock: .cursor))
         case .pulse:
-            // The framework's own cycle, so the tolerance may move it: snapping.
             let ramp = speed.rampLayout(
-                standardCycle: standardPulseCycle, framesPerSecond: 1 / Self.standardFrameSeconds,
-                snapping: true)
+                standardCycle: standardPulseCycle, frameTicks: AnimationClock.standardFrameTicks)
             return CycleLayout(
                 frameCount: ramp.frameCount,
-                timing: IndicatorCycleTiming(frameDuration: ramp.frameDuration, clock: .cursor))
+                timing: IndicatorCycleTiming(
+                    frameDuration: AnimationClock.seconds(forTicks: ramp.frameTicks), clock: .cursor))
         }
     }
 
