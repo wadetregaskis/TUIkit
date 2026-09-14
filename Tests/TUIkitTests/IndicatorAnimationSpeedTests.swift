@@ -150,9 +150,20 @@ struct IndicatorAnimationSpeedSpinnerTests {
         }
     }
 
+    /// `.automatic` is 1 ± 0.05, so 110 ms accepts 104.8 ms to 115.8 ms, which holds
+    /// no whole number of 25 ms ticks.
     @Test("Unset, a .dots spinner shows each frame for its style's 110 ms")
     func unsetIsTheStyleInterval() {
         #expect(runNanos(Spinner(style: .dots)) == [110_000_000])
+    }
+
+    /// 120 ms at 1 ± 0.05 accepts 114.3 ms to 126.3 ms, and 125 ms, five base
+    /// ticks, is in it. `.standard` is exact.
+    @Test("Unset, a .pie spinner shows each frame for 125 ms, and at .standard for its style's 120 ms")
+    func automaticMovesOntoTheLattice() {
+        #expect(IndicatorAnimationSpeed.automatic == IndicatorAnimationSpeed(1, tolerance: 0.05))
+        #expect(runNanos(Spinner(style: .pie)) == [125_000_000])
+        #expect(runNanos(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [120_000_000])
     }
 
     @Test("A .dots spinner at twice the speed shows each frame for 55 ms")

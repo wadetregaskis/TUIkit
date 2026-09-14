@@ -100,8 +100,15 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     }
 
     /// The speed every indicator has unless something sets another: the
-    /// standard rate.
-    public static let automatic = Self(1, tolerance: 0)
+    /// standard rate, allowed to move by up to 0.05 either way.
+    ///
+    /// Inside that band the framework picks a frame duration that is a whole
+    /// number of ``AnimationClock/baseTick``s when there is one, so indicators on
+    /// one screen step together and the run loop wakes once for them. At the
+    /// standard durations as they are, that moves only the spinner styles whose
+    /// interval is 120 ms or 130 ms, to 125 ms. Use ``standard`` for the exact
+    /// rate.
+    public static let automatic = Self(1, tolerance: 0.05)
 
     /// The standard rate, exactly.
     public static let standard = Self(1)

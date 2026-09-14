@@ -247,7 +247,10 @@ extension View {
 - **Tolerance is in the rate's own units** (`2 ± 0.1`), like
   `Timer.publish(every:tolerance:)`. Inside it, the framework may pick a duration
   that is a whole number of `AnimationClock.baseTick`s, so indicators step
-  together. A tolerance of 0 is exact.
+  together. A tolerance of 0 is exact. The default, `.automatic`, is `1 ± 0.05`;
+  at the standard durations as they are, that moves only the 120 ms and 130 ms
+  spinner styles, to 125 ms. An explicit speed is exact unless it names a
+  tolerance.
 - **Only spinners read it so far.** The caret, the focus emphasis and the
   indeterminate bar follow in their own changes.
 

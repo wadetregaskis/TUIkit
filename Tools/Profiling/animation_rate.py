@@ -15,6 +15,12 @@ A ratio of 1.00 is a spinner stepping at its own rate. The same ratio well above
 1 on EVERY style is a slow clock rather than slow spinners: the animation clock
 losing time at each wake, not any one run asking for the wrong duration.
 
+The nominal is the style's STANDARD interval, not always the one it runs at. A
+page that sets no speed runs at `IndicatorAnimationSpeed.automatic`, which lets
+a 120 ms or 130 ms style move to 125 ms, a whole number of 25 ms base ticks. So
+on the Spinners page those rows read 1.04 and 0.96 by design; every other row
+should still read 1.00.
+
 Only CHARACTER changes are seen. A colour-only animation (a focused control's
 breath, a faded tint) changes no cell's character and is invisible here, which
 is also why a breathing focus ring does not pollute the spinner rows.

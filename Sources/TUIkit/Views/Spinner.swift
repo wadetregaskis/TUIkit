@@ -165,7 +165,10 @@ public enum SpinnerStyle: Sendable {
     /// seconds.
     ///
     /// A spinner shows each frame for this long under
-    /// ``IndicatorAnimationSpeed/standard``. Under another speed set with
+    /// ``IndicatorAnimationSpeed/standard``. Under the default,
+    /// ``IndicatorAnimationSpeed/automatic``, the rate may move by up to 0.05 onto
+    /// a whole number of ``AnimationClock/baseTick``s, so the 120 ms and 130 ms
+    /// styles show each frame for 125 ms. Under another speed set with
     /// ``View/indicatorAnimationSpeed(_:for:)`` it shows each frame for
     /// ``IndicatorAnimationSpeed/frameDuration(standard:)`` of this interval. So
     /// to show a style's frames for a duration of your choosing, set the speed to

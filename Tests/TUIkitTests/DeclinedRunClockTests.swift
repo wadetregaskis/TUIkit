@@ -72,15 +72,16 @@ struct DeclinedRunClockTests {
 
     @Test("A mixed-width spinner alone on a page moves from frame to frame")
     func mixedWidthSpinnerMoves() {
-        let run = frames(of: MixedWidthSpinnerApp(), step: 0.120)
+        let run = frames(of: MixedWidthSpinnerApp(), step: 0.125)
         #expect(run.idleTimer, "something else kept the timer alive, so this is not the case under test")
         #expect(run.scheduled, "nothing asked the loop to come back")
         #expect(Set(run.pictures).count > 1, "every frame drew the same picture: \(run.pictures)")
     }
 
     /// A declined run is re-rendered at its next step, not on a grid anchored at
-    /// whichever frame first asked. A `.custom` sequence steps every 120 ms, so at
-    /// 1.037 s the next step is 1.080 s.
+    /// whichever frame first asked. A `.custom` sequence's standard step is 120 ms, and
+    /// `.automatic`, the default speed, moves it to 125 ms, so at 1.037 s the next step
+    /// is 1.125 s.
     @Test("A mixed-width spinner asks for one render at its next step, and registers no grid")
     func mixedWidthSpinnerWakesAtItsNextStep() {
         let harness = RenderLoopHarness()
@@ -91,7 +92,7 @@ struct DeclinedRunClockTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
-        #expect(scheduler.nextFiring(after: now) == 1_080_000_000, "a 120 ms step at 1.037 s ends at 1.080 s")
+        #expect(scheduler.nextFiring(after: now) == 1_125_000_000, "a 125 ms step at 1.037 s ends at 1.125 s")
     }
 
     /// A same-width spinner, which leaves a run, beside a mixed-width one, which
@@ -122,12 +123,12 @@ struct DeclinedRunClockTests {
         let loop = harness.loop(RunBesideDeclinedApp())
         let timer = CursorTimer(renderNotifier: harness.appState)
         let scheduler = AnimationScheduler()
-        // 90,090 s, a whole number of 120 ms steps, and past any real clock reading.
+        // 90,090 s, a whole number of 125 ms steps, and past any real clock reading.
         let base: Int64 = 90_090 * 1_000_000_000
         var mismatches: [(frame: Int, picture: String)] = []
         for frame in 0..<6 {
             // 1 ms into each step, so both spinners are due frame index `frame % 2`.
-            let now = base + Int64(frame) * 120_000_000 + 1_000_000
+            let now = base + Int64(frame) * 125_000_000 + 1_000_000
             scheduler.beginFrame()
             loop.render(cursorTimer: timer, animationScheduler: scheduler, frameNowNanos: now)
             scheduler.endFrame()
@@ -170,7 +171,7 @@ struct DeclinedRunClockTests {
         let harness = RenderLoopHarness()
         let loop = harness.loop(app)
         let scheduler = AnimationScheduler()
-        // 90,090 s: a whole number of 120 ms steps.
+        // 90,090 s: a whole number of 125 ms steps.
         let base: Int64 = 90_090 * 1_000_000_000
         return (0..<4).map { frame in
             let now = base + Int64((Double(frame) * step * 1e9).rounded()) + 1_000_000
@@ -186,7 +187,7 @@ struct DeclinedRunClockTests {
     /// paths read the frame clock now.
     @Test("A spinner that leaves a run advances with the frame clock when there is no cursor timer")
     func runBackedSpinnerWithoutTimerAdvances() {
-        let pictures = framesWithoutTimer(of: RunBackedSpinnerApp(), step: 0.120)
+        let pictures = framesWithoutTimer(of: RunBackedSpinnerApp(), step: 0.125)
         let shown = pictures.map { $0.contains("b") ? "b" : "a" }
         #expect(shown == ["a", "b", "a", "b"], "\(pictures)")
     }
