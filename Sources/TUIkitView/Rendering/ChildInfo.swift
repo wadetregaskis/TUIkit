@@ -50,7 +50,17 @@ public struct ChildView {
     /// keeps its identity instead of flattening it back to a slot-prefixed key.
     /// See `spliced(fromSlot:under:branched:)`.
     ///
-    /// An `Int32` with a sentinel (`ProviderSlot`) rather than `Optional<Int>`, and it is
+    /// A keyed row that an `if`/`else` resolved for itself, before any splice saw
+    /// it, carries `ProviderSlot.resolvedInBranch` for the same reason. In `Group
+    /// { if … else … }` beside a sibling the `Group` has no branch label, so the
+    /// mark is all that tells the splice this row's identity holds a branch step.
+    /// It is a mark in this field rather than a field of its own because the
+    /// struct's size is load-bearing (below). The splice decides on the mark and
+    /// never on whether `resolvedIdentity` is set: the child memo resolves a
+    /// loop's rows from sixteen rows on, and those rows still take the flat key,
+    /// so deciding on the identity would move them as the loop grew past fifteen.
+    ///
+    /// An `Int32` with sentinels (`ProviderSlot`) rather than `Optional<Int>`, and it is
     /// load-bearing: the optional grew the struct from 97 to 105 bytes (a
     /// 96→112 stride step), and this struct is built and copied per child per
     /// pass — the growth alone cost the all-invalidating `churn` scenario
@@ -73,6 +83,10 @@ public struct ChildView {
         /// Nothing has namespaced this child: a row straight out of its
         /// `ForEach`, or a positional child.
         static let unnamespaced: Int32 = -1
+        /// A keyed row an `if`/`else` resolved for itself: its identity holds the
+        /// branch step, which a flat slot-prefixed key has nowhere to put. It
+        /// always has a `resolvedIdentity`.
+        static let resolvedInBranch: Int32 = -2
     }
 
     /// The identity this child renders and measures under, when it has been
@@ -234,15 +248,34 @@ public struct ChildView {
     /// one identity share a `@State` box. A child that already carries a
     /// resolved identity keeps it: it was resolved under this branch, or under
     /// a deeper one (a nested conditional, a memoised `ForEach`).
+    ///
+    /// A keyed row nothing has namespaced is also marked
+    /// `ProviderSlot.resolvedInBranch`. Its identity now holds the branch step
+    /// and a flat slot-prefixed key cannot, so a tuple splice further out has to
+    /// keep it. Unmarked, `VStack { Text("h"); Group { if a { ForEach(ids) {
+    /// Row($0) } } else { ForEach(ids) { Row($0) } } } }` flattened both arms'
+    /// rows onto one `Row[1#id]` each, and the arm drawn second read the first
+    /// arm's `@State`. The mark goes on in the construction that resolves the
+    /// row, so it costs no extra copy.
     func resolvingIdentity(inBranch branch: ViewIdentity) -> Self {
-        guard identityType == nil else { return resolvingIdentity(under: branch) }
-        guard resolvedIdentity == nil else { return self }
+        guard let identityType else {
+            guard resolvedIdentity == nil else { return self }
+            return Self(
+                view: view, identityType: nil, childIndex: childIndex,
+                identityKey: identityKey, providerSlot: providerSlot, isSpacer: isSpacer,
+                spacerMinLength: spacerMinLength, zIndex: zIndex,
+                providesAlignmentGuide: providesAlignmentGuide,
+                resolvedIdentity: branch)
+        }
+        guard let identityKey, providerSlot == ProviderSlot.unnamespaced else {
+            return resolvingIdentity(under: branch)
+        }
         return Self(
-            view: view, identityType: nil, childIndex: childIndex,
-            identityKey: identityKey, providerSlot: providerSlot, isSpacer: isSpacer,
-            spacerMinLength: spacerMinLength, zIndex: zIndex,
+            view: view, identityType: identityType, childIndex: childIndex,
+            identityKey: identityKey, providerSlot: ProviderSlot.resolvedInBranch,
+            isSpacer: isSpacer, spacerMinLength: spacerMinLength, zIndex: zIndex,
             providesAlignmentGuide: providesAlignmentGuide,
-            resolvedIdentity: branch)
+            resolvedIdentity: resolvedIdentity ?? branch.child(erasedType: identityType, key: identityKey))
     }
 
     /// A copy whose positional identity is rebased to `index`, and whose
@@ -317,10 +350,13 @@ public struct ChildView {
     ///   that is itself the tuple element, or a `Group` or an `if` without `else`
     ///   holding one — takes the flat slot-prefixed key beside its parent's other
     ///   children. That is the hot shape, and it is injective: no other keyed row
-    ///   comes out of this slot.
-    /// - A keyed row that already carries a slot, or sits under a branch, keeps
-    ///   the identity it was resolved to, or is resolved under `parent` with its
-    ///   inner slot still in its key. Overwriting that slot with this one is what
+    ///   comes out of this slot. A `Group` or an `if` holding an `if`/`else` of
+    ///   loops does not qualify: the conditional below marked its rows
+    ///   `ProviderSlot.resolvedInBranch`.
+    /// - A keyed row that already carries a slot, or sits under a branch at this
+    ///   level or one provider further in, keeps the identity it was resolved
+    ///   to, or is resolved under `parent` with its inner slot still in its key.
+    ///   Overwriting that slot with this one is what
     ///   put both loops of `Group { ForEach(0..<2); ForEach(0..<2) }` — spliced,
     ///   because a sibling sits beside the `Group` — on the same two identities,
     ///   and the row memo, which keys on identity and element, drew the first
@@ -346,6 +382,9 @@ public struct ChildView {
         if providerSlot == ProviderSlot.unnamespaced, !branched {
             return reindexed(to: 0, providerSlot: slot, under: nil)
         }
+        assert(
+            providerSlot != ProviderSlot.resolvedInBranch || resolvedIdentity != nil,
+            "a branch-resolved row lost its identity")
         let resolved =
             resolvedIdentity
             ?? parent.child(
@@ -1035,7 +1074,10 @@ public func resolveChildViews<V: View>(from content: V, context: RenderContext) 
     // is the container's. Keyed `ForEach` rows take the step as well, unlike
     // in the tuple splice, which leaves keyed rows unstepped for speed — here
     // there is no sibling slot to namespace them by, and without the step two
-    // branches looping over the same ids alias exactly as plain views do.
+    // branches looping over the same ids alias exactly as plain views do. They
+    // are marked as holding it, too (`ChildView.resolvingIdentity(inBranch:)`):
+    // when this conditional is a `Group`'s or an `if`'s whole content, a tuple
+    // splice further out must keep the step rather than flatten it away.
     // Ahead of the memo and never through it: its key knows nothing of
     // branches, and no conditional opts into memoising.
     if let branch = provider.identityBranchLabel {

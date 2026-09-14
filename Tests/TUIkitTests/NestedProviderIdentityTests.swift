@@ -22,6 +22,12 @@ import Testing
 /// nest one level. Two levels collapsed distinct children onto one identity —
 /// one `@State` box, one focus id, and one row-memo entry, which then served
 /// one loop's buffer for another loop's row in the same pass.
+///
+/// A branch is lost the same way one provider further in. In `Group { if … else
+/// … }` the `Group` has no branch label of its own: the arms are told apart only
+/// by the step the conditional took inside `resolveChildViews`, and a keyed row
+/// has to carry that step out through the splice. That holds whichever way the
+/// loop's rows were built, eagerly or through the child memo from sixteen rows.
 @MainActor
 @Suite("A nested provider's children keep the identities the inner level gave them")
 struct NestedProviderIdentityTests {
@@ -97,6 +103,100 @@ struct NestedProviderIdentityTests {
         }
     }
 
+    /// One loop per arm over the same ids and row type, so only the branch step
+    /// tells the arms apart. Every fixture below uses it, so they all test the
+    /// same conditional.
+    @ViewBuilder
+    private static func keyedArms(compact: Bool, count: Int) -> some View {
+        if compact {
+            ForEach(0..<count, id: \.self) { Tagged("\($0)-compact") }
+        } else {
+            ForEach(0..<count, id: \.self) { Tagged("\($0)-expanded") }
+        }
+    }
+
+    /// A keyed `if`/`else` one provider further in: the conditional is the whole
+    /// content of a `Group` that is spliced because a `Text` sits beside it.
+    /// `Group` has no branch label, so only the step the conditional took inside
+    /// `resolveChildViews` tells the arms apart, and the splice used to flatten
+    /// it away.
+    private struct KeyedBranchesInAGroup: View {
+        let compact: Bool
+        var count = 2
+
+        @ViewBuilder var content: some View {
+            Text("h")
+            Group { NestedProviderIdentityTests.keyedArms(compact: compact, count: count) }
+        }
+
+        var body: some View {
+            VStack(alignment: .leading) { content }
+        }
+    }
+
+    /// The same under an `if` without `else`, an `Optional`, which has no branch
+    /// label either.
+    private struct KeyedBranchesInAnIf: View {
+        let compact: Bool
+        var count = 2
+        var shown = true
+
+        @ViewBuilder var content: some View {
+            Text("h")
+            if shown { NestedProviderIdentityTests.keyedArms(compact: compact, count: count) }
+        }
+
+        var body: some View {
+            VStack(alignment: .leading) { content }
+        }
+    }
+
+    /// One loop in a spliced `Group` with no branch anywhere: the hot shape, whose
+    /// rows keep the flat slot-prefixed key.
+    private struct LoopInAGroup: View {
+        let count: Int
+
+        @ViewBuilder var content: some View {
+            Text("h")
+            Group { ForEach(0..<count, id: \.self) { Text("row \($0)") } }
+        }
+
+        var body: some View {
+            VStack(alignment: .leading) { content }
+        }
+    }
+
+    /// The `List` twin: `_ListCore.extractFromChildren` reaches the same tuple
+    /// splice through `resolveChildViews`.
+    private struct KeyedBranchesInAListGroup: View {
+        let compact: Bool
+        var count = 2
+
+        var body: some View {
+            List {
+                Text("h")
+                Group { NestedProviderIdentityTests.keyedArms(compact: compact, count: count) }
+            }
+        }
+    }
+
+    /// The `Section` twin, through `Section.extractListRows`.
+    private struct KeyedBranchesInASectionGroup: View {
+        let compact: Bool
+        var count = 2
+
+        var body: some View {
+            List {
+                Section {
+                    Text("h")
+                    Group { NestedProviderIdentityTests.keyedArms(compact: compact, count: count) }
+                } header: {
+                    Text("S")
+                }
+            }
+        }
+    }
+
     private func makeHost() -> (TUIContext, EnvironmentValues) {
         let tui = TUIContext()
         var environment = EnvironmentValues()
@@ -127,6 +227,26 @@ struct NestedProviderIdentityTests {
         return resolveChildViews(from: content, context: context).map {
             $0.identity(under: context).path
         }
+    }
+
+    /// Both arms resolve to a heading plus `count` rows, and no row path is shared.
+    private func expectArmsApart(
+        _ compact: [String], _ expanded: [String], count: Int, _ shape: String
+    ) {
+        #expect(compact.count == count + 1, "\(shape): \(compact)")
+        #expect(expanded.count == count + 1, "\(shape): \(expanded)")
+        let shared = Set(compact.dropFirst()).intersection(expanded.dropFirst())
+        #expect(shared.isEmpty, "\(shape): both arms' rows land on \(shared.sorted())")
+    }
+
+    /// The expanded arm, drawn after the compact one through one state store,
+    /// reads its own initial `@State` rather than the compact arm's.
+    private func expectFlipKeepsArmState(_ flip: (before: String, after: String), _ shape: String) {
+        #expect(flip.before.contains("T=0-compact"), "\(shape) before the flip: \(flip.before)")
+        #expect(
+            flip.after.contains("T=0-expanded"),
+            "\(shape): the new arm read the old arm's @State: \(flip.after)")
+        #expect(!flip.after.contains("-compact"), "\(shape) after the flip: \(flip.after)")
     }
 
     @Test("Two ForEach loops in a spliced Group draw their own rows")
@@ -170,5 +290,97 @@ struct NestedProviderIdentityTests {
         #expect(
             compactRows.isDisjoint(with: expandedRows),
             "both arms' rows land on \(compactRows.sorted())")
+    }
+
+    // Counts 2 and 20 sit either side of the child memo's sixteen-row threshold:
+    // below it the loop's rows reach the branch unresolved, from it they arrive
+    // already resolved by the memo. Both must come out of the splice the same way.
+
+    @Test("A keyed if/else in a spliced Group keeps its arms apart", arguments: [2, 20])
+    func keyedBranchesInAGroupStayApart(count: Int) {
+        expectArmsApart(
+            childPaths(KeyedBranchesInAGroup(compact: true, count: count).content),
+            childPaths(KeyedBranchesInAGroup(compact: false, count: count).content),
+            count: count, "Group")
+    }
+
+    @Test("A keyed if/else in a spliced if keeps its arms apart", arguments: [2, 20])
+    func keyedBranchesInAnIfStayApart(count: Int) {
+        expectArmsApart(
+            childPaths(KeyedBranchesInAnIf(compact: true, count: count).content),
+            childPaths(KeyedBranchesInAnIf(compact: false, count: count).content),
+            count: count, "if")
+    }
+
+    @Test(
+        "Flipping a keyed if/else in a spliced Group or if gives each arm its own @State",
+        arguments: [2, 20])
+    func keyedBranchFlipInAStackKeepsEachArmsState(count: Int) {
+        expectFlipKeepsArmState(
+            renderedBeforeAndAfterFlip(width: 40, height: 30) {
+                KeyedBranchesInAGroup(compact: $0, count: count)
+            },
+            "Group")
+        expectFlipKeepsArmState(
+            renderedBeforeAndAfterFlip(width: 40, height: 30) {
+                KeyedBranchesInAnIf(compact: $0, count: count)
+            },
+            "if")
+    }
+
+    /// Rows here render at child identities under the list, not at the list's
+    /// own, so `Tagged`'s `@State` at index 0 cannot meet `_ListCore`'s slots.
+    @Test(
+        "A keyed if/else in a Group inside a List or a Section gives each arm its own @State",
+        arguments: [2, 20])
+    func keyedBranchFlipInAListKeepsEachArmsState(count: Int) {
+        expectFlipKeepsArmState(
+            renderedBeforeAndAfterFlip(width: 40, height: 30) {
+                KeyedBranchesInAListGroup(compact: $0, count: count)
+            },
+            "List")
+        expectFlipKeepsArmState(
+            renderedBeforeAndAfterFlip(width: 40, height: 30) {
+                KeyedBranchesInASectionGroup(compact: $0, count: count)
+            },
+            "Section")
+    }
+
+    /// The guard on how the fix may decide. From the threshold the child memo
+    /// hands a loop's rows back already resolved, so a splice that kept any row
+    /// with an identity would move a plain `Group { ForEach }` row off its flat
+    /// key the moment its loop reached sixteen rows. The threshold is asked of
+    /// `ForEach` rather than written down, so the counts keep straddling it.
+    @Test("Rows keep their identities as a spliced loop crosses the child memo's threshold")
+    func identitiesStableAcrossTheMemoThreshold() throws {
+        let (tui, environment) = makeHost()
+        let context = RenderContext(
+            availableWidth: 40, availableHeight: 10, environment: environment, tuiContext: tui)
+        #expect(context.renderCache != nil, "no render cache, so the child memo never runs")
+        let threshold = try #require(
+            (1...64).first { count in
+                ForEach(0..<count, id: \.self) { Text("\($0)") }.childViewsAreWorthMemoising
+            })
+
+        func expectStable(_ shape: String, _ paths: (Int) -> [String]) {
+            let below = paths(threshold - 1)
+            let at = paths(threshold)
+            let above = paths(threshold + 1)
+            #expect(below.count == threshold, "\(shape): \(below)")
+            #expect(
+                Array(at.prefix(threshold)) == below,
+                "\(shape): crossing into the memo moved rows: \(below) vs \(at)")
+            #expect(
+                Array(above.prefix(threshold + 1)) == at,
+                "\(shape): one row past the threshold moved rows: \(at) vs \(above)")
+        }
+
+        expectStable("Group { ForEach }") { childPaths(LoopInAGroup(count: $0).content) }
+        expectStable("Group { if … else … }") {
+            childPaths(KeyedBranchesInAGroup(compact: true, count: $0).content)
+        }
+        expectStable("if { if … else … }") {
+            childPaths(KeyedBranchesInAnIf(compact: true, count: $0).content)
+        }
     }
 }

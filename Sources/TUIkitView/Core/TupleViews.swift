@@ -194,8 +194,10 @@ extension TupleView: ChildViewProvider {
                 // on the measure and state paths: it measured **menus
                 // +6.2%**, against +2.6% once the rows were left where they
                 // were. That is the row nothing below has namespaced and no
-                // branch separates. A row with either takes the step, since a
-                // flat key can carry neither, and only nested shapes make one.
+                // branch separates, here or one provider further in (`Group {
+                // if … else … }`, whose conditional marked its rows). A row with
+                // either takes the step, since a flat key can carry neither, and
+                // only nested shapes make one.
                 //
                 // A POSITIONAL child is the half that broke, and it keeps
                 // the index the level below already gave it — its static
