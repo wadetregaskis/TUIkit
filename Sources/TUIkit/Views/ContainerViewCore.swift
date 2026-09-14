@@ -740,11 +740,14 @@ struct _ContainerViewCore<Content: View, Footer: View>: View, Renderable, Layout
         // it — so it is stated only when it is true of every frame: a still colour, or
         // an animating one whose frames share one alpha (§59). Frames at several alphas
         // state NOTHING here and state it per frame on the runs instead (§69.3), because
-        // no one rectangle is true of them all. That is an XOR, and the resolver asserts
-        // it: a claim here beside a payload there would fold twice and fade the border
-        // at the product of the two. This used to skip every animating border and call
-        // it loud; it stopped being loud at §18.3, when `band` began stating the opaque
-        // spelling.
+        // no one rectangle is true of them all. The two are exclusive, and nothing at
+        // resolve time checks it: the resolver MULTIPLIES a run's payload into whatever
+        // claim covers its cells (§70.3), so a claim here beside a payload there would
+        // fade the border at the product of the two. It cannot tell this producer from
+        // an ancestor's translucent background, which covers the run legitimately, so
+        // the rule is pinned in BorderAlphaTests' several-alphas test instead. This used
+        // to skip every animating border and call it loud; it stopped being loud at
+        // §18.3, when `band` began stating the opaque spelling.
         guard !borderColor.isAnimating || borderColor.hasOneAlpha else { return regions }
         // The ● is claimed at its current frame, so it must be one alpha too. Its one
         // producer, `activeSection`, spends both of its ends.
