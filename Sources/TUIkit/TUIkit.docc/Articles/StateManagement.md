@@ -174,6 +174,10 @@ All `@State` values live in a central `StateStorage` (owned by `TUIContext`), ke
 - The view's structural identity
 - The property's declaration index within the view (0, 1, 2, ...)
 
+An `App`'s own `@State` is stored the same way, under the identity at the root of the view
+tree, and is bound before `app.body` is evaluated. A write to it therefore invalidates the
+whole tree below the root, just as a write to a root view's `@State` does.
+
 When `@State var count = 0` is declared, the `init` checks if a persistent value already
 exists for this position. If it does, the existing value is used instead of the default.
 

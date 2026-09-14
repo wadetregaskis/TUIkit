@@ -259,9 +259,10 @@ internal final class RenderLoop<A: App> {
 
     /// The identity at the root of the view tree.
     ///
-    /// **Load-bearing invariant:** ``evaluateAppBody`` hydrates the app's
-    /// `@State` under this identity, and ``renderContent`` renders the scene
-    /// under it too. The two MUST agree. If they diverge, App-level `@State`
+    /// **Load-bearing invariant:** ``evaluateAppBody`` binds the app's
+    /// `@State` under this identity (and marks it active, so the end-of-pass
+    /// prune keeps it), and ``renderContent`` renders the scene under it too.
+    /// The two MUST agree. If they diverge, App-level `@State`
     /// (e.g. a root view's selection index) lives at one root while the views it
     /// drives render under another — so it is not an ancestor of them, and
     /// `StateBox.didSet → RenderCache.clearAffected` matches none of their cache
@@ -995,14 +996,21 @@ extension RenderLoop {
             showing.text, width: statusBar.style.barContentWidth(terminalWidth))
     }
 
-    /// Evaluates `App.body` with the environment published so `@Environment`
-    /// reads from it. (`@State` binds to each view's render identity later, in
-    /// `renderToBuffer` — not at construction here.)
+    /// Evaluates `App.body` with the App's `@State` bound under ``rootIdentity``
+    /// and the environment published so `@Environment` reads from it. (The
+    /// views `body` builds bind their own `@State` later, each at its own render
+    /// identity, in `renderToBuffer`.)
     fileprivate func evaluateAppBody(environment: EnvironmentValues) -> A.Body {
-        // An `App` is not a `View`, so nothing populates its `@Environment`
-        // boxes — publishing the environment around `body` is the only way its
-        // reads resolve. The scope ends with the call, so nothing outside it
-        // ever sees this value.
+        // An `App` is not a `View`, so no render walk ever reaches it to bind its
+        // `@State`. Left unbound, each property kept the box `State.init` made,
+        // which has no identity and no render cache: a write asked for nothing,
+        // and a memoized view below the scene (a `ForEach` row drawing the value
+        // from its closure) kept its old buffer. Bound here, a write clears
+        // `rootIdentity` and everything below it, as a root view's `@State` would.
+        bindStateProperties(of: app, identity: rootIdentity, storage: tuiContext.stateStorage)
+        // Nothing populates an App's `@Environment` boxes either — publishing the
+        // environment around `body` is the only way its reads resolve. The scope
+        // ends with the call, so nothing outside it ever sees this value.
         let scene = StateRegistration.withHydration(environment: environment) { app.body }
         tuiContext.stateStorage.markActive(rootIdentity)
         return scene

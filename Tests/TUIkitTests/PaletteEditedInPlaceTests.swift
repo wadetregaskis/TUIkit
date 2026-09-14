@@ -17,9 +17,11 @@ import Testing
 // `id`. The Example's Theme page edits its palette IN PLACE — a
 // `CustomizablePalette` that keeps its preset's id while its colours change — so
 // an edit changed no field of the snapshot, the cache was kept, and every
-// memoized row went on drawing the colours from before the edit. Nothing else
-// clears it: the palette lives in the App's `@State`, which is never bound to a
-// view identity and so invalidates nothing when written.
+// memoized row went on drawing the colours from before the edit. When these
+// tests were written nothing else cleared it: the App's `@State` was never bound,
+// so the write invalidated nothing. It is bound now (see AppStateBindingTests),
+// but a palette can reach the scene from elsewhere, so the snapshot comparison
+// has to stand on its own.
 
 /// The Example's `CustomizablePalette` in miniature: every colour a stored
 /// property, the id fixed while they are edited.

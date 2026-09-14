@@ -591,8 +591,11 @@ public protocol RenderIdentityBindable {
 /// Binds every `@State` (and ``RenderIdentityBindable``, e.g. `@FocusState`)
 /// property of `view` to storage/ids keyed by the view's own render `identity`
 /// + declaration order. Mirrors ``resolveEnvironmentProperties``.
+///
+/// `view` is not constrained to `View`: the render loop binds an `App`'s
+/// `@State` with it too, at the root identity, before evaluating `App.body`.
 @MainActor
-func bindStateProperties<V>(of view: V, identity: ViewIdentity, storage: StateStorage) {
+package func bindStateProperties<V>(of view: V, identity: ViewIdentity, storage: StateStorage) {
     let typeID = ObjectIdentifier(V.self)
     if StateBindingCache.typesWithoutState.contains(typeID) { return }
     var index = 0
