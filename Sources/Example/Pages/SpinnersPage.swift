@@ -25,8 +25,10 @@ struct SpinnersPage: View {
     @AppStorage("spinners.speed") private var speedChoice = SpinnerSpeedChoice.automatic.rawValue
     @AppStorage("spinners.speedRatePercent") private var speedRatePercent = 100
     @AppStorage("spinners.speedToleranceHundredths") private var speedToleranceHundredths = 0
-    /// Per-style frame durations in base ticks, spelled `"dots=4,line=6"`.
-    @AppStorage("spinners.frameOverrides") private var frameOverrides = ""
+    /// Per-style frame durations in ticks of 1/60 s, spelled `"dots=6,line=9"`.
+    /// A new key: the old `spinners.frameOverrides` counted 25 ms ticks, and is
+    /// ignored rather than read as a different duration.
+    @AppStorage("spinners.frameTickOverrides") private var frameOverrides = ""
     /// The style the frame stepper edits.
     @AppStorage("spinners.overrideStyle") private var overrideStyle = SpinnerStyleChoice.dots.rawValue
 

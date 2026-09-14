@@ -7,7 +7,7 @@
 import TUIkit
 
 /// The Spinners page's speed controls: one speed for the whole catalogue, and a
-/// frame duration of whole base ticks for any style that should differ.
+/// frame duration of whole 1/60 s ticks for any style that should differ.
 ///
 /// It exists so the default durations can be chosen by watching them rather
 /// than by arithmetic: every control is a picker or a stepper, so all of it is
@@ -111,14 +111,19 @@ struct SpinnersSpeedSection: View {
             })
     }
 
-    /// "4 × 25 ms = 100 ms" for an override, or what no override means.
+    /// "7 × 16.7 ms = 116.7 ms" for an override, or what no override means.
+    ///
+    /// The total is the instant the override's tick count begins at, not the
+    /// count times a rounded tick: seven rounded ticks are 116,666,669 ns, and a
+    /// readout built that way would drift further from the frame shown with
+    /// every tick added.
     private func ticksText(_ settings: SpinnerSpeedSettings) -> String {
         guard let style = SpinnerStyleChoice(rawValue: overrideStyle),
             let ticks = settings.overrides[style]
         else { return L("page.spinners.frameInherit") }
-        let tick = AnimationClock.nanoseconds(AnimationClock.baseTick)
+        let tick = AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: 1))
         return "\(ticks) × \(SpinnerSpeedSettings.milliseconds(tick)) ms = "
-            + "\(SpinnerSpeedSettings.milliseconds(Int64(ticks) * tick)) ms"
+            + "\(SpinnerSpeedSettings.milliseconds(AnimationClock.nanoseconds(atTick: Int64(ticks)))) ms"
     }
 }
 
@@ -140,14 +145,15 @@ struct SpinnerSpeedSettings {
     /// The tolerance picker's choices, in hundredths of the rate unit. All are
     /// below the smallest rate, 0.25, as a tolerance must be.
     static let tolerances = [0, 2, 5, 10, 20]
-    /// The most base ticks an override offers: 300 ms, twice the slowest
-    /// standard interval.
-    static let maximumTicks = 12
+    /// The most 1/60 s ticks an override offers: 18, 300 ms, twice the slowest
+    /// standard interval (`.earth`'s 9 ticks).
+    static let maximumTicks = 18
 
     let choice: SpinnerSpeedChoice
     let ratePercent: Int
     let toleranceHundredths: Int
-    /// Base ticks per frame, by style; a style that is absent follows the speed.
+    /// Ticks of 1/60 s per frame, by style; a style that is absent follows the
+    /// speed.
     let overrides: [SpinnerStyleChoice: Int]
 
     init(choice: String, ratePercent: Int, toleranceHundredths: Int, frameOverrides: String) {
@@ -178,8 +184,7 @@ struct SpinnerSpeedSettings {
     /// shows.
     func overrideSpeed(for style: SpinnerStyleChoice?) -> IndicatorAnimationSpeed? {
         guard let style, let ticks = overrides[style] else { return nil }
-        return IndicatorAnimationSpeed(
-            style.style.interval / (Double(ticks) * AnimationClock.baseTick))
+        return IndicatorAnimationSpeed(style.style.interval / AnimationClock.seconds(forTicks: ticks))
     }
 
     /// How long `style` shows each frame on the page, in nanoseconds: the same
