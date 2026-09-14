@@ -305,7 +305,11 @@ struct _Color256GridCore: View, Renderable {
         // The CYCLE, not this tick's colour: the cursor swatch's mark is handed
         // to the run loop rather than rebuilt by re-rendering the whole panel
         // (and the page behind it) on every tick.
-        let cycle = context.environment.selectionEmphasis.cycle(isFocused)
+        //
+        // Drawing only — see `RenderContext.indicatesFocus(_:)`. The check mark
+        // on the cursor swatch announces focus, so it goes with the effect; the
+        // keys never read this.
+        let cycle = context.environment.selectionEmphasis.cycle(context.indicatesFocus(isFocused))
         let indicator = cycle.frames[cycle.step % max(1, cycle.frames.count)]
 
         // Fold the palette to whatever the width on offer allows — 3 cube blocks

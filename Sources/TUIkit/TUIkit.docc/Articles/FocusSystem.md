@@ -220,10 +220,10 @@ contract. Tab still reaches the control, it still takes the keys, it simply
 stops advertising that it has arrived. Everything goes: the pulse, a `Button`'s
 caps and bold, a `Toggle`'s glyph colour, a `Slider`'s and `Stepper`'s arrows,
 a `List`'s or `Table`'s cursor-row highlight, a `TabView`'s active-chip
-breath, a menu `Picker`'s accent value and breathing caps, and the breathing
-scrollbars and "N more" lines of a `ScrollView` or `TextEditor` (the bars stay,
-in their resting colours: where you are in the content is not which control
-has the keys).
+breath, a menu `Picker`'s accent value and breathing caps, the check mark on a
+`ColorPicker` grid's cursor swatch, and the breathing scrollbars and "N more"
+lines of a `ScrollView` or `TextEditor` (the bars stay, in their resting
+colours: where you are in the content is not which control has the keys).
 
 Two things deliberately survive, and the rule behind them is worth stating
 because it decides the case this document has not seen:

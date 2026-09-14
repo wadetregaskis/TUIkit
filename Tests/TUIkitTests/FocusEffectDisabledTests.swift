@@ -28,12 +28,17 @@ struct FocusEffectDisabledTests {
     /// focus manager has a real choice to make.
     private func rendered(
         _ subject: some View, focusOnSubject: Bool, effectsDisabled: Bool, frames: Int = 1,
-        skippingRows: Int = 0
+        skippingRows: Int = 0, height: Int = 10
     ) -> [String] {
         // The animation services matter here: a control whose focus
         // indication is a PULSE produces none without them, and the sweep
         // would then compare two identical unfocused pictures and pass.
-        let context = makeRenderContext(width: 44, height: 10) { environment, _ in
+        //
+        // `height` must fit the subject AND the sibling: a subject taller than
+        // the context pushes the sibling off the bottom in one arrangement and
+        // not the other, and the two pictures then differ by a row whatever the
+        // focus is doing.
+        let context = makeRenderContext(width: 44, height: height) { environment, _ in
             environment.animationScheduler = AnimationScheduler()
             environment.volatileReadTracker = VolatileReadTracker()
         }
@@ -99,11 +104,13 @@ struct FocusEffectDisabledTests {
     /// The whole contract, per control: focused-with-effects-off must be
     /// byte-for-byte what genuinely-unfocused looks like.
     private func expectIndistinguishable(
-        _ subject: some View, _ name: String, frames: Int = 1,
+        _ subject: some View, _ name: String, frames: Int = 1, height: Int = 10,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
-        let unfocused = rendered(subject, focusOnSubject: false, effectsDisabled: false, frames: frames)
-        let suppressed = rendered(subject, focusOnSubject: true, effectsDisabled: true, frames: frames)
+        let unfocused = rendered(
+            subject, focusOnSubject: false, effectsDisabled: false, frames: frames, height: height)
+        let suppressed = rendered(
+            subject, focusOnSubject: true, effectsDisabled: true, frames: frames, height: height)
         #expect(
             suppressed == unfocused,
             """
@@ -118,11 +125,13 @@ struct FocusEffectDisabledTests {
     /// the effect is on, or the case above passes for a control that never
     /// indicated anything.
     private func expectDistinguishable(
-        _ subject: some View, _ name: String, frames: Int = 1,
+        _ subject: some View, _ name: String, frames: Int = 1, height: Int = 10,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
-        let unfocused = rendered(subject, focusOnSubject: false, effectsDisabled: false, frames: frames)
-        let focused = rendered(subject, focusOnSubject: true, effectsDisabled: false, frames: frames)
+        let unfocused = rendered(
+            subject, focusOnSubject: false, effectsDisabled: false, frames: frames, height: height)
+        let focused = rendered(
+            subject, focusOnSubject: true, effectsDisabled: false, frames: frames, height: height)
         #expect(
             focused != unfocused,
             "\(name) does not indicate focus at all, so the suppression case proves nothing",
@@ -279,6 +288,26 @@ struct FocusEffectDisabledTests {
               unfocused   \(unfocused.map(\.debugDescription).joined(separator: "\n              "))
               suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
             """)
+    }
+
+    /// A colour grid's cursor swatch carries a breathing check mark while the
+    /// grid is focused — which swatch the arrow keys will move from — so it
+    /// goes. The swatches, and which one is selected, stay.
+    @Test("SwatchGrid")
+    func swatchGrid() {
+        let grid = _SwatchGridCore(
+            entries: [.red, .green, .blue, .yellow], columns: 2, selection: .constant(.red))
+        expectDistinguishable(grid, "SwatchGrid")
+        expectIndistinguishable(grid, "SwatchGrid")
+    }
+
+    @Test("Color256Grid")
+    func color256Grid() {
+        // The whole palette folds to about twenty rows at this width: a context
+        // of 40 holds it and the sibling in both arrangements.
+        let grid = _Color256GridCore(selection: .constant(.palette(1)))
+        expectDistinguishable(grid, "Color256Grid", height: 40)
+        expectIndistinguishable(grid, "Color256Grid", height: 40)
     }
 
     /// A `TextField` is the documented exception, and the exception is
