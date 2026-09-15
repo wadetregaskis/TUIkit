@@ -4686,21 +4686,22 @@ sites — twenty-odd being exactly the kind of count §68 exists to distrust. Th
 root grounds is translucent, and wraps that one in `GroundedPalette`, which spends those three
 and forwards every other role. Every write to the palette comes through that setter:
 `.palette(_:)`, `.tint(_:)`, a theme, and the render loop's own. An ordinary palette pays three
-alpha compares at the rare write and nothing on the hot reads.
+alpha compares at the rare write and nothing on the hot reads. (§80 widens what it spends
+against and which roles it touches, and stores the roles.)
 
 `overlayBackground` is deliberately NOT spent. It is the wash a modal dims its page with, the
 page IS behind it, and §68.5 already claims its field and resolves it there.
 
-**What "spent" means here, and the open question.** With no colour to spend against, spent
-means the opaque spelling: the alpha is dropped. That is precisely what a release build
-already drew, so no picture changes — the change is that a debug build no longer traps. It
-also means the ground's alpha channel does nothing visible yet. The honest way to give it a
-meaning is to ask the terminal: `OSC 11 ; ? ST` reports the terminal's default background on
-most hosts, and a reported colour is exactly the "what is behind it" this boundary lacks —
-`GroundedPalette` would then spend each root ground over it with `spendingAlpha(over:)`, one
-line, and keep the opaque spelling where a terminal does not answer. That is a
-terminal-specific behaviour with its own measurement to do (which hosts answer, over tmux and
-ssh, how late), so it is left for a decision rather than built here.
+**What "spent" meant here, and what it means now.** With no colour to spend against, spent
+meant the opaque spelling: the alpha was dropped. That was precisely what a release build
+already drew, so no picture changed — the change was that a debug build no longer trapped. It
+also meant the ground's alpha channel did nothing visible, and a `.clear` ground was solid
+black. The honest meaning needed what is behind a root, the terminal's own background, which
+`OSC 11 ; ? ST` reports on most hosts. That background is now a colour,
+`.terminalBackground`, and since §80 each root ground is spent over it with
+`spendingAlpha(over:)`: a `.clear` root is the terminal's page, emitted as 49. Where the
+terminal has not reported its page, a root at half alpha or more keeps the opaque spelling
+this section introduced, and below half is that page.
 
 Proven across the app, not only at the sites read: the Example's
 `TUIKIT_EXAMPLE_GROUND_ALPHA` seam fades the four grounds and nothing else, and the faded-
@@ -4852,7 +4853,7 @@ handling of SGR 8 is measured, so that is not pursued.
 
 **What a built-in view sees: nothing yet.** Every built-in palette paints an RGB page. This
 reaches an app whose palette or background is `.terminalBackground`, and the grounding
-step of the terminal-colour plan, which makes a `.clear` root that page.
+step of the terminal-colour plan, which makes a `.clear` root that page (§80).
 
 `FadeOverUnreportedPageTests` (TUIkitTests) pins it through `renderToScreen`: a label at
 0.3 and 0.49 is gone and at 0.5 and 0.6 is drawn in its own ink; a dropped underline
@@ -4926,8 +4927,10 @@ What it does not touch:
 `ButtonCapsOnUnmeasurableFaceTests` (TUIkitTests) pins it for a string label, a view label
 and a menu picker. On an unreported page the caps are the tier at rest and when disabled,
 and the accent with no run when focused. An accent of `Color.default` gives the same caps
-on an RGB page, whether or not the terminal has reported. A reported page gives the face
-and two runs again, and every built-in palette's caps rest in its face and breathe.
+on an RGB page while the terminal has not reported. (Since §80 a palette's `Color.default`
+accent is stored as the terminal's foreground, which measures once reported, so there its
+face is a tint and its caps breathe.) A reported page gives the face and two runs again,
+and every built-in palette's caps rest in its face and breathe.
 
 ## 79. A focus breath over a colour the terminal decides (2026-09-15)
 
@@ -4983,3 +4986,79 @@ leaves no run and reads no clock, draws its `.selectionIndicatorStyle(.none)` pi
 every point of the cycle, and gives the run loop nothing to wake for. Reported, the same
 controls breathe. `BlendEndsTests` (TUIkitStylingTests) pins both pairs, and that RGB
 pairs are the composite and the spent colour, as before.
+
+## 80. The grounds are the terminal's own page (2026-09-15)
+
+§70.4 spent a translucent root ground with nothing behind it, and spent meant the opaque
+spelling: `.clear` was solid black, and a ground's alpha did nothing. The terminal's page
+now has a spelling, `.terminalBackground`: SGR 49 as a fill, measured as the RGB the
+terminal reported for it (OSC 11), and as nothing until it has (§75). `GroundedPalette`
+grounds a palette on it when the palette is written to the environment.
+
+**The roots.** The page, app header and status bar backgrounds are each spent over
+`.terminalBackground` with `spendingAlpha(over:)`, one rule for every alpha:
+- At alpha 0 (`.clear`) a root is the terminal's page, and the root emits 49.
+- Over a reported page a translucent root is RGB between the two. Under One Dark's
+  (40, 44, 52), rgb(10, 10, 20) at alpha 128 is rgb(25, 27, 36).
+- Over a page the terminal has not reported, rule 9 snaps. At alpha 128 or more a root is
+  its own colour, opaque, which is what §70.4 drew; below that it is the terminal's page,
+  so an alpha-64 root emits 49.
+- A root spelled `Color.default` is the terminal's page too. It already emitted 49, but
+  measured as nothing.
+
+**`Color.default` roles.** `Color.default` never measures: it is 39 as ink and 49 as a
+fill, so no one colour is both. A palette role knows its slot, so grounding re-spells it.
+`overlayBackground` becomes `.terminalBackground` with its alpha kept (it is not a root,
+§70.4). Each other stated role is an ink, and becomes `.terminalForeground` with its alpha
+spent over the grounded page. Over One Dark's reported pair, `Color.default` tiers at 0.75,
+0.55 and 0.38 are rgb(138, 144, 156), (112, 118, 128) and (90, 95, 105). A `Color.default`
+accent is therefore the terminal's foreground, so until the terminal reports it a focus
+breath in it is steady (§79).
+
+Where that spend has a side with no RGB, the ink is `.terminalForeground` at full strength,
+not rule 9's heavier end. Rule 9 would make a tier at 0.38 over an unreported page the page
+itself. The foreground slot would still draw it as 39, but every rule that measures a colour
+would read it as the page: a contrast floor, a surface walk, a button's resting caps (§78).
+A fade would also drop its glyph (§76). So text tiers on a silent terminal are plain 39. An
+ink at alpha 0 is the page.
+
+**The derived surfaces.** `focusBackground` and `fieldBackground` are derived again from
+the grounded roles wherever the base's value is its own derived default. A stated value is
+kept. Over an unreported page both are the page, since no step can be taken from a colour
+with no RGB; over a reported one the field steps off it. This also fixes a second defect: a
+default field on a `.clear` page was derived from `.clear` itself, and came out
+rgb(31, 31, 31) at alpha 0, a well with no presence at all. More generally the derivation
+steps off the page and carries its alpha, so a default field over a page at alpha 128 was a
+half-present well over a page already spent opaque. Derived from the grounded page it is
+opaque, as the focus wash, a blend that consumes alpha, already was. A field a palette states
+translucent keeps its alpha; the faded-palette suites' `FadedAll` now states one, a step of
+blue off its derivation.
+
+**Stored, and compared by the terminal.** The roles are computed once, when the palette is
+written, instead of on every read. Whether to wrap is decided by reading the fifteen stated
+roles, never the two derived ones, whose defaults compute a blend and a surface walk.
+`hasSameDerivation` compares the `TerminalColors` the roles were grounded against, so every
+memo sees groundings under two answers as different palettes. The render cache also clears
+when the process's colours change (`TerminalColors.generation`).
+
+**What a built-in palette sees: nothing.** Every one states opaque RGB roots and no
+`Color.default` role, so it is stored exactly as it was given. On a terminal that does not
+answer the startup query, an app's `.clear` page emits 49 and a translucent one snaps. On
+one that answers, the same palette spends over the reported page.
+
+Limits:
+- Below half alpha over an unreported page a root is that page, not a dimmer version of its
+  own colour: there is nothing to show between them.
+- A `Color.default` tier over an unreported page is plain 39 at any alpha above zero.
+- A stated `focusBackground` or `fieldBackground` equal to its derived default cannot be
+  told from that default, so it is derived again. `FadedAll` first stated its field at
+  exactly its derivation, and it came out opaque.
+- The Example's `CustomizablePalette` stores `focusBackground` from its source, so after an
+  edit of a ground it no longer equals its derived default and is kept as it was.
+
+`GroundedPaletteTerminalTests` (TUIkitTests) pins the roots at alpha 0, 64 and 128 and
+spelled `Color.default`, silent and reported, including the 49 the root spells. It pins
+each of the fifteen stated roles spelled `Color.default` on its own, the overlay's kept
+alpha, the tiers silent and reported, the derived and stated surfaces, idempotence (under
+a tint too), that groundings under two answers differ, and that every built-in palette is
+stored as given.

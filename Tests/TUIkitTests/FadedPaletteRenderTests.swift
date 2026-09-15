@@ -729,6 +729,14 @@ struct FadedAll: Palette {
     let error = Color.rgb(220, 40, 40).opacity(0.5)
     let info = Color.rgb(40, 120, 220).opacity(0.5)
     let border = Color.rgb(120, 120, 130).opacity(0.5)
+    /// Stated, one step of blue off the value its default derivation gives, rgb(31, 31, 62)
+    /// at alpha 128. That derivation steps off the translucent page and carries its alpha,
+    /// which made it the translucent well the text editor, caret and hyperlink alpha suites
+    /// claim. The environment now derives a default field again from the spent, opaque page
+    /// (Opacity as composition §80), so it would be opaque. A stated field is kept, but only
+    /// one that differs from its derived default can be told from it: stated at exactly
+    /// rgb(31, 31, 62) it was derived again, and those suites failed.
+    let fieldBackground = Color.rgb(31, 31, 63).opacity(0.5)
 }
 
 /// Every slot opaque but the quietest rung, which is where a scroll track's colour

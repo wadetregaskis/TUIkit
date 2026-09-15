@@ -207,6 +207,20 @@ public struct Color: Sendable, Hashable {
     /// xterm's grey.
     public static let `default` = Self(value: .terminalDefault)
 
+    /// The terminal's own default foreground: 39 as ink, measured as what the
+    /// terminal reported for it (see `ColorValue.terminalForeground`).
+    ///
+    /// Package-only: grounding a palette's `Color.default` inks is what spells it
+    /// outside this module, and an app has `Color.default` for the colour it paints.
+    package static let terminalForeground = Self(value: .terminalForeground)
+
+    /// The terminal's own default background: 49 as a fill, measured as what the
+    /// terminal reported for it (see `ColorValue.terminalBackground`).
+    ///
+    /// Package-only, for the reason `terminalForeground` is: grounding a palette's
+    /// roots spells it outside this module.
+    package static let terminalBackground = Self(value: .terminalBackground)
+
     // MARK: - SwiftUI's Named Colors
 
     // SwiftUI's fifteen named colours, and `magenta`.

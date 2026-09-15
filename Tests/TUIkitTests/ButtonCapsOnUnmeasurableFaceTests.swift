@@ -161,19 +161,36 @@ struct ButtonCapsOnUnmeasurableFaceTests {
     }
 
     /// Keyed on the accent too: tinting a face with a colour that has no RGB leaves
-    /// the page, and a breath toward it has no RGB between its ends.
+    /// the page, and a breath toward it has no RGB between its ends. The environment
+    /// stores a palette's `Color.default` accent as the terminal's foreground (Opacity
+    /// as composition §80), which has no RGB until the terminal reports it.
     @Test("An accent with no RGB gives the same caps on an RGB page", arguments: Control.allCases)
     func unmeasurableAccentOnAnRGBPage(_ control: Control) {
-        for terminal in [TerminalColors.unknown, Self.reported] {
-            TerminalColors.withCurrent(terminal) {
-                let palette = DefaultAccentPalette()
-                expectCaps(
-                    render(control, palette, focused: false), in: palette.foregroundTertiary,
-                    "\(control) at rest")
-                let focused = render(control, palette, focused: true)
-                expectCaps(focused, in: palette.accent, "\(control) focused")
-                #expect(focused.animatedCells.isEmpty, "\(control): \(focused.animatedCells)")
-            }
+        TerminalColors.withCurrent(.unknown) {
+            let palette = DefaultAccentPalette()
+            let seen = GroundedPalette.grounding(palette)
+            expectCaps(
+                render(control, palette, focused: false), in: palette.foregroundTertiary,
+                "\(control) at rest")
+            let focused = render(control, palette, focused: true)
+            expectCaps(focused, in: seen.accent, "\(control) focused")
+            #expect(focused.animatedCells.isEmpty, "\(control): \(focused.animatedCells)")
+        }
+    }
+
+    /// Once the terminal reports its foreground, that stored accent measures: the face is
+    /// a tint again and the caps are drawn in it, breathing.
+    @Test("A Color.default accent measures once the terminal reports its foreground",
+        arguments: Control.allCases)
+    func defaultAccentMeasuresOnceReported(_ control: Control) {
+        TerminalColors.withCurrent(Self.reported) {
+            let palette = DefaultAccentPalette()
+            let seen = GroundedPalette.grounding(palette)
+            #expect(seen.restingControlFace.rgbComponents != nil, "the fixture: a measurable face")
+            expectCaps(
+                render(control, palette, focused: false), in: seen.restingControlFace,
+                "\(control) at rest")
+            #expect(render(control, palette, focused: true).animatedCells.count == 2)
         }
     }
 
