@@ -69,7 +69,7 @@ struct SelectableRowAlphaTests {
     func opaqueRowClaimsNothing() {
         #expect(
             SelectableRowClaims.claims(
-                line: 0, width: 10, cells: 2..<8, ink: .ansi(.red), mark: .ansi(.blue), fill: .ansi(.green)
+                line: 0, width: 10, cells: 2..<8, ink: .red, mark: .blue, fill: .green
             ).isEmpty)
     }
 
@@ -77,7 +77,7 @@ struct SelectableRowAlphaTests {
 
     @Test("A Table's cell ink claims under a faded foregroundStyle")
     func tableCellInkClaims() {
-        let drawn = buffer(table().foregroundStyle(Color.ansi(.red).opacity(0.5)))
+        let drawn = buffer(table().foregroundStyle(Color.red.opacity(0.5)))
         let claims = drawn.opacityRegions.filter { $0.inkOpacity == half }
         #expect(!claims.isEmpty, "\(drawn.opacityRegions)")
         // One per drawn row, and none of them on the header.
@@ -96,7 +96,7 @@ struct SelectableRowAlphaTests {
     @Test("The cursor row claims its ink and not its breathing fill")
     func cursorRowClaimsInkOnly() {
         let drawn = buffer(
-            table(.constant([1])).foregroundStyle(Color.ansi(.red).opacity(0.5)))
+            table(.constant([1])).foregroundStyle(Color.red.opacity(0.5)))
         #expect(drawn.opacityRegions.allSatisfy { $0.fieldOpacity == 1 }, "\(drawn.opacityRegions)")
         #expect(drawn.opacityRegions.contains { $0.inkOpacity == half })
     }
