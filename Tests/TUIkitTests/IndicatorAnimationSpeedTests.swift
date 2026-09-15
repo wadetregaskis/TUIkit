@@ -563,6 +563,23 @@ struct IndicatorAnimationSpeedBarTests {
         #expect(tui.terminalImageStore.imageCount == 36)
     }
 
+    /// A 2-cell picture bar at a 16×34-pixel cell is 16 pixels wide, so its ramp slides
+    /// through 16 whole-pixel shifts, and its pass of 72 frames shows each of them four
+    /// or five times. Each distinct picture is sent once, and every frame showing it
+    /// names it. The bar used to send a picture for every frame, 72 of them, 56 of
+    /// them the same as another.
+    @Test("A 2-cell picture bar holds one picture for each of its 16 shifts, not one for each of its 72 frames")
+    func narrowPictureBarHoldsEachShiftOnce() throws {
+        let tui = Self.freshContext()
+        let buffer = bar(
+            ProgressView().indeterminateStyle(.gradient()).frame(width: 2), pictures: true, tui: tui)
+        #expect(placeholders(buffer) == 2, "the picture path was not taken")
+        let run = try #require(buffer.animatedCells.first)
+        #expect(run.frames.count == 72)
+        #expect(Set(run.frames).count == 16)
+        #expect(tui.terminalImageStore.imageCount == 16)
+    }
+
     /// In frames of 2 ticks an hour is 108,000 frames, every one built at the first
     /// render and held for as long as the bar is on screen. A thousand frames of 216
     /// ticks (3.6 s) is exactly an hour.

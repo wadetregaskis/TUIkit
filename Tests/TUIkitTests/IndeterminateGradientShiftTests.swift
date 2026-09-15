@@ -85,7 +85,8 @@ struct IndeterminateGradientShiftTests {
         let count = 72
         let pictures = try #require(
             IndeterminateRaster.frames(
-                width: 20, count: count, configuration: IndeterminateStyle.gradient().configuration,
+                width: 20, shifts: IndeterminateRaster.shifts(count: count, pixels: 160).distinct,
+                configuration: IndeterminateStyle.gradient().configuration,
                 cellPixels: TerminalCellPixels(width: 16, height: 34)))
         let ramp = samples(count: 161)
         #expect(pictures.count == count)

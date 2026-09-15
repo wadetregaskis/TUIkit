@@ -167,8 +167,12 @@ enum IndeterminateRenderer {
     /// to ask to be re-rendered at — so the animation looks as it did, at any speed,
     /// up to `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` frames, past which
     /// each lasts longer. Frames that come out identical cost nothing at replay:
-    /// ``AnimatedCellRun`` skips straight past them. They still cost their building
-    /// and their memory, which is what the bound is for.
+    /// ``AnimatedCellRun`` skips straight past them. Nor does each cost a render: a
+    /// frame showing a state an earlier frame showed
+    /// (``state(ofFrame:of:configuration:width:)``) is that frame's row, so a stepped
+    /// motion of N states draws at most min(N, F) rows for F frames, and a 2-cell
+    /// sweep's pass of 48 frames draws 2. Every frame of the pulse is its own, which,
+    /// with the frames' memory, is what the bound is for.
     static func cycle(
         width: Int, style: IndeterminateStyle,
         fillColor: Color, backgroundColor: Color, accentColor: Color,
@@ -178,33 +182,56 @@ enum IndeterminateRenderer {
         let configuration = style.configuration
         // Sampled over the configuration's OWN period, whatever the speed: a faster
         // bar shows the same motion in less time, not a different motion. A stepped
-        // motion's frame i of F is its step ⌊i·N/F⌋, counted in integers
-        // (`step(ofFrame:of:states:)`), with a knightRider's turn at the far wall
-        // kept (`bounceStep(ofFrame:of:width:)`); only the pulse, which has no steps,
-        // is timed.
+        // motion's frame i of F is its step, counted in integers
+        // (`state(ofFrame:of:configuration:width:)`); only the pulse, which has no
+        // steps, is timed.
         let sample = period(of: style) / Double(layout.frameCount)
-        let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
-        let frames = (0..<layout.frameCount).map { index -> String in
-            switch configuration.motion {
-            case .sweep, .knightRider, .gradient, .barberPole:
-                let step: Int =
-                    configuration.motion == .knightRider
-                    ? bounceStep(ofFrame: index, of: layout.frameCount, width: width)
-                    : step(ofFrame: index, of: layout.frameCount, states: states)
-                return render(
-                    width: width, style: style, fillColor: fillColor,
-                    backgroundColor: backgroundColor, accentColor: accentColor,
-                    position: .step(step), palette: palette
-                ).text
-            case .pulse:
-                return render(
+        var drawn: [Int: String] = [:]
+        var frames: [String] = []
+        frames.reserveCapacity(layout.frameCount)
+        for index in 0..<layout.frameCount {
+            let state = state(ofFrame: index, of: layout.frameCount, configuration: configuration, width: width)
+            if let row = drawn[state] {
+                frames.append(row)
+                continue
+            }
+            let row =
+                configuration.motion == .pulse
+                ? render(
                     width: width, style: style, fillColor: fillColor,
                     backgroundColor: backgroundColor, accentColor: accentColor,
                     elapsed: Double(index) * sample, palette: palette
                 ).text
-            }
+                : render(
+                    width: width, style: style, fillColor: fillColor,
+                    backgroundColor: backgroundColor, accentColor: accentColor,
+                    position: .step(state), palette: palette
+                ).text
+            drawn[state] = row
+            frames.append(row)
         }
         return (frames, layout.frameTicks)
+    }
+
+    /// Which state frame `frame` of a pass of `frameCount` frames shows, of
+    /// `configuration` across `width` cells: the step a stepped motion draws there,
+    /// ⌊frame·N/F⌋ (``step(ofFrame:of:states:)``) with a knightRider's turn at the far
+    /// wall kept (``bounceStep(ofFrame:of:width:)``), or for the pulse, whose colour
+    /// is continuous, the frame itself.
+    ///
+    /// Two frames of one state draw the same row, so a cycle draws each state once.
+    static func state(
+        ofFrame frame: Int, of frameCount: Int, configuration: IndeterminateConfiguration, width: Int
+    ) -> Int {
+        switch configuration.motion {
+        case .pulse:
+            return frame
+        case .knightRider:
+            return bounceStep(ofFrame: frame, of: frameCount, width: width)
+        case .sweep, .barberPole, .gradient:
+            let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
+            return step(ofFrame: frame, of: frameCount, states: states)
+        }
     }
 
     /// The step frame `frame` of a knightRider's pass of `frameCount` frames shows

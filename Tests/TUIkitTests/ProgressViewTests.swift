@@ -589,4 +589,31 @@ struct IndeterminateProgressViewTests {
             }
         }
     }
+
+    /// A pass of F frames of a motion that steps through N states shows min(N, F) of
+    /// them: every state when there are frames enough, and a different state in every
+    /// frame otherwise. Each is drawn once, and every frame showing it is that one row;
+    /// more distinct rows than states would mean a frame's row depends on something
+    /// besides its state.
+    @Test(
+        "A stepped bar's cycle has as many distinct frames as the states it shows",
+        arguments: [
+            ("sweep", IndeterminateStyle.sweep), ("knightRider", .knightRider),
+            ("barberPole", .barberPole), ("gradient", .gradient()),
+        ])
+    func distinctFramesAreItsStates(name: String, style: IndeterminateStyle) {
+        for width in [1, 2, 3, 20, 36] {
+            let frames = ColorDepth.withCurrent(.truecolor) {
+                IndeterminateRenderer.cycle(
+                    width: width, style: style, fillColor: .rgb(150, 150, 150),
+                    backgroundColor: .rgb(80, 80, 80), accentColor: .rgb(0, 200, 255),
+                    palette: SystemPalette.green, speed: .standard
+                ).frames
+            }
+            let states = IndeterminateRenderer.states(of: style.configuration, width: width, cellPixels: nil) ?? 0
+            #expect(
+                Set(frames).count == min(states, frames.count),
+                "\(name) at \(width) cells: \(Set(frames).count) distinct of \(frames.count) frames, \(states) states")
+        }
+    }
 }

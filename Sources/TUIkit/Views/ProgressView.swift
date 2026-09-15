@@ -404,9 +404,9 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// One built cycle, kept until something it depends on changes.
     ///
     /// Worth keeping because it is the one real cost of this approach: a
-    /// 36-cell `.gradient` cycle is 47 frames of ~840 bytes, and rebuilding
-    /// that on every render would move work onto the render path in exchange
-    /// for taking it off the animation path. Every frame, and how long it is shown,
+    /// 36-cell `.gradient` cycle is 72 frames, each a row re-colouring every cell,
+    /// and rebuilding that on every render would move work onto the render path in
+    /// exchange for taking it off the animation path. Every frame, and how long it is shown,
     /// is a pure function of these inputs, so anything else may change freely.
     private struct CachedCycle {
         let width: Int
@@ -423,8 +423,9 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let pictures: Bool
         let frames: [String]
         let run: AnimatedCellRun
-        /// How many frame tokens the build asked the image store for: the frame
-        /// count when it was built with a graphics context, and 0 when it was not.
+        /// How many picture tokens the build asked the image store for: one for each
+        /// distinct picture of the pass when it was built with a graphics context, and
+        /// 0 when it was not.
         /// A rebuild gives back the ones its replacement does not name.
         let pictureCount: Int
 
@@ -450,43 +451,37 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let configuration = style.configuration.resolvingColours(with: palette)
         // The `.gradient` motion over a solid fill is a colour field, and a
         // colour field can be pictures where the terminal draws them — see
-        // ``IndeterminateRaster``. Asked for with the frame count it will
-        // own, so every frame's picture is released when the bar goes. The
-        // count the glyph cycle is sampled at, so a bar steps at one rate
-        // whichever path draws it.
+        // ``IndeterminateRaster``. A pass of the glyph cycle's frame count, so a
+        // bar steps at one rate whichever path draws it, showing one picture for
+        // each whole-pixel shift it reaches: min(P, F), P the picture's width in
+        // pixels. Counted before the context is asked for, because asking registers
+        // that many tokens, each released when the bar goes.
         let frameCount = layout.frameCount
         let pictureToken = "track-\(context.identity.path)"
-        let graphics =
-            configuration.motion == .gradient && configuration.fill == "█"
-            ? context.gradientGraphics(token: pictureToken, frames: frameCount)
-            : nil
-        let pictureCount = graphics == nil ? 0 : frameCount
+        let isPictureBar = configuration.motion == .gradient && configuration.fill == "█"
+        let distinctPictures =
+            isPictureBar
+            ? min(
+                frameCount,
+                IndeterminateRenderer.states(
+                    of: configuration, width: width, cellPixels: context.environment.imageCellPixels)
+                    ?? frameCount)
+            : 0
+        let graphics = isPictureBar ? context.gradientGraphics(token: pictureToken, frames: distinctPictures) : nil
+        let pictureCount = graphics == nil ? 0 : distinctPictures
 
         func build() -> CachedCycle {
             if let graphics,
-                let pictures = IndeterminateRaster.frames(
-                    width: width, count: frameCount, configuration: configuration,
-                    cellPixels: graphics.cellPixels)
+                let rows = pictureFrames(
+                    width: width, frameCount: frameCount, configuration: configuration, graphics: graphics)
             {
-                let rows = pictures.enumerated().compactMap { index, picture in
-                    graphics.store.placeholderRows(
-                        token: graphics.token(forFrame: index),
-                        signature: IndeterminateFrameSignature(
-                            configuration: configuration, width: picture.width,
-                            height: picture.height, frame: index, count: frameCount),
-                        columns: width, rows: 1,
-                        pixels: { (picture.bytes, picture.format, picture.width, picture.height) }
-                    )?.first
-                }
-                if rows.count == frameCount {
-                    return CachedCycle(
-                        width: width, style: style, filled: filled, empty: empty, accent: accent,
-                        speed: speed, pictures: true, frames: rows,
-                        run: AnimatedCellRun(
-                            offsetX: 0, offsetY: 0, width: width, frames: rows,
-                            frameTicks: layout.frameTicks, clock: .content),
-                        pictureCount: pictureCount)
-                }
+                return CachedCycle(
+                    width: width, style: style, filled: filled, empty: empty, accent: accent,
+                    speed: speed, pictures: true, frames: rows,
+                    run: AnimatedCellRun(
+                        offsetX: 0, offsetY: 0, width: width, frames: rows,
+                        frameTicks: layout.frameTicks, clock: .content),
+                    pictureCount: pictureCount)
             }
             let built = IndeterminateRenderer.cycle(
                 width: width, style: style, fillColor: filled,
@@ -537,6 +532,39 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         }
         box.value = built
         return built
+    }
+
+    /// The rows of a picture bar's pass of `frameCount` frames: one picture for each
+    /// distinct whole-pixel shift the pass reaches, sent once and named by every frame
+    /// showing it (`IndeterminateRaster.shifts(count:pixels:)`) — or `nil` when the box
+    /// has no pixels, or the store names no row, and the bar is drawn in glyphs.
+    private func pictureFrames(
+        width: Int, frameCount: Int, configuration: IndeterminateConfiguration,
+        graphics: GradientGraphicsContext
+    ) -> [String]? {
+        guard
+            let pixels = IndeterminateRenderer.states(
+                of: configuration, width: width, cellPixels: graphics.cellPixels)
+        else { return nil }
+        let shifts = IndeterminateRaster.shifts(count: frameCount, pixels: pixels)
+        // As many pictures as the context holds tokens for, which it releases.
+        guard shifts.distinct.count == graphics.frames,
+            let pictures = IndeterminateRaster.frames(
+                width: width, shifts: shifts.distinct, configuration: configuration,
+                cellPixels: graphics.cellPixels)
+        else { return nil }
+        let rows = pictures.enumerated().compactMap { index, picture in
+            graphics.store.placeholderRows(
+                token: graphics.token(forFrame: index),
+                signature: IndeterminateFrameSignature(
+                    configuration: configuration, width: picture.width,
+                    height: picture.height, frame: index, count: pictures.count),
+                columns: width, rows: 1,
+                pixels: { (picture.bytes, picture.format, picture.width, picture.height) }
+            )?.first
+        }
+        guard rows.count == pictures.count else { return nil }
+        return shifts.frames.map { rows[$0] }
     }
 
     // MARK: - Label Line Rendering
