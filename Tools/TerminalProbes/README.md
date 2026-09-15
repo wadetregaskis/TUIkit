@@ -384,3 +384,43 @@ Two things these tools cannot do alone:
   dialog nobody clicked, so no probe ran. iTerm2 opened what looked like an
   alert. A record from the same launcher is timestamped 07:48, well after the
   attempt, and nobody noted who dismissed the window.
+
+## `reverse_video_card.py`: what SGR 7 paints
+
+Whether a terminal PRINTS anything for SGR 7 (reverse video), or advances text
+differently under it, is a cursor question. On 2026-09-14 every host asked gave
+the same answer: nothing printed, and text advanced as plain text. What a
+reversed cell LOOKS like, no report can tell you, so this is a card for a
+person. Each case is drawn beside a hand-swapped reference: the same colours
+with foreground and background exchanged, and no SGR 7.
+
+- `ESC[7m` over the terminal's default colours, and `ESC[7;1m` with bold. SGR
+  cannot name a default colour, so these two references are built as 24-bit
+  colour from the host's OSC 10/11 answer. A host that does not answer (GNU
+  screen) gets no reference.
+- `ESC[7;31;44m`, `ESC[7;38;2;10;20;30;48;2;200;200;200m` and, as an extra,
+  `ESC[7;1;31;44m`: each has an exact reference.
+- Extras: `ESC[K` (erase to end of line) while reversed, `ESC[27m` part way
+  along, and a reversed pair ended by `ESC[0m`.
+- Keys 1–6 park the terminal's own cursor on a reversed cell, a reference cell or
+  the erased tail. That shows whether the cursor stays visible and the cell
+  under it readable.
+
+```sh
+python3 reverse_video_card.py              # keys 1-6 move the cursor, q quits
+python3 reverse_video_card.py --no-query   # no OSC 10/11 query
+python3 reverse_video_card.py --hold 20    # no keys; exits after 20 s
+```
+
+It sets nothing on the host, and its only query is OSC 10/11, fenced by
+`CSI 5n`. Record what you saw, with the host, its version and its colour profile
+or theme, in `Documentation/Terminal-compatibility.md` under "Reverse video
+(SGR 7)". Under Warp, also record `appearance.text.enforce_minimum_contrast`
+(read it, don't change it). At its default, Warp may lighten a named foreground,
+and that would show up as a mismatch in the named rows for a reason other than
+SGR 7.
+
+**Not yet read on any host (as of 2026-09-15).** It has only been run in a pty,
+where nothing is painted. The cursor measurements above came from a working
+copy of `osc_colour_probe.py` with an extra suite of steps; that copy is not
+committed.
