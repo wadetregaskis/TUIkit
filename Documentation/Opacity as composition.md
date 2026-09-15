@@ -672,6 +672,11 @@ The rules, updated as each lands:
    `visibleOnBlankCell` minus 7 — one vocabulary for "what is observable on a
    blank cell", used by both consumers.
 
+   The answer is emitted in those exchanged colours, without the 7, wherever
+   each has a spelling in the slot it lands in. The terminal's own pair, before
+   it is reported, has none there, so a cell a reversed one reached is spelled
+   with the 7 again (2026-09-15, §85).
+
 7. **Each channel blends with its own counterpart, and the two never mix.**
    A cell shows its ink where its glyph draws and its FIELD where none does,
    and that one reading is applied to both sides of the blend: the source's ink
@@ -5293,3 +5298,56 @@ terminal's foreground and `Color.palette(4)`, unreported: a label in 39, an RGB 
 slot on an RGB field draw byte for byte as they do unmultiplied, and at half alpha the
 lines are `.white.opacity(0.5)`'s. With Apple Terminal "Basic"'s slots reported, a multiply
 by slot 4 draws `38;2;0;0;35`.
+
+## 85. A reversed cell with a side the terminal decides (2026-09-15)
+
+Rule 6 reads a reversed cell in the colours it displays: the decomposition exchanges its
+ink and field and drops the 7, and every blend works in what the viewer sees. The answer
+is then emitted without the 7, in those exchanged colours. That is exact wherever each
+colour can be spelled in the slot it lands in. The terminal's own pair, before the
+terminal reports it, cannot: the page as ink emits 39, the terminal's foreground, and the
+terminal's foreground as a field emits 49, the page (the limit §75 names). So
+`Text("ab").inverted().opacity(0.6)` over such a page came out as "ab" in 39 on 49, plain
+text: the fade silently un-reversed it. The same held for a column between two regions,
+which passes the source through re-emitted from the exchanged colours, and for a label
+composited over a reversed row, which sat on the row's fill, the terminal's foreground,
+spelled as the page.
+
+**The rule.** Where a cell's source or destination was reversed, and its blended colours
+have no spelling without the 7, it is spelled with the 7: the field in the foreground slot
+and the ink in the background slot. That spelling is exact whenever the first one is not,
+with one exception: when the ink and the field are both the terminal's foreground, or both
+its page, neither spelling states them, and the glyph is invisible anyway (ink on a field of
+its own colour). It is dropped, with the attributes that ink a blank cell (rule 6), as §76
+drops a glyph in the page on the page, and the blank takes whichever spelling states its
+field. A reversed space in the terminal's foreground over text in that foreground is this
+case, so at ½ and above it covers the text.
+
+Nothing else about the blend changes. The colours are still blended in what the cell
+displays, and rule 9's snap still applies to each channel, so a reversed cell whose colours
+are all the terminal's changes as a unit at ½, where its glyph contest is decided too. A
+reversed cell with one side measured still fades that side.
+
+What it leaves alone:
+- **A reported pair, and RGB.** Every colour then has a spelling in either slot, so the
+  first spelling is always exact and the bytes are what they were.
+- **Unmeasurable slots.** `.ansi(.red)` is 31 as ink and 41 as a field, so a reversed pair of
+  slots is spelled exchanged without the 7, which draws the same cells.
+- **Cells nothing reversed reached.** A fill stated as `.terminalForeground` still emits 49
+  (§75's limit), inside a fade as outside one, so a composite never disagrees with the
+  frame it was composited into.
+- **The dissolve.** `.transition(.opacity)` rewrites the colours in place, 7 and all (§83),
+  and is not this rule's.
+
+The plan (osc11-v5, R1) asked for the 7 to be kept through the decomposition, with such a
+cell blended as a unit at layer alpha ½. The spelling rule was taken instead: it keeps one
+model of the blend, reaches the destination side and the uncovered column the plan did not
+name, and meets each of the plan's tests.
+
+`ReversedCellOverUnreportedPageTests` (TUIkitTests) pins it through `renderToScreen`, with
+the terminal's pair unreported: a reversed label at 0.5 and 0.6 keeps its 7 with its glyphs
+and states no RGB, and at 0.3 and 0.49 is gone, over the page and over text; a reversed space
+at 0.6 covers text and at 0.3 yields to it; a red label at 0.6 over a reversed row is drawn
+reversed with its red in the background slot, and at 0.3 the row shows; and the uncovered
+columns between two regions stay reversed. With the pair reported, a reversed label at 0.6
+is drawn in its exchanged colours with no 7, as before.

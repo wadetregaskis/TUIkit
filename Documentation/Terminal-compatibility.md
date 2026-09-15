@@ -2370,9 +2370,13 @@ table above; not measured on a hovered control.
 - **Ghostty:** unmeasured for both.
 
 **Why it is recorded.** Today the framework emits SGR 7 only for
-`Text.inverted()`. It is also in the output path's vocabulary ("SGR codes the
-output path emits", below), which never emits `27` and restates from `ESC[0m`
-instead. The framework is to draw highlights it cannot measure as reverse video
+`Text.inverted()`, and for a cell composited over or under one where the
+terminal's pair is unreported (2026-09-15): the compositor reads a reversed cell
+with its colours exchanged, and states that pair with the 7 again where 39 and 49
+cannot state it without (`Opacity as composition` §85). That relies on the 7
+exchanging the pair in force, below. It is also in the output path's vocabulary
+("SGR codes the output path emits", below), which never emits `27` and restates
+from `ESC[0m` instead. The framework is to draw highlights it cannot measure as reverse video
 instead of a tint: that means a terminal that reported no colours, or a slot it
 did not report. So what each host paints for SGR 7 is about to be relied on.
 

@@ -29,6 +29,15 @@ extension FrameBuffer {
         var style: SGRState
         var foreground: Color?
         var background: Color?
+        /// Whether the line had reverse video (SGR 7) in force on this cell.
+        ///
+        /// Not the 7 itself: `cells(in:through:defaultForeground:surface:)` has
+        /// already exchanged the two colours above and dropped the attribute from
+        /// `style`, so every blend rule reads what the cell displays. This is the
+        /// only trace of it, kept for the one question the exchange cannot answer:
+        /// whether the blended answer needs the 7 back to be spelled at all
+        /// (``spelledWithReverseWhereNeeded(_:)``).
+        var isReversed = false
     }
 
     /// What one cell's three channels are worth, resolved from the region
@@ -112,7 +121,8 @@ extension FrameBuffer {
                 ?? RowCell(
                     character: " ", style: lastSourceCell?.style ?? SGRState(),
                     foreground: lastSourceCell?.foreground,
-                    background: lastSourceCell?.background)
+                    background: lastSourceCell?.background,
+                    isReversed: lastSourceCell?.isReversed ?? false)
             if sourceCells[column] != nil { lastSourceCell = cell }
             if cell.background == nil, let field = fieldCells?[column]?.background {
                 cell.background = field
@@ -180,6 +190,12 @@ extension FrameBuffer {
                     || column + width > columns.upperBound
             {
                 blended.character = " "
+            }
+            // Only where a reversed cell reached this column, on either side: a fill
+            // merely stated as the terminal's foreground is spelled here as it is
+            // outside a composite, so the two never disagree.
+            if cell.isReversed || behind?.isReversed == true {
+                blended = Self.spelledWithReverseWhereNeeded(blended)
             }
             span += blended.style.rendered(changingFrom: emitted)
             span.append(blended.character)
@@ -451,6 +467,63 @@ extension FrameBuffer {
         return ink.rgbComponents == nil
     }
 
+    /// `cell` spelled with reverse video where its colours have no spelling without it.
+    ///
+    /// A reversed cell is blended in the colours it displays, and the answer is
+    /// emitted in them with the 7 dropped. That is exact wherever each colour has a
+    /// spelling in the slot it lands in. The terminal's own pair, before the terminal
+    /// reports it, has none there: the page as ink emits 39, the terminal's
+    /// foreground, and the terminal's foreground as a field emits 49, the page. So
+    /// the cell came out un-reversed. Stated the other way round, the field in the
+    /// foreground slot and the ink in the background slot, with the 7, both are
+    /// exact, and so is every colour that means the same in either slot.
+    ///
+    /// Two colours mean different things in the two slots, so neither is ever moved
+    /// across: a default (`nil`, or `Color.default`), which is 39 in one and 49 in the
+    /// other, and the half of the terminal's pair that has no spelling in the slot it
+    /// would move to.
+    ///
+    /// Where neither spelling states both, the ink and the field are the same colour
+    /// of the terminal's, so the glyph cannot be seen. It is dropped with the
+    /// attributes that ink a blank cell, as ``isTheUnreportedPageOnItself(ink:field:)``
+    /// drops one, and the blank takes whichever spelling states its field.
+    /// `Opacity as composition` §85.
+    private static func spelledWithReverseWhereNeeded(_ cell: RowCell) -> RowCell {
+        let paintsInk = cell.character != " " || cell.style.paintsInkOnBlankCell
+        let inkIsSpelled = !paintsInk || !isUnreported(cell.foreground, page: true)
+        let fieldIsSpelled = !isUnreported(cell.background, page: false)
+        guard !inkIsSpelled || !fieldIsSpelled else { return cell }
+        var result = cell
+        let inkMoves = !paintsInk || movesAcrossSlots(cell.foreground, asPage: false)
+        if !(inkMoves && movesAcrossSlots(cell.background, asPage: true)) {
+            result.character = " "
+            result.style.apply("\u{1B}[24;25;29m")
+            guard !fieldIsSpelled else { return result }
+        }
+        result.style.apply("\u{1B}[7m")
+        let ink = movesAcrossSlots(cell.foreground, asPage: false) ? cell.foreground : nil
+        result.style = result.style.settingForeground(cell.background).settingBackground(ink)
+        return result
+    }
+
+    /// Whether `colour` is the terminal's page (`page`) or its foreground, unreported.
+    private static func isUnreported(_ colour: Color?, page: Bool) -> Bool {
+        guard let colour, colour.rgbComponents == nil else { return false }
+        switch colour.value {
+        case .terminalBackground: return page
+        case .terminalForeground: return !page
+        default: return false
+        }
+    }
+
+    /// Whether `colour` shows the same colour spelled in the other slot: an ink in the
+    /// background slot, or a field (`asPage`) in the foreground slot.
+    private static func movesAcrossSlots(_ colour: Color?, asPage: Bool) -> Bool {
+        guard let colour else { return false }
+        if case .terminalDefault = colour.value { return false }
+        return !isUnreported(colour, page: asPage)
+    }
+
     /// `line` taken apart into one entry per COLUMN, up to `width`.
     ///
     /// `nil` where a wide character claims a column it did not start, and where
@@ -526,6 +599,7 @@ extension FrameBuffer {
                     cell.style = unreversed
                         .settingForeground(cell.foreground)
                         .settingBackground(cell.background)
+                    cell.isReversed = true
                 }
                 result[column] = cell
                 column += max(1, character.terminalWidth)
