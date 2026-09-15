@@ -29,8 +29,9 @@ struct StandardAnimationDurationTests {
     /// Every standard duration: each spinner style's interval, the caret blink's
     /// half, the focus pulse's frame and cycle, each indeterminate preset's bar
     /// frame and pass at two widths, the standard frame and the focus clock's floor, a
-    /// toast fade's frame and longest sleep, and how often the run loop renders a view
-    /// animation, a drag's lift and its walk home.
+    /// toast fade's frame and longest sleep, how often the run loop renders a view
+    /// animation, a drag's lift, its walk home and its auto-scroll, and a held
+    /// scrollbar's repeat.
     static let durations: [StandardAnimationDuration] =
         spinnerDurations + cursorDurations + barDurations + clockDurations + notificationDurations
         + loopDurations
@@ -41,6 +42,12 @@ struct StandardAnimationDurationTests {
         ("viewAnimationFrame", AnimationRequest.viewAnimations), ("dragLiftFrame", .dragLift),
         ("dragReturnFrame", .dragReturn), ("dragAutoScrollFrame", .dragAutoScroll),
     ].map { StandardAnimationDuration(name: $0.0, seconds: AnimationClock.seconds(forTicks: $0.1.frameTicks ?? 0)) }
+        + [
+            // The period a held scrollbar steps at and keeps the loop rendering at: one
+            // constant for both, so the renders cannot fall between the steps.
+            StandardAnimationDuration(
+                name: "scrollbarRepeat", seconds: AnimationClock.seconds(forTicks: ScrollbarRenderer.autoRepeatIntervalTicks)),
+        ]
 
     /// A toast fade's frame, as the wakes its animation task plans while a fade is
     /// drawing are spaced: thirty of them from a frame's instant, over their count.

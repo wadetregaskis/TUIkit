@@ -61,6 +61,33 @@ extension RenderContext {
         scheduler.request(token, request, now: environment.frameNowNanos)
     }
 
+    /// Declares that the view rendering here wants the run loop to re-render it
+    /// every `frameTicks` ticks of 1/60 s, at the instants those ticks begin,
+    /// counted from tick zero of the frame clock.
+    ///
+    /// The lattice form of
+    /// ``requestAnimation(token:frequency:frequencyTolerance:phaseTolerance:)``,
+    /// and the one to prefer: a lattice has no anchor, so its renders are the
+    /// instants every other framework animation of whole ticks changes at, with
+    /// no tolerance needed to meet them. Re-declared every frame the view is on
+    /// screen and dropped when it is not, like the other.
+    ///
+    /// No-ops during a measure pass and when no scheduler is wired in.
+    ///
+    /// - Parameters:
+    ///   - token: A stable per-view key, from the structural identity — e.g.
+    ///     `"scrollbar-\(context.identity.path)"`.
+    ///   - frameTicks: The ticks between renders (`>= 1`).
+    @MainActor
+    func requestAnimation(token: String, frameTicks: Int) {
+        guard !isMeasuring else { return }
+        // Same reason as the frequency form: a memoizing ancestor serving a
+        // cached buffer would freeze the frame and skip the re-declaration.
+        environment.volatileReadTracker?.recordRenderSideEffect()
+        guard let scheduler = environment.animationScheduler else { return }
+        scheduler.request(token, AnimationRequest(frameTicks: frameTicks), now: environment.frameNowNanos)
+    }
+
     /// Declares that the view rendering here needs one render at a single
     /// instant `delay` seconds from this frame — the one-shot counterpart of
     /// ``requestAnimation(token:frequency:frequencyTolerance:phaseTolerance:)``.

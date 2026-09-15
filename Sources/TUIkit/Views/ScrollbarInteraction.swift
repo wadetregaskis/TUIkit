@@ -69,7 +69,7 @@ public struct ScrollbarRepeat: Sendable, Equatable {
 
 extension ScrollbarRenderer {
     /// The pause before a held arrow/track starts repeating (like a key-repeat
-    /// delay), then the gap between repeats.
+    /// delay).
     ///
     /// The initial delay must clear a deliberate CLICK's press–release span:
     /// a careful click on a one-cell arrow commonly holds the button for
@@ -79,13 +79,30 @@ extension ScrollbarRenderer {
     /// prompt for an intentional hold — the same reasoning as OS key-repeat
     /// delays.
     static let autoRepeatInitialDelayNanos: Int64 = 700_000_000
-    static let autoRepeatIntervalNanos: Int64 = 60_000_000
+
+    /// The gap between repeats once they start, in ticks of 1/60 s: 4, 66.7 ms,
+    /// 15 a second. It is also the lattice the bar keeps the run loop rendering
+    /// on while it is held, so every render a hold causes is one a repeat can be
+    /// due at.
+    ///
+    /// How often to repeat is input timing, like the initial delay. But a repeat
+    /// is only taken at a render, and the renders a hold causes are the lattice's
+    /// instants, so the next repeat is due on that lattice, a whole interval past
+    /// the tick the last one was taken in
+    /// (`AnimationClock.nanoseconds(ofRepeatTicks:afterStepAt:)`). It was 60 ms
+    /// from each repeat against a 20 Hz grid: the render 50 ms after a repeat
+    /// found the next not yet due and it waited for the render after, so a held
+    /// arrow on a page with nothing else to draw stepped every 100 ms. Four ticks
+    /// because 60 ms is the pace meant: 3 ticks is 17% shorter than it, 4 ticks
+    /// 11% longer.
+    static let autoRepeatIntervalTicks = 4
 
     /// Drives a held scrollbar's auto-repeat. Call it each frame from the bar's
     /// owner (with a bar shown): while `state.scrollbarRepeat` is set it keeps the
     /// run loop waking and scrolls by the repeat delta once the initial delay has
-    /// passed and then every interval. The hold's mouse handler sets the repeat on
-    /// press and clears it on release.
+    /// passed and then every interval, on the lattice it keeps the loop rendering
+    /// on. The hold's mouse handler sets the repeat on press and clears it on
+    /// release.
     @MainActor
     static func driveAutoRepeat(
         state: ScrollableOffsetState, token: String, context: RenderContext
@@ -97,8 +114,9 @@ extension ScrollbarRenderer {
             state.scrollbarRepeat = nil
             return
         }
-        // Keep the loop ticking while held so the deadline below is checked.
-        context.requestAnimation(token: token, frequency: 20)
+        // Keep the loop rendering while held so the deadline below is checked, at
+        // the instants the repeats are due on.
+        context.requestAnimation(token: token, frameTicks: autoRepeatIntervalTicks)
         let now = context.environment.frameNowNanos
         if repeating.nextFireNanos == 0 {
             repeating.nextFireNanos = now + autoRepeatInitialDelayNanos
@@ -121,7 +139,8 @@ extension ScrollbarRenderer {
                 // allowance rather than simply stalling.
                 state.userScrollFine(by: repeating.delta)
             }
-            repeating.nextFireNanos = now + autoRepeatIntervalNanos
+            repeating.nextFireNanos = AnimationClock.nanoseconds(
+                ofRepeatTicks: autoRepeatIntervalTicks, afterStepAt: now)
         }
         state.scrollbarRepeat = repeating
     }

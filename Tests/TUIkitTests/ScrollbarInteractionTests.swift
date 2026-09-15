@@ -162,9 +162,50 @@ struct ScrollbarInteractionTests {
         #expect(handler.scrollOffset == 50, "no repeat before the initial delay: \(handler.scrollOffset)")
         tickRepeat(handler, atNanos: t0 + Bar.autoRepeatInitialDelayNanos)
         #expect(handler.scrollOffset == 49, "first repeat fires after the delay: \(handler.scrollOffset)")
-        tickRepeat(
-            handler, atNanos: t0 + Bar.autoRepeatInitialDelayNanos + Bar.autoRepeatIntervalNanos)
+        let second = AnimationClock.nanoseconds(
+            ofRepeatTicks: Bar.autoRepeatIntervalTicks, afterStepAt: t0 + Bar.autoRepeatInitialDelayNanos)
+        tickRepeat(handler, atNanos: second - 1)
+        #expect(handler.scrollOffset == 49, "not before the interval: \(handler.scrollOffset)")
+        tickRepeat(handler, atNanos: second)
         #expect(handler.scrollOffset == 48, "second repeat after one interval: \(handler.scrollOffset)")
+    }
+
+    /// The run loop renders a held bar only when its scheduler says to, and a real
+    /// render lands a little after the instant it was asked for.
+    @Test("Rendered only when its scheduler fires, 2 ms late, a held arrow steps 15 times a second, 4 ticks apart")
+    func heldArrowStepsOnTheLattice() {
+        let handler = ScrollViewHandler(focusID: "t")
+        handler.contentHeight = 10_000
+        handler.viewportHeight = 10
+        handler.scrollOffset = 5_000
+        handler.scrollbarRepeat = ScrollbarRepeat(delta: -1)
+        let scheduler = AnimationScheduler()
+        let tui = TUIContext()
+
+        var now: Int64 = 1_000_000_000
+        var steps: [Int64] = []
+        var firingGaps: Set<Int64> = []
+        while now < 3_000_000_000 {
+            var env = EnvironmentValues()
+            env.frameNowNanos = now
+            env.animationScheduler = scheduler
+            let context = RenderContext(availableWidth: 10, availableHeight: 10, environment: env, tuiContext: tui)
+            let before = handler.scrollOffset
+            scheduler.beginFrame()
+            Bar.driveAutoRepeat(state: handler, token: "bar", context: context)
+            scheduler.endFrame()
+            if handler.scrollOffset != before { steps.append(now) }
+            guard let firing = scheduler.nextFiring(after: now), let after = scheduler.nextFiring(after: firing)
+            else { break }
+            firingGaps.insert(after - firing)
+            now = firing + 2_000_000
+        }
+        let inTheSecond = steps.filter { $0 >= 2_000_000_000 && $0 < 3_000_000_000 }
+        #expect(inTheSecond.count == 15, "steps in the second from 2 s: \(inTheSecond)")
+        let gaps = Set(zip(inTheSecond.dropFirst(), inTheSecond).map { $0 - $1 })
+        #expect(gaps.isSubset(of: [66_666_666, 66_666_667]), "gaps \(gaps)")
+        // What keeps the bar rendering while it is held is a lattice of the same 4 ticks.
+        #expect(firingGaps.isSubset(of: [66_666_666, 66_666_667]), "firing gaps \(firingGaps)")
     }
 
     @Test("With nothing held, the auto-repeat driver does nothing")
@@ -210,14 +251,15 @@ struct ScrollbarInteractionTests {
 
     // MARK: Page-track hold — stop at the mouse / resume / never reverse
 
-    /// Drives the auto-repeat past the initial delay, then for `count` intervals.
+    /// Drives the auto-repeat past the initial delay, then for `count` intervals, each
+    /// at the instant the repeat after the one before is due.
     private func driveRepeats(_ handler: ScrollViewHandler, count: Int, from start: Int64) -> Int64 {
         var t = start
         tickRepeat(handler, atNanos: t)  // seed the deadline (first time)
         t += Bar.autoRepeatInitialDelayNanos + 1
         for _ in 0..<count {
             tickRepeat(handler, atNanos: t)
-            t += Bar.autoRepeatIntervalNanos + 1
+            t = AnimationClock.nanoseconds(ofRepeatTicks: Bar.autoRepeatIntervalTicks, afterStepAt: t)
         }
         return t
     }
