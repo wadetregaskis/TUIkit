@@ -26,15 +26,19 @@ struct TabViewBytePinTests {
     /// The digests recorded on the commit before the strips were converted, keyed
     /// "shape/focused-or-still/depth". A mismatch prints the new digest and the
     /// frame, so an INTENDED change re-records by copying them here.
+    ///
+    /// Re-recorded 2026-09-14, when the active chip's resting label became the
+    /// palette's readable ink rather than white: on Green, the foreground at rest and
+    /// a loud end that stands off it. Nothing else in these frames moved.
     private static let pinned: [String: String] = [
-        "bordered/focused/truecolor": "b16a85cdec8ea9bb",
-        "bordered/focused/palette256": "32c737f4a0f84066",
-        "bordered/still/truecolor": "392a58fe53a0a44b",
-        "bordered/still/palette256": "ad2b0523c3d359f",
-        "compact/focused/truecolor": "e7e2fd8b278f6930",
-        "compact/focused/palette256": "ecd0cc54b58baea9",
-        "compact/still/truecolor": "64297951fe7ee4e8",
-        "compact/still/palette256": "b5f87ea22cb046f6",
+        "bordered/focused/truecolor": "1523692c1fa8a363",
+        "bordered/focused/palette256": "dac9a90360d23de6",
+        "bordered/still/truecolor": "cf6dd306fc21fcf7",
+        "bordered/still/palette256": "2299a062731a5d41",
+        "compact/focused/truecolor": "cd79d6474278ab50",
+        "compact/focused/palette256": "f4fff09187eedb3b",
+        "compact/still/truecolor": "23b164d3aae272b0",
+        "compact/still/palette256": "81f6af1a13ccf52a",
     ]
 
     @Test("A TabView draws the bytes it drew before", arguments: Shape.allCases, [true, false])

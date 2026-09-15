@@ -80,8 +80,8 @@ struct TabViewBorderedClaimTests {
                 if field != owed(surface) { wrong.append("panel (\(column), \(row)): field \(field)") }
             }
         }
-        // The labels: the resting active one in black or white on the surface, the
-        // inactive one in the secondary rung on the page.
+        // The labels: the resting active one in the palette's ink, spent, on the
+        // surface; the inactive one in the secondary rung on the page.
         let active = try #require(cells(of: "n", in: drawn).first, "no \"one\": \(screen)")
         for column in (active.column - 1)...(active.column + 1) {
             expect(column, active.row, ink: 1, field: owed(surface), "active label")

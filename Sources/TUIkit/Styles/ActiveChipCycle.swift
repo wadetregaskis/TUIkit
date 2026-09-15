@@ -21,9 +21,10 @@ struct ActiveChipCycle {
     /// state, and its fill says which place; the focus says so in the label.
     let surface: Color
 
-    /// Where the active label rests: readable on the chip, and quiet. Black or white
-    /// for the surface (`ContrastingLabel.on`) — never a palette slot, so it has no
-    /// alpha of its own, which is what decides how ``labelBright`` treats one.
+    /// Where the active label rests: readable on the chip, and quiet. The palette's
+    /// readable ink for the surface (`ContrastingLabel.on`), spent over it, so it is
+    /// opaque even under a palette whose foreground is translucent. That is what
+    /// decides how ``labelBright`` treats the accent's alpha.
     let labelDim: Color
 
     /// The loud end of the breath: the accent, SPENT against the chip's surface and
@@ -41,8 +42,9 @@ struct ActiveChipCycle {
     ///
     /// It also stands off ``labelDim`` by the chrome pulse floor, measured as drawn.
     /// Nothing else keeps the two ends apart, and an accent the cube draws like the
-    /// resting label is a label that does not breathe: White's accent is white, and
-    /// so is the resting label on its dark chip. This end moves, not the resting one,
+    /// resting label is a label that does not breathe. White's accent is white, as
+    /// the black-or-white resting label on its dark chip was; a phosphor palette's
+    /// accent is a lighter foreground. This end moves, not the resting one,
     /// because the resting end is what an unfocused strip shows, and it is floored
     /// against the chip again afterwards.
     let labelBright: Color

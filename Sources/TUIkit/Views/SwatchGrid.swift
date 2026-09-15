@@ -240,8 +240,9 @@ struct _SwatchGridCore: View, Renderable {
         return buffer
     }
 
-    /// The selected swatch's mark: a check, centred on the swatch. Drawn in a
-    /// contrasting tone (white on dark, dark on light) so it reads on any colour.
+    /// The selected swatch's mark: a check, centred on the swatch. Drawn in the
+    /// palette's readable ink for the swatch (`ContrastingLabel.on`), so it reads on
+    /// any colour and follows the theme.
     static let selectionMark = "✔"
 
     /// The two ends the cursor swatch's mark breathes between: the swatch's own
@@ -257,9 +258,10 @@ struct _SwatchGridCore: View, Renderable {
     }
 
     /// One swatch: the colour as a background, with a check on the selected cell.
-    /// The check is contrasting so it stays visible on any swatch; when the grid
-    /// is focused it animates (per ``View/selectionIndicatorStyle(_:)``) between the swatch
-    /// colour and the contrasting tone — breathing/blinking/steady — and is bold.
+    /// The check is in the palette's readable ink for the swatch, so it stays visible
+    /// on any swatch; when the grid is focused it animates (per
+    /// ``View/selectionIndicatorStyle(_:)``) between the swatch colour and that ink —
+    /// breathing/blinking/steady — and is bold.
     ///
     /// `mark` is what makes a cell the CURSOR cell — non-nil says "draw the
     /// check here", in the colour this frame of the cycle calls for. One

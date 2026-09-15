@@ -1,9 +1,10 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  TabChipBreathAlphaTests.swift
 //
-//  A focused TabView's active chip breathes its label from a black or white
-//  resting tone to the accent. The resting end is opaque by construction; the
-//  accent carried a faded tint's or palette's alpha, so the breath's alpha moved
+//  A focused TabView's active chip breathes its label from a resting tone, the
+//  palette's readable ink spent over the chip, to the accent. The resting end is
+//  opaque because it is spent; the accent carried a faded tint's or palette's
+//  alpha, so the breath's alpha moved
 //  with its phase, and every frame of the chip's run was blended at the alpha of
 //  whichever one the strip happened to draw (§29). The accent is spent over the
 //  chip's surface now, then floored, and every phase is opaque.
@@ -131,8 +132,8 @@ struct TabChipBreathAlphaTests {
 
     // MARK: - Helpers
 
-    /// Built as a TabView builds it: on its page-level surface, resting in black or
-    /// white for that surface.
+    /// Built as a TabView builds it: on its page-level surface, resting in the
+    /// palette's readable ink for that surface.
     private func chip(palette: any Palette, animation: TextCursorStyle.Animation) -> ActiveChipCycle {
         var environment = EnvironmentValues()
         environment.palette = palette

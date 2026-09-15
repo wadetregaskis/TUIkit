@@ -3536,6 +3536,15 @@ floored, then spent — the loud end fell under the 3.0 readability floor for te
 sixteen shipped palettes under a faded tint, as low as 1.53:1, and the suite now checks
 the floor after the spend.
 
+(2026-09-14.) The resting end is no longer black or white. It is the palette's readable
+ink for the chip, `readableText(on:)`, resolved, spent over the surface and then floored
+at the rendered label floor (`ContrastingLabel.on`). A palette's foreground or background
+can be translucent, where black and white never were, so the spend is what keeps the
+resting end opaque; the two ends still agree about alpha, and `ActiveChipCycle` still
+asserts it. A themed resting label can sit close to the accent, as a phosphor palette's
+lighter-foreground accent does, so the loud end also stands off the resting end by the
+chrome pulse floor, measured as drawn. That end moves, never the resting one.
+
 The bordered strip's own chrome — its walls, tops and mouth — painted raw until §56.
 
 

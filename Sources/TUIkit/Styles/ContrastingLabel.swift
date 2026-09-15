@@ -10,15 +10,23 @@ import TUIkitCore
 /// choose: the active tab chip's resting label, and the check mark and index
 /// numbers on a colour swatch.
 ///
-/// One picker for all of them. It was three identical copies, one in each of
-/// `_TabViewCore`, `_SwatchGridCore` and `_Color256GridCore`.
+/// The palette's readable ink for that surface, so the theme decides it, as it
+/// already decides the label on a colour swatch button. It was black or white, in
+/// three identical copies, one in each of `_TabViewCore`, `_SwatchGridCore` and
+/// `_Color256GridCore`.
 enum ContrastingLabel {
-    /// Black or white, whichever reads better on `surface`, resolved against
-    /// `palette`: Rec. 601 luma above 140 takes black. A surface with no RGB reads
-    /// as black, so it takes white.
+    /// `readableText(on:)` for `surface`, resolved against `palette`, spent over the
+    /// surface, then floored at `ViewConstants.labelContrastFloor` as drawn.
+    ///
+    /// Spent, because a palette's foreground or background can be translucent, and
+    /// the active tab chip breathes from this colour to a loud end that is spent:
+    /// two ends that disagree about alpha cannot share one claim. Floored after the
+    /// spend, because the floor reads RGB, not alpha; and as drawn, because a
+    /// 256-colour terminal moves the surface as well as the label.
     static func on(_ surface: Color, palette: any Palette) -> Color {
-        let c = surface.resolve(with: palette).rgbComponents ?? (0, 0, 0)
-        let luminance = 0.299 * Double(c.red) + 0.587 * Double(c.green) + 0.114 * Double(c.blue)
-        return luminance > 140 ? .rgb(0, 0, 0) : .rgb(255, 255, 255)
+        let resolved = surface.resolve(with: palette)
+        return palette.readableText(on: resolved).resolve(with: palette)
+            .spendingAlpha(over: resolved)
+            .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: resolved)
     }
 }

@@ -161,11 +161,14 @@ struct Color256GridRenderTests {
         #expect(!joined.contains("232233"), "…not even along the dense greyscale row")
     }
 
-    @Test("Contrast picks black on light cells and white on dark cells")
+    @Test("Contrast picks the palette's ink on dark cells and its page on light ones")
     func contrast() {
-        // A black surface needs a light marker; a white one, a dark marker.
-        #expect(ContrastingLabel.on(.rgb(0, 0, 0), palette: SystemPalette(.green)) == .rgb(255, 255, 255))
-        #expect(ContrastingLabel.on(.rgb(255, 255, 255), palette: SystemPalette(.green)) == .rgb(0, 0, 0))
+        // A black surface needs a light marker; a white one, a dark marker. Green's
+        // foreground and background both already clear every floor there.
+        let palette = SystemPalette(.green)
+        #expect(ContrastingLabel.on(.rgb(0, 0, 0), palette: palette) == palette.foreground.resolve(with: palette))
+        #expect(
+            ContrastingLabel.on(.rgb(255, 255, 255), palette: palette) == palette.background.resolve(with: palette))
     }
 
     @Test("The grid highlights the nearest cell for a non-palette colour, not black")
