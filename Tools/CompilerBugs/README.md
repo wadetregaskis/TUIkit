@@ -336,53 +336,149 @@ workaround is needed for as long as swift.org's 6.2 builds are supported.
 
 ---
 
-## 5. `OptionalAnyHashableConversion` — `#expect` comparing an `Int64?` with a product of literals
+## 5. `OptionalAnyHashableConversion` — a function conversion that erases an `Optional` to `AnyHashable`
 
 ```
-cd OptionalAnyHashableConversion && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./variants.sh
+tcs=~/Library/Developer/Toolchains
+cd OptionalAnyHashableConversion && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+    ./variants.sh "$tcs/swift-6.2.4-RELEASE.xctoolchain" \
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain \
+    "$tcs/swift-6.3.3-RELEASE.xctoolchain" \
+    "$tcs/swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-09-10-a.xctoolchain"
 ```
 
 ```
-#expect(Int64? == 9 * 116_666_667)          ASSERTS
-a literal, not a product                    ok
-a sum, not a product                        ASSERTS
-the product typed, Int64(9) * ...           ok
-value not optional                          ok
-Int?, not Int64?                            ok
-compared outside #expect                    ok
+                                            6.2.4 +a      Xcode 6.2.4   6.3.3         6.4.2-dev +a
+Crash.swift: to (Int?) -> Void              ABORTS        BAD SIL       BAD SIL       ABORTS
+a function: to (Int?) -> Void               ABORTS        BAD SIL       BAD SIL       ABORTS
+a function: to (Value?) -> Void, generic    ABORTS        BAD SIL       BAD SIL       ABORTS
+result: () -> Int? to () -> AnyHashable     ABORTS        BAD SIL       BAD SIL       ABORTS
+#expect's expansion, in plain Swift         ABORTS        BAD SIL       BAD SIL       ABORTS
+the same, one literal                       ok            ok            ok            ok
+to (Int) -> Void, not Optional              ok            ok            ok            ok
+from Any, not AnyHashable                   ok            ok            ok            ok
+from AnyHashable?, not AnyHashable          ok            ok            ok            ok
+a value, not a function                     ok            ok            ok            ok
+a closure that erases it itself             ok            ok            ok            ok
+#expect(Int64? == 9 * 116_666_667)          ABORTS        BAD SIL       BAD SIL       ABORTS
+#expect(Int64? == 1 + 1_050_000_002)        ABORTS        BAD SIL       BAD SIL       ABORTS
+#expect(Int64? == 1_050_000_003)            ok            ok            ok            ok
+#expect(Int64? == Int64(9) * 116_666_667)   ok            ok            ok            ok
+#expect of a let holding the comparison     ok            ok            ok            ok
+run: nil, erased directly                   ABORTS        nil           nil           ABORTS
+run: 5, erased directly                     ABORTS        5             5             ABORTS
+run: nil through (Int?) -> String           ABORTS        trap (133)    trap (133)    ABORTS
+run: 5 through (Int?) -> String             ABORTS        Optional(5)   Optional(5)   ABORTS
 ```
 
-`Tests/ReproTests/Crash.swift` is one test with one expectation, and the
-compiler stops in SILGen while it emits a reabstraction thunk for the
-comparison `#expect` expands to:
+`+a` marks a compiler built with assertions. Each variant is compiled with
+`-emit-silgen -Xfrontend -sil-verify-all`, and `BAD SIL` means the verifier
+rejected what SILGen emitted. The `run` rows build one small program at `-Onone`
+(it is in `variants.sh`) and run it, so they read `ABORTS` wherever that program
+does not compile. The `#expect` rows use the toolchain's own swift-testing, or
+Xcode's, which is why `DEVELOPER_DIR` points at Xcode.
+
+`Crash.swift` is one line, with no imports:
+
+```swift
+_ = { (_: AnyHashable) in } as (Int?) -> Void
+```
+
+A compiler built with assertions stops while it emits the reabstraction thunk:
 
 ```
 TYPE MISMATCH IN ARGUMENT 0 OF APPLY AT <<debugloc at "<compiler-generated>":0:0>>
-  argument value:   %16 = alloc_stack $Int64
-  argument type: $*Int64
-  parameter type: $*Optional<Int64>
-While emitting reabstraction thunk in SIL function
-"@$ss11AnyHashableVABIgr_SbIgngd_s5Int64VSgxRi_zRi0_zlyABIsgr_SbIegngd_TR".
+  argument type: $*Int
+  parameter type: $*Optional<Int>
+While emitting reabstraction thunk in SIL function "@$ss11AnyHashableVIegn_SiSgIegy_TR".
 ```
 
-Three ingredients, all necessary:
+**A compiler without assertions compiles it to wrong code.** The thunk unwraps
+the `Optional` as if it were implicitly unwrapped, so `nil` traps ("Unexpectedly
+found nil while implicitly unwrapping an Optional value"). A value that is there
+is stored as an `Int`, and the thunk passes that address to
+`_convertToAnyHashable<Optional<Int>>`, which reads an `Optional<Int>`: one byte
+more than was written. The `run` rows show both: `nil` traps, and `5` arrives as
+`Optional(5)`, where erasing the same `Int?` directly gives `5`. The non-nil
+result depends on a byte nobody wrote, so it may differ elsewhere. With
+`-Xfrontend -sil-verify-all` those compilers reject the SIL instead
+("operand of 'apply' doesn't match function input type").
 
-1. **An `Int64?` on the left** of `==`. The same comparison with an `Int64`, or
-   with an `Int?`, is fine.
-2. **An arithmetic expression of integer literals on the right**: a product or
-   a sum. A single literal, or the same product with one operand typed
-   (`Int64(9) * 116_666_667`), is fine.
-3. **Inside `#expect`.** The same comparison assigned to a `let` first, and the
-   `let` expected, is fine.
+Three things are needed:
 
-**Assertions-enabled compilers, and not fixed yet.** swift.org's 6.2.4 and the
-6.4.x snapshot of 2026-09-10 (both built `+assertions`) abort on the same two
-variants. Xcode's 6.2.4 and swift.org's 6.3.3 print `ok` for all seven. So the
-nightly lanes stop on this spelling too.
+1. **A function conversion.** Erasing a value, `let erased: AnyHashable =
+   Int?.none`, is fine. A closure that erases the value itself,
+   `{ body(AnyHashable($0)) }`, is fine, and is the workaround.
+2. **An `Optional` on one side**, in a parameter (`(AnyHashable) -> Void` to
+   `(Int?) -> Void`) or in a result (`() -> Int?` to `() -> AnyHashable`). Any
+   wrapped type does it, a generic one too. A non-optional `Int` is fine.
+3. **Exactly `AnyHashable` on the other side.** `Any`, or `AnyHashable?`, is fine.
+
+From reading the compiler's source (not verified): `Transform::transform` in
+`lib/SILGen/SILGenPoly.cpp` force-unwraps an optional input whenever the output
+is neither optional nor an existential, a rule meant for implicitly unwrapped
+optionals in `@objc` overrides. `AnyHashable` is a struct, so the `Optional` is
+unwrapped, and the later `AnyHashable` branch then erases the unwrapped value
+with the formal type still `Optional<Int>`.
+
+**How `#expect` gets there.** `#expect(value() == 9 * 116_666_667)`, with
+`value()` an `Int64?`, expands to
+`__checkBinaryOperation(value(), { $0 == $1() }, 9 * 116_666_667, …)`. With
+untyped literal arithmetic on the right, the type checker picks `AnyHashable`'s
+`==` for that closure, and converts it to `(Int64?, () -> AnyHashable) -> Bool`,
+which is this conversion. A sum does the same. A single literal, a typed operand
+(`Int64(9) * 116_666_667`), or the comparison evaluated into a `let` first leaves
+`AnyHashable` out. The table's "#expect's expansion, in plain Swift" row is the
+expansion without swift-testing.
+
+**Corrected on 2026-09-14.** This section used to present the bug as `#expect`
+comparing an `Int64?` with a product of literals, gave those as its three
+ingredients, and listed Xcode's 6.2.4 and swift.org's 6.3.3 as `ok`. `#expect`
+is only one way to form the conversion, and the two `ok` compilers compile it
+to wrong code. The repro was a SwiftPM package with one test. It is now one
+file for `swiftc`, and the `#expect` forms are rows of the table.
+
+### Affected versions
+
+Observed on macOS (arm64) on 2026-09-14, with `Crash.swift` and the variants
+above:
+
+| Toolchain | Build config | `Crash.swift` |
+|---|---|---|
+| swift.org 6.2.4 (`swift-6.2.4-RELEASE`) | +assertions | aborts |
+| Xcode 26.3's 6.2.4 (`swiftlang-6.2.4.1.4`) | no assertions | compiles to **wrong code**; rejected with `-sil-verify-all` |
+| swift.org 6.3.3 (`swift-6.3.3-RELEASE`) | no assertions | compiles to **wrong code**; rejected with `-sil-verify-all` |
+| swift.org 6.4 snapshot of 2026-09-10 (`6.4.2-dev`) | +assertions | aborts |
+
+No toolchain tested handles the conversion correctly, so it is not fixed as of
+that snapshot.
+
+**Upstream.** No issue or pull request for it was found as of 2026-09-14.
+<https://github.com/swiftlang/swift/pull/5507> (2016) added `AnyHashable`
+erasure to function conversions, and
+<https://github.com/swiftlang/swift/issues/45208> (SR-2603) is an older crash
+with the same `==`-picks-`AnyHashable` shape but no `Optional`.
+
+**TUIkit's exposure: none in the code swift.org's 6.2.4 compiles.** The wrong
+code is exactly the argument-type mismatch that the assertion checks, so a
+compiler built with assertions aborts where one without them would emit it.
+swift.org's 6.2.4 (+assertions) builds the package, its tests and its
+benchmarks from clean with no warnings (`TUIKIT_BENCHMARKS=1 swift build
+--build-tests`, 2026-09-14), so none of that code forms this conversion. Keeping
+that compiler as the local default `swift` therefore also detects this
+miscompile. It covers only what a macOS build compiles, not `#if` branches for
+other platforms, but `git grep` finds `AnyHashable` in no file that has an `#if`
+at all.
 
 **Where TUIkit hit it:** tests of the instants a spinner's run next steps at,
-written as `#expect(scheduler.nextFiring(after: now) == 9 * 116_666_667)` (nine
-7-tick frames). **Workaround:** the expected instant as one literal,
-`1_050_000_003`, with the arithmetic in the message. See
-`Tests/TUIkitTests/DeclinedRunClockTests.swift`, `ListChildRunTests.swift` and
-`IndicatorAnimationSpeedTests.swift`.
+written for f857c2c1 as `#expect(scheduler.nextFiring(after: now) == 9 *
+116_666_667)`, where `nextFiring` returns an `Int64?`. swift.org's 6.2.4
+aborted. Xcode's 6.2.4 would have compiled it without complaint. A plain-Swift
+copy of that expansion, built without assertions, traps on `nil`, and returned
+`false` for an equal value in three of four builds (6.3.3 at `-Onone` and `-O`,
+Xcode's 6.2.4 at `-O`). **Workaround:** the expected instant as one literal.
+Since 41a2bcc1 those tests (`DeclinedRunClockTests.swift`,
+`ListChildRunTests.swift`, `IndicatorAnimationSpeedTests.swift`) spell an
+instant as one literal or as a call to `AnimationClock.nanoseconds(atTick:)`,
+and neither forms the conversion. In an `#expect` on an optional, give
+arithmetic on the right a type, or write one literal.
