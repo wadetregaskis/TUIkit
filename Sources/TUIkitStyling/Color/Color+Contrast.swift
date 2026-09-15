@@ -78,7 +78,12 @@ extension Color {
     /// variants can satisfy the minimum, the nearer one wins (least change to
     /// the palette's feel). If no lightness of this hue can reach the minimum
     /// (extreme minimums against mid-tone backgrounds), the closer of black /
-    /// white is returned. Colours without RGB components return unchanged.
+    /// white is returned.
+    ///
+    /// A colour returns unchanged when it, or `background`, has no RGB
+    /// components: an unresolved semantic colour, ``Color/default``, or the
+    /// terminal's own foreground or background before the terminal has reported
+    /// it. There is no ratio to measure, and the floor makes no guess.
     public func ensuringContrast(atLeast minimum: Double, against background: Color) -> Color {
         flooring(atLeast: minimum, against: background, asRendered: false)
     }
@@ -111,12 +116,19 @@ extension Color {
     private func flooring(
         atLeast minimum: Double, against background: Color, asRendered: Bool
     ) -> Color {
+        // Both sides measured, or no floor. A side with no RGB has no luminance, so
+        // `contrastRatio` answers 0, below any minimum; for an RGB ink on such a page
+        // the walk then compared 0 with 0 at every lightness and fell through to RGB
+        // white, a guess that the page is dark. `Color.default` never has RGB, and the
+        // terminal's own colours have none until it reports them, so what the floor
+        // cannot measure it leaves as asked. (An unmeasurable ink always came back
+        // unchanged: there was nothing to walk.)
+        guard let (red, green, blue) = rgbComponents, background.rgbComponents != nil else { return self }
         let target = asRendered ? background.downsampledToPalette256() : background
         func ratio(_ color: Color) -> Double {
             (asRendered ? color.downsampledToPalette256() : color).contrastRatio(against: target)
         }
         guard ratio(self) < minimum else { return self }
-        guard let (red, green, blue) = rgbComponents else { return self }
         let (hue, saturation, lightness) = Self.rgbToHSL(red: red, green: green, blue: blue)
 
         // Walk lightness outward in 1% steps and note the first satisfying

@@ -670,7 +670,21 @@ extension Palette {
     /// than raising the opacity keeps the adaptive property that mattered: a
     /// palette with a coarse accent ramp still gets exactly two visible steps,
     /// and one with a fine ramp does not get a shout.
+    ///
+    /// When the accent or the page has no RGB components (``Color/default``, or
+    /// a colour of the terminal's own that it has not reported), this is
+    /// ``restingControlFace``. The terminal decides what such a colour paints,
+    /// so no tint of it can be checked for a visible step, nor the label on it
+    /// for contrast.
     public var hoveredControlFace: Color {
+        // Not left to the walk finding nothing. A blend with an unmeasurable side has
+        // no RGB between its ends, so every tint below is one end or the other: the
+        // page, or the whole accent. Whichever end the blend picks, the walk could
+        // only stay at rest or jump to a solid accent under a label nobody can check,
+        // and the second is not a hover.
+        guard accent.resolve(with: self).rgbComponents != nil,
+            background.resolve(with: self).rgbComponents != nil
+        else { return restingControlFace }
         let resting = restingControlFace.resolve(with: self).downsampledToPalette256()
         var distinct: [Color] = []
         var furthest: Color?
@@ -717,9 +731,20 @@ extension Palette {
     /// ``liftedBackground``, and for the same reason: a lift finer than the
     /// 256-colour cube is no lift at all on the terminals least able to spare
     /// one, and a hover should look the same everywhere.
+    ///
+    /// An ink or a page with no RGB components (``Color/default``, or a colour
+    /// of the terminal's own that it has not reported) comes back unchanged.
+    /// The terminal decides what such a colour paints, so there is no lightness
+    /// to step away from and no way to tell whether a step would show.
     public func hoveredForeground(_ base: Color) -> Color {
         let resolved = base.resolve(with: self)
         let page = background.resolve(with: self)
+        // Both measured, or no lift. An unmeasured page read as lightness 0 in
+        // `extreme(furthestFrom:)`, so the walk lifted toward RGB white whatever the
+        // terminal paints, invisibly on a light one. An unmeasured ink, which a blend
+        // cannot move, fell through every step to the `best == nil` exit and BECAME
+        // that white.
+        guard resolved.rgbComponents != nil, page.rgbComponents != nil else { return resolved }
         let resting = resolved.downsampledToPalette256()
 
         /// The step toward `target` that is `hoverSeparationSteps`
@@ -884,7 +909,15 @@ extension Palette {
     /// Saturated mid-tone fills (Grass's amber over green) beat both sides,
     /// so the winner is then pushed toward readable via
     /// ``Color/ensuringContrast(atLeast:against:)``.
+    ///
+    /// On a surface with no RGB components (``Color/default``, or the
+    /// terminal's own background before it has reported it) this is
+    /// `foreground`, unchanged: neither side can be measured against it, so
+    /// neither is chosen or floored for it.
     public func readableText(on surface: Color) -> Color {
+        // Said outright rather than left to the tie below, where both ratios are 0
+        // and `>=` happens to pick the foreground.
+        guard surface.rgbComponents != nil else { return foreground }
         let winner =
             foreground.contrastRatio(against: surface) >= background.contrastRatio(against: surface)
             ? foreground
