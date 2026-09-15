@@ -39,10 +39,13 @@ struct ASCIIPaletteTests {
 
     @Test("Degenerate shade counts still make a palette")
     func degenerateShades() {
-        #expect(ASCIIPalette.shades(1).colors == [.ansi(.black)])
-        #expect(ASCIIPalette.shades(0).colors == [.ansi(.black)])
-        #expect(ASCIIPalette.shades(-3).colors == [.ansi(.black)])
-        #expect(ASCIIPalette([]).colors == [.ansi(.black), .ansi(.white)])
+        #expect(ASCIIPalette.shades(1).colors == [.black])
+        #expect(ASCIIPalette.shades(0).colors == [.black])
+        #expect(ASCIIPalette.shades(-3).colors == [.black])
+        #expect(ASCIIPalette([]).colors == [.black, .white])
+        // Literal black and white, the two `shades(2)` gives, not the terminal's
+        // slots 0 and 7.
+        #expect(ASCIIPalette([]).colors == ASCIIPalette.shades(2).colors)
     }
 
     @Test("A sampled palette spreads over the gamut instead of clustering")

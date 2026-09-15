@@ -72,10 +72,21 @@ struct ColorEffectTests {
     @Test("Multiplying by white changes nothing, by black removes everything")
     func multiplyTints() {
         let base = Text("ab").foregroundStyle(Color.rgb(200, 100, 50))
-        #expect(drawn(base.colorMultiply(.ansi(.white))) == drawn(base))
-        #expect(drawn(base.colorMultiply(.rgb(0, 0, 0))).contains("0;0;0"))
+        #expect(drawn(base.colorMultiply(.white)) == drawn(base))
+        #expect(drawn(base.colorMultiply(.black)).contains("0;0;0"))
         // Keeping only the red channel.
         #expect(drawn(base.colorMultiply(.rgb(255, 0, 0))).contains("200;0;0"))
+    }
+
+    /// The arithmetic would re-spell a slot as the RGB it measures as, so white
+    /// is the identity by spelling: `.white` leaves a terminal slot a slot.
+    @Test("Multiplying a terminal slot by white leaves it a slot")
+    func multiplyByWhiteKeepsASlot() {
+        let base = Text("ab").foregroundStyle(Color.ansi(.red))
+        let tinted = drawn(base.colorMultiply(.white))
+        #expect(tinted == drawn(base))
+        #expect(tinted.contains("\u{1B}[31m"), "\(tinted.debugDescription)")
+        #expect(!tinted.contains("38;2;"), "\(tinted.debugDescription)")
     }
 
     @Test("Hue rotation moves the hue and leaves the rest")

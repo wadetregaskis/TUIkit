@@ -2270,6 +2270,7 @@ Bold is the one that exists today; `SGR 2` (faint) is the same shape of hazard.
 | what we emit | what the terminal does with it |
 |---|---|
 | `SGR 30–37` / `90–97` (the 16 slots, `Color.ansi(_:)`) | Looks up slot *n* of the **user's colour scheme**. "Red" is a name, not a colour, and the user may make it green. |
+| `Color.red`, `.white`, `.gray` and the other named colours | Not slots: they are RGB, Apple's light values, so they emit the 24-bit row below, and on a 16-colour terminal they are quantised to the nearest slot like any other RGB. Only `Color.ansi(_:)` (or a 256-colour index below 16) asks for a slot. |
 | `SGR 38;5;n` (256-colour) | Slots 0–15 are the same sixteen, so they are remapped identically. 16–231 (the 6×6×6 cube) and 232–255 (the grey ramp) are conventionally fixed — but `OSC 4` can set any index, so "conventionally" is the strongest word available. |
 | `SGR 38;2;r;g;b` (24-bit) | The colour is stated exactly and there is nothing to look up. It can still be *adjusted* — iTerm2's minimum-contrast setting will move a foreground it judges illegible against its background, and a terminal applying a colour profile shifts everything. |
 | `SGR 39` / `49` (default fg/bg) | The user's configured default. This is what ``Color/default`` means, and it is the only spelling that is *defined* as "whatever the user chose". |

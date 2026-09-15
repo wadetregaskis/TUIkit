@@ -118,22 +118,24 @@ struct _ColorEffectView<Content: View>: View {
         ///
         /// About the COLOURS only — a translucent multiply tint also fades the layer,
         /// and that is not a rewrite of anything (see `renderToBuffer`). Hence
-        /// `opaqueSpelling`: `.ansi(.white).opacity(0.5)` leaves every hue exactly
-        /// where it was and is answered `true` here, with its alpha handled apart.
+        /// `opaqueSpelling`: `.white.opacity(0.5)` leaves every hue exactly where it
+        /// was and is answered `true` here, with its alpha handled apart.
         ///
-        /// `.ansi(.white)` is the multiply identity by SPELLING and not by
-        /// arithmetic, which is worth knowing before touching this. It is the
-        /// terminal's white slot, which measures as 229, not 255, so multiplying
-        /// by its components darkens by 229/255. The shortcut is what makes
-        /// `.colorMultiply(.ansi(.white))` mean what it says, and before
-        /// `opaqueSpelling` was here a faded white slipped past it and darkened the
-        /// subtree as a side effect of fading it.
+        /// `.white` is the multiply identity by SPELLING, not only by arithmetic,
+        /// which is worth knowing before touching this. Multiplying by RGB white
+        /// leaves every channel alone, but running a line through the arithmetic
+        /// re-spells a terminal slot such as `.ansi(.red)` as the RGB it measures
+        /// as, so the shortcut is what keeps `.colorMultiply(.white)` from changing
+        /// anything at all. `.ansi(.white)` is not the identity: it is the
+        /// terminal's white slot, which measures as 229, and multiplies as that.
+        /// Before `opaqueSpelling` was here a faded white slipped past the shortcut
+        /// and changed the subtree as a side effect of fading it.
         func isIdentity(at amount: Double) -> Bool {
             switch self {
             case .brightness, .grayscale, .hueRotation: amount == 0
             case .contrast, .saturation: amount == 1
             case .invert: false
-            case .multiply(let color): color.opaqueSpelling == .ansi(.white)
+            case .multiply(let color): color.opaqueSpelling == .white
             }
         }
     }

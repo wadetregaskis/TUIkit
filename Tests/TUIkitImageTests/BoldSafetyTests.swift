@@ -90,6 +90,15 @@ struct BoldSafetyTests {
         #expect(!ASCIIPalette.ansi16.foregroundSurvivesBold)
     }
 
+    /// The palette an empty colour list degrades to, and a one-shade palette,
+    /// are literal black and white: they state triples, so bold cannot repaint
+    /// them in a bright twin above sixteen colours.
+    @Test("The default palette and a single shade are safe")
+    func defaultPaletteIsSafe() {
+        #expect(ASCIIPalette([]).foregroundSurvivesBold)
+        #expect(ASCIIPalette.shades(1).foregroundSurvivesBold)
+    }
+
     /// A 256-cube index is a name below 16 and a colour at or above it, and the
     /// palette has to read it that way round.
     @Test("A 256-palette entry is safe only from index 16 up")

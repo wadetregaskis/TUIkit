@@ -6,15 +6,25 @@
 
 /// A color for use in TUIkit views.
 ///
-/// `Color` represents standard ANSI colors as well as
-/// extended 256-color palette and True Color (24-bit RGB).
+/// `Color` states a colour as RGB, as one of the terminal's own sixteen slots,
+/// as a 256-colour index, as the terminal's default, or as a palette role.
 ///
-/// # Standard Colors
+/// # Named Colors
+///
+/// SwiftUI's names are the colours they read as, at Apple's light values:
 ///
 /// ```swift
-/// Text("Red").foregroundStyle(.red)
-/// Text("Green").foregroundStyle(.green)
-/// Text("Blue").foregroundStyle(.blue)
+/// Text("Red").foregroundStyle(.red)      // #FF3B30
+/// Text("Green").foregroundStyle(.green)  // #28CD41
+/// Text("Blue").foregroundStyle(.blue)    // #007AFF
+/// ```
+///
+/// # Terminal Colors
+///
+/// A slot is whatever the user's terminal profile keeps there:
+///
+/// ```swift
+/// Text("Slot 1").foregroundStyle(.ansi(.red))
 /// ```
 ///
 /// # RGB Colors
@@ -186,13 +196,19 @@ public struct Color: Sendable, Hashable {
 
     // MARK: - SwiftUI's Named Colors
 
-    // Eight of SwiftUI's named colours.
+    // SwiftUI's fifteen named colours, and `magenta`.
     //
-    // The VALUES are Apple's system palette, sampled from AppKit in the light
-    // (aqua) appearance rather than guessed — `NSColor.systemOrange` and friends
-    // converted to sRGB. SwiftUI resolves these dynamically per appearance; a
-    // terminal has no such notion, so one appearance had to be chosen and light
-    // is the one a default terminal theme matches.
+    // The VALUES are Apple's system palette in the light (aqua) appearance,
+    // measured rather than guessed: `Color.resolve(in:)` on macOS 15.7, which
+    // agrees with `NSColor.systemOrange` and friends converted to sRGB. SwiftUI
+    // resolves the hues per appearance; these are fixed at the light values for
+    // now, so a colour can be measured, mixed and faded inside a view body.
+    // `white` and `black` are the same in both appearances.
+    //
+    // They are colours, not the terminal's slots: `.red` is `38;2;255;59;48` at
+    // truecolor, and on a 16-colour terminal the nearest slot by xterm's table
+    // (SGR 91). A colour the user's terminal profile should decide is
+    // `Color.ansi(_:)`.
     //
     // - Important: These are deliberately NOT the CSS colours of the same name.
     //   `Color.orange` is Apple's `#FF9500`; CSS "orange" is `#FFA500`, and the
@@ -201,8 +217,32 @@ public struct Color: Sendable, Hashable {
     //   browses the web vocabulary, this matches the SwiftUI source you are
     //   porting. Do not reconcile them.
     //
-    // The terminal's sixteen slots are not named here: they are spelled
-    // `Color.ansi(_:)`.
+    // `magenta` is TUIkit's own: SwiftUI has none. It is full-strength #FF00FF,
+    // because Apple's system palette has no magenta to borrow.
+
+    /// Black, `#000000`.
+    public static let black = Self.hex(0x00_00_00)
+
+    /// White, `#FFFFFF`.
+    public static let white = Self.hex(0xFF_FF_FF)
+
+    /// Red (Apple's system red, `#FF3B30`).
+    public static let red = Self.hex(0xFF_3B_30)
+
+    /// Yellow (Apple's system yellow, `#FFCC00`).
+    public static let yellow = Self.hex(0xFF_CC_00)
+
+    /// Green (Apple's system green, `#28CD41`).
+    public static let green = Self.hex(0x28_CD_41)
+
+    /// Cyan (Apple's system cyan, `#55BEF0`).
+    public static let cyan = Self.hex(0x55_BE_F0)
+
+    /// Blue (Apple's system blue, `#007AFF`).
+    public static let blue = Self.hex(0x00_7A_FF)
+
+    /// Magenta, `#FF00FF`. TUIkit's own: SwiftUI has no magenta.
+    public static let magenta = Self.hex(0xFF_00_FF)
 
     /// Grey (Apple's system grey, `#8E8E93`).
     public static let gray = Self.hex(0x8E_8E_93)

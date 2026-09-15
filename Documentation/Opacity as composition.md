@@ -1655,6 +1655,12 @@ independently, and either can happen without the other.
 That is also why the test asserts the *bytes* are byte-identical to an unmultiplied
 render. It is how the bug was found rather than a restatement of the fix.
 
+(2026-09-15.) `Color.white` is now RGB #FFFFFF, so multiplying by it leaves every RGB
+channel alone. The shortcut still matters: the arithmetic re-spells a terminal slot
+such as `.ansi(.red)` as the RGB it measures as, and skipping the pass is what keeps
+it a slot. The terminal's own white slot, `.ansi(.white)`, is no longer the identity:
+it measures as 229, and multiplies as that.
+
 ### 25.2 A tint nests, and that is a question of order (2026-09-12)
 
 The tint's layer region was appended bare, after whatever the content had already

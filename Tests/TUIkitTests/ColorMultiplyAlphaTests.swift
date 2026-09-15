@@ -35,7 +35,7 @@ struct ColorMultiplyAlphaTests {
     @Test("A half-transparent tint fades the layer by half")
     func halfTint() throws {
         let drawn = buffer(
-            Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(Color.ansi(.white).opacity(0.5)))
+            Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(Color.white.opacity(0.5)))
         let claim = try #require(drawn.opacityRegions.first)
         #expect(claim.opacity == 128.0 / 255)
         // The LAYER channel, not ink or field: this says how PRESENT the subtree is.
@@ -48,16 +48,16 @@ struct ColorMultiplyAlphaTests {
 
     @Test("A white tint at half alpha changes no hue, only presence")
     func whiteTintIsHueNeutral() {
-        // `.ansi(.white)` is the multiply identity by SPELLING, not by arithmetic:
-        // it is the terminal's white slot, which measures as 229, not 255, so
-        // running it through the multiply darkens by 229/255. The identity shortcut
-        // is what makes `.colorMultiply(.ansi(.white))` mean what it says, and this
-        // asserts a faded white gets the same shortcut. It did not, before: it slipped past the check and
+        // `.white` is the multiply identity by SPELLING, not only by arithmetic:
+        // running a line through the multiply re-spells a terminal slot such as
+        // `.ansi(.red)` as the RGB it measures as. The identity shortcut is what
+        // makes `.colorMultiply(.white)` change nothing, and this asserts a faded
+        // white gets the same shortcut. It did not, before: it slipped past the check and
         // darkened the subtree as a side effect of fading it, which is how this test
         // found the bug rather than confirming the fix.
         let plain = buffer(Text("hi").foregroundStyle(Color.ansi(.red)))
         let tinted = buffer(
-            Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(Color.ansi(.white).opacity(0.5)))
+            Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(Color.white.opacity(0.5)))
         #expect(tinted.lines[0] == plain.lines[0], "\(tinted.lines[0].debugDescription)")
         #expect(!tinted.opacityRegions.isEmpty, "and yet it fades")
     }
@@ -106,7 +106,7 @@ struct ColorMultiplyAlphaTests {
         // follows. Appended bare, the tint's rectangle came second and lost: the
         // pair resolved at the inner 0.5 and the tint's half went nowhere, where
         // SwiftUI (and `.opacity(0.5).opacity(0.5)` here) gives a quarter.
-        let drawn = buffer(Text("hi").opacity(0.5).colorMultiply(Color.ansi(.white).opacity(0.5)))
+        let drawn = buffer(Text("hi").opacity(0.5).colorMultiply(Color.white.opacity(0.5)))
         let layers = drawn.opacityRegions.map(\.opacity)
         let tint = 128.0 / 255
         #expect(layers == [0.5 * tint, tint], "the first region is the layer: \(layers)")

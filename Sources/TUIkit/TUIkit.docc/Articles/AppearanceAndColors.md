@@ -60,6 +60,28 @@ let custom = Appearance(
 
 TUIkit's ``Color`` type supports multiple color modes:
 
+### Named Colors
+
+SwiftUI's named colours are the colours they read as: fixed RGB, at the values
+Apple's system palette has in the light appearance.
+
+```swift
+Color.red    // #FF3B30, SGR 38;2;255;59;48
+Color.white  // #FFFFFF
+Color.gray   // #8E8E93
+```
+
+The fifteen are `black`, `white`, `red`, `orange`, `yellow`, `green`, `mint`,
+`teal`, `cyan`, `blue`, `indigo`, `purple`, `pink`, `brown` and `gray`. SwiftUI
+adapts the hues to a dark appearance; these stay at their light values, so a
+named colour can be measured, mixed and faded anywhere. `Color.magenta` is
+TUIkit's own, #FF00FF: SwiftUI has no magenta.
+
+A named colour looks the same on every terminal that shows 24-bit colour. On a
+terminal with only sixteen colours it becomes the nearest slot by xterm's
+table, so `.red` is SGR 91 there. For the red the user's terminal profile
+defines, use `Color.ansi(.red)`.
+
 ### Terminal Colors (ANSI)
 
 ``Color/ansi(_:)`` names one of the terminal's sixteen colour slots:
