@@ -4928,3 +4928,58 @@ and a menu picker. On an unreported page the caps are the tier at rest and when 
 and the accent with no run when focused. An accent of `Color.default` gives the same caps
 on an RGB page, whether or not the terminal has reported. A reported page gives the face
 and two runs again, and every built-in palette's caps rest in its face and breathe.
+
+## 79. A focus breath over a colour the terminal decides (2026-09-15)
+
+A focus breath runs between a dim end, the colour composited toward what it is drawn on,
+and a bright end: the colour itself (`Color.breathEnds(dimmedTo:over:)`, §29), or for a
+fill its half-strength tint (`Palette.accentFillPulse(over:)`). Where the colour or its
+ground has no RGB, the composite snaps (§75). Every dim end sits below ½ (0.20, 0.22),
+so it was the ground itself, and the bright end was the colour. The breath was a hard
+blink between the page and the mark: a List or Table cursor row between the page and a
+solid accent, and a radio ●, a toggle's brackets, a stepper's or slider's arrows, a
+plain button's ● and a caret between nothing and full strength. Each went to the run
+loop as a run, which kept the cursor clock ticking.
+
+**The rule.** Where either side has no RGB, both functions return the bright end twice.
+A cycle between equal ends is still, but `SelectionEmphasisCycle.isAnimating` counts
+frames, and a focused pulse has sixteen whatever colours they get. So the producers that
+hold the two ends ask `isAnimating(dim:bright:)` before they leave a run:
+- the `run(dim:bright:…)` overloads (the radio ●, a toggle's indicator, the stepper's and
+  slider's arrows, a menu row's bar, the DatePicker's block, a colour swatch's ●);
+- `RowBackground`, for the List's and the Table's cursor rows;
+- the plain button's ● prefix, for both kinds of label, and `BreathingLabel`, for a label
+  that breathes itself (a link, a plain button that indicates focus in its label);
+- the caret's cycle, shared by TextField, SecureField and TextEditor, where a pulse
+  between equal ends is one state. A blink still blinks: its states differ in whether
+  the caret shows.
+
+A run built from an `AnimatedColor` (a focus section's ●, a resize grip,
+`.border(AnimatedColor)`), a drop-down's rows, the split divider's cells and a scrollbar
+already drop a cycle whose frames are all one picture.
+
+**What does not go through `breathEnds`.** These pairs are two different colours by
+design, so the rule does not reach them. Where a side has no RGB, their `lerp` snaps at
+½ and they still alternate between their two ends (from the code; not tested):
+- `ButtonCapCycle` (a standard button's and a picker's caps): face to accent. §78's own
+  guard already holds the accent there.
+- `SwitchTrackBreath`: the track dimmed over the page, to the accent or the lifted off
+  track.
+- `ActiveChipCycle`: a tab's resting label to its floored accent.
+- `NavigationCrumbButtonStyle`: the resting rung to the accent, both spent.
+- `ScrollbarPulse`: the separated accent to the pulse lift.
+- `scrollIndicatorBreath`: the tertiary tier to the accent.
+- `SwatchGrid.markEnds` and `Color256Grid.cursorMarkEnds`: the swatch to its contrasting
+  label.
+
+**What a built-in view sees: nothing.** Every built-in palette states RGB roles, so both
+functions return what they did, byte for byte. A translucent colour below ½ spends to its
+ground (rule 9), so its steady breath is the ground; no built-in palette has one.
+
+`SteadyBreathOnUnmeasurableColourTests` (TUIkitTests) pins it for a List, a standard and
+a plain button, a Toggle, a radio group, a Stepper, a Slider and a TextField, over an
+accent of the terminal's foreground and over the terminal's page, both unreported. Each
+leaves no run and reads no clock, draws its `.selectionIndicatorStyle(.none)` picture at
+every point of the cycle, and gives the run loop nothing to wake for. Reported, the same
+controls breathe. `BlendEndsTests` (TUIkitStylingTests) pins both pairs, and that RGB
+pairs are the composite and the spent colour, as before.

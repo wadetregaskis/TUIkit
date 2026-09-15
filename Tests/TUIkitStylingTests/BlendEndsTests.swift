@@ -265,21 +265,70 @@ struct BlendEndsTests {
         }
     }
 
-    /// `restingControlFace` (0.20), `focusBackground` (0.30) and the pulse's dim end
-    /// (0.22) sit under half, so over a page with no RGB each is the page; the fill
-    /// pulse's bright end is exactly half, and the tie keeps the accent.
-    @Test("The palette's derived tints over a page with no RGB are the page or the accent")
+    /// `restingControlFace` (0.20) and `focusBackground` (0.30) sit under half, so over a
+    /// page with no RGB each is the page. Neither pulse can breathe there, so both hold
+    /// their bright end: the accent, since the fill's bright end is exactly half and the
+    /// tie keeps it.
+    @Test("Over a page with no RGB the derived tints are the page and both pulses hold the accent")
     func derivedTintsOverAnUnmeasurablePage() {
         let palette = TerminalPagePalette()
         TerminalColors.withCurrent(.unknown) {
             #expect(palette.restingControlFace == palette.background)
             #expect(palette.focusBackground == palette.background)
             let fill = palette.accentFillPulse()
-            #expect(fill.dim == palette.background)
+            #expect(fill.dim == palette.accent)
             #expect(fill.bright == palette.accent)
             let mark = palette.accentPulse()
-            #expect(mark.dim == palette.background)
+            #expect(mark.dim == palette.accent)
             #expect(mark.bright == palette.accent)
+        }
+    }
+
+    // MARK: - Breath ends
+
+    /// A breath's dim end is a composite toward its ground, which over a side with no RGB
+    /// snaps to the ground, so the breath would blink between the ground and the colour.
+    @Test("A breath with a side that has no RGB holds its bright end")
+    func breathWithoutRGBHoldsTheBrightEnd() {
+        let page = Color.rgb(20, 20, 30)
+        TerminalColors.withCurrent(.unknown) {
+            for colour in [Color.default, Self.ink] {
+                let ends = colour.breathEnds(dimmedTo: 0.35, over: page)
+                #expect(ends.dim == colour && ends.bright == colour, "\(colour): \(ends)")
+            }
+            let accent = Color.rgb(0, 122, 255)
+            let overPaper = accent.breathEnds(dimmedTo: 0.22, over: Self.paper)
+            #expect(overPaper.dim == accent && overPaper.bright == accent, "\(overPaper)")
+            // A translucent colour spends its alpha against the ground first: at ½ or more
+            // it is the colour, below that the ground, and both ends agree either way.
+            let heavy = Color.default.opacity(0.6).breathEnds(dimmedTo: 0.35, over: page)
+            #expect(heavy.dim == Color.default && heavy.bright == Color.default, "\(heavy)")
+            let light = Color.default.opacity(0.4).breathEnds(dimmedTo: 0.35, over: page)
+            #expect(light.dim == page && light.bright == page, "\(light)")
+        }
+    }
+
+    /// Measurable on both sides, the ends are what they were: a reported terminal colour
+    /// dims to RGB, and RGB pairs are byte for byte the composite and the spent colour.
+    @Test("A breath whose sides both measure keeps its dim end")
+    func measuredBreathKeepsItsDimEnd() {
+        TerminalColors.withCurrent(Self.reported) {
+            let ends = Self.ink.breathEnds(dimmedTo: 0.35, over: .rgb(20, 20, 30))
+            #expect(ends.bright == Self.ink)
+            #expect(Self.isRGB(ends.dim), "\(ends)")
+            let fill = TerminalPagePalette().accentFillPulse()
+            #expect(fill.dim != fill.bright && Self.isRGB(fill.dim), "\(fill)")
+        }
+        let pairs = [
+            (Color.rgb(0, 122, 255), Color.rgb(20, 20, 30)),
+            (Color.rgb(200, 40, 40).opacity(0.5), Color.rgb(250, 250, 250)),
+        ]
+        for (colour, ground) in pairs {
+            for factor in [0.2, 0.22, 0.35] {
+                let ends = colour.breathEnds(dimmedTo: factor, over: ground)
+                #expect(ends.dim == colour.opacity(factor, over: ground), "\(colour) at \(factor)")
+                #expect(ends.bright == colour.spendingAlpha(over: ground), "\(colour) at \(factor)")
+            }
         }
     }
 }

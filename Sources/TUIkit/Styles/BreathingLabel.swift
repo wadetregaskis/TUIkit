@@ -40,7 +40,9 @@ enum BreathingLabel {
         let breath = indicating ? cycle.colors(dim: dim, bright: bright) : []
         let now = breath.isEmpty ? resting : breath[cycle.step % breath.count]
         var buffer = FrameBuffer(lines: [drawn(now)])
-        if !isMeasuring, indicating,
+        // The ends asked, because `run(colors:)` sees only the frames: equal ends (a
+        // label whose ink or surface has no RGB) are a still label.
+        if !isMeasuring, indicating, cycle.isAnimating(dim: dim, bright: bright),
             let run = cycle.run(colors: breath, offsetX: 0, offsetY: 0, draw: drawn)
         {
             buffer.animatedCells = [run]
@@ -77,7 +79,9 @@ enum BreathingLabel {
         // label drew at full strength, and how a `.modal` presented from one
         // took the keyboard and never painted.
         var buffer = render(now)
-        guard !isMeasuring, indicating, cycle.isAnimating else { return buffer }
+        guard !isMeasuring, indicating, cycle.isAnimating(dim: ends.dim, bright: ends.bright) else {
+            return buffer
+        }
         // One run per ROW: a run names a rectangle of cells on ONE line, and a
         // label may wrap onto several. Appended after the label's own runs, so
         // both stay on the buffer: the label's keep a spinner in it alive when

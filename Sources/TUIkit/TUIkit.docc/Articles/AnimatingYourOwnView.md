@@ -95,10 +95,13 @@ struct FocusDot: View, Renderable {
 ```
 
 ``SelectionEmphasisCycle/run(_:dim:bright:offsetX:offsetY:)`` returns `nil` when
-the cycle does not actually animate — an unfocused element, or a
-`.selectionIndicatorStyle(.none)`. That is not an omission to paper over: a
-still picture was already drawn by the ordinary render, and a run would have the
-loop rewrite it on every tick to no visible effect.
+the cycle does not actually animate — an unfocused element, a
+`.selectionIndicatorStyle(.none)`, or a `dim` and `bright` that are one colour.
+``Color/breathEnds(dimmedTo:over:)`` returns such a pair where the colour or its
+ground has no RGB (``Color/default``, or a colour of the terminal's own that it
+has not reported). That is not an omission to paper over: a still picture was
+already drawn by the ordinary render, and a run would have the loop rewrite it on
+every tick to no visible effect.
 
 For an element whose appearance is more than a foreground colour, the
 `draw:` overloads hand you each frame's colour (or the whole

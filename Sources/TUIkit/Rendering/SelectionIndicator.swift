@@ -271,6 +271,14 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// element, is a single frame: a still picture, not an animation.
     public var isAnimating: Bool { frames.count > 1 }
 
+    /// Whether a breath between `dim` and `bright` moves: this cycle animates, and the
+    /// ends differ. `isAnimating` counts frames, which equal ends colour alike; they are
+    /// what `Color.breathEnds(dimmedTo:over:)` and `Palette.accentFillPulse(over:)` give
+    /// where a side has no RGB, and a run of one picture holds the clock open for nothing.
+    func isAnimating(dim: Color, bright: Color) -> Bool {
+        isAnimating && dim != bright
+    }
+
     /// Whether this cycle describes a focused element.
     ///
     /// Worth asking separately from ``isAnimating`` because a still cycle sits
@@ -322,11 +330,14 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     }
 
     /// A run that breathes a single glyph at `(offsetX, offsetY)`, or `nil`
-    /// when this cycle is still.
+    /// when this cycle is still or `dim` and `bright` are the same colour.
     ///
     /// The nil case is not an omission to paper over: a still glyph was already
     /// drawn by the ordinary render, and a run would have the loop rewrite it
-    /// on every tick to no visible effect. Only movement earns a run.
+    /// on every tick to no visible effect. Only movement earns a run, and a breath
+    /// between a colour and itself does not move, however many frames the cycle
+    /// has. ``Color/breathEnds(dimmedTo:over:)`` returns such a pair where the
+    /// colour or its ground has no RGB.
     ///
     /// The run's width is the glyph's own width in *cells*, which is what
     /// ``AnimatedCellRun`` promises and not always what the glyph's character
@@ -349,13 +360,16 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// colour it is handed; the run's width is taken from the first frame, so
     /// what is replayed is measured from what is actually drawn rather than
     /// from the caller's belief about its width.
+    ///
+    /// `nil`, as for a glyph, when this cycle is still or `dim` and `bright` are
+    /// the same colour.
     @MainActor
     public func run(
         dim: Color, bright: Color, offsetX: Int, offsetY: Int, draw: (Color) -> String
     ) -> AnimatedCellRun? {
-        // Asked BEFORE the colours are built: a still cycle earns no run, and
-        // the ramp built for one would be thrown away with it.
-        guard isAnimating else { return nil }
+        // Asked BEFORE the colours are built: a still cycle, or one between two equal
+        // ends, earns no run, and the ramp built for one would be thrown away with it.
+        guard isAnimating(dim: dim, bright: bright) else { return nil }
         // `colors(dim:bright:)`, not `color(dim:bright:)` per frame. The latter
         // BUILDS the pulse ramp, so calling it from inside the per-frame
         // closure rebuilt the identical ramp once per frame of the cycle —
@@ -371,6 +385,10 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// ends of the same row. Going through `run(dim:bright:…)` twice would
     /// build the same ramp twice; `colors(dim:bright:)` builds it once and this
     /// spends it as often as the caller likes.
+    ///
+    /// It never sees the two ends, so it cannot tell a breath of one colour from a
+    /// real one: a caller whose ends can be equal asks `isAnimating(dim:bright:)`
+    /// first, as `BreathingLabel` does.
     @MainActor
     func run(
         colors: [Color], offsetX: Int, offsetY: Int, draw: (Color) -> String

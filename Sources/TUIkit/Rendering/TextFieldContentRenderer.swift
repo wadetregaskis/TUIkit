@@ -803,6 +803,16 @@ struct TextFieldContentRenderer {
             return CursorCycle(states: [(true, dim)], step: 0, timing: forced ?? .cursorTick)
         }
         let layout = CursorTimer.cycleLayout(of: animation, speed: speed)
+        // A pulse between two equal ends is a still caret. They are equal where the
+        // caret's colour or the field has no RGB (`breathEnds` holds the bright end), and
+        // a cycle of identical states would leave a run repainting what the render drew.
+        // A blink still blinks: its states differ in whether the caret shows.
+        if animation == .pulse {
+            let ends = baseColor.breathEnds(dimmedTo: ViewConstants.focusPulseMin, over: surface)
+            if ends.dim == ends.bright {
+                return CursorCycle(states: [(true, ends.bright)], step: 0, timing: forced ?? .cursorTick)
+            }
+        }
         let states = (0..<layout.frameCount).map { frame in
             caretState(
                 atFrame: frame, of: layout.frameCount, baseColor: baseColor, over: surface,

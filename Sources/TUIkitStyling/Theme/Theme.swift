@@ -897,17 +897,23 @@ extension Palette {
     /// the accent has nothing on top of it and can go all the way.
     ///
     /// When the accent or the ground has no RGB (``Color/default``, or a colour of
-    /// the terminal's own that it has not reported), neither end can be mixed. For
-    /// an opaque accent the dim end, at 22%, is the ground, and the bright end, at
-    /// exactly half, is the accent; ``accentPulse(over:)``'s ends are the same two
-    /// colours. A translucent accent's own alpha counts toward the half.
+    /// the terminal's own that it has not reported), neither end can be mixed, and
+    /// both are the bright one. For an opaque accent that is the accent: the bright
+    /// end is exactly half, and a blend with such a side keeps the colour at half.
+    /// Mixed, the dim end at 22% would be the ground itself, and the fill would blink
+    /// between the page and a solid accent; held, it is still, and leaves no run.
+    /// ``accentPulse(over:)`` holds its bright end the same way, through
+    /// ``Color/breathEnds(dimmedTo:over:)``. A translucent accent's own alpha counts
+    /// toward the half, so one fainter than that holds the ground.
     ///
     /// - Parameter surface: What the fill sits on, when that is not the page.
     public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
         let ground = surface ?? background
-        return (
-            accent.opacity(ViewConstants.focusPulseMin, over: ground),
-            accent.opacity(ViewConstants.focusPulseMax, over: ground))
+        let bright = accent.opacity(ViewConstants.focusPulseMax, over: ground)
+        // `Color.breathEnds(dimmedTo:over:)`'s rule for a side with no RGB, applied to
+        // this pair's own bright end, which stops short of the accent.
+        guard accent.rgbComponents != nil, ground.rgbComponents != nil else { return (bright, bright) }
+        return (accent.opacity(ViewConstants.focusPulseMin, over: ground), bright)
     }
 }
 

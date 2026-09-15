@@ -678,7 +678,9 @@ private struct _ButtonStyleBody: View, Renderable {
         {
             buffer.opacityRegions.append(claim)
         }
-        if cycle.isAnimating, !context.isMeasuring {
+        // Between the two ends, not only the frames: where the accent or the surface has
+        // no RGB they are one colour, and sixteen prefixes of it are a still picture.
+        if cycle.isAnimating(dim: ends.dim, bright: ends.bright), !context.isMeasuring {
             buffer.animatedCells = [
                 AnimatedCellRun(
                     offsetX: 0, offsetY: 0,
@@ -813,7 +815,8 @@ private struct _ButtonStyleBody: View, Renderable {
             buffer.overlays = body.shiftedOverlays(byX: BorderRenderer.focusIndicatorWidth, y: 0)
             buffer.hitTestRegions = body.shiftedHitTestRegions(
                 byX: BorderRenderer.focusIndicatorWidth, y: 0)
-            if cycle.isAnimating {
+            // The ends asked too, as for a string label: one colour is a still prefix.
+            if cycle.isAnimating(dim: ends.dim, bright: ends.bright) {
                 buffer.animatedCells += body.lines.indices.map { row in
                     AnimatedCellRun(
                         offsetX: 0, offsetY: row,

@@ -62,19 +62,22 @@ enum RowBackground {
     /// Every colour of the pulse, in cycle order — or `nil` when this background
     /// does not animate (a still picture earns no runs: the ordinary render
     /// already drew it, and replaying it would emit bytes per tick to no
-    /// visible effect).
+    /// visible effect). A pulse between two equal ends is still too, whatever its
+    /// cycle: `accentFillPulse` returns one where the accent or the page has no RGB.
     @MainActor
     var pulseColors: [Color]? {
-        guard case .pulsing(let cycle, let dim, let bright) = self, cycle.isAnimating else {
-            return nil
-        }
+        guard case .pulsing(let cycle, let dim, let bright) = self,
+            cycle.isAnimating(dim: dim, bright: bright)
+        else { return nil }
         return cycle.colors(dim: dim, bright: bright)
     }
 
     /// The frame duration and clock ``pulseColors`` step on, or `nil` exactly when
     /// that is `nil`: what a run built from those colours is built with.
     var pulseTiming: IndicatorCycleTiming? {
-        guard case .pulsing(let cycle, _, _) = self, cycle.isAnimating else { return nil }
+        guard case .pulsing(let cycle, let dim, let bright) = self,
+            cycle.isAnimating(dim: dim, bright: bright)
+        else { return nil }
         return cycle.timing
     }
 

@@ -697,12 +697,29 @@ extension Color {
     /// debug trap — and no static claim could describe the run, because its alpha
     /// genuinely differed per phase.
     ///
+    /// ## A side with no RGB
+    ///
+    /// Where this colour or `ground` has no RGB (``Color/default``, or the
+    /// terminal's own foreground or background before it has reported them), both
+    /// ends are the bright one. The dim end is a composite, and a composite with such
+    /// a side snaps to the heavier end (see ``opacity(_:over:)``), so at any factor
+    /// below ½ the dim end would be the ground itself: not a quieter version of the
+    /// mark, but no mark at all, and the breath a blink between the two. Held at its
+    /// bright end instead, the breath is a still picture, and a focus cycle between
+    /// two equal ends leaves nothing for the run loop to replay.
+    ///
     /// - Parameters:
     ///   - factor: How far the quiet end recedes toward `ground` (0–1).
     ///   - ground: What the breath is drawn on — the enclosing surface, not the
     ///     page, wherever a container has painted one.
+    /// - Returns: The two ends, or the bright end twice where either side has no RGB.
     public func breathEnds(dimmedTo factor: Double, over ground: Color) -> (dim: Self, bright: Self) {
-        (dim: opacity(factor, over: ground), bright: spendingAlpha(over: ground))
+        let bright = spendingAlpha(over: ground)
+        // Asked of the two sides, not of the dim end: a dim end that happens to equal the
+        // ground is a real, measured breath toward it. A semantic side has no RGB either,
+        // and its composites were already `self` at both ends, so nothing moves for it.
+        guard rgbComponents != nil, ground.rgbComponents != nil else { return (bright, bright) }
+        return (dim: opacity(factor, over: ground), bright: bright)
     }
 
     /// This colour mixed with another — SwiftUI's spelling of ``lerp(_:_:phase:)``.

@@ -3111,7 +3111,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 lines: lines(over: nil).map { String(repeating: " ", count: $0.strippedLength) },
                 pulseFrames: nil, childRuns: [])
         }
-        guard case .pulsing(let cycle, let dim, let bright) = background, cycle.isAnimating else {
+        // Two equal ends are a still row, however many frames the cycle has — see
+        // `RowBackground.pulseColors`.
+        guard case .pulsing(let cycle, let dim, let bright) = background,
+            cycle.isAnimating(dim: dim, bright: bright)
+        else {
             let fill = background.claimableFill
             return RenderedRow(
                 lines: lines(over: fill?.opaqueSpelling ?? background.colorNow),
