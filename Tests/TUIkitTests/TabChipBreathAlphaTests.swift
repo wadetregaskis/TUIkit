@@ -122,7 +122,7 @@ struct TabChipBreathAlphaTests {
         let surface = palette.liftedBackground.resolve(with: palette)
         return ActiveChipCycle(
             surface: surface,
-            restingLabel: _TabViewCore<Int>.contrastingForeground(for: surface, palette: palette),
+            restingLabel: ContrastingLabel.on(surface, palette: palette),
             palette: palette, isFocused: true, context: context)
     }
 }

@@ -319,7 +319,8 @@ struct _Color256GridCore: View, Renderable {
             cellWidth: cellWidth, availableWidth: context.availableWidth)
         let (lines, cells) = Self.renderGrid(
             cursor: handler.cursor, indicator: indicator,
-            cellWidth: cellWidth, showNumbers: showNumbers, arrangement: arrangement)
+            cellWidth: cellWidth, showNumbers: showNumbers,
+            palette: context.environment.palette, arrangement: arrangement)
         handler.placements = cells
 
         var buffer = FrameBuffer(lines: lines)
@@ -328,7 +329,8 @@ struct _Color256GridCore: View, Renderable {
         if !context.isMeasuring, cycle.isAnimating,
             let placement = cells.first(where: { $0.index == handler.cursor })
         {
-            let cursorEnds = Self.cursorMarkEnds(forIndex: placement.index)
+            let cursorEnds = Self.cursorMarkEnds(
+                forIndex: placement.index, palette: context.environment.palette)
             buffer.animatedCells = [
                 AnimatedCellRun(
                     offsetX: placement.x, offsetY: placement.y, width: cellWidth,
@@ -342,7 +344,8 @@ struct _Color256GridCore: View, Renderable {
                     ).map {
                         Self.cellText(
                             index: placement.index, cellWidth: cellWidth,
-                            mark: (color: $0, isBold: cycle.isFocused), showNumbers: showNumbers)
+                            mark: (color: $0, isBold: cycle.isFocused), showNumbers: showNumbers,
+                            palette: context.environment.palette)
                     },
                     frameTicks: cycle.frameTicks, clock: cycle.clock)
             ]
@@ -427,13 +430,14 @@ struct _Color256GridCore: View, Renderable {
     /// mid-grey, and (when focused) animates per ``View/selectionIndicatorStyle(_:)``.
     static func renderGrid(
         cursor: Int, indicator: SelectionEmphasis, cellWidth: Int, showNumbers: Bool,
+        palette: any Palette,
         arrangement: Palette256Layout.Arrangement = Palette256Layout.preferred
     ) -> (lines: [String], cells: [Palette256Layout.Cell]) {
         let rows = Palette256Layout.rows(arrangement)
         let gridWidth = (rows.map(\.count).max() ?? 0) * cellWidth
         // Resolved once, outside the loop: one cell in the whole grid is the
         // cursor, and its two ends depend only on which swatch that is.
-        let ends = cursorMarkEnds(forIndex: cursor)
+        let ends = cursorMarkEnds(forIndex: cursor, palette: palette)
         let cursorMark = (
             color: indicator.color(dim: ends.dim, bright: ends.bright),
             isBold: indicator.isFocused)
@@ -451,7 +455,8 @@ struct _Color256GridCore: View, Renderable {
                 if let index = entry {
                     line += cellText(
                         index: index, cellWidth: cellWidth,
-                        mark: index == cursor ? cursorMark : nil, showNumbers: showNumbers)
+                        mark: index == cursor ? cursorMark : nil, showNumbers: showNumbers,
+                        palette: palette)
                     cells.append(Palette256Layout.Cell(index: index, x: x, y: y, width: cellWidth))
                 } else {
                     line += String(repeating: " ", count: cellWidth)  // gap
@@ -466,17 +471,19 @@ struct _Color256GridCore: View, Renderable {
     /// The two ends the cursor swatch's mark breathes between: the swatch's own
     /// colour, and the tone that reads on it.
     ///
-    /// Named apart from ``cellText(index:cellWidth:mark:showNumbers:)`` so a
+    /// Named apart from ``cellText(index:cellWidth:mark:showNumbers:palette:)`` so a
     /// caller drawing the whole cycle can hand them to
     /// `SelectionEmphasisCycle.colors(dim:bright:)` ONCE. `cellText` used to
     /// take a `SelectionEmphasis` and resolve the mark itself, which rebuilt
     /// the pulse ramp for every frame of the run.
-    static func cursorMarkEnds(forIndex index: Int) -> (dim: Color, bright: Color) {
+    static func cursorMarkEnds(forIndex index: Int, palette: any Palette) -> (dim: Color, bright: Color) {
         // `clamping`, because this is reached with a CURSOR rather than with a
         // cell index off the layout table. The handler keeps its cursor in
         // 0...255, but this is a static entry point and a plain `UInt8(_:)`
-        // would trap rather than draw something wrong.
-        (dim: .palette(UInt8(clamping: index)), bright: contrast(forIndex: index))
+        // would trap rather than draw something wrong. Both ends are the one
+        // clamped swatch.
+        let swatch = Color.palette(UInt8(clamping: index))
+        return (dim: swatch, bright: ContrastingLabel.on(swatch, palette: palette))
     }
 
     /// The rendered content of one swatch: the selection check, the palette index
@@ -487,10 +494,11 @@ struct _Color256GridCore: View, Renderable {
     /// parameter rather than an `isCursor` flag beside a colour, so the two
     /// cannot disagree.
     static func cellText(
-        index: Int, cellWidth: Int, mark: (color: Color, isBold: Bool)?, showNumbers: Bool
+        index: Int, cellWidth: Int, mark: (color: Color, isBold: Bool)?, showNumbers: Bool,
+        palette: any Palette
     ) -> String {
         let color = Color.palette(UInt8(index))
-        let foreground = contrast(forIndex: index)
+        let foreground = ContrastingLabel.on(color, palette: palette)
         if let mark {
             // A check, centred on the swatch, in a contrasting tone so it shows on
             // any colour; when focused it animates (per `.selectionIndicatorStyle`)
@@ -512,13 +520,6 @@ struct _Color256GridCore: View, Renderable {
         let left = (width - length) / 2
         return String(repeating: " ", count: left) + text
             + String(repeating: " ", count: width - length - left)
-    }
-
-    /// Black or white, whichever reads better on palette colour `index`.
-    static func contrast(forIndex index: Int) -> Color {
-        let c = Color.palette(UInt8(index)).rgbComponents ?? (0, 0, 0)
-        let luminance = 0.299 * Double(c.red) + 0.587 * Double(c.green) + 0.114 * Double(c.blue)
-        return luminance > 140 ? .rgb(0, 0, 0) : .rgb(255, 255, 255)
     }
 
     /// The palette index of `color` if it is a 256-palette colour, else nil.

@@ -135,7 +135,8 @@ struct Color256GridRenderTests {
     @Test("Renders the sectioned grid with a contrasting bullet on the cursor cell")
     func rendersGrid() {
         let (focused, cells) = _Color256GridCore.renderGrid(
-            cursor: 16, indicator: .steady(isFocused: true), cellWidth: 2, showNumbers: false)
+            cursor: 16, indicator: .steady(isFocused: true), cellWidth: 2, showNumbers: false,
+            palette: SystemPalette(.green))
         #expect(focused.count == Palette256Layout.rows.count)
         #expect(cells.count == 256)
         let nonEmpty = focused.filter { !$0.isEmpty }
@@ -149,7 +150,8 @@ struct Color256GridRenderTests {
     func numbersMode() {
         // cursor 0 keeps 16/255 as numbered (non-cursor) cells.
         let (lines, _) = _Color256GridCore.renderGrid(
-            cursor: 0, indicator: .steady(isFocused: true), cellWidth: 5, showNumbers: true)
+            cursor: 0, indicator: .steady(isFocused: true), cellWidth: 5, showNumbers: true,
+            palette: SystemPalette(.green))
         let joined = lines.joined()
         #expect(joined.contains("16"), "an index is printed in the swatch")
         #expect(joined.contains("255"), "the last greyscale index is printed")
@@ -161,9 +163,9 @@ struct Color256GridRenderTests {
 
     @Test("Contrast picks black on light cells and white on dark cells")
     func contrast() {
-        // Cube index 16 is (0,0,0) → needs a light marker; 231 is (255,255,255) → dark.
-        #expect(_Color256GridCore.contrast(forIndex: 16) == .rgb(255, 255, 255))
-        #expect(_Color256GridCore.contrast(forIndex: 231) == .rgb(0, 0, 0))
+        // A black surface needs a light marker; a white one, a dark marker.
+        #expect(ContrastingLabel.on(.rgb(0, 0, 0), palette: SystemPalette(.green)) == .rgb(255, 255, 255))
+        #expect(ContrastingLabel.on(.rgb(255, 255, 255), palette: SystemPalette(.green)) == .rgb(0, 0, 0))
     }
 
     @Test("The grid highlights the nearest cell for a non-palette colour, not black")

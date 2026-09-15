@@ -606,7 +606,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let alignment = context.environment.tabViewHeaderAlignment
         let chip = ActiveChipCycle(
             surface: surface,
-            restingLabel: Self.contrastingForeground(for: surface, palette: palette),
+            restingLabel: ContrastingLabel.on(surface, palette: palette),
             palette: palette, isFocused: isFocused, context: context)
         let (inactiveFg, inactiveBg) = stripLabelColors(palette: palette)
 
@@ -887,7 +887,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let alignment = context.environment.tabViewHeaderAlignment
         let chip = ActiveChipCycle(
             surface: surface,
-            restingLabel: Self.contrastingForeground(for: surface, palette: palette),
+            restingLabel: ContrastingLabel.on(surface, palette: palette),
             palette: palette, isFocused: isFocused, context: context)
 
         // Size to the widest tab; the strip wraps per the header-wrap mode (folded
@@ -976,13 +976,6 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             for: StateStorage.StateKey(
                 identity: context.identity, propertyIndex: StateIndex.hoveredTab),
             default: nil)
-    }
-
-    /// Black or white, whichever reads better on `color`.
-    static func contrastingForeground(for color: Color, palette: any Palette) -> Color {
-        let c = color.resolve(with: palette).rgbComponents ?? (0, 0, 0)
-        let luminance = 0.299 * Double(c.red) + 0.587 * Double(c.green) + 0.114 * Double(c.blue)
-        return luminance > 140 ? .rgb(0, 0, 0) : .rgb(255, 255, 255)
     }
 }
 

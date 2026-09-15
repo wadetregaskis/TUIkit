@@ -22,7 +22,7 @@ struct ActiveChipCycle {
     let surface: Color
 
     /// Where the active label rests: readable on the chip, and quiet. Black or white
-    /// for the surface (`contrastingForeground`) — never a palette slot, so it has no
+    /// for the surface (`ContrastingLabel.on`) — never a palette slot, so it has no
     /// alpha of its own, which is what decides how ``labelBright`` treats one.
     let labelDim: Color
 

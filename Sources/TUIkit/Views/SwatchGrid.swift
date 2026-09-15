@@ -253,7 +253,7 @@ struct _SwatchGridCore: View, Renderable {
     /// take a `SelectionEmphasis` and resolve the mark itself, which rebuilt
     /// the pulse ramp for every frame of the run.
     static func markEnds(for color: Color, palette: any Palette) -> (dim: Color, bright: Color) {
-        (dim: color.resolve(with: palette), bright: Self.contrast(for: color, palette: palette))
+        (dim: color.resolve(with: palette), bright: ContrastingLabel.on(color, palette: palette))
     }
 
     /// One swatch: the colour as a background, with a check on the selected cell.
@@ -284,13 +284,6 @@ struct _SwatchGridCore: View, Renderable {
         let left = (width - length) / 2
         return String(repeating: " ", count: left) + text
             + String(repeating: " ", count: width - length - left)
-    }
-
-    /// Black or white, whichever reads better on `color`.
-    static func contrast(for color: Color, palette: any Palette) -> Color {
-        let c = color.resolve(with: palette).rgbComponents ?? (0, 0, 0)
-        let luminance = 0.299 * Double(c.red) + 0.587 * Double(c.green) + 0.114 * Double(c.blue)
-        return luminance > 140 ? .rgb(0, 0, 0) : .rgb(255, 255, 255)
     }
 
     /// The index of the entry that best matches `color`: an exact match if the
