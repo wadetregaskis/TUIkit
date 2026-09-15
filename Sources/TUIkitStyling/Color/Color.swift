@@ -120,27 +120,31 @@ public struct Color: Sendable, Hashable {
         case palette256(UInt8)
         case rgb(red: UInt8, green: UInt8, blue: UInt8)
         case semantic(SemanticColor)
-        /// The terminal's own default foreground, SGR 39, carrying the RGB it
-        /// paints.
+        /// The terminal's own default foreground, SGR 39.
         ///
-        /// As a foreground it is 39 at every depth that has colour, whatever the
-        /// components say: the terminal paints its own colour, and the components
-        /// are what a blend, a contrast check or a surface walk measures. That is
-        /// the difference from `Color.default`, which is also 39 but measures as
+        /// As a foreground it is 39 at every depth that has colour: the terminal
+        /// paints its own colour. It measures as the RGB the terminal reported for
+        /// that colour (OSC 10), which is what a blend, a contrast check or a
+        /// surface walk reads. Until the terminal has reported it, it measures as
+        /// nothing: `rgbComponents` is nil, and no colour is guessed. That is the
+        /// difference from `Color.default`, which is also 39 but measures as
         /// xterm's grey 229.
         ///
-        /// As a BACKGROUND no SGR names the default foreground, so it is spelled as
-        /// its RGB, quantised for the depth as a `.rgb` of the same components is.
+        /// As a BACKGROUND no SGR names the default foreground. Once reported it is
+        /// spelled as that RGB, quantised for the depth as a `.rgb` of the same
+        /// components is. Until then there is nothing to spell, so it is the
+        /// background slot's own default, 49.
         ///
         /// Downsampling returns it unchanged, because `downsampledToPalette256()`
         /// does not know which slot a colour is for; the emitter makes the choice.
         /// So something measuring it as a fill at 256 or 16 colours reads the exact
-        /// RGB where the terminal is shown the quantised one.
-        case terminalForeground(red: UInt8, green: UInt8, blue: UInt8)
-        /// The terminal's own default background, SGR 49, carrying the RGB it
-        /// paints: 49 as a background, its quantised RGB as a foreground. The twin
-        /// of `terminalForeground(red:green:blue:)`.
-        case terminalBackground(red: UInt8, green: UInt8, blue: UInt8)
+        /// reported RGB where the terminal is shown the quantised one.
+        case terminalForeground
+        /// The terminal's own default background, SGR 49: 49 as a background, and
+        /// as a foreground the RGB the terminal reported for it (OSC 11),
+        /// quantised, or 39 until it has reported one. It measures as that RGB, or
+        /// as nothing. The twin of `terminalForeground`.
+        case terminalBackground
     }
 
     /// A colour that is fully transparent — SwiftUI's `Color.clear`.
@@ -369,14 +373,17 @@ public struct Color: Sendable, Hashable {
     /// - `.rgb` — returned directly
     /// - `.standard` / `.bright` — mapped to xterm standard RGB values
     /// - `.palette256` — mapped to xterm 256-color palette RGB values
-    /// - `.terminalForeground` / `.terminalBackground` — the RGB they carry
+    /// - `.terminalForeground` / `.terminalBackground` — the RGB the terminal
+    ///   reported for its default foreground or background, or nil until it has
     /// - `.semantic` — returns nil (must be resolved first via ``resolve(with:)``)
     public var rgbComponents: (red: UInt8, green: UInt8, blue: UInt8)? {
         switch value {
-        case .rgb(let red, let green, let blue),
-            .terminalForeground(let red, let green, let blue),
-            .terminalBackground(let red, let green, let blue):
+        case .rgb(let red, let green, let blue):
             return (red, green, blue)
+        case .terminalForeground:
+            return TerminalColors.current.foreground.map { (red: $0.red, green: $0.green, blue: $0.blue) }
+        case .terminalBackground:
+            return TerminalColors.current.background.map { (red: $0.red, green: $0.green, blue: $0.blue) }
         case .standard(let ansi):
             return ansi.rgbValues
         case .bright(let ansi):

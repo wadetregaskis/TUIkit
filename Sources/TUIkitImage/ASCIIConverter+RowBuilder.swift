@@ -281,19 +281,20 @@ struct ANSIRowBuilder {
         switch color.value {
         case .rgb(let red, let green, let blue):
             appendTriple(introducer: background ? 48 : 38, red: red, green: green, blue: blue)
-        // The terminal's own colour: 39 or 49 in its own slot and its triple in the
-        // other, exactly as `ASCIIPalette.sgrParameters(at:background:)` spells it.
-        case .terminalForeground(let red, let green, let blue):
-            if background {
-                appendTriple(introducer: 48, red: red, green: green, blue: blue)
+        // The terminal's own colour: 39 or 49 in its own slot, and in the other the
+        // triple the terminal reported or that slot's default while there is none,
+        // exactly as `ASCIIPalette.sgrParameters(at:background:)` spells it.
+        case .terminalForeground:
+            if background, let ink = color.rgbComponents {
+                appendTriple(introducer: 48, red: ink.red, green: ink.green, blue: ink.blue)
             } else {
-                appendNumber(39)
+                appendNumber(background ? 49 : 39)
             }
-        case .terminalBackground(let red, let green, let blue):
-            if background {
-                appendNumber(49)
+        case .terminalBackground:
+            if !background, let paper = color.rgbComponents {
+                appendTriple(introducer: 38, red: paper.red, green: paper.green, blue: paper.blue)
             } else {
-                appendTriple(introducer: 38, red: red, green: green, blue: blue)
+                appendNumber(background ? 49 : 39)
             }
         case .palette256(let index):
             appendNumber(background ? 48 : 38)

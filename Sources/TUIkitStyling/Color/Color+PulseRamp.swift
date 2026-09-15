@@ -118,8 +118,12 @@ extension Color {
     /// entry, or one of the achromatic ANSI 16.
     var isAchromatic: Bool {
         switch value {
-        case .rgb(let red, let green, let blue), .terminalForeground(let red, let green, let blue),
-            .terminalBackground(let red, let green, let blue):
+        case .rgb(let red, let green, let blue):
+            return red == green && green == blue
+        case .terminalForeground, .terminalBackground:
+            // The RGB the terminal reported. One it has not reported cannot be
+            // measured, so it is not known to be a grey.
+            guard let (red, green, blue) = rgbComponents else { return false }
             return red == green && green == blue
         case .palette256(let index):
             if index >= 232 { return true }  // the 24-step greyscale ramp

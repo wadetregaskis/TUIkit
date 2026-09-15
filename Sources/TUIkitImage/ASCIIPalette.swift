@@ -429,14 +429,17 @@ public struct ASCIIPalette: Sendable, Equatable {
         switch colors[index].value {
         case .rgb(let red, let green, let blue):
             return "\(background ? 48 : 38);2;\(red);\(green);\(blue)"
-        // The terminal's own colour in its own slot, and its triple in the other.
-        // The triple is NOT quantised: this module has no depth when it spells a
-        // colour, and ``downsampled(to:)`` leaves a carried entry alone, because
-        // one entry serves both slots.
-        case .terminalForeground(let red, let green, let blue):
-            return background ? "48;2;\(red);\(green);\(blue)" : "39"
-        case .terminalBackground(let red, let green, let blue):
-            return background ? "49" : "38;2;\(red);\(green);\(blue)"
+        // The terminal's own colour: the default in its own slot, and in the other
+        // the triple the terminal reported, or that slot's default while it has
+        // reported none. The triple is NOT quantised: this module has no depth
+        // when it spells a colour, and ``downsampled(to:)`` leaves a carried entry
+        // alone, because one entry serves both slots.
+        case .terminalForeground:
+            guard background, let ink = colors[index].rgbComponents else { return background ? "49" : "39" }
+            return "48;2;\(ink.red);\(ink.green);\(ink.blue)"
+        case .terminalBackground:
+            guard !background, let paper = colors[index].rgbComponents else { return background ? "49" : "39" }
+            return "38;2;\(paper.red);\(paper.green);\(paper.blue)"
         case .palette256(let value):
             return "\(background ? 48 : 38);5;\(value)"
         case .standard(let ansi):
@@ -466,11 +469,13 @@ public struct ASCIIPalette: Sendable, Equatable {
     ///
     /// `.terminalForeground` is SGR 39 as ink, the default foreground, so it
     /// counts as unsafe exactly as `.default` does. `.terminalBackground` as ink
-    /// is spelled as a triple, so it is safe.
+    /// is spelled as the triple the terminal reported, which is safe, or as 39
+    /// while it has reported none, which is not.
     var foregroundSurvivesBold: Bool {
         colors.allSatisfy { color in
             switch color.value {
-            case .rgb, .semantic, .terminalBackground: return true
+            case .rgb, .semantic: return true
+            case .terminalBackground: return color.rgbComponents != nil
             case .palette256(let index): return index >= 16
             case .standard, .bright, .terminalForeground: return false
             }

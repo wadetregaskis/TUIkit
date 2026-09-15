@@ -599,9 +599,11 @@ extension Color {
         case .palette256(let index): return .indexed(Int(index))
         case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
         case .terminalForeground: return .named(Int(ANSIColor.default.foregroundCode))
-        // The other slot: the carried RGB, quantised, as `foregroundCodes` spells it.
-        case .terminalBackground(let red, let green, let blue):
-            return Color.rgb(red, green, blue).sgrForeground(depth: depth)
+        // The other slot: the reported RGB, quantised, or this slot's own default
+        // while there is none, as `foregroundCodes` spells it.
+        case .terminalBackground:
+            guard let paper = rgbComponents else { return .named(Int(ANSIColor.default.foregroundCode)) }
+            return Color.rgb(paper.red, paper.green, paper.blue).sgrForeground(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
@@ -627,9 +629,11 @@ extension Color {
         case .palette256(let index): return .indexed(Int(index))
         case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
         case .terminalBackground: return .named(Int(ANSIColor.default.backgroundCode))
-        // The other slot: the carried RGB, quantised, as `backgroundCodes` spells it.
-        case .terminalForeground(let red, let green, let blue):
-            return Color.rgb(red, green, blue).sgrBackground(depth: depth)
+        // The other slot: the reported RGB, quantised, or this slot's own default
+        // while there is none, as `backgroundCodes` spells it.
+        case .terminalForeground:
+            guard let ink = rgbComponents else { return .named(Int(ANSIColor.default.backgroundCode)) }
+            return Color.rgb(ink.red, ink.green, ink.blue).sgrBackground(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."

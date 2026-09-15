@@ -20,8 +20,9 @@ extension Color {
     ///   color: one with a hue of its own may land only on an entry that has a
     ///   hue too, or on black, so a fading accent never steps through gray.
     /// - `.terminalForeground` and `.terminalBackground` are returned unchanged.
-    ///   Each is SGR 39 or 49 in its own slot and its RGB in the other, and this
-    ///   does not know the slot; the emitter quantises the other slot's RGB.
+    ///   Each is SGR 39 or 49 in its own slot, and in the other the RGB the
+    ///   terminal reported for it, and this does not know the slot; the emitter
+    ///   quantises the other slot's RGB.
     /// - `.semantic` must be resolved before calling this method.
     public func downsampledToPalette256() -> Color {
         switch value {
