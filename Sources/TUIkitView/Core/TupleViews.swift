@@ -39,10 +39,11 @@ public struct TupleView<each V: View>: View {
 // Equatable` every other view spells. Both run `==` on the main actor; the
 // isolated one is also refused, statically, outside it, and everything here
 // still compiles. The reason is a compiler bug: swift.org's Swift 6.2.4 is an
-// assertions build, and SILGen aborts on a `@preconcurrency` conformance of a
-// type that stores a parameter pack (`Assertion failed: (isPreconcurrency),
-// function emitProtocolWitness`). Xcode's 6.2.4 compiles either spelling. See
-// Tools/CompilerBugs/README.md, section 3.
+// assertions build, and SILGen aborts (`Assertion failed: (isPreconcurrency),
+// function emitProtocolWitness`) on a `@preconcurrency` conformance of a type
+// with a parameter pack, stored or not, when the witness for a synchronous
+// requirement is actor-isolated, as the main-actor `==` is here. Xcode's 6.2.4
+// compiles either spelling. See Tools/CompilerBugs/README.md, section 3.
 extension TupleView: @MainActor Equatable where repeat each V: Equatable {
     public static func == (lhs: TupleView, rhs: TupleView) -> Bool {
         func isEqual<T: Equatable>(_ left: T, _ right: T) -> Bool { left == right }

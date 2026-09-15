@@ -486,12 +486,16 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 if let crumbs {
-                    // One closure parameter, NOT `{ _, crumb in`. Destructuring
-                    // it — in a method of a type generic over `Root`, calling
-                    // `crumbView`, whose result is opaque — aborts swift.org's
-                    // Swift 6.2.4 (an assertions build) in SILGen: "no generic
-                    // environment provided for type with type parameters".
-                    // Xcode's 6.2.4 compiles either spelling. See
+                    // One closure parameter, NOT `{ _, crumb in`. The closure is
+                    // not the bug: `{ _, crumb in` is converted to a function of
+                    // one tuple parameter, and swift.org's Swift 6.2.4 (an
+                    // assertions build) aborts in SILGen ("no generic
+                    // environment provided for type with type parameters") on a
+                    // function conversion that needs a reabstraction thunk, in
+                    // a generic context (`Root`), of a function whose opaque
+                    // result does not use that context's parameters
+                    // (`crumbView`). One parameter needs no conversion. Xcode's
+                    // 6.2.4 compiles either spelling. See
                     // Tools/CompilerBugs/README.md, section 4.
                     ForEach(Array(crumbs.enumerated()), id: \.offset) { pair in
                         crumbView(pair.element, coordinator: coordinator)
