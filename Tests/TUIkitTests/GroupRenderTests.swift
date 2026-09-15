@@ -113,7 +113,7 @@ struct GroupRenderTests {
                     Text("x")
                     Text("y")
                 }
-                .foregroundStyle(.ansi(.red))
+                .foregroundStyle(.red)
             },
             context: ctx()
         )
