@@ -85,6 +85,11 @@ struct ProgressViewPage: View {
     @AppStorage("progressDemo.gradientStops")
     private var gradientStopsRaw = "3CC8BE,506EF0,AA46DC"
 
+    /// The indeterminate catalogue's speed, as an `IndeterminateSpeedChoice`
+    /// name, and its bars' width in cells, persisted like the stops above.
+    @AppStorage("progress.indeterminateSpeed") private var indeterminateSpeed = IndeterminateSpeedChoice.automatic.rawValue
+    @AppStorage("progress.indeterminateWidth") private var indeterminateWidth = IndeterminateCatalogueWidth.standard
+
     /// The persisted stops decoded to colours (invalid entries dropped; fewer
     /// than two falls back to the default so the row always shows a gradient).
     private var gradientStops: Gradient {
@@ -354,19 +359,22 @@ struct ProgressViewPage: View {
     /// ``determinateStylesSection``, and the second column's lower half.
     @ViewBuilder
     private var indeterminateStylesSection: some View {
+        let width = IndeterminateCatalogueWidth.valid(indeterminateWidth)
         DemoSection("page.progressView.indeterminateStyles") {
             VStack(alignment: .leading, spacing: 0) {
-                indeterminateRow(label: "sweep        ", style: .sweep)
-                indeterminateRow(label: "barberPole   ", style: .barberPole)
-                indeterminateRow(label: "pulse        ", style: .pulse)
-                indeterminateRow(label: "knightRider  ", style: .knightRider)
-                indeterminateRow(label: "gradient     ", style: .gradient())
+                IndeterminateCatalogueControls(
+                    speed: $indeterminateSpeed, width: $indeterminateWidth)
+                indeterminateRow(label: "sweep        ", style: .sweep, width: width)
+                indeterminateRow(label: "barberPole   ", style: .barberPole, width: width)
+                indeterminateRow(label: "pulse        ", style: .pulse, width: width)
+                indeterminateRow(label: "knightRider  ", style: .knightRider, width: width)
+                indeterminateRow(label: "gradient     ", style: .gradient(), width: width)
                 // The same slide with caller-supplied stops: any ≥2 RGB
                 // colours, cyclically wrapped — editable via the gradient
                 // editor below (teal → violet until you change it).
                 indeterminateRow(
                     label: "gradient(c)  ",
-                    style: .gradient(gradientStops))
+                    style: .gradient(gradientStops), width: width)
                 HStack(spacing: 1) {
                     ForEach(Array(gradientStops.stops.enumerated()), id: \.offset) { _, stop in
                         Text("██").foregroundStyle(stop.color)
@@ -374,6 +382,10 @@ struct ProgressViewPage: View {
                     Button("page.progressView.editGradient") { editingGradient = true }
                 }
             }
+            // One speed around every bar, as the Spinners page sets its catalogue's.
+            .indicatorAnimationSpeed(
+                IndeterminateSpeedChoice(stored: indeterminateSpeed).speed,
+                for: .indeterminateProgress)
         }
     }
 
@@ -437,13 +449,13 @@ struct ProgressViewPage: View {
         }
     }
 
-    /// A `[label | indeterminate bar]` row at a fixed column width,
+    /// A `[label | indeterminate bar]` row, the bar `width` cells wide,
     /// publishing the chosen indeterminate animation via the env modifier.
     @ViewBuilder
-    private func indeterminateRow(label: String, style: IndeterminateStyle) -> some View {
+    private func indeterminateRow(label: String, style: IndeterminateStyle, width: Int) -> some View {
         HStack(spacing: 1) {
             Text(label).dim()
-            ProgressView().frame(width: 36).indeterminateStyle(style)
+            ProgressView().frame(width: width).indeterminateStyle(style)
         }
     }
 
