@@ -408,7 +408,7 @@ struct RefreshableTests {
             RefreshIndicator(style: .custom(SpinnerStyle.line.frames.joined()))
                 != RefreshIndicator(style: .line))
         #expect(RefreshIndicator(style: .line) != RefreshIndicator(style: .dots))
-        #expect(RefreshIndicator(color: .ansi(.red)) != RefreshIndicator())
+        #expect(RefreshIndicator(color: .red) != RefreshIndicator())
     }
 
     /// The indicator is a `Spinner` composed inside the refreshable's subtree, so
