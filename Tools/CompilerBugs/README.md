@@ -67,28 +67,41 @@ lives in `TUIkitView`, which is why that module depends on `TUIkitStyling` — s
 ## 2. `LoadableByAddressAssertion` — a tuple in an `Optional` stored property
 
 ```
-cd LoadableByAddressAssertion && ./variants.sh /path/to/swift-DEVELOPMENT-SNAPSHOT.xctoolchain
+tcs=~/Library/Developer/Toolchains
+cd LoadableByAddressAssertion && ./variants.sh "$tcs/swift-6.2.4-RELEASE.xctoolchain" \
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain \
+    "$tcs/swift-6.3.3-RELEASE.xctoolchain" \
+    "$tcs/swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-09-10-a.xctoolchain"
 ```
 
 ```
-3-word field, 5-word closure arg        ASSERTS
-2-word field (tuple not large)          ok
-4-word closure arg (arg not large)      ok
-unlabelled tuple                        ASSERTS
-not Optional                            ok
-no closure in the tuple                 ok
-a struct instead of a tuple             ok
+                                                6.2.4 +a      Xcode 6.2.4   6.3.3         6.4.2-dev +a
+Crash.swift: 3-word field, 5-word closure arg   ABORTS        BAD SIL       BAD SIL       ABORTS
+2-word field (tuple not large)                  ok            ok            ok            ok
+4-word closure arg (arg not large)              ok            ok            ok            ok
+unlabelled tuple                                ABORTS        BAD SIL       BAD SIL       ABORTS
+not Optional                                    ok            ok            ok            ok
+no closure in the tuple                         ok            ok            ok            ok
+a struct instead of a tuple                     ok            ok            ok            ok
 ```
 
-`Crash.swift` is twelve lines and stops the compiler:
+`+a` marks a compiler built with assertions. The assertion is in a SIL pass
+that runs on the way to IRGen, so each variant is compiled to an object with
+`-c -Onone -Xfrontend -sil-verify-all`, and `BAD SIL` means the verifier
+rejected the SIL.
+
+`Crash.swift` is three declarations, and a compiler built with assertions stops
+in the LoadableByAddress pass. swift.org's 6.2.4 prints (the 6.4 snapshot the
+same, at line 2456):
 
 ```
 Assertion failed: (srcType == tgtType && "Source and target type do not match"),
-function rewriteFunction, file LoadableByAddress.cpp, line 2445.
+function rewriteFunction, file LoadableByAddress.cpp, line 2199.
 ```
 
 The **declaration alone** is enough — nothing has to assign to the property. It
-is the synthesized setter the pass chokes on.
+is the synthesized setter the pass chokes on: the verifier names the setter for
+`pending` as the function it rejects.
 
 Both halves have to be "large loadable" (over four words), and each for its own
 reason:
@@ -102,26 +115,24 @@ Then `rewriteFunction` compares the rewritten type against the original and
 they disagree. Labels make no difference. Dropping the `Optional`, the closure,
 or the tuple (a struct with the same two fields) all avoid it.
 
-**Assertions-enabled compilers only.** Xcode's 6.2.4 compiles all seven
-variants without complaint; the dev snapshot asserts on two. Re-run on
-2026-09-14, swift.org's 6.2.4 (`swift-6.2.4-RELEASE`, built `+assertions`) and
-the 6.4 snapshot of 2026-09-10 assert on the same two, and Xcode's 6.2.4 and
-swift.org's 6.3.3 (no assertions) compile all seven. So it stops a swift.org
-release toolchain as well as the nightly lanes.
-
-A clean compile without assertions is not a clean bill. With
-`-Xfrontend -sil-verify-all` added to `variants.sh`'s `swiftc` line, Xcode's
-6.2.4 and swift.org's 6.3.3 reject those same two variants ("SIL verification
-failed: entry point argument types do not match function type") and accept the
-other five. A program that stores, reads, mutates and clears such a property
-printed the right values with both, at `-Onone` and `-O`, so no wrong code was
-seen, but that one program is all that was checked.
+**No toolchain tested produces valid SIL for it.** Observed on macOS (arm64)
+on 2026-09-15: the two builds with assertions, swift.org's 6.2.4
+(`swift-6.2.4-RELEASE`) and the 6.4 snapshot of 2026-09-10, abort on the two
+rows that say so. It stops a swift.org release toolchain as well as the nightly
+lanes. The two builds without assertions, Xcode 26.3's 6.2.4
+and swift.org's 6.3.3, do not abort, but the verifier rejects the SIL of those
+same two rows ("SIL verification failed: entry point argument types do not
+match function type") and accepts the other five. Without
+`-Xfrontend -sil-verify-all` they compile all seven, so a clean compile on them
+is not a clean bill. A program that stores, reads, mutates and clears such a
+property printed the right values with both, at `-Onone` and `-O`, so no wrong
+code was seen, but that one program is all that was checked.
 
 **Where TUIkit hit it:** `MouseEventDispatcher.pendingHoverExit` was
 `(region: HitTestRegion, handler: (MouseEvent) -> Bool)?` — `HitTestRegion` is
 well over three words and `MouseEvent` is eight, so both thresholds were met.
-**Workaround:** a named struct instead of the tuple, which the matrix above
-shows is exactly the shape that does not assert.
+**Workaround:** a named struct instead of the tuple, the table's last row, which
+no toolchain aborts on and the verifier accepts.
 
 ---
 
