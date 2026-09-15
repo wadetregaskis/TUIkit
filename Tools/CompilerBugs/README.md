@@ -102,9 +102,20 @@ Then `rewriteFunction` compares the rewritten type against the original and
 they disagree. Labels make no difference. Dropping the `Optional`, the closure,
 or the tuple (a struct with the same two fields) all avoid it.
 
-**Assertions-enabled compilers only.** The shipped 6.2.4 compiles all seven
-variants without complaint; the dev snapshot asserts on two. So the bug is
-invisible on release toolchains, and stops the nightly lanes dead.
+**Assertions-enabled compilers only.** Xcode's 6.2.4 compiles all seven
+variants without complaint; the dev snapshot asserts on two. Re-run on
+2026-09-14, swift.org's 6.2.4 (`swift-6.2.4-RELEASE`, built `+assertions`) and
+the 6.4 snapshot of 2026-09-10 assert on the same two, and Xcode's 6.2.4 and
+swift.org's 6.3.3 (no assertions) compile all seven. So it stops a swift.org
+release toolchain as well as the nightly lanes.
+
+A clean compile without assertions is not a clean bill. With
+`-Xfrontend -sil-verify-all` added to `variants.sh`'s `swiftc` line, Xcode's
+6.2.4 and swift.org's 6.3.3 reject those same two variants ("SIL verification
+failed: entry point argument types do not match function type") and accept the
+other five. A program that stores, reads, mutates and clears such a property
+printed the right values with both, at `-Onone` and `-O`, so no wrong code was
+seen, but that one program is all that was checked.
 
 **Where TUIkit hit it:** `MouseEventDispatcher.pendingHoverExit` was
 `(region: HitTestRegion, handler: (MouseEvent) -> Bool)?` — `HitTestRegion` is
