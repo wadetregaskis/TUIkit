@@ -33,7 +33,7 @@ struct ColorPickerRenderTests {
         // one wears a bullet in its middle cell.
         let context = makeRenderContext(width: 60, height: 4)
         context.environment.focusManager!.register(SwatchFocusSentinel())
-        let out = renderToBuffer(ColorPicker("Accent", selection: .constant(.ansi(.red))), context: context)
+        let out = renderToBuffer(ColorPicker("Accent", selection: .constant(.red)), context: context)
             .lines.map { $0.stripped }.joined(separator: "\n")
         #expect(out.contains("Accent"), "title shown: \(out)")
         #expect(out.contains("███"), "live swatch shown: \(out)")
@@ -70,8 +70,8 @@ struct ColorPickerRenderTests {
     func inlineColorPickerReflectsBinding() {
         // The picker is stateless — the bound colour is the single source of
         // truth, so editing a different colour must change what is drawn.
-        let red = joined(ColorPicker("T", selection: .constant(.ansi(.red))), w: 60, h: 4)
-        let blue = joined(ColorPicker("T", selection: .constant(.ansi(.blue))), w: 60, h: 4)
+        let red = joined(ColorPicker("T", selection: .constant(.red)), w: 60, h: 4)
+        let blue = joined(ColorPicker("T", selection: .constant(.blue)), w: 60, h: 4)
         #expect(red != blue, "different colours fill the channels differently")
     }
 
@@ -80,7 +80,7 @@ struct ColorPickerRenderTests {
     @Test("ColorPickerPanel draws the dialog title, preview, every model tab and Done")
     func panelChrome() {
         let out = joined(
-            ColorPickerPanel("Theme Colour", selection: .constant(.ansi(.red)), isPresented: .constant(true)))
+            ColorPickerPanel("Theme Colour", selection: .constant(.red), isPresented: .constant(true)))
         #expect(out.contains("Theme Colour"), "dialog title: \(out)")
         // All six model tabs are present in the TabView strip (the active one is
         // highlighted by background colour, not brackets).
@@ -95,7 +95,7 @@ struct ColorPickerRenderTests {
     @Test("ColorPickerPanel's RGB editor shows the three channel sliders")
     func panelRGBChannels() {
         let out = joined(
-            ColorPickerPanel("Pick", selection: .constant(.ansi(.red)), isPresented: .constant(true)))
+            ColorPickerPanel("Pick", selection: .constant(.red), isPresented: .constant(true)))
         // Default mode is RGB: a labelled slider row per channel.
         #expect(out.contains("◀") && out.contains("▶"), "channel sliders render arrows: \(out)")
         #expect(out.contains("R ◀") && out.contains("G ◀") && out.contains("B ◀"),
@@ -156,7 +156,7 @@ struct ColorPickerRenderTests {
     @Test("ColorPickerPanel renders inside a bordered dialog")
     func panelHasBorder() {
         let lines = renderToBuffer(
-            ColorPickerPanel("Edit", selection: .constant(.ansi(.green)), isPresented: .constant(true)),
+            ColorPickerPanel("Edit", selection: .constant(.green), isPresented: .constant(true)),
             context: makeRenderContext(width: 64, height: 30)
         ).lines.map { $0.stripped }
         // A Dialog draws a box: some line carries a top-border corner glyph.
