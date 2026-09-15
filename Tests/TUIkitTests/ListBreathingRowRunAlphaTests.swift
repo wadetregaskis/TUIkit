@@ -75,7 +75,7 @@ struct ListBreathingRowRunAlphaTests {
                 ForEach(rows) { row in Text(row.name).border(border) }
             }
             .focusID("breathing-list")
-            .tint(.ansi(.red)),
+            .tint(.red),
             focusID: "breathing-list")
         let runs = drawn.animatedCells.map { "y=\($0.offsetY) w=\($0.width) alpha=\($0.alpha != nil)" }
         let cursorRowLines: Set<Int> = [1, 2, 3]
@@ -113,7 +113,7 @@ struct ListBreathingRowRunAlphaTests {
                 ForEach(rows) { row in Text(row.name).border(border).opacity(0.3) }
             }
             .focusID("breathing-list")
-            .tint(.ansi(.red)),
+            .tint(.red),
             focusID: "breathing-list")
         let dropped = try #require(
             drawn.opacityRegions.first { $0.inkOpacity < 1 && $0.offsetY == 1 },
