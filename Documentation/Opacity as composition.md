@@ -3604,6 +3604,17 @@ end; off, the lerp toward the foreground as it shows. Every frame is opaque, so 
 track claims while it breathes, through `IndicatorCycle.claims(at:)` and its assertion.
 An opaque palette's bytes do not change: spending an opaque colour returns it untouched.
 
+(2026-09-14.) The off track is no longer a fixed `.brightBlack`. It is the palette's
+`foregroundTertiary`, separated from the page and the accent by the scroll track's walk
+(`ChromeTrack.track(from:in:)`, §45), which carries the rung's alpha. So under a palette
+whose tertiary is translucent the RESTING off track is a translucent field, and the
+switch claims it at that alpha: unfocused, `IndicatorCycle.claims(at:)` claims the colour
+drawn now, which is the track. The breath is unchanged in kind: its dim end is the track
+composited over the page, and its bright end is the track and the foreground each spent
+over the page before the lerp, so every frame is still opaque. A disabled switch draws the
+off track at `disabledForeground` over the page, which composites, so it stays opaque.
+`SwitchTrackThemeTests` pins the claim under `FadedNavigation`, whose tertiary is at 0.3.
+
 
 ## 59. An animated border's alpha, when its frames share one (2026-09-10)
 

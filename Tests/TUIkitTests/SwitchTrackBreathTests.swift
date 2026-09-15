@@ -31,8 +31,8 @@ struct SwitchTrackBreathTests {
         let cycle = environment.selectionEmphasis.cycle(true)
         var offenders: [String] = []
         for palette in palettes {
-            // The tracks `_ToggleCore` draws: the accent on, a fixed grey off.
-            let base = isOn ? palette.accent : Color.brightBlack
+            // The tracks `_ToggleCore` draws: the accent on, the off track off.
+            let base = isOn ? palette.accent : SwitchTrackBreath.offTrack(in: palette)
             for track in [base, palette.hoveredForeground(base)] {
                 let ends = SwitchTrackBreath.ends(track: track, isOn: isOn, palette: palette)
                 let colors = cycle.colors(dim: ends.dim, bright: ends.bright)
@@ -51,9 +51,13 @@ struct SwitchTrackBreathTests {
         for palette in PaletteRegistry.all {
             let on = SwitchTrackBreath.ends(track: palette.accent, isOn: true, palette: palette)
             #expect(on.bright == palette.accent, "\(palette.name): the on end was re-spelled")
-            let off = SwitchTrackBreath.ends(track: .brightBlack, isOn: false, palette: palette)
+            let track = SwitchTrackBreath.offTrack(in: palette)
+            let off = SwitchTrackBreath.ends(track: track, isOn: false, palette: palette)
             #expect(
-                off.bright == Color.lerp(.brightBlack, palette.foreground, phase: 0.45),
+                off.bright
+                    == Color.lerp(
+                        track.spendingAlpha(over: palette.background),
+                        palette.foreground.spendingAlpha(over: palette.background), phase: 0.45),
                 "\(palette.name): the off end was re-spelled")
         }
     }

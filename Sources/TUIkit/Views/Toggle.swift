@@ -116,6 +116,10 @@ public struct CheckboxToggleStyle: ToggleStyle {
 /// In TUIkit this renders a coloured track with a two-cell knob on the side the
 /// switch points to — left for off, right for on — over a distinct background
 /// (the accent colour when on), so it reads as a switch rather than a checkbox.
+///
+/// Off, the track is the palette's tertiary foreground tone, moved as little as it
+/// takes to stand off both the page, which the knob is drawn in, and the accent. A
+/// disabled switch fades that track halfway toward the page.
 public struct SwitchToggleStyle: ToggleStyle {
     public init() {}
 }

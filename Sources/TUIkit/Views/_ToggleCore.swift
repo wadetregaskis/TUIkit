@@ -312,15 +312,15 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     ///
     /// The track colour carries the state, distinctly in all three states:
     /// - **on**: the accent (highlight) colour, like macOS's blue;
-    /// - **off**: a solid neutral grey;
-    /// - **disabled**: a *dimmed* version of the off grey, with a dimmed knob.
+    /// - **off**: the palette's tertiary tone, separated from the page and the accent;
+    /// - **disabled**: the off track faded halfway toward the page.
     ///
-    /// The off grey is a fixed neutral (`.brightBlack`), not a palette shade, so it
-    /// reads as grey under every theme — including accent-tinted ones whose neutral
-    /// foregrounds are themselves tinted. Disabled is that grey dimmed via `opacity`
-    /// (which darkens toward black), so it is always darker than the off grey and
-    /// the two never look alike. The knob is the background colour so it contrasts
-    /// the track on light and dark terminals alike (dimmed to match when disabled).
+    /// The off track is `SwitchTrackBreath.offTrack(in:)`: a palette rung, so it
+    /// follows the theme, moved until it stands off both the page the knob is drawn
+    /// in and the accent the same track turns when on. Disabled is that track faded
+    /// toward the page, so it is always quieter than off and the two never look
+    /// alike. The knob is the background colour so it contrasts the track on light
+    /// and dark terminals alike.
     private func styledSwitchIndicator(
         isOnValue: Bool, isDisabled: Bool, isFocused: Bool, isHovered: Bool,
         context: RenderContext
@@ -376,20 +376,20 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         var trackColor: Color
         let knobColor: Color
         if isDisabled {
-            // The off grey faded halfway toward the page background — reads as
+            // The off track faded halfway toward the page background — reads as
             // greyed-out / inactive on dark AND light palettes (a fade toward
             // black turned the disabled track *more* prominent than "off" on
-            // light backgrounds), while staying distinct from the solid grey.
-            trackColor = Color.brightBlack.opacity(
+            // light backgrounds), while staying distinct from the off track.
+            trackColor = SwitchTrackBreath.offTrack(in: palette).opacity(
                 ViewConstants.disabledForeground, over: palette.background)
             knobColor = palette.background
         } else if isOnValue {
             trackColor = palette.accent
             knobColor = palette.background
         } else {
-            // Off: a neutral dark grey like macOS — independent of the accent, so a
-            // switch that's off never reads as a dimmer "on".
-            trackColor = .brightBlack
+            // Off: the palette's tertiary tone, separated from the accent (and the
+            // page), so a switch that's off never reads as a dimmer "on".
+            trackColor = SwitchTrackBreath.offTrack(in: palette)
             knobColor = palette.background
         }
         // The track IS this style's foreground — it is the coloured thing the
@@ -403,7 +403,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // bracket chrome to pulse, so the switch's own background carries the
         // focus animation (same SelectionIndicator convention as the
         // bracketed styles). The endpoints stay within the state's own hue —
-        // accent for on, neutral grey lifted toward the foreground for off —
+        // accent for on, the off track lifted toward the foreground for off —
         // so the breathing never misreads as a state change, and the knob's
         // half-block margin keeps it visible at the dim end of the pulse.
         // Both ends spend their alpha over the page — see `SwitchTrackBreath`.
