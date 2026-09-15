@@ -22,10 +22,10 @@ struct ClaimingRowTests {
     @Test("A spliced row's claims land on the columns it now sits at")
     func spliceMovesTheClaims() {
         var inner = ClaimingRow()
-        inner.append("ab", cells: 2, ink: Color.ansi(.red).opacity(0.5))
+        inner.append("ab", cells: 2, ink: Color.red.opacity(0.5))
         var row = ClaimingRow()
         row.skip(cells: 3)
-        row.append("│", cells: 1, ink: Color.ansi(.white))
+        row.append("│", cells: 1, ink: Color.white)
         row.append(contentsOf: inner)
 
         #expect(row.cells == 6)
