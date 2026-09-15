@@ -79,15 +79,17 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
         guard configuration.isFocused else { return buffer }
 
         let palette = context.environment.palette
-        let cycle = context.environment.selectionEmphasis.cycle(true)
-        // `accentFillPulse()`, not a hand-rolled pair: this bar is a FILL that a
+        // `emphasisFill()`, not a hand-rolled pair: this bar is a FILL that a
         // label is drawn on, and that is exactly the distinction the two pulse
         // functions carry (`accentPulse` reaches the accent, a fill's bright end
         // stops at `focusPulseMax` so the content stays readable). Spelled out here,
         // the two ends also disagreed about a translucent accent — the dim end spent
         // its alpha and the bright end was written from `palette.accent` again. See
-        // `Documentation/Opacity as composition.md` §21.
-        let (dim, bright) = palette.accentFillPulse()
+        // `Documentation/Opacity as composition.md` §21. And where the accent or the
+        // page has no RGB there is nothing between them to breathe (§75), so the bar
+        // reverses the palette's own pair rather than hold a colour nobody can check
+        // the label against (§88) — the same answer `RowBackground` gives a cursor row.
+        let emphasis = palette.emphasisFill()
 
         // Squared off first: the bar spans the row, and a short line would
         // otherwise be painted only as far as it happens to reach, leaving the
@@ -102,16 +104,34 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             ANSIRenderer.applyPersistentBackground(line, color: color) + ANSIRenderer.reset
         }
 
-        let now = cycle.colorNow(dim: dim, bright: bright)
-        buffer.lines = plain.map { painted($0, now) }
-
-        // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
-        // was already drawn above; replaying it would emit bytes per tick to
-        // change nothing. Measuring passes leave no runs at all.
-        guard cycle.isAnimating, !context.isMeasuring else { return buffer }
-        buffer.animatedCells += plain.indices.compactMap { index in
-            cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: index) {
-                painted(plain[index], $0)
+        switch emphasis {
+        case .reversed(let ink, let field):
+            // Steady: a reversal has no phase to advance, so the row is drawn once and
+            // leaves no run — and with no run there is no clock for the loop to wake
+            // for. No cycle is built either, which is work avoided rather than a rule:
+            // building one is sixteen frames and a pulse ramp for a picture that cannot
+            // change, and it is NOT itself a clock read (`IndicatorCycleTiming.step(on:)`
+            // does not mark the frame, unlike `CursorTimer.pulsePhase(for:)`).
+            // The pair is restated after every reset inside the line, because a row is a
+            // reset per styled run followed by plain padding, and a bare 7 exchanges the
+            // colours IN FORCE, which after a reset are the terminal's own.
+            buffer.lines = plain.map {
+                ANSIRenderer.applyPersistentReverse(
+                    $0, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+            }
+        case .fill(let color):
+            buffer.lines = plain.map { painted($0, color) }
+        case .pulse(let dim, let bright):
+            let cycle = context.environment.selectionEmphasis.cycle(true)
+            buffer.lines = plain.map { painted($0, cycle.colorNow(dim: dim, bright: bright)) }
+            // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
+            // was already drawn above; replaying it would emit bytes per tick to
+            // change nothing. Measuring passes leave no runs at all.
+            guard cycle.isAnimating, !context.isMeasuring else { break }
+            buffer.animatedCells += plain.indices.compactMap { index in
+                cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: index) {
+                    painted(plain[index], $0)
+                }
             }
         }
         return buffer
@@ -260,10 +280,19 @@ private struct _MenuItemRow: View {
     /// breathing bar ``_MenuItemRowBar`` paints over the finished line.
     private var background: Color? {
         if configuration.isFocused { return nil }
-        if configuration.isHovered {
-            return palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+        guard configuration.isHovered else { return palette.background }
+        // A tint of the accent over the page — and where either has no RGB there is
+        // nothing between them, so every share of the blend is one end or the other
+        // (Opacity as composition §75). Below half that end is the page, which says
+        // nothing at all; the label's ink lifts instead (§82, `hoveredLabel` above).
+        // Asked of the colours rather than left to `hoverBackground` happening to sit
+        // below half: raised above it, the same blend would be a solid accent under a
+        // label nobody can check for contrast.
+        let wash = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+        guard case .fill(let tint) = palette.highlightFill(wash, tint: palette.accent) else {
+            return palette.background
         }
-        return palette.background
+        return tint
     }
 }
 

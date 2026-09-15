@@ -2392,6 +2392,8 @@ keeps there:
 | A selected row that is not the cursor; an alternating row | nothing at all: the ● says which row is selected | a tint of the accent over the page |
 | A text input's selection (`TextField`, `SecureField`, `TextEditor`) | `ESC[7;<ink>;<field>m` over the cell's OWN pair: the field's ink and its well | the accent at 60% over the well |
 | A block text caret | the cell under it with its reversal flipped — a plain cell reversed, a selected cell's reversal taken off. A blink alternates the two; a pulse holds one | the caret's colour with the character punched out of it in the well |
+| A menu's highlight bar (a pop-up `Menu`, a `.contextMenu`, a `Picker`'s drop-down, a combo box's suggestions) | a steady `ESC[7;<ink>;<field>m` over the palette's own ink and page, restated after every reset in the row. A drop-down reverses its interior only: its frame and its scrollbar column are chrome | the accent's breath over the page |
+| A menu row under the pointer | nothing: its wash is the page there, and the label's ink lifts instead | a quiet accent tint over the page |
 
 The trigger is those colours and never the terminal's silence: a palette of
 ordinary RGB roles keeps its tints on a host that answers nothing. The ink and

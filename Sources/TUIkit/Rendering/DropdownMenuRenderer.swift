@@ -449,6 +449,36 @@ enum DropdownMenu {
         )
     }
 
+    /// The colour a still highlight fills with, or `nil` for one that fills with no
+    /// colour of its own.
+    ///
+    /// A `.pulse` takes its bright end, which is what such a breath holds anyway
+    /// wherever it cannot be measured (`Documentation/Opacity as composition.md` §79).
+    private static func fillColor(_ highlight: HighlightFill) -> Color? {
+        switch highlight {
+        case .fill(let color): return color
+        case .pulse(_, let bright): return bright
+        case .reversed: return nil
+        }
+    }
+
+    /// `content` — a row's interior, already fitted to its column — painted as
+    /// `highlight` says.
+    ///
+    /// A fill is a persistent background, left in force to the end of what it is given.
+    /// A reversal states the palette's ink and page beside an SGR 7 and restates both
+    /// after every reset inside the row, because a bare 7 exchanges the colours IN
+    /// FORCE, which after a reset are the terminal's own rather than the palette's —
+    /// see `ANSIRenderer.applyPersistentReverse(_:ink:field:)`. Both sides are stated
+    /// opaque, as every reversal is, so a reversed row claims nothing of its own.
+    private static func paint(_ content: String, with highlight: HighlightFill) -> String {
+        guard case .reversed(let ink, let field) = highlight else {
+            return content.withPersistentBackground(fillColor(highlight))
+        }
+        return ANSIRenderer.applyPersistentReverse(
+            content, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+    }
+
     /// Draws the bordered popup lines for the visible window, at one point of
     /// the focus pulse.
     ///
@@ -470,7 +500,7 @@ enum DropdownMenu {
         visibleRange: Range<Int>,
         innerWidth: Int,
         barCells: [String]?,
-        highlightBg: Color,
+        highlight: HighlightFill,
         borderColor: Color,
         context: RenderContext
     ) -> [String] {
@@ -512,14 +542,24 @@ enum DropdownMenu {
                     lines.append(verticalBorder + fitted + ANSIRenderer.reset + verticalBorder)
                 }
             case .option(let content, _):
-                let isHighlighted = index == highlightedRow
+                let fill = index == highlightedRow ? highlight : nil
                 if let barCells {
                     let fitted = fit(content, to: contentInner)
-                    let styled = fitted.withPersistentBackground(
-                        isHighlighted ? highlightBg : nil)
+                    let styled = fill.map { paint(fitted, with: $0) } ?? fitted
                     let cell = local < barCells.count ? barCells[local] : " "
                     lines.append(
                         verticalBorder + styled + ANSIRenderer.reset + cell + verticalBorder)
+                } else if case .reversed? = fill {
+                    // A reversal must cover the row's own cells and not the walls either
+                    // side of them, and `standardContentLine`'s fill is a persistent
+                    // BACKGROUND, which has no reverse twin. So the interior is fitted
+                    // and reversed here, and the helper only frames what it is handed.
+                    lines.append(
+                        BorderRenderer.standardContentLine(
+                            content: paint(fit(content, to: innerWidth), with: highlight),
+                            innerWidth: innerWidth,
+                            style: borderStyle,
+                            color: borderColor))
                 } else {
                     lines.append(
                         BorderRenderer.standardContentLine(
@@ -527,7 +567,7 @@ enum DropdownMenu {
                             innerWidth: innerWidth,
                             style: borderStyle,
                             color: borderColor,
-                            backgroundColor: isHighlighted ? highlightBg : nil))
+                            backgroundColor: fill.flatMap(fillColor)))
                 }
             }
         }
@@ -553,11 +593,11 @@ enum DropdownMenu {
         barCells: [String]?,
         context: RenderContext
     ) -> (lines: [String], runs: [AnimatedCellRun], borderColor: Color) {
-        func draw(_ highlight: Color, _ border: Color) -> [String] {
+        func draw(_ highlight: HighlightFill, _ border: Color) -> [String] {
             lines(
                 rows: rows, highlightedRow: highlightedRow, visibleRange: visibleRange,
                 innerWidth: innerWidth, barCells: barCells,
-                highlightBg: highlight, borderColor: border, context: context)
+                highlight: highlight, borderColor: border, context: context)
         }
         // The cycle, not the live phase: reading the phase marks the frame as
         // having consulted the clock, and an open menu would then re-render the
@@ -566,8 +606,18 @@ enum DropdownMenu {
         // Two colour tracks, each from ONE ramp: the highlight and the border
         // fade between different pairs of ends, but both pairs are fixed for
         // the whole cycle.
-        let ends = Self.pulseEnds(palette: context.environment.palette)
-        let highlights = cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
+        let palette = context.environment.palette
+        let ends = Self.pulseEnds(palette: palette)
+        // What the highlighted row paints at each point of the cycle: the accent's tint,
+        // or — where that tint cannot be measured — reverse video over the palette's own
+        // pair, which is the same at every point, so the row is steady and its run is
+        // dropped below (`Documentation/Opacity as composition.md` §88).
+        let emphasis = palette.emphasisFill()
+        let highlights: [HighlightFill] =
+            emphasis.isReversed
+            ? Array(repeating: emphasis, count: cycle.frames.count)
+            : cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
+                .map(HighlightFill.fill)
         let borders = cycle.colors(dim: ends.border.dim, bright: ends.border.bright)
         // One alpha in every frame, or the chrome's claim — taken from the frame drawn —
         // would be wrong for the rest (§64).

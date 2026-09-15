@@ -5486,3 +5486,68 @@ cell under it, alternates that under a blink, holds it under a pulse with no run
 comes off over a reversed selection; a bar and an underscore are unchanged; and with Apple
 Terminal "Basic"'s sixteen reported, and under an RGB palette on a silent terminal, the tint is
 drawn as before.
+
+## 88. A menu's highlight bar on colours the terminal decides (2026-09-15)
+
+A menu's highlight bar is the fill a cursor row draws (§86): the accent breathing between 22%
+and 50% over the page (`Palette.accentFillPulse`). Two renderers paint it, because TUIkit has
+two kinds of menu row — `_MenuItemRowBar`, over the finished line of a view-composed row (a
+pop-up `Menu`, a `.contextMenu`), and `DropdownMenu.lines`, over the interior of a procedural
+one (a `Picker`'s drop-down, a combo box's suggestions). Where the accent or the page has no
+RGB, every share of that blend is one end or the other (§75), so the breath was held (§79) at a
+solid half-strength accent under a label nobody can check for contrast, or — for a translucent
+accent — at the page itself. On a palette naming a colour the terminal decides, an open menu
+then had no cursor at all: every row looked the same, and the arrow keys moved nothing you
+could see.
+
+**The rule.** Both bars draw reverse video instead, over the palette's own pair, decided by
+`Palette.emphasisFill(over:)` — the same question a cursor row asks, answered in the same
+place. SGR 7 with the ink and the field stated beside it and restated after every reset in the
+row (`ANSIRenderer.applyPersistentReverse`), because a bare 7 exchanges the colours IN FORCE,
+which after a reset are the terminal's own rather than the palette's.
+
+- The **view-composed row** reverses its whole padded line, which is what its fill already
+  covered.
+- The **drop-down row** reverses its interior only. The popup's frame and its scrollbar column
+  are chrome, not the cursor, and `BorderRenderer`'s own fill is a persistent BACKGROUND with
+  no reverse twin — so the interior is fitted and reversed first, and the border helper only
+  frames it.
+- The **row under the pointer** keeps no fill of its own: its wash is 32% of the accent over
+  the page, which below half IS the page (§82), and the label's ink lifts instead. That was
+  already the drawn answer; it is now asked of the colours rather than left to the constant
+  happening to sit below half, which is what §78 and §82 learned about the faces.
+
+What it leaves alone:
+- **A measurable fill.** Every built-in palette states RGB roles, so every menu is drawn as it
+  was, byte for byte, on a silent terminal and on a reporting one. Once the terminal reports
+  its sixteen, a slot accent breathes again.
+- **The chrome's breath.** The popup's border echoes the accent through `breathEnds`, which
+  answers for itself (§79): where it cannot be measured it is already held still, and where it
+  can it still moves, reversed row or not.
+- **The claims.** A reversal states both sides opaque and claims nothing, as §86's rows do; the
+  ✓ beside a selected option keeps its own claim, and the scrollbar and the dividers keep
+  theirs.
+- **The layout.** Only colours change, so the measure pass and the render still agree and every
+  glyph is where it was.
+
+Limits:
+- Neither bar is a breath any more where it reverses, so neither leaves a run and neither
+  resolves a cycle — which is the point: resolving one is what tells the run loop the frame
+  consulted the clock.
+- The ✓ beside the selected option states its own accent beside the restated pair, so that one
+  cell reverses the accent rather than the palette's ink. This is §86's "a child that states its
+  own colours reverses ITS pair", and it is what makes the marker still readable.
+- A row that arrives ALREADY DRAWN (`DropdownMenu.Row.rendered`, which is how a view-composed
+  menu reaches the popup renderer) is placed and never repainted, so its bar is
+  `_MenuItemRowBar`'s. The two arms are separate code for that reason, and both are pinned.
+- What a host actually PAINTS for a reversed row is unmeasured on every terminal
+  (Terminal-compatibility.md).
+
+`ReversedMenuHighlightTests` (TUIkitTests) pins it at all three depths, with an `.ansi(.blue)`
+accent over an RGB page and with the terminal's own pair: a focused menu row's bar and an open
+drop-down's highlighted row carry the 7 with the palette's ink and page, the ✓'s own cell
+excepted; the popup's frame does not; a drop-down windowed behind a scrollbar reverses its row
+too, through the renderer's other arm; neither leaves a run and the loop is asked for no tick;
+the row under the pointer states exactly what it states at rest; the glyphs are where they are
+with the colours reported; and with Apple Terminal "Basic"'s sixteen reported, and under an RGB
+palette on a silent terminal, the tint and its breath are drawn as before.
