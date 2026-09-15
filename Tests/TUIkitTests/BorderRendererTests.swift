@@ -19,7 +19,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 5,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("┌"))
@@ -31,7 +31,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 10,
-            color: .ansi(.white)
+            color: .white
         )
         // corners (2) + inner horizontal (10) = 12
         #expect(result.stripped.count == 12)
@@ -42,9 +42,9 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 20,
-            color: .ansi(.white),
+            color: .white,
             title: "Title",
-            titleColor: .ansi(.green)
+            titleColor: .green
         )
         let stripped = result.stripped
         #expect(stripped.contains("Title"))
@@ -57,16 +57,16 @@ struct BorderRendererStandardTests {
         let asciiResult = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 20,
-            color: .ansi(.white),
+            color: .white,
             title: "AB",  // 2 terminal cells
-            titleColor: .ansi(.green)
+            titleColor: .green
         )
         let cjkResult = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 20,
-            color: .ansi(.white),
+            color: .white,
             title: "你好",  // 4 terminal cells (2 CJK chars × 2 cells each)
-            titleColor: .ansi(.green)
+            titleColor: .green
         )
         // Both borders should have the same total visual width
         // (corners + innerWidth = 22)
@@ -85,7 +85,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardBottomBorder(
             style: .line,
             innerWidth: 5,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("└"))
@@ -97,7 +97,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardBottomBorder(
             style: .line,
             innerWidth: 8,
-            color: .ansi(.white)
+            color: .white
         )
         #expect(result.stripped.count == 10)  // 8 + 2 corners
     }
@@ -107,7 +107,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardDivider(
             style: .line,
             innerWidth: 5,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("├"))
@@ -119,7 +119,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardDivider(
             style: .line,
             innerWidth: 6,
-            color: .ansi(.white)
+            color: .white
         )
         #expect(result.stripped.count == 8)
     }
@@ -130,7 +130,7 @@ struct BorderRendererStandardTests {
             content: "Hello",
             innerWidth: 10,
             style: .line,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("│"))
@@ -143,7 +143,7 @@ struct BorderRendererStandardTests {
             content: "Hi",
             innerWidth: 10,
             style: .line,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         // │ + padded content (10 chars) + │ = 12
@@ -156,7 +156,7 @@ struct BorderRendererStandardTests {
             content: "",
             innerWidth: 0,
             style: .line,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         // Just two vertical borders
@@ -170,11 +170,12 @@ struct BorderRendererStandardTests {
             content: "Test",
             innerWidth: 10,
             style: .line,
-            color: .ansi(.white),
-            backgroundColor: .ansi(.blue)
+            color: .white,
+            backgroundColor: .blue
         )
-        // Should contain ANSI blue background code (44)
-        #expect(result.contains("\u{1B}[44m"))
+        // The blue background, in the spelling this build's colour depth gives it
+        let blue = "\u{1B}[" + Color.blue.backgroundCodes().joined(separator: ";") + "m"
+        #expect(result.contains(blue), "\(result.debugDescription)")
     }
 
     // MARK: Double Line Style
@@ -184,7 +185,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardTopBorder(
             style: .doubleLine,
             innerWidth: 5,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("╔"))
@@ -196,7 +197,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardDivider(
             style: .doubleLine,
             innerWidth: 5,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("╠"))
@@ -210,7 +211,7 @@ struct BorderRendererStandardTests {
         let result = BorderRenderer.standardTopBorder(
             style: .rounded,
             innerWidth: 5,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(stripped.hasPrefix("╭"))
@@ -229,8 +230,8 @@ struct BorderRendererFocusIndicatorTests {
         let result = BorderRenderer.standardTopBorder(
             style: .rounded,
             innerWidth: 10,
-            color: .ansi(.white),
-            focusIndicatorColor: .ansi(.cyan)
+            color: .white,
+            focusIndicatorColor: .cyan
         )
         let stripped = result.stripped
         #expect(stripped.contains("●"), "Should contain focus indicator character")
@@ -243,7 +244,7 @@ struct BorderRendererFocusIndicatorTests {
         let result = BorderRenderer.standardTopBorder(
             style: .rounded,
             innerWidth: 10,
-            color: .ansi(.white)
+            color: .white
         )
         let stripped = result.stripped
         #expect(!stripped.contains("●"), "Should not contain focus indicator")
@@ -254,13 +255,13 @@ struct BorderRendererFocusIndicatorTests {
         let withIndicator = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 10,
-            color: .ansi(.white),
-            focusIndicatorColor: .ansi(.cyan)
+            color: .white,
+            focusIndicatorColor: .cyan
         )
         let without = BorderRenderer.standardTopBorder(
             style: .line,
             innerWidth: 10,
-            color: .ansi(.white)
+            color: .white
         )
         // Both should have the same visual width (● replaces one ─)
         #expect(withIndicator.stripped.count == without.stripped.count)
@@ -311,10 +312,10 @@ struct BorderRendererFocusIndicatorTests {
         let result = BorderRenderer.standardTopBorder(
             style: .rounded,
             innerWidth: 20,
-            color: .ansi(.white),
+            color: .white,
             title: "Panel",
-            titleColor: .ansi(.cyan),
-            focusIndicatorColor: .ansi(.green)
+            titleColor: .cyan,
+            focusIndicatorColor: .green
         )
         let stripped = result.stripped
         #expect(stripped.contains("●"), "Should contain focus indicator")
