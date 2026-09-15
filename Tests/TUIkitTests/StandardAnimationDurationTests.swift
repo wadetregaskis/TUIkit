@@ -96,8 +96,8 @@ struct StandardAnimationDurationTests {
         return presets.flatMap { name, style in
             [20, 36].flatMap { width in
                 let cycle = IndeterminateRenderer.cycle(
-                    width: width, style: style, fillColor: .ansi(.green), backgroundColor: .ansi(.blue),
-                    accentColor: .ansi(.red), palette: SystemPalette.green, speed: .standard)
+                    width: width, style: style, fillColor: .green, backgroundColor: .blue,
+                    accentColor: .red, palette: SystemPalette.green, speed: .standard)
                 return [
                     StandardAnimationDuration(
                         name: "\(name)BarFrame(\(width))", seconds: AnimationClock.seconds(forTicks: cycle.frameTicks)),
