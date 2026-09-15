@@ -41,7 +41,7 @@ struct StandardAnimationDurationTests {
     private static let loopDurations: [StandardAnimationDuration] = [
         ("viewAnimationFrame", AnimationRequest.viewAnimations), ("dragLiftFrame", .dragLift),
         ("dragReturnFrame", .dragReturn), ("dragAutoScrollFrame", .dragAutoScroll),
-    ].map { StandardAnimationDuration(name: $0.0, seconds: AnimationClock.seconds(forTicks: $0.1.frameTicks ?? 0)) }
+    ].map { StandardAnimationDuration(name: $0.0, seconds: AnimationClock.seconds(forTicks: $0.1.frameTicks)) }
         + [
             // The period a held scrollbar steps at and keeps the loop rendering at: one
             // constant for both, so the renders cannot fall between the steps.

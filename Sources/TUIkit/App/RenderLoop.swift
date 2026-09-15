@@ -377,9 +377,10 @@ extension RenderLoop {
     ///   - animationScheduler: The run loop's animation scheduler, made available
     ///     to animating views via `context.requestAnimation(...)`. `nil` for
     ///     one-off renders (the backtick frame dump) that schedule no animation.
-    ///   - frameNowNanos: The monotonic-clock timestamp (ns) this frame's
-    ///     animation grids anchor to — the same `now` the run loop uses to compute
-    ///     the next animation deadline, so grid and deadline agree exactly.
+    ///   - frameNowNanos: The monotonic-clock timestamp (ns) of this frame — the
+    ///     instant a wake declared this frame is measured from, and the same `now`
+    ///     the run loop computes the next animation deadline after, so the two
+    ///     agree exactly.
     @discardableResult
     func render(
         pulsePhase: Double = 0,
@@ -406,7 +407,7 @@ extension RenderLoop {
         if tuiContext.dragAndDropSession.driveAutoScroll(
             nowNanos: UInt64(bitPattern: frameNowNanos))
         {
-            animationScheduler?.request("drag-autoscroll", .dragAutoScroll, now: frameNowNanos)
+            animationScheduler?.request("drag-autoscroll", .dragAutoScroll)
         }
 
         driveDragFlights(nowNanos: frameNowNanos, scheduler: animationScheduler)
@@ -627,13 +628,13 @@ extension RenderLoop {
         if tuiContext.dragAndDropSession.driveLift(
             nowNanos: UInt64(bitPattern: frameNowNanos))
         {
-            animationScheduler?.request("drag-lift", .dragLift, now: frameNowNanos)
+            animationScheduler?.request("drag-lift", .dragLift)
         }
 
         if tuiContext.dragAndDropSession.driveReturnFlight(
             nowNanos: UInt64(bitPattern: frameNowNanos)) != nil
         {
-            animationScheduler?.request("drag-return", .dragReturn, now: frameNowNanos)
+            animationScheduler?.request("drag-return", .dragReturn)
         }
     }
 
@@ -1140,9 +1141,9 @@ extension RenderLoop {
     /// clocks, the scheduler they declare their rates to, this frame's `now`,
     /// and the transaction the pending change was made under.
     ///
-    /// `frameNowNanos` is the anchor for any grid registering this frame, so
-    /// the loop's next-firing query and the grids agree exactly rather than by
-    /// a clock read apart.
+    /// `frameNowNanos` is the instant a wake declared this frame is measured from,
+    /// and the one the loop asks for the next firing after, so the two agree
+    /// exactly rather than by a clock read apart.
     private func publishAnimationValues(
         into environment: inout EnvironmentValues,
         pulsePhase: Double,
@@ -1193,7 +1194,7 @@ extension RenderLoop {
         guard store.animations.hasLiveAnimations(at: frameNowNanos)
             || store.departures.hasDepartures(at: frameNowNanos)
         else { return }
-        scheduler?.request(Self.viewAnimationToken, .viewAnimations, now: frameNowNanos)
+        scheduler?.request(Self.viewAnimationToken, .viewAnimations)
     }
 
     /// The scheduler token every in-flight interpolation shares.

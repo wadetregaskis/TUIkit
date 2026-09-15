@@ -83,7 +83,8 @@ aimed at one thing; focus is where the keyboard happens to be.
 A hover tooltip appears only after the pointer has rested. That needs a clock,
 and the run loop is demand-driven — it renders when something asks. So
 `TooltipState` must **request a wake** at the moment the delay expires, exactly
-as an animation does (`context.requestAnimation`), or the tooltip appears only
+as an animation asks for its frames (here the one-shot `context.requestWake`), or
+the tooltip appears only
 if something else happens to redraw.
 
 That is one scheduled wake per hover, not a poll, and it stops as soon as the

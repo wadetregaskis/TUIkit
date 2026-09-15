@@ -402,8 +402,8 @@ extension AppRunner {
             // share it, so none can disagree about whether a deadline has passed.
             let now = MonotonicClock.nowNanoseconds
 
-            // Render if a frame is due — a state change, or an animation grid
-            // whose deadline `now` has reached — AND the frame-rate cap has
+            // Render if a frame is due — a state change, or an animation lattice
+            // or wake whose deadline `now` has reached — AND the frame-rate cap has
             // cleared. The render moves both the cap and the next deadline
             // strictly past `now`, so the wait computed below is always a real
             // positive interval, never a spurious "block forever".
@@ -497,13 +497,14 @@ extension AppRunner {
 
     /// Renders one frame and returns the per-frame state the run loop tracks: the
     /// timestamp of this render (for the frame-rate cap) and the soonest instant
-    /// any live animation grid next fires (`nil` if nothing is animating).
+    /// any live animation lattice or wake next fires (`nil` if nothing is animating).
     ///
     /// The scheduler is fenced begin…end around the render: animating views
-    /// re-declare their rates *during* the render (via `requestAnimation`), then
-    /// the next-firing query reads the union of every still-live grid. Both the
-    /// grids and the query use `frameNow`, so "soonest firing after this frame" is
-    /// exact integer arithmetic, not a clock that drifted between the two. Also
+    /// re-declare their lattices and wakes *during* the render (via
+    /// `requestAnimation` and `requestWake`), then the next-firing query reads the
+    /// union of every one still live. Wakes and the query use `frameNow`, so
+    /// "soonest firing after this frame" is exact integer arithmetic, not a clock
+    /// that drifted between the two. Also
     /// republishes the demand-driven pulse/cursor clocks (kept ticking only while
     /// a frame consumed them) and the mouse-tracking mode.
     fileprivate func renderFrame(

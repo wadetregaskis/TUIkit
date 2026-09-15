@@ -29,7 +29,7 @@ struct VolatileReadTrackerTests {
             availableWidth: 40, availableHeight: 10,
             environment: environment, tuiContext: TUIContext())
 
-        context.requestAnimation(token: "test", frequency: 10)
+        context.requestAnimation(token: "test", frameTicks: 6)
 
         #expect(tracker.reads == 0, "no pulse demand: the pulse timer keys off `reads` alone")
         #expect(tracker.sideEffects == 1)
@@ -47,7 +47,7 @@ struct VolatileReadTrackerTests {
             availableWidth: 40, availableHeight: 10,
             environment: environment, tuiContext: TUIContext())
 
-        context.requestAnimation(token: "test", frequency: 10)
+        context.requestAnimation(token: "test", frameTicks: 6)
 
         #expect(tracker.sideEffects == 1)
     }
@@ -63,7 +63,7 @@ struct VolatileReadTrackerTests {
             environment: environment, tuiContext: TUIContext())
         context.isMeasuring = true
 
-        context.requestAnimation(token: "test", frequency: 10)
+        context.requestAnimation(token: "test", frameTicks: 6)
 
         #expect(tracker.cacheUnsafeCount == 0)
     }

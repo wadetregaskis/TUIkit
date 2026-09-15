@@ -35,8 +35,8 @@ private struct MouseEventDispatcherKey: EnvironmentKey {
 // MARK: - Animation Scheduler
 
 /// EnvironmentKey for the run loop's animation scheduler. An animating view
-/// declares its desired re-render rate through it (see
-/// ``RenderContext/requestAnimation(token:frequency:frequencyTolerance:phaseTolerance:)``)
+/// declares how often it wants re-rendering through it (see
+/// ``RenderContext/requestAnimation(token:frameTicks:)``)
 /// and the scheduler coalesces those declarations so one render serves them all.
 ///
 /// `nil` outside the live run loop — e.g. `ViewRenderer`'s one-off snapshot path,

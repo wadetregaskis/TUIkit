@@ -445,7 +445,7 @@ struct DragAutoScrollTests {
             let before = handler.scrollOffset
             scheduler.beginFrame()
             if harness.drive(nowNanos: UInt64(now)) {
-                scheduler.request("drag-autoscroll", .dragAutoScroll, now: now)
+                scheduler.request("drag-autoscroll", .dragAutoScroll)
             }
             scheduler.endFrame()
             if handler.scrollOffset != before { steps.append(now) }
