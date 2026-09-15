@@ -79,27 +79,27 @@ struct EquatableViewSurfaceTests {
         // Without this the real test below passes whenever the probe is broken.
         let tui = TUIContext()
         #expect(
-            renderUnmemoized(surface: .ansi(.red), tui: tui)
-                != renderUnmemoized(surface: .ansi(.blue), tui: tui))
+            renderUnmemoized(surface: .red, tui: tui)
+                != renderUnmemoized(surface: .blue, tui: tui))
     }
 
     @Test("a surface change re-renders a memoized subtree")
     func surfaceChangeInvalidates() {
         let tui = TUIContext()
-        let onRed = render(surface: .ansi(.red), tui: tui)
-        let onBlue = render(surface: .ansi(.blue), tui: tui)
+        let onRed = render(surface: .red, tui: tui)
+        let onBlue = render(surface: .blue, tui: tui)
 
         #expect(onRed != onBlue, "the buffer painted over red was served over blue")
-        #expect(onBlue == renderUnmemoized(surface: .ansi(.blue), tui: tui))
+        #expect(onBlue == renderUnmemoized(surface: .blue, tui: tui))
     }
 
     @Test("an unchanged surface still hits")
     func unchangedSurfaceStillHits() {
         // The fix must not turn every lookup into a miss.
         let tui = TUIContext()
-        _ = render(surface: .ansi(.red), tui: tui)
+        _ = render(surface: .red, tui: tui)
         let before = tui.renderCache.stats.hits
-        _ = render(surface: .ansi(.red), tui: tui)
+        _ = render(surface: .red, tui: tui)
         #expect(tui.renderCache.stats.hits > before)
     }
 }
