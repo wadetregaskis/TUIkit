@@ -2361,7 +2361,7 @@ table above; not measured on a hovered control.
 | what we emit | what the terminal does with it |
 |---|---|
 | `SGR 30–37` / `90–97` (the 16 slots, `Color.ansi(_:)`) | Looks up slot *n* of the **user's colour scheme**. "Red" is a name, not a colour, and the user may make it green. |
-| `Color.red`, `.white`, `.gray` and the other named colours | Not slots: they are RGB, Apple's light values, so they emit the 24-bit row below, and on a 16-colour terminal they are quantised to the nearest slot like any other RGB. Only `Color.ansi(_:)` (or a 256-colour index below 16) asks for a slot. |
+| `Color.red`, `.white`, `.gray` and the other named colours | Not slots: they are RGB, Apple's light values, so they emit the 24-bit row below, and on a 16-colour terminal they are quantised to the nearest slot like any other RGB: nearest to the colours the terminal reported for its slots, or by xterm's table while it has reported none. Only `Color.ansi(_:)` (or a 256-colour index below 16) asks for a slot. |
 | `SGR 38;5;n` (256-colour) | Slots 0–15 are the same sixteen, so they are remapped identically. 16–231 (the 6×6×6 cube) and 232–255 (the grey ramp) are conventionally fixed — but `OSC 4` can set any index, so "conventionally" is the strongest word available. |
 | `SGR 38;2;r;g;b` (24-bit) | The colour is stated exactly and there is nothing to look up. It can still be *adjusted* — iTerm2's minimum-contrast setting will move a foreground it judges illegible against its background, and a terminal applying a colour profile shifts everything. |
 | `SGR 39` / `49` (default fg/bg) | The user's configured default. This is what ``Color/default`` means, and it is the only spelling that is *defined* as "whatever the user chose". |
@@ -2387,23 +2387,32 @@ says so. Two things derived real decisions from it:
   reads no worse (Opacity as composition §82). On Apple Terminal
   "Basic", where 15 of the 16 differ from xterm's (above), that is the
   difference between measuring slot 1 as (205, 0, 0) and as (153, 0, 0).
-- **Quantisation.** Downsampling a truecolor value for a 256-colour terminal
-  searches for the nearest entry by RGB distance. If the first sixteen entries
-  are not where the table thinks, the "nearest" one may not look nearest.
-  **Measured, 2026-09-01:** quantising against Ghostty's real sixteen instead
-  of xterm's table changes the slot chosen for **66.8%** of the RGB cube, and
-  the colour actually painted lands **24% closer** in OKLab — the same 24% over
-  the cube as over dark pixels alone. So the approximation costs about a
-  quarter of the accuracy the mode is capable of. Quantising against the
-  reported sixteen is the fix, and is not built yet: RGB still quantises to the
-  sixteen by xterm's table.
+- **Quantisation.** On a 16-colour terminal an RGB colour is drawn as the slot
+  nearest to it by RGB distance. If the sixteen are not where the table thinks,
+  the "nearest" one may not look nearest. (A 256-colour terminal is not
+  affected: its search is over the cube and the grey ramp, 16–255, and never
+  the sixteen.) **Measured, 2026-09-01:** quantising against Ghostty's real
+  sixteen instead of xterm's table changes the slot chosen for **66.8%** of the
+  RGB cube, and the colour actually painted lands **24% closer** in OKLab — the
+  same 24% over the cube as over dark pixels alone. So the approximation cost
+  about a quarter of the accuracy the mode is capable of. **Since 2026-09-15 RGB
+  quantises to the sixteen the terminal reported**, once it has reported all
+  of them, and by xterm's table until then: the same RGB distance, the lower
+  slot on a tie, measured against what each slot paints. Computed with that
+  rule from the reported tables in this document, over every fifth level of
+  the cube (140,608 colours), the slot changes for 43.4% of them on Apple
+  Terminal "Basic" and 46.6% on iTerm2 "Default", and the slot painted lands
+  22.8% and 28.2% closer in OKLab. `Color.red`, (255, 59, 48), is SGR 91 by
+  xterm's table and on "Basic", and 31 on iTerm2 "Default", whose slot 1
+  (167, 69, 50) is nearer than its slot 9 (208, 126, 120).
 
-xterm's table is kept where a number is needed and no rule measures it: a
-colour editor's reading of a slot the terminal has not reported, an image
-palette's match candidates, and quantising RGB to sixteen colours. Those
-degrade rather than break, because **an app cannot know the user's scheme
-unless it asks**, and a terminal that does not answer `OSC 4` (Warp and GNU
-screen, measured) leaves the slots unknown.
+xterm's table is kept where a number is needed before the terminal has
+reported its slots: a colour editor's reading of a slot, an image palette's
+match candidates, and quantising RGB to sixteen colours. Each takes the
+reported slot once there is one. Until then they degrade rather than break,
+because **an app cannot know the user's scheme unless it asks**, and a
+terminal that does not answer `OSC 4` (Warp and GNU screen, measured) leaves
+the slots unknown.
 
 ### What follows for the framework's own colours
 

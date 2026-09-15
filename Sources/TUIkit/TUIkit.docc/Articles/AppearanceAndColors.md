@@ -78,9 +78,11 @@ named colour can be measured, mixed and faded anywhere. `Color.magenta` is
 TUIkit's own, #FF00FF: SwiftUI has no magenta.
 
 A named colour looks the same on every terminal that shows 24-bit colour. On a
-terminal with only sixteen colours it becomes the nearest slot by xterm's
-table, so `.red` is SGR 91 there. For the red the user's terminal profile
-defines, use `Color.ansi(.red)`.
+terminal with only sixteen colours it becomes the nearest slot: nearest to the
+colours the terminal reports for its slots, or by xterm's table when it reports
+none. So `.red` is SGR 91 by xterm's table and on Terminal.app's default
+profile, and 31 on iTerm2's. For the red the user's terminal profile defines,
+use `Color.ansi(.red)`.
 
 ### Terminal Colors (ANSI)
 

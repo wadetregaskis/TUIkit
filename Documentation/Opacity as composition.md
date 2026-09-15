@@ -5139,7 +5139,9 @@ terminal's own foreground and background:
 **What does not change.** A slot still emits its own code at every depth, and `isAchromatic`
 still goes by which slot it is. Code that reads a colour as a value keeps a number: a colour
 editor, a swatch grid's nearest match and an image palette's candidates read the reported
-slot or xterm's value, and RGB still quantises to the sixteen by xterm's table. An image
+slot or xterm's value, and RGB quantises to the sixteen by the reported slots, or by xterm's
+table until all sixteen are reported (Terminal-compatibility.md, "Why this is load-bearing
+rather than trivia"; 2026-09-15). An image
 tone curve's stops read `rgbComponents`, so a slot stop drops out while the slots are
 unreported, as a semantic stop does until it is resolved.
 

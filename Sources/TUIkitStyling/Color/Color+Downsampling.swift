@@ -42,7 +42,10 @@ extension Color {
     /// - `.palette256` indices 0–15 map directly to their `.ansi` slots;
     ///   indices 16–255 are converted via their RGB representation.
     /// - `.rgb` is matched to the closest of the 16 standard/bright
-    ///   ANSI colors using Euclidean distance in RGB space.
+    ///   ANSI colors using Euclidean distance in RGB space: closest to the
+    ///   colours the terminal reported for its sixteen slots, once it has
+    ///   reported all of them, and to xterm's table until then. The lower slot
+    ///   wins a tie.
     /// - `.terminalForeground` and `.terminalBackground` are returned unchanged,
     ///   as in ``downsampledToPalette256()``.
     /// - `.semantic` must be resolved before calling this method.
@@ -581,8 +584,9 @@ extension Color {
         }
     }
 
-    /// All 16 ANSI colors with xterm's RGB values for nearest-neighbor matching,
-    /// in slot order, so an exact tie goes to the lower slot.
+    /// All 16 ANSI colors with xterm's RGB values, in slot order, so an exact tie
+    /// goes to the lower slot. The RGB is what ``rgbToNearestANSI16(red:green:blue:)``
+    /// matches against while the terminal has not reported its own sixteen.
     fileprivate static let ansi16Table: [(color: Color, red: UInt8, green: UInt8, blue: UInt8)] =
         ANSIColor.allCases.map { slot in
             let rgb = slot.xtermRGB
@@ -590,16 +594,34 @@ extension Color {
         }
 
     /// Finds the nearest ANSI 16-color for an RGB value.
+    ///
+    /// Nearest to what each slot PAINTS, as far as that is known: the colour the
+    /// terminal reported for it, once it has reported all sixteen
+    /// (`TerminalColors.slots`, which is all or nothing), and xterm's value until
+    /// then. A slot is still what is emitted, so the terminal draws its own
+    /// colour either way; the report only changes which slot is nearest. On Apple
+    /// Terminal "Basic" (220, 0, 0) is nearer xterm's red, (205, 0, 0), than its
+    /// bright red, but nearer that terminal's bright red, (230, 0, 0), than its
+    /// red, (153, 0, 0), so it is drawn as 91 there rather than 31.
+    ///
+    /// Not memoised, and the terminal's colours are read once per call: the
+    /// answer depends on them, and a memo would have to be keyed on them too.
     fileprivate static func rgbToNearestANSI16(red: UInt8, green: UInt8, blue: UInt8) -> Color {
+        let reported = TerminalColors.current.slots
         var bestColor = Color.ansi(.white)
         var bestDistance = Int.max
 
         // Deliberate linear scan: n=16 is trivially cheap and beats anything cleverer — don't "optimise".
-        for entry in ansi16Table {
-            let distance = rgbDistanceSquared(
-                (red, green, blue),
-                (entry.red, entry.green, entry.blue)
-            )
+        for index in ansi16Table.indices {
+            let entry = ansi16Table[index]
+            let candidate: (UInt8, UInt8, UInt8)
+            if let reported {
+                let slot = reported[index]
+                candidate = (slot.red, slot.green, slot.blue)
+            } else {
+                candidate = (entry.red, entry.green, entry.blue)
+            }
+            let distance = rgbDistanceSquared((red, green, blue), candidate)
             if distance < bestDistance {
                 bestDistance = distance
                 bestColor = entry.color

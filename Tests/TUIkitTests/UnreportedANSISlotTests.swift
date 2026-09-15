@@ -335,17 +335,25 @@ struct UnreportedANSISlotTests {
         }
     }
 
-    /// A pin: quantising RGB to the sixteen still searches xterm's table (N-C5 makes it
-    /// search the reported slots).
-    @Test("RGB still quantises to the sixteen by xterm's table")
-    func quantisingIsUnchanged() {
-        for terminal in [TerminalColors.unknown, Self.appleTerminal] {
-            TerminalColors.withCurrent(terminal) {
-                for slot in ANSIColor.allCases {
-                    let rgb = slot.xtermRGB
-                    #expect(Color.rgb(rgb.red, rgb.green, rgb.blue).downsampledToANSI16() == .ansi(slot), "\(slot)")
-                }
+    /// The last line of §2: quantising RGB to the sixteen searches xterm's table until the
+    /// terminal reports its slots, and the reported slots after. ReportedSlotQuantisationTests
+    /// (TUIkitStylingTests) pins the rule across the cube.
+    @Test("RGB quantises to the sixteen by xterm's table until the slots are reported, then by the report")
+    func quantisingFollowsTheReport() {
+        TerminalColors.withCurrent(.unknown) {
+            for slot in ANSIColor.allCases {
+                let rgb = slot.xtermRGB
+                #expect(Color.rgb(rgb.red, rgb.green, rgb.blue).downsampledToANSI16() == .ansi(slot), "\(slot)")
             }
+            #expect(Color.rgb(220, 0, 0).downsampledToANSI16() == .ansi(.red))
+        }
+        TerminalColors.withCurrent(Self.appleTerminal) {
+            for slot in ANSIColor.allCases {
+                let rgb = Self.reported(slot)
+                #expect(Color.rgb(rgb.red, rgb.green, rgb.blue).downsampledToANSI16() == .ansi(slot), "\(slot)")
+            }
+            // Nearer xterm's red (205) and nearer Apple Terminal's bright red (230).
+            #expect(Color.rgb(220, 0, 0).downsampledToANSI16() == .ansi(.brightRed))
         }
     }
 }
