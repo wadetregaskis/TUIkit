@@ -38,6 +38,13 @@ struct ActiveChipCycle {
     ///
     /// Spent THEN floored: the floor reads RGB, not alpha, so a floor passed before
     /// the spend is no floor after it.
+    ///
+    /// It also stands off ``labelDim`` by the chrome pulse floor, measured as drawn.
+    /// Nothing else keeps the two ends apart, and an accent the cube draws like the
+    /// resting label is a label that does not breathe: White's accent is white, and
+    /// so is the resting label on its dark chip. This end moves, not the resting one,
+    /// because the resting end is what an unfocused strip shows, and it is floored
+    /// against the chip again afterwards.
     let labelBright: Color
 
     /// - Parameter restingLabel: where the active label sits when the strip
@@ -50,9 +57,19 @@ struct ActiveChipCycle {
         cycle = context.environment.selectionEmphasis.cycle(isFocused)
         self.surface = surface
         labelDim = restingLabel
-        labelBright = palette.accent.resolve(with: palette)
+        var bright = palette.accent.resolve(with: palette)
             .spendingAlpha(over: surface)
             .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: surface)
+        // The loud end moves, never the resting one: that is what an unfocused strip
+        // shows. Re-floored against the chip after, because standing off the resting
+        // label can walk it toward the surface. Both floors carry alpha, so the two
+        // ends still agree about it.
+        if ChromeTrack.renderedRatio(bright, restingLabel) < ViewConstants.chromePulseFloor {
+            bright = bright
+                .ensuringRenderedContrast(atLeast: ViewConstants.chromePulseFloor, against: restingLabel)
+                .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: surface)
+        }
+        labelBright = bright
         // Every frame is a lerp or a swap of these two, so agreeing here is agreeing
         // everywhere — and it is what the claim both strips derive from `labelNow`
         // silently depends on.

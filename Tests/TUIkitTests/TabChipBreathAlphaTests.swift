@@ -53,6 +53,26 @@ struct TabChipBreathAlphaTests {
         #expect(unreadable.isEmpty, "the loud end falls under the floor: \(unreadable)")
     }
 
+    /// A breath is two colours at two moments, and two that the 256-colour cube
+    /// draws alike are a still label. The loud end is the accent floored against the
+    /// chip, and nothing kept it off the resting end: on White the accent is white,
+    /// and so is the resting label on its dark chip.
+    ///
+    /// Measured as chrome's other breaths are, through the cube, at their floor
+    /// (the hundredth is the slack a lightness walk in 1% steps leaves).
+    @Test("A focused chip's breath can be seen on every palette")
+    func breathIsVisibleOnEveryPalette() {
+        var still: [String] = []
+        for palette in PaletteRegistry.all {
+            let chip = chip(palette: palette, animation: .pulse)
+            let ratio = ChromeTrack.renderedRatio(chip.labelDim, chip.labelBright)
+            if ratio < ViewConstants.chromePulseFloor - 0.01 {
+                still.append("\(palette.name): \(ratio)")
+            }
+        }
+        #expect(still.isEmpty, "the breath's two ends draw alike: \(still)")
+    }
+
     /// The compact strip draws its active chip at the breath's current phase and
     /// claims what that phase owes, then replays every other phase under that one
     /// claim. With no cursor timer running, the current phase is the first — the
