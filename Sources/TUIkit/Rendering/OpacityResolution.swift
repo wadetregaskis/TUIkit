@@ -34,7 +34,11 @@
 //    keeps its character at every alpha; where both sides paint ink, at or
 //    above ½ the source's character is drawn and below ½ the destination's is.
 //    At 0 the source contributes nothing at all, so `opacity(0)` genuinely
-//    reveals what is behind it.
+//    reveals what is behind it;
+//  * **a colour with no RGB is not mixed**: the heavier side wins, and a glyph
+//    whose ink ends up as the terminal's unreported page, on that page, draws
+//    nothing, because the foreground slot would spell it as 39. So a fade over
+//    such a page is a cut at ½ (§75 and §76).
 //
 //  Created by Wade Tregaskis
 //  Created by Wade Tregaskis

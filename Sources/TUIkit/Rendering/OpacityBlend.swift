@@ -415,7 +415,37 @@ extension FrameBuffer {
         result.foreground = foreground
         result.background = background
         result.style = result.style.settingForeground(foreground).settingBackground(background)
+        // A glyph whose ink is the page the terminal has not reported, drawn ON that
+        // page, draws nothing. It is invisible, but the foreground slot has no
+        // spelling for that page and emits 39, so the glyph would show at full
+        // strength in the terminal's foreground. It gets here because a blend with
+        // no RGB snaps: a label faded below ½ over such a page becomes the page,
+        // and so does an ink whose own alpha is below ½, even where its layer is
+        // whole and wins the contest. Dropping the glyph makes both a cut at ½, the
+        // side of it rule 9 already puts the colours on.
+        // The attributes that ink a blank cell go with it (rule 6).
+        //
+        // This is where §12's "a transparent ink keeps its glyph" gives way. That
+        // rule keeps copy and paste honest by emitting the glyph in the field's
+        // colour, which here cannot be emitted. `Opacity as composition` §76.
+        if Self.isTheUnreportedPageOnItself(ink: foreground, field: background ?? surface) {
+            result.character = " "
+            result.style.apply("\u{1B}[24;25;29m")
+        }
         return result
+    }
+
+    /// Whether `ink` is the terminal's page, unreported, and `field` is that page too.
+    ///
+    /// Only `.terminalBackground`, and only with no RGB. Reported, the foreground
+    /// slot spells it as its RGB, so the glyph is emitted in the field's colour as
+    /// any other invisible ink is. On a different field the glyph is visible
+    /// ink, in the wrong colour (39), and dropping it would lose it.
+    private static func isTheUnreportedPageOnItself(ink: Color?, field: Color) -> Bool {
+        guard let ink, case .terminalBackground = ink.value, case .terminalBackground = field.value else {
+            return false
+        }
+        return ink.rgbComponents == nil
     }
 
     /// `line` taken apart into one entry per COLUMN, up to `width`.

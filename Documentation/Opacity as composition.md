@@ -735,6 +735,14 @@ The rules, updated as each lands:
    same side of the tie. At alpha 1 and 0 every blend is the colour exactly as
    it is spelled, measurable or not.
 
+10. **A glyph drawn in the unreported page, on that page, is not drawn**
+    (2026-09-15, §76). Where a cell's ink comes out as `.terminalBackground`
+    with no RGB and its field is that page too, the cell is a space, and the
+    attributes that ink a blank cell (rule 6) are dropped with the glyph. The
+    glyph is invisible, but the foreground slot cannot say so: it emits 39, the
+    terminal's foreground, at full strength. With rule 9 this makes a fade over
+    such a page a cut at ½ for the glyph as well as for its colours.
+
 Checked for §10 and found already handled, no change needed: quantisation can
 make adjacent phases of a repeating fade byte-identical, and the replay
 machinery already charges nothing for them — `timeUntilChange` scans past
@@ -924,6 +932,11 @@ contest, so a layer at 0 handing the cell to the destination is the continuous
 answer *there*. The ink channel has no contest at all — it is one cell's own
 glyph on its own field — so keeping the glyph is the continuous answer for it.
 Two channels, two limits, one rule each.
+
+**One exception, 2026-09-15 (§76):** on a page the terminal has not reported, the
+field's colour has no spelling in the foreground slot, so a glyph in it would be
+emitted as 39 and seen. There the cell draws no glyph, and the text under it is not
+copied either.
 
 
 ## 13. First match wins dropped one of two claims (2026-09-09)
@@ -4786,7 +4799,7 @@ glyph still draws below ½, now in a colour that snapped to the field. Where tha
 `.terminalBackground` and the terminal has not reported it, the foreground slot has no
 spelling for it and emits its own default, 39, so the glyph shows in the terminal's
 foreground. Whether such a glyph should draw at all is the next step of the terminal-colour
-plan, not this one.
+plan, not this one. (It does not: §76.)
 
 **What a built-in view sees: nothing.** Every built-in palette states RGB roles, so no
 blend the framework derives from one has a side without RGB. The change reaches an app
@@ -4796,3 +4809,51 @@ or a blend of its own.
 `BlendEndsTests` (TUIkitStylingTests) pins the rule, including
 `restingControlFace`, `focusBackground` and both pulse pairs over a page with no RGB, and
 a gradient stop with no RGB, which is a hard edge at the middle of its segment.
+
+## 76. A glyph in the terminal's page, on that page (2026-09-15)
+
+§75 left one cell wrong. A label faded below ½ over `.terminalBackground`, before the
+terminal has reported it, has its ink snap to that page. The glyph still drew, because
+rule 2 draws a source glyph over a blank destination at any alpha, and the foreground slot
+has no spelling for an unreported page: it emits 39. So `Text("ab").opacity(0.3)` over
+that page was "ab" in the terminal's own foreground, at full strength, which is not
+between the label and the page at all. The same cell arises from a colour's own alpha:
+`Text("ab").foregroundStyle(red.opacity(0.3))` has a whole layer, its ink snaps to the page
+inside it, and a whole layer wins the glyph contest even over text, so it drew "ab" in 39
+where the text it covered had been.
+
+**The rule.** When a blended cell's ink is `.terminalBackground` with no RGB and its field
+is `.terminalBackground`, the cell is a space. Underline, blink and strike are cleared
+with the glyph, since each inks a blank cell in the foreground colour (rule 6). With
+rule 9, a fade over such a page is now a cut at ½ in all three things a cell has: its
+ink, its field and its glyph.
+
+What the rule does not touch, and why:
+- **A reported page.** The foreground slot spells it as its RGB, so the glyph is emitted
+  in the field's colour like any other invisible ink, and §12 holds: the text stays
+  selectable. The fade is RGB between exact ends.
+- **The page's colour on another field.** That glyph is visible, only in the wrong colour
+  (the limit §75 names), so dropping it would lose it.
+- **`Color.default` over `Color.default`.** Each spells its own slot's default, 39 on 49,
+  which is ordinary visible text.
+- **The terminal's foreground as a field.** The background slot spells an unreported
+  `.terminalForeground` as 49, so there the field is what is wrong, not the glyph.
+- **Opaque cells.** Nothing is blended at full strength, so nothing snaps.
+- **A veil in the page's colour.** It is emitted as 49, and the compositor reads a stated
+  49 as no background at all (`readingColors`, OpacityModifier.swift), so it composites
+  nothing and the text under it stays. That is a limit of its own, not this rule's.
+
+**The cost, accepted.** §12 keeps a transparent ink's glyph so that copy and paste stays
+honest. Over an unreported page that is given up: a label faded below ½ is not in the
+terminal's text at all. Concealing it with SGR 8 would keep it selectable, but no host's
+handling of SGR 8 is measured, so that is not pursued.
+
+**What a built-in view sees: nothing yet.** Every built-in palette paints an RGB page. This
+reaches an app whose palette or background is `.terminalBackground`, and the grounding
+step of the terminal-colour plan, which makes a `.clear` root that page.
+
+`FadeOverUnreportedPageTests` (TUIkitTests) pins it through `renderToScreen`: a label at
+0.3 and 0.49 is gone and at 0.5 and 0.6 is drawn in its own ink; a dropped underline
+leaves no attribute; an ink at alpha 0.3 is gone over the page and over the text it
+covers, and at 0.6 is drawn over that text; and over a reported page the label at 0.3
+and the ink at 0.3 both keep their glyphs, in RGB.
