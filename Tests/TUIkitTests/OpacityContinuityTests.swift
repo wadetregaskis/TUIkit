@@ -55,7 +55,7 @@ struct OpacityContinuityTests {
             OpacityRegion(offsetX: 0, offsetY: 0, width: 1, height: 1, opacity: alpha)
         ]
         return buffer.resolvingOpacity(
-            over: destination, surface: .ansi(.black), palette: palette()
+            over: destination, surface: .black, palette: palette()
         ).lines[0]
     }
 
