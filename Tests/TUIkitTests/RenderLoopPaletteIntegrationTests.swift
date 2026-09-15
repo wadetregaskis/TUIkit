@@ -11,16 +11,16 @@ import Testing
 private struct DistinctBackgroundPalette: Palette {
     let id = "distinct-bg"
     let name = "Distinct BG"
-    let background = Color.ansi(.red)
-    let foreground = Color.ansi(.white)
-    let accent = Color.ansi(.cyan)
-    let success = Color.ansi(.green)
-    let warning = Color.ansi(.yellow)
-    let error = Color.ansi(.magenta)
-    let info = Color.ansi(.blue)
-    let border = Color.ansi(.brightBlack)
-    let statusBarBackground = Color.ansi(.green)
-    let appHeaderBackground = Color.ansi(.blue)
+    let background = Color.red
+    let foreground = Color.white
+    let accent = Color.cyan
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.magenta
+    let info = Color.blue
+    let border = Color.gray
+    let statusBarBackground = Color.green
+    let appHeaderBackground = Color.blue
 }
 
 @MainActor
