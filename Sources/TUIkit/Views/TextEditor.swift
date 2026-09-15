@@ -71,6 +71,20 @@
 /// > follow the cursor (a common terminal-editor behaviour), and vertically when
 /// > the text is taller than the view. Soft word-wrap is a possible future
 /// > option.
+///
+/// ## The selection and the caret where the terminal decides the colours
+///
+/// A selection is a tint of the palette's accent over the editor's well, and a
+/// block caret is the caret's own colour with the character punched out of it.
+/// Where the palette names colours the terminal decides — its own foreground or
+/// background, or one of its sixteen slots — and the terminal has not said what
+/// it paints for them, there is no tint between them to draw. Selected cells
+/// then draw in **reverse video**, exchanging the cell's own ink and field, and
+/// a block caret flips whatever the cell under it does: a plain cell is
+/// reversed, a cell already reversed by the selection is drawn plain. A
+/// blinking caret alternates the two; a pulsing one holds. A bar or underscore
+/// caret is unaffected, as is a palette that states ordinary colours, on any
+/// terminal. ``TextField`` draws the same way.
 public struct TextEditor: View {
     let text: Binding<String>
     var focusID: String?
@@ -449,7 +463,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     private struct RowStyling {
         let background: Color?
         let text: Color
-        let selection: (foreground: Color, background: Color)
+        let selection: TextFieldContentRenderer.SelectionStyle
 
         @MainActor
         init(palette: any Palette, isDisabled: Bool, background: Color?) {
@@ -457,9 +471,14 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             // A disabled editor's text CLAIMS its tint's alpha, as a disabled
             // TextField's does — not §31.3's spend, which is the slider's own
             // dimming composite; the editor has no composite to spend through.
-            text = (isDisabled ? palette.foregroundTertiary : palette.foreground).resolve(with: palette)
-            let pair = TextFieldContentRenderer.selectionColors(palette: palette, background: background)
-            selection = (pair.foreground.resolve(with: palette), pair.background.resolve(with: palette))
+            let ink = (isDisabled ? palette.foregroundTertiary : palette.foreground)
+                .resolve(with: palette)
+            text = ink
+            // The row's own ink goes with the question: a selection whose highlight
+            // cannot be measured reverses the CELL rather than tinting it (§87).
+            selection = TextFieldContentRenderer.selectionColors(
+                palette: palette, background: background, ink: ink
+            ).resolved(with: palette)
         }
     }
 
@@ -469,7 +488,8 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     ) -> RenderedRow {
         let background = styling.background
         let textForeground = styling.text
-        let (selectionForeground, selectionBackground) = styling.selection
+        // Not `selection`, which is this row's selected COLUMNS.
+        let selectionStyle = styling.selection
         let windowStart = scrollColumn
         let windowEnd = scrollColumn + width
 
@@ -485,21 +505,21 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
         // is `outputCells`, which holds the next cell's column wherever a run opens
         // or flushes — mid-straddle included, where `outputCells` advances after.
         var runs = TextFieldContentRenderer.RunAccumulator(ink: textForeground, field: background)
-        func emit(_ character: Character, foreground: Color, background: Color?) {
-            runs.append(character, ink: foreground, field: background, atColumn: outputCells)
+        func emit(_ character: Character, foreground: Color, background: Color?, reversed: Bool = false) {
+            runs.append(character, ink: foreground, field: background, reversed: reversed, atColumn: outputCells)
         }
-        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color?) {
+        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color?, reversed: Bool = false) {
             let start = cellX
             let end = cellX + cells
             cellX = end
             guard end > windowStart, start < windowEnd else { return }
             if start >= windowStart, end <= windowEnd {
-                emit(character, foreground: foreground, background: background)
+                emit(character, foreground: foreground, background: background, reversed: reversed)
                 outputCells += cells
             } else {
                 let visible = min(end, windowEnd) - max(start, windowStart)
                 for _ in 0..<visible {
-                    emit(" ", foreground: foreground, background: background)
+                    emit(" ", foreground: foreground, background: background, reversed: reversed)
                 }
                 outputCells += visible
             }
@@ -527,9 +547,9 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             // that outlived its cells would repaint over whatever took them.
             guard cellX >= windowStart, cellX + cells <= windowEnd else {
                 emitClipped(
-                    underlying, cells: cells,
-                    foreground: isSelected ? selectionForeground : textForeground,
-                    background: isSelected ? selectionBackground : background)
+                    underlying, cells: cells, foreground: isSelected ? selectionStyle.foreground : textForeground,
+                    background: isSelected ? selectionStyle.background : background,
+                    reversed: isSelected && selectionStyle.isReversed)
                 return
             }
             let drawn = TextFieldContentRenderer.caretFrames(
@@ -571,26 +591,27 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
                     emitCaret(" ", cells: 1, cycle: caret.cycle, isSelected: isSelected)
                     for _ in 0..<max(0, cells - 1) {
                         emitClipped(
-                            " ", cells: 1,
-                            foreground: isSelected ? selectionForeground : textForeground,
-                            background: isSelected ? selectionBackground : background)
+                            " ", cells: 1, foreground: isSelected ? selectionStyle.foreground : textForeground,
+                            background: isSelected ? selectionStyle.background : background,
+                            reversed: isSelected && selectionStyle.isReversed)
                     }
                 } else {
                     emitCaret(character, cells: cells, cycle: caret.cycle, isSelected: isSelected)
                 }
                 continue
             }
-            let foreground = isSelected ? selectionForeground : textForeground
-            let cellBackground = isSelected ? selectionBackground : background
+            let foreground = isSelected ? selectionStyle.foreground : textForeground
+            let cellBackground = isSelected ? selectionStyle.background : background
+            let reversed = isSelected && selectionStyle.isReversed
             if character == "\t" {
                 // A tab is its stop run of spaces — emitted cell by cell so
                 // the window clips it naturally (and a selected tab
                 // highlights its whole span, as in any editor).
                 for _ in 0..<cells {
-                    emitClipped(" ", cells: 1, foreground: foreground, background: cellBackground)
+                    emitClipped(" ", cells: 1, foreground: foreground, background: cellBackground, reversed: reversed)
                 }
             } else {
-                emitClipped(character, cells: cells, foreground: foreground, background: cellBackground)
+                emitClipped(character, cells: cells, foreground: foreground, background: cellBackground, reversed: reversed)
             }
         }
         // The caret past the last character sits on its own cell.

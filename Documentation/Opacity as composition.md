@@ -5420,3 +5420,69 @@ asked for no tick; a selected row that is not the cursor and an alternating row 
 an RGB palette on the same silent terminal keeps its tint and its breath; and with Apple
 Terminal "Basic"'s sixteen reported the slot accent breathes in `accentFillPulse`'s own ends
 again.
+
+## 87. A text selection and a block caret on a highlight the terminal decides (2026-09-15)
+
+A `TextField`'s, `SecureField`'s or `TextEditor`'s selection is a tint: the accent at 60%
+(`ViewConstants.selectionIndicator`) over the field, with `readableText(on:)` picking the ink
+that reads on it. Its block caret is a fill too — the caret's own colour, with the character
+punched out of it in the field. Where the accent, the caret's colour or the field has no RGB,
+every share of such a blend is one end or the other (§75): the selection was a solid accent
+under text nobody can check for contrast, or — for a translucent accent, below half — the field
+itself, which marks nothing at all. The block caret was the same, and a palette naming a colour
+the terminal decides therefore had a field you could not see your selection or your cursor in.
+
+**The rule.** Both reverse the CELL instead: SGR 7 with the cell's own ink and field stated
+beside it (`ANSIRenderer.colorize(_:foreground:background:inverted:)`;
+Terminal-compatibility.md, "Reverse video (SGR 7)"). A bare 7 exchanges the colours IN FORCE,
+which after a reset are the terminal's own, so the pair is always stated with it — the reason
+the whole-line wrapper `applyPersistentReverse` restates one. A field's cells reach the emitter
+as runs of plain characters with no reset inside them to survive, so the run and the wrapper
+spell the same bytes and the run goes through `colorize`.
+
+- The **selection** reverses the cell's pair: the ink is the FIELD's own, a
+  `.textFieldTextStyle` override included, and the field is the well — or the page, for a
+  `.plain` field that paints none. `Palette.highlightFill(_:over:tint:)` decides, asked about
+  the accent as well as the fill, since below half a share of the accent IS the ground.
+- The **block caret** flips whatever the cell under it does: a plain cell is reversed, and a
+  cell already reversed by the selection has the 7 taken off. Two reversals read as none, which
+  is exactly the point — a cell standing plain among reversed neighbours marks the caret the way
+  a terminal's own block cursor does over a selection. `palette.cursorColor` and the ground
+  decide, through the same `highlightFill`.
+- **A blink alternates** the two, its frames being the cell reversed and the cell plain, and **a
+  pulse holds** one: a breath between two equal ends is still (§79), and the ends are equal
+  under exactly the condition that makes the block reverse. So a pulsing caret leaves no run and
+  asks for no tick, as it already did.
+
+What it leaves alone:
+- **A measurable highlight.** Every built-in palette states RGB roles, so every field is drawn
+  as it was, byte for byte, on a silent terminal and on a reporting one. Once the terminal
+  reports its sixteen, a slot accent tints again.
+- **The other caret shapes.** A bar and an underscore draw a glyph in the caret's own colour,
+  which a slot states perfectly well, so neither changes.
+- **The claims.** A reversal states both sides opaque and claims nothing of its own, as §86's
+  rows do; the caret's reversed frame reports the field alpha its blink-off frame reports, so
+  the frames still agree about the cell (§61.2).
+- **The layout.** Only colours change — the same glyphs in the same cells — so the measure pass
+  and the render still agree.
+
+Limits:
+- **Inside a reversed cursor row the selection cannot be seen.** A `List` row drawn by §86
+  re-states its 7 after every reset in the line, so a field nested in one has the 7 in force
+  across all of its runs: its unselected cells come out reversed in the field's pair, and its
+  selected cells state that same pair with a 7 that is already on. Both halves paint alike.
+  This is §86's "a child that states its own colours reverses ITS pair" reaching a control that
+  now has two kinds of cell. Inferred from the two paths, not measured.
+- A reversed selection is stated opaque, so a faded palette's well is spent rather than blended
+  under it.
+- What a host actually PAINTS for a reversed cell is unmeasured on every terminal
+  (Terminal-compatibility.md).
+
+`ReversedTextSelectionTests` (TUIkitTests) pins it, for a field and for an editor, at all three
+depths, with an `.ansi(.blue)` accent over an RGB well and with the terminal's own pair: the
+selected cells carry the 7 with the field's own ink and well and nothing else, and the cells
+around them do not; a `.textFieldTextStyle` ink is what is exchanged; a block caret reverses the
+cell under it, alternates that under a blink, holds it under a pulse with no run at all, and
+comes off over a reversed selection; a bar and an underscore are unchanged; and with Apple
+Terminal "Basic"'s sixteen reported, and under an RGB palette on a silent terminal, the tint is
+drawn as before.

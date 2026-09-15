@@ -30,6 +30,17 @@ package enum HighlightFill: Equatable, Sendable {
     /// terminal's own pair rather than the palette's
     /// (`Documentation/Terminal-compatibility.md`, "Reverse video (SGR 7)").
     case reversed(ink: Color, field: Color)
+
+    /// Whether this is a reversal — for a site that already knows the pair it would
+    /// paint and only needs telling whether to state it beside an SGR 7.
+    ///
+    /// A text input's selection and its block caret are both of those: each reverses
+    /// the CELL, whose ink and field it holds already, and what it asks the palette is
+    /// only whether the tint it would otherwise have drawn can be measured.
+    package var isReversed: Bool {
+        if case .reversed = self { return true }
+        return false
+    }
 }
 
 extension Palette {

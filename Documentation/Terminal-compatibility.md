@@ -2390,14 +2390,16 @@ keeps there:
 |---|---|---|
 | A `List`'s or a `Table`'s cursor row, selected or not | a steady `ESC[7;<ink>;<field>m` over the palette's own ink and page, restated after every reset in the row, keeping its ● | the accent's breath over the page |
 | A selected row that is not the cursor; an alternating row | nothing at all: the ● says which row is selected | a tint of the accent over the page |
+| A text input's selection (`TextField`, `SecureField`, `TextEditor`) | `ESC[7;<ink>;<field>m` over the cell's OWN pair: the field's ink and its well | the accent at 60% over the well |
+| A block text caret | the cell under it with its reversal flipped — a plain cell reversed, a selected cell's reversal taken off. A blink alternates the two; a pulse holds one | the caret's colour with the character punched out of it in the well |
 
 The trigger is those colours and never the terminal's silence: a palette of
 ordinary RGB roles keeps its tints on a host that answers nothing. The ink and
 the field are stated beside the 7 for the reason ECMA-48 gives below — a bare 7
 exchanges the pair IN FORCE, so a row's padding, which follows its content's
 last reset, would fill with the terminal's own foreground on a page the palette
-paints. What a host actually paints for such a row is what the card's rows A, B
-and D ask, and they are UNMEASURED on every host.
+paints. What a host actually paints for such a row or cell is what the card's
+rows A, B and D ask, and they are UNMEASURED on every host.
 
 **What follows from the sequence itself, on any host.** ECMA-48 calls SGR 7
 "negative image", conventionally drawn by exchanging the foreground and

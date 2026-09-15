@@ -116,6 +116,9 @@ struct TerminalDefinedContrastFloorTests {
         TerminalColors.withCurrent(.unknown) {
             let palette = GroundedPalette.grounding(TerminalGroundsPalette())
             let colours = TextFieldContentRenderer.selectionColors(palette: palette, background: nil)
+            // Unreported there is no highlight to floor against at all, so the cell
+            // reverses its own pair instead (§87) — whose ink is still plain 39.
+            #expect(colours.isReversed, "unreported: stated beside the 7")
             #expect(colours.foreground == .terminalForeground, "unreported: plain 39, as asked")
         }
     }

@@ -104,19 +104,28 @@ extension ANSIRenderer {
     ///   - background: Optional background color.
     ///   - bold: Whether to apply bold.
     ///   - underline: Whether to apply underline.
+    ///   - inverted: Whether to reverse the pair (SGR 7). The two colours are STATED
+    ///     beside the 7 rather than swapped here, so what the terminal exchanges is
+    ///     exactly this pair and not whatever is in force — the reason
+    ///     ``applyPersistentReverse(_:ink:field:)`` restates them after every reset.
+    ///     That wrapper is for a whole LINE, which has a reset per styled run inside
+    ///     it; a run of plain characters has none to survive, so a reversed run comes
+    ///     through here and the two spell the same bytes.
     /// - Returns: The ANSI-formatted string.
     static func colorize(
         _ string: String,
         foreground: Color? = nil,
         background: Color? = nil,
         bold: Bool = false,
-        underline: Bool = false
+        underline: Bool = false,
+        inverted: Bool = false
     ) -> String {
         var style = TextStyle()
         style.foregroundColor = foreground
         style.backgroundColor = background
         style.isBold = bold
         style.isUnderlined = underline
+        style.isInverted = inverted
         return render(string, with: style)
     }
 

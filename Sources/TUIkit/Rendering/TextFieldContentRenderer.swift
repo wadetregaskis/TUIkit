@@ -203,6 +203,7 @@ struct TextFieldContentRenderer {
         private var text = ""
         private var ink: Color
         private var field: Color?
+        private var isReversed = false
         private var start = 0
         private var isOpen = false
 
@@ -219,7 +220,8 @@ struct TextFieldContentRenderer {
         mutating func flush(atColumn column: Int) {
             guard isOpen else { return }
             line += ANSIRenderer.colorize(
-                text, foreground: ink.opaqueSpelling, background: field?.opaqueSpelling)
+                text, foreground: ink.opaqueSpelling, background: field?.opaqueSpelling,
+                inverted: isReversed)
             claims +=
                 OpacityRegion.claim(
                     offsetX: start, width: column - start, height: 1, ink: ink, field: field)
@@ -228,11 +230,23 @@ struct TextFieldContentRenderer {
             isOpen = false
         }
 
-        /// Adds one cell, opening a new run where the colours change.
-        mutating func append(_ piece: Character, ink: Color, field: Color?, atColumn column: Int) {
-            if isOpen, ink != self.ink || field != self.field { flush(atColumn: column) }
+        /// Adds one cell, opening a new run where the colours — or whether they are
+        /// exchanged — change.
+        ///
+        /// - Parameter reversed: Whether the pair is stated beside an SGR 7, which a
+        ///   selection whose highlight cannot be measured is (``SelectionStyle``). Part
+        ///   of a run's identity, not a decoration on it: a reversed cell and a plain
+        ///   one in the same two colours paint opposite pictures.
+        mutating func append(
+            _ piece: Character, ink: Color, field: Color?, reversed: Bool = false,
+            atColumn column: Int
+        ) {
+            if isOpen, ink != self.ink || field != self.field || reversed != isReversed {
+                flush(atColumn: column)
+            }
             if !isOpen {
-                (self.ink, self.field, start, isOpen) = (ink, field, column, true)
+                (self.ink, self.field, isReversed) = (ink, field, reversed)
+                (start, isOpen) = (column, true)
             }
             text.append(piece)
         }
@@ -375,6 +389,29 @@ struct TextFieldContentRenderer {
         return (widths, scrollStart, scrollStart + width)
     }
 
+    /// What a selected cell paints: the highlight's own pair, or — where that
+    /// highlight cannot be measured — the cell's pair, exchanged by reverse video.
+    struct SelectionStyle {
+        /// The colour the selected cells are filled with. Reversed, the colour the
+        /// terminal exchanges INTO them, which is the field the cell already had.
+        let background: Color
+
+        /// The colour the selected text is drawn in. Reversed, the cell's own ink.
+        let foreground: Color
+
+        /// Whether the pair is stated beside an SGR 7 rather than painted directly.
+        let isReversed: Bool
+
+        /// Every colour resolved against `palette`. A custom palette may state a role
+        /// semantically, and ``RunAccumulator`` hands its colours to ``ANSIRenderer``
+        /// as they are, which traps on `.semantic`.
+        func resolved(with palette: any Palette) -> Self {
+            Self(
+                background: background.resolve(with: palette),
+                foreground: foreground.resolve(with: palette), isReversed: isReversed)
+        }
+    }
+
     /// The selection highlight's background and the text colour that reads on
     /// it.
     ///
@@ -382,12 +419,33 @@ struct TextFieldContentRenderer {
     /// has no surface to name — so the palette's background stands in. The
     /// selection is an opaque highlight either way; this only decides its
     /// exact tint.
+    ///
+    /// Where the accent or that ground has no RGB there is no tint to draw at all:
+    /// every share of such a blend is one end or the other, so 60% of the accent is
+    /// either a solid accent under text nobody can check for contrast or the ground
+    /// itself, which shows nothing (`Documentation/Opacity as composition.md` §75,
+    /// §87). The cell's own pair is exchanged instead — reverse video is the one
+    /// highlight a terminal paints legibly whatever colours it keeps — and, since it is
+    /// the CELL that is reversed, the ink is the field's own, a `.textFieldTextStyle`
+    /// override included, rather than the palette's. Both sides are stated opaque, as
+    /// every reversal is, so a reversed cell claims nothing.
+    ///
+    /// - Parameter ink: What the field draws its text in, for the reversed case.
+    ///   Defaults to the palette's foreground, for a caller with no cell in hand.
     static func selectionColors(
-        palette: any Palette, background: Color?
-    ) -> (background: Color, foreground: Color) {
-        let selection = palette.accent.opacity(
-            ViewConstants.selectionIndicator, over: background ?? palette.background)
-        return (selection, palette.readableText(on: selection))
+        palette: any Palette, background: Color?, ink: Color? = nil
+    ) -> SelectionStyle {
+        let ground = background ?? palette.background
+        let selection = palette.accent.opacity(ViewConstants.selectionIndicator, over: ground)
+        guard palette.highlightFill(selection, over: ground, tint: palette.accent).isReversed
+        else {
+            return SelectionStyle(
+                background: selection, foreground: palette.readableText(on: selection),
+                isReversed: false)
+        }
+        return SelectionStyle(
+            background: ground.opaqueSpelling,
+            foreground: (ink ?? palette.foreground).opaqueSpelling, isReversed: true)
     }
 
     private func buildTextWithCursor(
@@ -423,12 +481,14 @@ struct TextFieldContentRenderer {
         // Entered text honours the `.textFieldTextStyle` cascade override; the
         // cursor and selection keep their own colours.
         let textForeground = foregroundOverride ?? resolvedContentForeground(palette)
-        let (selectionBackground, selectionForeground) = Self.selectionColors(
-            palette: palette, background: background)
+        let selection = Self.selectionColors(
+            palette: palette, background: background, ink: textForeground)
         var runs = RunAccumulator(ink: textForeground, field: background)
         func flushRun() { runs.flush(atColumn: outputCells) }
-        func emit(_ piece: Character, foreground: Color, background: Color?) {
-            runs.append(piece, ink: foreground, field: background, atColumn: outputCells)
+        func emit(_ piece: Character, foreground: Color, background: Color?, reversed: Bool = false) {
+            runs.append(
+                piece, ink: foreground, field: background, reversed: reversed,
+                atColumn: outputCells)
         }
 
         // Walks the text in cell space, clipping each element (character or
@@ -436,18 +496,21 @@ struct TextFieldContentRenderer {
         // straddling an edge → spaces for the visible part; outside → skipped.
         var cellX = 0
         var outputCells = 0
-        func emitClipped(_ character: Character, cells: Int, foreground: Color, background: Color?) {
+        func emitClipped(
+            _ character: Character, cells: Int, foreground: Color, background: Color?,
+            reversed: Bool = false
+        ) {
             let start = cellX
             let end = cellX + cells
             cellX = end
             guard end > scrollStart, start < windowEnd else { return }
             if start >= scrollStart && end <= windowEnd {
-                emit(character, foreground: foreground, background: background)
+                emit(character, foreground: foreground, background: background, reversed: reversed)
                 outputCells += cells
             } else {
                 let visible = min(end, windowEnd) - max(start, scrollStart)
                 for _ in 0..<visible {
-                    emit(" ", foreground: foreground, background: background)
+                    emit(" ", foreground: foreground, background: background, reversed: reversed)
                 }
                 outputCells += visible
             }
@@ -462,7 +525,7 @@ struct TextFieldContentRenderer {
         // animation path. See ``AnimatedCellRun``.
         let (cycle, colors) = Self.caretSetup(
             palette: palette, background: background, textForeground: textForeground,
-            selection: (selectionForeground, selectionBackground),
+            selection: selection,
             cursorStyle: cursorStyle, speed: cursorSpeed, cursorTimer: cursorTimer, timing: cursorTiming,
             appearsActive: appearsActive)
         var caret: AnimatedCellRun?
@@ -476,8 +539,9 @@ struct TextFieldContentRenderer {
             guard cellX >= scrollStart, cellX + cells <= windowEnd else {
                 emitClipped(
                     underlying, cells: cells,
-                    foreground: isSelected ? selectionForeground : textForeground,
-                    background: isSelected ? selectionBackground : background)
+                    foreground: isSelected ? selection.foreground : textForeground,
+                    background: isSelected ? selection.background : background,
+                    reversed: isSelected && selection.isReversed)
                 return
             }
             let drawn = Self.caretFrames(
@@ -503,8 +567,9 @@ struct TextFieldContentRenderer {
             }
             emitClipped(
                 char, cells: widths[index],
-                foreground: isSelected ? selectionForeground : textForeground,
-                background: isSelected ? selectionBackground : background)
+                foreground: isSelected ? selection.foreground : textForeground,
+                background: isSelected ? selection.background : background,
+                reversed: isSelected && selection.isReversed)
         }
         // The caret past the last character sits on its own cell.
         if clampedPosition == characterCount {
@@ -554,7 +619,7 @@ struct TextFieldContentRenderer {
     /// which both callers already hold separately.
     static func caretSetup(  // swiftlint:disable:this function_parameter_count
         palette: any Palette, background: Color?, textForeground: Color,
-        selection: (foreground: Color, background: Color),
+        selection: SelectionStyle,
         cursorStyle: TextCursorStyle, speed: IndicatorAnimationSpeed, cursorTimer: CursorTimer?,
         timing: IndicatorCycleTiming?, appearsActive: Bool
     ) -> (cycle: CursorCycle, colors: CaretColors) {
@@ -583,7 +648,18 @@ struct TextFieldContentRenderer {
                 // keeps its alpha — so a faded palette's caret on a selected character
                 // handed the emitter a translucent colour (§60).
                 selectionText: selection.foreground.spendingAlpha(over: selection.background),
-                selectionBackground: selection.background)
+                selectionBackground: selection.background,
+                selectionIsReversed: selection.isReversed,
+                // A block paints the caret's own colour and punches the character out
+                // of it in the ground. Where the caret's colour or the ground has no
+                // RGB that pair is one nobody can check for contrast — and for a
+                // translucent caret colour, below half, it is the ground itself, which
+                // shows nothing (§75, §87). The block reverses the cell instead, which
+                // is what the terminal's own block cursor does.
+                blockReverses: palette.highlightFill(
+                    palette.cursorColor.spendingAlpha(over: ground), over: ground,
+                    tint: palette.cursorColor
+                ).isReversed)
         )
     }
 
@@ -610,6 +686,16 @@ struct TextFieldContentRenderer {
         let text: Color
         let selectionText: Color
         let selectionBackground: Color
+
+        /// Whether a selected cell's pair is stated beside an SGR 7
+        /// (``TextFieldContentRenderer/SelectionStyle/isReversed``). A block caret has
+        /// to know: it reverses the cell it sits on, and two reversals read as none.
+        let selectionIsReversed: Bool
+
+        /// Whether a block caret reverses the cell under it instead of painting its own
+        /// colour — set where that colour or the ground has no RGB, so the block would
+        /// be a fill nobody can check the character against, or the ground itself.
+        let blockReverses: Bool
     }
 
     /// Every frame of the caret's cycle, ready to hand to the run loop.
@@ -694,16 +780,36 @@ struct TextFieldContentRenderer {
         func owed(_ colour: Color?) -> Double {
             colour.map { OpacityRegion.opacity(of: $0.alpha) } ?? 1
         }
+        // The cell as it stands WITHOUT the caret. A selection whose highlight cannot
+        // be measured is itself a reversal, so the character under the caret is drawn
+        // with the 7 exactly where its neighbours are.
+        let cellIsReversed = isSelected && colors.selectionIsReversed
         guard state.visible else {
             let field = isSelected ? colors.selectionBackground : colors.background
             return (
                 ANSIRenderer.colorize(
                     String(underlying),
                     foreground: isSelected ? colors.selectionText : colors.text,
-                    background: field?.opaqueSpelling),
+                    background: field?.opaqueSpelling,
+                    inverted: cellIsReversed),
                 owed(field))
         }
         switch shape {
+        case .block where colors.blockReverses:
+            // The caret reverses the CELL, as the terminal's own block cursor does:
+            // the pair it already had, exchanged. Over a selection that is itself
+            // reversed the flag comes OFF — two reversals read as none, and a cell
+            // standing plain among reversed neighbours is exactly what marks it.
+            // `blockText` is the ground, which stands in for a `.plain` field that
+            // states no background of its own: a reversal has to name both sides.
+            let field = isSelected ? colors.selectionBackground : colors.background
+            return (
+                ANSIRenderer.colorize(
+                    String(underlying),
+                    foreground: isSelected ? colors.selectionText : colors.text,
+                    background: (field ?? colors.blockText).opaqueSpelling,
+                    inverted: !cellIsReversed),
+                owed(field))
         case .block:
             // Floored against the caret's CURRENT colour, per frame: the block
             // is the cursor's colour and the character is punched out of it, so

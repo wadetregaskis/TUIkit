@@ -38,7 +38,11 @@ struct ReversedRowSlotAccentPalette: Palette {
 }
 
 /// The page and the ink the terminal decides, with everything else RGB.
-private struct ReversedRowTerminalPairPalette: Palette {
+///
+/// Internal rather than private: `ReversedTextSelectionTests` asks the same question of
+/// a text input's selection and caret, and the two suites agreeing about what "the
+/// terminal's own pair" means is the point of sharing the fixture.
+struct ReversedRowTerminalPairPalette: Palette {
     let id = "reversed-row-terminal-pair"
     let name = "Terminal pair"
     let background = Color(value: .terminalBackground)

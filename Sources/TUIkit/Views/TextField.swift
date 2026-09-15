@@ -44,6 +44,25 @@
 /// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
 ///
+/// ## The selection and the caret where the terminal decides the colours
+///
+/// A selection is a tint of the palette's accent over the field, and a block
+/// caret is the caret's own colour with the character punched out of it. A
+/// palette may name colours the terminal decides instead — its own foreground
+/// or background, or one of its sixteen slots — and until the terminal says
+/// what it paints for those, there is no tint between them to draw: the
+/// selection would be a solid accent under text nobody can check, or the field
+/// itself, which marks nothing.
+///
+/// Selected cells then draw in **reverse video**, exchanging the cell's own ink
+/// and field, and a block caret flips whatever the cell under it does — a plain
+/// cell is reversed, and a cell already reversed by the selection is drawn
+/// plain, so the caret marks itself the way a terminal's own block cursor does
+/// over a selection. A blinking caret alternates the two; a pulsing one holds.
+/// A bar or underscore caret is unaffected, as is a palette that states
+/// ordinary colours, on any terminal. ``SecureField`` and ``TextEditor`` draw
+/// the same way: the three share one renderer.
+///
 /// # Basic Example
 ///
 /// ```swift
