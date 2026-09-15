@@ -49,7 +49,7 @@ struct OpacityRunClippingTests {
         ]
 
         let resolved = buffer.resolvingOpacity(
-            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .ansi(.black),
+            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .black,
             palette: palette())
 
         let run = try #require(resolved.animatedCells.first, "the surviving cells keep animating")
@@ -77,7 +77,7 @@ struct OpacityRunClippingTests {
         ]
 
         let resolved = buffer.resolvingOpacity(
-            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .ansi(.black),
+            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .black,
             palette: palette())
 
         #expect(resolved.animatedCells.isEmpty)
