@@ -382,6 +382,30 @@ private struct QuickTranslucentSweepApp: App {
     }
 }
 
+/// The quick bar, opaque, so it leaves a run.
+private struct QuickOpaqueSweepApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            ProgressView().indeterminateStyle(.sweep)
+                .indicatorAnimationSpeed(1.1, for: .indeterminateProgress)
+        }
+    }
+}
+
+/// A translucent `.sweep` bar two cells wide, whose head stands on each column for
+/// half a pass.
+private struct NarrowTranslucentSweepApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            ProgressView().indeterminateStyle(.sweep).frame(width: 2).tint(Color.red.opacity(0.5))
+        }
+    }
+}
+
 /// A translucent `.sweep` bar whose pass the app set to an hour.
 private struct HourLongTranslucentSweepApp: App {
     init() {}
@@ -503,9 +527,50 @@ struct IndicatorAnimationSpeedBarTests {
         #expect(scheduler.nextFiring(after: now) == 1_066_666_667)
     }
 
-    /// A declined bar draws one frame per render, at an instant rather than from its
-    /// frames, so it has to draw in the motion's own time as the run's frames are
-    /// sampled: at twice the speed, 1.2 s in is what the standard bar shows 2.4 s in.
+    /// A 2-cell sweep's pass is 48 frames of 2 ticks and 2 states, so frames 0-23 put
+    /// the head on column 0 and frames 24-47 on column 1. Drawn in frame 1, the bar has
+    /// nothing new to show until frame 24, which begins at tick 48, 800 ms. It used to
+    /// ask for a render at the end of every frame, 22 more of which drew what was
+    /// already on screen.
+    @Test("A translucent 2-cell sweep drawn in frame 1 asks for its next render at frame 24")
+    func narrowFallbackWakesAtItsNextState() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(NarrowTranslucentSweepApp())
+        let scheduler = AnimationScheduler()
+        let now = AnimationClock.nanoseconds(atTick: 2) + 1_000_000
+        scheduler.beginFrame()
+        loop.render(animationScheduler: scheduler, frameNowNanos: now)
+        scheduler.endFrame()
+        #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
+        #expect(scheduler.nextFiring(after: now) == AnimationClock.nanoseconds(atTick: 48))
+    }
+
+    /// A declined bar draws the frame its run would show at the same instant, counted
+    /// from the tick. At 1.1 times the speed an 80-cell sweep's pass is 44 frames of 2
+    /// ticks, so 8 ms into tick 1 is still frame 0, its head on column 0. Drawn instead
+    /// at 1.0909 times the elapsed time, over the preset's 1.6 s, it showed column 1
+    /// in the second tick of each frame.
+    @Test("A translucent bar at 1.1 times the speed draws the frame its run shows at the same tick")
+    func fallbackDrawsTheRunsFrame() {
+        func picture<A: App>(_ app: A, atTick tick: Int64) -> [String] {
+            let harness = RenderLoopHarness()
+            let loop = harness.loop(app)
+            let scheduler = AnimationScheduler()
+            scheduler.beginFrame()
+            loop.render(
+                animationScheduler: scheduler, frameNowNanos: AnimationClock.nanoseconds(atTick: tick) + 8_000_000)
+            scheduler.endFrame()
+            return (loop.replayable?.contentLines ?? []).map(\.stripped)
+        }
+        let differing = (0..<Int64(24)).filter { tick in
+            picture(QuickTranslucentSweepApp(), atTick: tick) != picture(QuickOpaqueSweepApp(), atTick: tick)
+        }
+        #expect(differing.isEmpty, "ticks \(differing)")
+    }
+
+    /// A declined bar draws one frame per render, the frame its run would show then,
+    /// so it draws in the motion's own time as the run's frames are sampled: at twice
+    /// the speed, 1.2 s in is what the standard bar shows 2.4 s in.
     @Test("A translucent bar at twice the speed draws at twice the elapsed time")
     func fallbackDrawsInTheMotionsTime() {
         func picture<A: App>(_ app: A, at now: Int64) -> [String] {
@@ -616,10 +681,13 @@ struct IndicatorAnimationSpeedBarTests {
         }
     }
 
-    /// A declined bar wakes at the frames its pass is laid out in, so an hour-long
-    /// bar asks for a render every 3.6 s, as its run would change, not every 1/30 s.
-    @Test("A translucent hour-long bar asks for its next render at the end of its 3.6 s frame")
-    func hourLongFallbackWakesAtItsFrame() {
+    /// A declined bar wakes when its pass next shows a different state. An hour-long
+    /// 80-cell sweep is a thousand frames of 216 ticks, 3.6 s, for 80 head positions, so
+    /// its head first moves at frame 13, where ⌊13·80/1000⌋ is 1: tick 2,808, 46.8 s in.
+    /// It used to ask for a render at the end of every 3.6 s frame, and before that
+    /// every 1/30 s.
+    @Test("A translucent hour-long bar asks for its next render when its head next moves, 46.8 s in")
+    func hourLongFallbackWakesAtItsNextState() {
         let harness = RenderLoopHarness()
         let loop = harness.loop(HourLongTranslucentSweepApp())
         let scheduler = AnimationScheduler()
@@ -628,6 +696,7 @@ struct IndicatorAnimationSpeedBarTests {
         loop.render(animationScheduler: scheduler, frameNowNanos: now)
         scheduler.endFrame()
         #expect(scheduler.liveCount == 0, "a grid was registered for the declined run")
-        #expect(scheduler.nextFiring(after: now) == 3_600_000_000)
+        #expect(scheduler.nextFiring(after: now) == AnimationClock.nanoseconds(atTick: 2_808))
+        #expect(AnimationClock.nanoseconds(atTick: 2_808) == 46_800_000_000)
     }
 }

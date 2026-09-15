@@ -192,21 +192,14 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
 // MARK: - Ramps
 
 extension IndicatorAnimationSpeed {
-    /// A continuous ramp's layout at a speed: how many frames it is sampled at, how
-    /// many ticks each is shown for, and how many of the ramp's own seconds pass in
-    /// each second shown.
+    /// A continuous ramp's layout at a speed: how many frames it is sampled at, and how
+    /// many ticks each is shown for.
     struct RampLayout: Equatable, Sendable {
         let frameCount: Int
 
         /// How many 1/60 s ticks each frame is shown for: a whole number of the ramp's
         /// lattice.
         let frameTicks: Int
-
-        /// The standard cycle over the cycle these whole frames last, which is the
-        /// rate a cycle of whole frames runs at. A view that draws the ramp at an
-        /// arbitrary instant, rather than from its frames, draws it at the clock's
-        /// elapsed time times this.
-        let timeScale: Double
 
         /// The most frames a ramp's cycle is sampled at. A longer cycle keeps this
         /// many or fewer, each longer.
@@ -268,8 +261,7 @@ extension IndicatorAnimationSpeed {
             count = (cycleTicks / Double(frameTicks)).rounded()
         }
         let frameCount = count >= limit ? RampLayout.maximumFrameCount : (count >= 2 ? Int(count) : 2)
-        let shown = Double(frameCount) * Double(frameTicks) / ticksPerSecond
-        return RampLayout(frameCount: frameCount, frameTicks: frameTicks, timeScale: standardCycle / shown)
+        return RampLayout(frameCount: frameCount, frameTicks: frameTicks)
     }
 }
 

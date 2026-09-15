@@ -355,33 +355,31 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         // cycle's own sampling rate, where each frame states its own exact claim.
         // Same shape as `Spinner`'s fallback for a mixed-width cycle, and for the
         // same reason: the run cannot express it, so the run is not used. §36.7.
-        // Like that fallback, it asks for one render at the cycle's next frame on
-        // the frame clock (a whole multiple of its frame of whole ticks), and that
-        // render asks for the one after. It used to ask for a grid at that rate,
-        // anchored at whichever frame first asked rather than at the frames.
+        // Each render draws the frame the run would show at this instant, and asks for
+        // one render when the next frame showing a different state begins on the frame
+        // clock; that render asks for the one after. It used to ask for a render at the
+        // end of every frame, most of which, on a narrow bar, draw the state already on
+        // screen, and to draw the motion at a time scaled by its rate rather than the
+        // run's frame.
         let canPreRender =
             IndeterminateRenderer.isOpaqueThroughout(
                 style: context.environment.indeterminateStyle,
                 fillColor: palette.foregroundSecondary, backgroundColor: palette.foregroundTertiary,
                 accentColor: palette.accent, palette: palette)
         guard fractionCompleted == nil, !context.isMeasuring, width > 0, canPreRender else {
-            var barElapsed = elapsed
+            let bar: ClaimingRow
             if fractionCompleted == nil, !context.isMeasuring, width > 0 {
-                let layout = IndeterminateRenderer.layout(
-                    of: context.environment.indeterminateStyle,
-                    speed: context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress))
-                context.requestWake(
-                    token: "progress-\(context.identity.path)",
-                    atNanos: AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: layout.frameTicks))
-                // In the motion's own time, which is what the run's frames are sampled
-                // in: a bar at twice the speed draws what it shows at twice the elapsed
-                // time. At the standard rate the scale is exactly 1.
-                barElapsed = elapsed * layout.timeScale
+                let frame = indeterminateFrame(width: width, palette: palette, context: context, elapsed: elapsed)
+                if let next = frame.nextChangeNanos {
+                    context.requestWake(token: "progress-\(context.identity.path)", atNanos: next)
+                }
+                bar = frame.row
+            } else {
+                bar = renderBarLine(width: width, palette: palette, context: context, elapsed: elapsed)
             }
             // The scheduler drives this path, not the cursor timer, which nothing keeps
             // running on a page holding only this (§66). The frame comes from the same
             // clock as the run path's.
-            let bar = renderBarLine(width: width, palette: palette, context: context, elapsed: barElapsed)
             lines.append(bar.text)
             var buffer = FrameBuffer(lines: lines)
             // Down to the row the bar landed on. Nothing is composited over this
@@ -620,23 +618,29 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
     // MARK: - Bar Line Rendering
 
+    /// The indeterminate bar's frame at `elapsed` on the frame clock, as its run would
+    /// show it, and when it next changes. See
+    /// `IndeterminateRenderer.frame(atElapsed:width:style:fillColor:backgroundColor:accentColor:palette:speed:)`.
+    private func indeterminateFrame(
+        width: Int, palette: any Palette, context: RenderContext, elapsed: Double
+    ) -> (row: ClaimingRow, nextChangeNanos: Int64?) {
+        IndeterminateRenderer.frame(
+            atElapsed: elapsed, width: width, style: context.environment.indeterminateStyle,
+            fillColor: palette.foregroundSecondary, backgroundColor: palette.foregroundTertiary,
+            accentColor: palette.accent, palette: palette,
+            speed: context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress))
+    }
+
     /// Renders the progress bar line — a determinate track, or an animated
     /// indeterminate sweep when there is no measurable progress.
     private func renderBarLine(
         width: Int, palette: any Palette, context: RenderContext, elapsed: Double
     ) -> ClaimingRow {
         guard let fraction = fractionCompleted else {
-            // The frame's own claims, exact for the one frame this is. Reached either
-            // by a measure pass (which draws nothing) or by the fallback above, where
-            // one frame per render is the whole point.
-            return IndeterminateRenderer.render(
-                width: width,
-                style: context.environment.indeterminateStyle,
-                fillColor: palette.foregroundSecondary,
-                backgroundColor: palette.foregroundTertiary,
-                accentColor: palette.accent,
-                elapsed: elapsed,
-                palette: palette)
+            // The frame's own claims, exact for the one frame this is. Reached by a
+            // measure pass, which draws nothing, and by a track with no cells; the
+            // fallback above draws the same frame.
+            return indeterminateFrame(width: width, palette: palette, context: context, elapsed: elapsed).row
         }
         return TrackRenderer.render(
             fraction: fraction,

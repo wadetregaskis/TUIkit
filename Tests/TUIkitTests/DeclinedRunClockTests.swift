@@ -210,9 +210,10 @@ struct DeclinedRunClockTests {
         }
     }
 
-    /// The bar's twin of the spinner's: one render at the cycle's next frame, the next
-    /// tick whose index is a multiple of the frame's ticks on the frame clock, not a grid
-    /// anchored at whichever frame first asked.
+    /// The bar's twin of the spinner's: one render when the cycle next shows a different
+    /// state, on the frame clock, not a grid anchored at whichever frame first asked. An
+    /// 80-cell sweep's 48 frames each put the head on a new column, so that is the next
+    /// frame: the next tick whose index is a multiple of the frame's ticks.
     @Test("A translucent indeterminate bar asks for one render at its next frame, and registers no grid")
     func translucentBarWakesAtItsNextFrame() {
         let harness = RenderLoopHarness()

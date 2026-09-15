@@ -214,6 +214,57 @@ enum IndeterminateRenderer {
         return (frames, layout.frameTicks)
     }
 
+    /// The frame of `style`'s cycle at `speed` showing `elapsed` seconds in, drawn with
+    /// its own claims, and the instant the next frame showing a different state begins,
+    /// in whole nanoseconds on the clock `elapsed` is read from; `nil` when every frame
+    /// of the pass shows one state, so nothing it draws will change.
+    ///
+    /// For a bar no run can carry, which is drawn one render at a time. It draws frame
+    /// `AnimationClock.step(atElapsed:frameTicks:)` of the pass, wrapped, which is the
+    /// frame the run would show then
+    /// (``cycle(width:style:fillColor:backgroundColor:accentColor:palette:speed:)``),
+    /// and needs drawing again only when that frame's state changes. It used to draw
+    /// the motion at the elapsed time scaled by the pass's rate, which between frame
+    /// boundaries is not the frame the run shows, and to ask for a render at the end
+    /// of every frame: a 2-cell sweep's 48 frames show 2 states, and it was drawn 48
+    /// times a pass to change twice.
+    static func frame(
+        atElapsed elapsed: Double, width: Int, style: IndeterminateStyle,
+        fillColor: Color, backgroundColor: Color, accentColor: Color,
+        palette: any Palette, speed: IndicatorAnimationSpeed
+    ) -> (row: ClaimingRow, nextChangeNanos: Int64?) {
+        guard width > 0 else { return (ClaimingRow(), nil) }
+        let layout = layout(of: style, speed: speed)
+        let configuration = style.configuration
+        let count = max(1, layout.frameCount)
+        let step = AnimationClock.step(atElapsed: elapsed, frameTicks: layout.frameTicks)
+        // Floor modulo, so a negative elapsed counts back through the pass.
+        let frame = Int((step % Int64(count) + Int64(count)) % Int64(count))
+        let state = state(ofFrame: frame, of: count, configuration: configuration, width: width)
+        let row: ClaimingRow
+        if configuration.motion == .pulse {
+            // The pulse's frame at the time `cycle` samples it, spelled as `cycle` does.
+            let sample = period(of: style) / Double(layout.frameCount)
+            row = render(
+                width: width, style: style, fillColor: fillColor, backgroundColor: backgroundColor,
+                accentColor: accentColor, elapsed: Double(frame) * sample, palette: palette)
+        } else {
+            row = render(
+                width: width, style: style, fillColor: fillColor, backgroundColor: backgroundColor,
+                accentColor: accentColor, position: .step(state), palette: palette)
+        }
+        // At most one pass on, where the frames repeat. `Self.`, because the local
+        // `state` hides the function inside the closure.
+        let later = (1..<count).first { offset in
+            Self.state(ofFrame: (frame + offset) % count, of: count, configuration: configuration, width: width)
+                != state
+        }
+        let next = later.map { offset in
+            AnimationClock.nanoseconds(atTick: (step + Int64(offset)) * Int64(layout.frameTicks))
+        }
+        return (row, next)
+    }
+
     /// Which state frame `frame` of a pass of `frameCount` frames shows, of
     /// `configuration` across `width` cells: the step a stepped motion draws there,
     /// ⌊frame·N/F⌋ (``step(ofFrame:of:states:)``) with a knightRider's turn at the far
@@ -267,10 +318,10 @@ enum IndeterminateRenderer {
     }
 
     /// How one pass of `style` is laid out at `speed`: how many frames it is sampled
-    /// at, how many ticks each is shown, and how fast the motion's own time runs.
-    /// That is also when the FALLBACK path asks to be re-rendered, so a bar that
-    /// cannot be pre-rendered animates at exactly the speed one that can does, and
-    /// what `ProgressView`'s cycle of pictures is laid out by.
+    /// at, and how many ticks each is shown. The FALLBACK path draws the same frames
+    /// (``frame(atElapsed:width:style:fillColor:backgroundColor:accentColor:palette:speed:)``),
+    /// so a bar that cannot be pre-rendered animates exactly as one that can does, and
+    /// `ProgressView`'s cycle of pictures is laid out by it too.
     ///
     /// A pass takes the configuration's period divided by the rate, in whole frames
     /// of `frameTicks` ticks, as many as come nearest
@@ -301,9 +352,7 @@ enum IndeterminateRenderer {
             return speed.rampLayout(standardCycle: period, frameTicks: frameTicks)
         }
         let ticks = max(frameTicks, speed.frameTicks(standard: period / Double(states)))
-        // In `Double`, which an `Int` of 32 bits could not hold the product in.
-        let shown = Double(states) * Double(ticks) / Double(AnimationClock.ticksPerSecond)
-        return IndicatorAnimationSpeed.RampLayout(frameCount: states, frameTicks: ticks, timeScale: period / shown)
+        return IndicatorAnimationSpeed.RampLayout(frameCount: states, frameTicks: ticks)
     }
 
     /// How many 1/60 s ticks a frame of a pre-rendered cycle is shown for: 2, the
