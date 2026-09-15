@@ -203,8 +203,10 @@ traps off its actor in Swift 6 mode the same way.
 <https://github.com/swiftlang/swift/pull/83004> ("AST: Change
 RequirementEnvironment::getRequirementToWitnessThunkSubs() to use contextual
 types", merged to `main` in July 2025). It makes `SILGenModule::emitProtocolWitness`
-read `isPreconcurrency` from the root conformance, which a pack type's
-specialized conformance would otherwise hide. It is in `release/6.3` and
+read `isPreconcurrency` through `getRootConformance()`. Why that matters for a
+pack type is a guess nobody has checked: the conformance looked up there may be
+a specialized one, which the old cast to `NormalProtocolConformance` fails on,
+leaving the flag `false`. It is in `release/6.3` and
 `swift-6.3.3-RELEASE`, not in `release/6.2` or `swift-6.2.4-RELEASE`, and no
 cherry-pick to 6.2 was found. That it is the fix is not confirmed: nobody has
 built it on its own.
