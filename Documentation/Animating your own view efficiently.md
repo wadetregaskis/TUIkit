@@ -355,8 +355,8 @@ things came out of building it that the scoping above could not have known.
 **A terminal has no render server.** SwiftUI's efficiency comes from handing an
 interpolation to Core Animation, which runs it without re-evaluating a body.
 There is nothing here to hand it to, so an animating subtree really is walked
-once per frame. That is fine, and bounded, for a *change*: 30 Hz for the
-animation's duration, eight passes for a quarter-second ease, then nothing. It
+once per frame. That is fine, and bounded, for a *change*: 30 Hz (every second
+1/60 s tick, since 2026-09) for the animation's duration, eight passes for a quarter-second ease, then nothing. It
 is not fine forever, and `repeatForever` is exactly forever.
 
 **The cheap path exists but is narrow, and narrow for a good reason** (§5.3

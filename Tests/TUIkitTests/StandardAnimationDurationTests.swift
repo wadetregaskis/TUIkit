@@ -28,10 +28,19 @@ struct StandardAnimationDuration: Sendable, CustomTestStringConvertible {
 struct StandardAnimationDurationTests {
     /// Every standard duration: each spinner style's interval, the caret blink's
     /// half, the focus pulse's frame and cycle, each indeterminate preset's bar
-    /// frame and pass at two widths, the standard frame and the focus clock's floor, and a
-    /// toast fade's frame and longest sleep.
+    /// frame and pass at two widths, the standard frame and the focus clock's floor, a
+    /// toast fade's frame and longest sleep, and how often the run loop renders a view
+    /// animation, a drag's lift and its walk home.
     static let durations: [StandardAnimationDuration] =
         spinnerDurations + cursorDurations + barDurations + clockDurations + notificationDurations
+        + loopDurations
+
+    /// The renders the run loop asks the scheduler for on its own behalf, each a lattice
+    /// of whole ticks.
+    private static let loopDurations: [StandardAnimationDuration] = [
+        ("viewAnimationFrame", AnimationRequest.viewAnimations), ("dragLiftFrame", .dragLift),
+        ("dragReturnFrame", .dragReturn),
+    ].map { StandardAnimationDuration(name: $0.0, seconds: AnimationClock.seconds(forTicks: $0.1.frameTicks ?? 0)) }
 
     /// A toast fade's frame, as the wakes its animation task plans while a fade is
     /// drawing are spaced: thirty of them from a frame's instant, over their count.

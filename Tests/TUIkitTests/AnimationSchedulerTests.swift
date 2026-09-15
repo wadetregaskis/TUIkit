@@ -128,6 +128,78 @@ struct AnimationSchedulerTests {
         #expect(count >= 28 && count <= 31)   // 30 Hz, not 40
     }
 
+    // MARK: lattices
+
+    @Test("A lattice fires where the next multiple of its period in ticks begins, wherever it was asked for")
+    func latticeFiresOnTickMultiples() {
+        let s = AnimationScheduler()
+        s.beginFrame()
+        s.request("two", AnimationRequest(frameTicks: 2), now: 1_037_000_000)
+        s.endFrame()
+        // 1.037 s is in tick 62; the next even tick is 64.
+        #expect(s.nextFiring(after: 1_037_000_000) == 1_066_666_667)
+        #expect(s.nextFiring(after: 1_066_666_667) == AnimationClock.nanoseconds(atTick: 66))
+
+        let t = AnimationScheduler()
+        t.beginFrame()
+        t.request("three", AnimationRequest(frameTicks: 3), now: 1_050_000_000)
+        t.endFrame()
+        #expect(t.nextFiring(after: 1_050_000_000) == 1_100_000_000)
+    }
+
+    @Test("A lattice fires where a run's steps of the same frame end, from any instant")
+    func latticeMeetsRunSteps() {
+        var misses: [String] = []
+        for frameTicks in [2, 3, 4] {
+            // 7.919 ms apart, which no tick divides, so the instants fall at every
+            // offset into a tick over the 4.75 s they span.
+            for step in 0..<600 {
+                let now = Int64(step) * 7_919_000
+                let s = AnimationScheduler()
+                s.beginFrame()
+                s.request("run-rate", AnimationRequest(frameTicks: frameTicks), now: now)
+                s.endFrame()
+                let run = AnimationClock.stepEndNanos(atElapsed: Double(now) / 1e9, frameTicks: frameTicks)
+                if s.nextFiring(after: now) != run { misses.append("\(frameTicks) ticks from \(now)") }
+            }
+        }
+        #expect(misses.isEmpty, "\(misses.prefix(5))")
+    }
+
+    @Test("Lattices of 2 and 3 ticks fire only where 2 or 3 divides the tick: 40 instants a second")
+    func latticesCoincideWhereTheirMultiplesMeet() {
+        let s = AnimationScheduler()
+        s.beginFrame()
+        s.request("two", AnimationRequest(frameTicks: 2), now: 7)
+        s.request("three", AnimationRequest(frameTicks: 3), now: 400_000_123)
+        s.endFrame()
+        var t: Int64 = -1
+        var firings: [Int64] = []
+        while let next = s.nextFiring(after: t), next < second {
+            firings.append(next)
+            t = next
+        }
+        #expect(firings.count == 40)
+        #expect(firings.allSatisfy { instant in
+            let tick = AnimationClock.tick(atNanoseconds: instant)
+            return AnimationClock.nanoseconds(atTick: tick) == instant
+                && (tick.isMultiple(of: 2) || tick.isMultiple(of: 3))
+        })
+    }
+
+    @Test("A lattice counts as a live grid while re-declared, and is dropped when it is not")
+    func latticeLifecycle() {
+        let s = AnimationScheduler()
+        s.beginFrame(); s.request("two", AnimationRequest(frameTicks: 2), now: 0); s.endFrame()
+        #expect(!s.isIdle)
+        #expect(s.liveCount == 1)
+        s.beginFrame(); s.request("two", AnimationRequest(frameTicks: 2), now: 50_000_000); s.endFrame()
+        #expect(s.liveCount == 1)
+        s.beginFrame(); s.endFrame()
+        #expect(s.isIdle)
+        #expect(s.nextFiring(after: 0) == nil)
+    }
+
     // MARK: one-shot wakes
 
     @Test("A one-shot wake fires at its instant, and counts as liveness")

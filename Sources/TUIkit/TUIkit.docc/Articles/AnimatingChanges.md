@@ -116,7 +116,7 @@ animating subtree really is walked once per frame. So the honest accounting is:
 
 | Animation | Cost |
 |-----------|------|
-| A finite one (``Animation/easeInOut``, a spring, `repeatCount`) | One render pass per frame at 30 Hz, **for its duration**. A quarter-second ease is eight passes, then nothing. |
+| A finite one (``Animation/easeInOut``, a spring, `repeatCount`) | One render pass per frame at 30 Hz, **for its duration**: every second tick of 1/60 s, the instants the framework's other 2-tick animations draw at too. A quarter-second ease is about eight passes, then nothing. |
 | ``Animation/repeatForever(autoreverses:)`` on ``View/opacity(_:)`` | The cycle is pre-rendered once and replayed by the run loop — **no render passes at all** while it runs. |
 | `repeatForever` on anything else | One render pass per frame, for as long as the view is on screen. |
 

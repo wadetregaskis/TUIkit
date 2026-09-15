@@ -7,7 +7,7 @@
 /// A frozen, uniform schedule of firing instants: `anchor + k·period` for every
 /// integer `k ≥ 0`, in monotonic-clock nanoseconds.
 ///
-/// A grid is the *resolved* form of an animation request — once chosen, its
+/// A grid is the *resolved* form of a frequency request — once chosen, its
 /// `anchor` and `period` never change. That is what guarantees a constant,
 /// drift-free frequency: every firing is computed directly from its index, never
 /// accumulated, so a render that lands late (because the frame-rate cap delayed
@@ -18,6 +18,12 @@
 /// how the scheduler coalesces aligned timers into a single render. Locked grids
 /// are built with commensurate `period`s and a shared `anchor` precisely so that
 /// coincidence is exact integer arithmetic, not a floating-point near-miss.
+///
+/// A lattice request (`AnimationRequest.init(frameTicks:)`) needs no grid. Its
+/// firings are the instants every `frameTicks`-th tick of 1/60 s begins, from
+/// tick zero, and `AnimationClock.nanoseconds(ofNextTickMultiple:after:)`
+/// computes them from the tick index; a grid of whole nanoseconds could not hold
+/// a period of 1/30 s at all.
 struct AnimationGrid: Equatable, Sendable {
     /// The first firing instant (monotonic-clock nanoseconds). Firings exist only
     /// at or after the anchor (`k ≥ 0`); there is no firing before it.

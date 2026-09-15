@@ -406,7 +406,7 @@ extension RenderLoop {
         if tuiContext.dragAndDropSession.driveAutoScroll(
             nowNanos: UInt64(bitPattern: frameNowNanos))
         {
-            _ = animationScheduler?.request(
+            animationScheduler?.request(
                 "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
         }
 
@@ -628,15 +628,13 @@ extension RenderLoop {
         if tuiContext.dragAndDropSession.driveLift(
             nowNanos: UInt64(bitPattern: frameNowNanos))
         {
-            _ = animationScheduler?.request(
-                "drag-lift", AnimationRequest(frequency: 30), now: frameNowNanos)
+            animationScheduler?.request("drag-lift", .dragLift, now: frameNowNanos)
         }
 
         if tuiContext.dragAndDropSession.driveReturnFlight(
             nowNanos: UInt64(bitPattern: frameNowNanos)) != nil
         {
-            _ = animationScheduler?.request(
-                "drag-return", AnimationRequest(frequency: 30), now: frameNowNanos)
+            animationScheduler?.request("drag-return", .dragReturn, now: frameNowNanos)
         }
     }
 
@@ -1183,8 +1181,9 @@ extension RenderLoop {
     ///
     /// Asked once for the whole tree rather than declared per animating view: an
     /// interpolation's next frame is due at a *rate*, not at a phase, so one
-    /// grid serves every animation on screen — and it disappears the moment the
-    /// last one arrives, which is what stops a settled screen rendering.
+    /// lattice serves every animation on screen (`AnimationRequest.viewAnimations`)
+    /// — and it disappears the moment the last one arrives, which is what stops a
+    /// settled screen rendering.
     ///
     /// Called AFTER the pass's prune, so an animation whose view has just left
     /// the tree does not hold the loop open for something nobody can see. A
@@ -1195,26 +1194,14 @@ extension RenderLoop {
         guard store.animations.hasLiveAnimations(at: frameNowNanos)
             || store.departures.hasDepartures(at: frameNowNanos)
         else { return }
-        scheduler?.request(Self.viewAnimationToken, Self.viewAnimationRequest, now: frameNowNanos)
+        scheduler?.request(Self.viewAnimationToken, .viewAnimations, now: frameNowNanos)
     }
 
     /// The scheduler token every in-flight interpolation shares.
     ///
     /// One token, not one per animation: they all want the same thing — another
-    /// frame, soon — so they ride one grid and one render serves them all.
+    /// frame, soon — so they ride one lattice and one render serves them all.
     private static var viewAnimationToken: String { "view-animations" }
-
-    /// How often an interpolation is re-rendered.
-    ///
-    /// 30 Hz. A terminal cell has no sub-pixel to reveal, so the visible
-    /// resolution of a moving thing is far below a display's: at 30 Hz a
-    /// quarter-second ease gets eight distinct pictures, which is past the
-    /// point where more of them look smoother. The tolerance lets it lock onto
-    /// a grid already running near that rate (a drag return, another app
-    /// animation) so one render serves both.
-    private static var viewAnimationRequest: AnimationRequest {
-        AnimationRequest(frequency: 30, frequencyTolerance: 6)
-    }
 
     /// Stores and returns what this frame reported, so the run loop can decide
     /// whether the next animation tick needs a render at all.
