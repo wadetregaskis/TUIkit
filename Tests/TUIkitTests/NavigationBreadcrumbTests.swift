@@ -313,7 +313,7 @@ struct NavigationCrumbAppearanceTests {
             let context = makeRenderContext(width: 40, height: 3)
             let palette = context.environment.palette
             let ground = palette.background.resolve(with: palette)
-            let tint = Color.ansi(.red).opacity(0.5)
+            let tint = Color.red.opacity(0.5)
             let buffer = renderToBuffer(crumb(" Library").tint(tint), context: context)
             let frames = buffer.animatedCells.first?.frames ?? []
             #expect(frames.count > 1)
