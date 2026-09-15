@@ -218,3 +218,52 @@ type_name:
   excluded:
     # Two characters, so below `min_length`; the conventional Swift spelling.
     - ID
+
+custom_rules:
+  # Every built-in view draws with the palette's roles, so a theme restyles all
+  # of them; the ThemingGuide article's "What built-in controls draw with" lists
+  # which role each control uses and the few colours that stay literal. This
+  # flags a new colour literal in the framework's view sources: an RGB, hex,
+  # HSL, HSB or CMYK constructor, a named `Color.x` static, or a bright ANSI
+  # slot.
+  #
+  # How it is scoped, each part of which was measured with SwiftLint 0.63.2:
+  # - `included` and `excluded` are regexes matched against the file's path,
+  #   not globs; a brace glob such as `Sources/TUIkit/{Views,Styles}` matches
+  #   nothing and silently switches the rule off.
+  # - All of Sources/TUIkit, not a list of its directories, so a new directory
+  #   is covered without anyone remembering to add it. Sources/TUIkitView too.
+  #   TUIkitStyling is not covered: it is the colour vocabulary and the palettes
+  #   themselves.
+  # - `match_kinds: [identifier]` keeps it out of comments and string
+  #   literals, where the framework's docs spell `.rgb(` freely.
+  # - Whole files are excluded only where colours are content (the colour
+  #   pickers and editors and their swatch sets, `AnyGradient`) or spelling and
+  #   arithmetic (the opacity blend, the terminal colour query, the opacity and
+  #   colour-effect modifiers, colour animation). A single line of arithmetic in
+  #   a view, such as the scrollbar's step toward white or black, takes an
+  #   inline `swiftlint:disable` with its reason, rather than excluding the view.
+  #
+  # What it cannot see: an implicit member such as `.red` or `.cyan` passed
+  # where a `Color` is expected, which is spelled the same as any enum case of
+  # that name. And once slot colours are spelled `.ansi(_:)`, `\.ansi\(` belongs
+  # in the regex.
+  framework_colour_literal:
+    name: "Framework colour literal"
+    message: >-
+      A built-in view draws with a palette role, not a literal colour. See
+      "What built-in controls draw with" in ThemingGuide.md; if the colour is
+      content or arithmetic, not ink, disable this rule on that line and say why.
+    included:
+      - "Sources/TUIkit/.*\\.swift$"
+      - "Sources/TUIkitView/.*\\.swift$"
+    excluded:
+      - "Sources/TUIkit/Views/(SwatchPalettes|ColorPickerPanel|ColorPicker|ToneCurveEditorPanel|GradientEditorPanel|ChannelCurveEditorPanel)\\.swift$"
+      - "Sources/TUIkit/Rendering/(OpacityBlend|TerminalColorQuery)\\.swift$"
+      - "Sources/TUIkit/Modifiers/(OpacityModifier|ColorEffectModifiers)\\.swift$"
+      - "Sources/TUIkit/Styling/AnyGradient\\.swift$"
+      - "Sources/TUIkitView/Animation/ColorAnimation\\.swift$"
+    regex: '(\bColor)?\.(rgb|hex|hsl|hsb|cmyk)\(|\bColor\.(black|white|red|green|yellow|blue|magenta|cyan|gray|orange|pink|purple|brown|mint|teal|indigo|bright\w+)\b|\.bright(Black|Red|Green|Yellow|Blue|Magenta|Cyan|White)\b'
+    match_kinds:
+      - identifier
+    severity: error

@@ -523,9 +523,14 @@ struct ScrollbarColors {
         // large move to change its contrast at all, so it stopped short every
         // time. A fifth of the way to the far end is always a visible change
         // and never more than a breath.
+        //
+        // White and black are literal here, and exempt from the colour-literal
+        // lint, because they are directions to step in, not ink (see below).
+        // swiftlint:disable framework_colour_literal
         let extreme: Color =
             ChromeTrack.renderedRatio(resting, .rgb(255, 255, 255)) >= ChromeTrack.renderedRatio(resting, .rgb(0, 0, 0))
             ? .rgb(255, 255, 255) : .rgb(0, 0, 0)
+        // swiftlint:enable framework_colour_literal
         // The SMALLEST step that can be seen, not a fixed one: a fixed depth
         // barely moved a colour already near an extreme and flung a mid-tone
         // one across the range (Man Page measured a 5.50:1 breath, which is a
