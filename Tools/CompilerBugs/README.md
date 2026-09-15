@@ -114,53 +114,110 @@ shows is exactly the shape that does not assert.
 
 ---
 
-## 3. `PackPreconcurrencyConformance` — `@preconcurrency` on a type that stores a pack
+## 3. `PackPreconcurrencyConformance` — `@preconcurrency` on a type with a parameter pack
 
 ```
-cd PackPreconcurrencyConformance && ./variants.sh /path/to/swift-6.2.4-RELEASE.xctoolchain
+tcs=~/Library/Developer/Toolchains
+cd PackPreconcurrencyConformance && ./variants.sh "$tcs/swift-6.2.4-RELEASE.xctoolchain" \
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain \
+    "$tcs/swift-6.3.3-RELEASE.xctoolchain" \
+    "$tcs/swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-09-10-a.xctoolchain"
 ```
 
 ```
-@preconcurrency, pack condition             ASSERTS
-@MainActor (isolated) conformance           ok
-@preconcurrency, pack condition, trivial == ASSERTS
-@preconcurrency, pack, no condition         ASSERTS
-@preconcurrency, ordinary generic           ok
-protocol not main-actor isolated            ok
+                                                6.2.4 +a      Xcode 6.2.4   6.3.3         6.4.2-dev +a
+Crash.swift: actor, pack, @preconcurrency       ABORTS        ok            ok            ok
+struct, @MainActor witness                      ABORTS        ok            ok            ok
+@MainActor struct storing a pack, Equatable     ABORTS        ok            ok            ok
+stdlib protocol, property requirement           ABORTS        ok            ok            ok
+pack on an enclosing type                       ABORTS        ok            ok            ok
+no pack: actor Holder<Element>                  ok            ok            ok            ok
+no pack: struct, @MainActor witness             ok            ok            ok            ok
+requirement async                               ok            ok            ok            ok
+witness nonisolated                             ok            ok            ok            ok
+isolated conformance, @MainActor Equatable      ok            ok            ok            ok
 ```
 
-`Crash.swift` declares one conformance, and the compiler stops while it emits
-the witness thunk for `==`:
+`+a` marks a compiler built with assertions. Each variant is compiled with
+`-emit-silgen -Xfrontend -sil-verify-all`, so a column would say `BAD SIL` if the
+verifier rejected what SILGen emitted. None does.
+
+`Crash.swift` is two declarations, and the compiler stops while it emits the
+protocol witness thunk for `run()`:
+
+```swift
+protocol Runner {
+    func run()
+}
+
+actor Holder<each Element>: @preconcurrency Runner {
+    func run() {}
+}
+```
 
 ```
 Assertion failed: (isPreconcurrency), function emitProtocolWitness,
 file SILGenPoly.cpp, line 7521.
 ```
 
-Three ingredients, all necessary:
+Declaring the conformance is enough. Three things are needed:
 
-1. **A main-actor-isolated protocol**, so the conforming type is main-actor
-   isolated. Drop the isolation and a plain conformance is fine.
-2. **A struct that STORES a parameter pack** and conforms to it. The same
-   conformance on an ordinary one-parameter generic is fine.
-3. **A `@preconcurrency` conformance to a nonisolated protocol** (`Equatable`).
-   The isolated spelling, `@MainActor Equatable` (SE-0470), is fine.
+1. **A type parameter pack on the conforming type**, or on a type that encloses
+   it. Nothing has to be stored in it. An ordinary generic parameter instead is
+   fine.
+2. **A `@preconcurrency` conformance.** The isolated spelling (SE-0470),
+   `@MainActor Equatable`, is fine.
+3. **An actor-isolated witness for a synchronous requirement:** a method of an
+   actor, or one isolated to a global actor such as `@MainActor`. An `async`
+   requirement, or a `nonisolated` witness, is fine.
 
-The conformance's `where repeat each V: Equatable` condition is not needed, and
-neither is anything in the body of `==`.
+The protocol is nonisolated, and it can be the standard library's
+(`CustomStringConvertible`, whose requirement is a property).
 
-**Assertions-enabled 6.2.4 only.** Xcode's 6.2.4 prints `ok` for all six
-variants, and so do swift.org's 6.3.3 and the 6.4.x snapshot of 2026-09-10 (which
-is built `+assertions` too). So the bug was fixed after 6.2.4, and the
-workaround can go once 6.2 is no longer supported.
+**Corrected on 2026-09-14.** This section used to say that the protocol had to
+be main-actor isolated and that the pack had to be stored, with a matrix from the
+old `variants.sh`. Neither is needed. The old variant that dropped the protocol's
+isolation also dropped `@preconcurrency` and left `==` nonisolated, so it took
+away the second and third things too.
+
+### Affected versions
+
+Observed on macOS (arm64) on 2026-09-14, with `Crash.swift` and the variants
+above:
+
+| Toolchain | Build config | `Crash.swift` |
+|---|---|---|
+| swift.org 6.2.4 (`swift-6.2.4-RELEASE`) | +assertions | aborts |
+| Xcode 26.3's 6.2.4 (`swiftlang-6.2.4.1.4`) | no assertions | compiles |
+| swift.org 6.3.3 (`swift-6.3.3-RELEASE`) | no assertions | compiles |
+| swift.org 6.4 snapshot of 2026-09-10 (`6.4.2-dev`) | +assertions | compiles |
+
+Only a build with assertions can abort here, so the clean compiles on Xcode's
+6.2.4 and on 6.3.3 do not show the bug is absent from them. The 6.4 snapshot is
+the only assertions build that compiles it. A separate runtime check found no
+sign of wrong code on the three compilers that do not abort: a pack type's
+witness thunk gets the same executor check as an ordinary generic type's, and
+traps off its actor in Swift 6 mode the same way.
+
+**Upstream.** No issue for this abort was found. The likely fix is
+<https://github.com/swiftlang/swift/pull/83004> ("AST: Change
+RequirementEnvironment::getRequirementToWitnessThunkSubs() to use contextual
+types", merged to `main` in July 2025). It makes `SILGenModule::emitProtocolWitness`
+read `isPreconcurrency` from the root conformance, which a pack type's
+specialized conformance would otherwise hide. It is in `release/6.3` and
+`swift-6.3.3-RELEASE`, not in `release/6.2` or `swift-6.2.4-RELEASE`, and no
+cherry-pick to 6.2 was found. That it is the fix is not confirmed: nobody has
+built it on its own.
 
 **Where TUIkit hit it:** `TupleView: @preconcurrency Equatable`, spelled like
-every other view's conformance. `swift build` with swift.org's 6.2.4 aborted in
-`TUIkitView`, natively on macOS as well as in the Linux static-SDK and
-WebAssembly builds that first showed it. **Workaround:** `extension TupleView:
-@MainActor Equatable`, the isolated spelling, which the matrix shows does not
-assert. See `Sources/TUIkitView/Core/TupleViews.swift`. No other view stores a
-pack, so the rest keep `@preconcurrency`.
+every other view's conformance. `TupleView<each V>` has the pack, and its `==`
+is main-actor isolated because `View` is. `swift build` with swift.org's 6.2.4
+aborted in `TUIkitView`, natively on macOS as well as in the Linux static-SDK
+and WebAssembly builds that first showed it. **Workaround:** `extension
+TupleView: @MainActor Equatable`, the isolated conformance in the table's last
+row. See `Sources/TUIkitView/Core/TupleViews.swift`. No other view has a pack,
+so the rest keep `@preconcurrency`. The workaround is needed for as long as
+swift.org's 6.2 builds are supported.
 
 ---
 
