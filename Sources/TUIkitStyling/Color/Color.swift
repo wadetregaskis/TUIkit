@@ -131,7 +131,8 @@ public struct Color: Sendable, Hashable {
         case ansi(ANSIColor)
         /// The terminal's default colour in whichever slot it is drawn: SGR 39 as
         /// a foreground and 49 as a background. This is `Color.default`. It
-        /// measures as xterm's grey 229.
+        /// measures as nothing, even once the terminal has reported its colours:
+        /// `rgbComponents` is nil, because no single RGB is both.
         case terminalDefault
         case palette256(UInt8)
         case rgb(red: UInt8, green: UInt8, blue: UInt8)
@@ -143,8 +144,9 @@ public struct Color: Sendable, Hashable {
         /// that colour (OSC 10), which is what a blend, a contrast check or a
         /// surface walk reads. Until the terminal has reported it, it measures as
         /// nothing: `rgbComponents` is nil, and no colour is guessed. That is the
-        /// difference from `Color.default`, which is also 39 but measures as
-        /// xterm's grey 229.
+        /// difference from `Color.default`, which is also 39 as a foreground but
+        /// 49 as a background, so it stands for no single colour and never
+        /// measures.
         ///
         /// As a BACKGROUND no SGR names the default foreground. Once reported it is
         /// spelled as that RGB, quantised for the depth as a `.rgb` of the same
@@ -191,7 +193,18 @@ public struct Color: Sendable, Hashable {
 
     // MARK: - The Terminal's Default
 
-    /// Default color (terminal default)
+    /// The terminal's own default colour in whichever slot it is drawn: SGR 39
+    /// as a foreground and SGR 49 as a background.
+    ///
+    /// It is the one spelling that means whatever the user chose, and it follows
+    /// their terminal profile when they change it.
+    ///
+    /// It has no value to measure. As ink it is the terminal's foreground and as
+    /// a fill its background, and no single colour is both, so ``rgbComponents``
+    /// is `nil`, and so is every measurement built on it, such as
+    /// ``relativeLuminance``. That holds even once the terminal has reported its
+    /// colours, and nothing is guessed in their place: it is not white, and not
+    /// xterm's grey.
     public static let `default` = Self(value: .terminalDefault)
 
     // MARK: - SwiftUI's Named Colors
@@ -366,7 +379,8 @@ public struct Color: Sendable, Hashable {
     /// Converts any color type to its RGB representation:
     /// - `.rgb` — returned directly
     /// - `.ansi` — xterm's conventional value for the slot, ``ANSIColor/xtermRGB``
-    /// - `.terminalDefault` — xterm's default foreground, grey 229
+    /// - `.terminalDefault` — nil, always: it is the terminal's foreground as
+    ///   ink and its background as a fill, and no single RGB is both
     /// - `.palette256` — mapped to xterm 256-color palette RGB values
     /// - `.terminalForeground` / `.terminalBackground` — the RGB the terminal
     ///   reported for its default foreground or background, or nil until it has
@@ -382,8 +396,10 @@ public struct Color: Sendable, Hashable {
         case .ansi(let slot):
             return slot.xtermRGB
         case .terminalDefault:
-            // xterm's default foreground, the same grey as its value for slot 7.
-            return (229, 229, 229)
+            // Not the reported foreground, even once there is one: as a fill this
+            // is 49, the background. It stands for whichever of the two its slot
+            // paints, so there is no one colour to measure, and no guess is made.
+            return nil
         case .palette256(let index):
             return Self.palette256ToRGB(index)
         case .semantic:

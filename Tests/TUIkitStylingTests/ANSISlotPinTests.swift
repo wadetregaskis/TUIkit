@@ -111,11 +111,23 @@ struct ANSISlotPinTests {
         #expect([table.red, table.green, table.blue] == slot.xterm)
     }
 
-    /// Today's value. The OSC 10/11/4 plan makes the default unmeasurable in a
-    /// later step, which will change this pin on purpose.
-    @Test("The default measures as xterm's grey 229, the same as white, and is still not white")
-    func defaultMeasuresAsGrey229() {
-        #expect(Color.default.rgbComponents.map { [$0.red, $0.green, $0.blue] } == [229, 229, 229])
+    /// The default is whatever the terminal paints in the slot it is drawn in:
+    /// its foreground as ink and its background as a fill. No single RGB is both,
+    /// so it measures as nothing, and that stays true once the terminal has
+    /// reported both colours. It is not white, and not any other guess.
+    @Test("The default measures as nothing, whatever the terminal reported, and is still not white")
+    func defaultIsUnmeasurable() {
+        let reported = TerminalColors(
+            foreground: TerminalColors.RGB(red: 171, green: 178, blue: 191),
+            background: TerminalColors.RGB(red: 40, green: 44, blue: 52))
+        for (name, colours) in [("unknown", TerminalColors.unknown), ("reported", reported)] {
+            TerminalColors.withCurrent(colours) {
+                #expect(Color.default.rgbComponents == nil, "\(name)")
+                #expect(Color.default.relativeLuminance == nil, "\(name)")
+                #expect(Color.default.perceivedLightness == nil, "\(name)")
+                #expect(!Color.default.isAchromatic, "\(name)")
+            }
+        }
         #expect(Color.default != Color.ansi(.white))
     }
 

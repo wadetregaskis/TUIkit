@@ -512,6 +512,9 @@ public struct ASCIIPalette: Sendable, Equatable {
         // A semantic colour that reached here unresolved has no RGB; mid-grey
         // is what `Color.resolve(with:)` itself falls back to, so an
         // unresolved palette renders flat rather than differently-wrong.
+        // `.default`, and a carried colour the terminal has not reported, have
+        // none either, and take the same stand-in as a match candidate. They
+        // are still drawn as 39 or 49; see `sgrParameters(at:background:)`.
         let rgb = color.rgbComponents ?? (red: 128, green: 128, blue: 128)
         let lab = Color.oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
         let rgba = RGBA(r: rgb.red, g: rgb.green, b: rgb.blue)
