@@ -176,6 +176,12 @@ public struct StatusBar: View {
 ///
 /// Handles all procedural ANSI rendering and buffer assembly.
 /// Public ``StatusBar`` delegates to this via its `body`.
+///
+/// `highlightColor` and `labelColor` are resolved against the environment's
+/// palette once, at the top of `renderToBuffer`, and only the resolved colours go
+/// on to the emitter and the claims. Either may be a palette role, and a role
+/// that reached `ANSIRenderer` unresolved stopped the process: the emitter does
+/// not resolve, and a bar built outside the run loop had nothing else to do it.
 private struct _StatusBarCore: View, Renderable {
     let userItems: [any StatusBarItemProtocol]
     let systemItems: [any StatusBarItemProtocol]
@@ -227,9 +233,11 @@ private struct _StatusBarCore: View, Renderable {
         // confirmation that an item is clickable.
         let hoveredID = context.environment.statusBar?.hoveredItemID
         let activationOverride = context.environment.statusBar?.activationLabelOverride
+        let colours = resolvedColours(in: context.environment.palette)
         let layouts = combinedItems.map { item -> ItemLayout in
             let display = renderItemString(
                 item: item,
+                colours: colours,
                 escapeOverride: escapeOverride,
                 activationOverride: activationOverride,
                 isHovered: item.id == hoveredID && itemIsClickable(item)
@@ -263,6 +271,7 @@ private struct _StatusBarCore: View, Renderable {
                 columns: result.placedColumns,
                 columnOffset: itemColumnOffset,
                 rowOffset: itemRowOffset,
+                colours: colours,
                 context: context
             )
 
@@ -291,6 +300,7 @@ private struct _StatusBarCore: View, Renderable {
                 columns: result.placedColumns,
                 columnOffset: itemColumnOffset,
                 rowOffset: itemRowOffset,
+                colours: colours,
                 context: context
             )
 
@@ -316,6 +326,7 @@ private struct _StatusBarCore: View, Renderable {
                 columns: result.placedColumns,
                 columnOffset: itemColumnOffset,
                 rowOffset: itemRowOffset,
+                colours: colours,
                 context: context
             )
         }
@@ -360,19 +371,40 @@ private struct _StatusBarCore: View, Renderable {
         let placedColumns: [Int]
     }
 
-    /// Renders a single item's `shortcut + " " + label` with the
-    /// configured highlight / label colors and the escape-label
-    /// override. When `isHovered` is true, the whole item is
-    /// underlined so the user has a clear visual confirmation
-    /// that they're over a clickable target.
+    /// The bar's two configurable colours, resolved against one palette.
+    ///
+    /// A type of its own so the emitter and the claims can only be handed colours
+    /// that have been through ``resolvedColours(in:)``, never the stored ones.
+    private struct ItemColours {
+        /// The shortcut keys' colour, concrete, carrying the alpha it was given.
+        let highlight: Color
+        /// The labels' colour, concrete, or `nil` for no stated colour.
+        let label: Color?
+    }
+
+    /// `highlightColor` and `labelColor`, resolved against `palette`.
+    ///
+    /// Resolving keeps each colour's alpha (a role's own, composed with the call
+    /// site's), which is what the claims read.
+    private func resolvedColours(in palette: any Palette) -> ItemColours {
+        ItemColours(
+            highlight: highlightColor.resolve(with: palette),
+            label: labelColor?.resolve(with: palette))
+    }
+
     /// Whether `shortcut` is the Return key, however the app spelled it.
     static func isReturnShortcut(_ shortcut: String) -> Bool {
         shortcut == Shortcut.enter || shortcut == Shortcut.returnKey || shortcut == "enter"
             || shortcut == "return"
     }
 
+    /// Renders a single item's `shortcut + " " + label` in `colours` and with the
+    /// escape-label override. When `isHovered` is true, the whole item is
+    /// underlined so the user has a clear visual confirmation that they're over a
+    /// clickable target.
     private func renderItemString(
         item: any StatusBarItemProtocol,
+        colours: ItemColours,
         escapeOverride: String?,
         activationOverride: String?,
         isHovered: Bool
@@ -381,7 +413,7 @@ private struct _StatusBarCore: View, Renderable {
             item.shortcut,
             with: {
                 var textStyle = TextStyle()
-                textStyle.foregroundColor = highlightColor.opaqueSpelling
+                textStyle.foregroundColor = colours.highlight.opaqueSpelling
                 textStyle.isBold = true
                 textStyle.isUnderlined = isHovered
                 return textStyle
@@ -401,7 +433,7 @@ private struct _StatusBarCore: View, Renderable {
         }
 
         let labelStyled: String
-        if let color = labelColor {
+        if let color = colours.label {
             labelStyled = ANSIRenderer.render(
                 " " + effectiveLabel,
                 with: {
@@ -449,11 +481,12 @@ private struct _StatusBarCore: View, Renderable {
         columns: [Int],
         columnOffset: Int,
         rowOffset: Int,
+        colours: ItemColours,
         context: RenderContext
     ) -> FrameBuffer {
         var claimed = applyOpacityClaims(
             buffer: buffer, layouts: layouts, columns: columns,
-            columnOffset: columnOffset, rowOffset: rowOffset)
+            columnOffset: columnOffset, rowOffset: rowOffset, colours: colours)
         // The tooltip's rows, when the palette slot they paint is faded. They sit
         // directly above the items and are inset exactly as the items are — flush
         // for `.compact` and `.rule`, past the wall and a space of padding for
@@ -487,6 +520,9 @@ private struct _StatusBarCore: View, Renderable {
     /// the same reason: only the alignment knows where an item ended up, and a claim
     /// computed from the item widths alone would be wrong under `.justified`.
     ///
+    /// The alphas are read from the RESOLVED colours, the same ones the bytes were
+    /// spelled from, so a palette role is claimed at its alpha in this palette.
+    ///
     /// - Parameters:
     ///   - buffer: The bar's buffer.
     ///   - layouts: The items, in the order they were placed.
@@ -494,17 +530,21 @@ private struct _StatusBarCore: View, Renderable {
     ///   - columnOffset: What the line itself is inset by (a wall, for a bordered
     ///     bar).
     ///   - rowOffset: Which row of the buffer the items are on.
+    ///   - colours: The two colours the items were drawn in, resolved.
     /// - Returns: The buffer, with the claims appended.
     private func applyOpacityClaims(
         buffer: FrameBuffer,
         layouts: [ItemLayout],
         columns: [Int],
         columnOffset: Int,
-        rowOffset: Int
+        rowOffset: Int,
+        colours: ItemColours
     ) -> FrameBuffer {
         // Asked of the two colours before anything is walked: an app that has not
         // faded either — which is every app until one does — pays one comparison.
-        guard !highlightColor.isOpaque || labelColor?.isOpaque == false else { return buffer }
+        guard !colours.highlight.isOpaque || colours.label?.isOpaque == false else {
+            return buffer
+        }
         var result = buffer
         for (layout, columnInLine) in zip(layouts, columns) {
             let start = columnOffset + columnInLine
@@ -514,13 +554,13 @@ private struct _StatusBarCore: View, Renderable {
             let shortcutWidth = layout.item.shortcut.strippedLength
             if let claim = OpacityRegion.claim(
                 offsetX: start, offsetY: rowOffset, width: shortcutWidth, height: 1,
-                ink: highlightColor)
+                ink: colours.highlight)
             {
                 result.opacityRegions.append(claim)
             }
             if let claim = OpacityRegion.claim(
                 offsetX: start + shortcutWidth, offsetY: rowOffset,
-                width: layout.visibleWidth - shortcutWidth, height: 1, ink: labelColor)
+                width: layout.visibleWidth - shortcutWidth, height: 1, ink: colours.label)
             {
                 result.opacityRegions.append(claim)
             }
