@@ -20,7 +20,7 @@ import Testing
 @Suite("Terminal colour query")
 struct TerminalColorQueryTests {
 
-    typealias RGB = TerminalColorReport.RGB
+    typealias RGB = TerminalColors.RGB
     typealias Resolved = TerminalColorReport.Resolved
 
     private static let bel = "\u{07}"
@@ -353,12 +353,12 @@ struct TerminalColorQueryTests {
     @Test(
         "With only the foreground answered, the background is whichever of black and white contrasts more",
         arguments: [
-            (TerminalColorReport.RGB(red: 0, green: 0, blue: 0), TerminalColorReport.RGB.white),
-            (TerminalColorReport.RGB(red: 230, green: 230, blue: 230), TerminalColorReport.RGB.black),
+            (TerminalColors.RGB(red: 0, green: 0, blue: 0), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
+            (TerminalColors.RGB(red: 230, green: 230, blue: 230), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
             // Either side of the luminance where black and white contrast
             // equally (about 0.179): grey 117 is dark, 118 light.
-            (TerminalColorReport.RGB(red: 117, green: 117, blue: 117), TerminalColorReport.RGB.white),
-            (TerminalColorReport.RGB(red: 118, green: 118, blue: 118), TerminalColorReport.RGB.black),
+            (TerminalColors.RGB(red: 117, green: 117, blue: 117), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
+            (TerminalColors.RGB(red: 118, green: 118, blue: 118), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
         ])
     func resolveForegroundOnly(foreground: RGB, background: RGB) {
         #expect(
@@ -371,10 +371,10 @@ struct TerminalColorQueryTests {
     @Test(
         "With only the background answered, the foreground is whichever of black and white contrasts more",
         arguments: [
-            (TerminalColorReport.RGB(red: 40, green: 44, blue: 52), TerminalColorReport.RGB.white),
-            (TerminalColorReport.RGB(red: 255, green: 255, blue: 255), TerminalColorReport.RGB.black),
-            (TerminalColorReport.RGB(red: 117, green: 117, blue: 117), TerminalColorReport.RGB.white),
-            (TerminalColorReport.RGB(red: 118, green: 118, blue: 118), TerminalColorReport.RGB.black),
+            (TerminalColors.RGB(red: 40, green: 44, blue: 52), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
+            (TerminalColors.RGB(red: 255, green: 255, blue: 255), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
+            (TerminalColors.RGB(red: 117, green: 117, blue: 117), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
+            (TerminalColors.RGB(red: 118, green: 118, blue: 118), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
         ])
     func resolveBackgroundOnly(background: RGB, foreground: RGB) {
         #expect(

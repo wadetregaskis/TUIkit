@@ -18,21 +18,6 @@ import TUIkitStyling
 /// fields are the ones that record needs, so it can be built field for field.
 struct TerminalColorReport: Equatable, Sendable {
 
-    /// A reported colour, scaled to eight bits per channel.
-    struct RGB: Hashable, Sendable {
-        /// The red channel.
-        var red: UInt8
-        /// The green channel.
-        var green: UInt8
-        /// The blue channel.
-        var blue: UInt8
-
-        /// `#000000`.
-        static let black = Self(red: 0, green: 0, blue: 0)
-        /// `#ffffff`.
-        static let white = Self(red: 255, green: 255, blue: 255)
-    }
-
     /// Which theme a `CSI ? 997 ; Ps n` report names.
     enum Appearance: Equatable, Sendable {
         /// `Ps` = 1.
@@ -46,14 +31,14 @@ struct TerminalColorReport: Equatable, Sendable {
     static let slotCount = 16
 
     /// The default foreground (OSC 10), or `nil` if the terminal did not say.
-    var foreground: RGB?
+    var foreground: TerminalColors.RGB?
 
     /// The default background (OSC 11), or `nil` if the terminal did not say.
-    var background: RGB?
+    var background: TerminalColors.RGB?
 
     /// Slots 0 to 15 (OSC 4), each `nil` until its reply arrives. Sixteen
     /// entries.
-    var slots: [RGB?] = Array(repeating: nil, count: slotCount)
+    var slots: [TerminalColors.RGB?] = Array(repeating: nil, count: slotCount)
 
     /// What a `CSI ? 997 ; Ps n` report said, or `nil` for none.
     ///
@@ -88,11 +73,11 @@ extension TerminalColorReport {
         }
 
         /// The default foreground.
-        var foreground: RGB
+        var foreground: TerminalColors.RGB
         /// Where ``foreground`` came from.
         var foregroundSource: Source
         /// The default background.
-        var background: RGB
+        var background: TerminalColors.RGB
         /// Where ``background`` came from.
         var backgroundSource: Source
 
@@ -101,7 +86,7 @@ extension TerminalColorReport {
         /// All or nothing: a partial table cannot answer "what does this
         /// name paint" for the names it lacks, and mixing reported slots with
         /// xterm's defaults would describe no terminal at all.
-        var slots: [RGB]?
+        var slots: [TerminalColors.RGB]?
 
         /// What a terminal that says nothing is taken to be: black on white,
         /// with no slots.
@@ -312,7 +297,7 @@ enum TerminalColorQuery {
     /// alpha is read, so a malformed one refuses the spec, and then ignored:
     /// the colour a terminal paints its default slots with is opaque on its
     /// grid. The prefix is lowercase, as every measured reply spelled it.
-    private static func color(fromSpec spec: ArraySlice<UInt8>) -> TerminalColorReport.RGB? {
+    private static func color(fromSpec spec: ArraySlice<UInt8>) -> TerminalColors.RGB? {
         let channelCount: Int
         let channelBytes: ArraySlice<UInt8>
         if spec.starts(with: rgbaPrefix) {
@@ -328,7 +313,7 @@ enum TerminalColorQuery {
         guard channels.count == channelCount else { return nil }
         let values = channels.compactMap(channel)
         guard values.count == channelCount else { return nil }
-        return TerminalColorReport.RGB(red: values[0], green: values[1], blue: values[2])
+        return TerminalColors.RGB(red: values[0], green: values[1], blue: values[2])
     }
 
     /// One channel of a spec: one to four hex digits, in either case, scaled
@@ -404,9 +389,18 @@ enum TerminalColorQuery {
     /// Whichever of black and white contrasts more with `rgb`, white on a tie:
     /// the same choice, and the same tie, as the readability floor's last
     /// resort (`Color.ensuringContrast(atLeast:against:)`).
-    private static func contrasting(_ rgb: TerminalColorReport.RGB) -> TerminalColorReport.RGB {
+    private static func contrasting(_ rgb: TerminalColors.RGB) -> TerminalColors.RGB {
         let color = Color.rgb(rgb.red, rgb.green, rgb.blue)
         return color.contrastRatio(against: .rgb(255, 255, 255))
             >= color.contrastRatio(against: .rgb(0, 0, 0)) ? .white : .black
     }
+}
+
+// MARK: - The two colours resolution falls back on
+
+extension TerminalColors.RGB {
+    /// `#000000`.
+    fileprivate static let black = Self(red: 0, green: 0, blue: 0)
+    /// `#ffffff`.
+    fileprivate static let white = Self(red: 255, green: 255, blue: 255)
 }
