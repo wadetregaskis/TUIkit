@@ -63,6 +63,19 @@ one idea meeting different geometry: a control marks the cell it has, and a
 `List` row has none, because the row *is* content all the way across. Which is
 exactly why it uses a background.
 
+**The row background has a second form, added 2026-09-15.** The accent over the
+page is a *tint*, and a palette may name colours the terminal decides — its own
+pair, or one of its sixteen slots — which the terminal need never report. There
+is then no tint between them to draw: every share of the blend is one end or the
+other, so the fill is a solid accent under unreadable text, or the page itself
+(`Documentation/Opacity as composition.md` §75, §86). Such a cursor row draws
+**reverse video** over the palette's own ink and page instead — steady, since a
+reversal has no phase to breathe — and a selected row that is not the cursor
+draws its `●` and nothing else. The rule is keyed on the colours, not on the
+terminal's silence: a palette of ordinary colours keeps its tints everywhere.
+For the enum below that means a `.background` mode would have two spellings on
+one control, decided by the palette rather than by the app.
+
 ## Finding 1: a colour-based affordance can always be overpainted
 
 Measured. A `List` whose rows contain `Text(item).background(.rgb(200, 0, 0))`,

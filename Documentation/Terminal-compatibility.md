@@ -2376,9 +2376,28 @@ with its colours exchanged, and states that pair with the 7 again where 39 and 4
 cannot state it without (`Opacity as composition` §85). That relies on the 7
 exchanging the pair in force, below. It is also in the output path's vocabulary
 ("SGR codes the output path emits", below), which never emits `27` and restates
-from `ESC[0m` instead. The framework is to draw highlights it cannot measure as reverse video
-instead of a tint: that means a terminal that reported no colours, or a slot it
-did not report. So what each host paints for SGR 7 is about to be relied on.
+from `ESC[0m` instead. And, since 2026-09-15, for a highlight whose colours it
+cannot measure, below. So what each host paints for SGR 7 is now relied on.
+
+**What the framework draws reversed.** A highlight is a tint of a palette role
+over the page, and where that tint or the page has no RGB — the terminal's own
+foreground or background, or one of its sixteen slots, until it reports them —
+no share of the blend can be drawn at all (`Opacity as composition` §75, §86).
+Reverse video is drawn instead, because it is legible whatever colours the host
+keeps there:
+
+| Site | Where the colours cannot be measured | Otherwise |
+|---|---|---|
+| A `List`'s or a `Table`'s cursor row, selected or not | a steady `ESC[7;<ink>;<field>m` over the palette's own ink and page, restated after every reset in the row, keeping its ● | the accent's breath over the page |
+| A selected row that is not the cursor; an alternating row | nothing at all: the ● says which row is selected | a tint of the accent over the page |
+
+The trigger is those colours and never the terminal's silence: a palette of
+ordinary RGB roles keeps its tints on a host that answers nothing. The ink and
+the field are stated beside the 7 for the reason ECMA-48 gives below — a bare 7
+exchanges the pair IN FORCE, so a row's padding, which follows its content's
+last reset, would fill with the terminal's own foreground on a page the palette
+paints. What a host actually paints for such a row is what the card's rows A, B
+and D ask, and they are UNMEASURED on every host.
 
 **What follows from the sequence itself, on any host.** ECMA-48 calls SGR 7
 "negative image", conventionally drawn by exchanging the foreground and

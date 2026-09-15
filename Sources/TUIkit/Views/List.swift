@@ -42,6 +42,22 @@
 /// }
 /// ```
 ///
+/// ## The cursor row where the terminal decides the colours
+///
+/// The cursor row marks itself with a fill: the palette's accent over its page,
+/// breathing while the list has focus. A palette may name colours the terminal
+/// decides instead — its own foreground or background, or one of its sixteen
+/// slots — and until the terminal says what it paints for those, there is no
+/// tint between them to draw: the fill would be a solid accent nobody can check
+/// the text on, or the page itself, which shows nothing.
+///
+/// Such a row draws **reverse video** instead, over the palette's own ink and
+/// page, so the cursor is visible in whatever colours the terminal paints. It is
+/// steady rather than breathing, and it keeps its `●`. A selected row that is
+/// not the cursor then shows its `●` and no fill at all, as a `Table` always
+/// has, and alternating rows are left plain. A palette that states ordinary
+/// colours is unaffected, on any terminal.
+///
 /// ## Presenting from a row
 ///
 /// Attach a `.sheet` / `.alert` / `.modal` to the **List**, not to a row:

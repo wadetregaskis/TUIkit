@@ -84,6 +84,18 @@ import Foundation
 /// ## Column Spacing
 ///
 /// Columns are separated by spaces (no vertical lines) for a clean look.
+///
+/// ## The cursor row where the terminal decides the colours
+///
+/// The cursor row marks itself with a fill of the palette's accent over its
+/// page, breathing while the table has focus. Where the palette names colours
+/// the terminal decides — its own foreground or background, or one of its
+/// sixteen slots — and the terminal has not said what it paints for them, there
+/// is no tint between them to draw, so the row draws **reverse video** instead,
+/// over the palette's own ink and page. It is steady rather than breathing, and
+/// it keeps its `●`. A selected row that is not the cursor draws its `●` and no
+/// fill, which is what it has always done. A palette that states ordinary
+/// colours is unaffected, on any terminal.
 public struct Table<Value: Identifiable & Sendable>: View where Value.ID: Hashable {
     /// The data items to display.
     let data: [Value]
@@ -1899,9 +1911,7 @@ where Value.ID: Hashable {
             guard case .none = visual.background else {
                 content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
                 if pulseColors != nil { bareLines.append(content) }
-                lines.append(
-                    content.withPersistentBackground(
-                        claimableFill?.opaqueSpelling ?? visual.background.colorNow))
+                lines.append(visual.background.painting(content))
                 continue
             }
             lines.append(content)
@@ -3586,10 +3596,7 @@ where Value.ID: Hashable {
             content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
             let fill = visualState.background.claimableFill
             guard let colors = visualState.background.pulseColors else {
-                return (
-                    content.withPersistentBackground(fill?.opaqueSpelling
-                        ?? visualState.background.colorNow),
-                    nil, nil, claims(fill: fill))
+                return (visualState.background.painting(content), nil, nil, claims(fill: fill))
             }
             let frames = colors.map { content.withPersistentBackground($0) }
             // The pulse's own frames need no spelling and earn no fill claim: both
@@ -3821,7 +3828,9 @@ where Value.ID: Hashable {
                 // pair as `_ListCore`'s cursor row, from the same place.
                 .focusedSelection(in: context, palette: palette)
             } else if isFocused {
-                .fixed(palette.focusBackground)
+                // The focus wash, or a reversal where it cannot be measured — the same
+                // answer `_ListCore` takes for the same row, from the same place.
+                .focused(palette: palette)
             } else {
                 // A selected row while the table itself does not have focus
                 // draws its mark and no fill; `.hidden` suppresses both, and

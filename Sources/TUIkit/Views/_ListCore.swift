@@ -3117,8 +3117,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             cycle.isAnimating(dim: dim, bright: bright)
         else {
             let fill = background.claimableFill
+            // A reversal states its own pair and closes itself, so its lines are painted
+            // rather than handed a colour to persist under their resets; everything else
+            // takes the colour (``RowBackground/stillLines(_:)``).
             return RenderedRow(
-                lines: lines(over: fill?.opaqueSpelling ?? background.colorNow),
+                lines: background.stillLines { lines(over: $0) },
                 pulseFrames: nil, childRuns: childRuns,
                 claims: claims(over: fill), droppedRunClaims: droppedRunClaims)
         }
@@ -3345,7 +3348,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // ``AnimatedCellRun``s over the row's own lines.
                 return .focusedSelection(in: context, palette: palette)
             } else if isFocused {
-                return .fixed(palette.focusBackground)
+                // The focus wash, or a reversal where it cannot be measured — the same
+                // answer `Table` takes for the same row, from the same place.
+                return .focused(palette: palette)
             } else if isSelected {
                 // Selected row while the list itself doesn't have
                 // focus. Controlled by the
@@ -3357,35 +3362,45 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // (pop-up pickers, quick-pick palettes) where the
                 // ambient highlight is more noise than signal.
                 if context.environment.unfocusedSelectionVisibility == .hidden {
-                    return .init(alternatingBackgroundIfAny(
+                    return alternatingBackgroundIfAny(
                         sectionContentIndex: sectionContentIndex,
                         style: style,
-                        palette: palette))
+                        palette: palette)
                 }
-                return .fixed(
-                    palette.accent.opacity(ViewConstants.selectedBackground, over: palette.background))
+                // A tint of the accent, and nothing at all where that tint cannot be
+                // measured: the ● beside the row says it is selected, which is how a
+                // `Table` has always drawn a selected row it has no cursor on.
+                return .tint(
+                    palette.highlightFill(
+                        palette.accent.opacity(ViewConstants.selectedBackground, over: palette.background),
+                        tint: palette.accent))
             } else {
-                return .init(alternatingBackgroundIfAny(
+                return alternatingBackgroundIfAny(
                     sectionContentIndex: sectionContentIndex,
                     style: style,
-                    palette: palette))
+                    palette: palette)
             }
         }
     }
 
     /// Returns the alternating-row tint when this row qualifies
-    /// for it, or nil otherwise. Extracted so the unfocused-
+    /// for it, and `.none` otherwise. Extracted so the unfocused-
     /// selection-hidden path and the unselected-row path can both
     /// fall back to it without duplicating the condition.
+    ///
+    /// Nothing, too, where the tint cannot be measured: a band of
+    /// reverse video down every other row would read as a screen
+    /// full of cursors (``RowBackground/tint(_:)``).
     private func alternatingBackgroundIfAny(
         sectionContentIndex: Int,
         style: any ListStyle,
         palette: any Palette
-    ) -> Color? {
-        if style.alternatingRowColors && sectionContentIndex.isMultiple(of: 2) {
-            return palette.accent.opacity(ViewConstants.alternatingRowBackground, over: palette.background)
-        }
-        return nil
+    ) -> RowBackground {
+        guard style.alternatingRowColors, sectionContentIndex.isMultiple(of: 2) else { return .none }
+        return .tint(
+            palette.highlightFill(
+                palette.accent.opacity(ViewConstants.alternatingRowBackground, over: palette.background),
+                tint: palette.accent))
     }
 
     /// How a badged line is laid out: the content fitted to leave room, the fill

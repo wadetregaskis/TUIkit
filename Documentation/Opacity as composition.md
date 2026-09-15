@@ -5351,3 +5351,72 @@ at 0.6 covers text and at 0.3 yields to it; a red label at 0.6 over a reversed r
 reversed with its red in the background slot, and at 0.3 the row shows; and the uncovered
 columns between two regions stay reversed. With the pair reported, a reversed label at 0.6
 is drawn in its exchanged colours with no 7, as before.
+
+## 86. A cursor row on a highlight the terminal decides (2026-09-15)
+
+A `List`'s or a `Table`'s cursor row says where the cursor is with a fill: breathing between
+22% and 50% of the accent over the page (`Palette.accentFillPulse`), or — a row merely under
+the cursor, with nothing selected on it — the focus wash, the tertiary tier at 30% over the
+page. Both are tints, and where the tint or the page has no RGB every share of one is an end
+rather than a mixture (§75). The breath was then held at its bright end (§79): a solid
+half-strength accent under content nobody can check for contrast, or, for a translucent
+accent, the page. The wash, below half, was the page itself. So on a palette naming a colour
+the terminal decides — its own pair, or one of its sixteen slots — a focused list had no
+cursor at all.
+
+**The rule.** Such a row draws reverse video instead, over the palette's own pair: SGR 7 with
+the ink and the field stated beside it and restated after every reset in the row
+(`ANSIRenderer.applyPersistentReverse`; Terminal-compatibility.md, "Reverse video (SGR 7)").
+A bare 7 exchanges the colours IN FORCE, which after a reset are the terminal's own, so on a
+page the palette paints the padding after a child's reset would fill with the terminal's
+foreground and the bar would come out in two colours.
+
+The trigger is the colours, not the terminal's silence (`Palette.highlightFill(_:over:tint:)`
+and `Palette.emphasisFill(over:)`): a palette of RGB roles keeps its tints on a terminal that
+answered nothing, and a palette naming one slot loses only the highlights built from that
+slot. A fill that is a SHARE of a tint is asked about the tint as well, because below half
+such a share is the ground, which measures perfectly well and shows nothing — the focus wash
+of a tertiary tier the terminal decides, over an RGB page, is exactly that case.
+
+**Which rows draw what:**
+- The cursor row of a focused control, selected or not: a steady reversal, keeping the ● it
+  already had. It leaves no run and asks for no tick, because a reversal has no phase to
+  advance.
+- A selected row that is NOT the cursor, and an alternating row: nothing. Their tint repeats
+  what the ● and the cursor row already say, and a second reversed bar would read as a second
+  cursor. It is what a `Table` has always drawn for a selected row it has no cursor on.
+- A keyboard reorder's landing slot, which asks for the cursor row's emphasis by name, gets
+  the same reversal.
+
+What it leaves alone:
+- **A measurable fill.** Every built-in palette states RGB roles, so every row is drawn as it
+  was, byte for byte, on a silent terminal and on a reporting one. Once the terminal reports
+  its sixteen, a slot accent breathes again.
+- **The mark, the ink and the claims.** The ● is drawn as before, reversed with the row; a
+  reversal states no translucent colour, so it claims none (`RowBackground.claimableFill`),
+  and the mark's and the content's own claims are untouched.
+- **The measure pass.** Only colours change, so measuring and rendering still agree, and the
+  glyph grid is identical (the two golden snapshots pin that).
+
+Limits:
+- A cursor row looks the same whether or not it is selected; the ● is the difference.
+- With `.rowSelectionIndicator(.hidden)`, a selection that is not the cursor is invisible.
+- A child that states its own colours reverses ITS pair: a `Table` under a `.foregroundStyle`
+  draws its cells' ink reversed and its padding in the palette's ink.
+- A reversal is stated opaque and claims nothing, so a translucent ink or page on such a
+  palette is spent rather than blended.
+- A run the row carries — a spinner inside a `List` row — replays without the 7, as it
+  already replays without a fill: the splice restores the page's background, not the row's
+  (`FrameDiffWriter.restoringBackground`). Inferred from that path, not measured.
+- A reversal closes itself with a reset, so it covers the row's own cells and no more. The
+  container's right pad cell, which a persistent background left in force used to colour by
+  bleed, stays bare — as its left pad always was.
+
+`ReversedCursorRowTests` (TUIkitTests) pins it for both twins, at all three depths, with an
+`.ansi` accent over an RGB page and with the terminal's own pair: every cell of the cursor
+row from its text to the row's end carries the 7 with the palette's ink and field, the
+padding after a child's own reset included; the ● is kept; no run is left and the loop is
+asked for no tick; a selected row that is not the cursor and an alternating row draw nothing;
+an RGB palette on the same silent terminal keeps its tint and its breath; and with Apple
+Terminal "Basic"'s sixteen reported the slot accent breathes in `accentFillPulse`'s own ends
+again.

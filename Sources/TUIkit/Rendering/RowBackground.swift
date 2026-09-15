@@ -31,6 +31,11 @@ enum RowBackground {
     /// A breathing colour: the whole cycle and the two ends it runs between.
     case pulsing(SelectionEmphasisCycle, dim: Color, bright: Color)
 
+    /// Reverse video (SGR 7) over the palette's own ink and page, both stated beside
+    /// the 7 — the highlight a terminal paints whatever colours it keeps, for a row
+    /// whose fill cannot be measured (``HighlightFill``).
+    case reversed(ink: Color, field: Color)
+
     /// `.fixed`, or `.none` for no colour — for the callers whose other branches
     /// produce an optional.
     init(_ color: Color?) {
@@ -42,21 +47,108 @@ enum RowBackground {
     /// The one definition of that colour pair: a list and a table showing
     /// visibly different pulses for the same state is exactly the kind of drift
     /// this type exists to prevent.
+    ///
+    /// Where the accent or the page has no RGB the pair cannot be mixed, and the row
+    /// reverses the palette's pair instead of holding a colour nobody can check
+    /// (``Palette/emphasisFill(over:)``).
     @MainActor
     static func focusedSelection(in context: RenderContext, palette: any Palette) -> Self {
-        let (dim, bright) = palette.accentFillPulse()
+        let highlight = palette.emphasisFill()
+        guard case .pulse(let dim, let bright) = highlight else { return still(highlight) }
         return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
     }
 
-    /// The colour to draw with in the frame being rendered now.
+    /// The still highlight a row merely UNDER the cursor shows: the focus wash, or a
+    /// reversal where that wash cannot be measured.
+    ///
+    /// Here rather than at the two call sites for the reason ``focusedSelection(in:palette:)``
+    /// is: the twins ask one question in one place.
+    @MainActor
+    static func focused(palette: any Palette) -> Self {
+        // The default wash is the tertiary tier at 30% over the page, and a share below
+        // half of a colour the terminal decides is the page itself (Opacity as
+        // composition §75): it measures, and shows nothing. So where the palette has not
+        // stated a wash of its own, the tier it is built from is asked as well.
+        let fill = palette.focusBackground
+        let tint = fill == palette.derivedFocusBackground() ? palette.foregroundTertiary : nil
+        return still(palette.highlightFill(fill, tint: tint))
+    }
+
+    /// The fill of a highlight that only ever TINTS — a selected row that is not the
+    /// cursor, an alternating row — and nothing where that tint cannot be measured.
+    ///
+    /// Such a row repeats what the ● beside it and the cursor row already say. Reversed
+    /// it would read as a second cursor, so where its tint has no RGB it is left
+    /// unfilled — which is what a `Table` has always drawn for a selected row it does
+    /// not have the cursor on.
+    static func tint(_ highlight: HighlightFill) -> Self {
+        guard case .fill(let color) = highlight else { return .none }
+        return .fixed(color)
+    }
+
+    /// `highlight` as a background that does not animate.
+    ///
+    /// A breath is not one: a site that can show one asks ``focusedSelection(in:palette:)``,
+    /// and here the bright end stands in, which is the colour such a cycle holds anyway
+    /// wherever it cannot be measured (§79).
+    private static func still(_ highlight: HighlightFill) -> Self {
+        switch highlight {
+        case .fill(let color): return .fixed(color)
+        case .pulse(_, let bright): return .fixed(bright)
+        case .reversed(let ink, let field): return .reversed(ink: ink, field: field)
+        }
+    }
+
+    /// The colour to draw with in the frame being rendered now, or `nil` where the row
+    /// fills with no colour of its own — no background at all, and a reversal, which
+    /// paints with the pair already in force.
     @MainActor
     var colorNow: Color? {
         switch self {
-        case .none: return nil
+        case .none, .reversed: return nil
         case .fixed(let color): return color
         case .pulsing(let cycle, let dim, let bright):
             return cycle.colorNow(dim: dim, bright: bright)
         }
+    }
+
+    /// `line` — a row's finished line, already padded to its width — drawn over this
+    /// background as the frame being rendered now shows it.
+    ///
+    /// A fill is left in force at the end of the line, as
+    /// ``String/withPersistentBackground(_:)`` leaves it; a reversal closes itself with
+    /// a reset. Both re-state themselves after every reset inside the line, because a
+    /// row is a reset per styled run followed by plain padding. For the reversal that is
+    /// the whole point: the 7 exchanges the colours IN FORCE, so without the palette's
+    /// ink and field restated beside it the padding would fill with the terminal's own
+    /// foreground (`ANSIRenderer.applyPersistentReverse(_:ink:field:)`).
+    ///
+    /// Opaque spellings, as every row paint uses: a translucent fill's alpha is claimed
+    /// (``claimableFill``) and resolved against what is behind the row, and the emitter
+    /// is never handed a colour that still states one.
+    @MainActor
+    func painting(_ line: String) -> String {
+        guard case .reversed(let ink, let field) = self else {
+            return line.withPersistentBackground(claimableFill?.opaqueSpelling ?? colorNow)
+        }
+        return ANSIRenderer.applyPersistentReverse(
+            line, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+    }
+
+    /// A row's still lines, from a renderer that draws them over a colour.
+    ///
+    /// ``painting(_:)`` for a caller whose lines are BUILT with their background rather
+    /// than painted after the fact — a `List` row draws its badge and its gutter into
+    /// them. A reversal renders them over no colour and reverses each; every other
+    /// background hands the renderer the colour of the frame being rendered now.
+    ///
+    /// - Parameter render: Draws the row's lines over the colour it is given.
+    @MainActor
+    func stillLines(_ render: (Color?) -> [String]) -> [String] {
+        guard case .reversed = self else {
+            return render(claimableFill?.opaqueSpelling ?? colorNow)
+        }
+        return render(nil).map { painting($0) }
     }
 
     /// Every colour of the pulse, in cycle order — or `nil` when this background
