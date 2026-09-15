@@ -226,7 +226,7 @@ struct TrackAlphaTests {
         let context = RenderContext(availableWidth: 24, availableHeight: 1, tuiContext: TUIContext())
             .isolatingRenderCache()
         let drawn = renderToBuffer(
-            Slider(value: .constant(0.5), in: 0...1).tint(Color.ansi(.red).opacity(0.5)), context: context)
+            Slider(value: .constant(0.5), in: 0...1).tint(Color.red.opacity(0.5)), context: context)
         let claims = drawn.opacityRegions.filter { $0.inkOpacity == half }
         #expect(!claims.isEmpty, "\(drawn.opacityRegions)")
         #expect(
@@ -239,7 +239,7 @@ struct TrackAlphaTests {
         let context = RenderContext(availableWidth: 24, availableHeight: 1, tuiContext: TUIContext())
             .isolatingRenderCache()
         let drawn = renderToBuffer(
-            Slider(value: .constant(0.5), in: 0...1).tint(Color.ansi(.red).opacity(0.5)).disabled(true),
+            Slider(value: .constant(0.5), in: 0...1).tint(Color.red.opacity(0.5)).disabled(true),
             context: context)
         // `forState` composites every colour through `opacity(_:over: palette.background)`,
         // which consumes the alpha and stamps the result opaque. One colour, two
@@ -256,7 +256,7 @@ struct TrackAlphaTests {
             Gauge(value: 0.5) { Text("L") } currentValueLabel: { Text("") }
                 minimumValueLabel: { Text("mn") } maximumValueLabel: { Text("mx") }
                 .gaugeStyle(.accessoryLinear)
-                .tint(Color.ansi(.red).opacity(0.5)),
+                .tint(Color.red.opacity(0.5)),
             context: context)
         let claims = drawn.opacityRegions.filter { $0.inkOpacity == half }
         #expect(!claims.isEmpty, "\(drawn.opacityRegions)")
@@ -273,7 +273,7 @@ struct TrackAlphaTests {
         let drawn = renderToBuffer(
             ProgressView(value: 0.5) { Text("Loading") }
                 .progressViewStyle(.knob)
-                .tint(Color.ansi(.red).opacity(0.5)),
+                .tint(Color.red.opacity(0.5)),
             context: context)
         // The bar is below the label, so a claim on row 0 would fade the label instead
         // — and `allSatisfy` on an empty array is vacuously true, so the count comes
