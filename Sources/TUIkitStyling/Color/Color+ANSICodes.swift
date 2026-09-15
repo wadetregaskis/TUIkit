@@ -75,18 +75,17 @@ extension Color {
                 + "the VIEW for a fade that works everywhere.")
         if depth == .noColor { return [] }
         switch downsampled(to: depth).value {
-        case .standard(let ansi): return ["\(ansi.foregroundCode)"]
-        case .bright(let ansi): return ["\(ansi.brightForegroundCode)"]
+        case .ansi(let slot): return ["\(slot.foregroundCode)"]
         case .palette256(let index): return ["38", "5", "\(index)"]
         case .rgb(let red, let green, let blue): return ["38", "2", "\(red)", "\(green)", "\(blue)"]
-        case .terminalForeground: return ["\(ANSIColor.default.foregroundCode)"]
+        case .terminalDefault, .terminalForeground: return ["\(ANSIColor.defaultForegroundCode)"]
         // No SGR names the default BACKGROUND as a foreground. Once the terminal
         // has reported it, this slot gets that RGB, quantised as an `.rgb` of it
         // would be; `downsampled` left it alone above because it cannot see the
         // slot. Until then there is no RGB to spell and none is guessed, so this
         // slot gets its own default.
         case .terminalBackground:
-            guard let paper = rgbComponents else { return ["\(ANSIColor.default.foregroundCode)"] }
+            guard let paper = rgbComponents else { return ["\(ANSIColor.defaultForegroundCode)"] }
             return Color.rgb(paper.red, paper.green, paper.blue).foregroundCodes(depth: depth)
         case .semantic:
             fatalError(
@@ -141,16 +140,15 @@ extension Color {
                 + "the VIEW for a fade that works everywhere.")
         if depth == .noColor { return [] }
         switch downsampled(to: depth).value {
-        case .standard(let ansi): return ["\(ansi.backgroundCode)"]
-        case .bright(let ansi): return ["\(ansi.brightBackgroundCode)"]
+        case .ansi(let slot): return ["\(slot.backgroundCode)"]
         case .palette256(let index): return ["48", "5", "\(index)"]
         case .rgb(let red, let green, let blue): return ["48", "2", "\(red)", "\(green)", "\(blue)"]
-        case .terminalBackground: return ["\(ANSIColor.default.backgroundCode)"]
+        case .terminalDefault, .terminalBackground: return ["\(ANSIColor.defaultBackgroundCode)"]
         // The twin of the foreground's arm: no SGR names the default foreground
         // as a background, so this is the reported RGB, quantised, or this slot's
         // own default while there is none.
         case .terminalForeground:
-            guard let ink = rgbComponents else { return ["\(ANSIColor.default.backgroundCode)"] }
+            guard let ink = rgbComponents else { return ["\(ANSIColor.defaultBackgroundCode)"] }
             return Color.rgb(ink.red, ink.green, ink.blue).backgroundCodes(depth: depth)
         case .semantic:
             fatalError(

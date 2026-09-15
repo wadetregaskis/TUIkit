@@ -115,8 +115,14 @@ public struct Color: Sendable, Hashable {
 
     /// Internal enum for different color types.
     public enum ColorValue: Sendable, Hashable {
-        case standard(ANSIColor)
-        case bright(ANSIColor)
+        /// One of the terminal's sixteen colour slots: SGR 30–37 or 90–97 as a
+        /// foreground, 40–47 or 100–107 as a background. It measures as xterm's
+        /// value for the slot, ``ANSIColor/xtermRGB``.
+        case ansi(ANSIColor)
+        /// The terminal's default colour in whichever slot it is drawn: SGR 39 as
+        /// a foreground and 49 as a background. This is `Color.default`. It
+        /// measures as xterm's grey 229.
+        case terminalDefault
         case palette256(UInt8)
         case rgb(red: UInt8, green: UInt8, blue: UInt8)
         case semantic(SemanticColor)
@@ -176,57 +182,57 @@ public struct Color: Sendable, Hashable {
     // MARK: - Standard ANSI Colors
 
     /// Black (ANSI 30/40)
-    public static let black = Self(value: .standard(.black))
+    public static let black = Self(value: .ansi(.black))
 
     /// Red (ANSI 31/41)
-    public static let red = Self(value: .standard(.red))
+    public static let red = Self(value: .ansi(.red))
 
     /// Green (ANSI 32/42)
-    public static let green = Self(value: .standard(.green))
+    public static let green = Self(value: .ansi(.green))
 
     /// Yellow (ANSI 33/43)
-    public static let yellow = Self(value: .standard(.yellow))
+    public static let yellow = Self(value: .ansi(.yellow))
 
     /// Blue (ANSI 34/44)
-    public static let blue = Self(value: .standard(.blue))
+    public static let blue = Self(value: .ansi(.blue))
 
     /// Magenta (ANSI 35/45)
-    public static let magenta = Self(value: .standard(.magenta))
+    public static let magenta = Self(value: .ansi(.magenta))
 
     /// Cyan (ANSI 36/46)
-    public static let cyan = Self(value: .standard(.cyan))
+    public static let cyan = Self(value: .ansi(.cyan))
 
     /// White (ANSI 37/47)
-    public static let white = Self(value: .standard(.white))
+    public static let white = Self(value: .ansi(.white))
 
     /// Default color (terminal default)
-    public static let `default` = Self(value: .standard(.`default`))
+    public static let `default` = Self(value: .terminalDefault)
 
     // MARK: - Bright ANSI Colors
 
     /// Bright black (gray)
-    public static let brightBlack = Self(value: .bright(.black))
+    public static let brightBlack = Self(value: .ansi(.brightBlack))
 
     /// Bright red
-    public static let brightRed = Self(value: .bright(.red))
+    public static let brightRed = Self(value: .ansi(.brightRed))
 
     /// Bright green
-    public static let brightGreen = Self(value: .bright(.green))
+    public static let brightGreen = Self(value: .ansi(.brightGreen))
 
     /// Bright yellow
-    public static let brightYellow = Self(value: .bright(.yellow))
+    public static let brightYellow = Self(value: .ansi(.brightYellow))
 
     /// Bright blue
-    public static let brightBlue = Self(value: .bright(.blue))
+    public static let brightBlue = Self(value: .ansi(.brightBlue))
 
     /// Bright magenta
-    public static let brightMagenta = Self(value: .bright(.magenta))
+    public static let brightMagenta = Self(value: .ansi(.brightMagenta))
 
     /// Bright cyan
-    public static let brightCyan = Self(value: .bright(.cyan))
+    public static let brightCyan = Self(value: .ansi(.brightCyan))
 
     /// Bright white
-    public static let brightWhite = Self(value: .bright(.white))
+    public static let brightWhite = Self(value: .ansi(.brightWhite))
 
     // MARK: - SwiftUI's Named Colors
 
@@ -371,7 +377,8 @@ public struct Color: Sendable, Hashable {
     ///
     /// Converts any color type to its RGB representation:
     /// - `.rgb` — returned directly
-    /// - `.standard` / `.bright` — mapped to xterm standard RGB values
+    /// - `.ansi` — xterm's conventional value for the slot, ``ANSIColor/xtermRGB``
+    /// - `.terminalDefault` — xterm's default foreground, grey 229
     /// - `.palette256` — mapped to xterm 256-color palette RGB values
     /// - `.terminalForeground` / `.terminalBackground` — the RGB the terminal
     ///   reported for its default foreground or background, or nil until it has
@@ -384,10 +391,11 @@ public struct Color: Sendable, Hashable {
             return TerminalColors.current.foreground.map { (red: $0.red, green: $0.green, blue: $0.blue) }
         case .terminalBackground:
             return TerminalColors.current.background.map { (red: $0.red, green: $0.green, blue: $0.blue) }
-        case .standard(let ansi):
-            return ansi.rgbValues
-        case .bright(let ansi):
-            return ansi.brightRGBValues
+        case .ansi(let slot):
+            return slot.xtermRGB
+        case .terminalDefault:
+            // xterm's default foreground, the same grey as its value for slot 7.
+            return (229, 229, 229)
         case .palette256(let index):
             return Self.palette256ToRGB(index)
         case .semantic:
@@ -396,19 +404,17 @@ public struct Color: Sendable, Hashable {
     }
 
     /// Whether the TERMINAL decides what this colour paints, rather than its
-    /// components: the eight ANSI names and their bright twins, `.default`,
-    /// 256-colour indices 0-15 (the same sixteen slots, spelled by index), and
-    /// the two carried cases, SGR 39 and 49.
+    /// components: the sixteen slots, `.default`, 256-colour indices 0-15 (the
+    /// same sixteen slots, spelled by index), and the two carried cases, SGR 39
+    /// and 49.
     ///
-    /// `.bright(.default)` is not one: its codes come out as 99 and 109, which
-    /// are not SGR. Indices 16-255, the cube and the grey ramp, count as ordinary
-    /// RGB, being conventionally fixed; see "What an ANSI colour actually paints"
-    /// in `Documentation/Terminal-compatibility.md`. A semantic colour is not one
+    /// Indices 16-255, the cube and the grey ramp, count as ordinary RGB, being
+    /// conventionally fixed; see "What an ANSI colour actually paints" in
+    /// `Documentation/Terminal-compatibility.md`. A semantic colour is not one
     /// until it is resolved.
     package var isTerminalDefined: Bool {
         switch value {
-        case .standard, .terminalForeground, .terminalBackground: return true
-        case .bright(let ansi): return ansi != .default
+        case .ansi, .terminalDefault, .terminalForeground, .terminalBackground: return true
         case .palette256(let index): return index < 16
         case .rgb, .semantic: return false
         }
@@ -794,18 +800,15 @@ extension Color {
 extension Color {
     /// Converts a 256-color palette index to RGB values.
     ///
-    /// - Indices 0–7: standard ANSI colors
-    /// - Indices 8–15: bright ANSI colors
+    /// - Indices 0–15: the sixteen ANSI slots, at xterm's values
     /// - Indices 16–231: 6×6×6 color cube
     /// - Indices 232–255: grayscale ramp
     package static func palette256ToRGB(_ index: UInt8) -> (red: UInt8, green: UInt8, blue: UInt8) {
         switch index {
-        case 0...7:
-            guard let ansi = ANSIColor(rawValue: index) else { return (0, 0, 0) }
-            return ansi.rgbValues
-        case 8...15:
-            guard let ansi = ANSIColor(rawValue: index - 8) else { return (0, 0, 0) }
-            return ansi.brightRGBValues
+        case 0...15:
+            // A slot's raw value is its index, so every index here is a slot.
+            guard let slot = ANSIColor(rawValue: index) else { return (0, 0, 0) }
+            return slot.xtermRGB
         case 16...231:
             // 6×6×6 color cube: index = 16 + 36*r + 6*g + b (each 0–5)
             let cubeIndex = index - 16

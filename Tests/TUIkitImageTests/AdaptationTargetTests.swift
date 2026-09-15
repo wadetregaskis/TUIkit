@@ -128,7 +128,7 @@ struct AdaptationTargetTests {
         #expect(derived.colors.count == 12)
         for colour in derived.colors {
             switch colour.value {
-            case .standard, .bright: break
+            case .ansi: break
             default: Issue.record("not one of the sixteen: \(colour)")
             }
         }

@@ -80,7 +80,7 @@ extension ASCIIPalette {
     /// rather than merely near it — and, at 256 colours asked for 240, converges
     /// on it.
     ///
-    /// Because the entries are `.palette(n)` and `.standard`/`.bright` colours
+    /// Because the entries are `.palette(n)` and `.ansi` colours
     /// rather than triples, a palette built out of them is a **fixed point** of
     /// ``downsampled(to:)``: the fit that runs after the derivation
     /// (`ASCIIConverter.convert(_:width:height:)`, which must keep running — see

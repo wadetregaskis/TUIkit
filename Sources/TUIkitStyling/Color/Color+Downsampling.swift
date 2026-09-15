@@ -11,8 +11,8 @@ import Foundation
 extension Color {
     /// Converts this color to the nearest 256-color palette entry.
     ///
-    /// - `.standard` and `.bright` already map to palette indices 0–15;
-    ///   returned unchanged.
+    /// - `.ansi` is already one of palette indices 0–15, and `.terminalDefault`
+    ///   is SGR 39 or 49 at every depth; both are returned unchanged.
     /// - `.palette256` already in range; returned unchanged.
     /// - `.rgb` is quantized to the nearest 6×6×6 cube color (16–231) in
     ///   OKLab, hue weighted so it stays in the original's color family. A
@@ -26,7 +26,7 @@ extension Color {
     /// - `.semantic` must be resolved before calling this method.
     public func downsampledToPalette256() -> Color {
         switch value {
-        case .standard, .bright, .palette256, .terminalForeground, .terminalBackground:
+        case .ansi, .terminalDefault, .palette256, .terminalForeground, .terminalBackground:
             return self
         case .rgb(let red, let green, let blue):
             let index = Self.nearestPalette256Index(red: red, green: green, blue: blue)
@@ -38,8 +38,8 @@ extension Color {
 
     /// Converts this color to the nearest basic ANSI color (16-color).
     ///
-    /// - `.standard` and `.bright` already in range; returned unchanged.
-    /// - `.palette256` indices 0–15 map directly to standard/bright;
+    /// - `.ansi` and `.terminalDefault` already in range; returned unchanged.
+    /// - `.palette256` indices 0–15 map directly to their `.ansi` slots;
     ///   indices 16–255 are converted via their RGB representation.
     /// - `.rgb` is matched to the closest of the 16 standard/bright
     ///   ANSI colors using Euclidean distance in RGB space.
@@ -48,7 +48,7 @@ extension Color {
     /// - `.semantic` must be resolved before calling this method.
     public func downsampledToANSI16() -> Color {
         switch value {
-        case .standard, .bright, .terminalForeground, .terminalBackground:
+        case .ansi, .terminalDefault, .terminalForeground, .terminalBackground:
             return self
         case .palette256(let index):
             return Self.palette256ToANSI16(index).carryingAlpha(of: self)
@@ -553,38 +553,23 @@ extension Color {
     /// Converts a 256-color palette index to the nearest ANSI 16-color.
     fileprivate static func palette256ToANSI16(_ index: UInt8) -> Color {
         switch index {
-        case 0...7:
-            guard let ansi = ANSIColor(rawValue: index) else { return .white }
-            return Color(value: .standard(ansi))
-        case 8...15:
-            guard let ansi = ANSIColor(rawValue: index - 8) else { return .brightWhite }
-            return Color(value: .bright(ansi))
+        case 0...15:
+            // A slot's raw value is its index, so every index here is a slot.
+            guard let slot = ANSIColor(rawValue: index) else { return .white }
+            return Color(value: .ansi(slot))
         default:
             let rgb = palette256ToRGB(index)
             return rgbToNearestANSI16(red: rgb.red, green: rgb.green, blue: rgb.blue)
         }
     }
 
-    /// All 16 ANSI colors with their RGB values for nearest-neighbor matching.
-    fileprivate static let ansi16Table: [(color: Color, red: UInt8, green: UInt8, blue: UInt8)] = {
-        var table: [(Color, UInt8, UInt8, UInt8)] = []
-
-        // Standard colors (indices 0–7)
-        for raw: UInt8 in 0...7 where raw != 9 {
-            guard let ansi = ANSIColor(rawValue: raw) else { continue }
-            let rgb = ansi.rgbValues
-            table.append((Color(value: .standard(ansi)), rgb.red, rgb.green, rgb.blue))
+    /// All 16 ANSI colors with xterm's RGB values for nearest-neighbor matching,
+    /// in slot order, so an exact tie goes to the lower slot.
+    fileprivate static let ansi16Table: [(color: Color, red: UInt8, green: UInt8, blue: UInt8)] =
+        ANSIColor.allCases.map { slot in
+            let rgb = slot.xtermRGB
+            return (Color(value: .ansi(slot)), rgb.red, rgb.green, rgb.blue)
         }
-
-        // Bright colors (indices 8–15)
-        for raw: UInt8 in 0...7 where raw != 9 {
-            guard let ansi = ANSIColor(rawValue: raw) else { continue }
-            let rgb = ansi.brightRGBValues
-            table.append((Color(value: .bright(ansi)), rgb.red, rgb.green, rgb.blue))
-        }
-
-        return table
-    }()
 
     /// Finds the nearest ANSI 16-color for an RGB value.
     fileprivate static func rgbToNearestANSI16(red: UInt8, green: UInt8, blue: UInt8) -> Color {

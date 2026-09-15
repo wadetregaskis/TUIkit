@@ -315,7 +315,7 @@ extension ASCIIPalette {
         ///
         /// Two spellings, and the difference is not cosmetic: a constrained set
         /// answers with the LATTICE's own colours — `.palette(n)`,
-        /// `.standard(.red)` — so the fit that runs after the derivation has
+        /// `.ansi(.red)` — so the fit that runs after the derivation has
         /// nothing left to change, where a triple carrying the same RGB would be
         /// re-quantised by it. See ``ASCIIPalette/representable(at:)``.
         private static func colours(

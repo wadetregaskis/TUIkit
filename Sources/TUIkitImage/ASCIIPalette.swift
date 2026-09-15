@@ -206,7 +206,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// What ``ASCIIColorMode/ansi16`` maps through, and available in its own
     /// right for an image that should be drawn in the colours the user's
     /// terminal profile defines rather than in colours of its own. Every entry
-    /// is a `.standard`/`.bright` ``Color``, so it emits as SGR 30–37 / 90–97
+    /// is an `.ansi` ``Color``, so it emits as SGR 30–37 / 90–97
     /// and FOLLOWS the profile: change the terminal's idea of "red" and the
     /// image changes with it. As glyphs, that is — an image drawn as pixels
     /// through terminal graphics gets xterm's default RGB for each name, since
@@ -442,10 +442,10 @@ public struct ASCIIPalette: Sendable, Equatable {
             return "38;2;\(paper.red);\(paper.green);\(paper.blue)"
         case .palette256(let value):
             return "\(background ? 48 : 38);5;\(value)"
-        case .standard(let ansi):
-            return "\((background ? 40 : 30) + Int(ansi.rawValue))"
-        case .bright(let ansi):
-            return "\((background ? 100 : 90) + Int(ansi.rawValue))"
+        case .ansi(let slot):
+            return "\(background ? slot.backgroundCode : slot.foregroundCode)"
+        case .terminalDefault:
+            return background ? "49" : "39"
         case .semantic:
             // Cannot happen after `resolved(with:)`, and if it somehow does,
             // the entry's mid-grey stand-in is what is drawn.
@@ -477,7 +477,7 @@ public struct ASCIIPalette: Sendable, Equatable {
             case .rgb, .semantic: return true
             case .terminalBackground: return color.rgbComponents != nil
             case .palette256(let index): return index >= 16
-            case .standard, .bright, .terminalForeground: return false
+            case .ansi, .terminalDefault, .terminalForeground: return false
             }
         }
     }

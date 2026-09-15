@@ -170,20 +170,17 @@ struct TerminalCarriedColourTests {
         }
     }
 
-    /// Whether the terminal decides what a colour paints: the eight names and
-    /// their bright twins, the default, 256-colour indices 0-15, and the carried
-    /// cases. `.bright(.default)` is not a slot: its codes are 99 and 109, which
-    /// are not SGR. The cube and grey ramp (16-255) are conventionally fixed.
+    /// Whether the terminal decides what a colour paints: the sixteen slots, the
+    /// default, 256-colour indices 0-15, and the carried cases. The cube and grey
+    /// ramp (16-255) are conventionally fixed.
     @Test("isTerminalDefined, over every case")
     func terminalDefinedOverEveryCase() {
-        let eight = (0...7).compactMap { ANSIColor(rawValue: UInt8($0)) }
-        #expect(eight.count == 8, "the fixture")
-        for ansi in eight {
-            #expect(Color(value: .standard(ansi)).isTerminalDefined, "standard \(ansi)")
-            #expect(Color(value: .bright(ansi)).isTerminalDefined, "bright \(ansi)")
+        #expect(ANSIColor.allCases.count == 16, "the fixture")
+        for slot in ANSIColor.allCases {
+            #expect(Color(value: .ansi(slot)).isTerminalDefined, "\(slot)")
         }
         #expect(Color.default.isTerminalDefined)
-        #expect(!Color(value: .bright(.default)).isTerminalDefined)
+        #expect(Color(value: .terminalDefault) == Color.default)
         for index in 0...255 {
             #expect(Color.palette(UInt8(index)).isTerminalDefined == (index < 16), "palette \(index)")
         }

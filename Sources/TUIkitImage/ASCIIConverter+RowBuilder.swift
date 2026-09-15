@@ -302,10 +302,10 @@ struct ANSIRowBuilder {
             bytes.append(0x35)  // "5"
             bytes.append(0x3B)
             appendNumber(Int(index))
-        case .standard(let ansi):
-            appendNumber((background ? 40 : 30) + Int(ansi.rawValue))
-        case .bright(let ansi):
-            appendNumber((background ? 100 : 90) + Int(ansi.rawValue))
+        case .ansi(let slot):
+            appendNumber(Int(background ? slot.backgroundCode : slot.foregroundCode))
+        case .terminalDefault:
+            appendNumber(background ? 49 : 39)
         case .semantic:
             // Unreachable after `cellColor`, which stands a semantic entry in
             // with its grey; written as the default so a row is never left

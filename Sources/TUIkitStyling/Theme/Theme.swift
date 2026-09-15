@@ -571,7 +571,7 @@ extension Palette {
         //
         //   * a page at `.rgb(0, 0, 0).opacity(0.5)`, because `channels` builds an
         //     opaque colour and 255 != 128;
-        //   * a page at `Color.black`, because that is `.standard(.black)` and the
+        //   * a page at `Color.black`, because that is `.ansi(.black)` and the
         //     rebuilt one is `.rgb`, so the CASE differs even at full opacity. And
         //     `var background: Color { .black }` is the obvious thing to write.
         //

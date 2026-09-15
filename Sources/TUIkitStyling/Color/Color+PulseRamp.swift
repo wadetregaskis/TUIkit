@@ -133,8 +133,11 @@ extension Color {
             let green = (cube % 36) / 6
             let blue = cube % 6
             return red == green && green == blue
-        case .standard(let ansi), .bright(let ansi):
-            return ansi == .black || ansi == .white
+        case .ansi(let slot):
+            // By which slot it is: black, white and their bright twins.
+            return slot == .black || slot == .white || slot == .brightBlack || slot == .brightWhite
+        case .terminalDefault:
+            return false
         case .semantic:
             // Unresolved — a palette lookup, not a drawable colour yet.
             return false

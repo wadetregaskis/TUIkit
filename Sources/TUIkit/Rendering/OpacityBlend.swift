@@ -594,15 +594,14 @@ extension Color {
     fileprivate func sgrForeground(depth: ColorDepth) -> SGRState.Colour {
         assert(isOpaque, "translucent colour reached sgrForeground: alpha \(alpha)")
         switch downsampled(to: depth).value {
-        case .standard(let ansi): return .named(Int(ansi.foregroundCode))
-        case .bright(let ansi): return .named(Int(ansi.brightForegroundCode))
+        case .ansi(let slot): return .named(Int(slot.foregroundCode))
         case .palette256(let index): return .indexed(Int(index))
         case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
-        case .terminalForeground: return .named(Int(ANSIColor.default.foregroundCode))
+        case .terminalDefault, .terminalForeground: return .named(Int(ANSIColor.defaultForegroundCode))
         // The other slot: the reported RGB, quantised, or this slot's own default
         // while there is none, as `foregroundCodes` spells it.
         case .terminalBackground:
-            guard let paper = rgbComponents else { return .named(Int(ANSIColor.default.foregroundCode)) }
+            guard let paper = rgbComponents else { return .named(Int(ANSIColor.defaultForegroundCode)) }
             return Color.rgb(paper.red, paper.green, paper.blue).sgrForeground(depth: depth)
         case .semantic:
             fatalError(
@@ -624,15 +623,14 @@ extension Color {
     fileprivate func sgrBackground(depth: ColorDepth) -> SGRState.Colour {
         assert(isOpaque, "translucent colour reached sgrBackground: alpha \(alpha)")
         switch downsampled(to: depth).value {
-        case .standard(let ansi): return .named(Int(ansi.backgroundCode))
-        case .bright(let ansi): return .named(Int(ansi.brightBackgroundCode))
+        case .ansi(let slot): return .named(Int(slot.backgroundCode))
         case .palette256(let index): return .indexed(Int(index))
         case .rgb(let red, let green, let blue): return .rgb(Int(red), Int(green), Int(blue))
-        case .terminalBackground: return .named(Int(ANSIColor.default.backgroundCode))
+        case .terminalDefault, .terminalBackground: return .named(Int(ANSIColor.defaultBackgroundCode))
         // The other slot: the reported RGB, quantised, or this slot's own default
         // while there is none, as `backgroundCodes` spells it.
         case .terminalForeground:
-            guard let ink = rgbComponents else { return .named(Int(ANSIColor.default.backgroundCode)) }
+            guard let ink = rgbComponents else { return .named(Int(ANSIColor.defaultBackgroundCode)) }
             return Color.rgb(ink.red, ink.green, ink.blue).sgrBackground(depth: depth)
         case .semantic:
             fatalError(

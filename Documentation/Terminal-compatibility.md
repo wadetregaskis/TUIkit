@@ -2275,7 +2275,7 @@ Bold is the one that exists today; `SGR 2` (faint) is the same shape of hazard.
 
 ### Why this is load-bearing rather than trivia
 
-`ANSIColor.rgbValues` carries xterm's conventional table — and its doc comment
+`ANSIColor.xtermRGB` carries xterm's conventional table — and its doc comment
 says so. Two things derive real decisions from it:
 
 - **The contrast floor.** `ensuringContrast` computes a WCAG ratio, which needs

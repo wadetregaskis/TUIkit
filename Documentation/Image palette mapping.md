@@ -621,7 +621,7 @@ fit, and unfitted RGB triples on a 256-colour terminal made Terminal.app read
 `38;2;r;g;b` as five SGR codes and draw "Most used" as blinking primaries
 (`AdaptivePaletteDepthTests`). What the targeting changes is that the fit is now
 a **no-op by construction**: the chosen colours are the lattice's own
-`.palette(n)` / `.standard(.red)` entries, and those downsample to themselves.
+`.palette(n)` / `.ansi(.red)` entries, and those downsample to themselves.
 
 ### What it costs
 

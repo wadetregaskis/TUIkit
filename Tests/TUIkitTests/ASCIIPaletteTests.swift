@@ -173,7 +173,7 @@ struct ASCIIPaletteTests {
         #expect(at16.colors.count == 2)
         for colour in at16.colors {
             switch colour.value {
-            case .standard, .bright: break
+            case .ansi: break
             default: Issue.record("\(colour) is not one of the 16")
             }
         }
