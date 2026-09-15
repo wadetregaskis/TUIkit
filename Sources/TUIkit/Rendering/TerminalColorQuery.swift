@@ -13,9 +13,8 @@ import TUIkitStyling
 /// nothing filled in, nothing guessed.
 ///
 /// A local value, and NOT the process-wide record of the terminal's colours
-/// that rendering will read: that record's shape is still being decided.
-/// ``TerminalColorQuery/resolve(_:)`` turns this into a ``Resolved`` whose
-/// fields are the ones that record needs, so it can be built field for field.
+/// that rendering reads, `TerminalColors`:
+/// ``TerminalColorQuery/resolve(_:environment:)`` turns this into one.
 struct TerminalColorReport: Equatable, Sendable {
 
     /// Which theme a `CSI ? 997 ; Ps n` report names.
@@ -42,60 +41,14 @@ struct TerminalColorReport: Equatable, Sendable {
 
     /// What a `CSI ? 997 ; Ps n` report said, or `nil` for none.
     ///
-    /// Recorded, and not resolved: it is not a colour, and whether it may
-    /// stand in for OSC 11 is a later rung of the plan. Under tmux it is
-    /// tmux's own reading of the client's background (measured), so it adds
-    /// nothing there.
+    /// Not a colour. ``TerminalColorQuery/resolve(_:environment:)`` reads it
+    /// for `prefersDark` only when OSC 11 went unanswered: Ghostty's did not
+    /// follow the background it painted, and under tmux it is tmux's own
+    /// reading of the client's background (both measured).
     var appearance: Appearance?
 
     /// Whether the status fence's reply, `CSI 0 n`, arrived.
     var sawStatusFence = false
-}
-
-// MARK: - What to believe
-
-extension TerminalColorReport {
-
-    /// A report with every gap filled, and each colour marked with where it
-    /// came from.
-    struct Resolved: Equatable, Sendable {
-
-        /// Where a resolved colour came from.
-        enum Source: Equatable, Sendable {
-            /// The terminal reported it.
-            case reported
-            /// The terminal reported the other colour, and this is whichever
-            /// of black and white contrasts with it more.
-            case inferred
-            /// The terminal reported neither colour, so this is the
-            /// assumption: black on white.
-            case assumed
-        }
-
-        /// The default foreground.
-        var foreground: TerminalColors.RGB
-        /// Where ``foreground`` came from.
-        var foregroundSource: Source
-        /// The default background.
-        var background: TerminalColors.RGB
-        /// Where ``background`` came from.
-        var backgroundSource: Source
-
-        /// All sixteen slots, or `nil` when fewer than sixteen answered.
-        ///
-        /// All or nothing: a partial table cannot answer "what does this
-        /// name paint" for the names it lacks, and mixing reported slots with
-        /// xterm's defaults would describe no terminal at all.
-        var slots: [TerminalColors.RGB]?
-
-        /// What a terminal that says nothing is taken to be: black on white,
-        /// with no slots.
-        ///
-        /// Light, because that is the owner's decision for a silent terminal.
-        static let assumed = Self(
-            foreground: .black, foregroundSource: .assumed,
-            background: .white, backgroundSource: .assumed, slots: nil)
-    }
 }
 
 // MARK: - Asking a terminal for its colours
@@ -107,8 +60,8 @@ extension TerminalColorReport {
 /// Nothing sends these yet. They are the pieces the startup exchange will run
 /// through `Terminal.fencedExchange(request:timeout:sawFence:)`, reading to
 /// ``sawStatusFence(_:)``, handing back what ``isReply(_:)`` and
-/// ``isStatusFence(_:)`` do not claim, then keeping ``resolve(_:)`` of
-/// ``parse(_:)``.
+/// ``isStatusFence(_:)`` do not claim, then keeping
+/// ``resolve(_:environment:)`` of ``parse(_:)``.
 ///
 /// ## The fence
 ///
@@ -348,59 +301,75 @@ enum TerminalColorQuery {
 
     // MARK: Resolving
 
-    /// What to believe, given what the terminal said.
+    /// What the process record of the terminal's colours holds, given what the
+    /// terminal said and the environment the process runs in.
     ///
-    /// - Both colours answered: both are reported.
-    /// - One answered: the other is whichever of black and white contrasts
-    ///   with it more (WCAG ratio; white on a tie), marked inferred.
-    /// - Neither: ``TerminalColorReport/Resolved/assumed``, black on white.
-    /// - Slots, on their own: all sixteen or `nil`.
+    /// Nothing is filled in:
+    /// - Each default colour is the one reported, or `nil`. A reported
+    ///   foreground says nothing about the background, nor the other way round.
+    /// - Slots are all sixteen, or `nil`. A partial table cannot say what the
+    ///   slots it lacks paint, and mixing reported slots with xterm's values
+    ///   would describe no terminal at all.
+    /// - `prefersDark` is the first of these that says anything:
+    ///   1. The reported background: dark when white contrasts with it at least
+    ///      as much as black does (WCAG ratio), so grey 117 is dark and 118
+    ///      light.
+    ///   2. A `CSI ? 997 ; Ps n` report. It ranks below the background because
+    ///      Ghostty 1.3.1 answered `997;2` (light) on a black background, and
+    ///      under tmux 3.7c it is tmux's own reading of the background (both
+    ///      measured).
+    ///   3. `COLORFGBG`'s last field, a slot number: dark for 0–6 and 8, light
+    ///      for 7 and 9–15. Ignored under tmux or screen, because a pane's
+    ///      environment comes from whatever started the session, so the variable
+    ///      can describe a terminal that is no longer attached (inferred, not
+    ///      measured: it was unset in every pane probed).
     ///
-    /// The `997` report and the environment (`COLORFGBG`) are not consulted.
-    /// They are later rungs of the plan, and none has an owner decision yet.
-    static func resolve(_ report: TerminalColorReport) -> TerminalColorReport.Resolved {
-        var resolved = TerminalColorReport.Resolved.assumed
-        switch (report.foreground, report.background) {
-        case (let foreground?, let background?):
-            resolved.foreground = foreground
-            resolved.foregroundSource = .reported
-            resolved.background = background
-            resolved.backgroundSource = .reported
-        case (let foreground?, nil):
-            resolved.foreground = foreground
-            resolved.foregroundSource = .reported
-            resolved.background = contrasting(foreground)
-            resolved.backgroundSource = .inferred
-        case (nil, let background?):
-            resolved.foreground = contrasting(background)
-            resolved.foregroundSource = .inferred
-            resolved.background = background
-            resolved.backgroundSource = .reported
-        case (nil, nil):
-            break
-        }
+    /// A terminal that said nothing, in an environment with nothing to say, is
+    /// `TerminalColors.unknown`.
+    static func resolve(_ report: TerminalColorReport, environment: [String: String]) -> TerminalColors {
+        var resolved = TerminalColors(foreground: report.foreground, background: report.background)
         let answered = report.slots.compactMap { $0 }
-        if report.slots.count == TerminalColorReport.slotCount, answered.count == report.slots.count {
-            resolved.slots = answered
+        if answered.count == report.slots.count {
+            resolved.slots = TerminalColors.Slots(answered)
+        }
+        if let background = report.background {
+            resolved.prefersDark = isDark(background)
+        } else if let appearance = report.appearance {
+            resolved.prefersDark = appearance == .dark
+        } else if !isMultiplexed(environment) {
+            resolved.prefersDark = environment["COLORFGBG"].flatMap(prefersDark(colorFgBg:))
         }
         return resolved
     }
 
-    /// Whichever of black and white contrasts more with `rgb`, white on a tie:
-    /// the same choice, and the same tie, as the readability floor's last
-    /// resort (`Color.ensuringContrast(atLeast:against:)`).
-    private static func contrasting(_ rgb: TerminalColors.RGB) -> TerminalColors.RGB {
+    /// Whether `rgb` is a dark background: white contrasts with it at least as
+    /// much as black does (WCAG ratio), so a tie is dark.
+    private static func isDark(_ rgb: TerminalColors.RGB) -> Bool {
         let color = Color.rgb(rgb.red, rgb.green, rgb.blue)
-        return color.contrastRatio(against: .rgb(255, 255, 255))
-            >= color.contrastRatio(against: .rgb(0, 0, 0)) ? .white : .black
+        return color.contrastRatio(against: .rgb(255, 255, 255)) >= color.contrastRatio(against: .rgb(0, 0, 0))
     }
-}
 
-// MARK: - The two colours resolution falls back on
+    /// Whether the process runs inside tmux or GNU screen, where an inherited
+    /// `COLORFGBG` can describe a terminal that is no longer attached.
+    private static func isMultiplexed(_ environment: [String: String]) -> Bool {
+        if TerminalHost.detectTmux(environment: environment) { return true }
+        if let session = environment["STY"], !session.isEmpty { return true }
+        return false
+    }
 
-extension TerminalColors.RGB {
-    /// `#000000`.
-    fileprivate static let black = Self(red: 0, green: 0, blue: 0)
-    /// `#ffffff`.
-    fileprivate static let white = Self(red: 255, green: 255, blue: 255)
+    /// What `COLORFGBG` says about the background, or `nil` when it has fewer
+    /// than two fields or its last field is not a slot number (`default`, empty,
+    /// out of range).
+    ///
+    /// `fg;bg`, or `fg;default;bg` as rxvt spells it: the last field is the
+    /// background's slot. Slots 0–6 and 8 (black, the six dark hues, bright
+    /// black) are the dark ones.
+    private static func prefersDark(colorFgBg value: String) -> Bool? {
+        let fields = value.split(separator: ";", omittingEmptySubsequences: false)
+        guard fields.count >= 2, let field = fields.last,
+            let slot = ASCIIDecimal.value(of: field.utf8),
+            (0..<TerminalColorReport.slotCount).contains(slot)
+        else { return nil }
+        return slot <= 6 || slot == 8
+    }
 }

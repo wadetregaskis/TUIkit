@@ -2093,6 +2093,20 @@ iTerm2's sixteen, as reported. They are not xterm's table either:
   Ghostty and Warp, and in the screen and tmux panes.
 - **screen:** its panes inherit `TERM_PROGRAM=Apple_Terminal` from the outer
   host, which is stale there.
+- **What the framework takes from this about light and dark.**
+  `TerminalColorQuery.resolve` ranks the answers. Nothing asks the terminal
+  at startup yet.
+  - A default colour the terminal did not report stays unknown. It is never
+    inferred from the other one.
+  - The reported background decides first: dark when white contrasts with it
+    at least as much as black does.
+  - Then `997`. It ranks below the background because Ghostty's did not follow
+    the background it painted, and under tmux it restates that background.
+  - Then `COLORFGBG`'s last field, dark for slots 0–6 and 8. It is ignored
+    under tmux (`TMUX`, or `TERM_PROGRAM=tmux`) and screen (`STY`).
+    *Inferred*, not measured: a pane's environment comes from whatever started
+    the session, so an inherited `COLORFGBG` can describe a terminal that is no
+    longer attached. It was unset in every pane measured here.
 
 #### tmux 3.7c
 

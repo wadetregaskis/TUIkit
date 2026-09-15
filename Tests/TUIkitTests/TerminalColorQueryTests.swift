@@ -21,7 +21,6 @@ import Testing
 struct TerminalColorQueryTests {
 
     typealias RGB = TerminalColors.RGB
-    typealias Resolved = TerminalColorReport.Resolved
 
     private static let bel = "\u{07}"
     private static let st = "\u{1B}\\"
@@ -99,13 +98,13 @@ struct TerminalColorQueryTests {
         #expect(!TerminalColorQuery.isStatusFence(Self.bytes("\u{1B}[24;1R")[...]))
     }
 
-    @Test("A terminal that answers only the fence reports nothing, and resolves to the assumption")
+    @Test("A terminal that answers only the fence reports nothing, and resolves to unknown")
     func fenceOnly() {
         let report = Self.parse(Self.fence)
         var expected = TerminalColorReport()
         expected.sawStatusFence = true
         #expect(report == expected)
-        #expect(TerminalColorQuery.resolve(report) == Resolved.assumed)
+        #expect(TerminalColorQuery.resolve(report, environment: [:]) == .unknown)
     }
 
     // MARK: - Colour specs
@@ -329,112 +328,158 @@ struct TerminalColorQueryTests {
     private static let black = RGB(red: 0, green: 0, blue: 0)
     private static let white = RGB(red: 255, green: 255, blue: 255)
 
+    /// No `TMUX`, no `STY`, no `COLORFGBG`: a native host that sets nothing.
+    private static let bareEnvironment: [String: String] = [:]
+
     private static func report(
-        foreground: RGB? = nil, background: RGB? = nil, slots: Int = 0
+        foreground: RGB? = nil, background: RGB? = nil, slots: Int = 0,
+        appearance: TerminalColorReport.Appearance? = nil
     ) -> TerminalColorReport {
         var report = TerminalColorReport()
         report.foreground = foreground
         report.background = background
         for index in 0..<slots { report.slots[index] = appleTerminalSlots[index] }
+        report.appearance = appearance
         return report
     }
 
-    @Test("Both colours answered are both reported")
+    private static func resolve(
+        _ report: TerminalColorReport, environment: [String: String] = bareEnvironment
+    ) -> TerminalColors {
+        TerminalColorQuery.resolve(report, environment: environment)
+    }
+
+    @Test("A terminal that answered nothing, in a bare environment, resolves to unknown")
+    func resolveNothing() {
+        #expect(Self.resolve(TerminalColorReport()) == .unknown)
+    }
+
+    @Test("Both colours answered are both kept, and the background decides prefersDark")
     func resolveBothReported() {
         let dark = RGB(red: 40, green: 44, blue: 52)
         let pale = RGB(red: 171, green: 178, blue: 191)
         #expect(
-            TerminalColorQuery.resolve(Self.report(foreground: pale, background: dark))
-                == Resolved(
-                    foreground: pale, foregroundSource: .reported,
-                    background: dark, backgroundSource: .reported, slots: nil))
+            Self.resolve(Self.report(foreground: pale, background: dark))
+                == TerminalColors(foreground: pale, background: dark, prefersDark: true))
+    }
+
+    @Test("Only the foreground answered leaves the background, and prefersDark, unknown")
+    func resolveForegroundOnly() {
+        for foreground in [Self.black, RGB(red: 230, green: 230, blue: 230)] {
+            #expect(Self.resolve(Self.report(foreground: foreground)) == TerminalColors(foreground: foreground))
+        }
     }
 
     @Test(
-        "With only the foreground answered, the background is whichever of black and white contrasts more",
+        "Only the background answered leaves the foreground unknown; the background decides prefersDark",
         arguments: [
-            (TerminalColors.RGB(red: 0, green: 0, blue: 0), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
-            (TerminalColors.RGB(red: 230, green: 230, blue: 230), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
+            (TerminalColors.RGB(red: 40, green: 44, blue: 52), true),
+            (TerminalColors.RGB(red: 0, green: 0, blue: 0), true),
+            (TerminalColors.RGB(red: 255, green: 255, blue: 255), false),
             // Either side of the luminance where black and white contrast
             // equally (about 0.179): grey 117 is dark, 118 light.
-            (TerminalColors.RGB(red: 117, green: 117, blue: 117), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
-            (TerminalColors.RGB(red: 118, green: 118, blue: 118), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
+            (TerminalColors.RGB(red: 117, green: 117, blue: 117), true),
+            (TerminalColors.RGB(red: 118, green: 118, blue: 118), false),
         ])
-    func resolveForegroundOnly(foreground: RGB, background: RGB) {
+    func resolveBackgroundOnly(background: RGB, prefersDark: Bool) {
         #expect(
-            TerminalColorQuery.resolve(Self.report(foreground: foreground))
-                == Resolved(
-                    foreground: foreground, foregroundSource: .reported,
-                    background: background, backgroundSource: .inferred, slots: nil))
+            Self.resolve(Self.report(background: background))
+                == TerminalColors(background: background, prefersDark: prefersDark))
+    }
+
+    @Test("A 997 report alone decides prefersDark, and fills in no colour")
+    func resolveAppearanceAlone() {
+        #expect(Self.resolve(Self.report(appearance: .dark)) == TerminalColors(prefersDark: true))
+        #expect(Self.resolve(Self.report(appearance: .light)) == TerminalColors(prefersDark: false))
+    }
+
+    /// Ghostty 1.3.1 answered OSC 11 with 40, 44, 52, and `997;2`, measured.
+    @Test("The reported background outranks a 997 report that contradicts it")
+    func resolveBackgroundOutranksAppearance() {
+        let ghostty = Self.report(
+            foreground: Self.white, background: RGB(red: 40, green: 44, blue: 52), appearance: .light)
+        #expect(Self.resolve(ghostty).prefersDark == true)
+        let lightPage = Self.report(background: Self.white, appearance: .dark)
+        #expect(Self.resolve(lightPage).prefersDark == false)
     }
 
     @Test(
-        "With only the background answered, the foreground is whichever of black and white contrasts more",
+        "COLORFGBG alone decides prefersDark by its last field",
         arguments: [
-            (TerminalColors.RGB(red: 40, green: 44, blue: 52), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
-            (TerminalColors.RGB(red: 255, green: 255, blue: 255), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
-            (TerminalColors.RGB(red: 117, green: 117, blue: 117), TerminalColors.RGB(red: 255, green: 255, blue: 255)),
-            (TerminalColors.RGB(red: 118, green: 118, blue: 118), TerminalColors.RGB(red: 0, green: 0, blue: 0)),
+            ("0;15", false), ("15;0", true), ("7;8", true), ("0;7", false), ("15;default;0", true),
+            ("0;6", true), ("0;9", false),
         ])
-    func resolveBackgroundOnly(background: RGB, foreground: RGB) {
-        #expect(
-            TerminalColorQuery.resolve(Self.report(background: background))
-                == Resolved(
-                    foreground: foreground, foregroundSource: .inferred,
-                    background: background, backgroundSource: .reported, slots: nil))
+    func resolveColorFgBg(value: String, prefersDark: Bool) {
+        #expect(Self.resolve(Self.report(), environment: ["COLORFGBG": value]) == TerminalColors(prefersDark: prefersDark))
     }
 
-    @Test("Neither colour answered is the assumption: black on white")
-    func resolveNeither() {
-        #expect(
-            Resolved.assumed
-                == Resolved(
-                    foreground: Self.black, foregroundSource: .assumed,
-                    background: Self.white, backgroundSource: .assumed, slots: nil))
-        #expect(TerminalColorQuery.resolve(TerminalColorReport()) == Resolved.assumed)
+    @Test(
+        "A COLORFGBG whose last field is not a slot number says nothing",
+        arguments: ["", "0", "0;", "0;default", "0;16", "0;-1", "0;x", "0;15;"])
+    func resolveUnreadableColorFgBg(value: String) {
+        #expect(Self.resolve(Self.report(), environment: ["COLORFGBG": value]) == .unknown)
     }
 
-    @Test("A 997 report is not a colour answer, so alone it still resolves to the assumption")
-    func resolveIgnoresAppearance() {
-        var report = TerminalColorReport()
-        report.appearance = .dark
-        #expect(TerminalColorQuery.resolve(report) == Resolved.assumed)
+    @Test("A 997 report outranks COLORFGBG")
+    func resolveAppearanceOutranksColorFgBg() {
+        #expect(Self.resolve(Self.report(appearance: .dark), environment: ["COLORFGBG": "0;15"]).prefersDark == true)
+        #expect(Self.resolve(Self.report(appearance: .light), environment: ["COLORFGBG": "15;0"]).prefersDark == false)
+    }
+
+    @Test("The reported background outranks COLORFGBG")
+    func resolveBackgroundOutranksColorFgBg() {
+        #expect(Self.resolve(Self.report(background: Self.black), environment: ["COLORFGBG": "0;15"]).prefersDark == true)
+    }
+
+    @Test(
+        "COLORFGBG is ignored inside tmux or screen",
+        arguments: [
+            ["COLORFGBG": "0;15", "TMUX": "/private/tmp/tmux-501/default,1234,0"],
+            ["COLORFGBG": "0;15", "TERM_PROGRAM": "tmux"],
+            ["COLORFGBG": "0;15", "STY": "1234.ttys001.host"],
+        ])
+    func resolveColorFgBgIgnoredUnderMultiplexers(environment: [String: String]) {
+        #expect(Self.resolve(Self.report(), environment: environment) == .unknown)
+    }
+
+    @Test("An empty TMUX or STY does not count as a multiplexer")
+    func resolveEmptyMultiplexerVariables() {
+        #expect(
+            Self.resolve(Self.report(), environment: ["COLORFGBG": "0;15", "TMUX": "", "STY": ""])
+                == TerminalColors(prefersDark: false))
     }
 
     @Test("All sixteen slots are kept")
     func resolveAllSlots() {
-        let resolved = TerminalColorQuery.resolve(
-            Self.report(foreground: Self.black, background: Self.white, slots: 16))
-        #expect(resolved.slots == Self.appleTerminalSlots)
-        #expect(resolved.foregroundSource == .reported)
+        let resolved = Self.resolve(Self.report(foreground: Self.black, background: Self.white, slots: 16))
+        #expect(resolved.slots == TerminalColors.Slots(Self.appleTerminalSlots))
     }
 
     @Test("Fifteen of sixteen slots are no slots", arguments: [0, 1, 15])
     func resolvePartialSlots(missing: Int) {
         var report = Self.report(foreground: Self.black, background: Self.white, slots: 16)
         report.slots[missing] = nil
-        let resolved = TerminalColorQuery.resolve(report)
+        let resolved = Self.resolve(report)
         #expect(resolved.slots == nil)
         #expect(resolved.foreground == Self.black && resolved.background == Self.white)
     }
 
-    @Test("Slots answered without either colour are kept, beside the assumed colours")
+    @Test("Slots answered without either colour are kept, and fill in neither colour")
     func resolveSlotsWithoutColours() {
-        var expected = Resolved.assumed
-        expected.slots = Self.appleTerminalSlots
-        #expect(TerminalColorQuery.resolve(Self.report(slots: 16)) == expected)
+        #expect(
+            Self.resolve(Self.report(slots: 16))
+                == TerminalColors(slots: TerminalColors.Slots(Self.appleTerminalSlots)))
     }
 
-    @Test("Apple Terminal's whole native answer resolves to what it reported")
+    @Test("Apple Terminal's whole native answer resolves to what it reported, light")
     func resolveAppleTerminal() {
         let answer =
             "\u{1B}]10;rgb:0000/0000/0000\u{07}\u{1B}]11;rgb:ffff/ffff/ffff\u{07}"
             + Self.slotReplies(0..<16) + Self.fence
         #expect(
-            TerminalColorQuery.resolve(Self.parse(answer))
-                == Resolved(
-                    foreground: Self.black, foregroundSource: .reported,
-                    background: Self.white, backgroundSource: .reported,
-                    slots: Self.appleTerminalSlots))
+            Self.resolve(Self.parse(answer))
+                == TerminalColors(
+                    foreground: Self.black, background: Self.white,
+                    slots: TerminalColors.Slots(Self.appleTerminalSlots), prefersDark: false))
     }
 }
