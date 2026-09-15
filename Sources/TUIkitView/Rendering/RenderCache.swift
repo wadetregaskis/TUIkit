@@ -417,6 +417,17 @@ public final class RenderCache: @unchecked Sendable {
     /// ``TerminalWidthTraits/generation`` and ``beginRenderPass()``.
     private var measuredUnderWidthGeneration = TerminalWidthTraits.generation
 
+    /// The terminal-colours generation this cache's contents were rendered under.
+    ///
+    /// A buffer spells some colours from what the terminal reported: a colour
+    /// that is the terminal's own, drawn in the other slot, is its reported RGB,
+    /// and a blend with one mixes that RGB. So buffers rendered under one report
+    /// are wrong under the next. Checked in ``beginRenderPass()``.
+    ///
+    /// Internal, not private, so a test can age it. Moving the process-wide
+    /// generation instead would clear every cache in the test process.
+    var renderedUnderTerminalColorsGeneration = TerminalColors.generation
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -1078,10 +1089,17 @@ extension RenderCache {
     public func beginRenderPass() {
         // The claim moved — a different host is being rendered as — so every
         // memoized size was measured against a width that no longer applies.
-        // Checked once per pass rather than per lookup: this is cold except in
-        // the diagnostic app that switches hosts at runtime.
-        if measuredUnderWidthGeneration != TerminalWidthTraits.generation {
+        // Or the terminal reported different colours, so every buffer that
+        // spelled or blended the ones before is stale. Its sizes are not, but
+        // both events are rare enough that one clear of everything is simplest.
+        // Checked once per pass rather than per lookup: the width moves only in
+        // the diagnostic app that switches hosts at runtime, and the colours
+        // only when the terminal reports them.
+        let widthMoved = measuredUnderWidthGeneration != TerminalWidthTraits.generation
+        let coloursMoved = renderedUnderTerminalColorsGeneration != TerminalColors.generation
+        if widthMoved || coloursMoved {
             measuredUnderWidthGeneration = TerminalWidthTraits.generation
+            renderedUnderTerminalColorsGeneration = TerminalColors.generation
             clearAll()
         }
 

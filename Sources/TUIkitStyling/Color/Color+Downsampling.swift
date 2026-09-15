@@ -119,6 +119,19 @@ extension Color {
     ///   the ANSI layer passes through untouched — and interpolated RGB
     ///   otherwise.
     public static func quantisedRamp(_ gradient: Gradient, count: Int, depth: ColorDepth) -> [Color] {
+        quantisedRamp(
+            gradient, count: count, depth: depth, terminalColorsGeneration: TerminalColors.generation)
+    }
+
+    /// `quantisedRamp(_:count:depth:)`, memoised under `terminalColorsGeneration`
+    /// rather than the process's current generation.
+    ///
+    /// Internal, not private, so a test can ask under a generation of its own.
+    /// Moving the process-wide one instead would clear every cache in the test
+    /// process.
+    static func quantisedRamp(
+        _ gradient: Gradient, count: Int, depth: ColorDepth, terminalColorsGeneration: Int
+    ) -> [Color] {
         // The cache is consulted BEFORE the ramp is sampled, which is the whole
         // point of having one: sampling is the expensive half, and asking after
         // doing it meant a hit cost exactly as much as a miss's first stage.
@@ -129,8 +142,12 @@ extension Color {
         // Sound because the key is a function of the arguments alone, and the
         // two guards below that a cached answer implies are equally so:
         // `sampled.count` IS `max(0, count)`, and an entry is only ever stored
-        // on the path where both guards passed.
-        let key = RampKey(gradient: gradient, count: count, depth: depth)
+        // on the path where both guards passed. The terminal's colours count as
+        // an argument: a stop that is the terminal's own measures as what the
+        // terminal reported, so their generation is in the key.
+        let key = RampKey(
+            gradient: gradient, count: count, depth: depth,
+            terminalColorsGeneration: terminalColorsGeneration)
         let worthCaching = count > 2
         if worthCaching, let cached = cachedRamp(key) { return cached }
 
@@ -314,6 +331,7 @@ extension Color {
         let gradient: Gradient
         let count: Int
         let depth: ColorDepth
+        let terminalColorsGeneration: Int
     }
 
     private static let rampCacheLock = NSLock()

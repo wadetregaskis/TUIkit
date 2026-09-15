@@ -28,6 +28,17 @@ enum ChromeTrack {
     /// accent and page, answered once per distinct set of inputs and kept.
     @MainActor
     static func track(from base: Color, in palette: any Palette) -> Color {
+        track(from: base, in: palette, terminalColorsGeneration: TerminalColors.generation)
+    }
+
+    /// `track(from:in:)`, memoised under `terminalColorsGeneration` rather than
+    /// the process's current generation, so a test can ask under a generation of
+    /// its own. Moving the process-wide one instead would clear every cache in
+    /// the test process.
+    @MainActor
+    static func track(
+        from base: Color, in palette: any Palette, terminalColorsGeneration: Int
+    ) -> Color {
         let base = base.resolve(with: palette)
         let accent = palette.accent.resolve(with: palette)
         let page = palette.background.resolve(with: palette)
@@ -35,8 +46,13 @@ enum ChromeTrack {
         // Every input of `resolvedTrack` is in the key. The ink was not, so two
         // palettes alike but for their foreground shared one answer — and the
         // answer can be the FALLBACK, cached from a palette whose ink offered
-        // no acceptable rung and served to one whose ink would have.
-        let key = TrackKey(base: base, accent: accent, page: page, ink: ink)
+        // no acceptable rung and served to one whose ink would have. The
+        // terminal's colours are an input too: a page or ink that is the
+        // terminal's own measures as what the terminal reported, so their
+        // generation is in the key.
+        let key = TrackKey(
+            base: base, accent: accent, page: page, ink: ink,
+            terminalColorsGeneration: terminalColorsGeneration)
         if let cached = trackCache[key] { return cached }
         let answer = resolvedTrack(base: base, accent: accent, page: page, ink: ink)
         // Sixteen palettes and one entry each; the cap is a backstop against an
@@ -51,6 +67,7 @@ enum ChromeTrack {
         let accent: Color
         let page: Color
         let ink: Color
+        let terminalColorsGeneration: Int
     }
 
     /// Up to 24 quantisations per palette, so it is answered once and kept —

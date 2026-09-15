@@ -173,7 +173,8 @@ extension TerminalColors {
     /// Something computed from these colours and kept is wrong once they
     /// change. This counter is for such a cache to compare, dropping itself
     /// when it moves, as the width caches do with
-    /// `TerminalWidthTraits.generation`. No cache reads it yet.
+    /// `TerminalWidthTraits.generation`. The render cache clears when it moves,
+    /// and the pulse ramp, quantised ramp and chrome track memos key on it.
     ///
     /// Only the process value bumps it. A task-local pin is scoped to work that
     /// opts into it, and the render path is not that work.

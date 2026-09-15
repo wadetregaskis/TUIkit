@@ -45,6 +45,21 @@ extension Color {
     public static func pulseRamp(
         from dim: Color, to bright: Color, depth: ColorDepth, samples: Int = 256
     ) -> [Color] {
+        pulseRamp(
+            from: dim, to: bright, depth: depth, samples: samples,
+            terminalColorsGeneration: TerminalColors.generation)
+    }
+
+    /// `pulseRamp(from:to:depth:samples:)`, memoised under
+    /// `terminalColorsGeneration` rather than the process's current generation.
+    ///
+    /// Internal, not private, so a test can ask under a generation of its own.
+    /// Moving the process-wide one instead would clear every cache in the test
+    /// process.
+    static func pulseRamp(
+        from dim: Color, to bright: Color, depth: ColorDepth, samples: Int = 256,
+        terminalColorsGeneration: Int
+    ) -> [Color] {
         guard depth < .truecolor else { return [dim, bright] }
 
         // Memoised by its four inputs. A ramp is a pure function of them, and a
@@ -55,7 +70,13 @@ extension Color {
         // cycle) never gets here twice; one that does not pays a dictionary
         // hit rather than the walk, which is what lets the hoist be an
         // optimisation and not a correctness requirement.
-        let key = PulseRampKey(dim: dim, bright: bright, depth: depth, samples: samples)
+        //
+        // Pure while the terminal's colours stand still, that is: an end that is
+        // the terminal's own measures as what the terminal reported, so a new
+        // report can change the ramp. Their generation is in the key.
+        let key = PulseRampKey(
+            dim: dim, bright: bright, depth: depth, samples: samples,
+            terminalColorsGeneration: terminalColorsGeneration)
         if let cached = pulseRampCacheLock.withLock({ pulseRampCache[key] }) { return cached }
 
         // An achromatic step is only a defect when the fade itself is meant to
@@ -100,6 +121,7 @@ extension Color {
         let bright: Color
         let depth: ColorDepth
         let samples: Int
+        let terminalColorsGeneration: Int
     }
 
     private static let pulseRampCacheLock = NSLock()
