@@ -199,7 +199,7 @@ struct ForegroundStylePropagationTests {
         let view = VStack {
             Text("Hello")
         }
-        .foregroundStyle(.ansi(.red))
+        .foregroundStyle(.red)
 
         let context = RenderContext(
             availableWidth: 80,
@@ -211,9 +211,9 @@ struct ForegroundStylePropagationTests {
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
 
-        // Check that ANSI red color code is present
-        // Red foreground is ESC[31m
-        #expect(content.contains("\u{1B}[31m"))
+        // Check that red's foreground code is present, in this build's colour depth
+        let red = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
+        #expect(content.contains(red), "\(content.debugDescription)")
     }
 
     @Test("foregroundStyle propagates through multiple levels")
@@ -223,7 +223,7 @@ struct ForegroundStylePropagationTests {
                 Text("Nested")
             }
         }
-        .foregroundStyle(.ansi(.green))
+        .foregroundStyle(.green)
 
         let context = RenderContext(
             availableWidth: 80,
@@ -235,16 +235,16 @@ struct ForegroundStylePropagationTests {
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
 
-        // Green foreground is ESC[32m
-        #expect(content.contains("\u{1B}[32m"))
+        let green = "\u{1B}[" + Color.green.foregroundCodes().joined(separator: ";") + "m"
+        #expect(content.contains(green), "\(content.debugDescription)")
     }
 
     @Test("explicit Text foregroundStyle overrides parent")
     func explicitStyleOverridesParent() {
         let view = VStack {
-            Text("Override").foregroundStyle(.ansi(.blue))
+            Text("Override").foregroundStyle(.blue)
         }
-        .foregroundStyle(.ansi(.red))
+        .foregroundStyle(.red)
 
         let context = RenderContext(
             availableWidth: 80,
@@ -256,9 +256,11 @@ struct ForegroundStylePropagationTests {
         let buffer = renderToBuffer(view, context: context)
         let content = buffer.lines.joined()
 
-        // Blue foreground is ESC[34m, should have blue, not red
-        #expect(content.contains("\u{1B}[34m"))
-        #expect(!content.contains("\u{1B}[31m"))
+        // Should have blue, not red
+        let blue = "\u{1B}[" + Color.blue.foregroundCodes().joined(separator: ";") + "m"
+        let red = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
+        #expect(content.contains(blue), "\(content.debugDescription)")
+        #expect(!content.contains(red), "\(content.debugDescription)")
     }
 
     @Test("without foregroundStyle, Text uses default")
