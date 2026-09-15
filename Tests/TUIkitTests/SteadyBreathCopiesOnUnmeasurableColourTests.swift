@@ -51,13 +51,25 @@ private struct CopiesPagePalette: Palette {
     let border = Color.rgb(120, 120, 130)
 }
 
+/// An RGB page and ink whose accent is a terminal slot, which has no RGB until the
+/// terminal reports its sixteen.
+private struct CopiesSlotAccentPalette: Palette {
+    let id = "steady-breath-copies-slot-accent"
+    let name = "Slot accent"
+    let background = Color.rgb(20, 20, 30)
+    let foreground = Color.rgb(220, 220, 220)
+    let foregroundTertiary = Color.rgb(130, 130, 140)
+    let accent = Color.ansi(.blue)
+    let success = Color.rgb(40, 200, 40)
+    let warning = Color.rgb(220, 200, 40)
+    let error = Color.rgb(220, 40, 40)
+    let info = Color.rgb(40, 120, 220)
+    let border = Color.rgb(120, 120, 130)
+}
+
 @MainActor
 @Suite("A focus breath between two colours, one with no RGB, holds still")
 struct SteadyBreathCopiesOnUnmeasurableColourTests {
-
-    /// The swatch under a swatch grid's cursor: the terminal's own foreground, which has
-    /// no RGB until the terminal reports it, whatever the palette.
-    static let unmeasuredSwatch = Color(value: .terminalForeground)
 
     /// The breaths that pick their two ends themselves.
     enum Copy: String, CaseIterable, Sendable, CustomTestStringConvertible {
@@ -75,11 +87,14 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
         case scrollIndicator
         /// `_SwatchGridCore.markEnds`: the swatch, to the ink that reads on it.
         case swatchMark
+        /// `_Color256GridCore.cursorMarkEnds`: the cursor on slot 4, to the ink that reads
+        /// on it. A slot has no RGB until the terminal reports its sixteen.
+        case color256Mark
 
         var testDescription: String { rawValue }
 
         @MainActor @ViewBuilder
-        var view: some View {
+        func view(_ fixture: Fixture) -> some View {
             switch self {
             case .switchOn:
                 Toggle("On", isOn: .constant(true)).toggleStyle(.switch)
@@ -110,9 +125,11 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
                 .scrollIndicatorStyle(.text)
             case .swatchMark:
                 _SwatchGridCore(
-                    entries: [SteadyBreathCopiesOnUnmeasurableColourTests.unmeasuredSwatch, .rgb(200, 40, 40)],
+                    entries: [fixture.unmeasuredSwatch, .rgb(200, 40, 40)],
                     columns: 2,
-                    selection: .constant(SteadyBreathCopiesOnUnmeasurableColourTests.unmeasuredSwatch))
+                    selection: .constant(fixture.unmeasuredSwatch))
+            case .color256Mark:
+                _Color256GridCore(selection: .constant(.palette(4)), showNumbers: false)
             }
         }
 
@@ -123,13 +140,19 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
             switch (self, fixture) {
             // The on track is the accent, dimmed over the page.
             case (.switchOn, _): true
-            // The swatch under the cursor has no RGB, whatever the palette.
-            case (.swatchMark, _): true
+            // The swatch under the cursor has no RGB, whatever the palette: the fixture's
+            // unmeasured colour, or slot 4.
+            case (.swatchMark, _), (.color256Mark, _): true
             // The off track dims over the page, and lifts toward the foreground: both RGB
             // unless the page has none.
             case (.switchOff, .page): true
-            case (.switchOff, .accent): false
-            case (.tabChip, .accent), (.crumb, .accent), (.scrollbar, .accent), (.scrollIndicator, .accent): true
+            case (.switchOff, .accent), (.switchOff, .ansiAccent): false
+            // The accent is one end. A slot accent has no RGB exactly where the terminal's
+            // foreground has none.
+            case (.tabChip, .accent), (.crumb, .accent), (.scrollbar, .accent), (.scrollIndicator, .accent),
+                (.tabChip, .ansiAccent), (.crumb, .ansiAccent), (.scrollbar, .ansiAccent),
+                (.scrollIndicator, .ansiAccent):
+                true
             case (.tabChip, .page), (.crumb, .page), (.scrollbar, .page), (.scrollIndicator, .page): false
             }
         }
@@ -141,6 +164,8 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
         case accent
         /// The page is the terminal's background.
         case page
+        /// The accent is a terminal slot, `.ansi(.blue)`.
+        case ansiAccent
 
         var testDescription: String { rawValue }
 
@@ -148,14 +173,24 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
             switch self {
             case .accent: CopiesInkAccentPalette()
             case .page: CopiesPagePalette()
+            case .ansiAccent: CopiesSlotAccentPalette()
             }
+        }
+
+        /// The swatch under a swatch grid's cursor: a colour with no RGB until the
+        /// terminal reports it, whatever the palette. The terminal's own foreground, or
+        /// a slot beside a slot accent.
+        var unmeasuredSwatch: Color {
+            self == .ansiAccent ? .ansi(.blue) : Color(value: .terminalForeground)
         }
     }
 
-    /// One Dark's pair, as the carried-colour tests use.
+    /// One Dark's pair, as the carried-colour tests use, and Apple Terminal "Basic"'s
+    /// sixteen slots, so a slot measures too.
     private static let reported = TerminalColors(
         foreground: TerminalColors.RGB(red: 171, green: 178, blue: 191),
-        background: TerminalColors.RGB(red: 40, green: 44, blue: 52))
+        background: TerminalColors.RGB(red: 40, green: 44, blue: 52),
+        slots: TerminalColors.Slots(UnreportedANSISlotTests.appleBasic))
 
     /// The middle of each 50 ms frame of the focus breath, over two cycles and more.
     private static let instants: [UInt64] = (0..<32).map { UInt64($0) * 50_000_000 + 25_000_000 }
@@ -175,13 +210,14 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
         // shown first: seen alone, `nanos` would be the zero, and every render step 0.
         timer.observe(nowNanos: 0)
         timer.observe(nowNanos: nanos)
-        let context = makeRenderContext(width: 40, height: 8) { environment, _ in
+        // Wide and tall enough for the 256-colour grid, whose swatches do not shrink.
+        let context = makeRenderContext(width: 80, height: 24) { environment, _ in
             environment.palette = fixture.palette
             environment.cursorTimer = timer
             environment.frameNowNanos = Int64(nanos)
             environment.volatileReadTracker = tracker
         }
-        let view = copy.view.selectionIndicatorStyle(still ? .none : .pulse)
+        let view = copy.view(fixture).selectionIndicatorStyle(still ? .none : .pulse)
         return ColorDepth.withCurrent(.truecolor) {
             _ = renderToBuffer(view, context: context)
             let before = tracker.reads

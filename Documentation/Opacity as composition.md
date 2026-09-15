@@ -4785,8 +4785,8 @@ All four now ask one helper, `Color.blendEnds`, in this order:
   the whole colour, alpha included. `opacity(a, over:)` is `lerp` at phase `1 − a`, so a
   colour at a coverage of ½ or more keeps itself and below that is the surface.
 - **Otherwise**, two measured colours mix as RGB between exact ends. That covers a
-  reported foreground or background, and today also `.ansi` slots and `palette256(0...15)`,
-  which still measure as xterm's table.
+  reported foreground or background, and a slot the terminal has reported. (Until §81,
+  `.ansi` slots and `palette256(0...15)` measured as xterm's table, so they mixed too.)
 
 **Why the tie goes to the source.** `ViewConstants.disabledForeground` and
 `focusPulseMax` are both exactly 0.50. So a disabled label in such an ink keeps its ink
@@ -5023,13 +5023,13 @@ test pins it.
 
 **What a built-in view sees: nothing.** Every built-in palette states RGB roles and every
 built-in swatch is RGB, so every breath is what it was, byte for byte. The 256-colour grid
-cannot reach the rule yet, because its sixteen slots still measure as xterm's table. Once
-a slot the terminal has not reported has no RGB, which is the next step of the
-terminal-colour plan, a cursor on slots 0 to 15 holds still.
+could not reach the rule while its sixteen slots measured as xterm's table. Since §81 a
+slot the terminal has not reported has no RGB, so a cursor on slots 0 to 15 holds still
+until the terminal reports them.
 
-`SteadyBreathCopiesOnUnmeasurableColourTests` (TUIkitTests) pins it for all but the
-256-colour grid, over an accent of the terminal's foreground and over the terminal's page,
-both unreported. Where an end has no RGB, each leaves no run, reads no clock and draws its
+`SteadyBreathCopiesOnUnmeasurableColourTests` (TUIkitTests) pins it over an accent of the
+terminal's foreground and over the terminal's page, both unreported, and since §81 over a
+slot accent and for the 256-colour grid too. Where an end has no RGB, each leaves no run, reads no clock and draws its
 still picture at every point of the cycle. Where both ends are RGB, it still breathes.
 Reported, every one of them breathes. `BlendEndsTests` pins the helper.
 
@@ -5108,3 +5108,48 @@ each of the fifteen stated roles spelled `Color.default` on its own, the overlay
 alpha, the tiers silent and reported, the derived and stated surfaces, idempotence (under
 a tint too), that groundings under two answers differ, and that every built-in palette is
 stored as given.
+
+## 81. A slot the terminal has not reported (2026-09-15)
+
+`Color.ansi(_:)` and `Color.palette(0...15)` name one of the terminal's sixteen slots, and
+the terminal paints whatever the user's profile keeps there. Every rule that measures a
+colour read a slot as xterm's table (`ANSIColor.xtermRGB`), which Apple Terminal's "Basic"
+profile disagrees with on fifteen of the sixteen (Terminal-compatibility.md). A floor, a
+blend, a hover and a breath were drawing on that guess.
+
+**The rule.** A slot measures as the colour the terminal reported for it (OSC 4, asked at
+startup), and as nothing until it has reported all sixteen: `rgbComponents` is nil. Each
+rule that is already keyed on `rgbComponents` then does for a slot what it does for the
+terminal's own foreground and background:
+- a blend with it snaps to the heavier end (§75), so a fade of a slot over an RGB page is a
+  cut at ½, and so is `.opacity(_:)` over text already drawn in a slot, whose SGR 30–37 or
+  90–97 the fade reads back as that slot;
+- a colour effect (brightness, contrast, saturation, grayscale, hue rotation, inversion)
+  leaves it as it is, and `.colorMultiply` by it changes nothing;
+- a contrast floor and a hover lift leave it as asked, and a control face tinted with it is
+  the page, so a hover adds no fill (§78's caps apply);
+- a focus breath in it holds its bright end (§79, §79.1), the 256-colour grid's cursor on
+  slots 0 to 15 included;
+- a gradient with a slot stop is drawn as cells, not as a picture (§77);
+- `lighter()` and `darker()` return it unchanged;
+- the contrast picker gives the palette's foreground on a slot swatch (§77).
+
+**What does not change.** A slot still emits its own code at every depth, and `isAchromatic`
+still goes by which slot it is. Code that reads a colour as a value keeps a number: a colour
+editor, a swatch grid's nearest match and an image palette's candidates read the reported
+slot or xterm's value, and RGB still quantises to the sixteen by xterm's table. An image
+tone curve's stops read `rgbComponents`, so a slot stop drops out while the slots are
+unreported, as a semantic stop does until it is resolved.
+
+Once the terminal reports its sixteen, each rule measures the reported colour. On Apple
+Terminal "Basic", slot 1 blended halfway to blue is rgb(77, 0, 128), from (153, 0, 0), where
+xterm's table gave (103, 0, 128).
+
+**What a built-in view sees: nothing.** Every built-in palette states RGB roles, and every
+built-in swatch but the 256-colour grid's first sixteen is RGB. The change reaches an app
+whose palette, style or blend names a slot, and that grid.
+
+`UnreportedANSISlotTests` (TUIkitTests) pins one row per rule, with the slots unreported and
+with Apple Terminal "Basic"'s reported, and the parts that do not change.
+`SteadyBreathOnUnmeasurableColourTests` and `SteadyBreathCopiesOnUnmeasurableColourTests`
+add a slot accent, and the 256-colour grid.

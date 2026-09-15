@@ -140,13 +140,22 @@ struct ColorTests {
         #expect(overflow == to)
     }
 
-    @Test("lerp with ANSI colors converts to RGB")
+    @Test("lerp with ANSI colors converts to RGB once the terminal reports them, and snaps before")
     func lerpWithANSI() {
         let from = Color.ansi(.black)
         let to = Color.ansi(.white)
-        let result = Color.lerp(from, to, phase: 0.5)
-        // Should produce an RGB color (not crash)
-        #expect(result.rgbComponents != nil)
+        // A slot measures as the colour the terminal reported for it, so reported slots
+        // blend as RGB (all one colour here, which is enough to measure).
+        let reported = TerminalColors(
+            slots: TerminalColors.Slots(repeating: TerminalColors.RGB(red: 128, green: 64, blue: 32)))
+        TerminalColors.withCurrent(reported) {
+            #expect(Color.lerp(from, to, phase: 0.5).rgbComponents != nil)
+        }
+        // Unreported, it has no RGB: the blend takes the heavier end, and does not crash.
+        TerminalColors.withCurrent(.unknown) {
+            #expect(Color.lerp(from, to, phase: 0.5) == from)
+            #expect(Color.lerp(from, to, phase: 0.6) == to)
+        }
     }
 
     // MARK: - Rounding

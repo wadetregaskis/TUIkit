@@ -78,11 +78,19 @@ struct BlendEndsTests {
             }
             #expect(from.mix(with: to, by: 0) == from, "\(from) → \(to)")
             #expect(from.mix(with: to, by: 1) == to, "\(from) → \(to)")
-            // Only the ends: a measurable pair still blends as RGB between them.
-            #expect(Self.isRGB(Color.lerp(from, to, phase: 0.5)), "\(from) → \(to)")
-            #expect(Self.isRGB(from.mix(with: to, by: 0.5)), "\(from) → \(to)")
+            // Only the ends: a measurable pair still blends as RGB between them. A slot
+            // measures once the terminal reports its sixteen.
+            TerminalColors.withCurrent(Self.reportedSlots) {
+                #expect(Self.isRGB(Color.lerp(from, to, phase: 0.5)), "\(from) → \(to)")
+                #expect(Self.isRGB(from.mix(with: to, by: 0.5)), "\(from) → \(to)")
+            }
         }
     }
+
+    /// A terminal that reported its sixteen slots (all one colour, which is enough for a
+    /// blend to measure them).
+    private static let reportedSlots = TerminalColors(
+        slots: TerminalColors.Slots(repeating: TerminalColors.RGB(red: 128, green: 64, blue: 32)))
 
     @Test("Equal ends keep their spelling and interpolate only the alpha")
     func equalEndsKeepTheirSpelling() {

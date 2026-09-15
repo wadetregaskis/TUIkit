@@ -443,20 +443,25 @@ struct FadedPaletteDerivationTests {
     /// "the same as drawing none". Asked of the CHANNELS instead, both step.
     @Test("A black page steps whatever its alpha and whatever its spelling")
     func blackPagesStillStep() {
-        for (name, page) in [
-            ("faded rgb black", Color.rgb(0, 0, 0).opacity(0.5)),
-            ("the black slot", Color.ansi(.black)),
-            ("opaque rgb black", Color.rgb(0, 0, 0)),
-        ] {
-            let palette = BlackPagePalette(background: page)
-            for (which, surface) in [
-                ("fieldBackground", palette.fieldBackground),
-                ("liftedBackground", palette.liftedBackground),
-                ("lifted(from:)", palette.lifted(from: page)),
+        // The black slot measures as black only once the terminal has reported its
+        // sixteen, so they are reported here: every one black, since only slot 0 is read.
+        let reported = TerminalColors(slots: TerminalColors.Slots(repeating: TerminalColors.RGB(red: 0, green: 0, blue: 0)))
+        TerminalColors.withCurrent(reported) {
+            for (name, page) in [
+                ("faded rgb black", Color.rgb(0, 0, 0).opacity(0.5)),
+                ("the black slot", Color.ansi(.black)),
+                ("opaque rgb black", Color.rgb(0, 0, 0)),
             ] {
-                #expect(
-                    surface.rgbComponents.map { $0 != (0, 0, 0) } ?? false,
-                    "\(name) \(which) came back as the page: \(surface)")
+                let palette = BlackPagePalette(background: page)
+                for (which, surface) in [
+                    ("fieldBackground", palette.fieldBackground),
+                    ("liftedBackground", palette.liftedBackground),
+                    ("lifted(from:)", palette.lifted(from: page)),
+                ] {
+                    #expect(
+                        surface.rgbComponents.map { $0 != (0, 0, 0) } ?? false,
+                        "\(name) \(which) came back as the page: \(surface)")
+                }
             }
         }
     }

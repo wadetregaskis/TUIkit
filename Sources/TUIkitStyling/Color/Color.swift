@@ -126,8 +126,10 @@ public struct Color: Sendable, Hashable {
     /// Internal enum for different color types.
     public enum ColorValue: Sendable, Hashable {
         /// One of the terminal's sixteen colour slots: SGR 30–37 or 90–97 as a
-        /// foreground, 40–47 or 100–107 as a background. It measures as xterm's
-        /// value for the slot, ``ANSIColor/xtermRGB``.
+        /// foreground, 40–47 or 100–107 as a background. It measures as the colour
+        /// the terminal reported for the slot (OSC 4), and as nothing until it has
+        /// reported all sixteen: `rgbComponents` is nil, and xterm's value is not
+        /// guessed in its place.
         case ansi(ANSIColor)
         /// The terminal's default colour in whichever slot it is drawn: SGR 39 as
         /// a foreground and 49 as a background. This is `Color.default`. It
@@ -392,13 +394,20 @@ public struct Color: Sendable, Hashable {
     ///
     /// Converts any color type to its RGB representation:
     /// - `.rgb` — returned directly
-    /// - `.ansi` — xterm's conventional value for the slot, ``ANSIColor/xtermRGB``
+    /// - `.ansi` — the RGB the terminal reported for the slot (OSC 4), or nil
+    ///   until it has reported all sixteen
     /// - `.terminalDefault` — nil, always: it is the terminal's foreground as
     ///   ink and its background as a fill, and no single RGB is both
-    /// - `.palette256` — mapped to xterm 256-color palette RGB values
+    /// - `.palette256` — indices 0–15 are the sixteen slots, measured as `.ansi`;
+    ///   16–255, the 6×6×6 cube and the grey ramp, xterm's values
     /// - `.terminalForeground` / `.terminalBackground` — the RGB the terminal
     ///   reported for its default foreground or background, or nil until it has
     /// - `.semantic` — returns nil (must be resolved first via ``resolve(with:)``)
+    ///
+    /// Nothing the terminal decides is guessed: a slot it has not reported is not
+    /// xterm's value, ``ANSIColor/xtermRGB``, which the user's profile need not
+    /// keep. A colour with no RGB is one a blend snaps across, a contrast floor
+    /// leaves as asked, and a focus breath holds still in.
     public var rgbComponents: (red: UInt8, green: UInt8, blue: UInt8)? {
         switch value {
         case .rgb(let red, let green, let blue):
@@ -408,17 +417,27 @@ public struct Color: Sendable, Hashable {
         case .terminalBackground:
             return TerminalColors.current.background.map { (red: $0.red, green: $0.green, blue: $0.blue) }
         case .ansi(let slot):
-            return slot.xtermRGB
+            return Self.reportedRGB(of: slot)
         case .terminalDefault:
             // Not the reported foreground, even once there is one: as a fill this
             // is 49, the background. It stands for whichever of the two its slot
             // paints, so there is no one colour to measure, and no guess is made.
             return nil
         case .palette256(let index):
+            // Indices 0-15 are the sixteen slots, spelled by index; a slot's raw value
+            // is its index, so every index here is a slot.
+            if index < 16, let slot = ANSIColor(rawValue: index) { return Self.reportedRGB(of: slot) }
             return Self.palette256ToRGB(index)
         case .semantic:
             return nil
         }
+    }
+
+    /// The colour the terminal reported for `slot`, or nil until it has reported
+    /// its sixteen.
+    private static func reportedRGB(of slot: ANSIColor) -> (red: UInt8, green: UInt8, blue: UInt8)? {
+        guard let reported = TerminalColors.current.slots?[Int(slot.rawValue)] else { return nil }
+        return (reported.red, reported.green, reported.blue)
     }
 
     /// Whether the TERMINAL decides what this colour paints, rather than its
@@ -491,13 +510,18 @@ extension Color {
     /// for one that looks the same everywhere, use ``rgb(_:_:_:)`` or a palette
     /// role.
     ///
-    /// It measures as xterm's value for the slot, ``ANSIColor/xtermRGB``, which is
-    /// an estimate of what the user's profile keeps there. Bold may
-    /// draw a standard slot's text in its bright twin on some terminals; see "What
-    /// an ANSI colour actually paints" in `Documentation/Terminal-compatibility.md`.
+    /// It measures as the colour the terminal reported for the slot, and as nothing
+    /// until it has: ``rgbComponents`` is `nil`, and xterm's value,
+    /// ``ANSIColor/xtermRGB``, is not guessed in its place, because the user's
+    /// profile need not keep it. So until the terminal reports its sixteen, a blend
+    /// with a slot takes the heavier end rather than a colour between, a contrast
+    /// floor leaves it as asked, and a focus breath in it holds still. It still
+    /// emits its slot's code either way. Bold may draw a standard slot's text in its
+    /// bright twin on some terminals; see "What an ANSI colour actually paints" in
+    /// `Documentation/Terminal-compatibility.md`.
     ///
     /// `Color.palette(1)` is the same slot spelled by index, which stays `38;5;1`
-    /// where the terminal has 256 colours.
+    /// where the terminal has 256 colours, and measures the same way.
     ///
     /// - Parameter slot: The slot.
     /// - Returns: That slot, fully opaque.
@@ -981,7 +1005,9 @@ extension Color {
 extension Color {
     /// Converts a 256-color palette index to RGB values.
     ///
-    /// - Indices 0–15: the sixteen ANSI slots, at xterm's values
+    /// - Indices 0–15: the sixteen ANSI slots, at xterm's values. This is xterm's
+    ///   table, not what a slot measures as: `rgbComponents` reads the terminal's
+    ///   report for those, or has none
     /// - Indices 16–231: 6×6×6 color cube
     /// - Indices 232–255: grayscale ramp
     package static func palette256ToRGB(_ index: UInt8) -> (red: UInt8, green: UInt8, blue: UInt8) {

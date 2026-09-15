@@ -211,9 +211,11 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// is an `.ansi` ``Color``, so it emits as SGR 30–37 / 90–97
     /// and FOLLOWS the profile: change the terminal's idea of "red" and the
     /// image changes with it. As glyphs, that is — an image drawn as pixels
-    /// through terminal graphics gets xterm's default RGB for each name, since
-    /// pixels cannot carry a name and nothing here can ask the terminal what
-    /// its profile paints for one.
+    /// through terminal graphics gets an RGB for each name, since pixels cannot
+    /// carry one: the colour the terminal reported for the slot, or xterm's value
+    /// while it has reported none, as they stood when this palette was first used.
+    /// That is a best guess for a number to draw, not a measurement: a slot the
+    /// terminal has not reported measures as nothing (`Color.rgbComponents`).
     ///
     /// Mapped by nearest colour in OKLab like any other palette. `.default` is
     /// deliberately absent: it is not one of the sixteen, it is "whatever the

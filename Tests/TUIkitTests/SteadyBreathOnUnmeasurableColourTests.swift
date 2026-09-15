@@ -51,6 +51,22 @@ private struct TerminalPagePalette: Palette {
     let border = Color.rgb(120, 120, 130)
 }
 
+/// An RGB page and ink whose accent is a terminal slot, which has no RGB until the
+/// terminal reports its sixteen.
+private struct SlotAccentPalette: Palette {
+    let id = "steady-breath-slot-accent"
+    let name = "Slot accent"
+    let background = Color.rgb(20, 20, 30)
+    let foreground = Color.rgb(220, 220, 220)
+    let foregroundTertiary = Color.rgb(130, 130, 140)
+    let accent = Color.ansi(.blue)
+    let success = Color.rgb(40, 200, 40)
+    let warning = Color.rgb(220, 200, 40)
+    let error = Color.rgb(220, 40, 40)
+    let info = Color.rgb(40, 120, 220)
+    let border = Color.rgb(120, 120, 130)
+}
+
 /// One control under one of the palettes above, as a whole app, for the run loop.
 private struct SteadyBreathApp: App {
     var control = SteadyBreathOnUnmeasurableColourTests.Control.button
@@ -116,6 +132,8 @@ struct SteadyBreathOnUnmeasurableColourTests {
         case accent
         /// The ground it breathes over: the page is the terminal's background.
         case page
+        /// The colour that breathes: the accent is a terminal slot, `.ansi(.blue)`.
+        case ansiAccent
 
         var testDescription: String { rawValue }
 
@@ -123,14 +141,17 @@ struct SteadyBreathOnUnmeasurableColourTests {
             switch self {
             case .accent: TerminalInkAccentPalette()
             case .page: TerminalPagePalette()
+            case .ansiAccent: SlotAccentPalette()
             }
         }
     }
 
-    /// One Dark's pair, as the carried-colour tests use.
+    /// One Dark's pair, as the carried-colour tests use, and Apple Terminal "Basic"'s
+    /// sixteen slots, so a slot accent measures too.
     private static let reported = TerminalColors(
         foreground: TerminalColors.RGB(red: 171, green: 178, blue: 191),
-        background: TerminalColors.RGB(red: 40, green: 44, blue: 52))
+        background: TerminalColors.RGB(red: 40, green: 44, blue: 52),
+        slots: TerminalColors.Slots(UnreportedANSISlotTests.appleBasic))
 
     /// The middle of each 50 ms frame of the focus breath, over two cycles and more,
     /// so a caret's slower pulse is covered too.

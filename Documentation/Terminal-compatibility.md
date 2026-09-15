@@ -2337,11 +2337,18 @@ Bold is the one that exists today; `SGR 2` (faint) is the same shape of hazard.
 ### Why this is load-bearing rather than trivia
 
 `ANSIColor.xtermRGB` carries xterm's conventional table — and its doc comment
-says so. Two things derive real decisions from it:
+says so. Two things derived real decisions from it:
 
 - **The contrast floor.** `ensuringContrast` computes a WCAG ratio, which needs
-  luminances, which need RGB. Against a remapped scheme the ratio it computes
-  is not the ratio on screen.
+  luminances, which need RGB. Against a remapped scheme the ratio it computed
+  was not the ratio on screen. **Since 2026-09-15 a slot no longer measures as
+  xterm's table.** `Color.ansi(_:)` and `Color.palette(0...15)` measure as the
+  colour the terminal reported for the slot, which the startup exchange asks
+  for (see "Asking the terminal for its colours"), and as nothing until it has
+  reported all sixteen. A floor, a blend, a hover and a focus breath then read
+  the terminal's own sixteen, or leave the slot as asked. On Apple Terminal
+  "Basic", where 15 of the 16 differ from xterm's (above), that is the
+  difference between measuring slot 1 as (205, 0, 0) and as (153, 0, 0).
 - **Quantisation.** Downsampling a truecolor value for a 256-colour terminal
   searches for the nearest entry by RGB distance. If the first sixteen entries
   are not where the table thinks, the "nearest" one may not look nearest.
@@ -2349,13 +2356,16 @@ says so. Two things derive real decisions from it:
   of xterm's table changes the slot chosen for **66.8%** of the RGB cube, and
   the colour actually painted lands **24% closer** in OKLab — the same 24% over
   the cube as over dark pixels alone. So the approximation costs about a
-  quarter of the accuracy the mode is capable of. Asking `OSC 4` once at
-  startup and quantising against the answer is the fix, and is not built.
+  quarter of the accuracy the mode is capable of. Quantising against the
+  reported sixteen is the fix, and is not built yet: RGB still quantises to the
+  sixteen by xterm's table.
 
-Both degrade rather than break: they are approximations against an unknown
-palette, and they are the best available, because **an app cannot know the
-user's scheme unless it asks** — which is what the probe does, and what nothing
-in the render path does today.
+xterm's table is kept where a number is needed and no rule measures it: a
+colour editor's reading of a slot the terminal has not reported, an image
+palette's match candidates, and quantising RGB to sixteen colours. Those
+degrade rather than break, because **an app cannot know the user's scheme
+unless it asks**, and a terminal that does not answer `OSC 4` (Warp and GNU
+screen, measured) leaves the slots unknown.
 
 ### What follows for the framework's own colours
 

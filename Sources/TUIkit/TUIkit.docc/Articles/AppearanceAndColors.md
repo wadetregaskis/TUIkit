@@ -102,12 +102,17 @@ The slots are the cases of ``ANSIColor``, in slot order:
 A slot is a name, not a colour. The terminal paints whatever the user's
 profile keeps in that slot, which need not be red at all, so use one where a
 colour should follow the user's terminal scheme. For a colour that looks the
-same everywhere, use RGB or a palette role. A slot measures as xterm's value
-for it, ``ANSIColor/xtermRGB``, which is an estimate of what the user's profile
-keeps there.
+same everywhere, use RGB or a palette role.
 
-`Color.palette(1)` is the same slot spelled by its index, and stays `38;5;1`
-where the terminal has 256 colours.
+A slot measures as the colour the terminal reported for it, and as nothing
+until it has: ``Color/rgbComponents`` is `nil`, and xterm's value,
+``ANSIColor/xtermRGB``, is not guessed in its place, because the user's profile
+need not keep it. Until the terminal reports its sixteen, a blend with a slot
+takes whichever end is heavier rather than a colour between, a contrast floor
+leaves it as asked, and a focus breath in it holds still.
+
+`Color.palette(1)` is the same slot spelled by its index, stays `38;5;1`
+where the terminal has 256 colours, and measures the same way.
 
 ### 256-Color Palette
 

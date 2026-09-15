@@ -227,7 +227,7 @@ struct ASCIIPaletteTests {
 
     @Test("A duotone recolours without flattening")
     func duotoneKeepsItsDepth() {
-        let curve = ASCIIToneCurve([(.ansi(.black), .rgb(20, 20, 60)), (.ansi(.white), .rgb(255, 215, 130))])
+        let curve = ASCIIToneCurve([(.black, .rgb(20, 20, 60)), (.white, .rgb(255, 215, 130))])
         let dark = curve.apply(to: RGBA(r: 0, g: 0, b: 0))
         let light = curve.apply(to: RGBA(r: 255, g: 255, b: 255))
         #expect(dark == RGBA(r: 20, g: 20, b: 60))
@@ -242,7 +242,7 @@ struct ASCIIPaletteTests {
         // Two stops covering only the dark half. Anything brighter than the
         // last stop takes the last stop's colour rather than a colour nobody
         // named.
-        let curve = ASCIIToneCurve([(.ansi(.black), .rgb(0, 0, 255)), (.rgb(128, 128, 128), .rgb(0, 255, 0))])
+        let curve = ASCIIToneCurve([(.black, .rgb(0, 0, 255)), (.rgb(128, 128, 128), .rgb(0, 255, 0))])
         #expect(curve.apply(to: RGBA(r: 255, g: 255, b: 255)) == RGBA(r: 0, g: 255, b: 0))
         #expect(curve.apply(to: RGBA(r: 0, g: 0, b: 0)) == RGBA(r: 0, g: 0, b: 255))
     }
@@ -250,10 +250,10 @@ struct ASCIIPaletteTests {
     @Test("A curve that cannot define a mapping changes nothing")
     func degenerateCurvesAreInert() {
         #expect(ASCIIToneCurve.identity.isIdentity)
-        #expect(ASCIIToneCurve([(.ansi(.black), .ansi(.white))]).isIdentity)
+        #expect(ASCIIToneCurve([(.black, .white)]).isIdentity)
         let pixel = RGBA(r: 77, g: 88, b: 99)
         #expect(ASCIIToneCurve.identity.apply(to: pixel) == pixel)
-        #expect(ASCIIToneCurve([(.ansi(.black), .ansi(.white))]).apply(to: pixel) == pixel)
+        #expect(ASCIIToneCurve([(.black, .white)]).apply(to: pixel) == pixel)
     }
 
     @Test("Alpha is carried through — a curve recolours, it does not reveal")
@@ -339,7 +339,7 @@ struct ASCIIPaletteTests {
 
     @Test("A curve stop may name a theme colour")
     func curveResolves() {
-        let curve = ASCIIToneCurve([(.ansi(.black), .palette.accent), (.ansi(.white), .ansi(.white))])
+        let curve = ASCIIToneCurve([(.black, .palette.accent), (.white, .white)])
         // Unresolved, the accent stop has no colour and drops out — leaving one
         // knot, which cannot define a mapping, so nothing is recoloured. That is
         // the safe failure: an unresolved curve is inert rather than wrong.

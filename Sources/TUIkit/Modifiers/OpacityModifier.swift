@@ -493,9 +493,11 @@ enum SGRColorRewrite {
     }
 
     /// A basic (30–37 / 90–97) or background (40–47 / 100–107) colour code,
-    /// faded. The named colours have no fixed RGB — a terminal's palette
-    /// decides — so they are faded via their standard xterm values, which is
-    /// what the 256-cube downsampling already assumes.
+    /// transformed. The code is read back as its slot, `.ansi(_:)`, which has no
+    /// fixed RGB: the terminal's palette decides. So `transform` sees what every
+    /// rule sees for a slot: the colour the terminal reported for it, or no RGB
+    /// until it has, where a fade snaps to its heavier end (a cut at ½) and a
+    /// colour effect leaves the slot as it is.
     private static func rewrittenBasic(
         _ parameter: Int, transform: (Color) -> Color
     ) -> [String] {

@@ -314,7 +314,7 @@ struct HuePreservingQuantisationTests {
                 // returns the same colour every step with a different alpha —
                 // nothing for a downsample to quantise differently. The
                 // surface-taking spelling is the one that produces the colours.
-                let quantised = base.opacity(Double(step) / 16, over: .ansi(.black))
+                let quantised = base.opacity(Double(step) / 16, over: .black)
                     .downsampledToPalette256()
                 guard let (red, green, blue) = quantised.rgbComponents else { continue }
                 let isBlack = red == 0 && green == 0 && blue == 0

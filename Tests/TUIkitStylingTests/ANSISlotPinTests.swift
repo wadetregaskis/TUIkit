@@ -103,10 +103,18 @@ struct ANSISlotPinTests {
         #expect(Color.default.backgroundCodes(depth: .noColor).isEmpty)
     }
 
-    @Test("A slot measures as xterm's value, by name and by index", arguments: slots)
-    func slotMeasuresAsXterm(_ slot: Slot) {
-        #expect(slot.color.rgbComponents.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
-        #expect(Color.palette(slot.index).rgbComponents.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
+    /// A slot the terminal has not reported measures as nothing (UnreportedANSISlotTests
+    /// pins what it measures as once reported). xterm's value is still the table, and
+    /// what a value reader gets.
+    @Test("An unreported slot measures as nothing, and reads as xterm's value, by name and by index",
+        arguments: slots)
+    func unreportedSlotReadsAsXterm(_ slot: Slot) {
+        TerminalColors.withCurrent(.unknown) {
+            #expect(slot.color.rgbComponents == nil)
+            #expect(Color.palette(slot.index).rgbComponents == nil)
+            #expect(slot.color.estimatedRGB.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
+            #expect(Color.palette(slot.index).estimatedRGB.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
+        }
         let table = Color.palette256ToRGB(slot.index)
         #expect([table.red, table.green, table.blue] == slot.xterm)
     }

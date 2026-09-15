@@ -88,10 +88,16 @@ struct ScrollIndicatorBreathAlphaTests {
         let palettes: [any Palette] =
             PaletteRegistry.all + PaletteRegistry.all.map { TintedPalette(base: $0, tint: .ansi(.red)) }
             + [NamedSlots()]
-        for palette in palettes {
-            let ends = scrollIndicatorBreath(palette: palette, over: palette.background)
-            #expect(ends.dim == palette.foregroundTertiary, "\(palette.name)'s dim end was re-spelled")
-            #expect(ends.bright == palette.accent, "\(palette.name)'s bright end was re-spelled")
+        // Reported, so every slot measures and the breath moves between its two ends. A
+        // slot the terminal has not reported holds the breath at its bright end
+        // (SteadyBreathCopiesOnUnmeasurableColourTests), which is not a re-spelling.
+        let reported = TerminalColors(slots: TerminalColors.Slots(UnreportedANSISlotTests.appleBasic))
+        TerminalColors.withCurrent(reported) {
+            for palette in palettes {
+                let ends = scrollIndicatorBreath(palette: palette, over: palette.background)
+                #expect(ends.dim == palette.foregroundTertiary, "\(palette.name)'s dim end was re-spelled")
+                #expect(ends.bright == palette.accent, "\(palette.name)'s bright end was re-spelled")
+            }
         }
     }
 }

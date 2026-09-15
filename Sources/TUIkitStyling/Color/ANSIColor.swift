@@ -67,8 +67,12 @@ public enum ANSIColor: UInt8, Sendable, CaseIterable {
 
     /// xterm's conventional RGB for this slot.
     ///
-    /// An estimate: the user's terminal profile decides what a slot paints, and
-    /// nothing here asks it. See "What an ANSI colour actually paints" in
+    /// Not what the slot measures as. The user's terminal profile decides what a
+    /// slot paints, and `Color.ansi(_:)` measures as the colour the terminal
+    /// reported for it, or as nothing until it has. This table is kept where a
+    /// number is needed and nothing is measured: quantising RGB to sixteen colours,
+    /// and reading a slot the terminal has not reported as a value, as a colour
+    /// editor does. See "What an ANSI colour actually paints" in
     /// `Documentation/Terminal-compatibility.md`.
     public var xtermRGB: (red: UInt8, green: UInt8, blue: UInt8) {
         switch self {

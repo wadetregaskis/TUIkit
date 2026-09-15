@@ -139,8 +139,10 @@ struct IndicatorCycleTimingTests {
         case .tableRowMultiLine:
             focused(table(rows: 3, note: "a note long enough to wrap over two lines", lineLimit: 2), height: 10)
         case .color256GridCursor:
+            // A cube swatch, which measures: the cursor on slots 0-15 holds still until the
+            // terminal reports its sixteen, and leaves no run to time.
             focused(
-                _Color256GridCore(selection: .constant(Color.palette(1)), focusID: "grid-timing"),
+                _Color256GridCore(selection: .constant(Color.palette(196)), focusID: "grid-timing"),
                 width: 80, height: 24)
         case .swatchGridCursor: swatchGridRuns()
         case .verticalScrollbar:

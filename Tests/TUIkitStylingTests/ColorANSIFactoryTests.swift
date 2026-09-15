@@ -25,7 +25,10 @@ struct ColorANSIFactoryTests {
         #expect(colour.isOpaque)
         #expect(colour.foregroundCodes(depth: .truecolor) == [slot.foreground])
         #expect(colour.backgroundCodes(depth: .truecolor) == [slot.background])
-        #expect(colour.rgbComponents.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
+        TerminalColors.withCurrent(.unknown) {
+            #expect(colour.rgbComponents == nil)
+            #expect(colour.estimatedRGB.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
+        }
         #expect(colour.isTerminalDefined)
     }
 
