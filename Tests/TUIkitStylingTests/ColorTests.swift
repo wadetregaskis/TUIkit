@@ -52,7 +52,7 @@ struct ColorTests {
             let resolved = colour.opacity(Double(carried.alpha) / 255, over: .rgb(0, 0, 0))
             // …and what the surface-taking spelling gives directly. The quantised
             // alpha is used on both sides, because the byte is what travels.
-            #expect(resolved == colour.opacity(Double(carried.alpha) / 255, over: .ansi(.black)))
+            #expect(resolved == colour.opacity(Double(carried.alpha) / 255, over: .black))
         }
     }
 
@@ -66,7 +66,7 @@ struct ColorTests {
         #expect(carried.value == colour.value, "the colour is unchanged")
         #expect(carried.alpha == 128, "and carries the opacity")
 
-        let consumed = colour.opacity(0.5, over: .ansi(.black))
+        let consumed = colour.opacity(0.5, over: .black)
         #expect(consumed.isOpaque, "a concrete answer")
         #expect(consumed.value != colour.value, "…which is a different colour")
     }
@@ -93,7 +93,7 @@ struct ColorTests {
         #expect(red >= 200 && green >= 200, "\(faded) should be mostly white")
         #expect(blue == 255)
         // Endpoints: 0 disappears into the surface, 1 is the colour itself.
-        #expect(Color.ansi(.red).opacity(0, over: .rgb(10, 20, 30)) == Color.rgb(10, 20, 30))
+        #expect(Color.red.opacity(0, over: .rgb(10, 20, 30)) == Color.rgb(10, 20, 30))
         #expect(Color.rgb(1, 2, 3).opacity(1, over: .rgb(255, 255, 255)) == Color.rgb(1, 2, 3))
     }
 
