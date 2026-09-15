@@ -6,6 +6,14 @@
 
 // swiftc -emit-silgen -o /dev/null Crash.swift
 //
+// That is enough for a swift.org toolchain on macOS. Xcode's swiftc, called by
+// its path, also needs `-sdk`, from an xcrun that DEVELOPER_DIR points at Xcode
+// (a prefix assignment would not reach the xcrun inside `$(...)`):
+//
+//   export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+//   "$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc" -emit-silgen \
+//       -sdk "$(xcrun --sdk macosx --show-sdk-path)" -o /dev/null Crash.swift
+//
 // Aborts SILGen on an assertions-enabled compiler, while it emits the
 // reabstraction thunk for the conversion:
 //
