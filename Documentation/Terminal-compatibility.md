@@ -1885,7 +1885,9 @@ configuration on 2026-09-01, and the live answers matched it. Warp 0.2026.09.02
 does not report its palette: it left OSC 4 unanswered on 2026-09-14. How each
 host answers the queries themselves, and what tmux and GNU screen do to them,
 was measured on 2026-09-14; see "Asking the terminal for its colours" below.
-Hyper was not measured.**
+So was whether reverse video (SGR 7) prints or moves the cursor. What a reversed
+cell paints is UNMEASURED; see "Reverse video (SGR 7)" below. Hyper was not
+measured.**
 `Tools/TerminalProbes/palette_probe.py` asks a terminal directly (OSC 4 /
 OSC 10 / OSC 11) and writes the answer as JSON; run it in each host and record
 the results below. `osc_colour_probe.py` measures the exchange itself.
@@ -2355,6 +2357,125 @@ focused button with a standard-slot label shows no change. An unfocused label
 is not bold, and on the hosts that treat bold as a weight the twin is a step
 wherever the profile paints it differently from its slot. Inferred from the
 table above; not measured on a hovered control.
+
+### Reverse video (SGR 7) — cursor behaviour measured 2026-09-14; paint UNMEASURED
+
+**Status:**
+- **Measured:** SGR 7 printed nothing, and text under it advanced exactly as
+  plain text. The hosts were Apple Terminal 455.1, iTerm2 3.7.1, Warp
+  v0.2026.09.02.08.27.stable_01, and GNU screen 4.00.03 and tmux 3.7c, both
+  inside Apple Terminal.
+- **UNMEASURED on every host:** what a reversed cell PAINTS. That waits for
+  someone to read `Tools/TerminalProbes/reverse_video_card.py` by eye.
+- **Ghostty:** unmeasured for both.
+
+**Why it is recorded.** Today the framework emits SGR 7 only for
+`Text.inverted()`. It is also in the output path's vocabulary ("SGR codes the
+output path emits", below), which never emits `27` and restates from `ESC[0m`
+instead. The framework is to draw highlights it cannot measure as reverse video
+instead of a tint: that means a terminal that reported no colours, or a slot it
+did not report. So what each host paints for SGR 7 is about to be relied on.
+
+**What follows from the sequence itself, on any host.** ECMA-48 calls SGR 7
+"negative image", conventionally drawn by exchanging the foreground and
+background colours.
+- It exchanges the colours in force. Where no colour is stated, those are the
+  terminal's own default pair, not an application palette's. So an app that
+  wants its own pair reversed has to state both colours beside the 7.
+- `ESC[0m` ends it, and so does `ESC[27m`. So a run that resets part way has to
+  state the 7 again after the reset.
+
+Whether each host paints exactly that is what the card's rows A, B, D, G and H
+check, below.
+
+**Provenance.**
+- macOS 15.7.9 (24G830), system appearance Light, on the virtual Mac above.
+- **The probe** is a working copy of `osc_colour_probe.py` with a suite added
+  for mode 2031 and SGR 7. Neither that copy nor its records are committed.
+- **How a step is judged:** by the cursor, read from the reply to a `CSI 6n`
+  sent behind the step. A step counts as "printed" when the cursor is not where
+  the step should leave it: at its starting point, or two columns right of it
+  for a step that writes `ab`.
+  - Output that does not move the cursor goes unseen.
+  - Under screen and tmux, the report comes from the multiplexer's own grid,
+    not the outer terminal's.
+- **The four spellings:** A `ESC[7m`, B `ESC[7;31;44m`, C `ESC[7;1m` and
+  D `ESC[7;38;2;10;20;30;48;2;200;200;200m`.
+- **The steps.** For each spelling:
+  1. the SGR alone;
+  2. DECRQSS for SGR (`DCS $ q m ST`), where that is safe to send;
+  3. `ESC[0m`;
+  4. the SGR, then `ab`, then `ESC[0m`.
+
+  After all four: `ESC[7m ESC[27m`, a bare `ESC[m`, and DECRQSS once more.
+- No fence timed out.
+- **Where iTerm2's record came from.** Its `open -a iTerm` launch of a
+  `.command` file, at about 12:09, raised what looked like an alert, and nothing
+  ran within 40 s. The record is timestamped 12:24:48. It carries iTerm2's own
+  environment (`TERM_PROGRAM=iTerm.app`, `TERM_PROGRAM_VERSION=3.7.1`,
+  `ITERM_PROFILE=Default`). As in the colour-query passes, nobody noted who
+  dismissed the window.
+
+| Host | The SGR alone; `ESC[0m`; `ESC[7m ESC[27m`; bare `ESC[m` | SGR, `ab`, `ESC[0m` | DECRQSS `DCS $ q m ST` |
+|---|---|---|---|
+| Apple Terminal 455.1, "Basic" | nothing printed; the cursor stayed put | exactly +2 columns, all four spellings | not sent: this host prints DCS payloads (see "Apple Terminal parses OSC and does NOT parse DCS or APC") |
+| iTerm2 3.7.1, profile "Default" | nothing printed; the cursor stayed put | exactly +2, all four | answered, ST-terminated, in 7–15 ms; the replies are below |
+| Warp v0.2026.09.02.08.27.stable_01 | nothing printed; the cursor stayed put | exactly +2, all four | silent, 5 of 5; nothing printed |
+| GNU screen 4.00.03, inside Apple Terminal 455.1 | nothing printed; the cursor stayed put, in screen's grid | exactly +2, all four | not sent: screen passes a DCS payload to its outer terminal |
+| tmux 3.7c, inside Apple Terminal 455.1 | nothing printed; the cursor stayed put, in tmux's grid | exactly +2, all four | `ESC P 0 $ r ESC \`, 5 of 5, in ~0.03 ms. `0` means "invalid request", so tmux does not report SGR state |
+| Ghostty 1.3.1 | UNMEASURED | UNMEASURED | UNMEASURED |
+
+**iTerm2 reports a reversed pair already exchanged, and the 7 as well.** Its
+DECRQSS replies, verbatim:
+
+| State set | iTerm2's reply |
+|---|---|
+| `ESC[7m` | `ESC P 1 $ r 0;7m ESC \` |
+| `ESC[7;31;44m` | `ESC P 1 $ r 0;34;41;7m ESC \` |
+| `ESC[7;1m` | `ESC P 1 $ r 0;1;7m ESC \` |
+| `ESC[7;38;2;10;20;30;48;2;200;200;200m` | `ESC P 1 $ r 0;38:2:1:200:200:200;48:2:1:10:20:30;7m ESC \` |
+| `ESC[m` | `ESC P 1 $ r 0m ESC \` |
+
+- Asked for 31 on 44 with 7, it reports 34 on 41 with 7.
+- The 24-bit pair also comes back exchanged, in the colon form with colour
+  space 1.
+- Replayed as SGR, the reply would reverse the pair a second time.
+- Whether iTerm2 stores the pair exchanged or only reports it that way, the reply
+  cannot say. What it paints is the question of the card's rows B and D.
+- TUIkit never sends DECRQSS, so nothing reads this today.
+
+**What a reversed cell paints: UNMEASURED on every host.** Screen capture on
+this machine returns only the wallpaper, so nobody has seen the card in a real
+terminal. Each row is a question the card asks, and it is answered by eye:
+
+| Card row | Question | Apple Terminal 455.1 | iTerm2 3.7.1 | Ghostty 1.3.1 | Warp 0.2026.09.02 | screen 4.00.03 | tmux 3.7c |
+|---|---|---|---|---|---|---|---|
+| A `ESC[7m` | ground in the default foreground, glyphs in the default background? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| B `ESC[7;31;44m` | the same cells as `ESC[34;41m`? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| C `ESC[7;1m` | does bold change the ground, the glyphs, or neither? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| D the 24-bit pair | the same cells as the pair exchanged? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| E `ESC[7;1;31;44m` | the same cells as `ESC[1;34;41m`? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| F `ESC[K` while reversed | do the erased cells take the reversed ground? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| G `ESC[27m` part way | reversed up to it, plain after? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| H `ESC[0m` after a reversed pair | nothing left over? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| keys 1–6 | the terminal's cursor visible over a reversed cell, and the cell readable? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+
+A reading goes into this table with the host's version, its colour profile or
+theme, and the date.
+
+**Warp's minimum contrast, on and off: UNMEASURED.** At its default,
+`only_named_colors` (see "A host may recolour a foreground it cannot read"),
+Warp may lighten a named foreground. Which of a reversed cell's two colours it
+treats as the foreground is unknown. Reading the setting "off" would mean
+changing a Warp preference, and that is for the owner to do.
+
+**Not measured, and why:**
+- **Ghostty 1.3.1:** two launches with `open -na Ghostty.app --args -e <script>`
+  each opened a window but started no child, so the probe never ran. The cause
+  was not established.
+- **Not captured:** what tmux sends its outer terminal during these steps.
+- **Not attempted:** screen or tmux inside iTerm2, Warp or Ghostty, and ssh.
+- **Hyper:** dropped from these measurements.
 
 ### The three colour spellings are not equally literal
 
