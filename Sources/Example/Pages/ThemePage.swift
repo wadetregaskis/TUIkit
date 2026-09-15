@@ -208,7 +208,7 @@ struct ThemePage: View {
                         }
                         keyDemoRow("Text(verbatim:)") { Text(verbatim: "button.save") }
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
                 }
 
                 DemoSection("page.theme.presetPalette") {

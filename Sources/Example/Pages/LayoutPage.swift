@@ -264,7 +264,7 @@ struct LayoutPage: View {
                     }
                 }
             }
-            .border(.ansi(.brightBlack))
+            .border(.palette.border)
         }
     }
 
@@ -298,7 +298,7 @@ struct LayoutPage: View {
                     Text("\(L("page.layout.item")) 2")
                     Text("\(L("page.layout.item")) 3")
                 }
-                .border(.ansi(.brightBlack))
+                .border(.palette.border)
             }
 
             DemoSection("page.layout.section.hstack") {
@@ -352,7 +352,7 @@ struct LayoutPage: View {
                         Text("[ \(L("page.layout.signOut")) ]")
                     }
                 }
-                .border(.ansi(.brightBlack))
+                .border(.palette.border)
             }
 
             DemoSection("page.layout.section.alignmentGuide") {
@@ -383,7 +383,7 @@ struct LayoutPage: View {
                         Text("page.layout.guideItem")
                         Text("page.layout.guideItem2")
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
 
                     // 2 — A guide that is a plain NUMBER, driven by a stepper.
                     //
@@ -405,7 +405,7 @@ struct LayoutPage: View {
                             .alignmentGuide(.leading) { _ in Double(-guideOffset) }
                         Text("page.layout.guideFixed2")
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
 
                     // 3 — A CUSTOM alignment: a line of one's own.
                     //
@@ -449,7 +449,7 @@ struct LayoutPage: View {
                             }
                         }
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
 
                     // 5 — A guide across a VERTICAL alignment, which is where
                     // this stops being a curiosity.
@@ -480,7 +480,7 @@ struct LayoutPage: View {
                                 }
                         }
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
                 }
             }
 
@@ -513,7 +513,7 @@ struct LayoutPage: View {
                         }
                     }
                     .frame(height: 2)
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
                 }
             }
 
@@ -532,7 +532,7 @@ struct LayoutPage: View {
                             Text(" \(chip) ").inverted()
                         }
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
                 }
             }
 
@@ -544,7 +544,7 @@ struct LayoutPage: View {
                     Divider(character: "═")
                     Text("page.layout.below")
                 }
-                .border(.ansi(.brightBlack))
+                .border(.palette.border)
             }
 
             DemoSection("page.layout.section.lazy") {
@@ -604,7 +604,7 @@ struct LayoutPage: View {
                         Text("\(L("page.layout.col")) 2")
                         Text("\(L("page.layout.col")) 3")
                     }
-                    .border(.ansi(.brightBlack))
+                    .border(.palette.border)
                 }
             }
 

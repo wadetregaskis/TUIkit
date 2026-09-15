@@ -288,6 +288,6 @@ extension LayeringPage {
             .padding(.leading, geometry.inset)
             .padding(.trailing, geometry.inset)
             .frame(width: geometry.bandWidth, alignment: .leading)
-            .border(.ansi(.brightBlack))
+            .border(.palette.border)
     }
 }
