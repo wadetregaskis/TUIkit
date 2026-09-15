@@ -224,8 +224,8 @@ custom_rules:
   # of them; the ThemingGuide article's "What built-in controls draw with" lists
   # which role each control uses and the few colours that stay literal. This
   # flags a new colour literal in the framework's view sources: an RGB, hex,
-  # HSL, HSB or CMYK constructor, a named `Color.x` static, or a bright ANSI
-  # slot.
+  # HSL, HSB or CMYK constructor, a terminal slot spelled `.ansi(_:)`, a named
+  # `Color.x` static, or a bright ANSI slot.
   #
   # How it is scoped, each part of which was measured with SwiftLint 0.63.2:
   # - `included` and `excluded` are regexes matched against the file's path,
@@ -246,8 +246,10 @@ custom_rules:
   #
   # What it cannot see: an implicit member such as `.red` or `.cyan` passed
   # where a `Color` is expected, which is spelled the same as any enum case of
-  # that name. And once slot colours are spelled `.ansi(_:)`, `\.ansi\(` belongs
-  # in the regex.
+  # that name. `.ansi(` is matched the same way in any file it covers, so a
+  # `case .ansi(...)` over some other enum there would need an inline disable;
+  # today the only such cases, the ANSI segments of a rendered line, are in the
+  # opacity blend and modifier, which are excluded.
   framework_colour_literal:
     name: "Framework colour literal"
     message: >-
@@ -263,7 +265,7 @@ custom_rules:
       - "Sources/TUIkit/Modifiers/(OpacityModifier|ColorEffectModifiers)\\.swift$"
       - "Sources/TUIkit/Styling/AnyGradient\\.swift$"
       - "Sources/TUIkitView/Animation/ColorAnimation\\.swift$"
-    regex: '(\bColor)?\.(rgb|hex|hsl|hsb|cmyk)\(|\bColor\.(black|white|red|green|yellow|blue|magenta|cyan|gray|orange|pink|purple|brown|mint|teal|indigo|bright\w+)\b|\.bright(Black|Red|Green|Yellow|Blue|Magenta|Cyan|White)\b'
+    regex: '(\bColor)?\.(rgb|hex|hsl|hsb|cmyk|ansi)\(|\bColor\.(black|white|red|green|yellow|blue|magenta|cyan|gray|orange|pink|purple|brown|mint|teal|indigo|bright\w+)\b|\.bright(Black|Red|Green|Yellow|Blue|Magenta|Cyan|White)\b'
     match_kinds:
       - identifier
     severity: error

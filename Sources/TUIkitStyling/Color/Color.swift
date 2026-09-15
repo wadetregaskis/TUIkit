@@ -463,6 +463,31 @@ extension Color {
         return resolved
     }
 
+    /// One of the terminal's sixteen colour slots, by name: `Color.ansi(.red)`,
+    /// `Color.ansi(.brightBlack)`.
+    ///
+    /// A slot is a name, not a colour. As a foreground it is SGR 30–37, or 90–97
+    /// for a bright slot, and 40–47 or 100–107 as a background. The terminal paints
+    /// whatever the user's profile keeps in that slot, which need not be red at
+    /// all. Reach for it where a colour should follow the user's terminal scheme;
+    /// for one that looks the same everywhere, use ``rgb(_:_:_:)`` or a palette
+    /// role.
+    ///
+    /// It measures as xterm's value for the slot, ``ANSIColor/xtermRGB``, which is
+    /// an estimate: nothing asks the terminal what the slot really is. Bold may
+    /// draw a standard slot's text in its bright twin on some terminals; see "What
+    /// an ANSI colour actually paints" in `Documentation/Terminal-compatibility.md`.
+    ///
+    /// Today `Color.ansi(.red)` is the same colour as `Color.red`, and so on for
+    /// each of the sixteen named statics. `Color.palette(1)` is the same slot
+    /// spelled by index, which stays `38;5;1` where the terminal has 256 colours.
+    ///
+    /// - Parameter slot: The slot.
+    /// - Returns: That slot, fully opaque.
+    public static func ansi(_ slot: ANSIColor) -> Self {
+        Self(value: .ansi(slot))
+    }
+
     /// Creates a color from the 256-color palette.
     ///
     /// - Parameter index: The palette index (0-255).
