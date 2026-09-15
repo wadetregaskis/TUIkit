@@ -186,7 +186,7 @@ struct LocalizedTitleTests {
 
     @Test("ColorPicker")
     func colorPicker() {
-        let box = Box(Color.ansi(.red))
+        let box = Box(Color.red)
         expectLocalized(
             ColorPicker("test.title.control", selection: box.binding),
             ColorPicker(Self.computedKey, selection: box.binding), "ColorPicker")
@@ -584,8 +584,8 @@ struct LocalizedTitleTests {
 
     @Test("Colour and gradient editor panels")
     func editorPanels() {
-        let color = Box(Color.ansi(.red))
-        let stops = Box(Gradient(colors: [Color.ansi(.red), Color.ansi(.blue)]))
+        let color = Box(Color.red)
+        let stops = Box(Gradient(colors: [Color.red, Color.blue]))
         let presented = Box(true)
         expectLocalized(
             ColorPickerPanel(
