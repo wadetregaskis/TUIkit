@@ -28,14 +28,14 @@ struct ColorMultiplyAlphaTests {
     @Test("An opaque tint claims nothing")
     func opaqueTint() {
         #expect(
-            buffer(Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(.ansi(.green)))
+            buffer(Text("hi").foregroundStyle(Color.red).colorMultiply(.green))
                 .opacityRegions.isEmpty)
     }
 
     @Test("A half-transparent tint fades the layer by half")
     func halfTint() throws {
         let drawn = buffer(
-            Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(Color.white.opacity(0.5)))
+            Text("hi").foregroundStyle(Color.red).colorMultiply(Color.white.opacity(0.5)))
         let claim = try #require(drawn.opacityRegions.first)
         #expect(claim.opacity == 128.0 / 255)
         // The LAYER channel, not ink or field: this says how PRESENT the subtree is.
@@ -50,7 +50,7 @@ struct ColorMultiplyAlphaTests {
     func whiteTintIsHueNeutral() {
         // `.white` is the multiply identity by SPELLING, not only by arithmetic:
         // running a line through the multiply re-spells a terminal slot such as
-        // `.ansi(.red)` as the RGB it measures as. The identity shortcut is what
+        // `.red` as the RGB it measures as. The identity shortcut is what
         // makes `.colorMultiply(.white)` change nothing, and this asserts a faded
         // white gets the same shortcut. It did not, before: it slipped past the check and
         // darkened the subtree as a side effect of fading it, which is how this test
@@ -64,14 +64,14 @@ struct ColorMultiplyAlphaTests {
 
     @Test("A clear tint hides the subtree")
     func clearTint() throws {
-        let drawn = buffer(Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(.clear))
+        let drawn = buffer(Text("hi").foregroundStyle(Color.red).colorMultiply(.clear))
         let claim = try #require(drawn.opacityRegions.first)
         #expect(claim.opacity == 0)
         // Resolved over a page, a layer at zero yields the destination back — the
         // glyph loses the ½ contest rather than being painted in the page's colour.
         let context = makeRenderContext(width: 10, height: 1)
         let resolved = drawn.resolvingOpacity(
-            surface: .ansi(.blue), palette: context.environment.palette)
+            surface: .blue, palette: context.environment.palette)
         #expect(
             !resolved.lines[0].contains("hi"),
             "hidden, not merely faint: \(resolved.lines[0].debugDescription)")
@@ -82,9 +82,9 @@ struct ColorMultiplyAlphaTests {
         // The RGB half must not have been traded for the alpha half. A green tint
         // zeroes red's red channel whatever its alpha.
         let drawn = buffer(
-            Text("hi").foregroundStyle(Color.ansi(.red)).colorMultiply(Color.ansi(.green).opacity(0.5)))
+            Text("hi").foregroundStyle(Color.red).colorMultiply(Color.green.opacity(0.5)))
         #expect(!drawn.opacityRegions.isEmpty, "the alpha half")
-        let plain = buffer(Text("hi").foregroundStyle(Color.ansi(.red)))
+        let plain = buffer(Text("hi").foregroundStyle(Color.red))
         #expect(drawn.lines[0] != plain.lines[0], "and the hue half")
     }
 
@@ -93,7 +93,7 @@ struct ColorMultiplyAlphaTests {
         // The effect rewrites the escapes and the content's alpha is not IN the
         // escapes, so a claim the content made has to travel through untouched.
         let drawn = buffer(
-            Text("hi").foregroundStyle(Color.ansi(.red).opacity(0.5)).colorMultiply(.ansi(.green)))
+            Text("hi").foregroundStyle(Color.red.opacity(0.5)).colorMultiply(.green))
         #expect(
             drawn.opacityRegions.contains { $0.inkOpacity < 1 },
             "the text's ink claim: \(drawn.opacityRegions)")
@@ -119,10 +119,10 @@ struct ColorMultiplyAlphaTests {
         // so the layer resolved at 1 and the text drew. `clearTint` above passes
         // only because its text claims nothing.
         let drawn = buffer(
-            Text("hi").foregroundStyle(Color.ansi(.red).opacity(0.5)).colorMultiply(.clear))
+            Text("hi").foregroundStyle(Color.red.opacity(0.5)).colorMultiply(.clear))
         let context = makeRenderContext(width: 10, height: 1)
         let resolved = drawn.resolvingOpacity(
-            surface: .ansi(.blue), palette: context.environment.palette)
+            surface: .blue, palette: context.environment.palette)
         let visible = resolved.lines[0].stripped
         #expect(
             !visible.contains("hi"),
