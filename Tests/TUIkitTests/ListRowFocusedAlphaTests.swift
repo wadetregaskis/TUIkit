@@ -86,7 +86,7 @@ struct ListRowFocusedAlphaTests {
                 ForEach(rows) { row in Text(row.name) }
             }
             .focusID("faded-list")
-            .tint(Color.ansi(.red).opacity(0.5)),
+            .tint(Color.red.opacity(0.5)),
             focusID: "faded-list")
         let ink = drawn.opacityRegions.filter { $0.inkOpacity == half }
         #expect(!ink.isEmpty, "no claim reached the mark: \(drawn.opacityRegions)")
@@ -130,7 +130,7 @@ struct ListRowFocusedAlphaTests {
                 ForEach(rows) { row in Text(row.name) }
             }
             .focusID("opaque-list")
-            .tint(.ansi(.red)),
+            .tint(.red),
             focusID: "opaque-list")
         #expect(drawn.lines.joined().contains("●"), "still focused: \(drawn.lines)")
         #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
