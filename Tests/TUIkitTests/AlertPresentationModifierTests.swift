@@ -124,8 +124,8 @@ struct AlertPresentationModifierTests {
                 isPresented: isPresented,
                 actions: { EmptyView() },
                 message: { Text("Message") },
-                borderColor: .ansi(.red),
-                titleColor: .ansi(.yellow)
+                borderColor: .red,
+                titleColor: .yellow
             )
 
         let buffer = render(view)
