@@ -96,11 +96,12 @@ enum IndeterminateRenderer {
                 accent: accentColor, head: Int(phase * Double(width)))
         case (.barberPole, _):
             // The pattern shifted by `shift` characters is the pattern shifted by
-            // `shift` modulo its length, which is all a step has to name.
+            // `shift` modulo its length, which is all a step has to name. A phase is
+            // the step it falls in, of the pattern's own length.
             let shift: Int
             switch position {
             case .step(let step): shift = wrapped(step)
-            case .phase(let phase): shift = wrapped(Int(phase * Double(width * 2)))
+            case .phase(let phase): shift = wrapped(Int(phase * Double(states)))
             }
             return renderBarberPole(
                 width: width, configuration: configuration, filled: fillColor,
@@ -176,16 +177,16 @@ enum IndeterminateRenderer {
         let layout = layout(of: style, speed: speed)
         let configuration = style.configuration
         // Sampled over the configuration's OWN period, whatever the speed: a faster
-        // bar shows the same motion in less time, not a different motion. A sweep's,
-        // a knightRider's and a gradient's frame i of F is their step ⌊i·N/F⌋,
-        // counted in integers (`step(ofFrame:of:states:)`), with a knightRider's
-        // turn at the far wall kept (`bounceStep(ofFrame:of:width:)`); a
-        // barberPole's and a pulse's are still timed.
+        // bar shows the same motion in less time, not a different motion. A stepped
+        // motion's frame i of F is its step ⌊i·N/F⌋, counted in integers
+        // (`step(ofFrame:of:states:)`), with a knightRider's turn at the far wall
+        // kept (`bounceStep(ofFrame:of:width:)`); only the pulse, which has no steps,
+        // is timed.
         let sample = period(of: style) / Double(layout.frameCount)
         let states = states(of: configuration, width: width, cellPixels: nil) ?? 1
         let frames = (0..<layout.frameCount).map { index -> String in
             switch configuration.motion {
-            case .sweep, .knightRider, .gradient:
+            case .sweep, .knightRider, .gradient, .barberPole:
                 let step: Int =
                     configuration.motion == .knightRider
                     ? bounceStep(ofFrame: index, of: layout.frameCount, width: width)
@@ -195,7 +196,7 @@ enum IndeterminateRenderer {
                     backgroundColor: backgroundColor, accentColor: accentColor,
                     position: .step(step), palette: palette
                 ).text
-            case .barberPole, .pulse:
+            case .pulse:
                 return render(
                     width: width, style: style, fillColor: fillColor,
                     backgroundColor: backgroundColor, accentColor: accentColor,
@@ -464,6 +465,13 @@ extension IndeterminateRenderer {
 extension IndeterminateRenderer {
     /// The fill pattern shifted one cell per step, its glyphs coloured in turn
     /// so the row reads as moving diagonal stripes.
+    ///
+    /// A pass is one step for each of the pattern's characters, since the pattern
+    /// shifted by its own length is the pattern again: `"◢◤"` is two steps a pass,
+    /// each held for half of it. A pass used to shift the pattern by twice the bar's
+    /// WIDTH, and a cycle's 18 frames sampled that and read it modulo 2, so what the
+    /// bar showed depended on the width it aliased with: at 36 cells every frame
+    /// but one was the same picture, and at 20 it held for five frames, then four.
     private static func renderBarberPole(
         width: Int, configuration: IndeterminateConfiguration,
         filled: Color, accent: Color, shift: Int
@@ -472,10 +480,7 @@ extension IndeterminateRenderer {
         let stripes = configuration.gradient.map { $0.stops.map(\.color) }.flatMap {
             $0.isEmpty ? nil : $0
         } ?? [accent, filled]
-        // `shift` is at least 0, so neither remainder below goes negative. A phase
-        // reaches it as a fast-cycling shift of twice the width a pass, so the
-        // stripes appear to scroll briskly; the eye reads the built-in `0.6 s` per
-        // stripe-pair shift as "moving" rather than "ticking".
+        // `shift` is at least 0, so neither remainder below goes negative.
         return laid(width: width) { column in
             let slot = fill.isEmpty ? 0 : (column + shift) % fill.count
             return (glyph(fill, at: column + shift), stripes[slot % stripes.count])

@@ -34,7 +34,9 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
         case sweep
         /// The fill pattern shifts one cell per step, its glyphs coloured in
         /// turn from ``IndeterminateConfiguration/gradient`` — diagonal stripes
-        /// that appear to scroll.
+        /// that appear to scroll. A pass is one step for each character of
+        /// ``IndeterminateConfiguration/fill``, after which the pattern is back
+        /// where it started.
         case barberPole
         /// The whole track breathes between the two ends of the ramp.
         case pulse
@@ -147,8 +149,8 @@ extension IndeterminateConfiguration {
     /// long, wrapping every 1.6 s.
     public static let sweep = Self(motion: .sweep, period: 1.6, extent: 1.0 / 3.0)
 
-    /// `◢◤` shifted one cell per step. Fast on purpose: the eye reads 0.6 s per
-    /// stripe-pair shift as "moving" rather than "ticking".
+    /// `◢◤` shifted one cell per step. A pass of 0.6 s is the pattern shifted by each
+    /// of its two characters, one cell every 0.3 s.
     public static let barberPole = Self(motion: .barberPole, fill: "◢◤", period: 0.6)
 
     /// The whole bar breathing between the background colour and the accent.
