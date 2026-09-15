@@ -424,9 +424,8 @@ enum SGRColorRewrite {
                 let isBackground = (40...47).contains(parameter) || (100...107).contains(parameter)
                 let isBright = parameter >= 90
                 let base = parameter - (isBright ? (isBackground ? 100 : 90) : (isBackground ? 40 : 30))
-                if base >= 0, base < Self.basicColors.count {
-                    let (standard, bright) = Self.basicColors[base]
-                    report(isBackground ? .background : .foreground, isBright ? bright : standard)
+                if let color = Self.basicColor(base: base, isBright: isBright) {
+                    report(isBackground ? .background : .foreground, color)
                 }
             case 39:
                 report(.foreground, nil)
@@ -482,13 +481,16 @@ enum SGRColorRewrite {
         }
     }
 
-    /// The eight named colours in SGR order, standard and bright, so a code's
-    /// last digit indexes straight into them.
-    private static let basicColors: [(standard: Color, bright: Color)] = [
-        (.black, .brightBlack), (.red, .brightRed), (.green, .brightGreen),
-        (.yellow, .brightYellow), (.blue, .brightBlue), (.magenta, .brightMagenta),
-        (.cyan, .brightCyan), (.white, .brightWhite),
-    ]
+    /// The terminal slot a basic colour code names, from the code's last digit
+    /// (`base`, 0–7, in SGR order, which is also slot order) and whether it is
+    /// one of the bright codes (90–97 / 100–107), or `nil` for a digit that
+    /// names no slot.
+    private static func basicColor(base: Int, isBright: Bool) -> Color? {
+        guard let slot = UInt8(exactly: base).flatMap(ANSIColor.init(rawValue:)), !slot.isBright else {
+            return nil
+        }
+        return .ansi(isBright ? slot.brightTwin : slot)
+    }
 
     /// A basic (30–37 / 90–97) or background (40–47 / 100–107) colour code,
     /// faded. The named colours have no fixed RGB — a terminal's palette
@@ -500,9 +502,8 @@ enum SGRColorRewrite {
         let isBackground = (40...47).contains(parameter) || (100...107).contains(parameter)
         let isBright = parameter >= 90
         let base = parameter - (isBright ? (isBackground ? 100 : 90) : (isBackground ? 40 : 30))
-        guard base >= 0, base < Self.basicColors.count else { return ["\(parameter)"] }
-        let (standard, bright) = Self.basicColors[base]
-        let faded = transform(isBright ? bright : standard)
+        guard let color = Self.basicColor(base: base, isBright: isBright) else { return ["\(parameter)"] }
+        let faded = transform(color)
         return isBackground
             ? faded.backgroundCodes()
             : faded.foregroundCodes()

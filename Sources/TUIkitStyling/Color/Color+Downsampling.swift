@@ -555,7 +555,7 @@ extension Color {
         switch index {
         case 0...15:
             // A slot's raw value is its index, so every index here is a slot.
-            guard let slot = ANSIColor(rawValue: index) else { return .white }
+            guard let slot = ANSIColor(rawValue: index) else { return .ansi(.white) }
             return Color(value: .ansi(slot))
         default:
             let rgb = palette256ToRGB(index)
@@ -573,7 +573,7 @@ extension Color {
 
     /// Finds the nearest ANSI 16-color for an RGB value.
     fileprivate static func rgbToNearestANSI16(red: UInt8, green: UInt8, blue: UInt8) -> Color {
-        var bestColor = Color.white
+        var bestColor = Color.ansi(.white)
         var bestDistance = Int.max
 
         // Deliberate linear scan: n=16 is trivially cheap and beats anything cleverer — don't "optimise".

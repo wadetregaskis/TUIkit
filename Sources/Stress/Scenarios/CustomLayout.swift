@@ -92,7 +92,7 @@ private struct CustomLayoutView: View {
                     Text(" \(Synth.slug(mix(config.seed, index))) ").inverted()
                 }
             }
-            .border(.brightBlack)
+            .border(.ansi(.brightBlack))
         }
     }
 }

@@ -165,7 +165,7 @@ public struct ASCIIPalette: Sendable, Equatable {
         //
         // Normalised at the boundary so `colors` and `entries` cannot disagree
         // about it, and so the drop is a line of code rather than an omission.
-        let colors = (colors.isEmpty ? [.black, .white] : colors).map(\.opaqueSpelling)
+        let colors = (colors.isEmpty ? [.ansi(.black), .ansi(.white)] : colors).map(\.opaqueSpelling)
         let entries = colors.map(Self.entry(for:))
         self.colors = colors
         self.mapping = mapping
@@ -191,7 +191,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// black and white; one is black, which is a legitimate if bleak request.
     public static func shades(_ count: Int) -> Self {
         let count = max(1, count)
-        guard count > 1 else { return Self([.black]) }
+        guard count > 1 else { return Self([.ansi(.black)]) }
         return Self(
             (0..<count).map { step in
                 let lightness = Double(step) / Double(count - 1)
@@ -216,11 +216,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// Mapped by nearest colour in OKLab like any other palette. `.default` is
     /// deliberately absent: it is not one of the sixteen, it is "whatever the
     /// terminal would have used", and an image cannot be drawn in it.
-    public static let ansi16 = Self([
-        .black, .red, .green, .yellow, .blue, .magenta, .cyan, .white,
-        .brightBlack, .brightRed, .brightGreen, .brightYellow,
-        .brightBlue, .brightMagenta, .brightCyan, .brightWhite,
-    ])
+    public static let ansi16 = Self(ANSIColor.allCases.map(Color.ansi))
 
     /// The terminal's own 256 — the 6×6×6 cube and the 24-step grey ramp,
     /// indices 16…255. What ``ASCIIColorMode/ansi256`` maps through.

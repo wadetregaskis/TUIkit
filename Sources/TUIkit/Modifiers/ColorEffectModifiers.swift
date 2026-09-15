@@ -122,8 +122,9 @@ struct _ColorEffectView<Content: View>: View {
         /// was and is answered `true` here, with its alpha handled apart.
         ///
         /// `.white` is the multiply identity by SPELLING and not by arithmetic, which
-        /// is worth knowing before touching this. `Color.white` is ANSI white — 229,
-        /// not 255 — so multiplying by its components darkens by 229/255. The
+        /// is worth knowing before touching this. `Color.white` is the terminal's
+        /// white slot, `.ansi(.white)` — 229, not 255 — so multiplying by its
+        /// components darkens by 229/255. The
         /// shortcut is what makes `.colorMultiply(.white)` mean what it says, and
         /// before `opaqueSpelling` was here a faded white slipped past it and
         /// darkened the subtree as a side effect of fading it.
@@ -132,7 +133,7 @@ struct _ColorEffectView<Content: View>: View {
             case .brightness, .grayscale, .hueRotation: amount == 0
             case .contrast, .saturation: amount == 1
             case .invert: false
-            case .multiply(let color): color.opaqueSpelling == .white
+            case .multiply(let color): color.opaqueSpelling == .ansi(.white)
             }
         }
     }
