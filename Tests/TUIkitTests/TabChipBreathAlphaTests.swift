@@ -82,7 +82,7 @@ struct TabChipBreathAlphaTests {
     @Test("A focused compact strip's breathing chip owes no ink")
     func breathingChipOwesNoInk() throws {
         let palettes: [any Palette] = [
-            FadedAll(), TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5)),
+            FadedAll(), TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5)),
         ]
         for palette in palettes {
             let view = TabView(selection: .constant(1)) {
@@ -115,7 +115,7 @@ struct TabChipBreathAlphaTests {
     /// that loud end, with no cursor timer running.
     @Test("A focused bordered strip renders under a faded tint, and breathes")
     func borderedStripUnderAFadedTint() throws {
-        let palette = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
+        let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
         let view = TabView(selection: .constant(1)) {
             Tab("One", value: 0) { Text("first") }
             Tab("Two", value: 1) { Text("second") }
