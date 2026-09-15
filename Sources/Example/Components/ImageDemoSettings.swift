@@ -245,19 +245,20 @@ struct ImageDemoSettings: Equatable {
             // colour the accent would never be the closest entry to anything in
             // a photograph and the demo would draw two colours while claiming
             // three.
-            return .palette(ASCIIPalette([.ansi(.black), .palette.accent, .ansi(.white)]).asToneRamp())
+            return .palette(ASCIIPalette([.black, .palette.accent, .white]).asToneRamp())
         }
     }
 
     /// ``ColourMode/mono``'s ink: literal white while ``monoThemeColours`` is
     /// off, and otherwise the theme's foreground, which is what an unstated
-    /// style means anyway. `.rgb` rather than `.white`, a palette entry a theme
-    /// may define as something else: "literal" is the point of the option.
-    var monoInk: Color { usesLiteralMono ? .rgb(255, 255, 255) : .palette.foreground }
+    /// style means anyway. `.white` is RGB white, the same on every terminal,
+    /// not the terminal's white slot `.ansi(.white)`, which a profile fills as
+    /// it likes: "literal" is the point of the option.
+    var monoInk: Color { usesLiteralMono ? .white : .palette.foreground }
 
     /// ``ColourMode/mono``'s paper: literal black while ``monoThemeColours`` is
     /// off, and otherwise the theme's background.
-    var monoPaper: Color { usesLiteralMono ? .rgb(0, 0, 0) : .palette.background }
+    var monoPaper: Color { usesLiteralMono ? .black : .palette.background }
 
     private var usesLiteralMono: Bool { colour == .mono && !monoThemeColours }
 
@@ -266,7 +267,7 @@ struct ImageDemoSettings: Equatable {
         case .off: return nil
         case .negative: return .inverted
         case .accent:
-            return ASCIIToneCurve([(.rgb(0, 0, 0), .ansi(.black)), (.rgb(255, 255, 255), .palette.accent)])
+            return ASCIIToneCurve([(.rgb(0, 0, 0), .black), (.rgb(255, 255, 255), .palette.accent)])
         case .duotone:
             return ASCIIToneCurve([
                 (.rgb(0, 0, 0), duotoneShadow), (.rgb(255, 255, 255), duotoneHighlight),

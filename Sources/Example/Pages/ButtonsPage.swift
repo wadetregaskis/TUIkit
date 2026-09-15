@@ -259,7 +259,7 @@ struct ButtonsPage: View {
                         Button("page.buttons.two") { clickCount += 1 }
                         Button("page.buttons.delete", role: .destructive) { clickCount += 1 }
                     }
-                    .buttonTextStyle { $0.bold = true; $0.foreground = .ansi(.green) }
+                    .buttonTextStyle { $0.bold = true; $0.foreground = .green }
 
                     Text("page.buttons.themeableNote")
                     .foregroundStyle(.palette.foregroundSecondary)

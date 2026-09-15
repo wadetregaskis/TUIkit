@@ -272,8 +272,8 @@ struct SpinnersPage: View {
     /// so touching the picker made the custom colour stop applying and left
     /// the radio saying "Custom colour" over spinners in the theme accent.
     private var storedColor: Color {
-        GradientStopsCodec.decode(editorColorHex, fallback: Gradient(colors: [.ansi(.magenta)]))
-            .stops.first?.color ?? .ansi(.magenta)
+        GradientStopsCodec.decode(editorColorHex, fallback: Gradient(colors: [.magenta]))
+            .stops.first?.color ?? .magenta
     }
 
     /// The edited colour as a binding the `ColorPicker` can drive, hex in the
