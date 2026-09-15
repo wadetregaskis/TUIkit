@@ -76,11 +76,25 @@ extension TrackStyle {
 // MARK: - Indeterminate motion
 
 extension IndeterminateConfiguration {
-    /// This configuration with its gradient's stops resolved.
+    /// This configuration with its gradient's stops resolved, and for the
+    /// ``IndeterminateConfiguration/Motion/gradient`` motion, the palette's default
+    /// stops (`IndeterminateRenderer.defaultGradient(in:)`) in place of `nil` or of
+    /// a gradient with fewer than two usable stops.
+    ///
+    /// The default is filled in HERE, the one door the renderer, the opacity check
+    /// and `ProgressView`'s kept cycle all come through, rather than where the ramp
+    /// is sampled, so every cache in front of the bar sees the stops. A `nil` left
+    /// in the configuration looks the same under every palette: the kept cycle was
+    /// served, and a picture terminal's pictures reused (their signature holds the
+    /// configuration), after the palette's roles had changed.
     func resolvingColours(with palette: any Palette) -> Self {
-        guard let gradient else { return self }
         var resolved = self
-        resolved.gradient = gradient.resolvingStops(with: palette)
+        resolved.gradient = gradient?.resolvingStops(with: palette)
+        if motion == .gradient,
+            resolved.gradient.map({ IndeterminateRenderer.resolvable(in: $0).count < 2 }) ?? true
+        {
+            resolved.gradient = IndeterminateRenderer.defaultGradient(in: palette)
+        }
         return resolved
     }
 }

@@ -16,10 +16,11 @@ import Testing
 @Suite("An indeterminate gradient's frames are whole-sample shifts")
 struct IndeterminateGradientShiftTests {
 
-    /// The ramp `.gradient()` slides, sampled `count` times in truecolor as the
-    /// renderer and the raster sample it, as RGB triples.
+    /// The ramp `.gradient()` slides under Green, sampled `count` times in truecolor
+    /// as the renderer and the raster sample it, as RGB triples.
     private func samples(count: Int) -> [[UInt8]] {
-        Color.quantisedRamp(IndeterminateRenderer.cyclic(nil), count: count, depth: .truecolor).map { colour in
+        let ramp = IndeterminateRenderer.cyclic(nil, palette: SystemPalette.green)
+        return Color.quantisedRamp(ramp, count: count, depth: .truecolor).map { colour in
             colour.rgbComponents.map { [$0.red, $0.green, $0.blue] } ?? []
         }
     }
@@ -87,7 +88,7 @@ struct IndeterminateGradientShiftTests {
             IndeterminateRaster.frames(
                 width: 20, shifts: IndeterminateRaster.shifts(count: count, pixels: 160).distinct,
                 configuration: IndeterminateStyle.gradient().configuration,
-                cellPixels: TerminalCellPixels(width: 16, height: 34)))
+                cellPixels: TerminalCellPixels(width: 16, height: 34), palette: SystemPalette.green))
         let ramp = samples(count: 161)
         #expect(pictures.count == count)
         for (index, picture) in pictures.enumerated() {

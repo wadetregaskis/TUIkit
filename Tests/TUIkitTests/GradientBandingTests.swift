@@ -170,7 +170,7 @@ struct GradientBandingTests {
                 backgroundColor: .black, accentColor: .white, elapsed: 0, palette: SystemPalette.green)
         }
         let steps = IndeterminateRenderer.samplesPerCell * width
-        let ramp = IndeterminateRenderer.cyclic(Gradient(colors: stops))
+        let ramp = IndeterminateRenderer.cyclic(Gradient(colors: stops), palette: SystemPalette.green)
         let samples = Color.quantisedRamp(ramp, count: steps + 1, depth: .palette256)
         let expected = (0..<width).map { column -> UInt8? in
             let index = min(steps, Int((Double(column) / Double(width) * Double(steps)).rounded()))

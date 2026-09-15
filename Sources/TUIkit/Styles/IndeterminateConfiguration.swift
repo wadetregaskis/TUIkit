@@ -85,8 +85,10 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// - ``Motion/gradient`` takes them as CYCLIC stops — the last interpolates
     ///   back to the first, so the slide is seamless. Where each stop sits
     ///   counts, and the wrap takes the average of the gaps between them, so
-    ///   evenly spaced stops stay evenly spaced. `nil` uses the built-in
-    ///   rainbow. Fewer than two usable stops falls back the same way.
+    ///   evenly spaced stops stay evenly spaced. `nil` slides the palette's
+    ///   error, warning, success, info and accent colours, each with its own
+    ///   alpha, so the bar follows the theme. Fewer than two usable stops falls
+    ///   back the same way.
     public var gradient: Gradient?
 
     /// How long one full pass takes, in seconds. Must be finite and greater
@@ -171,7 +173,7 @@ extension IndeterminateConfiguration {
     public static let knightRider = Self(motion: .knightRider, period: 2.0, extent: 1.0 / 8.0)
 
     /// A cyclic ramp slid across the track. `gradient` supplies the stops;
-    /// `nil` uses the built-in rainbow.
+    /// `nil` uses the palette's error, warning, success, info and accent colours.
     public static func gradient(_ gradient: Gradient? = nil) -> Self {
         Self(motion: .gradient, gradient: gradient, period: 2.4)
     }

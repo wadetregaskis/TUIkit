@@ -110,10 +110,11 @@ struct GradientPaletteResolutionTests {
         #expect(painted.last == "0;0;255", "\(painted)")
     }
 
-    /// This one did not crash — it silently substituted the built-in rainbow,
-    /// because the motion filtered its stops down to the ones that had channels
-    /// and fell back when fewer than two survived.
-    @Test("A role in an indeterminate motion's ramp paints, and is not the built-in rainbow")
+    /// This one did not crash — it silently substituted the motion's default
+    /// stops (then a built-in rainbow, now the palette's own), because the motion
+    /// filtered its stops down to the ones that had channels and fell back when
+    /// fewer than two survived.
+    @Test("A role in an indeterminate motion's ramp paints, and is not the motion's default")
     func indeterminateRamp() {
         let line = renderToBuffer(
             ProgressView().indeterminateStyle(.gradient(ramp)).frame(width: 12),
@@ -121,7 +122,9 @@ struct GradientPaletteResolutionTests {
         ).lines.first ?? ""
         let painted = inks(line)
         #expect(painted.first == accentCodes, "\(painted)")
-        #expect(!painted.contains("180;30;80"), "fell back to the rainbow: \(painted)")
+        let fallback = IndeterminateRenderer.defaultGradient(in: SystemPalette.green).stops[0].color.rgbComponents
+        let fallbackCodes = fallback.map { "\($0.red);\($0.green);\($0.blue)" } ?? "?"
+        #expect(!painted.contains(fallbackCodes), "fell back to the default: \(painted)")
     }
 
     /// Every geometry, since each has its own `paint(in:)`.

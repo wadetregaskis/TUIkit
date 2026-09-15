@@ -60,17 +60,18 @@ enum IndeterminateRaster {
 
     /// The pictures of `configuration`'s ramp across a `width`-cell, one-row track,
     /// one for each of `shifts`, slid that many whole pixels along — or `nil` for a
-    /// box with no pixels.
+    /// box with no pixels. `palette` is what a ramp with too few usable stops falls
+    /// back to (`IndeterminateRenderer.cyclic(_:palette:)`).
     static func frames(
         width: Int, shifts: [Int], configuration: IndeterminateConfiguration,
-        cellPixels: TerminalCellPixels
+        cellPixels: TerminalCellPixels, palette: any Palette
     ) -> [GradientRaster.Picture]? {
         guard !shifts.isEmpty,
             let size = GradientRaster.resolution(columns: width, rows: 1, cellPixels: cellPixels)
         else { return nil }
         // The same cyclic ramp the cells sample, quantised once at the
         // picture's own resolution so every frame reads from one table.
-        let ramp = IndeterminateRenderer.cyclic(configuration.gradient)
+        let ramp = IndeterminateRenderer.cyclic(configuration.gradient, palette: palette)
         let steps = size.width
         let samples = Color.quantisedRamp(ramp, count: steps + 1, depth: .truecolor).map { colour in
             colour.rgbComponents.map { ($0.red, $0.green, $0.blue) } ?? (0, 0, 0)

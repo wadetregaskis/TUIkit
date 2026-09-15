@@ -1264,6 +1264,23 @@ back to the built-in rainbow when fewer than two survived. A caller's ramp was
 silently replaced by a different one — the exact failure this file's §5 exists
 to forbid.
 
+**Addendum, 2026-09-14.** The stops that motion falls back to are no longer a
+fixed rainbow. With no stops, or fewer than two usable ones, it slides the
+palette's error, warning, success, info and accent, each resolved and carrying
+its role's alpha (`IndeterminateRenderer.defaultGradient(in:)`), so the one
+indeterminate default that did not come from the palette now does. The default
+is filled in by `IndeterminateConfiguration.resolvingColours(with:)`, the same
+door as the resolve above, rather than where `cyclic` samples the ramp: a `nil`
+left in the configuration looks the same under every palette, so `ProgressView`'s
+kept cycle was served and a picture terminal's pictures reused (their signature
+holds the configuration) after the roles changed. The kept cycle is now keyed on
+the resolved gradient, which also rebuilds a caller's ramp of roles when only a
+role changes. `cyclic` keeps a last resort for a palette whose roles make fewer
+than two measurable stops, a flat accent pair used unfiltered. A translucent
+role now makes the default bar translucent, so under a faded palette it is drawn
+one frame per render rather than from a pre-rendered cycle, as any translucent
+bar is. §5's rule is unchanged: a caller's usable stops are never replaced.
+
 **The general lesson, for the next `Color` field that is a reference rather than
 a value:** `rgbComponents == nil` is not "this colour is uninteresting", it is
 "you are holding a question, not an answer". Every `guard`, `filter` and early

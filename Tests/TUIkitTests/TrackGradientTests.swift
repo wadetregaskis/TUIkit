@@ -186,7 +186,7 @@ struct TrackGradientTests {
         return found
     }
 
-    @Test("Indeterminate .gradient with fewer than two usable stops falls back to the rainbow")
+    @Test("Indeterminate .gradient with fewer than two usable stops falls back to the palette's default")
     func indeterminateFallback() {
         let output = IndeterminateRenderer.render(
             width: 16, style: .gradient(Gradient(colors: [.rgb(11, 22, 33)])),
@@ -194,7 +194,12 @@ struct TrackGradientTests {
             elapsed: 0,
             palette: SystemPalette.green)
         let triples = foregroundTriples(in: output.text)
-        #expect(triples.count >= 4, "built-in rainbow spans many colours: \(triples)")
+        #expect(triples.count >= 4, "the default's five stops span many colours: \(triples)")
+        let error = IndeterminateRenderer.defaultGradient(in: SystemPalette.green).stops[0].color.rgbComponents
+        let inOrder = ordered(in: output.text)
+        #expect(
+            inOrder.first == error.map { "\($0.red);\($0.green);\($0.blue)" },
+            "starts at the palette's error colour: \(inOrder)")
     }
 }
 

@@ -77,7 +77,8 @@ enum IndeterminateRenderer {
     ) -> ClaimingRow {
         guard width > 0 else { return ClaimingRow() }
         // A motion's own gradient is read straight from the style, so it has
-        // never met the palette. See `StyleGradientResolution.swift`.
+        // never met the palette, and the `.gradient` motion's default stops are
+        // filled in by the same call. See `StyleGradientResolution.swift`.
         let configuration = style.configuration.resolvingColours(with: palette)
         // Every stepped motion's count is at least 1, so the wrap below cannot divide
         // by zero; the pulse has none.
@@ -121,10 +122,12 @@ enum IndeterminateRenderer {
                 width: width, configuration: configuration, empty: backgroundColor,
                 accent: accentColor, step: min(states - 1, Int(phase * Double(states))))
         case (.gradient, .step(let step)):
-            return renderGradient(width: width, configuration: configuration, shift: wrapped(step))
+            return renderGradient(
+                width: width, configuration: configuration, shift: wrapped(step), palette: palette)
         case (.gradient, .phase(let phase)):
             return renderGradient(
-                width: width, configuration: configuration, shift: wrapped(Int(phase * Double(states))))
+                width: width, configuration: configuration, shift: wrapped(Int(phase * Double(states))),
+                palette: palette)
         }
     }
 
@@ -746,9 +749,9 @@ extension IndeterminateRenderer {
     /// cell used to round its own float position in the ramp, and where that
     /// position was a tie the cells of one frame rounded different ways.
     private static func renderGradient(
-        width: Int, configuration: IndeterminateConfiguration, shift: Int
+        width: Int, configuration: IndeterminateConfiguration, shift: Int, palette: any Palette
     ) -> ClaimingRow {
-        let ramp = cyclic(configuration.gradient)
+        let ramp = cyclic(configuration.gradient, palette: palette)
         let fill = Array(configuration.fill)
         // The ramp, sampled once as a whole — four entries per cell, so the
         // motion still slides in quarter-cell steps — and quantised through
@@ -766,18 +769,25 @@ extension IndeterminateRenderer {
         }
     }
 
-    /// The rainbow this motion slides when the caller names no colours of
-    /// their own.
-    private static let rainbow = Gradient(colors: [
-        // swiftlint:disable comma
-        .rgb(180,  30,  80),  // magenta-pink
-        .rgb(220, 110,  40),  // amber
-        .rgb(220, 220,  60),  // yellow
-        .rgb( 60, 200,  90),  // green
-        .rgb( 50, 140, 220),  // cyan-blue
-        .rgb(140,  90, 220),  // violet
-        // swiftlint:enable comma
-    ])
+    /// How finely `renderGradient` samples its ramp per cell. Internal, like
+    /// ``cyclic(_:palette:)``, so the banding test can rebuild the exact sample set.
+    static let samplesPerCell = 4
+
+    /// The stops this motion slides when the caller names no colours of their
+    /// own: the palette's error, warning, success, info and accent, in that order,
+    /// each resolved and carrying its role's alpha.
+    ///
+    /// Filled in by `IndeterminateConfiguration.resolvingColours(with:)`, so every
+    /// cache and picture signature in front of the bar sees the stops rather than
+    /// a `nil` that looks the same under every palette. It was a fixed rainbow,
+    /// which no theme could change, and the one default of an indeterminate bar
+    /// that did not come from the palette. The accent is in it, so the bar still
+    /// answers to whatever moves the accent.
+    static func defaultGradient(in palette: any Palette) -> Gradient {
+        Gradient(
+            colors: [palette.error, palette.warning, palette.success, palette.info, palette.accent]
+                .map { $0.resolve(with: palette) })
+    }
 
     /// `requested` laid out as a CYCLE — a ramp that can be slid across the
     /// track for ever without a seam.
@@ -793,22 +803,28 @@ extension IndeterminateRenderer {
     /// count here as it does under ``IndeterminateConfiguration/Motion/sweep``
     /// and its siblings.
     ///
-    /// - Parameter requested: The caller's stops, or `nil` for the built-in
-    ///   rainbow.
+    /// - Parameters:
+    ///   - requested: The stops, as `resolvingColours(with:)` left them, or `nil`
+    ///     for the palette's ``defaultGradient(in:)``.
+    ///   - palette: The palette the default and the last resort come from.
     /// - Returns: A gradient spanning `0...1` whose ends are the same colour.
-    /// How finely `renderGradient` samples its ramp per cell. Internal, like
-    /// ``cyclic(_:)``, so the banding test can rebuild the exact sample set.
-    static let samplesPerCell = 4
-
-    static func cyclic(_ requested: Gradient?) -> Gradient {
-        // Stops need resolvable RGB (a semantic colour has none until a
-        // palette is applied); anything unresolvable is skipped, and fewer
-        // than two usable stops falls back to the built-in rainbow.
-        var source = requested ?? rainbow
+    static func cyclic(_ requested: Gradient?, palette: any Palette) -> Gradient {
+        // Stops need resolvable RGB (a semantic colour has none until a palette is
+        // applied); anything unresolvable is skipped, and fewer than two usable
+        // stops is the palette's default, as `resolvingColours(with:)` decides.
+        var source = requested ?? defaultGradient(in: palette)
         var stops = resolvable(in: source)
+        if stops.count < 2, requested != nil {
+            source = defaultGradient(in: palette)
+            stops = resolvable(in: source)
+        }
         if stops.count < 2 {
-            source = rainbow
-            stops = rainbow.stops
+            // The last resort, for a palette whose status roles and accent do not
+            // make two measurable stops, which no shipped palette reaches: a flat
+            // ramp of the accent. Unfiltered, so a stop with no channels cannot
+            // leave `stops` empty for the `stops[0]` below.
+            source = Gradient(colors: [palette.accent, palette.accent].map { $0.resolve(with: palette) })
+            stops = source.stops
         }
 
         let count = Double(stops.count)
@@ -832,7 +848,7 @@ extension IndeterminateRenderer {
     }
 
     /// `gradient`'s stops that name a real colour, in location order.
-    private static func resolvable(in gradient: Gradient) -> [Gradient.Stop] {
+    static func resolvable(in gradient: Gradient) -> [Gradient.Stop] {
         gradient.stops.enumerated()
             .filter { $0.element.color.rgbComponents != nil }
             // Ordered by location, ties broken by the order they were given

@@ -58,12 +58,13 @@ public enum IndeterminateStyle: Sendable, Equatable {
     /// trail behind it.
     case knightRider
 
-    /// A smoothly-coloured gradient slides continuously across the
-    /// track at full opacity.
+    /// A smoothly-coloured gradient slides continuously across the whole
+    /// track.
     ///
     /// `colors` supplies custom gradient stops (at least two, cyclically
     /// wrapped so the scroll is seamless); `nil` — and the bare `.gradient`
-    /// spelling — uses the built-in rainbow. The same stop model as
+    /// spelling — uses the palette's error, warning, success, info and accent
+    /// colours, so the bar follows the theme. The same stop model as
     /// ``TrackConfiguration/fillGradient`` and
     /// ``SegmentColoring/gradient(_:)``.
     case gradient(_ gradient: Gradient? = nil)

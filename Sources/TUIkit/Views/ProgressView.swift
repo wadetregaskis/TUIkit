@@ -412,6 +412,13 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let filled: Color
         let empty: Color
         let accent: Color
+        /// The style's stops, resolved against the palette, with the `.gradient`
+        /// motion's default filled in (`IndeterminateConfiguration.resolvingColours(with:)`).
+        /// Not the style's own: that names a role where a caller wrote one, and
+        /// nothing at all for the default, so it compares equal after the roles
+        /// change. Nor do the three colours above cover it, since a stop can be any
+        /// role.
+        let gradient: Gradient?
         /// The bar's speed. A pass at another speed has other frames and another
         /// frame duration, so a cycle built at one must not be served at another.
         let speed: IndicatorAnimationSpeed
@@ -430,11 +437,11 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
 
         func matches(
             width: Int, style: IndeterminateStyle, filled: Color, empty: Color, accent: Color,
-            speed: IndicatorAnimationSpeed, pictures: Bool
+            gradient: Gradient?, speed: IndicatorAnimationSpeed, pictures: Bool
         ) -> Bool {
             self.width == width && self.style == style && self.filled == filled
-                && self.empty == empty && self.accent == accent && self.speed == speed
-                && self.pictures == pictures
+                && self.empty == empty && self.accent == accent && self.gradient == gradient
+                && self.speed == speed && self.pictures == pictures
         }
     }
 
@@ -448,6 +455,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let speed = context.environment.indicatorAnimationSpeeds.speed(for: .indeterminateProgress)
         let layout = IndeterminateRenderer.layout(of: style, speed: speed)
         let configuration = style.configuration.resolvingColours(with: palette)
+        let gradient = configuration.gradient
         // The `.gradient` motion over a solid fill is a colour field, and a
         // colour field can be pictures where the terminal draws them — see
         // ``IndeterminateRaster``. A pass of the glyph cycle's frame count, so a
@@ -472,11 +480,12 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         func build() -> CachedCycle {
             if let graphics,
                 let rows = pictureFrames(
-                    width: width, frameCount: frameCount, configuration: configuration, graphics: graphics)
+                    width: width, frameCount: frameCount, configuration: configuration, graphics: graphics,
+                    palette: palette)
             {
                 return CachedCycle(
                     width: width, style: style, filled: filled, empty: empty, accent: accent,
-                    speed: speed, pictures: true, frames: rows,
+                    gradient: gradient, speed: speed, pictures: true, frames: rows,
                     run: AnimatedCellRun(
                         offsetX: 0, offsetY: 0, width: width, frames: rows,
                         frameTicks: layout.frameTicks, clock: .content),
@@ -487,7 +496,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 backgroundColor: empty, accentColor: accent, palette: palette, speed: speed)
             return CachedCycle(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
-                speed: speed, pictures: false, frames: built.frames,
+                gradient: gradient, speed: speed, pictures: false, frames: built.frames,
                 run: AnimatedCellRun(
                     offsetX: 0, offsetY: 0, width: width, frames: built.frames,
                     frameTicks: built.frameTicks, clock: .content),
@@ -506,7 +515,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         if let cached = box.value,
             cached.matches(
                 width: width, style: style, filled: filled, empty: empty, accent: accent,
-                speed: speed, pictures: graphics != nil)
+                gradient: gradient, speed: speed, pictures: graphics != nil)
         {
             return cached
         }
@@ -541,7 +550,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// pixels, or the store names no row, and the bar is drawn in glyphs.
     private func pictureFrames(
         width: Int, frameCount: Int, configuration: IndeterminateConfiguration,
-        graphics: GradientGraphicsContext
+        graphics: GradientGraphicsContext, palette: any Palette
     ) -> [String]? {
         guard
             let pixels = IndeterminateRenderer.states(
@@ -553,7 +562,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         guard shifts.distinct.count == graphics.frames,
             let drawn = IndeterminateRaster.frames(
                 width: width, shifts: shifts.distinct, configuration: configuration,
-                cellPixels: graphics.cellPixels)
+                cellPixels: graphics.cellPixels, palette: palette)
         else { return nil }
         // Compared by their pixels before any is placed: a ramp that repeats across the
         // track draws one picture at two shifts, and each is sent and held once, under
