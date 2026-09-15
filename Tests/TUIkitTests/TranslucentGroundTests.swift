@@ -65,7 +65,7 @@ struct TranslucentGroundTests {
     @Test("A faded view resolves against a translucent ground")
     func fadeResolvesAgainstTheGround() {
         let palette = environment().palette
-        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hi", foreground: .ansi(.red))])
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hi", foreground: .red)])
         buffer.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 0, width: 2, height: 1, opacity: 0.5)
         ]
