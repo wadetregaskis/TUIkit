@@ -391,22 +391,25 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         // The label colours are floored (hue-preserving) against the face
         // they sit on, like Button labels — see ButtonStyle.makeStandardBody.
-        let labelFg: Color
+        let restingLabel: Color
         if isDisabled {
             // The disabled branch is floored too — it is the one that was not,
             // which is how a disabled picker's value came to be painted in the
             // same 256-colour entry as the face under it.
-            labelFg = palette.foregroundTertiary
+            restingLabel = palette.foregroundTertiary
                 .opacity(ViewConstants.disabledForeground, over: palette.background)
                 .ensuringRenderedContrast(
                     atLeast: ViewConstants.disabledLabelContrastFloor, against: buttonBg)
         } else if isFocused {
-            labelFg = palette.accent.ensuringRenderedContrast(
+            restingLabel = palette.accent.ensuringRenderedContrast(
                 atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         } else {
-            labelFg = palette.foregroundSecondary.ensuringRenderedContrast(
+            restingLabel = palette.foregroundSecondary.ensuringRenderedContrast(
                 atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
         }
+        // As on a button: on a face that cannot be measured the hover has no fill to
+        // show, so the label lifts instead (Opacity as composition §82).
+        let labelFg = isHovered && !isDisabled ? palette.hoveredLabel(restingLabel) : restingLabel
 
         // The caps are glyphs, not a fill behind text, so they breathe all the
         // way to the accent — and as a whole cycle, so the run loop can advance

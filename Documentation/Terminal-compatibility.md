@@ -2324,6 +2324,16 @@ host beats a ruined image on two.
 colour must not be used decoratively over a colour stated as one of the sixteen.
 Bold is the one that exists today; `SGR 2` (faint) is the same shape of hazard.
 
+**Where the framework asks for the twin itself (2026-09-15).** A hover on a
+control whose fill cannot be measured lifts a standard slot to its bright twin
+(Opacity as composition §82). A focused button's label is also bold, so on a
+host that brightens bold, such as iTerm2 with `Use Bright Bold` on (its
+default, above), the bold slot is already painted as the twin, and hovering a
+focused button with a standard-slot label shows no change. An unfocused label
+is not bold, and on the hosts that treat bold as a weight the twin is a step
+wherever the profile paints it differently from its slot. Inferred from the
+table above; not measured on a hovered control.
+
 ### The three colour spellings are not equally literal
 
 | what we emit | what the terminal does with it |
@@ -2345,8 +2355,11 @@ says so. Two things derived real decisions from it:
   xterm's table.** `Color.ansi(_:)` and `Color.palette(0...15)` measure as the
   colour the terminal reported for the slot, which the startup exchange asks
   for (see "Asking the terminal for its colours"), and as nothing until it has
-  reported all sixteen. A floor, a blend, a hover and a focus breath then read
-  the terminal's own sixteen, or leave the slot as asked. On Apple Terminal
+  reported all sixteen. A floor, a blend and a focus breath then read the
+  terminal's own sixteen, or leave the slot as asked. A hover never re-spells a
+  slot as RGB: it climbs from a standard slot to its bright twin to 39, and once
+  the terminal has reported them takes a rung only if it is a visible step that
+  reads no worse (Opacity as composition §82). On Apple Terminal
   "Basic", where 15 of the 16 differ from xterm's (above), that is the
   difference between measuring slot 1 as (205, 0, 0) and as (153, 0, 0).
 - **Quantisation.** Downsampling a truecolor value for a 256-colour terminal

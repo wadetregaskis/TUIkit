@@ -668,6 +668,30 @@ extension Palette {
             && background.resolve(with: self).rgbComponents != nil
     }
 
+    /// A label's ink under the pointer, on a control whose hover is a fill: a
+    /// standard button's or a menu picker's face, a menu row's wash.
+    ///
+    /// Where the accent tint measures, the fill shows the hover and the ink is
+    /// left as it is. Where it does not, the fill is the page and shows nothing,
+    /// so the ink is lifted instead (``hoveredForeground(_:)``). Opacity as
+    /// composition §82.
+    package func hoveredLabel(_ ink: Color) -> Color {
+        accentTintIsMeasurable ? ink : hoveredForeground(ink)
+    }
+
+    /// A glyph's ink under the pointer, where the hover draws the glyph in the
+    /// accent tint over the page: a Stepper's or a Slider's arrows.
+    ///
+    /// The tint, where it measures. Where it does not it is the page, which on
+    /// the terminal's own page the foreground slot spells as 39, so the glyph's
+    /// `resting` ink is lifted instead (``hoveredForeground(_:)``). Opacity as
+    /// composition §82.
+    package func hoveredGlyph(resting: Color) -> Color {
+        accentTintIsMeasurable
+            ? accent.opacity(ViewConstants.hoverBackground, over: background)
+            : hoveredForeground(resting)
+    }
+
     /// The face while the pointer is over the control.
     ///
     /// A step further into the accent than ``restingControlFace``, and — this
@@ -751,18 +775,32 @@ extension Palette {
     /// 256-colour cube is no lift at all on the terminals least able to spare
     /// one, and a hover should look the same everywhere.
     ///
-    /// An ink or a page with no RGB components (``Color/default``, or a colour
-    /// of the terminal's own that it has not reported) comes back unchanged.
-    /// The terminal decides what such a colour paints, so there is no lightness
-    /// to step away from and no way to tell whether a step would show.
+    /// A colour the terminal decides is not stepped in RGB: a slot
+    /// (``Color/ansi(_:)``), a 256-colour index below 16, or ``Color/default``.
+    /// A step in RGB would re-spell a name the user's terminal profile keeps as
+    /// a triple the profile does not. It climbs a ladder of names instead: a
+    /// standard slot to its bright twin (``ANSIColor/brightTwin``), a bright
+    /// slot to the terminal's default foreground, SGR 39, which has no rung
+    /// above it and comes back unchanged. While the terminal has not reported
+    /// the colours involved, the first rung spelled differently is taken. Once
+    /// it has, the first rung that is visibly different and no harder to read
+    /// against the page is taken, or none.
+    ///
+    /// An RGB ink on a page with no RGB components (``Color/default``, or the
+    /// terminal's own page before it has reported it) comes back unchanged:
+    /// there is no lightness to step away from, and no way to tell whether a
+    /// step would show.
     public func hoveredForeground(_ base: Color) -> Color {
         let resolved = base.resolve(with: self)
         let page = background.resolve(with: self)
-        // Both measured, or no lift. An unmeasured page read as lightness 0 in
-        // `extreme(furthestFrom:)`, so the walk lifted toward RGB white whatever the
-        // terminal paints, invisibly on a light one. An unmeasured ink, which a blend
-        // cannot move, fell through every step to the `best == nil` exit and BECAME
-        // that white.
+        // A colour the terminal decides climbs its ladder of names, measured or not.
+        // The walk below lerps toward RGB: a reported slot came back as a triple the
+        // user's profile does not keep, and an unreported one came back unchanged,
+        // which on a control whose fill cannot be measured either was no hover at all.
+        if resolved.isTerminalDefined { return resolved.hoverLadderLift(over: page) }
+        // An RGB ink needs a measured page, or no lift. An unmeasured page read as
+        // lightness 0 in `extreme(furthestFrom:)`, so the walk lifted toward RGB white
+        // whatever the terminal paints, invisibly on a light one.
         guard resolved.rgbComponents != nil, page.rgbComponents != nil else { return resolved }
         let resting = resolved.downsampledToPalette256()
 

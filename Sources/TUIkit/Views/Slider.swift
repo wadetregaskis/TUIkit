@@ -915,24 +915,26 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         // Arrow colors:
         //   - Focused: pulsing accent
         //   - Hovered: static accent at the hoverBackground tint, so the
-        //     affordance is visible. Focus wins on these particular cells —
-        //     they are the only thing either state has to say here, and a
-        //     pointer resting on the arrow it already focused must not freeze
-        //     the pulse. The hover still shows elsewhere on the control.
+        //     affordance is visible, or where that tint cannot be measured the
+        //     dimmed arrow lifted (`hoveredGlyph`). Focus wins on these
+        //     particular cells — they are the only thing either state has to
+        //     say here, and a pointer resting on the arrow it already focused
+        //     must not freeze the pulse. The hover still shows elsewhere on the
+        //     control.
         //   - Otherwise: dimmed foregroundTertiary
+        let dimmedArrow = palette.foregroundTertiary.opacity(
+            ViewConstants.disabledForeground, over: palette.background)
         let arrowColor: Color
         if isDisabled {
-            arrowColor = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            arrowColor = dimmedArrow
         } else if isFocused {
             let (dimAccent, brightAccent) = palette.accentPulse()
             arrowColor = indicator.colorNow(dim: dimAccent, bright: brightAccent)
         } else if isHovered {
-            arrowColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+            arrowColor = palette.hoveredGlyph(resting: dimmedArrow)
         } else {
             // Dimmed arrows when unfocused
-            arrowColor = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            arrowColor = dimmedArrow
         }
 
         // Build track. Every colour it is drawn from FADES toward the page when

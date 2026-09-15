@@ -102,7 +102,11 @@ struct MeasuringWithoutRGBTests {
         }
     }
 
-    @Test("A hover lift leaves the ink alone when it or the page cannot be measured")
+    /// An RGB ink has no lightness to step away from on a page with no RGB. The
+    /// terminal's foreground and `Color.default` are 39 as ink, the top of the ladder
+    /// a colour the terminal decides climbs (HoverLadderTests), so they have no rung
+    /// above them, reported or not.
+    @Test("A hover lift leaves an RGB ink alone on a page that cannot be measured, and 39 alone always")
     func hoverLiftKeepsTheInk() {
         let terminalPage = TerminalPagePalette()
         let rgbPage = TerminalAccentPalette()
@@ -116,7 +120,7 @@ struct MeasuringWithoutRGBTests {
             #expect(terminalPage.hoveredForeground(faded) == faded)
         }
         TerminalColors.withCurrent(Self.reported) {
-            #expect(terminalPage.hoveredForeground(Self.ink) != Self.ink, "the fixture: both reported, so it lifts")
+            #expect(terminalPage.hoveredForeground(Self.ink) == Self.ink, "39 measured: still no rung")
             #expect(terminalPage.hoveredForeground(Self.red) != Self.red, "the fixture: a reported page")
             #expect(rgbPage.hoveredForeground(.default) == .default)
         }

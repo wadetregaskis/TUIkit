@@ -247,8 +247,12 @@ private struct _MenuItemRow: View {
         if !configuration.isEnabled {
             return palette.foreground.opacity(ViewConstants.disabledForeground, over: palette.background)
         }
-        if configuration.role == .destructive { return palette.error }
-        return palette.foreground
+        let ink = configuration.role == .destructive ? palette.error : palette.foreground
+        // Under the pointer the row's wash is an accent tint, which is the page where it
+        // cannot be measured, so the label lifts instead (Opacity as composition §82).
+        // Not on the keyboard cursor's row, whose bar is drawn over it.
+        guard configuration.isHovered, !configuration.isFocused else { return ink }
+        return palette.hoveredLabel(ink)
     }
 
     /// The row's own background: a quiet tint under the pointer, the page

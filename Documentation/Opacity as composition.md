@@ -4918,8 +4918,8 @@ What it does not touch:
 - **A measurable face.** Every built-in palette states RGB roles, so on a silent terminal
   its caps are what they were, byte for byte. Once the terminal reports its page, a tint
   over it measures, and the caps are the face again, breathing.
-- **Hover.** A hovered face on such a page is the resting one, so a hovered button still
-  shows nothing until its label's ink is lifted instead.
+- **Hover.** A hovered face on such a page is the resting one. Since §82 the label's ink
+  is lifted instead, where its colour has a rung to lift to.
 - **A translucent accent or tier.** It is spent against the face, so below ½ it is the
   page (rule 9), and on an unreported page that cap is 39 again. No built-in palette has
   one.
@@ -5126,8 +5126,9 @@ terminal's own foreground and background:
   90–97 the fade reads back as that slot;
 - a colour effect (brightness, contrast, saturation, grayscale, hue rotation, inversion)
   leaves it as it is, and `.colorMultiply` by it changes nothing;
-- a contrast floor and a hover lift leave it as asked, and a control face tinted with it is
-  the page, so a hover adds no fill (§78's caps apply);
+- a contrast floor leaves it as asked, and a control face tinted with it is the page, so a
+  hover adds no fill (§78's caps apply); a hover lift climbs from it to its bright twin
+  instead (§82);
 - a focus breath in it holds its bright end (§79, §79.1), the 256-colour grid's cursor on
   slots 0 to 15 included;
 - a gradient with a slot stop is drawn as cells, not as a picture (§77);
@@ -5153,3 +5154,63 @@ whose palette, style or blend names a slot, and that grid.
 with Apple Terminal "Basic"'s reported, and the parts that do not change.
 `SteadyBreathOnUnmeasurableColourTests` and `SteadyBreathCopiesOnUnmeasurableColourTests`
 add a slot accent, and the 256-colour grid.
+
+## 82. A hover with no fill to show it (2026-09-15)
+
+Five controls answer the pointer with an accent tint over the page. A standard button and a
+menu picker lift their face (`hoveredControlFace`), a menu row paints a wash (the accent at
+`hoverBackground`, 0.32), and a Stepper's and a Slider's hovered arrows are drawn in that
+wash. Where the accent or the page has no RGB, every one of those tints is the page (§75).
+The face stays at rest (§78) and the wash is the page, so hovering a button, a picker or a
+menu row showed nothing. The arrows were drawn in the page's colour: on the terminal's
+unreported page the foreground slot spells that as 39, the terminal's foreground, by
+accident, and on an RGB page it is the page's own RGB, so the arrows vanished.
+
+The lift that would have answered instead, `Palette.hoveredForeground(_:)`, left such a
+colour as asked (§81). Where it did step a slot the terminal had reported, it stepped
+in RGB, lerping toward white or black, so `.ansi(.red)` came back as a triple the user's
+profile does not keep.
+
+**The rule.** A colour the terminal decides climbs a ladder of names: a standard slot, its
+bright twin, then 39 (`Color.default`). A bright slot starts on the second rung, and a
+256-colour index below 16 climbs by index. 39 as ink, spelled `Color.default` or as the
+terminal's foreground, is the top and has no rung. So has the terminal's page drawn as ink
+while unreported, which is also 39.
+- Where the ink, the rung or the page has no RGB, the first rung the terminal is told
+  differently is taken.
+- Where all three measure, the first rung that lands on a different 256-colour entry (the
+  test the RGB lift uses) and is no harder to read against the page. 39 measures as the
+  foreground the terminal reported. On Apple Terminal "Basic"'s white page slot 1 reads at
+  8.92:1 and its twin at 4.81:1, so `.ansi(.red)` lifts to 39, which is black there. Slot 0
+  lifts to nothing, because 39 is the same black.
+- Never RGB. An RGB ink keeps the RGB lift, and on a page with no RGB is still left as
+  asked.
+
+Where a hover's tint cannot be measured (`Palette.accentTintIsMeasurable`), the control lifts
+its ink instead, and its fill stays what it was, the page:
+- a standard button's label, string or view, the app's cascade colour included, as a plain
+  button's is;
+- a menu picker's value;
+- a menu row's label, except on the keyboard cursor's row, whose bar is drawn over it;
+- a Stepper's and a Slider's arrows: the dimmed resting arrow, lifted, instead of the wash.
+
+Every other caller of the lift gets the same ladder for a colour the terminal decides: a
+scrollbar's hovered arrow, a resize grip's hovered marks, a toggle, a radio button, a tab, a
+navigation crumb, a date field, and the far end of a focused scrollbar's breath.
+
+What it does not touch:
+- **A measurable tint.** Every built-in palette states RGB roles, so its hovers are what they
+  were, byte for byte, on a silent terminal and on a reporting one.
+- **A label in plain 39.** `Color.default`, the terminal's foreground and tiers spelled from
+  them have no rung, so hovering a control whose fill cannot be measured and whose label is
+  39 still shows nothing.
+- **Bold.** A focused button's label is bold. A host that paints a bold standard slot in its
+  bright twin (iTerm2 by default; Terminal-compatibility.md, "Bold is a COLOUR") already
+  shows the twin there, so the first rung is no visible step on that host. Inferred from
+  that table, not measured on a hovered control.
+
+`HoverLadderTests` (TUIkitStylingTests) pins the ladder, unreported and with Apple Terminal
+"Basic"'s and Ghostty 1.3.1's reported colours, and that no colour the terminal decides lifts
+to RGB, or to a harder read where it measures. `HoverWithoutAFillTests` (TUIkitTests) pins
+each of the five controls, a resize grip and a scrollbar's hovered arrow, and that a built-in
+palette's hovered arrows are still the wash.

@@ -806,27 +806,28 @@ private struct _StepperCore: View, Renderable, Layoutable {
     ) -> (content: String, valueClaim: OpacityRegion?) {
         // Arrow and value colors:
         //   - Focused: pulsing accent
-        //   - Hovered: static accent at the hoverBackground tint. Focus wins
-        //     on these cells, as it does on a Slider's arrows and for the same
-        //     reason — a hover must not freeze the pulse.
+        //   - Hovered: static accent at the hoverBackground tint, or where that
+        //     tint cannot be measured the dimmed arrow lifted (`hoveredGlyph`).
+        //     Focus wins on these cells, as it does on a Slider's arrows and for
+        //     the same reason — a hover must not freeze the pulse.
         //   - Otherwise: dimmed
+        let dimmedArrow = palette.foregroundTertiary.opacity(
+            ViewConstants.disabledForeground, over: palette.background)
         let arrowColor: Color
         let valueColor: Color
         if isDisabled {
-            arrowColor = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            arrowColor = dimmedArrow
             valueColor = palette.foregroundTertiary
         } else if isFocused {
             let (dimAccent, brightAccent) = palette.accentPulse()
             arrowColor = emphasis.colorNow(dim: dimAccent, bright: brightAccent)
             valueColor = palette.foreground
         } else if isHovered {
-            arrowColor = palette.accent.opacity(ViewConstants.hoverBackground, over: palette.background)
+            arrowColor = palette.hoveredGlyph(resting: dimmedArrow)
             valueColor = palette.foregroundSecondary
         } else {
             // Dimmed arrows when unfocused
-            arrowColor = palette.foregroundTertiary.opacity(
-                ViewConstants.disabledForeground, over: palette.background)
+            arrowColor = dimmedArrow
             valueColor = palette.foregroundSecondary
         }
 

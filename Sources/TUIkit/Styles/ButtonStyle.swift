@@ -517,10 +517,15 @@ private struct _ButtonStyleBody: View, Renderable {
                 .ensuringRenderedContrast(
                     atLeast: ViewConstants.disabledLabelContrastFloor, against: buttonBg)
         } else if let cascadeForeground {
-            labelFg = cascadeForeground.resolve(with: palette)
+            // On a face that cannot be measured the hover has no fill to show, so the
+            // label lifts instead, the app's colour too: it is then the only thing that
+            // can answer the pointer, as on a plain button (Opacity as composition §82).
+            let ink = cascadeForeground.resolve(with: palette)
+            labelFg = isHovered ? palette.hoveredLabel(ink) : ink
         } else {
-            labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
+            let ink = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
                 .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+            labelFg = isHovered ? palette.hoveredLabel(ink) : ink
         }
 
         // Caps match the background normally, pulsing to accent when focused —
@@ -749,10 +754,15 @@ private struct _ButtonStyleBody: View, Renderable {
                 ?? baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary
             labelFg = isHovered ? palette.hoveredForeground(resting) : resting
         } else if let cascadeForeground {
-            labelFg = cascadeForeground.resolve(with: palette)
+            // On a face that cannot be measured the hover has no fill to show, so the
+            // label lifts instead, the app's colour too: it is then the only thing that
+            // can answer the pointer, as on a plain button (Opacity as composition §82).
+            let ink = cascadeForeground.resolve(with: palette)
+            labelFg = isHovered ? palette.hoveredLabel(ink) : ink
         } else {
-            labelFg = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
+            let ink = (baseForeground?.resolve(with: palette) ?? palette.foregroundSecondary)
                 .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
+            labelFg = isHovered ? palette.hoveredLabel(ink) : ink
         }
 
         // Plain: focus-indicator prefix + the label, no caps or background.
