@@ -86,8 +86,9 @@ struct SpinnerRenderTests {
 
     @Test("Explicit colour is emitted as an ANSI foreground code on the glyph")
     func explicitColorEmitted() {
-        let buffer = renderToBuffer(Spinner(style: .dots, color: .ansi(.red)), context: context())
-        #expect(buffer.lines[0].contains("\u{1B}[31m"), "Red foreground ANSI code must be present")
+        let buffer = renderToBuffer(Spinner(style: .dots, color: .red), context: context())
+        let red = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
+        #expect(buffer.lines[0].contains(red), "Red foreground code must be present: \(buffer.lines[0].debugDescription)")
         #expect(buffer.lines[0].stripped == "⠋")
     }
 
