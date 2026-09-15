@@ -95,9 +95,9 @@ enum IndeterminateRenderer {
                 width: width, configuration: configuration, empty: backgroundColor,
                 accent: accentColor, head: Int(phase * Double(width)))
         case (.barberPole, _):
-            // The pattern shifted by `shift` characters is the pattern shifted by
-            // `shift` modulo its length, which is all a step has to name. A phase is
-            // the step it falls in, of the pattern's own length.
+            // The row shifted by `shift` cells is the row shifted by `shift` modulo a
+            // repeat of its stripes, `states`, which is all a step has to name. A phase
+            // is the step it falls in.
             let shift: Int
             switch position {
             case .step(let step): shift = wrapped(step)
@@ -133,8 +133,9 @@ enum IndeterminateRenderer {
     ///
     /// - `sweep`: the width, a head on each column.
     /// - `knightRider`: ``bounceSteps(width:)``, 2(W − 1) and at least 1.
-    /// - `barberPole`: the characters in `fill` (at least 1), since the pattern
-    ///   shifted by its own length is the pattern again.
+    /// - `barberPole`: the cells in one repeat of its stripes, the characters in
+    ///   `fill` times the stripe colours, since the row shifted by that many cells is
+    ///   the row again; 1 for an empty fill, whose spaces no shift can move.
     /// - `gradient`: ``samplesPerCell`` a cell in glyphs, or the picture's width in
     ///   pixels when it is drawn as pictures.
     ///
@@ -148,7 +149,9 @@ enum IndeterminateRenderer {
         switch configuration.motion {
         case .sweep: return width
         case .knightRider: return bounceSteps(width: width)
-        case .barberPole: return max(1, configuration.fill.count)
+        case .barberPole:
+            guard !configuration.fill.isEmpty else { return 1 }
+            return configuration.fill.count * (stripeColours(of: configuration)?.count ?? 2)
         case .pulse: return nil
         case .gradient:
             if let cellPixels,
@@ -332,11 +335,12 @@ enum IndeterminateRenderer {
     /// A barberPole's pass is a sequence rather than a ramp: one frame for each of its
     /// states, each shown for the whole number of ticks nearest the pass divided by the
     /// states, and at least `frameTicks` (`IndicatorAnimationSpeed.frameTicks(standard:)`),
-    /// so every shift is held the same time. Laid out in 2-tick frames, a pass its
-    /// states do not divide held them unevenly: "abcd" over 0.5 s was 15 frames, and
-    /// ⌊i·4/15⌋ held its four states for 4, 4, 4 and 3 of them. A fill of more than
-    /// `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` characters is laid out as
-    /// a ramp, which bounds its frames.
+    /// so every shift is held the same time: the preset's four states over 0.6 s are
+    /// four frames of 9 ticks. Laid out in 2-tick frames, a pass its states do not
+    /// divide held them unevenly: four states over 0.5 s were 15 frames, and ⌊i·4/15⌋
+    /// held them for 4, 4, 4 and 3 of them. A barberPole of more than
+    /// `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` states is laid out as a
+    /// ramp, which bounds its frames.
     ///
     /// The frame count used to be a literal 30 in three places, which is the shape
     /// a divergence arrives in.
@@ -561,28 +565,38 @@ extension IndeterminateRenderer {
 // MARK: - Barber Pole
 
 extension IndeterminateRenderer {
-    /// The fill pattern shifted one cell per step, its glyphs coloured in turn
-    /// so the row reads as moving diagonal stripes.
+    /// The fill pattern shifted one cell left per step, in stripes: each repetition of
+    /// the pattern is one stripe, painted in the next of the stripe colours, so the
+    /// row reads as diagonal bands moving left.
     ///
-    /// A pass is one step for each of the pattern's characters, since the pattern
-    /// shifted by its own length is the pattern again: `"◢◤"` is two steps a pass,
-    /// each held for half of it. A pass used to shift the pattern by twice the bar's
-    /// WIDTH, and a cycle's 18 frames sampled that and read it modulo 2, so what the
-    /// bar showed depended on the width it aliased with: at 36 cells every frame
-    /// but one was the same picture, and at 20 it held for five frames, then four.
+    /// A pass is one step for each cell of a repeat of the stripes, the pattern's
+    /// characters times the colours, after which the row is back where it started:
+    /// `"◢◤"` in accent and filled is four steps. The colours used to go one per GLYPH,
+    /// so `"◢◤"` alternated accent and filled cell by cell, a row that repeats every
+    /// two cells. Shifted one cell, such a row only swaps which colour is where, and a
+    /// motion that swaps back and forth has no direction to read; it also never
+    /// painted a stop past the pattern's length. Before that, a pass shifted the
+    /// pattern by twice the bar's WIDTH, sampled at 18 frames and read modulo 2, so at
+    /// 36 cells every frame but one was the same picture.
     private static func renderBarberPole(
         width: Int, configuration: IndeterminateConfiguration,
         filled: Color, accent: Color, shift: Int
     ) -> ClaimingRow {
         let fill = Array(configuration.fill)
-        let stripes = configuration.gradient.map { $0.stops.map(\.color) }.flatMap {
-            $0.isEmpty ? nil : $0
-        } ?? [accent, filled]
-        // `shift` is at least 0, so neither remainder below goes negative.
+        let stripes = stripeColours(of: configuration) ?? [accent, filled]
+        // `shift` is at least 0, so neither division below goes negative. An empty fill
+        // draws spaces, all in the first colour.
         return laid(width: width) { column in
-            let slot = fill.isEmpty ? 0 : (column + shift) % fill.count
-            return (glyph(fill, at: column + shift), stripes[slot % stripes.count])
+            let stripe = fill.isEmpty ? 0 : (column + shift) / fill.count
+            return (glyph(fill, at: column + shift), stripes[stripe % stripes.count])
         }
+    }
+
+    /// The colours a barberPole's stripes take in turn: every stop of its gradient, or
+    /// `nil` for the control's own two, accent then filled.
+    private static func stripeColours(of configuration: IndeterminateConfiguration) -> [Color]? {
+        guard let stops = configuration.gradient?.stops, !stops.isEmpty else { return nil }
+        return stops.map(\.color)
     }
 }
 

@@ -26,8 +26,9 @@
 /// ◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤◢◤
 /// ```
 ///
-/// The pattern shifts one cell to the left each step, creating the
-/// classic two-tone "candy stripe" motion.
+/// The pattern shifts one cell to the left each step, in stripes one `◢◤`
+/// wide that alternate the accent and filled colours, creating the classic
+/// two-tone "candy stripe" motion.
 ///
 /// ## Pulse
 ///
@@ -46,8 +47,8 @@ public enum IndeterminateStyle: Sendable, Equatable {
     /// the track. The default.
     case sweep
 
-    /// `◢◤` triangle pattern shifted left one cell per step — the
-    /// classic "barber pole" candy-stripe motion.
+    /// `◢◤` triangle pattern in two-tone stripes, shifted left one cell per
+    /// step — the classic "barber pole" candy-stripe motion.
     case barberPole
 
     /// The whole bar fades between dim and bright accent.

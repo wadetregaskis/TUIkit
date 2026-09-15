@@ -265,8 +265,10 @@ extension View {
   2-tick frames that bring the count to 1,000 or fewer, so a long pass costs no
   more to build than a 33 s one. A named preset's period and one the app sets
   through `.custom` are laid out alike. A barberPole's pass is a sequence instead:
-  one frame per step of its pattern, each the whole number of ticks nearest the
-  pass divided by its steps and at least 2, so every shift is held alike. The
+  one frame per step, a step for each cell of a repeat of its stripes (its
+  pattern's characters times its colours), each the whole number of ticks nearest
+  the pass divided by its steps and at least 2, so every shift is held alike; the
+  preset is four frames of 9 ticks, 150 ms a cell. The
   focus emphasis and the caret have both
   kinds, laid out alike: a blink is two frames of 21 ticks (350 ms) at the standard
   rate, which stretch, and a breath or pulse is an 800 ms ramp in frames of 3

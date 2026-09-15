@@ -40,7 +40,8 @@ struct IndeterminateStyleEditor: View {
     ])
 
     /// Pre-defined lit patterns. `◢◤` is here because it is what makes a barber
-    /// pole a barber pole — under that motion the pattern IS the stripe.
+    /// pole a barber pole — under that motion each repetition of the pattern is
+    /// one stripe.
     private let fillGlyphs = ["█", "▓", "▌", "■", "●", "◢◤", "━", "=", "🎵"]
 
     /// Pre-defined unlit patterns, matching the track editor's vocabulary.

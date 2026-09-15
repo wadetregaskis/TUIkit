@@ -32,11 +32,12 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     public enum Motion: String, Sendable, Equatable, CaseIterable {
         /// A lit run with a fading trail travels the track and wraps.
         case sweep
-        /// The fill pattern shifts one cell per step, its glyphs coloured in
-        /// turn from ``IndeterminateConfiguration/gradient`` — diagonal stripes
-        /// that appear to scroll. A pass is one step for each character of
-        /// ``IndeterminateConfiguration/fill``, after which the pattern is back
-        /// where it started.
+        /// The fill pattern shifts one cell left per step, in stripes one
+        /// repetition of it wide, coloured in turn from
+        /// ``IndeterminateConfiguration/gradient`` — diagonal bands that scroll. A
+        /// pass is one step for each cell of a repeat of the stripes, the
+        /// characters of ``IndeterminateConfiguration/fill`` times the stripe
+        /// colours, after which the row is back where it started.
         case barberPole
         /// The whole track breathes between the two ends of the ramp.
         case pulse
@@ -56,8 +57,9 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// so the texture stays put while the motion sweeps over it.
     ///
     /// A single character is the classic solid run. For ``Motion/barberPole``
-    /// the pattern IS the stripe — its characters are what shifts — so `"◢◤"`
-    /// gives the built-in look and `"╱ "` a sparser one.
+    /// the pattern is what a stripe is made of — each repetition of it is one
+    /// stripe, and its characters are what shifts — so `"◢◤"` gives the built-in
+    /// look and `"╱ "` a sparser one.
     ///
     /// Multi-cell characters (emoji, CJK) are laid whole: one that would cross
     /// the track's last column is dropped and the shortfall padded with spaces,
@@ -77,8 +79,9 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// - ``Motion/sweep``, ``Motion/knightRider`` and ``Motion/pulse`` take
     ///   them as a RAMP, sampled from the dim end (first) to the bright end
     ///   (last). `nil` ramps from the control's background colour to its accent.
-    /// - ``Motion/barberPole`` takes them as the stripe colours, one per glyph
-    ///   of ``fill`` in turn. `nil` alternates accent and filled.
+    /// - ``Motion/barberPole`` takes them as the stripe colours, one per
+    ///   repetition of ``fill`` in turn, every one of them. `nil` alternates
+    ///   accent and filled.
     /// - ``Motion/gradient`` takes them as CYCLIC stops — the last interpolates
     ///   back to the first, so the slide is seamless. Where each stop sits
     ///   counts, and the wrap takes the average of the gaps between them, so
@@ -108,10 +111,11 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// very slow bar costs no more to build and hold than a 33-second one.
     ///
     /// A ``Motion/barberPole`` pass is a frame for each of its steps instead, one per
-    /// character of ``fill``, each shown for the same whole number of ticks nearest
-    /// the pass divided by the steps, and at least 2: `"◢◤"` over the preset's 0.6
-    /// seconds is two frames of 18 ticks, and `"abcd"` over 0.5 seconds four of 8, a
-    /// pass of 0.5333 seconds.
+    /// cell of a repeat of its stripes (the characters of ``fill`` times the stripe
+    /// colours), each shown for the same whole number of ticks nearest the pass
+    /// divided by the steps, and at least 2: `"◢◤"` in the control's two colours over
+    /// the preset's 0.6 seconds is four frames of 9 ticks, 150 ms a cell, and `"abcd"`
+    /// over 0.5 seconds eight of 4, a pass of 0.5333 seconds.
     public var period: Double
 
     /// The lit run's length as a fraction of the track, for the two motions
@@ -155,8 +159,9 @@ extension IndeterminateConfiguration {
     /// long, wrapping every 1.6 s.
     public static let sweep = Self(motion: .sweep, period: 1.6, extent: 1.0 / 3.0)
 
-    /// `◢◤` shifted one cell per step. A pass of 0.6 s is the pattern shifted by each
-    /// of its two characters, one cell every 0.3 s.
+    /// `◢◤` in stripes of accent and filled, shifted one cell left per step. A pass of
+    /// 0.6 s is four steps, the pattern's two characters times the two colours: one
+    /// cell every 150 ms.
     public static let barberPole = Self(motion: .barberPole, fill: "◢◤", period: 0.6)
 
     /// The whole bar breathing between the background colour and the accent.
