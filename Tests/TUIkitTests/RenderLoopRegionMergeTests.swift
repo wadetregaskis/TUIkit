@@ -105,8 +105,8 @@ struct RenderLoopRegionMergeTests {
             systemItems: [],
             style: .compact,
             alignment: .leading,
-            highlightColor: .ansi(.cyan),
-            labelColor: .ansi(.white)
+            highlightColor: .cyan,
+            labelColor: .white
         )
 
         let context = makeContext(width: 40, height: bar.height)
@@ -304,8 +304,8 @@ struct RenderLoopRegionMergeTests {
             systemItems: [],
             style: .compact,
             alignment: .leading,
-            highlightColor: .ansi(.cyan),
-            labelColor: .ansi(.white)
+            highlightColor: .cyan,
+            labelColor: .white
         )
 
         let context = makeContext(width: 40, height: bar.height)
@@ -352,8 +352,8 @@ struct RenderLoopRegionMergeTests {
             systemItems: [],
             style: .compact,
             alignment: .leading,
-            highlightColor: .ansi(.cyan),
-            labelColor: .ansi(.white)
+            highlightColor: .cyan,
+            labelColor: .white
         )
 
         let buffer = renderToBuffer(bar, context: context)
