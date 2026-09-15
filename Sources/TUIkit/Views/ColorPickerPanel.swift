@@ -38,7 +38,9 @@ import TUIkitStyling
 ///
 /// Each channel edit rewrites `selection` as the corresponding concrete colour
 /// (`.rgb`, or `.hsl` / `.hsb` / `.cmyk`, which all resolve to RGB). A non-RGB
-/// input (an ANSI or 256-palette colour) is read through ``Color/rgbComponents``;
+/// input is read as its RGB: a 256-palette colour as xterm's value for its
+/// index, and one of the terminal's sixteen slots as the colour the terminal
+/// reported for it, or xterm's value while it has reported none;
 /// a semantic colour has no fixed RGB and reads as black until edited.
 public struct ColorPickerPanel: View {
     private let title: String
@@ -341,7 +343,7 @@ struct _ColorPickerBody: View {
     /// its concrete value rather than blanks.
     private var previewRow: some View {
         let resolved = selection.wrappedValue.resolve(with: palette)
-        let components = resolved.rgbComponents
+        let components = resolved.estimatedRGB
         return HStack(alignment: .center, spacing: 2) {
             // A large solid block of the current colour (10 wide × 5 tall).
             VStack(spacing: 0) {
@@ -366,7 +368,7 @@ struct _ColorPickerBody: View {
                     focusID: "combined-hex", width: 10,
                     format: {
                         ColorPickerPanel.hexString(
-                            selection.wrappedValue.resolve(with: palette).rgbComponents)
+                            selection.wrappedValue.resolve(with: palette).estimatedRGB)
                     },
                     // Through `colorOnly`: `#RRGGBB` names a colour and says
                     // nothing about opacity, so typing one must not silently
@@ -503,7 +505,7 @@ extension ColorPickerPanel {
 
     /// Reads channel `index` of `color` in `mode`. Pure; unit-tested.
     static func channelValue(of color: Color, mode: Mode, index: Int) -> Double {
-        let c = color.rgbComponents ?? (0, 0, 0)
+        let c = color.estimatedRGB ?? (0, 0, 0)
         switch mode {
         case .rgb:
             return Double([c.red, c.green, c.blue][index])

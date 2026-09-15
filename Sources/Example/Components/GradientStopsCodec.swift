@@ -64,9 +64,11 @@ enum GradientStopsCodec {
     /// The one place this app turns a `Color` into text, so a store written
     /// here can always be read by whatever reads it. A colour with no channels
     /// to state (a palette role) has no hex, and black is what the gradient
-    /// format has always written for one.
+    /// format has always written for one. A terminal slot is written as the
+    /// colour the terminal reported for it, or xterm's value while it has
+    /// reported none.
     static func hex(_ color: Color) -> String {
-        guard let components = color.rgbComponents else { return "000000" }
+        guard let components = color.estimatedRGB else { return "000000" }
         return String(format: "%02X%02X%02X", components.red, components.green, components.blue)
     }
 }

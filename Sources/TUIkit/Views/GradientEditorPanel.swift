@@ -772,7 +772,7 @@ extension GradientEditorPanel {
         recents.map { gradient in
             gradient.stops.map { stop in
                 let hex: String
-                if let components = stop.color.rgbComponents {
+                if let components = stop.color.estimatedRGB {
                     hex = String(
                         format: "%02X%02X%02X", components.red, components.green, components.blue)
                 } else {

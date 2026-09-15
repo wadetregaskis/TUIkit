@@ -291,14 +291,17 @@ struct _SwatchGridCore: View, Renderable {
     /// The index of the entry that best matches `color`: an exact match if the
     /// colour is one of the entries, otherwise the nearest by RGB distance
     /// (resolving a semantic colour first). 0 if there are no entries.
+    ///
+    /// A terminal slot measures as the colour the terminal reported for it, or
+    /// xterm's value while it has reported none (`Color.estimatedRGB`).
     static func nearestIndex(of color: Color, in entries: [Color], palette: any Palette) -> Int {
         guard !entries.isEmpty else { return 0 }
         if let exact = entries.firstIndex(of: color) { return exact }
-        let target = color.resolve(with: palette).rgbComponents ?? (0, 0, 0)
+        let target = color.resolve(with: palette).estimatedRGB ?? (0, 0, 0)
         var best = 0
         var bestDistance = Int.max
         for (i, entry) in entries.enumerated() {
-            let c = entry.resolve(with: palette).rgbComponents ?? (0, 0, 0)
+            let c = entry.resolve(with: palette).estimatedRGB ?? (0, 0, 0)
             let dr = Int(c.red) - Int(target.red)
             let dg = Int(c.green) - Int(target.green)
             let db = Int(c.blue) - Int(target.blue)

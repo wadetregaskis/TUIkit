@@ -43,8 +43,10 @@
 /// ```
 ///
 /// The bound `Color` is rewritten as `.rgb(...)` on every edit. A non-RGB input
-/// (e.g. an ANSI or 256-palette colour) is read through ``Color/rgbComponents``;
-/// a semantic colour has no fixed RGB and is treated as black until edited.
+/// is read as its RGB: a 256-palette colour as xterm's value for its index, and
+/// one of the terminal's sixteen slots as the colour the terminal reported for
+/// it, or xterm's value while it has reported none. A colour with no RGB (a
+/// semantic colour, or `Color.default`) is treated as black until edited.
 public struct ColorPicker: View {
     private let title: String
     private let selection: Binding<Color>
@@ -235,7 +237,7 @@ public struct ColorPicker: View {
             get: {
                 let color = selection.wrappedValue
                 guard channel != .alpha else { return Double(color.alpha) }
-                let components = color.rgbComponents ?? (0, 0, 0)
+                let components = color.estimatedRGB ?? (0, 0, 0)
                 switch channel {
                 case .red: return Double(components.red)
                 case .green: return Double(components.green)
@@ -251,7 +253,7 @@ public struct ColorPicker: View {
                     selection.wrappedValue = faded
                     return
                 }
-                var components = color.rgbComponents ?? (0, 0, 0)
+                var components = color.estimatedRGB ?? (0, 0, 0)
                 switch channel {
                 case .red: components.red = clamped
                 case .green: components.green = clamped
