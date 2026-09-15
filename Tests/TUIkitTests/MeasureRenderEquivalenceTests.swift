@@ -143,7 +143,7 @@ struct MeasureRenderEquivalenceTests {
 
         // — Modifiers / wrappers —
         check(Text("hi").padding(), "padding")
-        check(Text("hi").background(.ansi(.blue)), "background")
+        check(Text("hi").background(.blue), "background")
         check(Text("box").border(), "Text.border()")
         check(VStack { Text("A"); Text("B") }.border(), "VStack.border()")
         check(Text("fill").frame(maxWidth: .infinity).border(), "frame(infinity).border()")
