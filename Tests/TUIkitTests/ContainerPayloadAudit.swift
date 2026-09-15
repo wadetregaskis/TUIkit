@@ -124,7 +124,7 @@ struct ContainerPayloadAudit {
             ("ZStack", { child in AnyView(ZStack { child }) }),
             ("padding", { child in AnyView(child.padding()) }),
             ("border", { child in AnyView(child.border()) }),
-            ("background", { child in AnyView(child.background(.ansi(.blue))) }),
+            ("background", { child in AnyView(child.background(.blue)) }),
             ("frame", { child in AnyView(child.frame(width: 24, height: 5)) }),
             ("ScrollView", { child in AnyView(ScrollView { child }) }),
             ("Box", { child in AnyView(Box { child }) }),
