@@ -283,7 +283,7 @@ struct LazyGridTests {
         let plain = render(LazyVGrid(columns: [GridItem(.fixed(3))]) { Text(verbatim: "x") })
         let styled = render(
             LazyVGrid(columns: [GridItem(.fixed(3))]) { Text(verbatim: "x") }
-                .foregroundStyle(.ansi(.red)))
+                .foregroundStyle(.red))
         #expect(styled != plain, "the colour reached the cell")
         #expect(styled.contains("\u{1B}["), "…as an SGR run: \(styled.debugDescription)")
     }
