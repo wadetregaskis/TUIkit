@@ -544,14 +544,14 @@ struct ColorPickerPanelCrashSafetyTests {
     private struct EditedPalette: Palette {
         let id = "edited"
         let name = "Edited"
-        let background = Color.ansi(.black)
-        let foreground = Color.ansi(.white)
+        let background = Color.black
+        let foreground = Color.white
         var accent: Color
-        let success = Color.ansi(.green)
-        let warning = Color.ansi(.yellow)
-        let error = Color.ansi(.red)
-        let info = Color.ansi(.blue)
-        let border = Color.ansi(.brightBlack)
+        let success = Color.green
+        let warning = Color.yellow
+        let error = Color.red
+        let info = Color.blue
+        let border = Color.gray
     }
 
     @Test("Clicking semantic swatches while the selection is bound into the palette never traps")
