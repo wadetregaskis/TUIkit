@@ -148,8 +148,7 @@ struct UnreportedANSISlotTests {
     }
 
     /// Through a colour's own alpha, which the compositor spends with `opacity(_:over:)`.
-    /// A pre-rendered SGR 31 faded by `.opacity(_:)` is rewritten by OpacityModifier's own
-    /// table, which is a later step of the plan (N-C3).
+    /// A pre-rendered SGR 31 is the next row.
     @Test("A faded slot over an RGB page is a cut at ½ until the terminal reports it")
     func fadeCutsAtHalf() {
         func line(_ alpha: Double) -> String {
@@ -173,9 +172,10 @@ struct UnreportedANSISlotTests {
         }
     }
 
-    /// Through `.opacity(_:)` over text already drawn in a slot: the fade reads SGR 31
-    /// back as `.ansi(.red)` and blends it with `opacity(_:over:)`.
-    @Test("A view faded over text drawn in an unreported slot is a cut at ½")
+    /// Through the rewrite `.transition(.opacity)` fades text already drawn in a slot with
+    /// (`OpacityFade`): it reads SGR 31 back as `.ansi(.red)` and blends it with
+    /// `opacity(_:over:)`. Over the terminal's own page, FadeOverUnreportedPageTests.
+    @Test("A dissolve of text drawn in an unreported slot is a cut at ½")
     func fadeOfPreRenderedSlotCutsAtHalf() {
         let line = "\u{1B}[31mab\u{1B}[0m"
         func faded(_ factor: Double) -> String {

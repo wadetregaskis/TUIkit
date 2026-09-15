@@ -271,12 +271,92 @@ enum OpacityFade {
     /// correct arithmetic for different questions, and this one is a FADE
     /// watched by an eye rather than a translucent layer measured by a meter.
     /// See `Documentation/Opacity as composition.md`.
+    ///
+    /// Over the terminal's page before it has reported it, a colour below ½
+    /// becomes that page, which the foreground slot can only spell 39. A glyph
+    /// left in it would show at full strength in the terminal's foreground, so
+    /// it is dropped, as the composite drops it (§76, §83).
     static func fading(
         _ line: String, by factor: Double, over surface: Color, defaultForeground: Color
     ) -> String {
-        SGRColorRewrite.rewriting(
-            line, defaultForeground: defaultForeground, defaultBackground: surface
-        ) { $0.opacity(factor, over: surface) }
+        let fade = { (colour: Color) in colour.opacity(factor, over: surface) }
+        // Only that page can be an ink on itself here. A field is the surface
+        // (a stated 49 is read as the surface) or a colour faded toward it, so
+        // no field is the page unless the surface is. Over any other surface
+        // the rewrite is the whole of it, byte for byte.
+        guard FrameBuffer.isTheUnreportedPageOnItself(ink: surface, field: surface) else {
+            return SGRColorRewrite.rewriting(
+                line, defaultForeground: defaultForeground, defaultBackground: surface,
+                transform: fade)
+        }
+        return fadingOverTheUnreportedPage(
+            line, surface: surface, defaultForeground: defaultForeground, fade: fade)
+    }
+
+    /// `line` rewritten by `fade`, with every glyph whose ink is the unreported
+    /// page, on that page, made blank.
+    ///
+    /// A glyph is judged in the colours the REWRITTEN line states, which the
+    /// rewrite reports as it emits them. At the start of a line and after a
+    /// reset nothing is stated: the terminal's own colours are in force, which
+    /// the rewrite never fades, so the glyph stays.
+    ///
+    /// A blank takes as many cells as the glyph did. Underline, blink and strike
+    /// ink a blank cell in the foreground colour (rule 6), so they are cleared
+    /// across the blanks and put back after them. A reversed cell is left as it
+    /// is: its field is its ink, so even a blank one is a fill.
+    private static func fadingOverTheUnreportedPage(
+        _ line: String, surface: Color, defaultForeground: Color, fade: (Color) -> Color
+    ) -> String {
+        var result = ""
+        var ink: Color?
+        var field: Color?
+        // What the rewritten line has in force, and, while a dropped glyph's
+        // underline, blink or strike is cleared, the state the terminal is in
+        // instead, to be put back before anything else is drawn.
+        var state = SGRState()
+        var cleared: SGRState?
+        for segment in line.ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, let isSGR):
+                if let off = cleared {
+                    result += state.rendered(changingFrom: off)
+                    cleared = nil
+                }
+                let rewritten = SGRColorRewrite.rewritingSGR(
+                    sequence, defaultForeground: defaultForeground, defaultBackground: surface,
+                    transform: fade
+                ) { slot, colour in
+                    switch slot {
+                    case .foreground: ink = colour
+                    case .background: field = colour
+                    case .reset: (ink, field) = (nil, nil)
+                    }
+                }
+                result += rewritten
+                if isSGR { state.apply(rewritten) }
+            case .visible(let character):
+                guard !state.reversesVideo,
+                    FrameBuffer.isTheUnreportedPageOnItself(ink: ink, field: field ?? surface)
+                else {
+                    if let off = cleared {
+                        result += state.rendered(changingFrom: off)
+                        cleared = nil
+                    }
+                    result.append(character)
+                    continue
+                }
+                if cleared == nil, state.paintsInkOnBlankCell {
+                    var off = state
+                    off.apply("\u{1B}[24;25;29m")
+                    result += off.rendered(changingFrom: state)
+                    cleared = off
+                }
+                result += String(repeating: " ", count: character.terminalWidth)
+            }
+        }
+        if let off = cleared { result += state.rendered(changingFrom: off) }
+        return result
     }
 }
 
@@ -319,9 +399,14 @@ enum SGRColorRewrite {
     }
 
     /// One escape sequence, transformed if it is an SGR that names a colour.
-    private static func rewritingSGR(
+    ///
+    /// `emitted` hears each colour the RESULT sets, in order: a transformed
+    /// colour, a colon-form colour passed through as it was written, and
+    /// `.reset` for SGR 0. What a later glyph is drawn in is that, not what
+    /// the original sequence named.
+    static func rewritingSGR(
         _ sequence: String, defaultForeground: Color, defaultBackground: Color,
-        transform: (Color) -> Color
+        transform: (Color) -> Color, emitted: (ColorSlot, Color?) -> Void = { _, _ in }
     ) -> String {
         // Only SGR (`ESC [ … m`) carries colour; anything else passes through
         // untouched rather than being guessed at.
@@ -340,6 +425,7 @@ enum SGRColorRewrite {
                 let (color, consumed) = Self.extendedColor(parameters, from: index)
                 if let color {
                     let faded = transform(color)
+                    emitted(parameter == 38 ? .foreground : .background, faded)
                     rewritten += parameter == 38
                         ? faded.foregroundCodes()
                         : faded.backgroundCodes()
@@ -349,24 +435,38 @@ enum SGRColorRewrite {
                 index += consumed
                 continue
             case 30...37, 90...97, 40...47, 100...107:
-                rewritten += Self.rewrittenBasic(parameter, transform: transform)
+                rewritten += Self.rewrittenBasic(parameter, transform: transform, emitted: emitted)
             case 39:
                 // "Default foreground" — which IS the palette foreground
                 // here, so it transforms rather than snapping back to full
                 // strength.
-                rewritten += transform(defaultForeground).foregroundCodes()
+                let faded = transform(defaultForeground)
+                emitted(.foreground, faded)
+                rewritten += faded.foregroundCodes()
             case 49:
-                rewritten += transform(defaultBackground).backgroundCodes()
+                let faded = transform(defaultBackground)
+                emitted(.background, faded)
+                rewritten += faded.backgroundCodes()
             default:
                 // 0 (reset), 1 (bold), 2 (dim), 4 (underline), 7 (inverse), …
-                rewritten.append(parameters[index])
+                // A colon-form colour lands here too (it is not an Int), and
+                // passes through as written.
+                let raw = parameters[index]
+                if raw.isEmpty || Int(raw) == 0 {
+                    emitted(.reset, nil)
+                } else if let (slot, color) = Self.colonFormColor(raw) {
+                    emitted(slot, color)
+                }
+                rewritten.append(raw)
             }
             index += 1
         }
         return "\u{1B}[" + rewritten.joined(separator: ";") + "m"
     }
 
-    /// Which colour an SGR parameter set, for ``readingColors(_:_:)``.
+    /// Which colour an SGR parameter set, for ``readingColors(_:_:)`` and for
+    /// what ``rewritingSGR(_:defaultForeground:defaultBackground:transform:emitted:)``
+    /// emits.
     enum ColorSlot {
         case foreground
         case background
@@ -497,15 +597,18 @@ enum SGRColorRewrite {
     /// fixed RGB: the terminal's palette decides. So `transform` sees what every
     /// rule sees for a slot: the colour the terminal reported for it, or no RGB
     /// until it has, where a fade snaps to its heavier end (a cut at ½) and a
-    /// colour effect leaves the slot as it is.
+    /// colour effect leaves the slot as it is. The faded colour is reported to
+    /// `emitted`, so a fade over the terminal's unreported page can drop a glyph
+    /// that snapped to it (`OpacityFade`).
     private static func rewrittenBasic(
-        _ parameter: Int, transform: (Color) -> Color
+        _ parameter: Int, transform: (Color) -> Color, emitted: (ColorSlot, Color?) -> Void
     ) -> [String] {
         let isBackground = (40...47).contains(parameter) || (100...107).contains(parameter)
         let isBright = parameter >= 90
         let base = parameter - (isBright ? (isBackground ? 100 : 90) : (isBackground ? 40 : 30))
         guard let color = Self.basicColor(base: base, isBright: isBright) else { return ["\(parameter)"] }
         let faded = transform(color)
+        emitted(isBackground ? .background : .foreground, faded)
         return isBackground
             ? faded.backgroundCodes()
             : faded.foregroundCodes()

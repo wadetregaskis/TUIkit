@@ -441,7 +441,10 @@ extension FrameBuffer {
     /// slot spells it as its RGB, so the glyph is emitted in the field's colour as
     /// any other invisible ink is. On a different field the glyph is visible
     /// ink, in the wrong colour (39), and dropping it would lose it.
-    private static func isTheUnreportedPageOnItself(ink: Color?, field: Color) -> Bool {
+    ///
+    /// Shared with `OpacityFade`, whose rewrite of a drawn line reaches the same
+    /// cell (`Opacity as composition` §83).
+    static func isTheUnreportedPageOnItself(ink: Color?, field: Color) -> Bool {
         guard let ink, case .terminalBackground = ink.value, case .terminalBackground = field.value else {
             return false
         }

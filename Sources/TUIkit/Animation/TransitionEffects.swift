@@ -190,6 +190,8 @@ extension AnyTransition.Effect {
     /// Blends every colour the buffer names toward the background — the same
     /// fade ``View/opacity(_:)`` performs, and for the same reason: a terminal
     /// cell has no alpha, so the only thing that can dissolve is the colour.
+    /// Over the terminal's page before it has reported it, that is a cut at ½
+    /// in the glyphs as well, as it is there (`OpacityFade`).
     @MainActor
     private static func faded(
         _ buffer: FrameBuffer, by factor: Double, context: RenderContext

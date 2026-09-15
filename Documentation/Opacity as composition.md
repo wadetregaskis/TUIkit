@@ -4829,7 +4829,7 @@ where the text it covered had been.
 is `.terminalBackground`, the cell is a space. Underline, blink and strike are cleared
 with the glyph, since each inks a blank cell in the foreground colour (rule 6). With
 rule 9, a fade over such a page is now a cut at ½ in all three things a cell has: its
-ink, its field and its glyph.
+ink, its field and its glyph. §83 gives the transition dissolve the same rule.
 
 What the rule does not touch, and why:
 - **A reported page.** The foreground slot spells it as its RGB, so the glyph is emitted
@@ -5214,3 +5214,41 @@ What it does not touch:
 to RGB, or to a harder read where it measures. `HoverWithoutAFillTests` (TUIkitTests) pins
 each of the five controls, a resize grip and a scrollbar's hovered arrow, and that a built-in
 palette's hovered arrows are still the wash.
+
+## 83. The dissolve over the terminal's page (2026-09-15)
+
+`.transition(.opacity)` does not composite. It fades the lines a view already drew by
+rewriting their colours (`OpacityFade`, through `SGRColorRewrite`): each colour an SGR
+names is faded toward the page with `opacity(_:over:)`, the blend the composite uses. That
+includes a pre-rendered 31, read back as its slot, and a 39, read as the palette's ink. So
+the dissolve reached §76's cell and had no rule for it. Over `.terminalBackground`, before
+the terminal reports it, every colour below ½ becomes that page (§75), the foreground slot
+spells it 39, and the glyph stayed. `Text("ab").foregroundStyle(.ansi(.red))` dissolving
+out drew "ab" in the terminal's foreground at full strength everywhere below ½, down to 0.
+A label in the terminal's own foreground stayed 39 at every phase, so it did not fade at
+all.
+
+**The rule.** §76's, on the rewrite. A visible character whose ink, as the rewritten line
+states it, is the unreported page, and whose field is that page, becomes as many spaces as
+it took cells. An underline, blink or strike in force is cleared across the blanks and put
+back after them, since each inks a blank cell (rule 6). The dissolve over such a page is
+now a cut at ½, in glyphs as in colours, as `.opacity(_:)` is.
+
+What it leaves alone:
+- **Any other surface.** Only the unreported page can be an ink on itself here, because a
+  field is the surface or a colour faded toward it. Over an RGB page or a reported one the
+  rewrite is what it was, byte for byte, and the glyph stays in its faded colour (§12).
+- **Text the rewrite does not restate.** At the start of a line and after a reset, the
+  terminal's own colours are in force, and the rewrite never fades them. The glyph is
+  judged in them, so it stays.
+- **A reversed cell.** Its field is its ink, so even a blank one is a fill, and dropping its
+  glyph would hide nothing. What reverse video does over a colour that cannot be measured
+  is for the reverse-video steps of the terminal-colour plan, not this rule.
+- **The colour effects.** They share the rewrite, but a colour with no RGB passes through
+  them unchanged, so none of them turns a colour into the page.
+
+`FadeOverUnreportedPageTests` (TUIkitTests) pins it on `OpacityFade` and through
+`AnyTransition.Effect.opacity`. A slot, the palette's ink and an RGB ink at 0, 0.3 and 0.49
+leave blanks, and a wide glyph leaves two. At 0.5 and 0.6 the slot is drawn as 31. A dropped
+glyph's underline is cleared, and a reversed glyph after it keeps its own. Over a reported
+page, with slots reported and without, the glyph stays, in RGB.
