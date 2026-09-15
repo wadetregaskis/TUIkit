@@ -100,6 +100,21 @@ struct TerminalImageSignature: Equatable {
     /// label's resting colour, for the whole breath. Its glyphs still breathe.
     var monoInk: RGBA
     var monoPaper: RGBA
+
+    /// The colours the terminal had reported when the picture was recoloured.
+    ///
+    /// A mode that names the terminal's slots — `.ansi16`, or a `.palette` of
+    /// `.ansi(_:)` entries — paints each pixel in the colour the terminal
+    /// reported for its slot, or in xterm's value while it has reported none.
+    /// A palette mode compares equal by its colours whatever they measure as,
+    /// so without this a report arriving after the picture was sent changed the
+    /// pixels and not the signature, and the terminal kept the old picture.
+    ///
+    /// Every mode carries it, so a report re-sends a picture that does not name
+    /// a slot too. That costs one transmission per picture per report, which
+    /// is rare, where leaving it out of the modes that do name one would be a
+    /// picture that never updates.
+    var terminalColors: TerminalColors
 }
 
 // MARK: - Any signature at all

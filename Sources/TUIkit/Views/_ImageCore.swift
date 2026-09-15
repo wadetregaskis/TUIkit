@@ -59,6 +59,18 @@ private struct ImageRenderCache: Equatable {
     var contentMode: ContentMode
     var aspectRatioOverride: Double?
     var cellAspect: Double
+    /// The colours the terminal had reported when this was converted.
+    ///
+    /// A mode that names the terminal's slots — `.ansi16`, or a `.palette` of
+    /// `.ansi(_:)` entries — matches each pixel against each slot as the colour
+    /// the terminal reported for it, or as xterm's value while it has reported
+    /// none. And a palette mode compares equal by its colours, whatever they
+    /// measure as. So `colorMode` alone matched a conversion made before a
+    /// report, and the view drew it for as long as nothing else changed.
+    ///
+    /// By value, not by `TerminalColors.generation`: a task-local pin changes
+    /// what a slot measures as without moving the generation.
+    var terminalColors: TerminalColors
     var art: ASCIIArt
 
     /// Returns whether `self` was built from the same inputs as the
@@ -72,7 +84,8 @@ private struct ImageRenderCache: Equatable {
         supersampling: Int?, edgeThreshold: Double?, edgeContrast: Double,
         contentMode: ContentMode,
         aspectRatioOverride: Double?,
-        cellAspect: Double
+        cellAspect: Double,
+        terminalColors: TerminalColors
     ) -> Bool {
         self.rawImageWidth == rawImageWidth
             && self.rawImageHeight == rawImageHeight
@@ -89,6 +102,7 @@ private struct ImageRenderCache: Equatable {
             && self.contentMode == contentMode
             && self.aspectRatioOverride == aspectRatioOverride
             && self.cellAspect == cellAspect
+            && self.terminalColors == terminalColors
             // Last: the scalar comparisons above reject the frequent miss — a
             // resize — before this one runs. It is the field that decides
             // correctness, not the one that usually decides the answer.
@@ -480,6 +494,9 @@ extension _ImageCore {
 
         // Check the per-view cache; if every conversion input matches,
         // skip the (potentially very expensive) re-conversion.
+        // Read once, for the lookup and for the entry it may store: the colours
+        // the conversion below measures the terminal's slots under.
+        let terminalColors = TerminalColors.current
         let cacheKey = StateStorage.StateKey(identity: identity, propertyIndex: StateIndex.renderCache)
         let cacheBox: StateBox<ImageRenderCache?> = stateStorage.storage(for: cacheKey, default: nil)
         if let cache = cacheBox.value, cache.matches(
@@ -498,7 +515,8 @@ extension _ImageCore {
             edgeContrast: edgeContrast,
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
-            cellAspect: cellAspect
+            cellAspect: cellAspect,
+            terminalColors: terminalColors
         ) {
             return Self.buffer(for: cache.art, monoColours: monoColours)
         }
@@ -532,6 +550,7 @@ extension _ImageCore {
             contentMode: contentMode,
             aspectRatioOverride: aspectRatioOverride,
             cellAspect: cellAspect,
+            terminalColors: terminalColors,
             art: art
         )
 
@@ -970,7 +989,8 @@ extension _ImageCore {
             pixelWidth: pixelWidth, pixelHeight: pixelHeight,
             colorMode: colorMode, toneCurve: toneCurve,
             edgeContrast: edgeContrast, dithering: dithering,
-            monoInk: mono.ink, monoPaper: mono.paper)
+            monoInk: mono.ink, monoPaper: mono.paper,
+            terminalColors: TerminalColors.current)
 
         guard
             let lines = store.placeholderRows(

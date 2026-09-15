@@ -30,7 +30,8 @@ struct TerminalImageStoreTests {
             source: .file(label), rawWidth: 8, rawHeight: 8,
             pixelWidth: pixelWidth, pixelHeight: pixelHeight,
             colorMode: .trueColor, toneCurve: nil, edgeContrast: 0, dithering: .none,
-            monoInk: RGBA(r: 255, g: 255, b: 255), monoPaper: RGBA(r: 0, g: 0, b: 0))
+            monoInk: RGBA(r: 255, g: 255, b: 255), monoPaper: RGBA(r: 0, g: 0, b: 0),
+            terminalColors: .unknown)
     }
 
     @Test("A first draw transmits the image and places it")
