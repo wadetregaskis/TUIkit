@@ -202,19 +202,20 @@ struct SpinnersPage: View {
     /// Under the whole page rather than in the customiser's column, so it can be
     /// copied: a terminal selects whole screen rows, and a line wrapped beside
     /// the catalogue would come away with pieces of the catalogue in it.
-    /// `name=ms` pairs separated by single spaces wrap only between pairs, so
+    /// `name=ticks` pairs separated by single spaces wrap only between pairs, so
     /// each row copies as whole pairs, and the names are the API case names.
+    /// Ticks rather than milliseconds, because ticks are what a frame is made
+    /// of: `dots=7` is exact where "116.7" is rounded, and the tick counts are
+    /// what the instants model below adds up.
     @ViewBuilder
     private var durationsReadout: some View {
         let entries = catalogueEntries(color: editedColor, settings: speedSettings)
         let line = entries.compactMap { entry in
-            entry.choice.map {
-                "\($0.rawValue)=\(SpinnerSpeedSettings.milliseconds(entry.frameNanoseconds))"
-            }
+            entry.choice.map { "\($0.rawValue)=\(entry.frameTicks)" }
         }
         .joined(separator: " ")
         let instants = SpinnerSpeedSettings.oneDecimal(
-            SpinnerSpeedSettings.frameInstantsPerSecond(entries.map(\.frameNanoseconds)))
+            SpinnerSpeedSettings.frameInstantsPerSecond(entries.map(\.frameTicks)))
         VStack(alignment: .leading, spacing: 0) {
             Text("page.spinners.durations").foregroundStyle(.palette.foregroundSecondary)
             Text(verbatim: line)
@@ -319,8 +320,9 @@ struct SpinnersPage: View {
         let overrideSpeed: IndicatorAnimationSpeed?
         /// The speed its spinner reads, whoever set it.
         let speedKey: String
-        /// How long it shows each frame, as its spinner will work it out.
-        let frameNanoseconds: Int64
+        /// How many 1/60 s ticks it shows each frame for, as its spinner will
+        /// work it out.
+        let frameTicks: Int
 
         init(
             name: String, choice: SpinnerStyleChoice?, style: SpinnerStyle, label: String?,
@@ -334,13 +336,13 @@ struct SpinnersPage: View {
             overrideSpeed = settings.overrideSpeed(for: choice)
             let speed = overrideSpeed ?? settings.catalogueSpeed
             speedKey = "\(overrideSpeed == nil ? "catalogue" : "row")@\(speed.rate)±\(speed.tolerance)"
-            frameNanoseconds = settings.frameNanoseconds(style, choice: choice)
+            frameTicks = settings.frameTicks(style, choice: choice)
         }
 
         // The speed and the duration are in it too: a speed is an environment
         // value the row's spinner reads, and a memo keyed on anything less would
         // serve the row drawn at the old speed.
-        var id: String { "\(name)|\(label ?? "")|\(colorKey)|\(speedKey)|\(frameNanoseconds)" }
+        var id: String { "\(name)|\(label ?? "")|\(colorKey)|\(speedKey)|\(frameTicks)" }
 
         /// The row is what its id says it is — which is what lets the value
         /// memo tell a changed row from an unchanged one.
@@ -371,7 +373,9 @@ struct SpinnersPage: View {
     @ViewBuilder
     private func spinnerRow(_ entry: CatalogueEntry, color: Color?) -> some View {
         let row = HStack(spacing: 1) {
-            Text(verbatim: "\(SpinnerSpeedSettings.milliseconds(entry.frameNanoseconds)) ms")
+            // Milliseconds here, beside the spinner, for reading at a glance; the
+            // exact tick counts are in the line under the page.
+            Text(verbatim: "\(SpinnerSpeedSettings.milliseconds(ticks: entry.frameTicks)) ms")
                 .frame(width: 8, alignment: .trailing)
                 .foregroundStyle(
                     entry.overrideSpeed == nil ? .palette.foregroundSecondary : .palette.accent)

@@ -32,7 +32,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "Frame",
             "page.spinners.frameInherit": "follows the speed",
             "page.spinners.clearOverrides": "Clear overrides",
-            "page.spinners.durations": "Frame durations in ms:",
+            "page.spinners.durations": "Frame durations in ticks of 1/60 s:",
             "page.spinners.instantsModel %@": "≈ %@ distinct instants a second at which a spinner here changes frame (a model)",
         ],
 
@@ -51,7 +51,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "Bild",
             "page.spinners.frameInherit": "folgt der Geschwindigkeit",
             "page.spinners.clearOverrides": "Überschreibungen löschen",
-            "page.spinners.durations": "Bilddauern in ms:",
+            "page.spinners.durations": "Bilddauern in 1/60-s-Takten:",
             "page.spinners.instantsModel %@": "≈ %@ verschiedene Zeitpunkte je Sekunde, an denen ein Spinner hier das Bild wechselt (ein Modell)",
         ],
 
@@ -70,7 +70,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "Image",
             "page.spinners.frameInherit": "suit la vitesse",
             "page.spinners.clearOverrides": "Effacer les surcharges",
-            "page.spinners.durations": "Durées d'image en ms :",
+            "page.spinners.durations": "Durées d'image en tics de 1/60 s :",
             "page.spinners.instantsModel %@": "≈ %@ instants distincts par seconde où un spinner ici change d'image (un modèle)",
         ],
 
@@ -89,7 +89,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "Fotogramma",
             "page.spinners.frameInherit": "segue la velocità",
             "page.spinners.clearOverrides": "Cancella sostituzioni",
-            "page.spinners.durations": "Durate dei fotogrammi in ms:",
+            "page.spinners.durations": "Durate dei fotogrammi in tick da 1/60 s:",
             "page.spinners.instantsModel %@": "≈ %@ istanti distinti al secondo in cui uno spinner qui cambia fotogramma (un modello)",
         ],
 
@@ -108,7 +108,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "Fotograma",
             "page.spinners.frameInherit": "sigue la velocidad",
             "page.spinners.clearOverrides": "Borrar anulaciones",
-            "page.spinners.durations": "Duraciones de fotograma en ms:",
+            "page.spinners.durations": "Duraciones de fotograma en ticks de 1/60 s:",
             "page.spinners.instantsModel %@": "≈ %@ instantes distintos por segundo en que un spinner de aquí cambia de fotograma (un modelo)",
         ],
 
@@ -127,7 +127,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "每帧",
             "page.spinners.frameInherit": "跟随速度",
             "page.spinners.clearOverrides": "清除覆盖",
-            "page.spinners.durations": "帧时长（ms）：",
+            "page.spinners.durations": "帧时长（以 1/60 s 节拍计）：",
             "page.spinners.instantsModel %@": "≈ 每秒有 %@ 个不同时刻，此处某个加载指示器换帧（模型）",
         ],
 
@@ -146,7 +146,7 @@ extension ExampleStrings {
             "page.spinners.frameTicks": "1 フレーム",
             "page.spinners.frameInherit": "速度に従う",
             "page.spinners.clearOverrides": "上書きをクリア",
-            "page.spinners.durations": "フレーム時間（ms）：",
+            "page.spinners.durations": "フレーム時間（1/60 s ティック単位）：",
             "page.spinners.instantsModel %@": "≈ 毎秒 %@ 回、ここのいずれかのスピナーがフレームを切り替える時刻（モデル）",
         ],
     ]

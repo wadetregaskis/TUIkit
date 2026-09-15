@@ -112,18 +112,12 @@ struct SpinnersSpeedSection: View {
     }
 
     /// "7 × 16.7 ms = 116.7 ms" for an override, or what no override means.
-    ///
-    /// The total is the instant the override's tick count begins at, not the
-    /// count times a rounded tick: seven rounded ticks are 116,666,669 ns, and a
-    /// readout built that way would drift further from the frame shown with
-    /// every tick added.
     private func ticksText(_ settings: SpinnerSpeedSettings) -> String {
         guard let style = SpinnerStyleChoice(rawValue: overrideStyle),
             let ticks = settings.overrides[style]
         else { return L("page.spinners.frameInherit") }
-        let tick = AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: 1))
-        return "\(ticks) × \(SpinnerSpeedSettings.milliseconds(tick)) ms = "
-            + "\(SpinnerSpeedSettings.milliseconds(AnimationClock.nanoseconds(atTick: Int64(ticks)))) ms"
+        return "\(ticks) × \(SpinnerSpeedSettings.milliseconds(ticks: 1)) ms = "
+            + "\(SpinnerSpeedSettings.milliseconds(ticks: ticks)) ms"
     }
 }
 
@@ -187,11 +181,11 @@ struct SpinnerSpeedSettings {
         return IndicatorAnimationSpeed(style.style.interval / AnimationClock.seconds(forTicks: ticks))
     }
 
-    /// How long `style` shows each frame on the page, in nanoseconds: where the
-    /// `frameTicks(standard:)` the spinner itself asks of the nearest speed ends.
-    func frameNanoseconds(_ style: SpinnerStyle, choice: SpinnerStyleChoice?) -> Int64 {
+    /// How many 1/60 s ticks `style` shows each frame for on the page: the
+    /// `frameTicks(standard:)` the spinner itself asks of the nearest speed.
+    func frameTicks(_ style: SpinnerStyle, choice: SpinnerStyleChoice?) -> Int {
         let speed = overrideSpeed(for: choice) ?? catalogueSpeed
-        return AnimationClock.nanoseconds(atTick: Int64(speed.frameTicks(standard: style.interval)))
+        return speed.frameTicks(standard: style.interval)
     }
 
     // MARK: Stored values
@@ -242,43 +236,60 @@ struct SpinnerSpeedSettings {
         return tenths.isMultiple(of: 10) ? "\(tenths / 10)" : "\(tenths / 10).\(tenths % 10)"
     }
 
+    /// A whole number of 1/60 s ticks as milliseconds to a tenth: 7 is "116.7".
+    ///
+    /// The instant the count's last tick ends, not the count times a rounded
+    /// tick: seven rounded ticks are 116,666,669 ns, and a readout built that
+    /// way would drift further from the frame shown with every tick added.
+    static func milliseconds(ticks: Int) -> String {
+        milliseconds(AnimationClock.nanoseconds(atTick: Int64(ticks)))
+    }
+
     /// A rate to one decimal place: 46.049 is "46.0".
     static func oneDecimal(_ value: Double) -> String {
         let tenths = Int((value * 10).rounded())
         return "\(tenths / 10).\(tenths % 10)"
     }
 
-    /// How many distinct instants a second at least one of these frame
-    /// durations ends a step: a model of how often these spinners change
+    /// How many distinct instants a second at least one of these frame lengths,
+    /// in 1/60 s ticks, ends a step: a model of how often these spinners change
     /// together, not a count of the run loop's wakes.
     ///
-    /// Durations sharing a multiple change at the same instant, so this is the
-    /// union of their step grids. By inclusion and exclusion it is the sum over
-    /// every non-empty subset of ±1 / lcm(subset), odd subsets added and even
-    /// ones taken away. The terms are collected by their lcm, so a set on one
-    /// lattice collapses to a handful of terms: seventeen durations of 1 to 17
-    /// whole 25 ms steps leave one, 25 ms. A term whose lcm does not fit in 64 bits of
-    /// nanoseconds is dropped, which is under 1.1e-10 of an instant a second.
+    /// Counted in ticks, not nanoseconds. A run of n ticks changes frame where
+    /// tick k·n begins, and every run counts from tick zero, so two lengths that
+    /// share a multiple of ticks change at the same instant. A tick is not a
+    /// whole number of nanoseconds, so their durations in nanoseconds, rounded
+    /// up to 116,666,667 and 83,333,334, share no such multiple, and a union of
+    /// nanosecond grids counts one instant as two.
+    ///
+    /// The union of the tick grids, by inclusion and exclusion, is the sum over
+    /// every non-empty subset of ±1 / lcm(subset) of a tick, odd subsets added
+    /// and even ones taken away. The terms are collected by their lcm, so a set
+    /// that includes 1 tick collapses to that one term, 60 a second. A term
+    /// whose lcm does not fit in 64 bits of ticks is dropped, which is under
+    /// 1e-17 of an instant a second.
     ///
     /// A real loop wakes less often than this: a wake that arrives a few
     /// milliseconds late also serves the boundaries it has passed.
-    static func frameInstantsPerSecond(_ durations: [Int64]) -> Double {
-        var terms: [Int64: Int] = [:]
-        for duration in Set(durations) where duration > 0 {
+    static func frameInstantsPerSecond(_ frameTicks: [Int]) -> Double {
+        var terms: [Int: Int] = [:]
+        for ticks in Set(frameTicks) where ticks > 0 {
             var next = terms
             for (multiple, sign) in terms {
-                let (lcm, overflow) = (multiple / gcd(multiple, duration))
-                    .multipliedReportingOverflow(by: duration)
+                let (lcm, overflow) = (multiple / gcd(multiple, ticks))
+                    .multipliedReportingOverflow(by: ticks)
                 guard !overflow else { continue }
                 next[lcm, default: 0] -= sign
             }
-            next[duration, default: 0] += 1
+            next[ticks, default: 0] += 1
             terms = next.filter { $0.value != 0 }
         }
-        return terms.reduce(0) { $0 + Double($1.value) * 1_000_000_000 / Double($1.key) }
+        return terms.reduce(0) {
+            $0 + Double($1.value) * Double(AnimationClock.ticksPerSecond) / Double($1.key)
+        }
     }
 
-    private static func gcd(_ lhs: Int64, _ rhs: Int64) -> Int64 {
+    private static func gcd(_ lhs: Int, _ rhs: Int) -> Int {
         var (a, b) = (lhs, rhs)
         while b != 0 { (a, b) = (b, a % b) }
         return a
