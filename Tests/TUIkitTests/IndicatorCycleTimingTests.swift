@@ -103,7 +103,7 @@ struct IndicatorCycleTimingTests {
             resolved.run(offsetX: 0, offsetY: 0) { ANSIRenderer.colorize("x", foreground: $0) })
         #expect(run.frameTicks == 5)
         #expect(run.clock == .content)
-        #expect(AnimatedColor(.ansi(.red)).frameTicks == AnimationClock.standardFrameTicks)
+        #expect(AnimatedColor(.red).frameTicks == AnimationClock.standardFrameTicks)
     }
 
     // MARK: - The producers
