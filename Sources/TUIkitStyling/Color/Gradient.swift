@@ -241,6 +241,13 @@ extension Gradient {
     /// Held at the end colours outside the stops' own range — the same rule
     /// ``ASCIIToneCurve`` follows for knots, and the reason locations outside
     /// `0…1` crop the ramp rather than extending it.
+    ///
+    /// A stop is returned as it is spelled, so at a `.ansi(.red)` stop's location
+    /// this is that slot, and between it and its neighbours it is RGB. A
+    /// segment with a stop that has no RGB (``Color/default``, or a colour of the
+    /// terminal's own it has not reported) has nothing to blend, so it is a hard
+    /// edge at its middle: the earlier stop through the midpoint, the later one
+    /// past it. See ``Color/lerp(_:_:phase:)``.
     public func color(at phase: Double) -> Color {
         Self.color(at: phase, in: ordered, space: colorSpace)
     }

@@ -633,11 +633,21 @@ extension Color {
     /// fade and every transition dissolve uses, and what SwiftUI is measured to
     /// composite with.
     ///
+    /// **The ends are the colours as spelled.** At full coverage this is the
+    /// colour itself and at none the surface, so `Color.ansi(.red).opacity(1,
+    /// over: page)` is still SGR 31. Where either side has no RGB
+    /// (``Color/default``, or the terminal's own foreground or background before
+    /// it has reported them) there is nothing to mix, and the answer is the
+    /// heavier side: the colour at a coverage of ½ or more, the surface below.
+    /// So a 0.5 disabled dim of such an ink keeps the ink, and a 0.2 tint over
+    /// such a page is the page. See ``lerp(_:_:phase:)``.
+    ///
     /// - Parameters:
     ///   - opacity: The opacity (0–1).
     ///   - surface: The colour beneath, typically the palette background the
     ///     view draws over.
-    /// - Returns: The blended color, or `self` if either side is semantic.
+    /// - Returns: The blended colour, opaque: RGB, an end as it is spelled, or the
+    ///   heavier side where one has no RGB; `self` if either side is semantic.
     public func opacity(_ opacity: Double, over surface: Color) -> Self {
         // This colour's OWN alpha is part of the coverage, not something separate
         // from it. `.tint(.red.opacity(0.5))` reaches here through
@@ -662,12 +672,12 @@ extension Color {
     /// This colour with a translucent alpha SPENT against `ground` — the bright
     /// end of a focus breath.
     ///
-    /// An opaque colour is returned **untouched** rather than composited at 1, and
-    /// not as an economy: ``opacity(_:over:)`` lerps, and a lerp re-spells `.ansi(.red)`
-    /// (SGR 31, the terminal's OWN red) as `rgb(205, 0, 0)` (SGR 38;2;…). Same
-    /// colour by arithmetic, a different colour on any terminal whose palette is
-    /// not the default — and this is the bright end of every focus pulse on every
-    /// palette that ships.
+    /// An opaque colour is returned **untouched**. Composited at 1 it would come
+    /// back the same, spelling and all, since a blend's ends keep their spelling
+    /// (see ``lerp(_:_:phase:)``); this is the short way to that answer. It was
+    /// once the only thing keeping `.ansi(.red)` (SGR 31, the terminal's OWN red)
+    /// from becoming `38;2;205;0;0` at the bright end of every focus pulse, when a
+    /// lerp re-spelled its ends as RGB.
     ///
     /// - Parameter ground: What the breath is drawn on. The dim end must be
     ///   composited over the same colour, or the two ends will not agree.
@@ -716,11 +726,21 @@ extension Color {
     /// of encoded sRGB. Pass `in: .device`, or build the gradient with
     /// `colorSpace: .perceptual`, and they agree again.
     ///
+    /// ## The ends, and colours with no RGB
+    ///
+    /// Both spaces follow ``lerp(_:_:phase:)``'s rule. At a fraction of 0 this is
+    /// `self` and at 1 `rhs`, as spelled, so a terminal slot stays that slot. A
+    /// side with no RGB (``Color/default``, or the terminal's own foreground or
+    /// background before it has reported them) cannot be mixed, and the answer is
+    /// the heavier end: `self` through ½, `rhs` past it.
+    ///
     /// - Parameters:
     ///   - rhs: The colour to mix towards.
     ///   - fraction: How far towards `rhs` (0–1; clamped).
     ///   - colorSpace: Which space to mix in.
-    /// - Returns: The mixture, or `self` if either side is semantic.
+    /// - Returns: The mixture: RGB between the ends, an end as it is spelled, the
+    ///   heavier end where a side has no RGB, or `self` if either side is
+    ///   semantic.
     public func mix(
         with rhs: Color, by fraction: Double,
         in colorSpace: Gradient.ColorSpace = .perceptual
@@ -735,20 +755,28 @@ extension Color {
     /// for a space changes by a byte. `.perceptual` goes through OKLab, where a
     /// straight line between two colours looks like one: the midpoint of red
     /// and blue stops being darker than either end, and blue to yellow stops
-    /// passing through grey.
+    /// passing through grey. Its ends, and a side with no RGB, follow `lerp`'s
+    /// rule.
     ///
     /// - Parameters:
     ///   - from: The colour at `0`.
     ///   - to: The colour at `1`.
     ///   - phase: How far between them (0–1; clamped).
     ///   - space: Which space to blend in.
-    /// - Returns: The blend, or `from` if either side is semantic.
+    /// - Returns: The blend: RGB between the ends, an end as it is spelled, the
+    ///   heavier end where a side has no RGB, or `from` if either side is semantic.
     package static func interpolate(
         _ from: Color, _ to: Color, phase: Double, in space: Gradient.ColorSpace
     ) -> Color {
         guard space.isPerceptual else { return lerp(from, to, phase: phase) }
-        guard let fromRGB = from.rgbComponents, let toRGB = to.rgbComponents else { return from }
         let clamped = min(1, max(0, phase))
+        let fromRGB: RGBTriple
+        let toRGB: RGBTriple
+        switch blendEnds(from, to, phase: clamped) {
+        case .unresolved: return from
+        case .decided(let answer): return answer
+        case .mix(let lhs, let rhs): (fromRGB, toRGB) = (lhs, rhs)
+        }
         let start = oklab(red: fromRGB.red, green: fromRGB.green, blue: fromRGB.blue)
         let end = oklab(red: toRGB.red, green: toRGB.green, blue: toRGB.blue)
         let blended = fromOKLab(
@@ -760,21 +788,25 @@ extension Color {
         // space of its own, and OKLab has nothing to say about it. Both arms of
         // this function therefore agree about alpha even though they disagree
         // about colour, which is what a caller switching `colorSpace` expects.
-        result.alpha = UInt8(
-            min(
-                255,
-                max(
-                    0,
-                    (Double(from.alpha)
-                        + (Double(to.alpha) - Double(from.alpha)) * min(1, max(0, phase)))
-                        .rounded())))
+        result.alpha = mixedByte(from.alpha, to.alpha, phase: clamped)
         return result
     }
 
     /// Linearly interpolates between two colors.
     ///
-    /// Both colors are converted to RGB before interpolation. If either
-    /// color is semantic (unresolved), the `from` color is returned unchanged.
+    /// Between the ends the result is RGB, mixed in encoded sRGB. The ends
+    /// themselves come back as they are spelled: at phase 0 this is `from` and
+    /// at 1 it is `to`, so `Color.lerp(.ansi(.red), x, phase: 0)` is still
+    /// SGR 31, the terminal's own red, and not the RGB it measures as. Two equal
+    /// colours keep their spelling at every phase, with only the alpha
+    /// interpolated.
+    ///
+    /// A colour with no RGB (``Color/default``, or the terminal's own foreground
+    /// or background before it has reported them) has nothing to mix: the
+    /// terminal decides what it paints. A blend with such a side takes the
+    /// heavier end instead, `from` through phase ½ and `to` past it, whole. The
+    /// tie goes to `from`. A semantic (unresolved) side returns `from` at every
+    /// phase.
     ///
     /// Used by the breathing focus indicator to smoothly fade between
     /// a dimmed and a full-brightness accent color.
@@ -794,32 +826,99 @@ extension Color {
     ///   - to: The end color (returned when `phase` is 1).
     ///   - phase: The interpolation factor (0–1, clamped; a `phase` of NaN
     ///     reads as 0).
-    /// - Returns: The interpolated RGB color.
+    /// - Returns: The interpolated color: RGB between the ends, an end as it is
+    ///   spelled, or the heavier end where a side has no RGB.
     public static func lerp(_ from: Color, _ to: Color, phase: Double) -> Color {
-        guard let fromRGB = from.rgbComponents,
-            let toRGB = to.rgbComponents
-        else {
-            return from
-        }
-
         let clamped = min(1, max(0, phase))
-        func blend(_ start: UInt8, _ end: UInt8) -> UInt8 {
-            let value = Double(start) + (Double(end) - Double(start)) * clamped
-            // Clamped as well as rounded: the arithmetic cannot leave 0…255 for
-            // a `clamped` in 0…1, but `UInt8(_: Double)` traps if it ever did,
-            // and a trap is not an acceptable answer to a rounding question.
-            return UInt8(min(255, max(0, value.rounded())))
+        let fromRGB: RGBTriple
+        let toRGB: RGBTriple
+        switch blendEnds(from, to, phase: clamped) {
+        case .unresolved: return from
+        case .decided(let answer): return answer
+        case .mix(let start, let end): (fromRGB, toRGB) = (start, end)
         }
 
         var result = Color.rgb(
-            blend(fromRGB.red, toRGB.red),
-            blend(fromRGB.green, toRGB.green),
-            blend(fromRGB.blue, toRGB.blue))
+            mixedByte(fromRGB.red, toRGB.red, phase: clamped),
+            mixedByte(fromRGB.green, toRGB.green, phase: clamped),
+            mixedByte(fromRGB.blue, toRGB.blue, phase: clamped))
         // Alpha is a fourth channel and interpolates like the others. Both colour
         // animators go through here, so this is what makes a `withAnimation` fade
         // of a colour's own opacity work rather than snap.
-        result.alpha = blend(from.alpha, to.alpha)
+        result.alpha = mixedByte(from.alpha, to.alpha, phase: clamped)
         return result
+    }
+}
+
+// MARK: - Blend Ends
+
+extension Color {
+    /// One colour's RGB, as ``rgbComponents`` answers it.
+    typealias RGBTriple = (red: UInt8, green: UInt8, blue: UInt8)
+
+    /// What ``blendEnds(_:_:phase:)`` found.
+    enum BlendEnds {
+        /// A side is semantic: there is nothing to blend until a palette resolves
+        /// it, and each blend keeps its own answer for that.
+        case unresolved
+        /// The ends are the answer, spelled as they are.
+        case decided(Color)
+        /// Mix these two.
+        case mix(RGBTriple, RGBTriple)
+    }
+
+    /// What a blend of `from` toward `to` is when its ends decide it, or the two
+    /// RGB triples to mix when they do not.
+    ///
+    /// One rule for ``lerp(_:_:phase:)``, ``interpolate(_:_:phase:in:)`` and
+    /// ``compositing(_:over:)``, and so for ``opacity(_:over:)``, ``mix(with:by:in:)``
+    /// and every gradient. In order:
+    ///
+    /// 1. Two `.rgb` ends mix, and nothing below is asked. Their arithmetic is what
+    ///    it always was, byte for byte.
+    /// 2. A `.semantic` side is `.unresolved`.
+    /// 3. Equal ends are that colour, at the alpha between theirs.
+    /// 4. Phase 0 is `from` and phase 1 is `to`, as spelled. A blend that is an end
+    ///    has nothing to re-spell: a lerp of `.ansi(.red)` at 0 used to come back as
+    ///    the RGB it measures as, a different colour on any terminal whose palette
+    ///    is not xterm's.
+    /// 5. A side with no RGB snaps: `from` through phase ½, `to` past it, whole,
+    ///    alpha and all. The terminal decides what such a colour paints and has not
+    ///    said, so there is no colour between the two to show. The tie goes to
+    ///    `from`, which makes `opacity(0.5, over:)` keep the colour, as the
+    ///    compositor's glyph contest keeps the source's glyph at ½.
+    /// 6. Otherwise the two measured triples mix.
+    ///
+    /// - Parameter clamped: The phase, already clamped to 0…1.
+    static func blendEnds(_ from: Color, _ to: Color, phase clamped: Double) -> BlendEnds {
+        if case .rgb(let red, let green, let blue) = from.value,
+            case .rgb(let toRed, let toGreen, let toBlue) = to.value
+        {
+            return .mix((red, green, blue), (toRed, toGreen, toBlue))
+        }
+        if case .semantic = from.value { return .unresolved }
+        if case .semantic = to.value { return .unresolved }
+        if from.value == to.value {
+            var kept = from
+            kept.alpha = mixedByte(from.alpha, to.alpha, phase: clamped)
+            return .decided(kept)
+        }
+        if clamped == 0 { return .decided(from) }
+        if clamped == 1 { return .decided(to) }
+        guard let fromRGB = from.rgbComponents, let toRGB = to.rgbComponents else {
+            return .decided(clamped <= 0.5 ? from : to)
+        }
+        return .mix(fromRGB, toRGB)
+    }
+
+    /// One channel `phase` of the way from `start` to `end`, rounded to nearest.
+    ///
+    /// Clamped as well as rounded: the arithmetic cannot leave 0…255 for a phase in
+    /// 0…1, but `UInt8(_: Double)` traps if it ever did, and a trap is not an
+    /// acceptable answer to a rounding question.
+    static func mixedByte(_ start: UInt8, _ end: UInt8, phase clamped: Double) -> UInt8 {
+        let value = Double(start) + (Double(end) - Double(start)) * clamped
+        return UInt8(min(255, max(0, value.rounded())))
     }
 }
 

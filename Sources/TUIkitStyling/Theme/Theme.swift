@@ -170,6 +170,10 @@ extension Palette {
     /// terminals have no alpha, so the blend has to be resolved to a concrete
     /// cell colour (see ``Color/opacity(_:over:)``, and
     /// `Documentation/Terminal-compatibility.md` on the 256-colour cube).
+    ///
+    /// Over a background with no RGB (``Color/default``, or the terminal's own
+    /// before it has reported it) there is no colour 30% of the way to show, so
+    /// the default is the background itself.
     public var focusBackground: Color { derivedFocusBackground() }
 
     /// What the default `focusBackground` derives from this palette's other
@@ -643,6 +647,10 @@ extension Palette {
 
     /// The accent tint an unfocused control's face rests at — a button's fill,
     /// a picker's, a toggle's brackets.
+    ///
+    /// When the accent or the background has no RGB (``Color/default``, or a
+    /// colour of the terminal's own that it has not reported), no 20% tint can be
+    /// mixed, and the face is the background itself.
     public var restingControlFace: Color {
         accent.opacity(ViewConstants.focusBorderDim, over: background)
     }
@@ -887,6 +895,12 @@ extension Palette {
     /// colour, so the bright end is bounded by what that content stays readable
     /// against — the pair `PaletteContrastAuditTests` measures. A mark drawn IN
     /// the accent has nothing on top of it and can go all the way.
+    ///
+    /// When the accent or the ground has no RGB (``Color/default``, or a colour of
+    /// the terminal's own that it has not reported), neither end can be mixed. For
+    /// an opaque accent the dim end, at 22%, is the ground, and the bright end, at
+    /// exactly half, is the accent; ``accentPulse(over:)``'s ends are the same two
+    /// colours. A translucent accent's own alpha counts toward the half.
     ///
     /// - Parameter surface: What the fill sits on, when that is not the page.
     public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {

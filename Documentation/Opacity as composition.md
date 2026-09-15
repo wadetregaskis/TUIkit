@@ -726,6 +726,15 @@ The rules, updated as each lands:
    character whose start lies outside the resolved span reveals as its field —
    the terminal cannot draw half of it either.
 
+9. **A colour with no RGB is not mixed; the heavier side wins, and the tie
+   goes to the source** (2026-09-15, §75). `Color.default`, and the terminal's
+   own foreground and background until it reports them, are colours the
+   terminal paints without saying what they are. Every blend of such a colour,
+   in every channel, is one side or the other: the source at an alpha of ½ or
+   more, what is behind it below. The same ½ as rule 2's glyph contest, and the
+   same side of the tie. At alpha 1 and 0 every blend is the colour exactly as
+   it is spelled, measurable or not.
+
 Checked for §10 and found already handled, no change needed: quantisation can
 make adjacent phases of a repeating fade byte-identical, and the replay
 machinery already charges nothing for them — `timeUntilChange` scans past
@@ -4734,3 +4743,56 @@ Tested through `RenderLoop` with no timer: a same-width `.custom("ab")` at four 
 shows `a b a b`, and an opaque indeterminate bar changes between frames. Measured on the
 Spinners page against the commit before, the change is nil, as it should be: the value
 read is the same number.
+
+## 75. A blend with a side the terminal decides (2026-09-15)
+
+Three colours have no RGB: `Color.default`, always, and the terminal's own foreground and
+background (`.terminalForeground`, `.terminalBackground`) until the terminal reports them.
+The terminal paints them without saying what they are. Every blend reads RGB, and handed
+one of these each returned its `from` unchanged whatever the phase: `lerp`, `interpolate`
+(so `mix` and every gradient), `opacity(_:over:)` (a `lerp`) and `compositing(_:over:)`.
+So a 10% ink over such a page was the ink at full strength, and a 20% accent tint over it
+was the whole accent.
+
+All four now ask one helper, `Color.blendEnds`, in this order:
+
+- **Two RGB ends** mix exactly as before. `BlendEndsTests.rgbBlendsAreUnchanged` checks a
+  grid of pairs, alphas and phases (including equal ends, the clamped range and NaN)
+  against the arithmetic written out in the test.
+- **A semantic side** returns `from`, as before.
+- **Equal ends** are that colour, spelled as it is, with only the alpha interpolated.
+- **Phase 0 and 1** are the ends as spelled. `Color.ansi(.red).opacity(1, over: page)` is
+  SGR 31, not `38;2;205;0;0`. §21.2 and §29.1 explain why `spendingAlpha(over:)` had to
+  guard the bright end of every pulse against that re-spelling. The guard stays, and is
+  now only a shortcut.
+- **A side with no RGB** snaps to the heavier end: `from` through phase ½, `to` past it,
+  the whole colour, alpha included. `opacity(a, over:)` is `lerp` at phase `1 − a`, so a
+  colour at a coverage of ½ or more keeps itself and below that is the surface.
+- **Otherwise**, two measured colours mix as RGB between exact ends. That covers a
+  reported foreground or background, and today also `.ansi` slots and `palette256(0...15)`,
+  which still measure as xterm's table.
+
+**Why the tie goes to the source.** `ViewConstants.disabledForeground` and
+`focusPulseMax` are both exactly 0.50. So a disabled label in such an ink keeps its ink
+rather than becoming the page, and a fill pulse's bright end is the accent while its dim
+end (0.22) is the ground. It is also the side of ½ that rule 2's glyph contest takes
+(`alpha.layer >= 0.5`), so at the midpoint a cell's glyph and its colours come from the
+same layer.
+
+**What the compositor does with it.** The resolution blends through `opacity(_:over:)`, so
+a fade of such a colour is now a cut at ½ in both channels: the colour through ½, the
+backdrop below. The glyph rule is unchanged here. Over a blank destination the source's
+glyph still draws below ½, now in a colour that snapped to the field. Where that field is
+`.terminalBackground` and the terminal has not reported it, the foreground slot has no
+spelling for it and emits its own default, 39, so the glyph shows in the terminal's
+foreground. Whether such a glyph should draw at all is the next step of the terminal-colour
+plan, not this one.
+
+**What a built-in view sees: nothing.** Every built-in palette states RGB roles, so no
+blend the framework derives from one has a side without RGB. The change reaches an app
+that puts `Color.default`, a slot or the terminal's own colours into a palette, a style
+or a blend of its own.
+
+`BlendEndsTests` (TUIkitStylingTests) pins the rule, including
+`restingControlFace`, `focusBackground` and both pulse pairs over a page with no RGB, and
+a gradient stop with no RGB, which is a hard edge at the middle of its segment.

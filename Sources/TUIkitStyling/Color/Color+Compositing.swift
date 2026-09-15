@@ -71,13 +71,28 @@ extension Color {
     /// `Documentation/Opacity as composition.md`, rule 5, for the numbers and
     /// the reversal.
     ///
+    /// Its ends follow ``lerp(_:_:phase:)``'s rule, weighted the same way: at an
+    /// opacity of 1 this is the colour as it is spelled and at 0 the surface, and
+    /// where either side has no RGB (``Color/default``, or the terminal's own
+    /// colours before it has reported them) it is the colour at an opacity of ½ or
+    /// more and the surface below. Every answer but a semantic one is opaque.
+    ///
     /// - Parameters:
     ///   - opacity: The weight of this colour (0–1; clamped).
     ///   - surface: What is underneath.
-    /// - Returns: The composite, or `self` if either side is semantic.
+    /// - Returns: The composite: RGB, an end as it is spelled, or `self` if either
+    ///   side is semantic.
     public func compositing(_ opacity: Double, over surface: Color) -> Color {
-        guard let source = rgbComponents, let behind = surface.rgbComponents else { return self }
         let alpha = min(1, max(0, opacity))
+        let source: RGBTriple
+        let behind: RGBTriple
+        switch Self.blendEnds(self, surface, phase: 1 - alpha) {
+        case .unresolved: return self
+        // Opaque, as the arithmetic below always was: this blend ignores the alpha
+        // either colour carries (§44.1 of `Documentation/Opacity as composition.md`).
+        case .decided(let answer): return answer.opaqueSpelling
+        case .mix(let over, let under): (source, behind) = (over, under)
+        }
         func channel(_ over: UInt8, _ under: UInt8) -> UInt8 {
             Self.encodedChannel(
                 alpha * Self.linearChannel(over) + (1 - alpha) * Self.linearChannel(under))
