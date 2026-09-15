@@ -35,7 +35,7 @@ struct ForegroundStyleAlphaTests {
 
     @Test("A horizontal rule claims the cells it drew, and no more")
     func horizontalDivider() throws {
-        let drawn = buffer(Divider().foregroundStyle(faded(.red, 128)), width: 7, height: 1)
+        let drawn = buffer(Divider().foregroundStyle(faded(.ansi(.red), 128)), width: 7, height: 1)
         let claim = try #require(drawn.opacityRegions.first)
         #expect(drawn.opacityRegions.count == 1)
         #expect(claim.width == 7, "one cell per column of the rule")
@@ -45,13 +45,13 @@ struct ForegroundStyleAlphaTests {
         // keeps a faded rule from punching a hole in whatever it is drawn over.
         #expect(claim.fieldOpacity == 1)
         #expect(
-            drawn.lines[0].contains(Color.red.foregroundCodes().joined(separator: ";")),
+            drawn.lines[0].contains(Color.ansi(.red).foregroundCodes().joined(separator: ";")),
             "the bytes are the colour at full strength: \(drawn.lines[0].debugDescription)")
     }
 
     @Test("An opaque rule claims nothing")
     func opaqueDivider() {
-        #expect(buffer(Divider().foregroundStyle(Color.red), width: 7, height: 1)
+        #expect(buffer(Divider().foregroundStyle(Color.ansi(.red)), width: 7, height: 1)
             .opacityRegions.isEmpty)
         // …and so does the default, which takes the palette's own border colour.
         #expect(buffer(Divider(), width: 7, height: 1).opacityRegions.isEmpty)
@@ -64,7 +64,7 @@ struct ForegroundStyleAlphaTests {
         let drawn = buffer(
             HStack {
                 Text("a")
-                Divider().foregroundStyle(faded(.red, 64)).frame(height: 3)
+                Divider().foregroundStyle(faded(.ansi(.red), 64)).frame(height: 3)
             }, width: 6, height: 3)
         let claim = try #require(drawn.opacityRegions.first)
         #expect(claim.width == 1, "one column")
@@ -78,7 +78,7 @@ struct ForegroundStyleAlphaTests {
 
     @Test("A rule with no room draws nothing and claims nothing")
     func degenerateDivider() {
-        #expect(buffer(Divider().foregroundStyle(faded(.red, 128)), width: 0, height: 1)
+        #expect(buffer(Divider().foregroundStyle(faded(.ansi(.red), 128)), width: 0, height: 1)
             .opacityRegions.isEmpty)
     }
 
@@ -86,7 +86,7 @@ struct ForegroundStyleAlphaTests {
 
     @Test("A spinner's glyph claims its own cells at its own alpha")
     func spinnerGlyph() throws {
-        let drawn = buffer(Spinner().foregroundStyle(faded(.red, 128)), width: 10, height: 1)
+        let drawn = buffer(Spinner().foregroundStyle(faded(.ansi(.red), 128)), width: 10, height: 1)
         let claim = try #require(drawn.opacityRegions.first)
         #expect(claim.offsetX == 0)
         #expect(claim.width > 0, "the glyph's width")
@@ -102,7 +102,7 @@ struct ForegroundStyleAlphaTests {
         // The label is drawn in the palette's foreground, not in the spinner's
         // colour, so one region over both would fade it at the wrong alpha.
         let drawn = buffer(
-            Spinner("Loading").foregroundStyle(faded(.red, 128)), width: 20, height: 1)
+            Spinner("Loading").foregroundStyle(faded(.ansi(.red), 128)), width: 20, height: 1)
         #expect(
             drawn.opacityRegions.count == 1,
             "an opaque label adds no claim of its own: \(drawn.opacityRegions)")
@@ -135,7 +135,7 @@ struct ForegroundStyleAlphaTests {
                 availableWidth: 20, availableHeight: 1, tuiContext: TUIContext()
             ).isolatingRenderCache()
             let palette = context.environment.palette
-            let tint = Color.red.opacity(0.5)
+            let tint = Color.ansi(.red).opacity(0.5)
             let drawn = renderToBuffer(
                 Spinner(style: .bouncing).foregroundStyle(tint), context: context)
             #expect(drawn.opacityRegions.isEmpty, "a spent ramp claims nothing")
@@ -148,7 +148,7 @@ struct ForegroundStyleAlphaTests {
             #expect(
                 run.frames.contains { $0.contains(spent) }, "the head states the spent colour")
             #expect(
-                !run.frames.contains { $0.contains(code(Color.red, palette)) },
+                !run.frames.contains { $0.contains(code(Color.ansi(.red), palette)) },
                 "and no frame states the unspent one")
         }
     }
@@ -158,10 +158,10 @@ struct ForegroundStyleAlphaTests {
     @Test("A faded rule resolves against what is behind it")
     func ruleResolves() {
         let context = makeRenderContext(width: 7, height: 1)
-        let drawn = buffer(Divider().foregroundStyle(faded(.red, 128)), width: 7, height: 1)
+        let drawn = buffer(Divider().foregroundStyle(faded(.ansi(.red), 128)), width: 7, height: 1)
         let resolved = drawn.resolvingOpacity(
-            surface: .blue, palette: context.environment.palette)
-        let halfway = Color.red.opacity(128.0 / 255, over: .blue)
+            surface: .ansi(.blue), palette: context.environment.palette)
+        let halfway = Color.ansi(.red).opacity(128.0 / 255, over: .ansi(.blue))
             .foregroundCodes().joined(separator: ";")
         #expect(
             resolved.lines[0].contains(halfway),

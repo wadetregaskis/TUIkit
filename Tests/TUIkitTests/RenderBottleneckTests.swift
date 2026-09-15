@@ -246,7 +246,7 @@ struct RenderBottleneckTests {
         }
 
         // 3 modifiers
-        let threeModifiers = Text("Hello").bold().foregroundStyle(.red).dimmed()
+        let threeModifiers = Text("Hello").bold().foregroundStyle(.ansi(.red)).dimmed()
         _ = measure("3 modifiers", iterations: iterations) {
             _ = renderToBuffer(threeModifiers, context: context)
         }
@@ -254,7 +254,7 @@ struct RenderBottleneckTests {
         // 5 modifiers
         let fiveModifiers = Text("Hello")
             .bold()
-            .foregroundStyle(.red)
+            .foregroundStyle(.ansi(.red))
             .dimmed()
             .padding(1)
             .border(style: .line)

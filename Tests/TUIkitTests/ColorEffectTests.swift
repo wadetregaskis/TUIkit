@@ -72,7 +72,7 @@ struct ColorEffectTests {
     @Test("Multiplying by white changes nothing, by black removes everything")
     func multiplyTints() {
         let base = Text("ab").foregroundStyle(Color.rgb(200, 100, 50))
-        #expect(drawn(base.colorMultiply(.white)) == drawn(base))
+        #expect(drawn(base.colorMultiply(.ansi(.white))) == drawn(base))
         #expect(drawn(base.colorMultiply(.rgb(0, 0, 0))).contains("0;0;0"))
         // Keeping only the red channel.
         #expect(drawn(base.colorMultiply(.rgb(255, 0, 0))).contains("200;0;0"))

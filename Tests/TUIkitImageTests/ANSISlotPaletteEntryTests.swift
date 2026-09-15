@@ -23,22 +23,22 @@ struct ANSISlotPaletteEntryTests {
 
     /// In slot order, 0 through 15.
     private static let slots: [Slot] = [
-        ("black", .black, 30, 40, [0, 0, 0]),
-        ("red", .red, 31, 41, [205, 0, 0]),
-        ("green", .green, 32, 42, [0, 205, 0]),
-        ("yellow", .yellow, 33, 43, [205, 205, 0]),
-        ("blue", .blue, 34, 44, [0, 0, 238]),
-        ("magenta", .magenta, 35, 45, [205, 0, 205]),
-        ("cyan", .cyan, 36, 46, [0, 205, 205]),
-        ("white", .white, 37, 47, [229, 229, 229]),
-        ("brightBlack", .brightBlack, 90, 100, [127, 127, 127]),
-        ("brightRed", .brightRed, 91, 101, [255, 0, 0]),
-        ("brightGreen", .brightGreen, 92, 102, [0, 255, 0]),
-        ("brightYellow", .brightYellow, 93, 103, [255, 255, 0]),
-        ("brightBlue", .brightBlue, 94, 104, [92, 92, 255]),
-        ("brightMagenta", .brightMagenta, 95, 105, [255, 0, 255]),
-        ("brightCyan", .brightCyan, 96, 106, [0, 255, 255]),
-        ("brightWhite", .brightWhite, 97, 107, [255, 255, 255]),
+        ("black", .ansi(.black), 30, 40, [0, 0, 0]),
+        ("red", .ansi(.red), 31, 41, [205, 0, 0]),
+        ("green", .ansi(.green), 32, 42, [0, 205, 0]),
+        ("yellow", .ansi(.yellow), 33, 43, [205, 205, 0]),
+        ("blue", .ansi(.blue), 34, 44, [0, 0, 238]),
+        ("magenta", .ansi(.magenta), 35, 45, [205, 0, 205]),
+        ("cyan", .ansi(.cyan), 36, 46, [0, 205, 205]),
+        ("white", .ansi(.white), 37, 47, [229, 229, 229]),
+        ("brightBlack", .ansi(.brightBlack), 90, 100, [127, 127, 127]),
+        ("brightRed", .ansi(.brightRed), 91, 101, [255, 0, 0]),
+        ("brightGreen", .ansi(.brightGreen), 92, 102, [0, 255, 0]),
+        ("brightYellow", .ansi(.brightYellow), 93, 103, [255, 255, 0]),
+        ("brightBlue", .ansi(.brightBlue), 94, 104, [92, 92, 255]),
+        ("brightMagenta", .ansi(.brightMagenta), 95, 105, [255, 0, 255]),
+        ("brightCyan", .ansi(.brightCyan), 96, 106, [0, 255, 255]),
+        ("brightWhite", .ansi(.brightWhite), 97, 107, [255, 255, 255]),
     ]
 
     @Test("sgrParameters spells each slot as its own code, and the default as 39 or 49")

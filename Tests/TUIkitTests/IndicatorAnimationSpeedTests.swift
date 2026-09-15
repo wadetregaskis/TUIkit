@@ -352,7 +352,7 @@ private struct StandardTranslucentSweepApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+            ProgressView().indeterminateStyle(.sweep).tint(Color.ansi(.red).opacity(0.5))
                 .indicatorAnimationSpeed(.standard, for: .indeterminateProgress)
         }
     }
@@ -364,7 +364,7 @@ private struct DoubleSpeedTranslucentSweepApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+            ProgressView().indeterminateStyle(.sweep).tint(Color.ansi(.red).opacity(0.5))
                 .indicatorAnimationSpeed(2, for: .indeterminateProgress)
         }
     }
@@ -376,7 +376,7 @@ private struct QuickTranslucentSweepApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+            ProgressView().indeterminateStyle(.sweep).tint(Color.ansi(.red).opacity(0.5))
                 .indicatorAnimationSpeed(1.1, for: .indeterminateProgress)
         }
     }
@@ -401,7 +401,7 @@ private struct NarrowTranslucentSweepApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProgressView().indeterminateStyle(.sweep).frame(width: 2).tint(Color.red.opacity(0.5))
+            ProgressView().indeterminateStyle(.sweep).frame(width: 2).tint(Color.ansi(.red).opacity(0.5))
         }
     }
 }
@@ -413,7 +413,7 @@ private struct HourLongTranslucentSweepApp: App {
     var body: some Scene {
         WindowGroup {
             ProgressView().indeterminateStyle(.custom(IndeterminateConfiguration(motion: .sweep, period: 3600)))
-                .tint(Color.red.opacity(0.5))
+                .tint(Color.ansi(.red).opacity(0.5))
         }
     }
 }

@@ -232,9 +232,9 @@ struct RenderCacheContractTests {
         // answer for the other. If these two matched, the test below would prove
         // nothing — which is the precondition, asserted rather than assumed.
         let redTruth = frame(
-            base.isolatingRenderCache(), CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
+            base.isolatingRenderCache(), CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.red)))
         let blueTruth = frame(
-            base.isolatingRenderCache(), CacheLeaf(text: "hi").equatable().foregroundStyle(.blue))
+            base.isolatingRenderCache(), CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.blue)))
         #expect(
             redTruth.lines != blueTruth.lines,
             "precondition: .foregroundStyle must change the rendered output"
@@ -244,8 +244,8 @@ struct RenderCacheContractTests {
         // boundary. Nothing in the cache key sees the difference — the modifier
         // has to notice and clear.
         let shared = context()
-        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
-        let served = frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.blue))
+        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.red)))
+        let served = frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.blue)))
 
         #expect(served.lines == blueTruth.lines, "the new style must be rendered")
         #expect(served.lines != redTruth.lines, "not the buffer from the old one")
@@ -293,7 +293,7 @@ struct RenderCacheContractTests {
     func unchangedThemeStillMemoizes() {
         let shared = context()
         // A TINTED theme: the resolved palette is the incomparable one.
-        let theme = Theme(palette: SystemPalette(.green), tint: .red)
+        let theme = Theme(palette: SystemPalette(.green), tint: .ansi(.red))
         frame(shared, AccentLeaf(text: "hi").equatable().theme(theme))
         let before = shared.renderCache?.stats.subtreeClears ?? 0
         frame(shared, AccentLeaf(text: "hi").equatable().theme(theme))
@@ -310,17 +310,17 @@ struct RenderCacheContractTests {
         let base = context()
 
         let redTruth = frame(
-            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().tint(.red))
+            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().tint(.ansi(.red)))
         let blueTruth = frame(
-            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().tint(.blue))
+            base.isolatingRenderCache(), AccentLeaf(text: "hi").equatable().tint(.ansi(.blue)))
         #expect(
             redTruth.lines != blueTruth.lines,
             "precondition: .tint must change the rendered output"
         )
 
         let shared = context()
-        frame(shared, AccentLeaf(text: "hi").equatable().tint(.red))
-        let served = frame(shared, AccentLeaf(text: "hi").equatable().tint(.blue))
+        frame(shared, AccentLeaf(text: "hi").equatable().tint(.ansi(.red)))
+        let served = frame(shared, AccentLeaf(text: "hi").equatable().tint(.ansi(.blue)))
 
         #expect(served.lines == blueTruth.lines, "the new tint must be rendered")
         #expect(served.lines != redTruth.lines, "not the buffer from the old one")
@@ -331,9 +331,9 @@ struct RenderCacheContractTests {
         let shared = context()
         let cache = shared.environment.renderCache!
 
-        frame(shared, AccentLeaf(text: "hi").equatable().tint(.red))
+        frame(shared, AccentLeaf(text: "hi").equatable().tint(.ansi(.red)))
         let before = cache.stats
-        frame(shared, AccentLeaf(text: "hi").equatable().tint(.red))
+        frame(shared, AccentLeaf(text: "hi").equatable().tint(.ansi(.red)))
 
         // Noticing the *change* rather than keying the cache on the palette: a
         // stable tint must still cost a comparison, not a miss.
@@ -372,9 +372,9 @@ struct RenderCacheContractTests {
         let shared = context()
         let cache = shared.environment.renderCache!
 
-        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
+        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.red)))
         let before = cache.stats
-        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.red))
+        frame(shared, CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.red)))
 
         // The point of detecting the *change* rather than keying on the
         // environment: a stable style costs a comparison, not a miss.
@@ -395,12 +395,12 @@ struct RenderCacheContractTests {
         // testing something that cannot happen.
         cache.beginRenderPass()
         _ = measureChild(
-            CacheLeaf(text: "hi").equatable().foregroundStyle(.red),
+            CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.red)),
             proposal: proposal, context: shared)
         let before = cache.stats
         cache.beginRenderPass()
         _ = measureChild(
-            CacheLeaf(text: "hi").equatable().foregroundStyle(.blue),
+            CacheLeaf(text: "hi").equatable().foregroundStyle(.ansi(.blue)),
             proposal: proposal, context: shared)
 
         // A paint is ink: it moves no cell, so the size measured under red is

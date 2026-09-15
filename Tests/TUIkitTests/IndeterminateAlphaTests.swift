@@ -37,7 +37,7 @@ struct IndeterminateAlphaTests {
     /// are not all one width, and for the same reason.
     @Test("A translucent indeterminate bar claims its frame and emits no run")
     func translucentBarClaimsInsteadOfRunning() {
-        let drawn = buffer(ProgressView().tint(Color.red.opacity(0.5)))
+        let drawn = buffer(ProgressView().tint(Color.ansi(.red).opacity(0.5)))
         #expect(drawn.animatedCells.isEmpty, "the run cannot carry it: \(drawn.animatedCells.count)")
         #expect(!drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
         #expect(
@@ -71,12 +71,12 @@ struct IndeterminateAlphaTests {
         let opaque = SystemPalette.default
         #expect(
             IndeterminateRenderer.isOpaqueThroughout(
-                style: .sweep, fillColor: .red, backgroundColor: .blue, accentColor: .green,
+                style: .sweep, fillColor: .ansi(.red), backgroundColor: .ansi(.blue), accentColor: .ansi(.green),
                 palette: opaque))
         for (name, colours) in [
-            ("filled", (Color.red.opacity(0.5), Color.blue, Color.green)),
-            ("empty", (Color.red, Color.blue.opacity(0.5), Color.green)),
-            ("accent", (Color.red, Color.blue, Color.green.opacity(0.5))),
+            ("filled", (Color.ansi(.red).opacity(0.5), Color.ansi(.blue), Color.ansi(.green))),
+            ("empty", (Color.ansi(.red), Color.ansi(.blue).opacity(0.5), Color.ansi(.green))),
+            ("accent", (Color.ansi(.red), Color.ansi(.blue), Color.ansi(.green).opacity(0.5))),
         ] {
             #expect(
                 !IndeterminateRenderer.isOpaqueThroughout(
@@ -87,8 +87,8 @@ struct IndeterminateAlphaTests {
         // And the style's own gradient, which never meets the palette's colours.
         #expect(
             !IndeterminateRenderer.isOpaqueThroughout(
-                style: .gradient(Gradient(colors: [.red, Color.blue.opacity(0.5)])),
-                fillColor: .red, backgroundColor: .blue, accentColor: .green, palette: opaque))
+                style: .gradient(Gradient(colors: [.ansi(.red), Color.ansi(.blue).opacity(0.5)])),
+                fillColor: .ansi(.red), backgroundColor: .ansi(.blue), accentColor: .ansi(.green), palette: opaque))
     }
 
     /// A styled bar's gradient reaches `laid` as the colour of each cell, so its alpha

@@ -38,7 +38,7 @@ struct BorderAlphaTests {
     @Test("The claim is the frame, not the box")
     func frameNotBox() {
         let claims = BorderRenderer.opacityClaims(
-            outerWidth: 6, height: 4, style: .line, color: faded(.red, 128))
+            outerWidth: 6, height: 4, style: .line, color: faded(.ansi(.red), 128))
         let cells = covered(claims)
         // The interior — where the CONTENT is — must be untouched. A single region
         // over the whole box would fade the very thing the border was drawn
@@ -78,7 +78,7 @@ struct BorderAlphaTests {
         for shape in shapes {
             let claims = BorderRenderer.opacityClaims(
                 outerWidth: shape.width, height: shape.height, style: .line,
-                color: faded(.red, 128), dividerRow: shape.divider)
+                color: faded(.ansi(.red), 128), dividerRow: shape.divider)
             let cells = covered(claims)
             let unique = Set(cells.map { "\($0.x),\($0.y)" })
             #expect(
@@ -91,13 +91,13 @@ struct BorderAlphaTests {
     func opaqueClaimsNothing() {
         #expect(
             BorderRenderer.opacityClaims(
-                outerWidth: 6, height: 4, style: .line, color: .red
+                outerWidth: 6, height: 4, style: .line, color: .ansi(.red)
             ).isEmpty)
         // …including a titled one whose title is also opaque.
         #expect(
             BorderRenderer.opacityClaims(
-                outerWidth: 12, height: 4, style: .line, color: .red, title: "Hi",
-                titleColor: .blue
+                outerWidth: 12, height: 4, style: .line, color: .ansi(.red), title: "Hi",
+                titleColor: .ansi(.blue)
             ).isEmpty)
     }
 
@@ -106,8 +106,8 @@ struct BorderAlphaTests {
     @Test("A faded border with an opaque title leaves the letters alone")
     func opaqueTitleInFadedBand() {
         let claims = BorderRenderer.opacityClaims(
-            outerWidth: 14, height: 3, style: .line, color: faded(.red, 128),
-            title: "Hi", titleColor: .blue)
+            outerWidth: 14, height: 3, style: .line, color: faded(.ansi(.red), 128),
+            title: "Hi", titleColor: .ansi(.blue))
         // `╭─ Hi ────────╮` — the title span is cells 2 through 5 (" Hi ").
         let topRow = claims.filter { $0.offsetY == 0 }
         let titleCells = covered(topRow).filter { (2...5).contains($0.x) && $0.y == 0 }
@@ -121,8 +121,8 @@ struct BorderAlphaTests {
     @Test("An opaque border with a faded title fades only the letters")
     func fadedTitleInOpaqueBand() throws {
         let claims = BorderRenderer.opacityClaims(
-            outerWidth: 14, height: 3, style: .line, color: .red, title: "Hi",
-            titleColor: faded(.blue, 64))
+            outerWidth: 14, height: 3, style: .line, color: .ansi(.red), title: "Hi",
+            titleColor: faded(.ansi(.blue), 64))
         let claim = try #require(claims.first, "the title span is claimed")
         #expect(claims.count == 1, "and nothing else is: \(claims)")
         #expect(claim.offsetX == 2)
@@ -138,8 +138,8 @@ struct BorderAlphaTests {
         // past the far corner, where nothing of this box exists at all.
         let outerWidth = 10
         let claims = BorderRenderer.opacityClaims(
-            outerWidth: outerWidth, height: 3, style: .line, color: .red,
-            title: "A very long title indeed", titleColor: faded(.blue, 64))
+            outerWidth: outerWidth, height: 3, style: .line, color: .ansi(.red),
+            title: "A very long title indeed", titleColor: faded(.ansi(.blue), 64))
         let claim = try #require(claims.first)
         #expect(claim.offsetX + claim.width <= outerWidth, "inside the box: \(claim)")
     }
@@ -150,8 +150,8 @@ struct BorderAlphaTests {
         // agrees — otherwise four cells in the middle of an unbroken band would
         // resolve at the title colour's alpha.
         let claims = BorderRenderer.opacityClaims(
-            outerWidth: 14, height: 3, style: .line, color: .red, title: "   ",
-            titleColor: faded(.blue, 64))
+            outerWidth: 14, height: 3, style: .line, color: .ansi(.red), title: "   ",
+            titleColor: faded(.ansi(.blue), 64))
         #expect(claims.isEmpty, "\(claims)")
     }
 
@@ -161,7 +161,7 @@ struct BorderAlphaTests {
         // field as well as a glyph, and both are the border colour.
         #expect(BorderStyle.block.paintsBackground, "the premise of this test")
         let claims = BorderRenderer.opacityClaims(
-            outerWidth: 6, height: 3, style: .block, color: faded(.red, 128))
+            outerWidth: 6, height: 3, style: .block, color: faded(.ansi(.red), 128))
         let claim = try #require(claims.first)
         #expect(claim.fieldOpacity == 128.0 / 255)
         #expect(claim.inkOpacity == 128.0 / 255)
@@ -169,7 +169,7 @@ struct BorderAlphaTests {
         // leaves the gaps between its glyphs alone.
         let line = try #require(
             BorderRenderer.opacityClaims(
-                outerWidth: 6, height: 3, style: .line, color: faded(.red, 128)
+                outerWidth: 6, height: 3, style: .line, color: faded(.ansi(.red), 128)
             ).first)
         #expect(line.fieldOpacity == 1)
     }
@@ -182,12 +182,12 @@ struct BorderAlphaTests {
             availableWidth: 12, availableHeight: 3, tuiContext: TUIContext()
         ).isolatingRenderCache()
         let buffer = renderToBuffer(
-            Text("hi").border(faded(.red, 128)), context: context)
+            Text("hi").border(faded(.ansi(.red), 128)), context: context)
         #expect(!buffer.opacityRegions.isEmpty, "the frame is claimed")
         // The BYTES are the colour at full strength: an SGR emitter has no
         // backdrop, so a translucent one there is a debug trap rather than a
         // blend. The alpha is in the region instead.
-        let opaque = Color.red.foregroundCodes().joined(separator: ";")
+        let opaque = Color.ansi(.red).foregroundCodes().joined(separator: ";")
         #expect(
             buffer.lines[0].contains(opaque),
             "the top band states the opaque spelling: \(buffer.lines[0].debugDescription)")
@@ -201,7 +201,7 @@ struct BorderAlphaTests {
         let context = RenderContext(
             availableWidth: 12, availableHeight: 3, tuiContext: TUIContext()
         ).isolatingRenderCache()
-        let buffer = renderToBuffer(Text("hi").border(.red), context: context)
+        let buffer = renderToBuffer(Text("hi").border(.ansi(.red)), context: context)
         #expect(buffer.opacityRegions.isEmpty)
     }
 
@@ -211,13 +211,13 @@ struct BorderAlphaTests {
             availableWidth: 12, availableHeight: 3, tuiContext: TUIContext()
         ).isolatingRenderCache()
         let buffer = renderToBuffer(
-            Text("hi").border(faded(.red, 128)), context: context)
+            Text("hi").border(faded(.ansi(.red), 128)), context: context)
         // The frame is drawn over nothing, so the backdrop the band blends toward
         // is the ambient SURFACE — which is exactly the case the old render-time
         // fade guessed at, and got right only over an empty page.
         let resolved = buffer.resolvingOpacity(
-            surface: .blue, palette: context.environment.palette)
-        let halfway = Color.red.opacity(128.0 / 255, over: .blue)
+            surface: .ansi(.blue), palette: context.environment.palette)
+        let halfway = Color.ansi(.red).opacity(128.0 / 255, over: .ansi(.blue))
             .foregroundCodes().joined(separator: ";")
         let band = resolved.lines[0]
         #expect(
@@ -244,10 +244,10 @@ struct BorderAlphaTests {
 
     @Test("An animated colour is one alpha only when every frame is")
     func hasOneAlpha() {
-        #expect(AnimatedColor(faded(.red, 128)).hasOneAlpha)
-        #expect(AnimatedColor(frames: [faded(.red, 128), faded(.green, 128)], step: 0).hasOneAlpha)
-        #expect(AnimatedColor(frames: [.red, .green], step: 0).hasOneAlpha)
-        #expect(!AnimatedColor(frames: [.red, faded(.blue, 128)], step: 0).hasOneAlpha)
+        #expect(AnimatedColor(faded(.ansi(.red), 128)).hasOneAlpha)
+        #expect(AnimatedColor(frames: [faded(.ansi(.red), 128), faded(.ansi(.green), 128)], step: 0).hasOneAlpha)
+        #expect(AnimatedColor(frames: [.ansi(.red), .ansi(.green)], step: 0).hasOneAlpha)
+        #expect(!AnimatedColor(frames: [.ansi(.red), faded(.ansi(.blue), 128)], step: 0).hasOneAlpha)
     }
 
     /// The type's own documented breath, from `border` to `accent`. A faded tint fades
@@ -255,7 +255,7 @@ struct BorderAlphaTests {
     @Test("The documented focus breath is one alpha only where its two slots agree")
     func documentedBreath() {
         let emphasis = EnvironmentValues().selectionEmphasis
-        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
+        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
         let breath = emphasis.animatedColor(true, dim: tinted.border, bright: tinted.accent)
         #expect(breath.isAnimating && !breath.hasOneAlpha, "\(breath.frames.map(\.alpha))")
         let palette = FadedAll()
@@ -269,8 +269,8 @@ struct BorderAlphaTests {
     func animatingOneAlphaClaims() {
         let tracker = VolatileReadTracker()
         let breathing = bordered(
-            AnimatedColor(frames: [faded(.red, 128), faded(.green, 128)], step: 0), tracker: tracker)
-        let still = bordered(AnimatedColor(faded(.red, 128)))
+            AnimatedColor(frames: [faded(.ansi(.red), 128), faded(.ansi(.green), 128)], step: 0), tracker: tracker)
+        let still = bordered(AnimatedColor(faded(.ansi(.red), 128)))
         #expect(!breathing.animatedCells.isEmpty, "its frames are replayed")
         #expect(!still.opacityRegions.isEmpty, "the premise: a faded frame is claimed")
         #expect(breathing.opacityRegions == still.opacityRegions, "\(breathing.opacityRegions)")
@@ -285,7 +285,7 @@ struct BorderAlphaTests {
     @Test("An animating border at several alphas blends each frame at its own alpha")
     func animatingSeveralAlphasBlendsPerFrame() throws {
         let tracker = VolatileReadTracker()
-        let drawn = bordered(AnimatedColor(frames: [.red, faded(.green, 128)], step: 0), tracker: tracker)
+        let drawn = bordered(AnimatedColor(frames: [.ansi(.red), faded(.ansi(.green), 128)], step: 0), tracker: tracker)
         #expect(!drawn.animatedCells.isEmpty, "its frames are replayed")
         #expect(tracker.reads == 0, "the border asked to be rendered every tick")
         // No region of its own: the opaque frame would be faded by any rectangle that
@@ -293,14 +293,14 @@ struct BorderAlphaTests {
         let carried = drawn.opacityRegions.filter { $0.offsetY == 0 }
         #expect(carried.isEmpty, "the border states no static claim here: \(carried)")
 
-        let resolved = drawn.resolvingOpacity(surface: .blue, palette: EnvironmentValues().palette)
+        let resolved = drawn.resolvingOpacity(surface: .ansi(.blue), palette: EnvironmentValues().palette)
         let top = try #require(resolved.animatedCells.first { $0.offsetY == 0 }, "the top rule")
-        let blended = Color.green.opacity(128.0 / 255, over: .blue).foregroundCodes().joined(separator: ";")
+        let blended = Color.ansi(.green).opacity(128.0 / 255, over: .ansi(.blue)).foregroundCodes().joined(separator: ";")
         #expect(
             top.frames[1].contains(blended),
             "the faded frame is blended: \(top.frames[1].debugDescription)")
         // And the opaque frame is untouched — the point of stating them separately.
-        let plainRed = Color.red.foregroundCodes().joined(separator: ";")
+        let plainRed = Color.ansi(.red).foregroundCodes().joined(separator: ";")
         #expect(
             top.frames[0].contains(plainRed),
             "the opaque frame keeps its colour: \(top.frames[0].debugDescription)")
@@ -327,16 +327,16 @@ struct BorderAlphaTests {
         ).isolatingRenderCache()
         let drawn = renderToBuffer(
             Text("hi")
-                .border(AnimatedColor(frames: [.red, faded(.green, 128)], step: 0))
-                .background(Color.blue.opacity(0.5)),
+                .border(AnimatedColor(frames: [.ansi(.red), faded(.ansi(.green), 128)], step: 0))
+                .background(Color.ansi(.blue).opacity(0.5)),
             context: context)
         let backgroundCoversTheRule = drawn.opacityRegions.contains { $0.offsetY == 0 && $0.fieldOpacity < 1 }
         #expect(backgroundCoversTheRule, "the precondition: an ancestor claim over the rule")
 
-        let resolved = drawn.resolvingOpacity(surface: .black, palette: EnvironmentValues().palette)
+        let resolved = drawn.resolvingOpacity(surface: .ansi(.black), palette: EnvironmentValues().palette)
 
         let top = try #require(resolved.animatedCells.first { $0.offsetY == 0 }, "the top rule")
-        let plainGreen = Color.green.foregroundCodes().joined(separator: ";")
+        let plainGreen = Color.ansi(.green).foregroundCodes().joined(separator: ";")
         #expect(
             !top.frames[1].contains(plainGreen),
             "the translucent frame is blended, not drawn at full strength: \(top.frames[1].debugDescription)")
@@ -348,11 +348,11 @@ struct BorderAlphaTests {
     /// the one claim they share.
     @Test("A one-alpha border's replayed frames resolve against the backdrop")
     func replayedFramesResolve() throws {
-        let drawn = bordered(AnimatedColor(frames: [faded(.red, 128), faded(.green, 128)], step: 0))
-        let resolved = drawn.resolvingOpacity(surface: .blue, palette: EnvironmentValues().palette)
+        let drawn = bordered(AnimatedColor(frames: [faded(.ansi(.red), 128), faded(.ansi(.green), 128)], step: 0))
+        let resolved = drawn.resolvingOpacity(surface: .ansi(.blue), palette: EnvironmentValues().palette)
         let top = try #require(resolved.animatedCells.first { $0.offsetY == 0 }, "the top band's run")
-        for (index, colour) in [Color.red, .green].enumerated() {
-            let blended = colour.opacity(128.0 / 255, over: .blue).foregroundCodes().joined(separator: ";")
+        for (index, colour) in [Color.ansi(.red), .ansi(.green)].enumerated() {
+            let blended = colour.opacity(128.0 / 255, over: .ansi(.blue)).foregroundCodes().joined(separator: ";")
             #expect(
                 top.frames[index].contains(blended),
                 "frame \(index): \(top.frames[index].debugDescription)")
@@ -393,7 +393,7 @@ struct BorderAlphaTests {
     @Test("A plain list's title claims a faded tint's alpha")
     func plainListTitleClaims() throws {
         let drawn = plain(
-            List("Items", selection: Binding<Int?>.constant(nil)) { Text("a") }.tint(faded(.red, 128)),
+            List("Items", selection: Binding<Int?>.constant(nil)) { Text("a") }.tint(faded(.ansi(.red), 128)),
             palette: SystemPalette.default, height: 5)
         try #require(drawn.lines.first?.stripped.hasPrefix("Items") == true, "\(drawn.lines.map(\.stripped))")
         for column in 0..<5 {

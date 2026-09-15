@@ -105,7 +105,7 @@ struct ANSIRendererStyleTests {
     @Test("Foreground color produces correct code")
     func foregroundColor() {
         var style = TextStyle()
-        style.foregroundColor = .red
+        style.foregroundColor = .ansi(.red)
         let result = ANSIRenderer.render("Red", with: style)
         #expect(result.contains("\u{1B}[31m"))
     }
@@ -113,7 +113,7 @@ struct ANSIRendererStyleTests {
     @Test("Background color produces correct code")
     func backgroundColor() {
         var style = TextStyle()
-        style.backgroundColor = .blue
+        style.backgroundColor = .ansi(.blue)
         let result = ANSIRenderer.render("Blue", with: style)
         #expect(result.contains("\u{1B}[44m"))
     }
@@ -153,7 +153,7 @@ struct ANSIRendererStyleTests {
     @Test("Bright foreground uses correct code")
     func brightForeground() {
         var style = TextStyle()
-        style.foregroundColor = .brightRed
+        style.foregroundColor = .ansi(.brightRed)
         let result = ANSIRenderer.render("Bright", with: style)
         #expect(result.contains("\u{1B}[91m"))
     }
@@ -161,7 +161,7 @@ struct ANSIRendererStyleTests {
     @Test("Bright background uses correct code")
     func brightBackground() {
         var style = TextStyle()
-        style.backgroundColor = .brightBlue
+        style.backgroundColor = .ansi(.brightBlue)
         let result = ANSIRenderer.render("Bright", with: style)
         #expect(result.contains("\u{1B}[104m"))
     }
@@ -175,14 +175,14 @@ struct ANSIRendererConvenienceTests {
 
     @Test("colorize with foreground applies color")
     func colorizeForeground() {
-        let result = ANSIRenderer.colorize("Hello", foreground: .green)
+        let result = ANSIRenderer.colorize("Hello", foreground: .ansi(.green))
         #expect(result.contains("\u{1B}[32m"))
         #expect(result.stripped == "Hello")
     }
 
     @Test("colorize with background applies color")
     func colorizeBackground() {
-        let result = ANSIRenderer.colorize("Hello", background: .red)
+        let result = ANSIRenderer.colorize("Hello", background: .ansi(.red))
         #expect(result.contains("\u{1B}[41m"))
     }
 
@@ -194,7 +194,7 @@ struct ANSIRendererConvenienceTests {
 
     @Test("colorize with all options applies foreground, background, and bold")
     func colorizeAll() {
-        let result = ANSIRenderer.colorize("Hello", foreground: .white, background: .blue, bold: true)
+        let result = ANSIRenderer.colorize("Hello", foreground: .ansi(.white), background: .ansi(.blue), bold: true)
         #expect(result.stripped == "Hello")
         #expect(result.contains("\u{1B}[1;37;44m"))
     }
@@ -207,22 +207,22 @@ struct ANSIRendererConvenienceTests {
 
     @Test("backgroundCode produces correct sequence")
     func backgroundCodeMethod() {
-        let code = ANSIRenderer.backgroundCode(for: .green)
+        let code = ANSIRenderer.backgroundCode(for: .ansi(.green))
         #expect(code == "\u{1B}[42m")
     }
 
     @Test("applyPersistentBackground wraps with bg code")
     func persistentBackground() {
-        let result = ANSIRenderer.applyPersistentBackground("Text", color: .blue)
+        let result = ANSIRenderer.applyPersistentBackground("Text", color: .ansi(.blue))
         #expect(result.contains("\u{1B}[44m"))
     }
 
     @Test("applyPersistentBackground replaces inner resets")
     func persistentBackgroundReplacesResets() {
         let input = "Before\(ANSIRenderer.reset)After"
-        let result = ANSIRenderer.applyPersistentBackground(input, color: .red)
+        let result = ANSIRenderer.applyPersistentBackground(input, color: .ansi(.red))
         // After reset, the bg code should be re-applied
-        let bgCode = ANSIRenderer.backgroundCode(for: .red)
+        let bgCode = ANSIRenderer.backgroundCode(for: .ansi(.red))
         // The reset in the middle should be followed by the bg code
         #expect(result.contains(ANSIRenderer.reset + bgCode))
     }

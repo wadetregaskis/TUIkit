@@ -21,28 +21,28 @@ import Testing
 private struct SelfRefPalette: Palette {
     let id = "selfref"
     let name = "Self-ref"
-    let background = Color.black
-    let foreground = Color.white
+    let background = Color.ansi(.black)
+    let foreground = Color.ansi(.white)
     var accent: Color { .palette.accent }
-    let success = Color.green
-    let warning = Color.yellow
-    let error = Color.red
-    let info = Color.blue
-    let border = Color.brightBlack
+    let success = Color.ansi(.green)
+    let warning = Color.ansi(.yellow)
+    let error = Color.ansi(.red)
+    let info = Color.ansi(.blue)
+    let border = Color.ansi(.brightBlack)
 }
 
 /// `accent` → `success` → `accent`: a two-role cycle.
 private struct CyclePalette: Palette {
     let id = "cycle"
     let name = "Cycle"
-    let background = Color.black
-    let foreground = Color.white
+    let background = Color.ansi(.black)
+    let foreground = Color.ansi(.white)
     var accent: Color { .palette.success }
     var success: Color { .palette.accent }
-    let warning = Color.yellow
-    let error = Color.red
-    let info = Color.blue
-    let border = Color.brightBlack
+    let warning = Color.ansi(.yellow)
+    let error = Color.ansi(.red)
+    let info = Color.ansi(.blue)
+    let border = Color.ansi(.brightBlack)
 }
 
 /// `accent` → `success`, and `success` is concrete — a chain that resolves in
@@ -50,14 +50,14 @@ private struct CyclePalette: Palette {
 private struct ChainPalette: Palette {
     let id = "chain"
     let name = "Chain"
-    let background = Color.black
-    let foreground = Color.white
+    let background = Color.ansi(.black)
+    let foreground = Color.ansi(.white)
     var accent: Color { .palette.success }
-    let success = Color.green
-    let warning = Color.yellow
-    let error = Color.red
-    let info = Color.blue
-    let border = Color.brightBlack
+    let success = Color.ansi(.green)
+    let warning = Color.ansi(.yellow)
+    let error = Color.ansi(.red)
+    let info = Color.ansi(.blue)
+    let border = Color.ansi(.brightBlack)
 }
 
 @MainActor

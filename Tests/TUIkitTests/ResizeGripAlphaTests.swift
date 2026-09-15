@@ -97,7 +97,7 @@ struct ResizeGripAlphaTests {
     /// the grips claim nothing — and the frame drawn is the one the run replays.
     @Test("Focused grips under a faded tint draw what their run replays")
     func focusedGripsUnderAFadedTint() throws {
-        let (drawn, cells) = grips(palette: SystemPalette.default, focused: true, tint: Color.red.opacity(0.5))
+        let (drawn, cells) = grips(palette: SystemPalette.default, focused: true, tint: Color.ansi(.red).opacity(0.5))
         try #require(!cells.isEmpty, "no grip was drawn: \(drawn.lines.map(\.stripped))")
         #expect(!drawn.animatedCells.isEmpty, "focused grips breathe")
         expectReplayIsIdentity(drawn, "a grip's run moved the cells")

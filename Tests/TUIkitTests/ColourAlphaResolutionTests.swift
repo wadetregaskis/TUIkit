@@ -60,22 +60,22 @@ struct ColourAlphaResolutionTests {
     @Test("Translucent ink keeps its own glyph and fades its colour")
     func translucentInkDrawsFaintly() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .red, background: .blue)
+            ANSIRenderer.colorize("world", foreground: .ansi(.red), background: .ansi(.blue))
         ])
         let source = tinted(
-            ANSIRenderer.colorize("hello", foreground: .green), ink: 0.2, width: 5)
+            ANSIRenderer.colorize("hello", foreground: .ansi(.green)), ink: 0.2, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(
             resolved.lines[0].stripped == "hello",
             "the source's glyph stands — there is no contest: \(resolved.lines)")
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(0.2, over: .blue))),
+            resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0.2, over: .ansi(.blue)))),
             "…in 20% green over the blue field: \(resolved.lines[0].debugDescription)")
-        #expect(!resolved.lines[0].contains(codes(.green)), "not at full strength")
+        #expect(!resolved.lines[0].contains(codes(.ansi(.green))), "not at full strength")
         #expect(
-            resolved.lines[0].contains(backgroundCodes(.blue)),
+            resolved.lines[0].contains(backgroundCodes(.ansi(.blue))),
             "and the field is untouched — the ink channel does not move it")
     }
 
@@ -84,13 +84,13 @@ struct ColourAlphaResolutionTests {
     @Test("Translucent field fades the background and not the ink")
     func translucentFieldFadesOnlyTheField() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .red, background: .blue)
+            ANSIRenderer.colorize("world", foreground: .ansi(.red), background: .ansi(.blue))
         ])
         let source = tinted(
-            ANSIRenderer.colorize("hello", foreground: .green, background: .white),
+            ANSIRenderer.colorize("hello", foreground: .ansi(.green), background: .ansi(.white)),
             field: 0.25, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         // Compared against green's own RGB rather than `codes(.green)`: the blend
@@ -98,10 +98,10 @@ struct ColourAlphaResolutionTests {
         // spelling ("32") is not what a blended row says even when the colour is
         // unchanged. `opacity(1, over:)` is the identity, in the blend's spelling.
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(1, over: .red))),
+            resolved.lines[0].contains(codes(Color.ansi(.green).opacity(1, over: .ansi(.red)))),
             "the ink is at full strength: \(resolved.lines[0].debugDescription)")
         #expect(
-            resolved.lines[0].contains(backgroundCodes(Color.white.opacity(0.25, over: .blue))),
+            resolved.lines[0].contains(backgroundCodes(Color.ansi(.white).opacity(0.25, over: .ansi(.blue)))),
             "…and the field is a quarter of the way from blue: \(resolved.lines[0].debugDescription)")
     }
 
@@ -126,22 +126,22 @@ struct ColourAlphaResolutionTests {
     @Test("Ink at zero keeps its own glyph, invisibly")
     func zeroInkKeepsItsGlyph() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .red, background: .blue)
+            ANSIRenderer.colorize("world", foreground: .ansi(.red), background: .ansi(.blue))
         ])
         let source = tinted(
-            ANSIRenderer.colorize("hello", foreground: .green), ink: 0, width: 5)
+            ANSIRenderer.colorize("hello", foreground: .ansi(.green)), ink: 0, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
         #expect(
             resolved.lines[0].stripped == "hello",
             "the source's own text is what is in the cells: \(resolved.lines)")
         // Invisible: the ink lands on the field it is drawn on, which the source
         // does not state and therefore inherits — the destination's blue.
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(0, over: .blue))),
+            resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0, over: .ansi(.blue)))),
             "painted in the field's colour: \(resolved.lines[0].debugDescription)")
         #expect(
-            !resolved.lines[0].contains(codes(Color.green.opacity(1, over: .red))),
+            !resolved.lines[0].contains(codes(Color.ansi(.green).opacity(1, over: .ansi(.red)))),
             "and no green was stated")
     }
 
@@ -163,12 +163,12 @@ struct ColourAlphaResolutionTests {
         func foreground(of ink: Color, alpha: Double) -> String {
             let source = tinted(
                 ANSIRenderer.colorize(
-                    "hello", foreground: ink.opaqueSpelling, background: .blue),
+                    "hello", foreground: ink.opaqueSpelling, background: .ansi(.blue)),
                 ink: alpha, width: 5)
-            return source.resolvingOpacity(surface: .black, palette: palette()).lines[0]
+            return source.resolvingOpacity(surface: .ansi(.black), palette: palette()).lines[0]
         }
-        let fieldCodes = codes(Color.blue.opacity(1, over: .blue))
-        for ink in [Color.green, .red, .clear, .white] {
+        let fieldCodes = codes(Color.ansi(.blue).opacity(1, over: .ansi(.blue)))
+        for ink in [Color.ansi(.green), .ansi(.red), .clear, .ansi(.white)] {
             let line = foreground(of: ink, alpha: 0)
             #expect(
                 line.contains(fieldCodes),
@@ -181,13 +181,13 @@ struct ColourAlphaResolutionTests {
     @Test("Ink at zero over an empty destination keeps its glyphs")
     func zeroInkOverNothing() {
         let source = tinted(
-            ANSIRenderer.colorize("hello", foreground: .green), ink: 0, width: 5)
-        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
+            ANSIRenderer.colorize("hello", foreground: .ansi(.green)), ink: 0, width: 5)
+        let resolved = source.resolvingOpacity(surface: .ansi(.black), palette: palette())
         #expect(
             resolved.lines[0].stripped == "hello",
             "still selectable: \(resolved.lines[0].debugDescription)")
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(0, over: .black))),
+            resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0, over: .ansi(.black)))),
             "and invisible against the surface: \(resolved.lines[0].debugDescription)")
     }
 
@@ -204,22 +204,22 @@ struct ColourAlphaResolutionTests {
     @Test("A layer's alpha and an ink's compose in sequence, not by multiplication")
     func channelsCompose() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .red, background: .blue)
+            ANSIRenderer.colorize("world", foreground: .ansi(.red), background: .ansi(.blue))
         ])
-        var source = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
+        var source = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .ansi(.green))])
         source.opacityRegions = [
             OpacityRegion(
                 offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.5, inkOpacity: 0.5)
         ]
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
         // Within the layer first, then across it.
-        let expected = Color.green.opacity(0.5, over: .blue).opacity(0.5, over: .red)
+        let expected = Color.ansi(.green).opacity(0.5, over: .ansi(.blue)).opacity(0.5, over: .ansi(.red))
         #expect(
             resolved.lines[0].contains(codes(expected)),
             "ink over its own field, then the layer: \(resolved.lines[0].debugDescription)")
         #expect(
-            !resolved.lines[0].contains(codes(Color.green.opacity(0.25, over: .red))),
+            !resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0.25, over: .ansi(.red)))),
             "and NOT the single multiplied blend")
     }
 
@@ -237,26 +237,26 @@ struct ColourAlphaResolutionTests {
     @Test("Translucent ink fades toward its own layer's background")
     func inkFadesTowardItsOwnField() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .white, background: .blue)
+            ANSIRenderer.colorize("world", foreground: .ansi(.white), background: .ansi(.blue))
         ])
         let source = tinted(
-            ANSIRenderer.colorize("hello", foreground: .red, background: .green),
+            ANSIRenderer.colorize("hello", foreground: .ansi(.red), background: .ansi(.green)),
             ink: 0.25, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(
-            resolved.lines[0].contains(codes(Color.red.opacity(0.25, over: .green))),
+            resolved.lines[0].contains(codes(Color.ansi(.red).opacity(0.25, over: .ansi(.green)))),
             "25% red over its own green field: \(resolved.lines[0].debugDescription)")
         // Spelled as a blend at alpha 1 rather than as `backgroundCodes(.green)`:
         // the resolver re-emits every colour it touched as truecolor, so the
         // standard-palette spelling `42` would be comparing notations, not
         // colours.
         #expect(
-            resolved.lines[0].contains(backgroundCodes(Color.green.opacity(1, over: .blue))),
+            resolved.lines[0].contains(backgroundCodes(Color.ansi(.green).opacity(1, over: .ansi(.blue)))),
             "the field itself is opaque and unmoved: \(resolved.lines[0].debugDescription)")
         #expect(
-            !resolved.lines[0].contains(codes(Color.red.opacity(0.25, over: .blue))),
+            !resolved.lines[0].contains(codes(Color.ansi(.red).opacity(0.25, over: .ansi(.blue)))),
             "and nothing blended toward the page behind the panel")
     }
 
@@ -265,9 +265,9 @@ struct ColourAlphaResolutionTests {
     /// eaten whole by "the layer wins the cell outright".
     @Test("Opaque in every channel is still the identity")
     func fullyOpaqueIsStillTheIdentity() {
-        let line = ANSIRenderer.colorize("hello", foreground: .green)
+        let line = ANSIRenderer.colorize("hello", foreground: .ansi(.green))
         let source = tinted(line, width: 5)
-        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = source.resolvingOpacity(surface: .ansi(.black), palette: palette())
         #expect(resolved.lines[0] == line, "untouched: \(resolved.lines[0].debugDescription)")
         #expect(resolved.opacityRegions.isEmpty)
     }
@@ -279,11 +279,11 @@ struct ColourAlphaResolutionTests {
     @Test("An ink-alpha region survives the drop filter over nothing")
     func inkAlphaSurvivesOverNothing() {
         let source = tinted(
-            ANSIRenderer.colorize("hello", foreground: .green), ink: 0.5, width: 5)
+            ANSIRenderer.colorize("hello", foreground: .ansi(.green)), ink: 0.5, width: 5)
         #expect(source.opacityRegions[0].isTranslucent, "the filter's own test")
-        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = source.resolvingOpacity(surface: .ansi(.black), palette: palette())
         #expect(
-            resolved.lines[0].contains(codes(Color.green.opacity(0.5, over: .black))),
+            resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0.5, over: .ansi(.black)))),
             "blended toward the surface: \(resolved.lines[0].debugDescription)")
     }
 
@@ -316,8 +316,8 @@ struct ColourAlphaResolutionTests {
                 offsetX: 0, offsetY: 0, width: 2, height: 1, opacity: 1,
                 inkOpacity: 1, fieldOpacity: 0.5),
         ]
-        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
-        let fadedField = backgroundCodes(field.opacity(0.5, over: .black))
+        let resolved = source.resolvingOpacity(surface: .ansi(.black), palette: palette())
+        let fadedField = backgroundCodes(field.opacity(0.5, over: .ansi(.black)))
         #expect(resolved.animatedCells.count == 1)
         for (index, drawn) in (resolved.animatedCells.first?.frames ?? []).enumerated() {
             #expect(
@@ -354,7 +354,7 @@ struct TranslucentColourViewTests {
     /// the number it asked for is off by one in the last channel — which is a
     /// property of the storage the tests should state, not paper over.
     private func alpha(_ value: Double) -> (colour: Color, exact: Double) {
-        var colour = Color.blue
+        var colour = Color.ansi(.blue)
         colour.alpha = UInt8((value * 255).rounded())
         return (colour, Double(colour.alpha) / 255)
     }
@@ -370,18 +370,18 @@ struct TranslucentColourViewTests {
         let veil = alpha(0.4)
         let lines = rendered(
             ZStack {
-                Color.red
+                Color.ansi(.red)
                 veil.colour
             })
-        let expected = codes(Color.blue.opacity(veil.exact, over: .red))
+        let expected = codes(Color.ansi(.blue).opacity(veil.exact, over: .ansi(.red)))
         #expect(
             lines[0].contains(expected),
             "40% blue over red (\(expected)): \(lines[0].debugDescription)")
         // And emphatically not the two wrong answers.
         #expect(
-            !lines[0].contains(codes(Color.blue.opacity(veil.exact, over: .black))),
+            !lines[0].contains(codes(Color.ansi(.blue).opacity(veil.exact, over: .ansi(.black)))),
             "not toward black")
-        #expect(!lines[0].contains(codes(.blue)), "not at full strength")
+        #expect(!lines[0].contains(codes(.ansi(.blue))), "not at full strength")
     }
 
     /// The same veil over a DIFFERENT sibling gives a different answer, which is
@@ -390,13 +390,13 @@ struct TranslucentColourViewTests {
     @Test("The same veil over a different sibling resolves differently")
     func veilDependsOnWhatIsBehind() {
         let veil = alpha(0.5)
-        let overRed = rendered(ZStack { Color.red; veil.colour })[0]
-        let overGreen = rendered(ZStack { Color.green; veil.colour })[0]
+        let overRed = rendered(ZStack { Color.ansi(.red); veil.colour })[0]
+        let overGreen = rendered(ZStack { Color.ansi(.green); veil.colour })[0]
         #expect(
             overRed != overGreen,
             "the veil is not a fixed colour: \(overRed.debugDescription)")
-        #expect(overRed.contains(codes(Color.blue.opacity(veil.exact, over: .red))))
-        #expect(overGreen.contains(codes(Color.blue.opacity(veil.exact, over: .green))))
+        #expect(overRed.contains(codes(Color.ansi(.blue).opacity(veil.exact, over: .ansi(.red)))))
+        #expect(overGreen.contains(codes(Color.ansi(.blue).opacity(veil.exact, over: .ansi(.green)))))
     }
 
     /// A veil over TEXT tints the field under the letters and leaves the letters
@@ -439,9 +439,9 @@ struct TranslucentColourViewTests {
         let context = RenderContext(
             availableWidth: 6, availableHeight: 1, tuiContext: TUIContext()
         ).isolatingRenderCache()
-        let buffer = renderToBuffer(Color.blue, context: context)
+        let buffer = renderToBuffer(Color.ansi(.blue), context: context)
         #expect(buffer.opacityRegions.isEmpty)
-        #expect(buffer.lines[0].contains(codes(.blue)))
+        #expect(buffer.lines[0].contains(codes(.ansi(.blue))))
     }
 }
 
@@ -478,18 +478,18 @@ struct TranslucentPaintTests {
     /// which is exactly what the two channels are for.
     @Test("A translucent background fades the field and not the text")
     func translucentBackground() {
-        let veil = faded(.blue, 128)
+        let veil = faded(.ansi(.blue), 128)
         // One row, so the ZStack cannot centre the text onto a line the pane
         // occupies alone — the first version of this test read row 0 and found
         // only the red fill.
         let lines = screen(
             ZStack {
-                Color.red
+                Color.ansi(.red)
                 Text("hi").background(veil.colour)
             }, height: 1)
         #expect(lines[0].stripped.contains("hi"), "the letters survive: \(lines[0].stripped)")
         #expect(
-            lines[0].contains(bgCodes(Color.blue.opacity(veil.exact, over: .red))),
+            lines[0].contains(bgCodes(Color.ansi(.blue).opacity(veil.exact, over: .ansi(.red)))),
             "the field is half blue over red: \(lines[0].debugDescription)")
     }
 
@@ -502,7 +502,7 @@ struct TranslucentPaintTests {
         ).isolatingRenderCache()
         let plain = renderToBuffer(Text("hi"), context: context)
         let backed = renderToBuffer(
-            Text("hi").background(faded(.blue, 0).colour), context: context)
+            Text("hi").background(faded(.ansi(.blue), 0).colour), context: context)
         #expect(backed.opacityRegions.isEmpty, "nothing claimed")
         #expect(
             backed.lines[0].stripped == plain.lines[0].stripped,
@@ -517,21 +517,21 @@ struct TranslucentPaintTests {
     /// and which is therefore the page's own surface.
     @Test("Translucent ink draws its glyph faintly over the field behind it")
     func translucentInk() {
-        let ink = faded(.green, 51)  // 20%
+        let ink = faded(.ansi(.green), 51)  // 20%
         let surface = makeRenderContext(width: 14, height: 3).environment.palette.background
         let lines = screen(
             ZStack {
-                Text("world").foregroundStyle(.red)
+                Text("world").foregroundStyle(.ansi(.red))
                 Text("hello").foregroundStyle(ink.colour)
             })
         #expect(
             lines[0].stripped.contains("hello"),
             "the faint glyph still draws: \(lines[0].stripped)")
         #expect(
-            lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: surface))),
+            lines[0].contains(fgCodes(Color.ansi(.green).opacity(ink.exact, over: surface))),
             "…in 20% green over the surface: \(lines[0].debugDescription)")
         #expect(
-            !lines[0].contains(fgCodes(Color.green.opacity(ink.exact, over: .red))),
+            !lines[0].contains(fgCodes(Color.ansi(.green).opacity(ink.exact, over: .ansi(.red)))),
             "and not toward the glyph it displaced")
     }
 
@@ -548,9 +548,9 @@ struct TranslucentPaintTests {
     /// deliberately still takes the first — see the comment at the fold.
     @Test("A translucent foreground and background both apply")
     func bothChannelsApplyTogether() {
-        var ink = Color.green
+        var ink = Color.ansi(.green)
         ink.alpha = 102  // 0.4
-        var field = Color.red
+        var field = Color.ansi(.red)
         field.alpha = 102
         let context = makeRenderContext(width: 14, height: 3)
         let surface = context.environment.palette.background
@@ -564,17 +564,17 @@ struct TranslucentPaintTests {
             surface: surface, palette: context.environment.palette
         ).lines
 
-        let fadedField = Color.red.opacity(102.0 / 255, over: surface)
+        let fadedField = Color.ansi(.red).opacity(102.0 / 255, over: surface)
         #expect(
             lines[0].contains(bgCodes(fadedField)),
             "the background is 40% red over the surface: \(lines[0].debugDescription)")
         #expect(
-            !lines[0].contains(bgCodes(Color.red.opacity(1, over: surface))),
+            !lines[0].contains(bgCodes(Color.ansi(.red).opacity(1, over: surface))),
             "and not full-strength red")
         // …and the ink is 40% green over the FIELD THAT RESULTED, which is the
         // faded red — the two claims compose rather than one winning.
         #expect(
-            lines[0].contains(fgCodes(Color.green.opacity(102.0 / 255, over: fadedField))),
+            lines[0].contains(fgCodes(Color.ansi(.green).opacity(102.0 / 255, over: fadedField))),
             "the ink blends over the faded field: \(lines[0].debugDescription)")
     }
 
@@ -590,13 +590,13 @@ struct TranslucentPaintTests {
     /// claim has to start at column 5 and be 5 wide — not cover the line.
     @Test("A concatenation claims each translucent fragment's own columns")
     func fragmentsClaimTheirOwnColumns() {
-        var faint = Color.green
+        var faint = Color.ansi(.green)
         faint.alpha = 102
         let context = makeRenderContext(width: 30, height: 3)
         let text =
-            Text("HELLO").foregroundStyle(.red)
+            Text("HELLO").foregroundStyle(.ansi(.red))
             + Text("world").foregroundStyle(faint)
-            + Text("AGAIN").foregroundStyle(.blue)
+            + Text("AGAIN").foregroundStyle(.ansi(.blue))
         let buffer = renderToBuffer(text, context: context)
 
         #expect(buffer.opacityRegions.count == 1, "one claim: \(buffer.opacityRegions)")
@@ -615,7 +615,7 @@ struct TranslucentPaintTests {
     /// `+ Text("")` to a working translucent `Text` silently made it opaque.
     @Test("A uniformly translucent concatenation claims its whole line")
     func uniformConcatenationIsNotRefused() {
-        var faint = Color.green
+        var faint = Color.ansi(.green)
         faint.alpha = 102
         let context = makeRenderContext(width: 30, height: 3)
         let plain = renderToBuffer(Text("abcdef").foregroundStyle(faint), context: context)
@@ -637,11 +637,11 @@ struct TranslucentPaintTests {
     /// unfaded.
     @Test("A wide glyph before a translucent fragment shifts its claim by cells")
     func wideGlyphShiftsTheClaim() {
-        var faint = Color.green
+        var faint = Color.ansi(.green)
         faint.alpha = 102
         let context = makeRenderContext(width: 30, height: 3)
         // "日本" is two characters and four cells.
-        let text = Text("日本").foregroundStyle(.red) + Text("ab").foregroundStyle(faint)
+        let text = Text("日本").foregroundStyle(.ansi(.red)) + Text("ab").foregroundStyle(faint)
         let buffer = renderToBuffer(text, context: context)
         #expect(
             buffer.opacityRegions.first?.offsetX == 4,
@@ -659,7 +659,7 @@ struct TranslucentPaintTests {
     func verticalRampClaimsPerRow() {
         let context = makeRenderContext(width: 8, height: 4)
         let scrim = LinearGradient(
-            colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            colors: [.ansi(.black), .clear], startPoint: .top, endPoint: .bottom)
         let buffer = renderToBuffer(
             VStack {
                 Text("aaaa")
@@ -684,8 +684,8 @@ struct TranslucentPaintTests {
     /// alpha does not vary, so nothing about the ramp's shape matters to the claim.
     @Test("A uniformly translucent ramp claims one rectangle")
     func uniformRampClaimsOneRectangle() {
-        var red = Color.red
-        var blue = Color.blue
+        var red = Color.ansi(.red)
+        var blue = Color.ansi(.blue)
         red.alpha = 128
         blue.alpha = 128
         let context = makeRenderContext(width: 8, height: 2)
@@ -713,7 +713,7 @@ struct TranslucentPaintTests {
     func transparentTextIsStillSelectable() {
         let lines = screen(
             ZStack {
-                Text("world").foregroundStyle(.red)
+                Text("world").foregroundStyle(.ansi(.red))
                 Text("hello").foregroundStyle(.clear)
             })
         #expect(
@@ -738,7 +738,7 @@ struct TranslucentPaintTests {
             availableWidth: 7, availableHeight: 3, tuiContext: TUIContext()
         ).isolatingRenderCache()
         let buffer = renderToBuffer(
-            Text("hi there").foregroundStyle(faded(.green, 128).colour), context: context)
+            Text("hi there").foregroundStyle(faded(.ansi(.green), 128).colour), context: context)
         #expect(buffer.lines.count == 2, "it wrapped: \(buffer.lines.map { $0.stripped })")
         #expect(buffer.opacityRegions.count == 2, "one region per line")
         let widths = buffer.opacityRegions.map(\.width)
@@ -755,10 +755,10 @@ struct TranslucentPaintTests {
             availableWidth: 8, availableHeight: 1, tuiContext: TUIContext()
         ).isolatingRenderCache()
         #expect(
-            renderToBuffer(Text("hi").background(Color.blue), context: context)
+            renderToBuffer(Text("hi").background(Color.ansi(.blue)), context: context)
                 .opacityRegions.isEmpty)
         #expect(
-            renderToBuffer(Text("hi").foregroundStyle(Color.green), context: context)
+            renderToBuffer(Text("hi").foregroundStyle(Color.ansi(.green)), context: context)
                 .opacityRegions.isEmpty)
     }
 }

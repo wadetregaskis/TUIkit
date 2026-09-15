@@ -33,35 +33,35 @@ struct ANSISlotPinTests {
     }
 
     static let slots: [Slot] = [
-        Slot(name: "black", color: .black, index: 0, foreground: "30", background: "40", xterm: [0, 0, 0]),
-        Slot(name: "red", color: .red, index: 1, foreground: "31", background: "41", xterm: [205, 0, 0]),
-        Slot(name: "green", color: .green, index: 2, foreground: "32", background: "42", xterm: [0, 205, 0]),
-        Slot(name: "yellow", color: .yellow, index: 3, foreground: "33", background: "43", xterm: [205, 205, 0]),
-        Slot(name: "blue", color: .blue, index: 4, foreground: "34", background: "44", xterm: [0, 0, 238]),
-        Slot(name: "magenta", color: .magenta, index: 5, foreground: "35", background: "45", xterm: [205, 0, 205]),
-        Slot(name: "cyan", color: .cyan, index: 6, foreground: "36", background: "46", xterm: [0, 205, 205]),
-        Slot(name: "white", color: .white, index: 7, foreground: "37", background: "47", xterm: [229, 229, 229]),
+        Slot(name: "black", color: .ansi(.black), index: 0, foreground: "30", background: "40", xterm: [0, 0, 0]),
+        Slot(name: "red", color: .ansi(.red), index: 1, foreground: "31", background: "41", xterm: [205, 0, 0]),
+        Slot(name: "green", color: .ansi(.green), index: 2, foreground: "32", background: "42", xterm: [0, 205, 0]),
+        Slot(name: "yellow", color: .ansi(.yellow), index: 3, foreground: "33", background: "43", xterm: [205, 205, 0]),
+        Slot(name: "blue", color: .ansi(.blue), index: 4, foreground: "34", background: "44", xterm: [0, 0, 238]),
+        Slot(name: "magenta", color: .ansi(.magenta), index: 5, foreground: "35", background: "45", xterm: [205, 0, 205]),
+        Slot(name: "cyan", color: .ansi(.cyan), index: 6, foreground: "36", background: "46", xterm: [0, 205, 205]),
+        Slot(name: "white", color: .ansi(.white), index: 7, foreground: "37", background: "47", xterm: [229, 229, 229]),
         Slot(
-            name: "brightBlack", color: .brightBlack, index: 8, foreground: "90", background: "100",
+            name: "brightBlack", color: .ansi(.brightBlack), index: 8, foreground: "90", background: "100",
             xterm: [127, 127, 127]),
-        Slot(name: "brightRed", color: .brightRed, index: 9, foreground: "91", background: "101", xterm: [255, 0, 0]),
+        Slot(name: "brightRed", color: .ansi(.brightRed), index: 9, foreground: "91", background: "101", xterm: [255, 0, 0]),
         Slot(
-            name: "brightGreen", color: .brightGreen, index: 10, foreground: "92", background: "102",
+            name: "brightGreen", color: .ansi(.brightGreen), index: 10, foreground: "92", background: "102",
             xterm: [0, 255, 0]),
         Slot(
-            name: "brightYellow", color: .brightYellow, index: 11, foreground: "93", background: "103",
+            name: "brightYellow", color: .ansi(.brightYellow), index: 11, foreground: "93", background: "103",
             xterm: [255, 255, 0]),
         Slot(
-            name: "brightBlue", color: .brightBlue, index: 12, foreground: "94", background: "104",
+            name: "brightBlue", color: .ansi(.brightBlue), index: 12, foreground: "94", background: "104",
             xterm: [92, 92, 255]),
         Slot(
-            name: "brightMagenta", color: .brightMagenta, index: 13, foreground: "95", background: "105",
+            name: "brightMagenta", color: .ansi(.brightMagenta), index: 13, foreground: "95", background: "105",
             xterm: [255, 0, 255]),
         Slot(
-            name: "brightCyan", color: .brightCyan, index: 14, foreground: "96", background: "106",
+            name: "brightCyan", color: .ansi(.brightCyan), index: 14, foreground: "96", background: "106",
             xterm: [0, 255, 255]),
         Slot(
-            name: "brightWhite", color: .brightWhite, index: 15, foreground: "97", background: "107",
+            name: "brightWhite", color: .ansi(.brightWhite), index: 15, foreground: "97", background: "107",
             xterm: [255, 255, 255]),
     ]
 
@@ -116,7 +116,7 @@ struct ANSISlotPinTests {
     @Test("The default measures as xterm's grey 229, the same as white, and is still not white")
     func defaultMeasuresAsGrey229() {
         #expect(Color.default.rgbComponents.map { [$0.red, $0.green, $0.blue] } == [229, 229, 229])
-        #expect(Color.default != Color.white)
+        #expect(Color.default != Color.ansi(.white))
     }
 
     @Test("A slot downsamples to itself at every depth, alpha included", arguments: slots)

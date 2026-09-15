@@ -19,7 +19,7 @@ struct OpacityClaimTests {
 
     @Test("Two opaque colours claim nothing at all")
     func opaqueClaimsNothing() {
-        #expect(OpacityRegion.claim(width: 10, height: 2, ink: .red, field: .blue) == nil)
+        #expect(OpacityRegion.claim(width: 10, height: 2, ink: .ansi(.red), field: .ansi(.blue)) == nil)
         #expect(OpacityRegion.claim(width: 10, height: 2) == nil)
         // `.default` is SGR 39/49 — the terminal's own colour, and fully opaque.
         #expect(OpacityRegion.claim(width: 10, height: 2, ink: .default) == nil)
@@ -28,7 +28,7 @@ struct OpacityClaimTests {
     @Test("A translucent ink claims the ink channel and leaves the field alone")
     func inkOnly() throws {
         let claim = try #require(
-            OpacityRegion.claim(width: 10, height: 2, ink: .red.opacity(0.5)))
+            OpacityRegion.claim(width: 10, height: 2, ink: .ansi(.red).opacity(0.5)))
         #expect(claim.inkOpacity == 128.0 / 255)
         #expect(claim.fieldOpacity == 1)
         // The LAYER channel stays at 1: faint text is drawn, not half-present.
@@ -41,7 +41,7 @@ struct OpacityClaimTests {
     @Test("A translucent field claims the field channel and leaves the ink alone")
     func fieldOnly() throws {
         let claim = try #require(
-            OpacityRegion.claim(width: 4, height: 1, field: .blue.opacity(0.25)))
+            OpacityRegion.claim(width: 4, height: 1, field: .ansi(.blue).opacity(0.25)))
         #expect(claim.fieldOpacity == 64.0 / 255)
         #expect(claim.inkOpacity == 1)
     }
@@ -61,7 +61,7 @@ struct OpacityClaimTests {
     func geometry() throws {
         let claim = try #require(
             OpacityRegion.claim(
-                offsetX: 7, offsetY: 3, width: 5, height: 2, ink: .red.opacity(0.5)))
+                offsetX: 7, offsetY: 3, width: 5, height: 2, ink: .ansi(.red).opacity(0.5)))
         #expect(claim.offsetX == 7)
         #expect(claim.offsetY == 3)
         #expect(claim.width == 5)

@@ -151,7 +151,7 @@ struct StatusBarFrameDiffTests {
     @Test("A highlight the app sets to cyan is drawn cyan, not replaced by the accent")
     func explicitCyanHighlightIsKept() {
         let harness = RenderLoopHarness()
-        harness.statusBar.highlightColor = .cyan
+        harness.statusBar.highlightColor = .ansi(.cyan)
         let loop = harness.loop(StatusBarItemsProbeApp())
         ColorDepth.withCurrent(.truecolor) { _ = loop.render() }
         let written = harness.terminal.writtenOutput.joined()

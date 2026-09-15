@@ -69,9 +69,9 @@ struct GradientRasterTests {
 
     @Test("A flat colour, or a one-stop ramp, is not a picture")
     func flatPaintIsCells() {
-        #expect(raster(.color(.red)) == nil)
+        #expect(raster(.color(.ansi(.red))) == nil)
         #expect(
-            raster(.gradient(GradientPaint(Gradient(colors: [.red]), .linear(from: .leading, to: .trailing))))
+            raster(.gradient(GradientPaint(Gradient(colors: [.ansi(.red)]), .linear(from: .leading, to: .trailing))))
                 == nil)
     }
 }
@@ -121,7 +121,7 @@ struct TrackRasterTests {
             let picture = try #require(
                 TrackRaster.picture(
                     fraction: 0.5, width: 10, config: config,
-                    fillColor: .white, backgroundColor: .black,
+                    fillColor: .ansi(.white), backgroundColor: .ansi(.black),
                     fillScaling: scaling, backgroundScaling: scaling, cellPixels: cell))
             let x = picture.width / 2 - 1
             return Array(picture.bytes[(x * 3)..<(x * 3 + 3)])

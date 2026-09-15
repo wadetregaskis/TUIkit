@@ -55,7 +55,7 @@ struct ListRowStyleTests {
     func backgroundSpansTheRow() {
         let width = 20
         let buffer = renderToBuffer(
-            Text("hi").listRowBackground(Color.blue),
+            Text("hi").listRowBackground(Color.ansi(.blue)),
             context: makeRenderContext(width: width, height: 3))
         // The text is 2 cells; the painted row is the full width.
         #expect(buffer.lines[0].stripped.count == width)
@@ -72,7 +72,7 @@ struct ListRowStyleTests {
                 Text("two")
                 Text("three")
             }
-            .listRowBackground(Color.blue),
+            .listRowBackground(Color.ansi(.blue)),
             context: makeRenderContext(width: 20, height: 6))
         #expect(buffer.lines.count == 3)
         for line in buffer.lines.prefix(3) {
@@ -119,7 +119,7 @@ struct ListRowStyleTests {
         let context = makeRenderContext(width: 20, height: 10)
         let bare = measureChild(Text("row"), proposal: .unspecified, context: context)
         let backed = measureChild(
-            Text("row").listRowBackground(Color.blue), proposal: .unspecified, context: context)
+            Text("row").listRowBackground(Color.ansi(.blue)), proposal: .unspecified, context: context)
         #expect(bare.height == backed.height)
     }
 
@@ -132,7 +132,7 @@ struct ListRowStyleTests {
         }
         let plain = renderToBuffer(Button("Tap") {}, context: context)
         let backed = renderToBuffer(
-            Button("Tap") {}.listRowBackground(Color.blue), context: context)
+            Button("Tap") {}.listRowBackground(Color.ansi(.blue)), context: context)
         #expect(!plain.hitTestRegions.isEmpty)
         #expect(backed.hitTestRegions.count == plain.hitTestRegions.count)
     }
@@ -145,7 +145,7 @@ struct ListRowStyleTests {
             List {
                 Text("alpha")
                     .listRowInsets(EdgeInsets(horizontal: 2, vertical: 0))
-                    .listRowBackground(Color.blue)
+                    .listRowBackground(Color.ansi(.blue))
                 Text("beta")
             },
             width: 24, height: 8)

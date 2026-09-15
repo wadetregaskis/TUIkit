@@ -172,8 +172,8 @@ struct PublicAnimationAPITests {
         // that a call site need not branch — so the two must produce the same
         // picture, byte for byte.
         let context = makeRenderContext(width: 20, height: 4)
-        let animated = renderToBuffer(Text("x").border(AnimatedColor(.red)), context: context)
-        let plain = renderToBuffer(Text("x").border(Color.red), context: context)
+        let animated = renderToBuffer(Text("x").border(AnimatedColor(.ansi(.red))), context: context)
+        let plain = renderToBuffer(Text("x").border(Color.ansi(.red)), context: context)
         #expect(animated.lines == plain.lines)
         #expect(animated.animatedCells.isEmpty)
     }
@@ -183,7 +183,7 @@ struct PublicAnimationAPITests {
         // A frame handed to the run loop is spliced in without whatever escape
         // preceded it, so a cell that leans on its neighbour's styling draws
         // wrong the moment it is replayed.
-        let styled = "●".styled(foreground: .red, background: .blue, bold: true)
+        let styled = "●".styled(foreground: .ansi(.red), background: .ansi(.blue), bold: true)
         #expect(styled.stripped == "●")
         #expect(styled.hasSuffix("\u{1B}[0m"), "not terminated: \(styled.debugDescription)")
     }

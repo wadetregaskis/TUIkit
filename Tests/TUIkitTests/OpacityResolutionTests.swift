@@ -53,7 +53,7 @@ struct OpacityResolutionTests {
         source.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.5)]
         let resolved = source.resolvingOpacity(
             over: FrameBuffer(lines: [String(repeating: " ", count: 10)]), at: (x: 0, y: 0),
-            surface: .black, palette: palette())
+            surface: .ansi(.black), palette: palette())
         let row = ANSIRenderer.applyPersistentBackground(resolved.lines[0], color: .rgb(20, 20, 200)) + ANSIRenderer.reset
         #expect(!row.ansiSGRStateAt(visibleColumn: 5).renderedBackground.isEmpty, "the container background is in force under 'p': \(row.debugDescription)")
     }
@@ -69,9 +69,9 @@ struct OpacityResolutionTests {
 
     @Test("An opaque region over nothing is spent without touching the layer")
     func opaqueOverNothingIsTheIdentity() {
-        let line = ANSIRenderer.colorize("hello", foreground: .green)
+        let line = ANSIRenderer.colorize("hello", foreground: .ansi(.green))
         let source = faded(line, 1, width: 5)
-        let resolved = source.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = source.resolvingOpacity(surface: .ansi(.black), palette: palette())
 
         // Byte-for-byte, not merely pixel-for-pixel: this is the root, where
         // nearly every `.opacity(1)` in an app is resolved, and rewriting a row
@@ -93,10 +93,10 @@ struct OpacityResolutionTests {
     @Test("An opaque region still lets the destination's background through")
     func opaqueKeepsWhatIsBehind() {
         let field = Color.rgb(160, 30, 30)
-        let source = faded(ANSIRenderer.colorize("hello", foreground: .green), 1, width: 5)
+        let source = faded(ANSIRenderer.colorize("hello", foreground: .ansi(.green)), 1, width: 5)
         let destination = FrameBuffer(lines: [ANSIRenderer.colorize("     ", background: field)])
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         // Whatever spelling this build's renderer picks for the field — truecolor
         // or the 256 cube — the resolved row has to name the same one.
@@ -111,20 +111,20 @@ struct OpacityResolutionTests {
     @Test("Below the threshold the destination keeps its character, not its colour")
     func belowTheThresholdTheDestinationKeepsItsCharacter() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .red, background: .blue)
+            ANSIRenderer.colorize("world", foreground: .ansi(.red), background: .ansi(.blue))
         ])
-        let source = faded(ANSIRenderer.colorize("hello", foreground: .green), 0.2, width: 5)
+        let source = faded(ANSIRenderer.colorize("hello", foreground: .ansi(.green)), 0.2, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         // The glyph contest goes to the destination, and only the glyph was
         // ever contested: the ink channel still blends, because colours blend
         // at every alpha. The field does NOT — the source states no background
         // of its own, so it composites none and the destination's stands.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(Color.green.opacity(0.2, over: .red))))
-        #expect(!resolved.lines[0].contains(codes(.green)))
-        #expect(resolved.lines[0].contains(backgroundCodes(.blue)))
+        #expect(resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0.2, over: .ansi(.red)))))
+        #expect(!resolved.lines[0].contains(codes(.ansi(.green))))
+        #expect(resolved.lines[0].contains(backgroundCodes(.ansi(.blue))))
     }
 
     @Test("Text fades toward a block swatch's colour, not its background")
@@ -139,7 +139,7 @@ struct OpacityResolutionTests {
         let source = faded(
             ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.6, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         let towardTheBlocks = Color.rgb(0, 255, 0).opacity(0.6, over: .rgb(0, 0, 255))
@@ -160,7 +160,7 @@ struct OpacityResolutionTests {
         let source = faded(
             ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.3, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         let expected = Color.rgb(0, 255, 0).opacity(0.3, over: .rgb(255, 0, 0))
@@ -180,11 +180,11 @@ struct OpacityResolutionTests {
 
         // Bold renders as parameter 1 inside the (reset-prefixed) escape.
         let below = faded(bold, 0.3, width: 2).resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
         #expect(!below.lines[0].contains("[0;1;"))
 
         let above = faded(bold, 0.7, width: 2).resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
         #expect(above.lines[0].contains("[0;1;"))
     }
 
@@ -194,21 +194,21 @@ struct OpacityResolutionTests {
         // a translucent panel over text would tint every blank cell and skip
         // every character-holding one, and read as a sieve rather than a veil.
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("world", foreground: .red, background: .rgb(255, 0, 0))
+            ANSIRenderer.colorize("world", foreground: .ansi(.red), background: .rgb(255, 0, 0))
         ])
         let source = faded(
-            ANSIRenderer.colorize("hello", foreground: .green, background: .rgb(0, 0, 255)),
+            ANSIRenderer.colorize("hello", foreground: .ansi(.green), background: .rgb(0, 0, 255)),
             0.25, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         // The destination's character stands; each channel takes the veil from
         // its own counterpart — the source's ink over the destination's ink,
         // its field over the destination's field. Neither is mixed into the
         // other, so no estimate of how much of a cell a glyph inks is needed.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(Color.green.opacity(0.25, over: .red))))
-        #expect(!resolved.lines[0].contains(codes(.green)))
+        #expect(resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0.25, over: .ansi(.red)))))
+        #expect(!resolved.lines[0].contains(codes(.ansi(.green))))
         let field = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(255, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(field)))
         #expect(!resolved.lines[0].contains(backgroundCodes(.rgb(255, 0, 0))))
@@ -220,7 +220,7 @@ struct OpacityResolutionTests {
         // reversed blue-foreground space displays as a blue block. Read as a
         // blank it would vanish from the veil entirely; read as what it
         // DISPLAYS it composites its fill like any other pane of background.
-        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .ansi(.red))])
         let reversedFill = "\u{1B}[7;38;2;0;0;255m     \u{1B}[0m"
         let source = faded(reversedFill, 0.5, width: 5)
         let resolved = source.resolvingOpacity(
@@ -230,7 +230,7 @@ struct OpacityResolutionTests {
         // A fill has no glyph, so what it shows where one would draw is its
         // own colour — the same reading on this side of the blend as on the
         // other. Both channels therefore carry it.
-        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.5, over: .red))))
+        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.5, over: .ansi(.red)))))
         let expected = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
@@ -245,7 +245,7 @@ struct OpacityResolutionTests {
         let source = faded(
             ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.6, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         // Toward BLUE — the displayed field — not toward the stored red.
@@ -268,7 +268,7 @@ struct OpacityResolutionTests {
             OpacityRegion(offsetX: 4, offsetY: 0, width: 2, height: 1, opacity: 0.5),
         ]
         let resolved = buffer.resolvingOpacity(
-            over: FrameBuffer(), surface: .black, palette: palette())
+            over: FrameBuffer(), surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "ABCDEF")
         // The gap cells display red ink on a blue field, exactly as before.
@@ -290,7 +290,7 @@ struct OpacityResolutionTests {
         let source = faded(
             ANSIRenderer.colorize("     ", background: .rgb(0, 200, 0)), 0.25, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         let ink = Color.rgb(0, 200, 0).opacity(0.25, over: .rgb(255, 0, 0))
@@ -311,7 +311,7 @@ struct OpacityResolutionTests {
         let source = faded(
             ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.3, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         // The source's glyphs yield and the underline survives — and it is
         // read as INK on this side too, so the source's ink fades from the
@@ -324,15 +324,15 @@ struct OpacityResolutionTests {
 
     @Test("Zero opacity is the same case, which is the bug being fixed")
     func zeroRevealsWhatIsBehind() {
-        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
-        let source = faded(ANSIRenderer.colorize("hello", foreground: .green), 0, width: 5)
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .ansi(.red))])
+        let source = faded(ANSIRenderer.colorize("hello", foreground: .ansi(.green)), 0, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         // Today's render-time fade paints "hello" in near-black here, hiding
         // the red text it is supposed to be revealing.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(.ansi(.red))))
     }
 
     @Test("At the threshold the source draws, faded toward what is BEHIND it")
@@ -342,7 +342,7 @@ struct OpacityResolutionTests {
         let destination = FrameBuffer(lines: [ANSIRenderer.colorize("     ", background: .rgb(255, 0, 0))])
         let source = faded(ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.5, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         // Half green, half red — neither endpoint, and nowhere near black.
@@ -353,20 +353,20 @@ struct OpacityResolutionTests {
 
     @Test("A source space keeps the destination's character and its colour")
     func aSpaceIsNotAGlyph() {
-        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .ansi(.red))])
         // Most of what a faded layer contributes is blank: a `VStack`'s padding,
         // the gap between a label and its value, the run out to the right edge.
         let source = faded("     ", 0.5, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(.ansi(.red))))
     }
 
     @Test("A source space WITH a background tints both channels, keeping the text")
     func aSpaceCompositesItsBackground() {
-        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .ansi(.red))])
         let source = faded(
             ANSIRenderer.colorize("     ", background: .rgb(0, 0, 255)), 0.5, width: 5)
         let resolved = source.resolvingOpacity(
@@ -377,7 +377,7 @@ struct OpacityResolutionTests {
         // around it, so the cell fades evenly rather than leaving crisp text
         // standing on a washed-out field.
         #expect(resolved.lines[0].stripped == "world")
-        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.5, over: .red))))
+        #expect(resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.5, over: .ansi(.red)))))
         let expected = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
@@ -387,7 +387,7 @@ struct OpacityResolutionTests {
         // The threshold decides which GLYPH shows, and a space is not a glyph
         // contest — so a translucent panel thins out smoothly instead of
         // vanishing whole at the midpoint.
-        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .ansi(.red))])
         let source = faded(
             ANSIRenderer.colorize("     ", background: .rgb(0, 0, 255)), 0.25, width: 5)
         let resolved = source.resolvingOpacity(
@@ -395,7 +395,7 @@ struct OpacityResolutionTests {
 
         #expect(resolved.lines[0].stripped == "world")
         #expect(
-            resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.25, over: .red))))
+            resolved.lines[0].contains(codes(Color.rgb(0, 0, 255).opacity(0.25, over: .ansi(.red)))))
         let expected = Color.rgb(0, 0, 255).opacity(0.25, over: .rgb(0, 0, 0))
         #expect(resolved.lines[0].contains(backgroundCodes(expected)))
     }
@@ -410,8 +410,8 @@ struct OpacityResolutionTests {
         // did not. Nothing mixes the channels now, so a layer with no
         // background composites no background — under a letter exactly as
         // under a blank.
-        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .red)])
-        let source = faded(ANSIRenderer.colorize("a b c", foreground: .green), 0.43, width: 5)
+        let destination = FrameBuffer(lines: [ANSIRenderer.colorize("world", foreground: .ansi(.red))])
+        let source = faded(ANSIRenderer.colorize("a b c", foreground: .ansi(.green)), 0.43, width: 5)
         // An off-black surface, so every background this row states is spelled
         // as an explicit triple and none of them can hide in a named code.
         let surface = Color.rgb(1, 2, 3)
@@ -429,8 +429,8 @@ struct OpacityResolutionTests {
         // paints ink where it has a letter and none where it has a space, so
         // only the lettered columns take its colour. That is emptiness rather
         // than blankness — the same answer a fully transparent layer gets.
-        #expect(resolved.lines[0].contains(codes(Color.green.opacity(0.43, over: .red))))
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(Color.ansi(.green).opacity(0.43, over: .ansi(.red)))))
+        #expect(resolved.lines[0].contains(codes(.ansi(.red))))
         #expect(!resolved.lines[0].contains("49m"), "no cell falls back to the terminal default")
     }
 
@@ -457,13 +457,13 @@ struct OpacityResolutionTests {
             OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.75),
         ]
         let resolved = source.resolvingOpacity(
-            over: FrameBuffer(), surface: .black, palette: palette())
+            over: FrameBuffer(), surface: .ansi(.black), palette: palette())
 
         // Nothing contests these cells, so every character draws — the first
         // two at the inner product, the rest at the outer alpha alone.
         #expect(resolved.lines[0].stripped == "hello")
-        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.25, over: .black))))
-        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.75, over: .black))))
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.25, over: .ansi(.black)))))
+        #expect(resolved.lines[0].contains(codes(.rgb(0, 255, 0).opacity(0.75, over: .ansi(.black)))))
     }
 
     @Test("Over a blank cell there is no contest, and text fades all the way out")
@@ -476,7 +476,7 @@ struct OpacityResolutionTests {
         ])
         let source = faded(ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0)), 0.2, width: 5)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "hello")
         let expected = Color.rgb(0, 255, 0).opacity(0.2, over: .rgb(255, 0, 0))
@@ -488,7 +488,7 @@ struct OpacityResolutionTests {
         let source = faded(
             ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0), bold: true), 0.5, width: 5)
         let resolved = source.resolvingOpacity(
-            over: FrameBuffer(), surface: .black, palette: palette())
+            over: FrameBuffer(), surface: .ansi(.black), palette: palette())
 
         // Everything SGR says that is not a colour is a property of the glyph,
         // and the glyph is still being drawn.
@@ -500,7 +500,7 @@ struct OpacityResolutionTests {
     func wideCharactersDoNotShiftTheRow() {
         let source = faded(ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0.5, width: 6)
         let resolved = source.resolvingOpacity(
-            over: FrameBuffer(lines: ["......"]), surface: .black, palette: palette())
+            over: FrameBuffer(lines: ["......"]), surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "日本語")
         #expect(resolved.lines[0].strippedLength == 6)
@@ -513,12 +513,12 @@ struct OpacityResolutionTests {
         // swallow the next column's answer. The stand-in is one column of the
         // destination's field — half a glyph cannot be drawn.
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("日本語", foreground: .red)
+            ANSIRenderer.colorize("日本語", foreground: .ansi(.red))
         ])
         let source = faded(
             ANSIRenderer.colorize("abcdef", foreground: .rgb(0, 255, 0)), 0.2, width: 6)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         // Columns 0/2/4 held wide starts (field stands in); 1/3/5 sat over
         // continuations — nothing to reveal there, so the source draws, faded.
@@ -535,27 +535,27 @@ struct OpacityResolutionTests {
         // its own, not vanish. Skipping it left the span short, so the splice
         // replaced too few columns and the row kept unfaded source glyphs.
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("abcdef", foreground: .red)
+            ANSIRenderer.colorize("abcdef", foreground: .ansi(.red))
         ])
         let source = faded(
             ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0.2, width: 6)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "abcdef")
         #expect(resolved.lines[0].strippedLength == 6)
-        #expect(resolved.lines[0].contains(codes(.red)))
+        #expect(resolved.lines[0].contains(codes(.ansi(.red))))
     }
 
     @Test("Zero opacity reveals through a wide source exactly")
     func wideSourceAtZeroRevealsExactly() {
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("abcdef", foreground: .red)
+            ANSIRenderer.colorize("abcdef", foreground: .ansi(.red))
         ])
         let source = faded(
             ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0, width: 6)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "abcdef")
         #expect(resolved.lines[0].strippedLength == 6)
@@ -581,7 +581,7 @@ struct OpacityResolutionTests {
             OpacityRegion(offsetX: 0, offsetY: 0, width: 3, height: 1, opacity: 0.8)
         ]
         let drawn = buffer.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(drawn.lines[0].strippedLength == 3)
         // The mark survives, attached to its base.
@@ -603,17 +603,17 @@ struct OpacityResolutionTests {
         // Wide over wide: the source's continuation columns were already
         // nobody's decision, so the revealed character keeps both its cells.
         let destination = FrameBuffer(lines: [
-            ANSIRenderer.colorize("中文字", foreground: .red)
+            ANSIRenderer.colorize("中文字", foreground: .ansi(.red))
         ])
         let source = faded(
             ANSIRenderer.colorize("日本語", foreground: .rgb(0, 255, 0)), 0.2, width: 6)
         let resolved = source.resolvingOpacity(
-            over: destination, surface: .black, palette: palette())
+            over: destination, surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0].stripped == "中文字")
         #expect(resolved.lines[0].strippedLength == 6)
         #expect(
-            resolved.lines[0].contains(codes(Color.rgb(0, 255, 0).opacity(0.2, over: .red))))
+            resolved.lines[0].contains(codes(Color.rgb(0, 255, 0).opacity(0.2, over: .ansi(.red)))))
     }
 
     @Test("Compositing punches the covered footprint out of pending regions")
@@ -621,11 +621,11 @@ struct OpacityResolutionTests {
         // A pending region names cells of the BASE. When an overlay replaces
         // some of those cells, the region must stop claiming them — or the
         // root resolver fades content that was never under the fade.
-        var base = FrameBuffer(lines: [ANSIRenderer.colorize("abcdef", foreground: .red)])
+        var base = FrameBuffer(lines: [ANSIRenderer.colorize("abcdef", foreground: .ansi(.red))])
         base.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 0, width: 6, height: 1, opacity: 0.5)
         ]
-        let overlay = FrameBuffer(lines: [ANSIRenderer.colorize("XY", foreground: .green)])
+        let overlay = FrameBuffer(lines: [ANSIRenderer.colorize("XY", foreground: .ansi(.green))])
         let out = base.composited(with: overlay, at: (x: 2, y: 0))
 
         let rects = out.opacityRegions
@@ -671,14 +671,14 @@ struct OpacityResolutionTests {
 
     @Test("A row no region covers is left exactly as it was")
     func untouchedRowsAreUntouched() {
-        let first = ANSIRenderer.colorize("hello", foreground: .green)
-        let second = ANSIRenderer.colorize("world", foreground: .red)
+        let first = ANSIRenderer.colorize("hello", foreground: .ansi(.green))
+        let second = ANSIRenderer.colorize("world", foreground: .ansi(.red))
         var source = FrameBuffer(lines: [first, second])
         source.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 1, width: 5, height: 1, opacity: 0.5)
         ]
         let resolved = source.resolvingOpacity(
-            over: FrameBuffer(), surface: .black, palette: palette())
+            over: FrameBuffer(), surface: .ansi(.black), palette: palette())
 
         #expect(resolved.lines[0] == first)
         #expect(resolved.lines[1] != second)
@@ -712,7 +712,7 @@ struct OpacityForeignRunTests {
         // the clock alive and they sat motionless at one faded frame. The
         // frames instead pass through the same blend the lines did, and the
         // run replays faded.
-        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .ansi(.green))])
         let bright = ANSIRenderer.colorize("aaaaa", foreground: .rgb(0, 255, 0))
         let dim = ANSIRenderer.colorize("bbbbb", foreground: .rgb(0, 120, 0))
         buffer.animatedCells = [
@@ -721,13 +721,13 @@ struct OpacityForeignRunTests {
         buffer.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.6)
         ]
-        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = buffer.resolvingOpacity(surface: .ansi(.black), palette: palette())
 
         #expect(resolved.animatedCells.count == 1)
         let faded = resolved.animatedCells.first
         #expect(faded?.frames.count == 2)
         #expect(faded?.frames.first?.stripped == "aaaaa")
-        let expected = Color.rgb(0, 255, 0).opacity(0.6, over: .black)
+        let expected = Color.rgb(0, 255, 0).opacity(0.6, over: .ansi(.black))
         #expect(faded?.frames.first?.contains(codes(expected)) == true)
         #expect(faded?.frames.first?.contains(codes(Color.rgb(0, 255, 0))) == false)
         // The cadence is the producer's; fading the pictures must not touch it.
@@ -757,7 +757,7 @@ struct OpacityForeignRunTests {
         let behind = FrameBuffer(lines: [
             ANSIRenderer.colorize("xxxxx", foreground: .rgb(255, 255, 255), background: .rgb(255, 0, 0))
         ])
-        let resolved = buffer.resolvingOpacity(over: behind, at: (x: 0, y: 0), surface: .black, palette: palette())
+        let resolved = buffer.resolvingOpacity(over: behind, at: (x: 0, y: 0), surface: .ansi(.black), palette: palette())
         let frame = try #require(resolved.animatedCells.first?.frames.first)
         let lineField = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(255, 0, 0))
         #expect(frame.contains(backgroundCodes(lineField)), "frame: \(frame.debugDescription)")
@@ -770,14 +770,14 @@ struct OpacityForeignRunTests {
     /// cells there wearing the last real cell's field, and grew the row.
     @Test("A region wider than its line fades the line, not the space past it")
     func regionPastTheLineEndAddsNoCells() {
-        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("ab", background: .blue)])
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("ab", background: .ansi(.blue))])
         buffer.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 6, height: 1, opacity: 0.5)]
-        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = buffer.resolvingOpacity(surface: .ansi(.black), palette: palette())
         #expect(resolved.lines[0].strippedLength == 2, "\(resolved.lines[0].debugDescription)")
         // …and a region entirely past a short line is a no-op for it.
-        var two = FrameBuffer(lines: [ANSIRenderer.colorize("abcdef", background: .blue), "ab"])
+        var two = FrameBuffer(lines: [ANSIRenderer.colorize("abcdef", background: .ansi(.blue)), "ab"])
         two.opacityRegions = [OpacityRegion(offsetX: 3, offsetY: 0, width: 3, height: 2, opacity: 0.5)]
-        let second = two.resolvingOpacity(surface: .black, palette: palette())
+        let second = two.resolvingOpacity(surface: .ansi(.black), palette: palette())
         #expect(second.lines[1] == "ab")
     }
 
@@ -787,7 +787,7 @@ struct OpacityForeignRunTests {
         // their product is not representable as one run. The run yields; its
         // cells freeze at the frame the lines were drawn with, inside a fade
         // that itself keeps animating.
-        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .ansi(.green))])
         buffer.animatedCells = [
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
@@ -795,14 +795,14 @@ struct OpacityForeignRunTests {
         var region = OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 1)
         region.cycle = OpacityCycle(phases: [1, 0.6], clock: .cursor)
         buffer.opacityRegions = [region]
-        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = buffer.resolvingOpacity(surface: .ansi(.black), palette: palette())
         // The fade's own runs replace it; the foreign run itself is gone.
         #expect(!resolved.animatedCells.contains { $0.frames.contains { $0.stripped == "bbbbb" } })
     }
 
     @Test("A run beside the region is left alone")
     func runsOutsideTheRegionSurvive() {
-        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello world", foreground: .green)])
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello world", foreground: .ansi(.green))])
         buffer.animatedCells = [
             AnimatedCellRun(
                 offsetX: 6, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
@@ -810,7 +810,7 @@ struct OpacityForeignRunTests {
         buffer.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.6)
         ]
-        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        let resolved = buffer.resolvingOpacity(surface: .ansi(.black), palette: palette())
         #expect(resolved.animatedCells.count == 1)
         #expect(resolved.animatedCells.first?.offsetX == 6)
     }
@@ -834,7 +834,7 @@ struct OpacityForeignRunTests {
         buffer.opacityRegions = [left, right]
 
         let resolved = buffer.resolvingOpacity(
-            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .black,
+            over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .ansi(.black),
             palette: palette())
 
         #expect(resolved.animatedCells.count == 1, "one row, one run")

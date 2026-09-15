@@ -307,7 +307,7 @@ struct ColorPickerPanelCrashSafetyTests {
         .rgb(0, 0, 255), .rgb(128, 128, 128), .rgb(38, 139, 210), .rgb(200, 100, 50),
         .rgb(1, 254, 130), .rgb(254, 1, 1),
         .palette(0), .palette(15), .palette(16), .palette(123), .palette(231), .palette(255),
-        .red, .green, .blue, .palette.accent, .palette.success, .palette.error,
+        .ansi(.red), .ansi(.green), .ansi(.blue), .palette.accent, .palette.success, .palette.error,
     ]
 
     static let channelModes: [Panel.Mode] = [.rgb, .hsl, .hsb, .cmyk]
@@ -544,14 +544,14 @@ struct ColorPickerPanelCrashSafetyTests {
     private struct EditedPalette: Palette {
         let id = "edited"
         let name = "Edited"
-        let background = Color.black
-        let foreground = Color.white
+        let background = Color.ansi(.black)
+        let foreground = Color.ansi(.white)
         var accent: Color
-        let success = Color.green
-        let warning = Color.yellow
-        let error = Color.red
-        let info = Color.blue
-        let border = Color.brightBlack
+        let success = Color.ansi(.green)
+        let warning = Color.ansi(.yellow)
+        let error = Color.ansi(.red)
+        let info = Color.ansi(.blue)
+        let border = Color.ansi(.brightBlack)
     }
 
     @Test("Clicking semantic swatches while the selection is bound into the palette never traps")

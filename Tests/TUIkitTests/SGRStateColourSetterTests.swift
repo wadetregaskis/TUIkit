@@ -19,7 +19,7 @@ import Testing
 struct SGRStateColourSetterTests {
 
     private static let colours: [Color?] = [
-        nil, .red, .brightBlue, .white, .rgb(10, 200, 30), .rgb(255, 255, 255), .rgb(0, 0, 0),
+        nil, .ansi(.red), .ansi(.brightBlue), .ansi(.white), .rgb(10, 200, 30), .rgb(255, 255, 255), .rgb(0, 0, 0),
     ]
 
     private static func applied(_ codes: [String], to state: SGRState) -> SGRState {
@@ -81,7 +81,7 @@ struct SGRStateColourSetterTests {
             }
         }
         // The premise the case rests on: there really are no parameters here.
-        #expect(Color.red.foregroundCodes(depth: .noColor).isEmpty)
+        #expect(Color.ansi(.red).foregroundCodes(depth: .noColor).isEmpty)
     }
 
     /// The `Color` front door — which is what the blend actually calls, and

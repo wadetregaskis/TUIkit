@@ -24,9 +24,9 @@ struct StringPersistentBackgroundTests {
     @Test("A color delegates to ANSIRenderer.applyPersistentBackground")
     func appliesBackground() {
         let input = "hello"
-        let result = input.withPersistentBackground(.red)
+        let result = input.withPersistentBackground(.ansi(.red))
 
-        #expect(result == ANSIRenderer.applyPersistentBackground(input, color: .red))
+        #expect(result == ANSIRenderer.applyPersistentBackground(input, color: .ansi(.red)))
         // A background was actually applied (the string changed) but the
         // visible content is preserved.
         #expect(result != input)

@@ -70,26 +70,26 @@ struct ScrollbarTests {
         // Adjacent block glyphs leave a hairline gap in some terminals; a
         // background-coloured space does not, and it covers the whole cell so a
         // one-cell thumb is as solid as a multi-cell one.
-        let full = Bar.paint(of: .full, thumb: Color.red, track: Color.blue)
+        let full = Bar.paint(of: .full, thumb: Color.ansi(.red), track: Color.ansi(.blue))
         #expect(
-            full.glyph == " " && full.ink == nil && full.field == Color.red,
+            full.glyph == " " && full.ink == nil && full.field == Color.ansi(.red),
             "a full cell is a thumb-coloured space, not a block glyph: \(full)")
-        let empty = Bar.paint(of: .empty, thumb: Color.red, track: Color.blue)
+        let empty = Bar.paint(of: .empty, thumb: Color.ansi(.red), track: Color.ansi(.blue))
         #expect(
-            empty.glyph == " " && empty.ink == nil && empty.field == Color.blue,
+            empty.glyph == " " && empty.ink == nil && empty.field == Color.ansi(.blue),
             "an empty cell is a track-coloured space: \(empty)")
         // A fractional end still needs a partial glyph — there is no background-only
         // way to draw a sub-cell boundary — and its two channels come from different
         // colours, which way round depending on which edge it is anchored to.
         let partial = Bar.paint(
-            of: ScrollbarCell(glyph: "▄", inverted: false), thumb: Color.red, track: Color.blue)
+            of: ScrollbarCell(glyph: "▄", inverted: false), thumb: Color.ansi(.red), track: Color.ansi(.blue))
         #expect(
-            partial.glyph == "▄" && partial.ink == Color.red && partial.field == Color.blue,
+            partial.glyph == "▄" && partial.ink == Color.ansi(.red) && partial.field == Color.ansi(.blue),
             "a fractional end keeps its partial glyph, in the thumb over the track: \(partial)")
         let inverted = Bar.paint(
-            of: ScrollbarCell(glyph: "▄", inverted: true), thumb: Color.red, track: Color.blue)
+            of: ScrollbarCell(glyph: "▄", inverted: true), thumb: Color.ansi(.red), track: Color.ansi(.blue))
         #expect(
-            inverted.glyph == "▄" && inverted.ink == Color.blue && inverted.field == Color.red,
+            inverted.glyph == "▄" && inverted.ink == Color.ansi(.blue) && inverted.field == Color.ansi(.red),
             "an inverted end draws the track's glyph over a thumb field: \(inverted)")
     }
 

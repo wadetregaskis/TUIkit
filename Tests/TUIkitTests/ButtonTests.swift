@@ -320,7 +320,7 @@ struct ButtonTests {
             // The control: at `.clear` a hovered face can be the same bytes as a
             // resting one, so show that this harness does hover — a red tint must
             // change what is drawn.
-            if let red = hovered(Button("Save") {}.tint(.red), focused: false) {
+            if let red = hovered(Button("Save") {}.tint(.ansi(.red)), focused: false) {
                 #expect(
                     red.before != red.after.lines.joined(separator: "\n"),
                     "the pointer changed nothing, so the clear-tint case proves nothing")

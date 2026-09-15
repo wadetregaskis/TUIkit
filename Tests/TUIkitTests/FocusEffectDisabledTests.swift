@@ -403,7 +403,7 @@ struct FocusEffectDisabledTests {
     @Test("SwatchGrid")
     func swatchGrid() {
         let grid = _SwatchGridCore(
-            entries: [.red, .green, .blue, .yellow], columns: 2, selection: .constant(.red))
+            entries: [.ansi(.red), .ansi(.green), .ansi(.blue), .ansi(.yellow)], columns: 2, selection: .constant(.ansi(.red)))
         expectDistinguishable(grid, "SwatchGrid")
         expectIndistinguishable(grid, "SwatchGrid")
     }

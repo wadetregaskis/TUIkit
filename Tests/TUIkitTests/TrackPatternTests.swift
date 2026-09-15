@@ -25,7 +25,7 @@ struct TrackPatternTests {
     ) -> String {
         TrackRenderer.render(
             fraction: fraction, width: width, style: .custom(config),
-            fillColor: .white, backgroundColor: .brightBlack, accentColor: .cyan,
+            fillColor: .ansi(.white), backgroundColor: .ansi(.brightBlack), accentColor: .ansi(.cyan),
         palette: SystemPalette.green
         ).text.stripped
     }
@@ -134,7 +134,7 @@ struct TrackPatternTests {
             fill: "😀", leadingEdge: ["▒"], background: .solid)
         let track = TrackRenderer.render(
             fraction: 5.0 / 8.0, width: 8, style: .custom(config),
-            fillColor: .white, backgroundColor: .brightBlack, accentColor: .cyan,
+            fillColor: .ansi(.white), backgroundColor: .ansi(.brightBlack), accentColor: .ansi(.cyan),
             palette: SystemPalette.green).text
         #expect(track.stripped == "😀😀▒▒  ", "2 blocks + ½ block of ramp + empty")
     }
@@ -144,7 +144,7 @@ struct TrackPatternTests {
         func knob(_ fraction: Double) -> String {
             TrackRenderer.render(
                 fraction: fraction, width: 10, style: .knob,
-                fillColor: .white, backgroundColor: .brightBlack, accentColor: .cyan,
+                fillColor: .ansi(.white), backgroundColor: .ansi(.brightBlack), accentColor: .ansi(.cyan),
             palette: SystemPalette.green
             ).text.stripped
         }

@@ -39,10 +39,10 @@ struct ASCIIPaletteTests {
 
     @Test("Degenerate shade counts still make a palette")
     func degenerateShades() {
-        #expect(ASCIIPalette.shades(1).colors == [.black])
-        #expect(ASCIIPalette.shades(0).colors == [.black])
-        #expect(ASCIIPalette.shades(-3).colors == [.black])
-        #expect(ASCIIPalette([]).colors == [.black, .white])
+        #expect(ASCIIPalette.shades(1).colors == [.ansi(.black)])
+        #expect(ASCIIPalette.shades(0).colors == [.ansi(.black)])
+        #expect(ASCIIPalette.shades(-3).colors == [.ansi(.black)])
+        #expect(ASCIIPalette([]).colors == [.ansi(.black), .ansi(.white)])
     }
 
     @Test("A sampled palette spreads over the gamut instead of clustering")
@@ -98,7 +98,7 @@ struct ASCIIPaletteTests {
     /// The case nearest-colour cannot serve, and the reason `.toneRamp` exists.
     @Test("A tone ramp spends every colour; nearest-colour need not")
     func toneRampSpendsEveryColour() {
-        let colours: [Color] = [.black, .rgb(102, 255, 102), .rgb(229, 229, 229)]
+        let colours: [Color] = [.ansi(.black), .rgb(102, 255, 102), .rgb(229, 229, 229)]
         let greys = stride(from: 0, through: 255, by: 8).map {
             RGBA(r: UInt8($0), g: UInt8($0), b: UInt8($0))
         }
@@ -118,7 +118,7 @@ struct ASCIIPaletteTests {
 
     @Test("A tone ramp orders itself, whatever order it was written in")
     func toneRampSortsItself() {
-        let scrambled = ASCIIPalette([.white, .black, .rgb(128, 128, 128)]).asToneRamp()
+        let scrambled = ASCIIPalette([.ansi(.white), .ansi(.black), .rgb(128, 128, 128)]).asToneRamp()
         #expect(scrambled.rgba(at: scrambled.nearestIndex(to: RGBA(r: 0, g: 0, b: 0))).r == 0)
         #expect(scrambled.rgba(at: scrambled.nearestIndex(to: RGBA(r: 255, g: 255, b: 255))).r == 229)
     }
@@ -127,9 +127,9 @@ struct ASCIIPaletteTests {
     func mappingIsPartOfIdentity() {
         // A render cache keyed on the colour mode has to notice this change, or
         // switching the demo's mapping would serve the old image forever.
-        #expect(ASCIIPalette([.black, .white]) != ASCIIPalette([.black, .white]).asToneRamp())
-        #expect(ASCIIPalette([.black, .white]).asToneRamp().downsampled(to: .basic16).mapping == .toneRamp)
-        #expect(ASCIIPalette([.black, .white]).asToneRamp()
+        #expect(ASCIIPalette([.ansi(.black), .ansi(.white)]) != ASCIIPalette([.ansi(.black), .ansi(.white)]).asToneRamp())
+        #expect(ASCIIPalette([.ansi(.black), .ansi(.white)]).asToneRamp().downsampled(to: .basic16).mapping == .toneRamp)
+        #expect(ASCIIPalette([.ansi(.black), .ansi(.white)]).asToneRamp()
             .resolved(with: SystemPalette.green).mapping == .toneRamp)
     }
 
@@ -143,7 +143,7 @@ struct ASCIIPaletteTests {
 
     @Test("A semantic colour has no colour until the theme says so")
     func semanticResolves() {
-        let unresolved = ASCIIPalette([.black, .palette.accent])
+        let unresolved = ASCIIPalette([.ansi(.black), .palette.accent])
         // Unresolved, the accent stands in as mid-grey — what `Color.resolve`
         // itself falls back to — so an unresolved palette renders flat rather
         // than differently wrong.
@@ -198,7 +198,7 @@ struct ASCIIPaletteTests {
         #expect(rgb.sgrParameters(at: 0, background: true) == "48;2;10;20;30")
         let indexed = ASCIIPalette([.palette(123)])
         #expect(indexed.sgrParameters(at: 0, background: false) == "38;5;123")
-        let basic = ASCIIPalette([.red, .brightBlue])
+        let basic = ASCIIPalette([.ansi(.red), .ansi(.brightBlue)])
         #expect(basic.sgrParameters(at: 0, background: false) == "31")
         #expect(basic.sgrParameters(at: 1, background: true) == "104")
     }
@@ -224,7 +224,7 @@ struct ASCIIPaletteTests {
 
     @Test("A duotone recolours without flattening")
     func duotoneKeepsItsDepth() {
-        let curve = ASCIIToneCurve([(.black, .rgb(20, 20, 60)), (.white, .rgb(255, 215, 130))])
+        let curve = ASCIIToneCurve([(.ansi(.black), .rgb(20, 20, 60)), (.ansi(.white), .rgb(255, 215, 130))])
         let dark = curve.apply(to: RGBA(r: 0, g: 0, b: 0))
         let light = curve.apply(to: RGBA(r: 255, g: 255, b: 255))
         #expect(dark == RGBA(r: 20, g: 20, b: 60))
@@ -239,7 +239,7 @@ struct ASCIIPaletteTests {
         // Two stops covering only the dark half. Anything brighter than the
         // last stop takes the last stop's colour rather than a colour nobody
         // named.
-        let curve = ASCIIToneCurve([(.black, .rgb(0, 0, 255)), (.rgb(128, 128, 128), .rgb(0, 255, 0))])
+        let curve = ASCIIToneCurve([(.ansi(.black), .rgb(0, 0, 255)), (.rgb(128, 128, 128), .rgb(0, 255, 0))])
         #expect(curve.apply(to: RGBA(r: 255, g: 255, b: 255)) == RGBA(r: 0, g: 255, b: 0))
         #expect(curve.apply(to: RGBA(r: 0, g: 0, b: 0)) == RGBA(r: 0, g: 0, b: 255))
     }
@@ -247,10 +247,10 @@ struct ASCIIPaletteTests {
     @Test("A curve that cannot define a mapping changes nothing")
     func degenerateCurvesAreInert() {
         #expect(ASCIIToneCurve.identity.isIdentity)
-        #expect(ASCIIToneCurve([(.black, .white)]).isIdentity)
+        #expect(ASCIIToneCurve([(.ansi(.black), .ansi(.white))]).isIdentity)
         let pixel = RGBA(r: 77, g: 88, b: 99)
         #expect(ASCIIToneCurve.identity.apply(to: pixel) == pixel)
-        #expect(ASCIIToneCurve([(.black, .white)]).apply(to: pixel) == pixel)
+        #expect(ASCIIToneCurve([(.ansi(.black), .ansi(.white))]).apply(to: pixel) == pixel)
     }
 
     @Test("Alpha is carried through — a curve recolours, it does not reveal")
@@ -336,7 +336,7 @@ struct ASCIIPaletteTests {
 
     @Test("A curve stop may name a theme colour")
     func curveResolves() {
-        let curve = ASCIIToneCurve([(.black, .palette.accent), (.white, .white)])
+        let curve = ASCIIToneCurve([(.ansi(.black), .palette.accent), (.ansi(.white), .ansi(.white))])
         // Unresolved, the accent stop has no colour and drops out — leaving one
         // knot, which cannot define a mapping, so nothing is recoloured. That is
         // the safe failure: an unresolved curve is inert rather than wrong.

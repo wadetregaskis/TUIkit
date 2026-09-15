@@ -152,7 +152,7 @@ struct TerminalCarriedColourTests {
         TerminalColors.withCurrent(Self.reported) {
             let white = Color.rgb(255, 255, 255)
             #expect(Self.ink.opacity(0.5, over: white) == Color.rgb(171, 178, 191).opacity(0.5, over: white))
-            #expect(Color.red.opacity(0.5, over: Self.paper) == Color.red.opacity(0.5, over: .rgb(40, 44, 52)))
+            #expect(Color.ansi(.red).opacity(0.5, over: Self.paper) == Color.ansi(.red).opacity(0.5, over: .rgb(40, 44, 52)))
             #expect(
                 Self.ink.mix(with: Self.paper, by: 0.3)
                     == Color.rgb(171, 178, 191).mix(with: .rgb(40, 44, 52), by: 0.3))

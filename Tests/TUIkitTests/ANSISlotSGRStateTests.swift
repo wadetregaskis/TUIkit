@@ -23,22 +23,22 @@ struct ANSISlotSGRStateTests {
 
     /// In slot order, 0 through 15.
     private static let slots: [Slot] = [
-        ("black", .black, 0, 30, 40),
-        ("red", .red, 1, 31, 41),
-        ("green", .green, 2, 32, 42),
-        ("yellow", .yellow, 3, 33, 43),
-        ("blue", .blue, 4, 34, 44),
-        ("magenta", .magenta, 5, 35, 45),
-        ("cyan", .cyan, 6, 36, 46),
-        ("white", .white, 7, 37, 47),
-        ("brightBlack", .brightBlack, 8, 90, 100),
-        ("brightRed", .brightRed, 9, 91, 101),
-        ("brightGreen", .brightGreen, 10, 92, 102),
-        ("brightYellow", .brightYellow, 11, 93, 103),
-        ("brightBlue", .brightBlue, 12, 94, 104),
-        ("brightMagenta", .brightMagenta, 13, 95, 105),
-        ("brightCyan", .brightCyan, 14, 96, 106),
-        ("brightWhite", .brightWhite, 15, 97, 107),
+        ("black", .ansi(.black), 0, 30, 40),
+        ("red", .ansi(.red), 1, 31, 41),
+        ("green", .ansi(.green), 2, 32, 42),
+        ("yellow", .ansi(.yellow), 3, 33, 43),
+        ("blue", .ansi(.blue), 4, 34, 44),
+        ("magenta", .ansi(.magenta), 5, 35, 45),
+        ("cyan", .ansi(.cyan), 6, 36, 46),
+        ("white", .ansi(.white), 7, 37, 47),
+        ("brightBlack", .ansi(.brightBlack), 8, 90, 100),
+        ("brightRed", .ansi(.brightRed), 9, 91, 101),
+        ("brightGreen", .ansi(.brightGreen), 10, 92, 102),
+        ("brightYellow", .ansi(.brightYellow), 11, 93, 103),
+        ("brightBlue", .ansi(.brightBlue), 12, 94, 104),
+        ("brightMagenta", .ansi(.brightMagenta), 13, 95, 105),
+        ("brightCyan", .ansi(.brightCyan), 14, 96, 106),
+        ("brightWhite", .ansi(.brightWhite), 15, 97, 107),
     ]
 
     private static func applying(_ code: Int) -> SGRState {

@@ -52,9 +52,9 @@ struct InactiveEmphasisTests {
         #expect(cycle.frames.count == 1)
         #expect(!cycle.isAnimating)
         #expect(cycle.isFocused, "held still, not unfocused: a fill still draws as focused")
-        #expect(cycle.colorNow(dim: .red, bright: .blue) == .blue)
-        #expect(cycle.colors(dim: .red, bright: .blue) == [.blue])
-        #expect(cycle.run("●", dim: .red, bright: .blue, offsetX: 0, offsetY: 0) == nil)
+        #expect(cycle.colorNow(dim: .ansi(.red), bright: .ansi(.blue)) == .ansi(.blue))
+        #expect(cycle.colors(dim: .ansi(.red), bright: .ansi(.blue)) == [.ansi(.blue)])
+        #expect(cycle.run("●", dim: .ansi(.red), bright: .ansi(.blue), offsetX: 0, offsetY: 0) == nil)
     }
 
     @Test(
@@ -70,7 +70,7 @@ struct InactiveEmphasisTests {
         #expect(!timer.didReadThisFrame)
         #expect(tracker.reads == 0)
         #expect(emphasis == .steady(isFocused: true))
-        #expect(emphasis.color(dim: .red, bright: .blue) == .blue)
+        #expect(emphasis.color(dim: .ansi(.red), bright: .ansi(.blue)) == .ansi(.blue))
     }
 
     @Test("Without a cursor clock, resolving reads no pulse phase either")

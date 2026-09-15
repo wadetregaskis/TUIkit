@@ -34,7 +34,7 @@ struct GaugeDialAlphaTests {
         let drawn = buffer(
             Gauge(value: 0.6) { Text("load") }
                 .gaugeStyle(.accessoryCircularTiny)
-                .tint(Color.red.opacity(0.5)))
+                .tint(Color.ansi(.red).opacity(0.5)))
         let claim = try #require(drawn.opacityRegions.first, "\(drawn.opacityRegions)")
         #expect(drawn.opacityRegions.count == 1, "\(drawn.opacityRegions)")
         #expect(claim.offsetX == 0 && claim.offsetY == 0 && claim.width == 1, "\(claim)")
@@ -50,7 +50,7 @@ struct GaugeDialAlphaTests {
         let drawn = buffer(
             Gauge(value: 1.0) { Text("load") }
                 .gaugeStyle(.accessoryCircularCapacity)
-                .tint(Color.red.opacity(0.5)))
+                .tint(Color.ansi(.red).opacity(0.5)))
         let claims = drawn.opacityRegions
         #expect(!claims.isEmpty, "\(claims)")
         #expect(claims.allSatisfy { $0.inkOpacity == half }, "\(claims)")
@@ -67,7 +67,7 @@ struct GaugeDialAlphaTests {
         let drawn = buffer(
             Gauge(value: 0.5) { Text("load") }
                 .gaugeStyle(.accessoryCircularCapacity)
-                .tint(Color.red.opacity(0.5)))
+                .tint(Color.ansi(.red).opacity(0.5)))
         let lit = drawn.opacityRegions.reduce(0) { $0 + $1.width }
         #expect(lit > 0, "\(drawn.opacityRegions)")
         // The rim of the 3 × 6 box (a 4-cell interior) is 14 cells; half of it is
@@ -81,7 +81,7 @@ struct GaugeDialAlphaTests {
     func opaqueDialsClaimNothing() {
         for style in [GaugeStyle.accessoryCircularTiny, .accessoryCircular, .accessoryCircularCapacity] {
             let drawn = buffer(
-                Gauge(value: 0.6) { Text("load") }.gaugeStyle(style).tint(.red))
+                Gauge(value: 0.6) { Text("load") }.gaugeStyle(style).tint(.ansi(.red)))
             #expect(drawn.opacityRegions.isEmpty, "\(style): \(drawn.opacityRegions)")
         }
     }

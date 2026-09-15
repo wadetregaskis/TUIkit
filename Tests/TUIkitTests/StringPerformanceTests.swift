@@ -152,7 +152,7 @@ struct StringPerformanceTests {
 
         // Foreground color
         var colorStyle = TextStyle()
-        colorStyle.foregroundColor = .red
+        colorStyle.foregroundColor = .ansi(.red)
         _ = measure("Foreground color", iterations: 10000) {
             _ = ANSIRenderer.render(text, with: colorStyle)
         }
@@ -160,8 +160,8 @@ struct StringPerformanceTests {
         // Full style
         var fullStyle = TextStyle()
         fullStyle.isBold = true
-        fullStyle.foregroundColor = .red
-        fullStyle.backgroundColor = .blue
+        fullStyle.foregroundColor = .ansi(.red)
+        fullStyle.backgroundColor = .ansi(.blue)
         _ = measure("Full style (bold+fg+bg)", iterations: 10000) {
             _ = ANSIRenderer.render(text, with: fullStyle)
         }
@@ -189,15 +189,15 @@ struct StringPerformanceTests {
         }
 
         _ = measure("Foreground only", iterations: 10000) {
-            _ = ANSIRenderer.colorize(text, foreground: .red)
+            _ = ANSIRenderer.colorize(text, foreground: .ansi(.red))
         }
 
         _ = measure("Foreground + bold", iterations: 10000) {
-            _ = ANSIRenderer.colorize(text, foreground: .red, bold: true)
+            _ = ANSIRenderer.colorize(text, foreground: .ansi(.red), bold: true)
         }
 
         _ = measure("Foreground + background", iterations: 10000) {
-            _ = ANSIRenderer.colorize(text, foreground: .red, background: .blue)
+            _ = ANSIRenderer.colorize(text, foreground: .ansi(.red), background: .ansi(.blue))
         }
 
         print("=====================================\n")

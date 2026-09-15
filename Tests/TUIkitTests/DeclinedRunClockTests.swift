@@ -35,7 +35,7 @@ private struct TranslucentBarApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProgressView().tint(Color.red.opacity(0.5))
+            ProgressView().tint(Color.ansi(.red).opacity(0.5))
         }
     }
 }
@@ -205,7 +205,7 @@ struct DeclinedRunClockTests {
 
         var body: some Scene {
             WindowGroup {
-                ProgressView().indeterminateStyle(.sweep).tint(Color.red.opacity(0.5))
+                ProgressView().indeterminateStyle(.sweep).tint(Color.ansi(.red).opacity(0.5))
             }
         }
     }

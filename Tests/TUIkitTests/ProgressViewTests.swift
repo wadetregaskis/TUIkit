@@ -198,11 +198,11 @@ struct ProgressViewStyleTests {
         withColorDepth(.basic16) {
             let blockFine = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .blockFine,
-                fillColor: .green, backgroundColor: .red, accentColor: .blue,
+                fillColor: .ansi(.green), backgroundColor: .ansi(.red), accentColor: .ansi(.blue),
                 palette: SystemPalette.green).text
             let block = TrackRenderer.render(
                 fraction: 0.4, width: 10, style: .block,
-                fillColor: .green, backgroundColor: .red, accentColor: .blue,
+                fillColor: .ansi(.green), backgroundColor: .ansi(.red), accentColor: .ansi(.blue),
                 palette: SystemPalette.green).text
             #expect(blockFine.contains("41"), "blockFine paints a background: \(blockFine.debugDescription)")
             #expect(block.contains("41"), "block paints the empty region as a background: \(block.debugDescription)")
@@ -224,7 +224,7 @@ struct ProgressViewStyleTests {
             // 0.45 × 10 cells × 8 eighths = 36 steps → 4 full cells + a ▌.
             let bar = TrackRenderer.render(
                 fraction: 0.45, width: 10, style: .blockFine,
-                fillColor: .green, backgroundColor: .red, accentColor: .blue,
+                fillColor: .ansi(.green), backgroundColor: .ansi(.red), accentColor: .ansi(.blue),
                 palette: SystemPalette.green).text
             #expect(bar.contains("42"), "full cells sit on the fill colour: \(bar.debugDescription)")
             let partialCell = bar.split(separator: "▌").first.map(String.init) ?? ""
@@ -441,9 +441,9 @@ struct TrackRendererClampingTests {
             fraction: 1.5,
             width: 10,
             style: .block,
-            fillColor: .white,
-            backgroundColor: .white,
-            accentColor: .cyan,
+            fillColor: .ansi(.white),
+            backgroundColor: .ansi(.white),
+            accentColor: .ansi(.cyan),
         palette: SystemPalette.green
         ).text
         #expect(
@@ -458,9 +458,9 @@ struct TrackRendererClampingTests {
             fraction: -0.5,
             width: 10,
             style: .block,
-            fillColor: .white,
-            backgroundColor: .white,
-            accentColor: .cyan,
+            fillColor: .ansi(.white),
+            backgroundColor: .ansi(.white),
+            accentColor: .ansi(.cyan),
         palette: SystemPalette.green
         ).text
         #expect(
@@ -478,9 +478,9 @@ struct TrackRendererClampingTests {
                 fraction: 2.0,
                 width: 10,
                 style: style,
-                fillColor: .white,
-                backgroundColor: .white,
-                accentColor: .cyan,
+                fillColor: .ansi(.white),
+                backgroundColor: .ansi(.white),
+                accentColor: .ansi(.cyan),
             palette: SystemPalette.green
             ).text
             #expect(
@@ -492,9 +492,9 @@ struct TrackRendererClampingTests {
                 fraction: -1.0,
                 width: 10,
                 style: style,
-                fillColor: .white,
-                backgroundColor: .white,
-                accentColor: .cyan,
+                fillColor: .ansi(.white),
+                backgroundColor: .ansi(.white),
+                accentColor: .ansi(.cyan),
             palette: SystemPalette.green
             ).text
             #expect(

@@ -118,7 +118,7 @@ struct ScrollWindowOpacityClipTests {
     @Test("An indicator overwriting a row takes the content's claims on it away")
     func overwrittenRowKeepsNoClaim() throws {
         let width = 24
-        let faded = Color.red.opacity(0.5)
+        let faded = Color.ansi(.red).opacity(0.5)
         let drawn = renderToBuffer(
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {

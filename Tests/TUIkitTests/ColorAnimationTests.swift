@@ -171,7 +171,7 @@ struct ColorAnimationTests {
     @Test("A colour's alpha animates with the rest of it")
     func alphaFades() {
         func veil(_ alpha: UInt8) -> Color {
-            var colour = Color.red
+            var colour = Color.ansi(.red)
             colour.alpha = alpha
             return colour
         }

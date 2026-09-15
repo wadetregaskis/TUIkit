@@ -115,7 +115,7 @@ struct TextRenderTests {
 
     @Test("foregroundStyle on the Text emits the colour as ANSI")
     func explicitForegroundColor() {
-        let buffer = renderToBuffer(Text("Red").foregroundStyle(.red), context: context())
+        let buffer = renderToBuffer(Text("Red").foregroundStyle(.ansi(.red)), context: context())
         #expect(buffer.lines[0].stripped == "Red", "Visible content must be unchanged by colour")
         #expect(buffer.lines[0].contains("\u{1B}[31m"), "Red foreground ANSI code must be present")
     }
@@ -134,7 +134,7 @@ struct TextRenderTests {
     @Test("Inherited foregroundStyle from the environment colours the text")
     func inheritsEnvironmentColor() {
         // foregroundStyle applied to a parent must flow down to a plain Text.
-        let view = VStack { Text("Inherited") }.foregroundStyle(.blue)
+        let view = VStack { Text("Inherited") }.foregroundStyle(.ansi(.blue))
         let buffer = renderToBuffer(view, context: context())
         #expect(buffer.lines[0].stripped == "Inherited")
         #expect(buffer.lines[0].contains("\u{1B}[34m"), "Inherited blue foreground must be emitted")

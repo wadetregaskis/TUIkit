@@ -120,7 +120,7 @@ struct ImageModifierEnvironmentTests {
         check("imageColorMode", ["imageColorMode": String(describing: ASCIIColorMode.ansi16)]) {
             AnyView($0.imageColorMode(.ansi16))
         }
-        let curve = ASCIIToneCurve([(Color.black, Color.white)])
+        let curve = ASCIIToneCurve([(Color.ansi(.black), Color.ansi(.white))])
         check("imageToneCurve", ["imageToneCurve": String(describing: Optional(curve))]) {
             AnyView($0.imageToneCurve(curve))
         }
@@ -176,10 +176,10 @@ struct ImageModifierEnvironmentTests {
             "imagePlaceholderSpinner(style:color:)",
             [
                 "imagePlaceholderSpinner": String(
-                    describing: ImagePlaceholderSpinner(style: .line, color: .red))
+                    describing: ImagePlaceholderSpinner(style: .line, color: .ansi(.red)))
             ]
         ) {
-            AnyView($0.imagePlaceholderSpinner(style: .line, color: .red))
+            AnyView($0.imagePlaceholderSpinner(style: .line, color: .ansi(.red)))
         }
     }
 

@@ -133,7 +133,7 @@ struct RampAlphaShapeTests {
     func rampedInkPerRowClaims() {
         let drawn = buffer(
             Text("hello\nworld").foregroundStyle(
-                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)))
+                LinearGradient(colors: [.ansi(.black), .clear], startPoint: .top, endPoint: .bottom)))
         let sorted = drawn.opacityRegions.sorted { $0.offsetY < $1.offsetY }
         #expect(sorted.count >= 1, "\(drawn.opacityRegions)")
         // Descending down the block, which is what makes it a fade rather than a wash.

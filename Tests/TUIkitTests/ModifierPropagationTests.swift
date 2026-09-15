@@ -31,7 +31,7 @@ struct ModifierPropagationTests {
             Text("Hello")
             Text("World")
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(.ansi(.red))
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
@@ -50,7 +50,7 @@ struct ModifierPropagationTests {
                 Text("B")
             }
         }
-        .foregroundStyle(.green)
+        .foregroundStyle(.ansi(.green))
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
@@ -64,9 +64,9 @@ struct ModifierPropagationTests {
     func childForegroundStyleOverrides() {
         let view = VStack {
             Text("Red")
-            Text("Blue").foregroundStyle(.blue)
+            Text("Blue").foregroundStyle(.ansi(.blue))
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(.ansi(.red))
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
@@ -205,7 +205,7 @@ struct ModifierPropagationTests {
             }
             Text("Footer")
         }
-        .foregroundStyle(.cyan)
+        .foregroundStyle(.ansi(.cyan))
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)

@@ -169,13 +169,13 @@ struct BorderSpellingTests {
     func colourFirst() {
         // The shape SwiftUI teaches. It only has to COMPILE to prove the point;
         // that it also draws a box is the sanity check.
-        let drawn = lines(Text(verbatim: "hi").border(.red))
+        let drawn = lines(Text(verbatim: "hi").border(.ansi(.red)))
         #expect(drawn.contains { $0.contains("┌") || $0.contains("╭") }, "\(drawn)")
     }
 
     @Test("style rides alongside the colour, not instead of it")
     func styleBesideColour() {
-        let drawn = lines(Text(verbatim: "hi").border(.cyan, style: .doubleLine))
+        let drawn = lines(Text(verbatim: "hi").border(.ansi(.cyan), style: .doubleLine))
         #expect(drawn.contains { $0.contains("╔") }, "the double-line corner: \(drawn)")
     }
 
@@ -194,9 +194,9 @@ struct BorderSpellingTests {
     /// makes the count observable.
     @Test("width draws that many concentric rings")
     func widthNests() {
-        let one = lines(Text(verbatim: "hi").border(.red, width: 1)).count
-        let two = lines(Text(verbatim: "hi").border(.red, width: 2)).count
-        let three = lines(Text(verbatim: "hi").border(.red, width: 3)).count
+        let one = lines(Text(verbatim: "hi").border(.ansi(.red), width: 1)).count
+        let two = lines(Text(verbatim: "hi").border(.ansi(.red), width: 2)).count
+        let three = lines(Text(verbatim: "hi").border(.ansi(.red), width: 3)).count
         #expect(two == one + 2, "one ring adds a row above and below: \(one) → \(two)")
         #expect(three == two + 2, "and again: \(two) → \(three)")
     }
@@ -204,7 +204,7 @@ struct BorderSpellingTests {
     @Test("width 0 draws no border at all")
     func widthZero() {
         let bare = lines(Text(verbatim: "hi"))
-        let zero = lines(Text(verbatim: "hi").border(.red, width: 0))
+        let zero = lines(Text(verbatim: "hi").border(.ansi(.red), width: 0))
         #expect(zero.count == bare.count, "\(zero) vs \(bare)")
         #expect(!zero.contains { $0.contains("┌") || $0.contains("╭") })
     }

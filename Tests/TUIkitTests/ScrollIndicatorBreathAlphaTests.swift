@@ -86,7 +86,7 @@ struct ScrollIndicatorBreathAlphaTests {
     @Test("An opaque palette breathes between its own two colours, unchanged")
     func opaqueBreathUnchanged() {
         let palettes: [any Palette] =
-            PaletteRegistry.all + PaletteRegistry.all.map { TintedPalette(base: $0, tint: .red) }
+            PaletteRegistry.all + PaletteRegistry.all.map { TintedPalette(base: $0, tint: .ansi(.red)) }
             + [NamedSlots()]
         for palette in palettes {
             let ends = scrollIndicatorBreath(palette: palette, over: palette.background)
@@ -101,10 +101,10 @@ struct ScrollIndicatorBreathAlphaTests {
 private struct NamedSlots: Palette {
     let id = "named-slots"
     let name = "Named slots"
-    let background = Color.black
-    let foreground = Color.white
-    let foregroundTertiary = Color.white
-    let accent = Color.red
+    let background = Color.ansi(.black)
+    let foreground = Color.ansi(.white)
+    let foregroundTertiary = Color.ansi(.white)
+    let accent = Color.ansi(.red)
     let success = Color.rgb(40, 200, 40)
     let warning = Color.rgb(220, 200, 40)
     let error = Color.rgb(220, 40, 40)

@@ -199,7 +199,7 @@ struct ForegroundStylePropagationTests {
         let view = VStack {
             Text("Hello")
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(.ansi(.red))
 
         let context = RenderContext(
             availableWidth: 80,
@@ -223,7 +223,7 @@ struct ForegroundStylePropagationTests {
                 Text("Nested")
             }
         }
-        .foregroundStyle(.green)
+        .foregroundStyle(.ansi(.green))
 
         let context = RenderContext(
             availableWidth: 80,
@@ -242,9 +242,9 @@ struct ForegroundStylePropagationTests {
     @Test("explicit Text foregroundStyle overrides parent")
     func explicitStyleOverridesParent() {
         let view = VStack {
-            Text("Override").foregroundStyle(.blue)
+            Text("Override").foregroundStyle(.ansi(.blue))
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(.ansi(.red))
 
         let context = RenderContext(
             availableWidth: 80,

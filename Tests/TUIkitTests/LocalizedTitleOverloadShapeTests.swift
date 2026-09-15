@@ -194,9 +194,9 @@ extension LocalizedTitleTests {
         // here would be a test that cannot fail. Mutation-tested both ways.
         expectLocalized(
             ColorPickerPanel(
-                "test.title.control", selection: .constant(.red), isPresented: .constant(true)),
+                "test.title.control", selection: .constant(.ansi(.red)), isPresented: .constant(true)),
             ColorPickerPanel(
-                Self.computedKey, selection: .constant(.red), isPresented: .constant(true)),
+                Self.computedKey, selection: .constant(.ansi(.red)), isPresented: .constant(true)),
             "ColorPickerPanel(.constant)")
         expectLocalized(
             Toggle("test.title.control", isOn: .constant(true)),

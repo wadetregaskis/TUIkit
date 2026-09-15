@@ -172,7 +172,7 @@ struct RenderMemoComparatorTests {
                 (
                     "backgroundColor",
                     Card(
-                        title: title, backgroundColor: .red, content: { Text("a") },
+                        title: title, backgroundColor: .ansi(.red), content: { Text("a") },
                         footer: { Text("f") })
                 ),
             ])
@@ -185,7 +185,7 @@ struct RenderMemoComparatorTests {
             variants: [
                 ("content", Box { Text("b") }),
                 ("borderStyle", Box(.doubleLine) { Text("a") }),
-                ("borderColor", Box(color: .red) { Text("a") }),
+                ("borderColor", Box(color: .ansi(.red)) { Text("a") }),
             ])
 
         func container(
@@ -201,7 +201,7 @@ struct RenderMemoComparatorTests {
             "ContainerView", container(), identical: container(),
             variants: [
                 ("title", container(title: "Other")),
-                ("titleColor", container(titleColor: .red)),
+                ("titleColor", container(titleColor: .ansi(.red))),
                 ("content", container(body: "b")),
                 ("footer", container(footer: "g")),
                 ("style", container(style: ContainerStyle(hasBorder: false))),
@@ -221,7 +221,7 @@ struct RenderMemoComparatorTests {
             "_ContainerViewCore", core(), identical: core(),
             variants: [
                 ("title", core(title: "Other")),
-                ("titleColor", core(titleColor: .red)),
+                ("titleColor", core(titleColor: .ansi(.red))),
                 ("content", core(body: "b")),
                 ("footer", core(footer: "g")),
                 ("style", core(style: ContainerStyle(hasBorder: false))),

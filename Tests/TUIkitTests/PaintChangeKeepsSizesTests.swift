@@ -27,7 +27,7 @@ struct PaintChangeKeepsSizesTests {
         }
         func renderToBuffer(context: RenderContext) -> FrameBuffer {
             Counters.renders += 1
-            let colour = context.environment.foregroundStyle?.representative ?? .white
+            let colour = context.environment.foregroundStyle?.representative ?? .ansi(.white)
             return FrameBuffer(text: ANSIRenderer.colorize(String(repeating: "x", count: width), foreground: colour))
         }
     }
@@ -60,10 +60,10 @@ struct PaintChangeKeepsSizesTests {
     @Test("New colour: every row re-renders, no row is re-measured")
     func colourChangeKeepsSizes() {
         let tui = TUIContext()
-        _ = Self.frame(colour: .red, tui: tui)
-        _ = Self.frame(colour: .red, tui: tui)
+        _ = Self.frame(colour: .ansi(.red), tui: tui)
+        _ = Self.frame(colour: .ansi(.red), tui: tui)
         Counters.reset()
-        let steady = Self.frame(colour: .red, tui: tui)
+        let steady = Self.frame(colour: .ansi(.red), tui: tui)
         // All 40 rows draw (the ScrollView clips, it does not window here), so a
         // warm frame serves 40 buffers and the verifier re-renders each once.
         #expect(
@@ -71,7 +71,7 @@ struct PaintChangeKeepsSizesTests {
             "warm: \(Counters.measures)/\(Counters.renders)")
 
         Counters.reset()
-        let recoloured = Self.frame(colour: .green, tui: tui)
+        let recoloured = Self.frame(colour: .ansi(.green), tui: tui)
         #expect(recoloured.lines.first != steady.lines.first, "the ink changed")
         #expect(Counters.renders >= 40, "every row re-rendered: \(Counters.renders)")
         #expect(Counters.measures == 0, "no row was re-measured for a colour: \(Counters.measures)")

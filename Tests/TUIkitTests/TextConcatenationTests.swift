@@ -205,7 +205,7 @@ struct TextConcatenationTests {
         let context = makeRenderContext(width: 30, height: 4)
         for view in [
             Text(verbatim: "hello"),
-            Text(verbatim: "hello").bold().foregroundStyle(.red),
+            Text(verbatim: "hello").bold().foregroundStyle(.ansi(.red)),
             Text(verbatim: "a longer line that will wrap at this width"),
         ] {
             #expect(view.runs == nil)

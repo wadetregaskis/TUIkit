@@ -32,7 +32,7 @@ struct ListRowBackgroundAlphaTests {
 
     @Test("The fill claims the whole row, not the width of the words")
     func fillSpansTheRow() throws {
-        let drawn = buffer(Text("hi").listRowBackground(faded(.red, 128)), width: 12)
+        let drawn = buffer(Text("hi").listRowBackground(faded(.ansi(.red), 128)), width: 12)
         let claim = try #require(drawn.opacityRegions.first { $0.fieldOpacity < 1 })
         #expect(claim.width == 12, "the row, not the two letters: \(claim)")
         #expect(claim.offsetX == 0)
@@ -47,7 +47,7 @@ struct ListRowBackgroundAlphaTests {
         // row background: the text sits ON the fill and those cells still show it.
         // Punched, the row would render opaque under its own words and faded either
         // side — so this asserts the claim still covers column 0, where the `h` is.
-        let drawn = buffer(Text("hi").listRowBackground(faded(.red, 128)), width: 12)
+        let drawn = buffer(Text("hi").listRowBackground(faded(.ansi(.red), 128)), width: 12)
         let claim = try #require(drawn.opacityRegions.first { $0.fieldOpacity < 1 })
         #expect(claim.offsetX == 0 && claim.width == 12, "unpunched: \(claim)")
     }
@@ -57,7 +57,7 @@ struct ListRowBackgroundAlphaTests {
         // The branch that must not change: an opaque fill IS a backdrop, so
         // `.opacity(0.5)` on the row's text resolves against it here rather than
         // travelling up to be resolved against the page.
-        let drawn = buffer(Text("hi").opacity(0.5).listRowBackground(Color.red), width: 12)
+        let drawn = buffer(Text("hi").opacity(0.5).listRowBackground(Color.ansi(.red)), width: 12)
         #expect(
             drawn.opacityRegions.isEmpty,
             "the content's fade was spent against the fill: \(drawn.opacityRegions)")
@@ -69,7 +69,7 @@ struct ListRowBackgroundAlphaTests {
         // the text toward its opaque spelling now would be blending toward a colour
         // the fill is not going to be. Both claims travel and resolve together.
         let drawn = buffer(
-            Text("hi").opacity(0.5).listRowBackground(faded(.red, 128)), width: 12)
+            Text("hi").opacity(0.5).listRowBackground(faded(.ansi(.red), 128)), width: 12)
         #expect(
             drawn.opacityRegions.contains { $0.fieldOpacity < 1 }, "the fill's claim")
         #expect(
@@ -79,9 +79,9 @@ struct ListRowBackgroundAlphaTests {
 
     @Test("The fill's bytes are the colour at full strength")
     func bytesAreOpaque() {
-        let drawn = buffer(Text("hi").listRowBackground(faded(.red, 128)), width: 12)
+        let drawn = buffer(Text("hi").listRowBackground(faded(.ansi(.red), 128)), width: 12)
         #expect(
-            drawn.lines[0].contains(Color.red.backgroundCodes().joined(separator: ";")),
+            drawn.lines[0].contains(Color.ansi(.red).backgroundCodes().joined(separator: ";")),
             "\(drawn.lines[0].debugDescription)")
     }
 

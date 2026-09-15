@@ -266,7 +266,7 @@ struct FadedPaletteRenderTests {
     @Test("A drop-down's breathing border spends a faded accent at both ends")
     func dropdownBorderBreathSpends() throws {
         try withColorDepth(.truecolor) {
-            let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
+            let palette = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
             let popup = DropdownMenu.popup(
                 DropdownMenu.Configuration(
                     rows: (0..<3).map { .option(" item \($0)", claims: []) }, highlightedRow: 0,
@@ -622,7 +622,7 @@ struct FadedPaletteRenderTests {
     @Test("A focused swatch breathes under a faded palette")
     func focusedSwatchBreathes() {
         withColorDepth(.truecolor) {
-            let fills: [Color] = [.rgb(200, 40, 40), .white, .black, .rgb(128, 128, 128)]
+            let fills: [Color] = [.rgb(200, 40, 40), .ansi(.white), .ansi(.black), .rgb(128, 128, 128)]
             for fill in fills {
                 let drawn = renderToBuffer(
                     Button("") {}.buttonStyle(_ColorSwatchButtonStyle(color: fill)),

@@ -119,7 +119,7 @@ struct LabelStyleTests {
             context: makeBareRenderContext(width: 30, height: 4)
         ).lines.joined()
         let styled = renderToBuffer(
-            label().labelStyle(.titleOnly).foregroundStyle(.red),
+            label().labelStyle(.titleOnly).foregroundStyle(.ansi(.red)),
             context: makeBareRenderContext(width: 30, height: 4)
         ).lines.joined()
         #expect(styled != plain)

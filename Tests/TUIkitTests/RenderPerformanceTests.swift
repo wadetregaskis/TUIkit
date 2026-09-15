@@ -249,7 +249,7 @@ struct RenderPerformanceTests {
     @Test("Modifier chain performance is acceptable")
     func modifierChainPerformance() {
         let view = Text("Styled Text")
-            .foregroundStyle(.red)
+            .foregroundStyle(.ansi(.red))
             .bold()
             .padding(2)
 

@@ -166,8 +166,8 @@ struct GradientBandingTests {
         let width = 40
         let row = ColorDepth.withCurrent(.palette256) {
             IndeterminateRenderer.render(
-                width: width, style: .gradient(Gradient(colors: stops)), fillColor: .white,
-                backgroundColor: .black, accentColor: .white, elapsed: 0, palette: SystemPalette.green)
+                width: width, style: .gradient(Gradient(colors: stops)), fillColor: .ansi(.white),
+                backgroundColor: .ansi(.black), accentColor: .ansi(.white), elapsed: 0, palette: SystemPalette.green)
         }
         let steps = IndeterminateRenderer.samplesPerCell * width
         let ramp = IndeterminateRenderer.cyclic(Gradient(colors: stops), palette: SystemPalette.green)

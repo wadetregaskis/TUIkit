@@ -85,8 +85,8 @@ struct BoldSafetyTests {
     @Test("A palette of triples is safe; one naming an ANSI colour is not")
     func paletteSafety() {
         #expect(ASCIIPalette([.rgb(10, 20, 30), .rgb(200, 200, 200)]).foregroundSurvivesBold)
-        #expect(!ASCIIPalette([.rgb(10, 20, 30), .black]).foregroundSurvivesBold)
-        #expect(!ASCIIPalette([.brightWhite]).foregroundSurvivesBold)
+        #expect(!ASCIIPalette([.rgb(10, 20, 30), .ansi(.black)]).foregroundSurvivesBold)
+        #expect(!ASCIIPalette([.ansi(.brightWhite)]).foregroundSurvivesBold)
         #expect(!ASCIIPalette.ansi16.foregroundSurvivesBold)
     }
 
@@ -124,7 +124,7 @@ struct BoldSafetyTests {
     /// two of its three entries are names and the whole image goes unbolded.
     @Test("A palette naming ANSI colours is emitted without bold")
     func paletteEmissionFollowsTheRule() {
-        let named = ASCIIColorMode.palette(ASCIIPalette([.black, .rgb(51, 255, 51), .white]))
+        let named = ASCIIColorMode.palette(ASCIIPalette([.ansi(.black), .rgb(51, 255, 51), .ansi(.white)]))
         let triples = ASCIIColorMode.palette(ASCIIPalette([.rgb(0, 0, 0), .rgb(255, 255, 255)]))
         #expect(!converted(named).contains(bold))
         #expect(converted(triples).contains(bold))

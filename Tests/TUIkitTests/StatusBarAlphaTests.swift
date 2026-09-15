@@ -42,12 +42,12 @@ struct StatusBarAlphaTests {
     @Test("Opaque colours claim nothing")
     func opaqueClaimsNothing() {
         #expect(bar().opacityRegions.isEmpty)
-        #expect(bar(highlight: .cyan, label: .white).opacityRegions.isEmpty)
+        #expect(bar(highlight: .ansi(.cyan), label: .ansi(.white)).opacityRegions.isEmpty)
     }
 
     @Test("A faded highlight claims the shortcut and not the label")
     func fadedHighlight() throws {
-        let drawn = bar(highlight: faded(.cyan, 128), label: .white)
+        let drawn = bar(highlight: faded(.ansi(.cyan), 128), label: .ansi(.white))
         let claim = try #require(drawn.opacityRegions.first)
         #expect(drawn.opacityRegions.count == 1, "one run, not the whole item")
         #expect(claim.width == 1, "the shortcut `q` is one cell: \(claim)")
@@ -56,7 +56,7 @@ struct StatusBarAlphaTests {
 
     @Test("A faded label claims the label and not the shortcut")
     func fadedLabel() throws {
-        let drawn = bar(highlight: .cyan, label: faded(.white, 64))
+        let drawn = bar(highlight: .ansi(.cyan), label: faded(.ansi(.white), 64))
         let claim = try #require(drawn.opacityRegions.first)
         #expect(drawn.opacityRegions.count == 1)
         #expect(claim.offsetX >= 1, "starts after the shortcut: \(claim)")
@@ -66,7 +66,7 @@ struct StatusBarAlphaTests {
 
     @Test("Both faded claims two runs, each at its own alpha")
     func bothFaded() {
-        let drawn = bar(highlight: faded(.cyan, 128), label: faded(.white, 64))
+        let drawn = bar(highlight: faded(.ansi(.cyan), 128), label: faded(.ansi(.white), 64))
         #expect(drawn.opacityRegions.count == 2, "\(drawn.opacityRegions)")
         // The two runs are adjacent and disjoint: together they are the item, and
         // neither the gap nor the last cell belongs to nobody. Claimed twice, the
@@ -78,9 +78,9 @@ struct StatusBarAlphaTests {
 
     @Test("The bytes are the colours at full strength")
     func bytesAreOpaque() {
-        let drawn = bar(highlight: faded(.cyan, 128))
+        let drawn = bar(highlight: faded(.ansi(.cyan), 128))
         #expect(
-            drawn.lines[0].contains(Color.cyan.foregroundCodes().joined(separator: ";")),
+            drawn.lines[0].contains(Color.ansi(.cyan).foregroundCodes().joined(separator: ";")),
             "\(drawn.lines[0].debugDescription)")
     }
 
