@@ -441,9 +441,9 @@ struct TrackRendererClampingTests {
             fraction: 1.5,
             width: 10,
             style: .block,
-            fillColor: .ansi(.white),
-            backgroundColor: .ansi(.white),
-            accentColor: .ansi(.cyan),
+            fillColor: .white,
+            backgroundColor: .white,
+            accentColor: .cyan,
         palette: SystemPalette.green
         ).text
         #expect(
@@ -458,9 +458,9 @@ struct TrackRendererClampingTests {
             fraction: -0.5,
             width: 10,
             style: .block,
-            fillColor: .ansi(.white),
-            backgroundColor: .ansi(.white),
-            accentColor: .ansi(.cyan),
+            fillColor: .white,
+            backgroundColor: .white,
+            accentColor: .cyan,
         palette: SystemPalette.green
         ).text
         #expect(
@@ -478,9 +478,9 @@ struct TrackRendererClampingTests {
                 fraction: 2.0,
                 width: 10,
                 style: style,
-                fillColor: .ansi(.white),
-                backgroundColor: .ansi(.white),
-                accentColor: .ansi(.cyan),
+                fillColor: .white,
+                backgroundColor: .white,
+                accentColor: .cyan,
             palette: SystemPalette.green
             ).text
             #expect(
@@ -492,9 +492,9 @@ struct TrackRendererClampingTests {
                 fraction: -1.0,
                 width: 10,
                 style: style,
-                fillColor: .ansi(.white),
-                backgroundColor: .ansi(.white),
-                accentColor: .ansi(.cyan),
+                fillColor: .white,
+                backgroundColor: .white,
+                accentColor: .cyan,
             palette: SystemPalette.green
             ).text
             #expect(
