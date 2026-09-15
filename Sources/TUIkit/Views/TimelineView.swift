@@ -145,9 +145,20 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
             // One wake, for the next entry only. The frame it produces declares
             // the one after it, so an irregular schedule stays exact and a
             // finished one stops asking.
-            context.requestWake(
-                token: "timeline-\(context.identity.path)",
-                afterSeconds: next.timeIntervalSince(now))
+            let token = "timeline-\(context.identity.path)"
+            if let frameTicks = (schedule as? AnimationTimelineSchedule)?.frameTicks {
+                // An animation schedule's pace is the framework's frame rate, not
+                // dates the app chose, so it wakes where the next frame of its
+                // lattice begins, as every other animation of whole ticks does,
+                // rather than a sixtieth after whenever this render landed. The
+                // content still saw this render's own date.
+                context.requestWake(
+                    token: token,
+                    atNanos: AnimationClock.nanoseconds(
+                        ofNextTickMultiple: frameTicks, after: context.environment.frameNowNanos))
+            } else {
+                context.requestWake(token: token, afterSeconds: next.timeIntervalSince(now))
+            }
         }
         return TUIkitView.renderToBuffer(content(timeline), context: context)
     }

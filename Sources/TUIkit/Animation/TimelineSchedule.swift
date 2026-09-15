@@ -5,6 +5,7 @@
 //  License: MIT
 
 import Foundation
+import TUIkitCore
 
 // MARK: - Mode
 
@@ -174,6 +175,13 @@ where Entries.Element == Date {
 /// equivalent to ask, so the default here is 60 Hz — the default of
 /// `App.maxFrameRate`, which is also the ceiling the run loop would coalesce a
 /// faster request down to. Give `minimumInterval` explicitly to ask for less.
+///
+/// A ``TimelineView`` following this schedule is re-rendered at the instants its
+/// frames of 1/60 s begin: every tick by default, or every so many ticks as the
+/// minimum interval rounds up to. Those are the instants the framework's other
+/// animations change at, so a timeline beside a spinner or a progress bar shares
+/// their renders rather than adding its own between them. The dates the content
+/// sees are unchanged: the first is the date of the render.
 public struct AnimationTimelineSchedule: TimelineSchedule, Sendable {
     /// The dates of an ``AnimationTimelineSchedule``: instants one interval
     /// apart from the start date, or none at all when the schedule is paused or
@@ -214,6 +222,25 @@ public struct AnimationTimelineSchedule: TimelineSchedule, Sendable {
     public init(minimumInterval: Double? = nil, paused: Bool = false) {
         self.minimumInterval = minimumInterval
         self.paused = paused
+    }
+
+    /// How many ticks of 1/60 s apart a view following this schedule is woken:
+    /// the fewest whole ticks no shorter than the minimum interval, and 1 for the
+    /// default rate. `nil` when paused, which is never woken.
+    ///
+    /// The run loop wakes the view where the next multiple of this many ticks
+    /// begins, rather than an interval after each render, so its renders land
+    /// on the lattice every other animation of whole ticks steps on. The entries
+    /// the content sees still start at the render's date, as SwiftUI's do.
+    /// Rounded up, less a billionth of a tick of slack for a `Double` like 0.1 s
+    /// (6.000…1 ticks), so a view is never woken sooner than it asked; a duration
+    /// too long for an `Int` of ticks is `Int32.max` of them.
+    var frameTicks: Int? {
+        guard !paused else { return nil }
+        guard let interval = minimumInterval, interval > 0 else { return 1 }
+        let ticks = (interval * Double(AnimationClock.ticksPerSecond) - 1e-9).rounded(.up)
+        guard ticks < Double(Int32.max) else { return Int(Int32.max) }
+        return max(1, Int(ticks))
     }
 
     public func entries(from startDate: Date, mode: TimelineScheduleMode) -> Entries {

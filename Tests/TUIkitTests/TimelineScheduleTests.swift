@@ -156,6 +156,21 @@ struct TimelineScheduleTests {
         #expect(abs((entries[1] - entries[0]) - 1.0 / 60.0) < 1e-6)
     }
 
+    @Test(
+        "An animation schedule is woken the fewest whole 1/60 s ticks apart that its minimum interval allows",
+        arguments: [
+            (nil, 1), (1.0 / 60, 1), (0.05, 3), (0.1, 6), (0.11, 7), (0.5, 30), (0, 1), (-1, 1),
+            (1e30, Int(Int32.max)),
+        ] as [(Double?, Int)])
+    func animationFrameTicks(_ interval: Double?, _ ticks: Int) {
+        #expect(AnimationTimelineSchedule(minimumInterval: interval).frameTicks == ticks)
+    }
+
+    @Test("A paused animation schedule is never woken")
+    func animationPausedFrameTicks() {
+        #expect(AnimationTimelineSchedule(minimumInterval: 0.1, paused: true).frameTicks == nil)
+    }
+
     // MARK: - Factories
 
     @Test("The factories build the same schedules as the initialisers")

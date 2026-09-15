@@ -15,9 +15,9 @@ import TUIkitCore
 struct TimelineViewTests {
     private let second: Int64 = 1_000_000_000
 
-    /// A render context whose frame clock reads zero, so a declared wake's
-    /// firing instant IS the delay that was asked for.
-    private func harness(width: Int = 40, height: Int = 8) -> (
+    /// A render context whose frame clock reads `frameNowNanos`: zero unless given,
+    /// so a declared wake's firing instant IS the delay that was asked for.
+    private func harness(width: Int = 40, height: Int = 8, frameNowNanos: Int64 = 0) -> (
         TUIContext, RenderContext, AnimationScheduler
     ) {
         let tui = TUIContext()
@@ -27,7 +27,7 @@ struct TimelineViewTests {
         environment.applyRuntimeServices(from: tui)
         environment.terminalWidth = width
         environment.animationScheduler = scheduler
-        environment.frameNowNanos = 0
+        environment.frameNowNanos = frameNowNanos
         return (
             tui,
             RenderContext(
@@ -165,6 +165,41 @@ struct TimelineViewTests {
         #expect(scheduler.liveWakeCount == 0)
         #expect(scheduler.isIdle)
         #expect(scheduler.nextFiring(after: 0) == nil)
+    }
+
+    @Test("An animation schedule wakes at the next 1/60 s tick's instant, not a sixtieth after the render")
+    func animationWakesOnTheNextTick() {
+        // 1.037 s is 2.3 ms into tick 62; tick 63 begins at 1.05 s.
+        let (tui, context, scheduler) = harness(frameNowNanos: 1_037_000_000)
+        let seen = Seen()
+        _ = render(timeline(.animation, into: seen), tui: tui, context: context, scheduler: scheduler)
+        #expect(scheduler.liveWakeCount == 1)
+        #expect(scheduler.nextFiring(after: 1_037_000_000) == AnimationClock.nanoseconds(atTick: 63))
+    }
+
+    @Test(
+        "An animation schedule with a minimum interval wakes on the lattice of that many ticks",
+        arguments: [(0.1, 66), (0.05, 63), (0.12, 64)] as [(Double, Int64)])
+    func animationMinimumIntervalWakesOnItsLattice(_ interval: Double, _ tick: Int64) {
+        // From tick 62: 0.1 s is 6 ticks, whose next multiple is 66; 0.05 s is 3 (63);
+        // 0.12 s is 7.2, and no fewer than that many ticks apart is 8 (64).
+        let (tui, context, scheduler) = harness(frameNowNanos: 1_037_000_000)
+        let seen = Seen()
+        _ = render(
+            timeline(.animation(minimumInterval: interval), into: seen), tui: tui, context: context,
+            scheduler: scheduler)
+        #expect(scheduler.nextFiring(after: 1_037_000_000) == AnimationClock.nanoseconds(atTick: tick))
+    }
+
+    @Test("An animation schedule's content still sees the date of the render")
+    func animationEntryIsTheRenderDate() throws {
+        let (tui, context, scheduler) = harness(frameNowNanos: 1_037_000_000)
+        let seen = Seen()
+        let before = Date()
+        _ = render(timeline(.animation, into: seen), tui: tui, context: context, scheduler: scheduler)
+        let after = Date()
+        let date = try #require(seen.date)
+        #expect(date >= before && date <= after)
     }
 
     @Test("A paused animation schedule asks for nothing")
