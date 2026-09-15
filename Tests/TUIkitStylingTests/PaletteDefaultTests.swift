@@ -13,14 +13,14 @@ import Testing
 private struct MinimalPalette: Palette {
     let id = "minimal"
     let name = "Minimal"
-    let background = Color.ansi(.black)
-    let foreground = Color.ansi(.white)
-    let accent = Color.ansi(.cyan)
-    let success = Color.ansi(.green)
-    let warning = Color.ansi(.yellow)
-    let error = Color.ansi(.red)
-    let info = Color.ansi(.blue)
-    let border = Color.ansi(.brightBlack)
+    let background = Color.black
+    let foreground = Color.white
+    let accent = Color.cyan
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.red
+    let info = Color.blue
+    let border = Color.gray
 }
 
 @MainActor
