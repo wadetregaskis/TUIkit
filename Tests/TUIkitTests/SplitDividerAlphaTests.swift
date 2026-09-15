@@ -85,7 +85,7 @@ struct SplitDividerAlphaTests {
     @Test("A hovered divider's dots breathe opaque under a faded tint")
     func hoveredDotsUnderAFadedTint() throws {
         let context = context(palette: SystemPalette.default)
-        let view = split.tint(Color.ansi(.red).opacity(0.5))
+        let view = split.tint(Color.red.opacity(0.5))
         let dispatcher = try #require(context.environment.mouseEventDispatcher)
         // Motion must be on for the dispatcher to synthesise an enter.
         dispatcher.setActiveSupport(MouseSupport(clicks: true, scrolling: true, drag: true, motion: true))
