@@ -18,7 +18,7 @@ import Testing
 struct ScrollbarTrackAlphaTests {
 
     /// A rung one shade off the accent fails the separation floor, so
-    /// `resolvedTrack` walks it toward the page or the ink — through `lerp`, which
+    /// `ChromeTrack.resolvedTrack` walks it toward the page or the ink — through `lerp`, which
     /// would otherwise interpolate the alpha toward theirs as a fourth channel.
     ///
     /// Three pages: an opaque one (the faded rung drifted OPAQUE, step by step), a
@@ -34,7 +34,7 @@ struct ScrollbarTrackAlphaTests {
             (Color.rgb(10, 10, 20).opacity(0.5), Color.rgb(230, 230, 240).opacity(0.5)),
             (Color.rgb(240, 240, 230), Color.rgb(20, 20, 30)),
         ] {
-            let track = ScrollbarColors.resolvedTrack(base: rung, accent: accent, page: page, ink: ink)
+            let track = ChromeTrack.resolvedTrack(base: rung, accent: accent, page: page, ink: ink)
             #expect(
                 track.opaqueSpelling != rung.opaqueSpelling,
                 "the rung was not moved on page \(page), so this asserts nothing")
@@ -48,7 +48,7 @@ struct ScrollbarTrackAlphaTests {
     @Test("An opaque rung, moved toward a faded page, is still opaque")
     func opaqueRungStaysOpaque() {
         let rung = Color.rgb(0, 170, 190)
-        let track = ScrollbarColors.resolvedTrack(
+        let track = ChromeTrack.resolvedTrack(
             base: rung, accent: Color.rgb(0, 180, 200),
             page: Color.rgb(10, 10, 20).opacity(0.5), ink: Color.rgb(230, 230, 240))
         #expect(track.opaqueSpelling != rung.opaqueSpelling, "the rung was not moved")

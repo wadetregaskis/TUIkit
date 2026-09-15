@@ -67,7 +67,7 @@ struct ScrollbarPulseFloorTests {
             let border = Color.brightBlack
         }
         func cold(_ palette: InkPalette) -> Color {
-            ScrollbarColors.resolvedTrack(
+            ChromeTrack.resolvedTrack(
                 base: palette.foregroundQuaternary.resolve(with: palette),
                 accent: palette.accent.resolve(with: palette),
                 page: palette.background.resolve(with: palette),

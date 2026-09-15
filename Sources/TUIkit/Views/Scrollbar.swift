@@ -516,7 +516,7 @@ struct ScrollbarColors {
     static func pulseLift(_ palette: any Palette) -> Color {
         let lifted = separated(palette.hoveredForeground(palette.accent), in: palette)
         let resting = separated(palette.accent.resolve(with: palette), in: palette)
-        guard renderedRatio(lifted, resting) < ViewConstants.chromePulseFloor else { return lifted }
+        guard ChromeTrack.renderedRatio(lifted, resting) < ViewConstants.chromePulseFloor else { return lifted }
         // A fixed proportional step toward whichever extreme the resting colour
         // is FURTHER from, rather than another contrast walk: the walk moves in
         // 1% lightness steps and a colour this close to an extreme needs a
@@ -524,7 +524,7 @@ struct ScrollbarColors {
         // time. A fifth of the way to the far end is always a visible change
         // and never more than a breath.
         let extreme: Color =
-            renderedRatio(resting, .rgb(255, 255, 255)) >= renderedRatio(resting, .rgb(0, 0, 0))
+            ChromeTrack.renderedRatio(resting, .rgb(255, 255, 255)) >= ChromeTrack.renderedRatio(resting, .rgb(0, 0, 0))
             ? .rgb(255, 255, 255) : .rgb(0, 0, 0)
         // The SMALLEST step that can be seen, not a fixed one: a fixed depth
         // barely moved a colour already near an extreme and flung a mid-tone
@@ -545,7 +545,7 @@ struct ScrollbarColors {
         for surviving in stride(from: 0.98, through: ViewConstants.chromePulseDepth, by: -0.02) {
             let candidate = separated(
                 towardExtreme(surviving), in: palette, standingOffThePage: false)
-            if renderedRatio(candidate, resting) >= ViewConstants.chromePulseFloor {
+            if ChromeTrack.renderedRatio(candidate, resting) >= ViewConstants.chromePulseFloor {
                 return candidate
             }
         }
@@ -609,10 +609,10 @@ struct ScrollbarColors {
         let page = palette.background.resolve(with: palette)
         let floored = thumb.ensuringRenderedContrast(
             atLeast: ViewConstants.chromeSeparationFloor, against: track)
-        let groove = renderedRatio(track, page)
+        let groove = ChromeTrack.renderedRatio(track, page)
         func standsOff(_ color: Color) -> Bool {
-            (!standingOffThePage || renderedRatio(color, page) >= groove)
-                && renderedRatio(color, track) >= ViewConstants.chromeSeparationFloor
+            (!standingOffThePage || ChromeTrack.renderedRatio(color, page) >= groove)
+                && ChromeTrack.renderedRatio(color, track) >= ViewConstants.chromeSeparationFloor
         }
         guard !standsOff(floored) else { return floored }
         let offThePage = floored.ensuringRenderedContrast(atLeast: groove, against: page)
@@ -622,8 +622,8 @@ struct ScrollbarColors {
     }
 
     /// The colour a scroll TRACK is drawn in: the palette's quietest rung,
-    /// moved along its own line until it is tellable from both the accent
-    /// drawn on it and the page it sits on.
+    /// separated from the accent drawn on it and the page it sits on by
+    /// ``ChromeTrack/track(from:in:)``, which says how and why.
     ///
     /// Six of the sixteen shipped profiles derive `foregroundQuaternary` within
     /// the chrome-separation floor of their own accent, and Ocean's lands on
@@ -631,80 +631,9 @@ struct ScrollbarColors {
     /// `separated` then pushes the thumb to an extreme to clear it, where it
     /// has no room left to breathe — which is why a focused scrollbar did not
     /// move on those profiles.
-    ///
-    /// Fixed here rather than in the derivation, deliberately. The requirement
-    /// belongs to the scrollbar: it is the one place the accent is drawn ON the
-    /// quietest rung, and constraining the rung itself would have moved a
-    /// colour that spinners, pickers and menu chrome also draw in — measured on
-    /// Grass, it took the quaternary from a muted green to a pale yellow to get
-    /// clear of the amber accent, which is a large change to a theme for one
-    /// control's benefit.
-    ///
-    /// Toward the page first at each step, because a groove wants to be the
-    /// quieter of the two; toward the ink when that direction runs out (Grass's
-    /// page is a teal its track already sits near, so quieting it further
-    /// erases it). Failing both, the palette's own rung stands: a groove too
-    /// close to its thumb is a worse bar than one too close to its page, and an
-    /// INVISIBLE groove is worse than either.
     @MainActor
     static func track(in palette: any Palette) -> Color {
-        let base = palette.foregroundQuaternary.resolve(with: palette)
-        let accent = palette.accent.resolve(with: palette)
-        let page = palette.background.resolve(with: palette)
-        let ink = palette.foreground.resolve(with: palette)
-        // Every input of `resolvedTrack` is in the key. The ink was not, so two
-        // palettes alike but for their foreground shared one answer — and the
-        // answer can be the FALLBACK, cached from a palette whose ink offered
-        // no acceptable rung and served to one whose ink would have.
-        let key = TrackKey(base: base, accent: accent, page: page, ink: ink)
-        if let cached = trackCache[key] { return cached }
-        let answer = resolvedTrack(base: base, accent: accent, page: page, ink: ink)
-        // Sixteen palettes and one entry each; the cap is a backstop against an
-        // app generating palettes per frame, not a working set.
-        if trackCache.count > 64 { trackCache.removeAll(keepingCapacity: true) }
-        trackCache[key] = answer
-        return answer
-    }
-
-    private struct TrackKey: Hashable {
-        let base: Color
-        let accent: Color
-        let page: Color
-        let ink: Color
-    }
-
-    /// Up to 24 quantisations per palette, so it is answered once and kept —
-    /// this is asked per scrollbar per frame.
-    @MainActor private static var trackCache: [TrackKey: Color] = [:]
-
-    /// Internal, not private, so the memo test can ask for a cold answer.
-    static func resolvedTrack(base: Color, accent: Color, page: Color, ink: Color) -> Color {
-        func acceptable(_ candidate: Color) -> Bool {
-            renderedRatio(candidate, accent) >= ViewConstants.chromeSeparationFloor
-                && renderedRatio(candidate, page) >= ViewConstants.chromeGrooveFloor
-        }
-        guard !acceptable(base) else { return base }
-        // Each candidate is the RUNG moved, not a mix of two paints: the page and
-        // the ink are only directions here. `lerp` would otherwise walk the alpha
-        // toward theirs as a fourth channel — a faded rung coming back part-way
-        // opaque, an opaque one part-way faded, by however far it had to move
-        // (§45). The floors are measured on the channels alone, so carrying the
-        // alpha changes which colour comes back, never which step is chosen.
-        for step in 1...12 {
-            let phase = Double(step) / 12
-            for candidate in [
-                Color.lerp(base, page, phase: phase), Color.lerp(base, ink, phase: phase),
-            ].map({ $0.carryingAlpha(of: base) }) where acceptable(candidate) {
-                return candidate
-            }
-        }
-        return base
-    }
-
-    /// Two colours' contrast AS DRAWN — through the 256-colour cube, which is
-    /// where chrome this quiet collapses. See ``separated(_:in:)``.
-    private static func renderedRatio(_ lhs: Color, _ rhs: Color) -> Double {
-        lhs.downsampledToPalette256().contrastRatio(against: rhs.downsampledToPalette256())
+        ChromeTrack.track(from: palette.foregroundQuaternary, in: palette)
     }
 
     /// Everything the bar's ANIMATION is coloured from, or nil when nothing

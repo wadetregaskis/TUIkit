@@ -3188,6 +3188,9 @@ the first exit could not fail. And the render that trapped is a test of its own.
 
 ## 45. A scroll track's alpha moved with its colour (2026-09-10)
 
+(2026-09-14: the walk moved from `ScrollbarColors` to `ChromeTrack`, unchanged, so a
+switch's off track can share it; it is `ChromeTrack.resolvedTrack` now.)
+
 `ScrollbarColors.resolvedTrack` is the palette's quietest rung, moved along a line until
 it can be told from both the accent drawn on it and the page it sits on — toward the
 page first, toward the ink when that runs out. It moves through `Color.lerp`, and `lerp`
