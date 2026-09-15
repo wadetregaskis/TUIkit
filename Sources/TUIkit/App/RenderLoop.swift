@@ -1377,21 +1377,16 @@ extension RenderLoop {
         terminalWidth: Int,
         environment: EnvironmentValues
     ) -> FrameBuffer {
-        let palette = environment.palette
-
-        let highlightColor =
-            statusBar.highlightColor == .cyan
-            ? palette.accent
-            : statusBar.highlightColor
-        let labelColor = statusBar.labelColor ?? palette.foreground
-
+        // The two colours go through as the app set them. An unset one is the
+        // palette's accent or foreground, and every colour is resolved against
+        // `environment.palette`, inside `StatusBar` itself.
         let statusBarView = StatusBar(
             userItems: statusBar.currentUserItems,
             systemItems: statusBar.currentSystemItems,
             style: statusBar.style,
             alignment: statusBar.alignment,
-            highlightColor: highlightColor,
-            labelColor: labelColor,
+            highlightColor: statusBar.highlightColor,
+            labelColor: statusBar.labelColor,
             tooltipLines: statusBar.tooltipLines
         )
 

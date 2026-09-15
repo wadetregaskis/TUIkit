@@ -20,13 +20,35 @@ struct StatusBarThemeTests {
     /// A one-item compact bar, rendered under ``ThemeProbePalette`` in truecolor, so
     /// a role's RGB is spelled out in the bytes.
     private func bar(highlight: Color, label: Color? = nil) -> FrameBuffer {
-        let view = StatusBar(
-            items: [StatusBarItem(shortcut: "q", label: "Quit")], style: .compact,
-            highlightColor: highlight, labelColor: label)
+        render(
+            StatusBar(
+                items: [StatusBarItem(shortcut: "q", label: "Quit")], style: .compact,
+                highlightColor: highlight, labelColor: label))
+    }
+
+    private func render(_ view: StatusBar) -> FrameBuffer {
         let context = makeRenderContext(width: 40, height: 3) { env, _ in
             env.palette = ThemeProbePalette()
         }
         return ColorDepth.withCurrent(.truecolor) { renderToBuffer(view, context: context) }
+    }
+
+    /// A bar that states neither colour draws its shortcuts in the palette's accent
+    /// and its labels in the palette's foreground, on its own and not only when the
+    /// run loop builds it.
+    @Test("A bar that states no colours draws the accent and the foreground")
+    func defaultsAreRoles() throws {
+        let line = render(
+            StatusBar(items: [StatusBarItem(shortcut: "q", label: "Quit")], style: .compact)
+        ).lines[0]
+        let text = line.stripped
+        let shortcut = try #require(text.firstIndex(of: "q"), "\(line.debugDescription)")
+        // The bar is ASCII, so a character's offset is its cell.
+        let column = text.distance(from: text.startIndex, to: shortcut)
+        let cells = truecolorInks(line)
+        #expect(cells[column] == "230;120;40", "the shortcut: \(line.debugDescription)")
+        // `column + 1` is the separating space; the `Q` of ` Quit` is the next cell.
+        #expect(cells[column + 2] == "220;220;220", "the label: \(line.debugDescription)")
     }
 
     /// A palette role handed to the bar as its highlight reached the emitter

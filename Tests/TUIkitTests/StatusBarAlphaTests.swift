@@ -24,7 +24,7 @@ struct StatusBarAlphaTests {
     }
 
     private func bar(
-        highlight: Color = .cyan, label: Color? = nil, width: Int = 40
+        highlight: Color? = nil, label: Color? = nil, width: Int = 40
     ) -> FrameBuffer {
         let view = StatusBar(
             userItems: [StatusBarItem(shortcut: "q", label: "Quit")],

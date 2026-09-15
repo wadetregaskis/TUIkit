@@ -27,6 +27,19 @@ private struct StatusBarProbeApp: App {
     }
 }
 
+/// A page that states one status bar item of its own.
+private struct StatusBarItemsProbeApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            Text("content").statusBarItems {
+                StatusBarItem(shortcut: "q", label: "Quit")
+            }
+        }
+    }
+}
+
 @MainActor
 @Suite("The status bar reaches the terminal")
 struct StatusBarFrameDiffTests {
@@ -128,5 +141,21 @@ struct StatusBarFrameDiffTests {
         }
         let tooltipRow = drawn[23] ?? ""
         #expect(tooltipRow.contains("Copy to clipboard"), "\(drawn)")
+    }
+
+    /// An app that sets its status bar's highlight to cyan gets cyan.
+    ///
+    /// The loop used to read `.cyan` as "not set" and paint the palette's accent in
+    /// its place, which is how it themed the bar while `.cyan` was the default. The
+    /// default is `nil` now, so cyan is only ever a colour an app chose.
+    @Test("A highlight the app sets to cyan is drawn cyan, not replaced by the accent")
+    func explicitCyanHighlightIsKept() {
+        let harness = RenderLoopHarness()
+        harness.statusBar.highlightColor = .cyan
+        let loop = harness.loop(StatusBarItemsProbeApp())
+        ColorDepth.withCurrent(.truecolor) { _ = loop.render() }
+        let written = harness.terminal.writtenOutput.joined()
+        // Bold comes before the foreground in `ANSIRenderer`'s codes.
+        #expect(written.contains("\u{1B}[1;36m"), "\(written.debugDescription)")
     }
 }

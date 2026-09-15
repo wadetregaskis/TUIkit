@@ -149,7 +149,7 @@ All state changes inside the lifecycle manager are `NSLock`-protected. Callbacks
 
 The status bar renders in a separate pass but within the same buffered frame:
 
-1. A ``StatusBar`` view is created with resolved palette colors
+1. A ``StatusBar`` view is created with the app's highlight and label colors as set; the view resolves them against the palette, with an unset color standing for the palette's accent or foreground
 2. A dedicated ``RenderContext`` is created with `availableHeight` set to the status bar's height
 3. `renderToBuffer()` runs on the status bar view: same dispatch as the main content
 4. `FrameDiffWriter.writeStatusBarDiff()` diffs the status bar independently from the main content

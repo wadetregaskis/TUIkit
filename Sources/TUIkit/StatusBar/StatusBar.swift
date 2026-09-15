@@ -52,10 +52,10 @@ public struct StatusBar: View {
     /// The horizontal alignment of user items within the left container.
     public let alignment: StatusBarAlignment
 
-    /// The highlight color for shortcut keys.
-    public let highlightColor: Color
+    /// The color for shortcut keys, or `nil` for the palette's accent.
+    public let highlightColor: Color?
 
-    /// The label color.
+    /// The color for labels, or `nil` for the palette's foreground.
     public let labelColor: Color?
 
     /// This frame's tooltip, already wrapped to the bar's content width.
@@ -72,8 +72,10 @@ public struct StatusBar: View {
     ///   - systemItems: System items (right container).
     ///   - style: The visual style (default: `.bordered`).
     ///   - alignment: The alignment of user items (default: `.leading`).
-    ///   - highlightColor: The color for shortcut keys (default: `.cyan`).
-    ///   - labelColor: The color for labels (default: nil, terminal default).
+    ///   - highlightColor: The color for shortcut keys (default: `nil`, the
+    ///     palette's accent).
+    ///   - labelColor: The color for labels (default: `nil`, the palette's
+    ///     foreground).
     ///   - tooltipLines: This frame's tooltip, already wrapped to the bar's
     ///     content width (default: none).
     public init(
@@ -81,7 +83,7 @@ public struct StatusBar: View {
         systemItems: [any StatusBarItemProtocol] = [],
         style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .leading,
-        highlightColor: Color = .cyan,
+        highlightColor: Color? = nil,
         labelColor: Color? = nil,
         tooltipLines: [String] = []
     ) {
@@ -100,13 +102,15 @@ public struct StatusBar: View {
     ///   - items: All items to display (will be treated as user items).
     ///   - style: The visual style (default: `.bordered`).
     ///   - alignment: The horizontal alignment (default: `.justified`).
-    ///   - highlightColor: The color for shortcut keys (default: `.cyan`).
-    ///   - labelColor: The color for labels (default: nil, terminal default).
+    ///   - highlightColor: The color for shortcut keys (default: `nil`, the
+    ///     palette's accent).
+    ///   - labelColor: The color for labels (default: `nil`, the palette's
+    ///     foreground).
     public init(
         items: [any StatusBarItemProtocol],
         style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .justified,
-        highlightColor: Color = .cyan,
+        highlightColor: Color? = nil,
         labelColor: Color? = nil
     ) {
         self.userItems = items
@@ -122,13 +126,14 @@ public struct StatusBar: View {
     /// - Parameters:
     ///   - style: The visual style.
     ///   - alignment: The horizontal alignment.
-    ///   - highlightColor: The color for shortcut keys.
-    ///   - labelColor: The color for labels.
+    ///   - highlightColor: The color for shortcut keys, or `nil` for the palette's
+    ///     accent.
+    ///   - labelColor: The color for labels, or `nil` for the palette's foreground.
     ///   - builder: A closure that returns items.
     public init(
         style: ChromeStyle = .bordered,
         alignment: StatusBarAlignment = .justified,
-        highlightColor: Color = .cyan,
+        highlightColor: Color? = nil,
         labelColor: Color? = nil,
         @StatusBarItemBuilder _ builder: () -> [any StatusBarItemProtocol]
     ) {
@@ -179,15 +184,17 @@ public struct StatusBar: View {
 ///
 /// `highlightColor` and `labelColor` are resolved against the environment's
 /// palette once, at the top of `renderToBuffer`, and only the resolved colours go
-/// on to the emitter and the claims. Either may be a palette role, and a role
-/// that reached `ANSIRenderer` unresolved stopped the process: the emitter does
-/// not resolve, and a bar built outside the run loop had nothing else to do it.
+/// on to the emitter and the claims. A `nil` colour is the palette's `accent` for
+/// the shortcuts and its `foreground` for the labels, so a bar that states neither
+/// follows the theme wherever it is drawn, not only when the run loop builds it.
+/// A stated colour may itself be a palette role, and a role that reached
+/// `ANSIRenderer` unresolved stopped the process: the emitter does not resolve.
 private struct _StatusBarCore: View, Renderable {
     let userItems: [any StatusBarItemProtocol]
     let systemItems: [any StatusBarItemProtocol]
     let style: ChromeStyle
     let alignment: StatusBarAlignment
-    let highlightColor: Color
+    let highlightColor: Color?
     let labelColor: Color?
     let tooltipLines: [String]
 
@@ -378,18 +385,19 @@ private struct _StatusBarCore: View, Renderable {
     private struct ItemColours {
         /// The shortcut keys' colour, concrete, carrying the alpha it was given.
         let highlight: Color
-        /// The labels' colour, concrete, or `nil` for no stated colour.
-        let label: Color?
+        /// The labels' colour, concrete, carrying the alpha it was given.
+        let label: Color
     }
 
-    /// `highlightColor` and `labelColor`, resolved against `palette`.
+    /// `highlightColor` and `labelColor`, resolved against `palette`, with a `nil`
+    /// colour standing for the palette's `accent` and `foreground` respectively.
     ///
     /// Resolving keeps each colour's alpha (a role's own, composed with the call
     /// site's), which is what the claims read.
     private func resolvedColours(in palette: any Palette) -> ItemColours {
         ItemColours(
-            highlight: highlightColor.resolve(with: palette),
-            label: labelColor?.resolve(with: palette))
+            highlight: (highlightColor ?? palette.accent).resolve(with: palette),
+            label: (labelColor ?? palette.foreground).resolve(with: palette))
     }
 
     /// Whether `shortcut` is the Return key, however the app spelled it.
@@ -432,32 +440,15 @@ private struct _StatusBarCore: View, Renderable {
             effectiveLabel = item.label
         }
 
-        let labelStyled: String
-        if let color = colours.label {
-            labelStyled = ANSIRenderer.render(
-                " " + effectiveLabel,
-                with: {
-                    var textStyle = TextStyle()
-                    textStyle.foregroundColor = color.opaqueSpelling
-                    textStyle.isUnderlined = isHovered
-                    return textStyle
-                }()
-            )
-        } else if isHovered {
-            // Plain label with hover — emit an underlined run
-            // so the visual cue is consistent with the styled-
-            // colour branch above.
-            labelStyled = ANSIRenderer.render(
-                " " + effectiveLabel,
-                with: {
-                    var textStyle = TextStyle()
-                    textStyle.isUnderlined = true
-                    return textStyle
-                }()
-            )
-        } else {
-            labelStyled = " " + effectiveLabel
-        }
+        let labelStyled = ANSIRenderer.render(
+            " " + effectiveLabel,
+            with: {
+                var textStyle = TextStyle()
+                textStyle.foregroundColor = colours.label.opaqueSpelling
+                textStyle.isUnderlined = isHovered
+                return textStyle
+            }()
+        )
 
         return shortcutStyled + labelStyled
     }
@@ -542,9 +533,7 @@ private struct _StatusBarCore: View, Renderable {
     ) -> FrameBuffer {
         // Asked of the two colours before anything is walked: an app that has not
         // faded either — which is every app until one does — pays one comparison.
-        guard !colours.highlight.isOpaque || colours.label?.isOpaque == false else {
-            return buffer
-        }
+        guard !colours.highlight.isOpaque || !colours.label.isOpaque else { return buffer }
         var result = buffer
         for (layout, columnInLine) in zip(layouts, columns) {
             let start = columnOffset + columnInLine

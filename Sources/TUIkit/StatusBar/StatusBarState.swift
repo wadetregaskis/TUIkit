@@ -166,10 +166,17 @@ public final class StatusBarState: @unchecked Sendable {
     /// The horizontal alignment of items.
     public var alignment: StatusBarAlignment = .justified
 
-    /// The highlight color for shortcut keys.
-    public var highlightColor: Color = .cyan
+    /// The color for shortcut keys, or `nil` (the default) for the palette's
+    /// accent.
+    ///
+    /// Resolved against the palette each time the bar is drawn, so a palette role
+    /// follows a change of theme. Any colour set here is drawn as set.
+    public var highlightColor: Color?
 
-    /// The label color.
+    /// The color for labels, or `nil` (the default) for the palette's foreground.
+    ///
+    /// Resolved against the palette each time the bar is drawn, like
+    /// ``highlightColor``.
     public var labelColor: Color?
 
     // MARK: - Transient Modal Overrides
