@@ -435,10 +435,8 @@ struct FadedPaletteDerivationTests {
     /// the same colour, and the branch was unreachable for:
     ///
     /// - a page at `.rgb(0, 0, 0).opacity(0.5)`, because the rebuilt colour is opaque;
-    /// - a page at `Color.black`, because that is `.ansi(.black)` and the rebuilt
-    ///   one is `.rgb` — the CASE differs at full opacity. `var background: Color
-    ///   { .black }` is the obvious thing for a custom palette to write, so this half
-    ///   was never about alpha at all.
+    /// - a page at `.ansi(.black)`, because the rebuilt one is `.rgb` — the CASE
+    ///   differs at full opacity, so this half was never about alpha at all.
     ///
     /// In both, every surface came back as the page colour: a field, a tab body and a
     /// well all invisible, which `surface(steppedFrom:separation:)`'s own note calls

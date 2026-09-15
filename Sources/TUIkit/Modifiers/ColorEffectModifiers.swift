@@ -118,16 +118,16 @@ struct _ColorEffectView<Content: View>: View {
         ///
         /// About the COLOURS only — a translucent multiply tint also fades the layer,
         /// and that is not a rewrite of anything (see `renderToBuffer`). Hence
-        /// `opaqueSpelling`: `.white.opacity(0.5)` leaves every hue exactly where it
-        /// was and is answered `true` here, with its alpha handled apart.
+        /// `opaqueSpelling`: `.ansi(.white).opacity(0.5)` leaves every hue exactly
+        /// where it was and is answered `true` here, with its alpha handled apart.
         ///
-        /// `.white` is the multiply identity by SPELLING and not by arithmetic, which
-        /// is worth knowing before touching this. `Color.white` is the terminal's
-        /// white slot, `.ansi(.white)` — 229, not 255 — so multiplying by its
-        /// components darkens by 229/255. The
-        /// shortcut is what makes `.colorMultiply(.white)` mean what it says, and
-        /// before `opaqueSpelling` was here a faded white slipped past it and
-        /// darkened the subtree as a side effect of fading it.
+        /// `.ansi(.white)` is the multiply identity by SPELLING and not by
+        /// arithmetic, which is worth knowing before touching this. It is the
+        /// terminal's white slot, which measures as 229, not 255, so multiplying
+        /// by its components darkens by 229/255. The shortcut is what makes
+        /// `.colorMultiply(.ansi(.white))` mean what it says, and before
+        /// `opaqueSpelling` was here a faded white slipped past it and darkened the
+        /// subtree as a side effect of fading it.
         func isIdentity(at amount: Double) -> Bool {
             switch self {
             case .brightness, .grayscale, .hueRotation: amount == 0

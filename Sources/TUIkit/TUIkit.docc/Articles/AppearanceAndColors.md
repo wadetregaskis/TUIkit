@@ -85,8 +85,7 @@ for it, ``ANSIColor/xtermRGB``, which is an estimate: nothing asks the terminal
 what the slot really is.
 
 `Color.palette(1)` is the same slot spelled by its index, and stays `38;5;1`
-where the terminal has 256 colours. Today the statics `Color.red`,
-`Color.brightBlack` and the rest are the same sixteen slots.
+where the terminal has 256 colours.
 
 ### 256-Color Palette
 

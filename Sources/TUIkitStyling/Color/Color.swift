@@ -179,64 +179,14 @@ public struct Color: Sendable, Hashable {
     /// > toward transparent BLACK — which is also SwiftUI's behaviour.
     public static let clear = Self(value: .rgb(red: 0, green: 0, blue: 0), alpha: 0)
 
-    // MARK: - Standard ANSI Colors
-
-    /// Black (ANSI 30/40)
-    public static let black = Self(value: .ansi(.black))
-
-    /// Red (ANSI 31/41)
-    public static let red = Self(value: .ansi(.red))
-
-    /// Green (ANSI 32/42)
-    public static let green = Self(value: .ansi(.green))
-
-    /// Yellow (ANSI 33/43)
-    public static let yellow = Self(value: .ansi(.yellow))
-
-    /// Blue (ANSI 34/44)
-    public static let blue = Self(value: .ansi(.blue))
-
-    /// Magenta (ANSI 35/45)
-    public static let magenta = Self(value: .ansi(.magenta))
-
-    /// Cyan (ANSI 36/46)
-    public static let cyan = Self(value: .ansi(.cyan))
-
-    /// White (ANSI 37/47)
-    public static let white = Self(value: .ansi(.white))
+    // MARK: - The Terminal's Default
 
     /// Default color (terminal default)
     public static let `default` = Self(value: .terminalDefault)
 
-    // MARK: - Bright ANSI Colors
-
-    /// Bright black (gray)
-    public static let brightBlack = Self(value: .ansi(.brightBlack))
-
-    /// Bright red
-    public static let brightRed = Self(value: .ansi(.brightRed))
-
-    /// Bright green
-    public static let brightGreen = Self(value: .ansi(.brightGreen))
-
-    /// Bright yellow
-    public static let brightYellow = Self(value: .ansi(.brightYellow))
-
-    /// Bright blue
-    public static let brightBlue = Self(value: .ansi(.brightBlue))
-
-    /// Bright magenta
-    public static let brightMagenta = Self(value: .ansi(.brightMagenta))
-
-    /// Bright cyan
-    public static let brightCyan = Self(value: .ansi(.brightCyan))
-
-    /// Bright white
-    public static let brightWhite = Self(value: .ansi(.brightWhite))
-
     // MARK: - SwiftUI's Named Colors
 
-    // The eight names SwiftUI has that the ANSI vocabulary above does not.
+    // Eight of SwiftUI's named colours.
     //
     // The VALUES are Apple's system palette, sampled from AppKit in the light
     // (aqua) appearance rather than guessed — `NSColor.systemOrange` and friends
@@ -251,10 +201,8 @@ public struct Color: Sendable, Hashable {
     //   browses the web vocabulary, this matches the SwiftUI source you are
     //   porting. Do not reconcile them.
     //
-    // `.red`, `.green`, `.blue` and `.yellow` are NOT re-pointed at their system
-    // values. In a terminal those names mean the ANSI slots, which the user's
-    // theme defines — taking that away to gain a nominal match with Apple's
-    // `#FF3B30` would break every themed app on screen.
+    // The terminal's sixteen slots are not named here: they are spelled
+    // `Color.ansi(_:)`.
 
     /// Grey (Apple's system grey, `#8E8E93`).
     public static let gray = Self.hex(0x8E_8E_93)
@@ -478,9 +426,8 @@ extension Color {
     /// draw a standard slot's text in its bright twin on some terminals; see "What
     /// an ANSI colour actually paints" in `Documentation/Terminal-compatibility.md`.
     ///
-    /// Today `Color.ansi(.red)` is the same colour as `Color.red`, and so on for
-    /// each of the sixteen named statics. `Color.palette(1)` is the same slot
-    /// spelled by index, which stays `38;5;1` where the terminal has 256 colours.
+    /// `Color.palette(1)` is the same slot spelled by index, which stays `38;5;1`
+    /// where the terminal has 256 colours.
     ///
     /// - Parameter slot: The slot.
     /// - Returns: That slot, fully opaque.

@@ -1,8 +1,7 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NamedColorTests.swift
 //
-//  SwiftUI's named colours — the eight that the ANSI vocabulary does not
-//  already carry.
+//  SwiftUI's named colours: the eight that TUIkit has.
 //
 //  The values are Apple's system palette, sampled from AppKit rather than
 //  guessed, so the tests pin the exact bytes: a "close enough" orange would
@@ -57,26 +56,6 @@ struct NamedColorTests {
     func notCSS() {
         #expect(Color.orange.rgbComponents?.green == 0x95, "Apple's #FF9500")
         #expect(Color.orange.rgbComponents?.green != 0xA5, "not CSS's #FFA500")
-    }
-
-    /// The ANSI names stay ANSI. Re-pointing `.red` at Apple's `#FF3B30` would
-    /// gain a nominal match and break every themed app on screen, because in a
-    /// terminal those names mean the slots a theme defines — they resolve to the
-    /// standard xterm values, not to Apple's palette.
-    @Test("the ANSI names are untouched")
-    func ansiNamesUnchanged() {
-        // xterm's red, not Apple's #FF3B30.
-        #expect(Color.red.rgbComponents?.red == 205)
-        #expect(Color.red.rgbComponents?.green == 0)
-        #expect(Color.green.rgbComponents?.green == 205)
-        #expect(Color.blue.rgbComponents?.blue == 238)
-        // And none of them accidentally became a system colour.
-        for color in [Color.red, .green, .blue, .yellow] {
-            #expect(
-                color.rgbComponents.map { [$0.red, $0.green, $0.blue] }
-                    != [0xFF, 0x3B, 0x30],
-                "an ANSI slot must not be Apple's system red")
-        }
     }
 
     /// Every named colour has to survive the trip down to a 16-colour terminal,

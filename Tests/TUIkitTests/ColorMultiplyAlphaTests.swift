@@ -48,11 +48,11 @@ struct ColorMultiplyAlphaTests {
 
     @Test("A white tint at half alpha changes no hue, only presence")
     func whiteTintIsHueNeutral() {
-        // `.white` is the multiply identity by SPELLING, not by arithmetic:
-        // `Color.white` is ANSI white — 229, not 255 — so running it through the
-        // multiply darkens by 229/255. The identity shortcut is what makes
-        // `.colorMultiply(.white)` mean what it says, and this asserts a faded white
-        // gets the same shortcut. It did not, before: it slipped past the check and
+        // `.ansi(.white)` is the multiply identity by SPELLING, not by arithmetic:
+        // it is the terminal's white slot, which measures as 229, not 255, so
+        // running it through the multiply darkens by 229/255. The identity shortcut
+        // is what makes `.colorMultiply(.ansi(.white))` mean what it says, and this
+        // asserts a faded white gets the same shortcut. It did not, before: it slipped past the check and
         // darkened the subtree as a side effect of fading it, which is how this test
         // found the bug rather than confirming the fix.
         let plain = buffer(Text("hi").foregroundStyle(Color.ansi(.red)))

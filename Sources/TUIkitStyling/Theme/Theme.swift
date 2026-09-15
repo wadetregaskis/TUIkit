@@ -571,9 +571,8 @@ extension Palette {
         //
         //   * a page at `.rgb(0, 0, 0).opacity(0.5)`, because `channels` builds an
         //     opaque colour and 255 != 128;
-        //   * a page at `Color.black`, because that is `.ansi(.black)` and the
-        //     rebuilt one is `.rgb`, so the CASE differs even at full opacity. And
-        //     `var background: Color { .black }` is the obvious thing to write.
+        //   * a page at `.ansi(.black)`, because the rebuilt one is `.rgb`, so the
+        //     CASE differs even at full opacity.
         //
         // In both, every surface came back as the page colour itself, which this
         // function's own note calls "the same as drawing none" — a field, a tab body
