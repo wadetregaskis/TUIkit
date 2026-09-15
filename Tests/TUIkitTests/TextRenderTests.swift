@@ -115,9 +115,10 @@ struct TextRenderTests {
 
     @Test("foregroundStyle on the Text emits the colour as ANSI")
     func explicitForegroundColor() {
-        let buffer = renderToBuffer(Text("Red").foregroundStyle(.ansi(.red)), context: context())
+        let buffer = renderToBuffer(Text("Red").foregroundStyle(.red), context: context())
         #expect(buffer.lines[0].stripped == "Red", "Visible content must be unchanged by colour")
-        #expect(buffer.lines[0].contains("\u{1B}[31m"), "Red foreground ANSI code must be present")
+        let red = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
+        #expect(buffer.lines[0].contains(red), "Red foreground code must be present: \(buffer.lines[0].debugDescription)")
     }
 
     @Test("bold emits the SGR bold attribute")
@@ -134,10 +135,11 @@ struct TextRenderTests {
     @Test("Inherited foregroundStyle from the environment colours the text")
     func inheritsEnvironmentColor() {
         // foregroundStyle applied to a parent must flow down to a plain Text.
-        let view = VStack { Text("Inherited") }.foregroundStyle(.ansi(.blue))
+        let view = VStack { Text("Inherited") }.foregroundStyle(.blue)
         let buffer = renderToBuffer(view, context: context())
         #expect(buffer.lines[0].stripped == "Inherited")
-        #expect(buffer.lines[0].contains("\u{1B}[34m"), "Inherited blue foreground must be emitted")
+        let blue = "\u{1B}[" + Color.blue.foregroundCodes().joined(separator: ";") + "m"
+        #expect(buffer.lines[0].contains(blue), "Inherited blue foreground must be emitted: \(buffer.lines[0].debugDescription)")
     }
 
     // MARK: - lineLimit
