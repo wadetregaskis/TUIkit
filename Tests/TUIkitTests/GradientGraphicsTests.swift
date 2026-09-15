@@ -312,6 +312,33 @@ struct GradientPictureTests {
         #expect(pictureRun.frames.count == glyphRun.frames.count)
     }
 
+    /// A ramp of red, blue, red, blue repeats halfway across the track, so the bar slid
+    /// half a pass on is the same bar. Its cycle is that half: 36 frames of 2 ticks
+    /// rather than 72, on both paths, and as pictures 36 of them rather than 72 held by
+    /// the terminal.
+    ///
+    /// Channels of 240, not 255: a sample of a red-to-blue segment is then a whole
+    /// number of levels on both paths (240 · k/20 = 12k), so the two halves are the same
+    /// bytes. At 255 some samples fall on a tie (255 · 9/10 = 229.5), which the two
+    /// halves' floating point breaks differently, (230, 0, 26) against (229, 0, 26):
+    /// those frames are not the same, and are rightly not cut.
+    @Test("An indeterminate bar whose ramp repeats halfway along holds half its pass, as glyphs and as pictures")
+    func repeatingRampHoldsOneRepeat() throws {
+        let ramp = Gradient(colors: [.rgb(240, 0, 0), .rgb(0, 0, 240), .rgb(240, 0, 0), .rgb(0, 0, 240)])
+        let bar = ProgressView().indeterminateStyle(.gradient(ramp))
+        let pictures = KittyGraphics.withSupport(true) { rendered(bar, height: 1) }
+        let glyphs = rendered(bar, height: 1)
+        #expect(placeholders(pictures.buffer) == 20, "the picture path was not taken")
+        #expect(placeholders(glyphs.buffer) == 0, "the glyph path drew pictures")
+        let glyphRun = try #require(glyphs.buffer.animatedCells.first)
+        let pictureRun = try #require(pictures.buffer.animatedCells.first)
+        #expect(glyphRun.frames.count == 36)
+        #expect(glyphRun.cycleTicks == 72)
+        #expect(pictureRun.frames.count == 36)
+        #expect(pictureRun.cycleTicks == 72)
+        #expect(pictures.store.imageCount == 36)
+    }
+
     @Test("Two identical bars share one picture")
     func identicalBarsShare() {
         let two = VStack {

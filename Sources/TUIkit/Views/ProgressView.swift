@@ -422,8 +422,9 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let frames: [String]
         let run: AnimatedCellRun
         /// How many picture tokens the build asked the image store for: one for each
-        /// distinct picture of the pass when it was built with a graphics context, and
-        /// 0 when it was not.
+        /// distinct shift of the pass when it was built with a graphics context, and
+        /// 0 when it was not. The pictures it put in the store can be fewer, where
+        /// shifts draw the same picture, and are the first tokens of these.
         /// A rebuild gives back the ones its replacement does not name.
         let pictureCount: Int
 
@@ -533,9 +534,11 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     }
 
     /// The rows of a picture bar's pass of `frameCount` frames: one picture for each
-    /// distinct whole-pixel shift the pass reaches, sent once and named by every frame
-    /// showing it (`IndeterminateRaster.shifts(count:pixels:)`) — or `nil` when the box
-    /// has no pixels, or the store names no row, and the bar is drawn in glyphs.
+    /// distinct whole-pixel shift the pass reaches (`IndeterminateRaster.shifts(count:pixels:)`),
+    /// or fewer where shifts draw the same pixels, sent once and named by every frame
+    /// showing it, and the pass cut to one repeat where it repeats
+    /// (`IndeterminateRenderer.repeatLength(of:)`) — or `nil` when the box has no
+    /// pixels, or the store names no row, and the bar is drawn in glyphs.
     private func pictureFrames(
         width: Int, frameCount: Int, configuration: IndeterminateConfiguration,
         graphics: GradientGraphicsContext
@@ -545,12 +548,25 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
                 of: configuration, width: width, cellPixels: graphics.cellPixels)
         else { return nil }
         let shifts = IndeterminateRaster.shifts(count: frameCount, pixels: pixels)
-        // As many pictures as the context holds tokens for, which it releases.
+        // As many tokens as the context holds, which it releases, whether or not each
+        // ends up naming a picture.
         guard shifts.distinct.count == graphics.frames,
-            let pictures = IndeterminateRaster.frames(
+            let drawn = IndeterminateRaster.frames(
                 width: width, shifts: shifts.distinct, configuration: configuration,
                 cellPixels: graphics.cellPixels)
         else { return nil }
+        // Compared by their pixels before any is placed: a ramp that repeats across the
+        // track draws one picture at two shifts, and each is sent and held once, under
+        // the first tokens.
+        var pictures: [GradientRaster.Picture] = []
+        var indexOfPixels: [[UInt8]: Int] = [:]
+        let pictureOfShift = drawn.map { picture in
+            if let index = indexOfPixels[picture.bytes] { return index }
+            indexOfPixels[picture.bytes] = pictures.count
+            pictures.append(picture)
+            return pictures.count - 1
+        }
+        let named = shifts.frames.map { pictureOfShift[$0] }
         let rows = pictures.enumerated().compactMap { index, picture in
             graphics.store.placeholderRows(
                 token: graphics.token(forFrame: index),
@@ -562,7 +578,7 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
             )?.first
         }
         guard rows.count == pictures.count else { return nil }
-        return shifts.frames.map { rows[$0] }
+        return named.prefix(IndeterminateRenderer.repeatLength(of: named)).map { rows[$0] }
     }
 
     // MARK: - Label Line Rendering

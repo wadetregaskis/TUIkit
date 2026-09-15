@@ -177,6 +177,11 @@ enum IndeterminateRenderer {
     /// motion of N states draws at most min(N, F) rows for F frames, and a 2-cell
     /// sweep's pass of 48 frames draws 2. Every frame of the pulse is its own, which,
     /// with the frames' memory, is what the bound is for.
+    ///
+    /// A pass whose rows repeat inside it is cut to one repeat
+    /// (``repeatLength(of:)``), so a run holds each row once and its cycle is as long
+    /// as what it shows: a gradient of the stops red, blue, red, blue is 36 frames, not
+    /// 72, and a sweep across one cell is one.
     static func cycle(
         width: Int, style: IndeterminateStyle,
         fillColor: Color, backgroundColor: Color, accentColor: Color,
@@ -214,7 +219,7 @@ enum IndeterminateRenderer {
             drawn[state] = row
             frames.append(row)
         }
-        return (frames, layout.frameTicks)
+        return (Array(frames.prefix(repeatLength(of: frames))), layout.frameTicks)
     }
 
     /// The frame of `style`'s cycle at `speed` showing `elapsed` seconds in, drawn with
@@ -318,6 +323,35 @@ enum IndeterminateRenderer {
     /// 2.9999999999999996.
     static func step(ofFrame frame: Int, of frameCount: Int, states: Int) -> Int {
         frame * states / max(1, frameCount)
+    }
+
+    /// How many of a pass's `frames` make one repeat of it: the fewest, p, that
+    /// divides their count with every frame the same as the one p before it; all of
+    /// them when no fewer do.
+    ///
+    /// A pattern that repeats inside a pass shows each repeat again. A gradient of the
+    /// stops red, blue, red, blue slid across the track is the same picture half a pass
+    /// on, a barberPole whose stripe colours repeat is the same row once its stripes
+    /// have moved one repeat, and a sweep across a single cell is one row for the whole
+    /// pass. A run holding every repeat builds, holds and replays frames it already
+    /// has, and for a picture bar sends the terminal pictures it already holds; cut to
+    /// one repeat it shows exactly the same thing. Compared as drawn rather than by the
+    /// states that drew them, since two states can draw the same row.
+    static func repeatLength<Frame: Hashable>(of frames: [Frame]) -> Int {
+        let count = frames.count
+        guard count > 1 else { return count }
+        // Each frame as the index of the first frame equal to it, so each comparison
+        // below is of two integers rather than two rows.
+        var firstIndex: [Frame: Int] = [:]
+        let names = frames.enumerated().map { index, frame in
+            if let seen = firstIndex[frame] { return seen }
+            firstIndex[frame] = index
+            return index
+        }
+        for length in 1..<count where count.isMultiple(of: length) {
+            if (length..<count).allSatisfy({ names[$0] == names[$0 - length] }) { return length }
+        }
+        return count
     }
 
     /// How one pass of `style` is laid out at `speed`: how many frames it is sampled

@@ -128,6 +128,21 @@ struct BarberPoleScrollTests {
         #expect(row.prefix(6).map(\.escapes) == [r, r, g, g, b, b])
     }
 
+    /// A barberPole whose stripe colours repeat is its first row again once its stripes
+    /// have moved one repeat: red, blue, red, blue under "◢◤" is eight states, and the
+    /// fifth draws what the first does. Its cycle is those four.
+    @Test("A barberPole whose stripe colours repeat holds one repeat of its pass")
+    func repeatingStripesHoldOneRepeat() {
+        let red = Color.rgb(255, 0, 0)
+        let blue = Color.rgb(0, 0, 255)
+        let style = IndeterminateStyle.custom(
+            IndeterminateConfiguration(
+                motion: .barberPole, fill: "◢◤", gradient: Gradient(colors: [red, blue, red, blue]), period: 0.6))
+        let cycle = cycle(style, width: 20)
+        #expect(cycle.frames.count == 4)
+        #expect(Set(cycle.frames).count == 4)
+    }
+
     /// A bar no run can carry draws one frame per render at an elapsed time, and must
     /// draw what the run would show then. Read mid-tick, so a time that lands on a
     /// step's first instant cannot read the step before.
