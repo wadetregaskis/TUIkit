@@ -179,10 +179,14 @@ struct StyleCascadeCoverageTests {
         #expect(tinted.name == base.name)
     }
 
-    /// The environment's ground-spending wrapper forwards every role, and changes only the
-    /// three ROOT grounds — to their opaque spelling. `overlayBackground` is not a root
-    /// (the page is behind a modal's wash) and must delegate like everything else.
-    @Test("GroundedPalette forwards EVERY role, spending only the three root grounds")
+    /// The environment's grounding wrapper stores every role, so none falls through to a
+    /// collapsing protocol default. For this palette, whose roots are opaque RGB and none
+    /// of whose roles is `Color.default`, every stored role is the base's own: an opaque
+    /// root spent over the terminal's page is itself, and a stated focus and field are
+    /// kept. `overlayBackground` is not a root (the page is behind a modal's wash) and must
+    /// come through like everything else. What grounding changes for other palettes is
+    /// `GroundedPaletteTerminalTests`'s subject.
+    @Test("GroundedPalette stores EVERY role, and an opaque palette's as stated")
     func groundedPaletteDelegates() {
         let base = EveryRolePalette()
         let grounded = GroundedPalette(base: base)

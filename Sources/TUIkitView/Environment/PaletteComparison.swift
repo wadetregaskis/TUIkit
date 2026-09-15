@@ -39,7 +39,8 @@ extension Palette {
 
 /// A palette the framework builds over another one, changing only what its own
 /// stored fields say: `TintedPalette` (the accent) and ``GroundedPalette`` (the
-/// root grounds, spent).
+/// terminal's colours it grounded the base on, which spend the root grounds and
+/// re-spell the `Color.default` roles).
 ///
 /// Compared as "the same derivation of the same base". That is exact wherever the
 /// base can be compared by value, and falls back to the base's id exactly where the
