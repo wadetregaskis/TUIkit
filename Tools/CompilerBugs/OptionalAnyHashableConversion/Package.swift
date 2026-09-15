@@ -2,6 +2,6 @@
 import PackageDescription
 
 let package = Package(
-    name: "ExpectOptionalProduct",
+    name: "OptionalAnyHashableConversion",
     targets: [.testTarget(name: "ReproTests")]
 )

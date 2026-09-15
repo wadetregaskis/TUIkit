@@ -164,10 +164,10 @@ pack, so the rest keep `@preconcurrency`.
 
 ---
 
-## 4. `GenericDestructuringClosure` — a destructured closure parameter in a generic type
+## 4. `GenericOpaqueResultConversion` — a destructured closure parameter in a generic type
 
 ```
-cd GenericDestructuringClosure && ./variants.sh /path/to/swift-6.2.4-RELEASE.xctoolchain
+cd GenericOpaqueResultConversion && ./variants.sh /path/to/swift-6.2.4-RELEASE.xctoolchain
 ```
 
 ```
@@ -214,10 +214,10 @@ was worked around. **Workaround:** `{ pair in crumbView(pair.element, …) }`. S
 
 ---
 
-## 5. `ExpectOptionalProduct` — `#expect` comparing an `Int64?` with a product of literals
+## 5. `OptionalAnyHashableConversion` — `#expect` comparing an `Int64?` with a product of literals
 
 ```
-cd ExpectOptionalProduct && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./variants.sh
+cd OptionalAnyHashableConversion && DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./variants.sh
 ```
 
 ```
