@@ -9,44 +9,78 @@ import TUIkit
 /// Colors demo page.
 ///
 /// Shows various color options including:
-/// - Standard ANSI colors (8 colors)
-/// - Bright colors (8 colors)
-/// - RGB colors (24-bit true color)
+/// - Named colours: SwiftUI's fifteen and TUIkit's magenta, fixed RGB
+/// - Terminal colours: the sixteen ANSI slots, standard and bright
 /// - Semantic colors (primary, success, warning, error)
+/// - Gradients, as strips and as styles
 struct ColorsPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
 
-            DemoSection("page.colors.section.standard") {
-                HStack(spacing: 2) {
-                    Text("page.colors.black").foregroundStyle(.ansi(.black)).background(.ansi(.white))
-                    Text("page.colors.red").foregroundStyle(.ansi(.red))
-                    Text("page.colors.green").foregroundStyle(.ansi(.green))
-                    Text("page.colors.yellow").foregroundStyle(.ansi(.yellow))
-                }
-                HStack(spacing: 2) {
-                    Text("page.colors.blue").foregroundStyle(.ansi(.blue))
-                    Text("page.colors.magenta").foregroundStyle(.ansi(.magenta))
-                    Text("page.colors.cyan").foregroundStyle(.ansi(.cyan))
-                    Text("page.colors.white").foregroundStyle(.ansi(.white))
+            // `.red` is the red SwiftUI means, the same RGB on every terminal
+            // that shows 24-bit colour. Black is drawn on white so it shows on
+            // a dark page.
+            DemoSection("page.colors.section.named") {
+                Text("page.colors.named.note")
+                    .foregroundStyle(.palette.foregroundSecondary)
+                Grid(alignment: .leading, horizontalSpacing: 2) {
+                    GridRow {
+                        Text("page.colors.red").foregroundStyle(.red)
+                        Text("page.colors.orange").foregroundStyle(.orange)
+                        Text("page.colors.yellow").foregroundStyle(.yellow)
+                        Text("page.colors.green").foregroundStyle(.green)
+                    }
+                    GridRow {
+                        Text("page.colors.mint").foregroundStyle(.mint)
+                        Text("page.colors.teal").foregroundStyle(.teal)
+                        Text("page.colors.cyan").foregroundStyle(.cyan)
+                        Text("page.colors.blue").foregroundStyle(.blue)
+                    }
+                    GridRow {
+                        Text("page.colors.indigo").foregroundStyle(.indigo)
+                        Text("page.colors.purple").foregroundStyle(.purple)
+                        Text("page.colors.pink").foregroundStyle(.pink)
+                        Text("page.colors.brown").foregroundStyle(.brown)
+                    }
+                    GridRow {
+                        Text("page.colors.black").foregroundStyle(.black).background(.white)
+                        Text("page.colors.gray").foregroundStyle(.gray)
+                        Text("page.colors.white").foregroundStyle(.white)
+                        Text("page.colors.magenta").foregroundStyle(.magenta)
+                    }
                 }
             }
 
-            DemoSection("page.colors.section.bright") {
-                HStack(spacing: 2) {
-                    Text("page.colors.brightRed").foregroundStyle(.ansi(.brightRed))
-                    Text("page.colors.brightGreen").foregroundStyle(.ansi(.brightGreen))
-                    Text("page.colors.brightYellow").foregroundStyle(.ansi(.brightYellow))
-                    Text("page.colors.brightBlue").foregroundStyle(.ansi(.brightBlue))
-                }
-            }
-
-            DemoSection("page.colors.section.rgb") {
-                HStack(spacing: 2) {
-                    Text("page.colors.orange").foregroundStyle(.rgb(255, 128, 0))
-                    Text("page.colors.pink").foregroundStyle(.rgb(255, 105, 180))
-                    Text("page.colors.teal").foregroundStyle(.rgb(0, 128, 128))
-                    Text("page.colors.purple").foregroundStyle(.rgb(128, 0, 128))
+            // `.ansi(.red)` is whatever the user's terminal profile keeps in
+            // slot 1, which need not be red at all. All sixteen, in slot order.
+            DemoSection("page.colors.section.ansi") {
+                Text("page.colors.ansi.note")
+                    .foregroundStyle(.palette.foregroundSecondary)
+                Grid(alignment: .leading, horizontalSpacing: 2) {
+                    GridRow {
+                        Text("page.colors.black").foregroundStyle(.ansi(.black)).background(.ansi(.white))
+                        Text("page.colors.red").foregroundStyle(.ansi(.red))
+                        Text("page.colors.green").foregroundStyle(.ansi(.green))
+                        Text("page.colors.yellow").foregroundStyle(.ansi(.yellow))
+                    }
+                    GridRow {
+                        Text("page.colors.blue").foregroundStyle(.ansi(.blue))
+                        Text("page.colors.magenta").foregroundStyle(.ansi(.magenta))
+                        Text("page.colors.cyan").foregroundStyle(.ansi(.cyan))
+                        Text("page.colors.white").foregroundStyle(.ansi(.white))
+                    }
+                    GridRow {
+                        Text("page.colors.brightBlack").foregroundStyle(.ansi(.brightBlack))
+                        Text("page.colors.brightRed").foregroundStyle(.ansi(.brightRed))
+                        Text("page.colors.brightGreen").foregroundStyle(.ansi(.brightGreen))
+                        Text("page.colors.brightYellow").foregroundStyle(.ansi(.brightYellow))
+                    }
+                    GridRow {
+                        Text("page.colors.brightBlue").foregroundStyle(.ansi(.brightBlue))
+                        Text("page.colors.brightMagenta").foregroundStyle(.ansi(.brightMagenta))
+                        Text("page.colors.brightCyan").foregroundStyle(.ansi(.brightCyan))
+                        Text("page.colors.brightWhite").foregroundStyle(.ansi(.brightWhite))
+                    }
                 }
             }
 
