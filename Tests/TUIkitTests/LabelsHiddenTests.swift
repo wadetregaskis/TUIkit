@@ -122,7 +122,7 @@ struct LabelsHiddenTests {
     @Test("ColorPicker drops the label column, gap and all")
     func colorPicker() {
         let (shown, hidden) = pair { hide in
-            let view = ColorPicker("Tint", selection: .constant(Color.ansi(.red)))
+            let view = ColorPicker("Tint", selection: .constant(Color.red))
             return hide ? AnyView(view.labelsHidden()) : AnyView(view)
         }
         #expect(shown.contains { $0.contains("Tint") })
