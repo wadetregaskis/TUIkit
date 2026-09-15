@@ -227,7 +227,7 @@ struct LayoutableTests {
         // A `.background()` does not change a Text's size, so a backgrounded
         // Text must still measure as a fixed-width view — otherwise a stack
         // treats it as the flexible child and shrinks it ahead of siblings.
-        let view = Text("Black").foregroundStyle(.ansi(.black)).background(.ansi(.white))
+        let view = Text("Black").foregroundStyle(.black).background(.white)
         var context = RenderContext(availableWidth: 80, availableHeight: 24, tuiContext: TUIContext()).isolatingRenderCache()
         context.hasExplicitWidth = true
 
@@ -242,7 +242,7 @@ struct LayoutableTests {
         // must lose a character. The leftmost view happens to carry a
         // background; truncation must still start from the right.
         let hstack = HStack(spacing: 2) {
-            Text("Black").foregroundStyle(.ansi(.black)).background(.ansi(.white))
+            Text("Black").foregroundStyle(.black).background(.white)
             Text("Red")
             Text("Green")
             Text("Yellow")
