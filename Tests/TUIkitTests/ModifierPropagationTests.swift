@@ -31,13 +31,13 @@ struct ModifierPropagationTests {
             Text("Hello")
             Text("World")
         }
-        .foregroundStyle(.ansi(.red))
+        .foregroundStyle(.red)
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
-        // Both lines should contain red ANSI code
-        let redCode = "\u{1B}[31m"
+        // Both lines should contain red's code, in this build's colour depth
+        let redCode = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
         #expect(buffer.lines[0].contains(redCode), "First text should have red color")
         #expect(buffer.lines[1].contains(redCode), "Second text should have red color")
     }
@@ -50,13 +50,13 @@ struct ModifierPropagationTests {
                 Text("B")
             }
         }
-        .foregroundStyle(.ansi(.green))
+        .foregroundStyle(.green)
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
         // Content should have green color
-        let greenCode = "\u{1B}[32m"
+        let greenCode = "\u{1B}[" + Color.green.foregroundCodes().joined(separator: ";") + "m"
         #expect(buffer.lines[0].contains(greenCode), "Nested content should have green color")
     }
 
@@ -64,15 +64,15 @@ struct ModifierPropagationTests {
     func childForegroundStyleOverrides() {
         let view = VStack {
             Text("Red")
-            Text("Blue").foregroundStyle(.ansi(.blue))
+            Text("Blue").foregroundStyle(.blue)
         }
-        .foregroundStyle(.ansi(.red))
+        .foregroundStyle(.red)
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
-        let redCode = "\u{1B}[31m"
-        let blueCode = "\u{1B}[34m"
+        let redCode = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
+        let blueCode = "\u{1B}[" + Color.blue.foregroundCodes().joined(separator: ";") + "m"
 
         #expect(buffer.lines[0].contains(redCode), "First text should be red")
         #expect(buffer.lines[1].contains(blueCode), "Second text should be blue (overridden)")
@@ -205,14 +205,15 @@ struct ModifierPropagationTests {
             }
             Text("Footer")
         }
-        .foregroundStyle(.ansi(.cyan))
+        .foregroundStyle(.cyan)
 
         let context = testContext()
         let buffer = renderToBuffer(view, context: context)
 
-        // All text should have cyan color (36m, possibly with bold prefix 1;)
+        // All text should have cyan's code, possibly with a bold prefix `1;`
+        let cyanCode = Color.cyan.foregroundCodes().joined(separator: ";") + "m"
         for line in buffer.lines where !line.stripped.isEmpty {
-            #expect(line.contains("36m"), "All non-empty lines should have cyan color code: \(line.stripped)")
+            #expect(line.contains(cyanCode), "All non-empty lines should have cyan color code: \(line.debugDescription)")
         }
     }
 
