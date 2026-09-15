@@ -201,4 +201,9 @@ extension AnimationRequest {
     /// How often a cancelled drag's walk home is re-rendered: every 2 ticks, like
     /// the lift it reverses.
     static let dragReturn = AnimationRequest(frameTicks: 2)
+
+    /// How often a drag held at a scrollable's edge is re-rendered, so it keeps
+    /// scrolling while the pointer holds still: every 3 ticks, the lattice its
+    /// steps are due on (`DragAndDropSession.AutoScroll.intervalTicks`).
+    static let dragAutoScroll = AnimationRequest(frameTicks: DragAndDropSession.AutoScroll.intervalTicks)
 }

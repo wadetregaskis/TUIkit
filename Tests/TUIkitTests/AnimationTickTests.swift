@@ -140,4 +140,34 @@ struct AnimationTickTests {
         #expect(AnimationClock.nanoseconds(ofNextTickMultiple: 2, after: -1) == 0)
         #expect(AnimationClock.nanoseconds(ofNextTickMultiple: 2, after: .max) == .max)
     }
+
+    @Test("A held repeat's next step is the first multiple of its period a whole period past the step's tick")
+    func repeatTicks() {
+        // Tick 63, on the 3-tick lattice: the next multiple, tick 66.
+        #expect(AnimationClock.nanoseconds(ofRepeatTicks: 3, afterStepAt: 1_052_000_000) == 1_100_000_000)
+        // Tick 65, a step taken off the lattice: tick 69, not the next multiple, 66.
+        #expect(AnimationClock.nanoseconds(ofRepeatTicks: 3, afterStepAt: 1_099_000_000) == 1_150_000_000)
+        #expect(AnimationClock.nanoseconds(ofRepeatTicks: 3, afterStepAt: 1_100_000_000) == 1_150_000_000)
+        #expect(AnimationClock.nanoseconds(ofRepeatTicks: 4, afterStepAt: -1) == AnimationClock.nanoseconds(atTick: 4))
+        #expect(AnimationClock.nanoseconds(ofRepeatTicks: 0, afterStepAt: 0) == 16_666_667)
+        #expect(AnimationClock.nanoseconds(ofRepeatTicks: 3, afterStepAt: .max) == .max)
+
+        // From every tick of −300…300 and 5 ms into it: a tick instant on the period's
+        // lattice, at least a period and under two periods past the step's tick.
+        var misses: [String] = []
+        for period in 1...5 {
+            for tick in Int64(-300)...300 {
+                for offset in [Int64(0), 5_000_000] {
+                    let step = AnimationClock.nanoseconds(atTick: tick) + offset
+                    let next = AnimationClock.nanoseconds(ofRepeatTicks: period, afterStepAt: step)
+                    let nextTick = AnimationClock.tick(atNanoseconds: next)
+                    let p = Int64(period)
+                    let isRepeat = AnimationClock.nanoseconds(atTick: nextTick) == next
+                        && nextTick.isMultiple(of: p) && nextTick - tick >= p && nextTick - tick < 2 * p
+                    if !isRepeat { misses.append("period \(period) from \(step): \(next)") }
+                }
+            }
+        }
+        #expect(misses.isEmpty, "\(misses.prefix(5))")
+    }
 }

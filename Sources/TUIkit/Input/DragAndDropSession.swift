@@ -806,15 +806,28 @@ final class DragAndDropSession: @unchecked Sendable {
     // MARK: - Auto-scroll
 
     /// Geometry and cadence for drag auto-scroll.
-    private enum AutoScroll {
+    enum AutoScroll {
         /// Rows of "hot margin" just inside an edge where scrolling engages at
         /// the modest base rate; the rate ramps up the further past the edge
         /// the cursor is dragged.
         static let hotMarginRows = 2
         /// The fastest auto-scroll step, in lines/rows per tick.
         static let maxRate = 6
-        /// The interval between ticks once engaged (~18 Hz).
-        static let intervalNanos: UInt64 = 55_000_000
+        /// The repeat once engaged, in ticks of 1/60 s: a step every 3, 50 ms, 20
+        /// a second.
+        ///
+        /// How often to step is input timing, but the steps are drawn by renders
+        /// the run loop makes at `AnimationRequest.dragAutoScroll`'s firings, a
+        /// lattice of the same 3 ticks; so after a step the next is due on that
+        /// lattice, a whole interval past the step's tick
+        /// (`AnimationClock.nanoseconds(ofRepeatTicks:afterStepAt:)`), and a render
+        /// late within its tick still steps. It was 55 ms from each step's instant
+        /// against an 18 Hz grid anchored where the drag engaged: a render later
+        /// into its firing than the one before by more than the 0.56 ms the two
+        /// periods differ found its step not yet due and waited a whole firing, so
+        /// the steps came one firing or two apart, 55.6 or 111 ms give or take the
+        /// renders' lateness, unevenly.
+        static let intervalTicks = 3
     }
 
     /// One auto-scroll zone plus the per-tick step to apply to it.
@@ -868,7 +881,9 @@ final class DragAndDropSession: @unchecked Sendable {
         } else if nowNanos >= autoScrollNextFireNanos {
             if step.dy != 0 { step.zone.vertical.scrollFine(by: step.dy) }
             if step.dx != 0 { step.zone.horizontal?.scrollFine(by: step.dx) }
-            autoScrollNextFireNanos = nowNanos &+ AutoScroll.intervalNanos
+            autoScrollNextFireNanos = UInt64(
+                bitPattern: AnimationClock.nanoseconds(
+                    ofRepeatTicks: AutoScroll.intervalTicks, afterStepAt: Int64(bitPattern: nowNanos)))
         }
         return true
     }

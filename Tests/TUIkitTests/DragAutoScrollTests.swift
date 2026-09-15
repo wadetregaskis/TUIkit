@@ -396,6 +396,68 @@ struct DragAutoScrollTests {
         #expect(handler.scrollOffset > 0, "the first scroll fires once the delay passes")
     }
 
+    // MARK: - The repeat's cadence
+
+    /// An edge drag with no initial delay, engaged at 1 s, so the first drive after
+    /// it steps.
+    private func engagedAtOneSecond(_ handler: ScrollViewHandler) -> Harness {
+        let harness = oneZone(vertical: handler, cursorX: 20, cursorY: 9)
+        #expect(harness.drive(nowNanos: 1_000_000_000), "engaged")
+        return harness
+    }
+
+    @Test("After a step, the next is due at the first 3-tick instant a whole 3 ticks on")
+    func nextStepIsOnTheLattice() {
+        let handler = scrollHandler(offset: 0, content: 1000, viewport: 10)
+        let harness = engagedAtOneSecond(handler)
+        harness.drive(nowNanos: 1_052_000_000)  // tick 63
+        let stepped = handler.scrollOffset
+        #expect(stepped > 0, "the first drive after engaging steps")
+        harness.drive(nowNanos: 1_099_999_999)
+        #expect(handler.scrollOffset == stepped, "not before tick 66")
+        harness.drive(nowNanos: 1_100_000_001)
+        #expect(handler.scrollOffset > stepped, "at tick 66, 1.1 s: \(handler.scrollOffset)")
+    }
+
+    @Test("A step taken between the grid's firings does not step again a tick later")
+    func offLatticeStepWaitsAWholeInterval() {
+        let handler = scrollHandler(offset: 0, content: 1000, viewport: 10)
+        let harness = engagedAtOneSecond(handler)
+        harness.drive(nowNanos: 1_099_000_000)  // tick 65: a render a mouse move made
+        let stepped = handler.scrollOffset
+        #expect(stepped > 0)
+        harness.drive(nowNanos: 1_100_000_001)  // the grid's firing, one tick later
+        #expect(handler.scrollOffset == stepped, "tick 66 is too soon")
+        harness.drive(nowNanos: 1_150_000_001)  // tick 69
+        #expect(handler.scrollOffset > stepped, "at tick 69: \(handler.scrollOffset)")
+    }
+
+    /// The run loop renders a held drag only when the scheduler says to, and a real
+    /// render is a little late: here 1 to 8 ms, in a fixed pattern.
+    @Test("Rendered only at its grid's firings, each 1-8 ms late, the drag steps every 50 ms ± 8 ms")
+    func stepsAreSteadyUnderLateRenders() {
+        let handler = scrollHandler(offset: 0, content: 100_000, viewport: 10)
+        let harness = oneZone(vertical: handler, cursorX: 20, cursorY: 9)
+        let scheduler = AnimationScheduler()
+        var now: Int64 = 1_000_000_000
+        var steps: [Int64] = []
+        for frame in 0..<120 {
+            let before = handler.scrollOffset
+            scheduler.beginFrame()
+            if harness.drive(nowNanos: UInt64(now)) {
+                scheduler.request("drag-autoscroll", .dragAutoScroll, now: now)
+            }
+            scheduler.endFrame()
+            if handler.scrollOffset != before { steps.append(now) }
+            guard let firing = scheduler.nextFiring(after: now) else { break }
+            now = firing + 1_000_000 + Int64((frame * 7_919) % 7_001) * 1_000
+        }
+        let gaps = zip(steps.dropFirst(), steps).map { $0 - $1 }
+        #expect(gaps.count >= 60, "\(gaps.count) steps")
+        let uneven = gaps.filter { abs($0 - 50_000_000) > 8_000_000 }
+        #expect(uneven.isEmpty, "gaps off 50 ms ± 8 ms: \(uneven.prefix(8)) of \(gaps.count)")
+    }
+
     @Test("The innermost of nested zones is the one that scrolls")
     func innermostZoneWins() {
         let outer = scrollHandler(offset: 30, content: 100, viewport: 20)

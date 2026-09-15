@@ -399,15 +399,14 @@ extension RenderLoop {
         // and `driveAutoScroll` resolves each zone's on-screen rect through the
         // dispatcher — run it after, and every `regionRect` lookup is nil and the
         // viewport never scrolls. While engaged the loop must keep ticking even
-        // if the cursor holds still, so request a grid at the auto-scroll cadence.
+        // if the cursor holds still, so request a lattice at the auto-scroll cadence.
         //
         // Sourced from `tuiContext` (not `environment`, which isn't built until
         // below) — the same session either way (see ServiceEnvironment).
         if tuiContext.dragAndDropSession.driveAutoScroll(
             nowNanos: UInt64(bitPattern: frameNowNanos))
         {
-            animationScheduler?.request(
-                "drag-autoscroll", AnimationRequest(frequency: 18), now: frameNowNanos)
+            animationScheduler?.request("drag-autoscroll", .dragAutoScroll, now: frameNowNanos)
         }
 
         driveDragFlights(nowNanos: frameNowNanos, scheduler: animationScheduler)

@@ -235,6 +235,37 @@ extension AnimationClock {
         guard !start.overflow, !next.overflow else { return .max }
         return Self.nanoseconds(atTick: next.partialValue)
     }
+
+    /// When a held repeat of `period` ticks is next due, after a step it took at
+    /// `nanoseconds`: the instant tick p·⌈(k + p)/p⌉ begins, where k is the step's
+    /// tick and p the period. That is the first multiple of the period at least a
+    /// whole period past the step's tick, and less than two periods past it.
+    ///
+    /// A held repeat (a drag at a scrollable's edge, a pressed scrollbar arrow) is
+    /// drawn by renders the run loop makes on a lattice of the same period, and a
+    /// render is a little late. Counted from the step's own tick, the next step
+    /// falls on the lattice instant after the one that took this step, however
+    /// late in its tick that render was, so the steps come a steady period apart.
+    /// And a step taken between the lattice's instants — at a render a mouse move
+    /// caused — waits a whole period, where ``nanoseconds(ofNextTickMultiple:after:)``
+    /// from the step would be due as soon as one tick later, a step twice in a
+    /// period. Adding the interval to the step's instant instead drifts off the
+    /// lattice, so a render that lands a hair early for it waits a whole firing.
+    ///
+    /// A `period` below 1 is taken as 1, and an instant past `Int64` saturates to
+    /// `Int64.max`, as ``nanoseconds(atTick:)`` does.
+    package static func nanoseconds(ofRepeatTicks period: Int, afterStepAt nanoseconds: Int64) -> Int64 {
+        let ticks = Int64(max(1, period))
+        let current = tick(atNanoseconds: nanoseconds)
+        // ⌈k/p⌉ + 1 periods. Truncating division already rounds a negative
+        // quotient up, so only a positive remainder needs the extra period.
+        var periods = current / ticks
+        if current % ticks > 0 { periods += 1 }
+        let next = periods.addingReportingOverflow(1)
+        let tickIndex = next.partialValue.multipliedReportingOverflow(by: ticks)
+        guard !next.overflow, !tickIndex.overflow else { return .max }
+        return Self.nanoseconds(atTick: tickIndex.partialValue)
+    }
 }
 
 // MARK: - AnimatedCellRun

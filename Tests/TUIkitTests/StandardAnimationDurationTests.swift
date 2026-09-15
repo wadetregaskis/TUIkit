@@ -39,7 +39,7 @@ struct StandardAnimationDurationTests {
     /// of whole ticks.
     private static let loopDurations: [StandardAnimationDuration] = [
         ("viewAnimationFrame", AnimationRequest.viewAnimations), ("dragLiftFrame", .dragLift),
-        ("dragReturnFrame", .dragReturn),
+        ("dragReturnFrame", .dragReturn), ("dragAutoScrollFrame", .dragAutoScroll),
     ].map { StandardAnimationDuration(name: $0.0, seconds: AnimationClock.seconds(forTicks: $0.1.frameTicks ?? 0)) }
 
     /// A toast fade's frame, as the wakes its animation task plans while a fade is
