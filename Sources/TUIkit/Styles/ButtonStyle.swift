@@ -525,16 +525,17 @@ private struct _ButtonStyleBody: View, Renderable {
 
         // Caps match the background normally, pulsing to accent when focused —
         // as a whole cycle, so the run loop can breathe those two cells without
-        // re-rendering the screen. See ``ButtonCapCycle``.
+        // re-rendering the screen. On a face the terminal decides they rest in
+        // the tertiary tier and hold the accent instead. See ``ButtonCapCycle``.
         let caps = ButtonCapCycle(
             isFocused: isFocused && !isDisabled,
-            background: buttonBg, accent: palette.accent, context: context)
+            background: buttonBg, palette: palette, context: context)
 
         // The caps are always opaque: both faces are composites over the page, or
         // an opaque accent kept at its own spelling (`hoveredControlFace`, §49),
-        // and `ButtonCapCycle` spends a translucent tint's alpha against that face,
-        // so every phase of the breath states a concrete colour (§29). They
-        // therefore need no spelling and earn no claim.
+        // and `ButtonCapCycle` spends a translucent tint's or tier's alpha against
+        // that face, so every phase of the breath states a concrete colour (§29).
+        // They therefore need no spelling and earn no claim.
         let openCap = ANSIRenderer.colorize(
             String(TerminalSymbols.openCap),
             foreground: caps.colorNow
@@ -824,11 +825,11 @@ private struct _ButtonStyleBody: View, Renderable {
         }
 
         // Standard: half-block caps around the background-tinted, padded label.
-        // Full accent at the bright end — see the note on the compact
-        // variant's cap above.
+        // Full accent at the bright end, and the tertiary tier at rest on a face
+        // the terminal decides — see ``ButtonCapCycle``.
         let caps = ButtonCapCycle(
             isFocused: isFocused && !isDisabled,
-            background: buttonBg, accent: palette.accent, context: context)
+            background: buttonBg, palette: palette, context: context)
 
         let composed = HStack(spacing: 0) {
             Text(String(TerminalSymbols.openCap)).foregroundStyle(caps.colorNow)

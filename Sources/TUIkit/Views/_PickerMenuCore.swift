@@ -411,10 +411,11 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // The caps are glyphs, not a fill behind text, so they breathe all the
         // way to the accent — and as a whole cycle, so the run loop can advance
         // those two cells without re-rendering the page. Literally the same
-        // treatment as `Button`'s end caps, so it is the same type.
+        // treatment as `Button`'s end caps, so it is the same type, and on a face
+        // the terminal decides it rests them in the tertiary tier as a button's.
         let caps = ButtonCapCycle(
             isFocused: isFocused && !isDisabled,
-            background: buttonBg, accent: palette.accent, context: context)
+            background: buttonBg, palette: palette, context: context)
 
         // Through `ClaimingRow`, which gets the label's claim onto the columns the
         // label actually occupies — past the opening cap — without a second piece of

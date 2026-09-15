@@ -3384,7 +3384,8 @@ one: when no tint cleared the cube, the fallback returned the RAW accent. At
 `.tint(.clear)` every candidate composites to the page, so that fallback is certain there,
 and the caps — drawn with no claim, on the strength of being "opaque by construction" —
 put a transparent colour into the emitter on hover alone. Focus was not needed: an
-unfocused cap is drawn in the face itself.
+unfocused cap is drawn in the face itself. (Except on a face with no RGB, where it is the
+tertiary tier: §78.)
 
 The fallback now spends the accent over the page, the ground the resting face uses. An
 opaque accent comes back untouched, so no shipped palette's bytes move.
@@ -4893,3 +4894,37 @@ to draw, and each had its own answer for a `nil`. Three of them invented a colou
 `ColorAnimationTests` pin these, each with a reported pair beside the unreported one where
 a picture is involved: once the terminal reports its colours, the picture path is taken
 again.
+
+## 78. A button's caps on a face the terminal decides (2026-09-15)
+
+A standard button, and a menu picker's collapsed control, draws `▐ … ▌` caps in its face
+at rest and breathes them from that face to the accent while focused (`ButtonCapCycle`,
+§49). Over a page with no RGB, `restingControlFace` (a 20% accent tint) is the page itself
+(§75), and `hoveredControlFace` is the resting face (its guard). The foreground slot
+spells an unreported `.terminalBackground` as its own default, 39. So an unfocused
+button's caps were two half-blocks in the terminal's foreground, which no rule chose, and
+a focused cap's breath was the accent for part of its cycle and that same 39 for the
+rest. An accent with no RGB (`Color.default`, which `.tint(Color.default)` gives) did the
+same on an RGB page: the face measures there, as the page, and the breath went between
+the page and 39.
+
+**The rule.** When the face, or the accent it is tinted with, has no RGB, the caps rest in
+the palette's `foregroundTertiary`, spent against the face, and a focused cap holds the
+accent: one colour, so no run and no tick. A disabled button's caps are at rest. The
+label and the face are unchanged.
+
+What it does not touch:
+- **A measurable face.** Every built-in palette states RGB roles, so on a silent terminal
+  its caps are what they were, byte for byte. Once the terminal reports its page, a tint
+  over it measures, and the caps are the face again, breathing.
+- **Hover.** A hovered face on such a page is the resting one, so a hovered button still
+  shows nothing until its label's ink is lifted instead.
+- **A translucent accent or tier.** It is spent against the face, so below ½ it is the
+  page (rule 9), and on an unreported page that cap is 39 again. No built-in palette has
+  one.
+
+`ButtonCapsOnUnmeasurableFaceTests` (TUIkitTests) pins it for a string label, a view label
+and a menu picker. On an unreported page the caps are the tier at rest and when disabled,
+and the accent with no run when focused. An accent of `Color.default` gives the same caps
+on an RGB page, whether or not the terminal has reported. A reported page gives the face
+and two runs again, and every built-in palette's caps rest in its face and breathe.

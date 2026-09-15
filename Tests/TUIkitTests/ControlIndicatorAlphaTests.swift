@@ -118,7 +118,7 @@ struct ControlIndicatorAlphaTests {
         let context = RenderContext(
             availableWidth: 20, availableHeight: 3, tuiContext: TUIContext())
         let caps = ButtonCapCycle(
-            isFocused: true, background: tinted.restingControlFace, accent: tinted.accent,
+            isFocused: true, background: tinted.restingControlFace, palette: tinted,
             context: context)
         #expect(caps.colorNow.isOpaque, "this phase carried \(caps.colorNow.alpha)")
         for run in caps.runs(width: 12) {
