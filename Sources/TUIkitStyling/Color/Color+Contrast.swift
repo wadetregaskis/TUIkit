@@ -67,6 +67,15 @@ extension Color {
         return (lighter + 0.05) / (darker + 0.05)
     }
 
+    /// What this colour measures as when it is drawn as INK: its `rgbComponents`,
+    /// except for `Color.default`. That measures as nothing on its own, because as a
+    /// fill it is the background; as ink it is the terminal's foreground, SGR 39,
+    /// which is measured once the terminal reports it.
+    var inkRGB: (red: UInt8, green: UInt8, blue: UInt8)? {
+        guard case .terminalDefault = value else { return rgbComponents }
+        return TerminalColors.current.foreground.map { (red: $0.red, green: $0.green, blue: $0.blue) }
+    }
+
     // MARK: - Readability floor
 
     /// Returns this colour adjusted — hue and saturation preserved, lightness

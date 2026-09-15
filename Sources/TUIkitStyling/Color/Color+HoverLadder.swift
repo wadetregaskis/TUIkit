@@ -35,9 +35,9 @@ extension Color {
     /// The result carries this colour's alpha, as every re-spelling does.
     package func hoverLadderLift(over page: Color) -> Color {
         let pageRGB = page.rgbComponents
-        let inkRGB = Self.inkRGB(of: self)
+        let inkRGB = self.inkRGB
         for rung in hoverRungs {
-            if let inkRGB, let pageRGB, let rungRGB = Self.inkRGB(of: rung) {
+            if let inkRGB, let pageRGB, let rungRGB = rung.inkRGB {
                 let from = Color.rgb(inkRGB.red, inkRGB.green, inkRGB.blue)
                 let to = Color.rgb(rungRGB.red, rungRGB.green, rungRGB.blue)
                 let ground = Color.rgb(pageRGB.red, pageRGB.green, pageRGB.blue)
@@ -57,23 +57,27 @@ extension Color {
     /// The rungs above this ink, nearest first. Ends in `Color.default`, which is
     /// no rung for an ink that is already 39.
     private var hoverRungs: [Color] {
-        switch value {
-        case .ansi(let slot) where !slot.isBright:
-            return [Color(value: .ansi(slot.brightTwin)), .default]
-        case .palette256(let index) where index < 8:
-            // 0-7 are the standard slots by index; `| 8` is the twin's index.
-            return [Color(value: .palette256(index | 8)), .default]
-        case .ansi, .palette256, .terminalDefault, .terminalForeground, .terminalBackground, .rgb, .semantic:
-            return [.default]
-        }
+        guard let twin = brightTwinOfStandardSlot else { return [.default] }
+        return [twin, .default]
     }
 
-    /// What `colour` measures as when it is drawn as ink. `Color.default` measures
-    /// as nothing on its own, because as a fill it is the background; as ink it is
-    /// the terminal's foreground, which is measured once the terminal reports it.
-    private static func inkRGB(of colour: Color) -> (red: UInt8, green: UInt8, blue: UInt8)? {
-        guard case .terminalDefault = colour.value else { return colour.rgbComponents }
-        return TerminalColors.current.foreground.map { (red: $0.red, green: $0.green, blue: $0.blue) }
+    /// The bright slot of this standard slot's pair, spelled as this colour is: by
+    /// name (`.ansi(.brightRed)` for `.ansi(.red)`) or by index (`.palette(9)` for
+    /// `.palette(1)`). Opaque, like every rung.
+    ///
+    /// Nil for a colour with no twin ABOVE it: a bright slot, which
+    /// ``ANSIColor/brightTwin`` answers with itself, and every colour that is not a
+    /// slot.
+    var brightTwinOfStandardSlot: Color? {
+        switch value {
+        case .ansi(let slot) where !slot.isBright:
+            return Color(value: .ansi(slot.brightTwin))
+        case .palette256(let index) where index < 8:
+            // 0-7 are the standard slots by index; `| 8` is the twin's index.
+            return Color(value: .palette256(index | 8))
+        case .ansi, .palette256, .terminalDefault, .terminalForeground, .terminalBackground, .rgb, .semantic:
+            return nil
+        }
     }
 
     /// The SGR parameters `colour` is spelled with as a foreground at 24-bit.
