@@ -54,8 +54,8 @@ struct IndeterminateGradientShiftTests {
                 let states = IndeterminateRenderer.samplesPerCell * width
                 let ramp = samples(count: states + 1)
                 let cycle = IndeterminateRenderer.cycle(
-                    width: width, style: .gradient(), fillColor: .ansi(.white), backgroundColor: .ansi(.black),
-                    accentColor: .ansi(.white), palette: SystemPalette.green, speed: .standard)
+                    width: width, style: .gradient(), fillColor: .white, backgroundColor: .black,
+                    accentColor: .white, palette: SystemPalette.green, speed: .standard)
                 let count = cycle.frames.count
                 var notShifts: [Int] = []
                 var misplaced: [Int] = []
