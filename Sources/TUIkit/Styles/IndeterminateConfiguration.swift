@@ -106,6 +106,12 @@ public struct IndeterminateConfiguration: Sendable, Equatable {
     /// seconds. Up to a thousand frames: a pass longer than that (about 33 seconds)
     /// keeps a thousand frames or fewer, each a whole number of 2-tick frames, so a
     /// very slow bar costs no more to build and hold than a 33-second one.
+    ///
+    /// A ``Motion/barberPole`` pass is a frame for each of its steps instead, one per
+    /// character of ``fill``, each shown for the same whole number of ticks nearest
+    /// the pass divided by the steps, and at least 2: `"◢◤"` over the preset's 0.6
+    /// seconds is two frames of 18 ticks, and `"abcd"` over 0.5 seconds four of 8, a
+    /// pass of 0.5333 seconds.
     public var period: Double
 
     /// The lit run's length as a fraction of the track, for the two motions

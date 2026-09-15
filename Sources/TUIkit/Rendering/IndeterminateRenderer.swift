@@ -166,7 +166,8 @@ enum IndeterminateRenderer {
     /// Frames of `frameTicks` ticks, a thirtieth of a second — the rate these bars used
     /// to ask to be re-rendered at — so the animation looks as it did, at any speed,
     /// up to `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` frames, past which
-    /// each lasts longer. Frames that come out identical cost nothing at replay:
+    /// each lasts longer; a barberPole's frames are one per step instead
+    /// (``layout(of:speed:)``). Frames that come out identical cost nothing at replay:
     /// ``AnimatedCellRun`` skips straight past them. Nor does each cost a render: a
     /// frame showing a state an earlier frame showed
     /// (``state(ofFrame:of:configuration:width:)``) is that frame's row, so a stepped
@@ -274,20 +275,41 @@ enum IndeterminateRenderer {
     /// A pass takes the configuration's period divided by the rate, in whole frames
     /// of `frameTicks` ticks, as many as come nearest
     /// (`IndicatorAnimationSpeed.rampLayout`). A named preset's period and a `.custom`
-    /// configuration's are laid out alike, so every bar's frames change on the same
-    /// 2-tick lattice.
+    /// configuration's are laid out alike, so the frames of every bar but a barberPole
+    /// change on the same 2-tick lattice.
+    ///
+    /// A barberPole's pass is a sequence rather than a ramp: one frame for each of its
+    /// states, each shown for the whole number of ticks nearest the pass divided by the
+    /// states, and at least `frameTicks` (`IndicatorAnimationSpeed.frameTicks(standard:)`),
+    /// so every shift is held the same time. Laid out in 2-tick frames, a pass its
+    /// states do not divide held them unevenly: "abcd" over 0.5 s was 15 frames, and
+    /// ⌊i·4/15⌋ held its four states for 4, 4, 4 and 3 of them. A fill of more than
+    /// `IndicatorAnimationSpeed.RampLayout.maximumFrameCount` characters is laid out as
+    /// a ramp, which bounds its frames.
     ///
     /// The frame count used to be a literal 30 in three places, which is the shape
     /// a divergence arrives in.
     static func layout(
         of style: IndeterminateStyle, speed: IndicatorAnimationSpeed
     ) -> IndicatorAnimationSpeed.RampLayout {
-        speed.rampLayout(standardCycle: period(of: style), frameTicks: frameTicks)
+        let period = period(of: style)
+        let configuration = style.configuration
+        guard configuration.motion == .barberPole,
+            let states = states(of: configuration, width: 1, cellPixels: nil),
+            states <= IndicatorAnimationSpeed.RampLayout.maximumFrameCount
+        else {
+            return speed.rampLayout(standardCycle: period, frameTicks: frameTicks)
+        }
+        let ticks = max(frameTicks, speed.frameTicks(standard: period / Double(states)))
+        // In `Double`, which an `Int` of 32 bits could not hold the product in.
+        let shown = Double(states) * Double(ticks) / Double(AnimationClock.ticksPerSecond)
+        return IndicatorAnimationSpeed.RampLayout(frameCount: states, frameTicks: ticks, timeScale: period / shown)
     }
 
     /// How many 1/60 s ticks a frame of a pre-rendered cycle is shown for: 2, the
     /// thirtieth of a second these bars asked the run loop to re-render them at
-    /// before `AnimatedCellRun` existed, kept so the animation looks as it did.
+    /// before `AnimatedCellRun` existed, kept so the animation looks as it did. A
+    /// barberPole's frames are one per step, and this long at the least.
     static let frameTicks = 2
 
     /// Whether every colour this bar could paint is opaque.

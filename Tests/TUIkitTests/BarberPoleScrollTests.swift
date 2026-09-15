@@ -73,4 +73,35 @@ struct BarberPoleScrollTests {
         }
         #expect(differing.isEmpty, "\(width) cells: ticks \(differing)")
     }
+
+    /// A barberPole's pass is a sequence, one frame per state, each held the same whole
+    /// number of ticks. A fill of four characters over a 0.5 s pass is four states of
+    /// 7.5 ticks, which rounds to 8: four frames of 8 ticks, a 0.5333 s pass. Laid out
+    /// like a ramp it was 15 frames of 2 ticks, and ⌊i·4/15⌋ held its states for 4, 4,
+    /// 4 and 3 frames, so the last one was cut 2 ticks short every pass.
+    @Test("A barberPole of four characters over 0.5 s is four frames of 8 ticks, one per state")
+    func customPassIsASequenceOfEqualFrames() {
+        let style = IndeterminateStyle.custom(
+            IndeterminateConfiguration(motion: .barberPole, fill: "abcd", period: 0.5))
+        let cycle = cycle(style, width: 20)
+        #expect(cycle.frames.count == 4)
+        #expect(cycle.frameTicks == 8)
+        var holds: [Int] = []
+        var previous: String?
+        for tick in 0..<(cycle.frames.count * cycle.frameTicks) {
+            let frame = shown(cycle, atTick: tick)
+            if frame == previous { holds[holds.count - 1] += 1 } else { holds.append(1) }
+            previous = frame
+        }
+        #expect(holds == [8, 8, 8, 8], "each state was held for \(holds) ticks")
+    }
+
+    /// The preset is two frames of 18 ticks: `◢◤`, and the same pattern one cell along,
+    /// 0.3 s each.
+    @Test("The preset barberPole is two frames of 18 ticks")
+    func presetIsTwoFramesOf18Ticks() {
+        let cycle = cycle(.barberPole, width: 36)
+        #expect(cycle.frames.count == 2)
+        #expect(cycle.frameTicks == 18)
+    }
 }
