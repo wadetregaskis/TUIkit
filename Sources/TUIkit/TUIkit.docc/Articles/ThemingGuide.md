@@ -111,6 +111,54 @@ struct MyCustomPalette: Palette {
 
 Only 8 properties are required (`background`, `foreground`, `accent`, `border`, `success`, `warning`, `error`, `info`). All others have default implementations that derive from these.
 
+## What built-in controls draw with
+
+Every built-in control draws with the palette's roles, so a palette you write, or
+one of the built-ins, restyles all of them. A control uses a literal colour only
+when the colour is its content, not its chrome.
+
+- **Text and labels**: `foreground`. It is text's default colour, and a
+  ``StatusBar``'s labels use it while ``StatusBar/labelColor`` is `nil`.
+- **Shortcut keys in the status bar**: `accent`, while
+  ``StatusBar/highlightColor`` is `nil`. A colour you set there, on the view or on
+  ``StatusBarState``, is drawn as you set it.
+- **The unlit part of a track**: `foregroundTertiary`, in a ``Slider``, a
+  ``ProgressView`` and a ``Gauge``; their filled part is `foregroundSecondary`.
+- **A switch that is off** (``SwitchToggleStyle``): its track is
+  `foregroundTertiary`, moved only as far as it takes to stand off both the page,
+  which the knob is drawn in, and the accent, which the track turns when the
+  switch is on. A disabled switch fades that track halfway toward the page. A
+  scroll track is `foregroundQuaternary`, separated the same way.
+- **A label on a surface the control did not choose**: the active tab's label in
+  a ``TabView``, the check mark on the swatch under the cursor in
+  ``ColorPickerPanel``'s grids, and the index numbers on its 256-colour grid. These use
+  ``Palette/readableText(on:)`` for the surface: whichever of `foreground` and
+  `background` reads better there. A focused tab strip breathes the active label
+  toward the accent. Where the two are too close to see apart, as on White, whose
+  accent is white, the accent end moves just far enough to be seen.
+- **The indeterminate ``IndeterminateStyle/gradient(_:)`` bar with no stops**:
+  `error`, `warning`, `success`, `info` and `accent`, in that order. The accent is
+  among them, so `.tint` still reaches the bar.
+- **Alerts and destructive actions**: the warning, error, info and success alert
+  presets draw their titles in the role of the same name. A destructive button or
+  menu item is drawn in `error`.
+
+A role's alpha comes with it, so a faded palette fades the controls drawn with
+it.
+
+These stay literal on purpose:
+
+- **Content**: an ``Image``'s pixels; the colour being edited in a colour picker;
+  the swatch sets (Greyscale, Named, Web Safe, Crayons) and the 256-colour grid's
+  cells; ``GradientEditorPanel``'s preset gradients; any gradient you supply.
+  The colour is what these show, so a theme must not change it.
+- **Identity**: ``ChannelCurveEditorPanel``'s red, green and blue curves, and
+  ``ToneCurveEditorPanel``'s strip of input greys. They say which channel or
+  which tone you are looking at, which a theme would not know.
+- **Fallbacks for input that has no colour**: an empty gradient, or an animated
+  colour with no frames.
+- **The frame-dump debug overlay** (`TUIKIT_DEBUG_FRAME_DUMP=1`), a diagnostic.
+
 ## Editing Colors at Runtime
 
 Two controls edit a `Binding<Color>`, mirroring SwiftUI's `ColorPicker`:

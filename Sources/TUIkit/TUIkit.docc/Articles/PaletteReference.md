@@ -42,12 +42,14 @@ The 16 built-in palettes are instances of ``SystemPalette`` (the 6 phosphor pres
 | Category | Tokens | Purpose |
 |----------|--------|---------|
 | **Background** | `background`, `statusBarBackground`, `appHeaderBackground`, `overlayBackground` | App background, chrome bars, overlays |
+| **Foreground** | `foreground`, `foregroundSecondary`, `foregroundTertiary`, `foregroundQuaternary` | Primary through quaternary (dimmest) text. Built-in controls also draw the filled part of a track in `foregroundSecondary`, its unlit part and an off switch's track in `foregroundTertiary`, and a scroll track in `foregroundQuaternary` |
+| **Accent** | `accent` | Interactive elements, highlights, status bar shortcut keys, an on switch's track |
+| **Semantic** | `success`, `warning`, `error`, `info` | Status indicators, alert titles, destructive actions (`error`), and with `accent` the default stops of an indeterminate `.gradient` bar |
+| **UI Elements** | `border`, `focusBackground`, `cursorColor`, `fieldBackground` | Borders, focused-row highlight, text cursor, editable-field surface |
 
 The header and the status bar are one material: `statusBarBackground` defaults to `appHeaderBackground` (which in turn defaults to `background`), so a palette states its chrome tone once and both ends of the page take it. Every built-in does. Override `statusBarBackground` only for a palette that genuinely wants the two ends to differ.
-| **Foreground** | `foreground`, `foregroundSecondary`, `foregroundTertiary`, `foregroundQuaternary` | Primary through quaternary (dimmest) text |
-| **Accent** | `accent` | Interactive elements, highlights |
-| **Semantic** | `success`, `warning`, `error`, `info` | Status indicators |
-| **UI Elements** | `border`, `focusBackground`, `cursorColor`, `fieldBackground` | Borders, focused-row highlight, text cursor, editable-field surface |
+
+Every built-in control draws with these roles, so a palette restyles all of them. See <doc:ThemingGuide#What-built-in-controls-draw-with> for which control uses which role, and for the few colours that stay literal on purpose.
 
 Only 8 tokens are required: the remaining have sensible defaults. See <doc:ThemingGuide> for details on creating custom palettes.
 
