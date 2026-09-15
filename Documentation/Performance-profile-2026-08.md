@@ -4348,3 +4348,158 @@ and after. So no scenario in the sweep is being claimed to move. That is a
 statement about today's sweep, not about reflection being free: a view that
 does declare `@Environment` pays a `Mirror` walk per render again, as it did
 before §55. §55 measured that walk at about 3.4 µs.
+
+## 59. Every animation on the 1/60 s grid, and what it cost or saved (2026-09-14)
+
+The owner's rule: every animation frame is a whole number of 1/60 s ticks, at
+least one and, for a framework default, at least two, and the defaults are
+chosen so that animations running together change on shared instants. A
+terminal's paint ends up on a 60 Hz display, and a frame length that display
+cannot hold judders and costs writes nobody sees. 25 ms, the lattice the
+indicator-speed work had landed in `e9ff5b8c`, is 40 Hz and beats against 60.
+
+This section is the record of that series: 30 commits from `cc88795c` to
+`0da36bbb`, one of them a compiler workaround (`a37c2348`), measured end to
+end. The work follows the owner's rule, not a profile, so it quotes
+measurements rather than `analyze_timeprofile.py`.
+
+### What changed
+
+- **One time model.** `AnimationClock.nanoseconds(atTick: k)` is ⌈k·10⁹/60⌉ and
+  `tick(atNanoseconds:)` is ⌊t·60/10⁹⌋, an exact inverse pair, so a wake at a
+  tick's instant reads that tick. A run carries a whole `frameTicks` and its
+  boundaries are tick instants computed from the step index, never
+  accumulated (`9a54a38a`, `df46c96a`, `41a2bcc1`). Before, runs of 7 and 5
+  ticks changed at 583,333,335 and 583,333,331 ns, and the loop woke twice for
+  what is one instant.
+- **Defaults on the lattice.** Spinner frames moved to the nearest whole tick,
+  {5, 6, 7, 8, 9} (largest change −7.4%, `f857c2c1`). Bars keep 2-tick frames
+  and their passes; a barberPole is 4 states of 9 ticks, 150 ms a cell
+  (`0c31f337`, `b23b8177`, `f8dd0b54`). The blink half (21), breath (16 × 3),
+  readers and `AnimationCycle` steps (3) were already whole ticks.
+- **Grids on the lattice.** View animations and a drag's lift and return sample
+  on a 2-tick lattice (`7d99c796`), drag auto-scroll on 3 (`2cc946e6`), a held
+  scrollbar arrow on 4 (`2d81e417`), a toast's fade on 2-tick instants
+  (`7d9d5bf9`), and `TimelineView(.animation)` on its tick lattice
+  (`f7f87342`). The scheduler's frequency lock went with the last frequency
+  request (`2ab97e64`).
+- **Speeds in ticks.** `IndicatorAnimationSpeed.frameTicks(standard:)` and the
+  ramp layout choose whole ticks; a tolerance may only move a sequence onto a
+  frame divisible by 2 or 3, and `.automatic`'s ±0.05 moves no standard
+  duration (`cc72219e`). The timer's shortest sleep ends at the next tick
+  instant instead of 10 ms on (`6ffc0751`).
+- **The Example shows it.** The Spinners page counts overrides and lists
+  durations in ticks, with a model of instants on tick counts (`87ead7a9`,
+  `5d63ff2f`); the ProgressView page picks its indeterminate catalogue's speed
+  and width (`0da36bbb`).
+
+### The bound, and the models
+
+Every planned change instant of every framework animation is now
+`nanoseconds(atTick: k)` on the content clock, so any mix of them plans at most
+60 distinct instants a second. The bound is on PLANNED instants: the cursor
+timer's task, the loop's scheduler wait and the notification task are separate
+wakers, and replays are written without the frame pacer, so one planned
+instant can still cost two writes. The measurements below are the evidence,
+not the model.
+
+Models of planned instants a second, from the design's scripts (outside the
+repo); they are models, not measurements:
+
+    screen                                      before   after
+    Spinners page, 17 rows                      46.0     31.4
+    Spinners + caret blink + breath             50.9     36.0
+    ProgressView page, six 36-cell bars         30.0     33.3
+    … with a focused breath                     50.0*    40.0
+    Forms (breath 3, blink 21)                  20.0     20.0
+    Every default at once (kitchen sink)        —        46.3
+
+\* 50.0 distinct nanosecond instants, since the old 33,333,333 ns bar
+boundaries never met 50 ms ones; about 40 wakes once boundaries a few
+nanoseconds apart merge.
+
+The ProgressView page's rise is the barberPole: its 9-tick steps are not
+multiples of the other bars' 2 ticks. Before, it stepped on the same frames as
+the other bars and, at 36 cells, stood still (`0c31f337`).
+
+### Measured
+
+Release builds of `37aa9b97`, the parent of `f857c2c1` (the first commit to
+move a default), and of `0da36bbb`, each in its own tree, built with swiftly's
+Swift 6.2.4, on macOS 15.7 / arm64. Three runs each of
+`Tools/Profiling/idle_cpu.py BIN 3 10 --page P --wakeups`, the two binaries
+alternating, then `Tools/Profiling/animation_rate.py BIN 12` on the spinners
+and progress pages.
+
+    spinners        before runs            median   after runs             median
+    CPU %           4.4   3.6   4.2        4.2      3.3   3.3   3.5        3.3
+    bytes/s         21636 21529 21561      21561    22552 22270 22058      22270
+    bursts/s        37.5  37.0  36.4       37.0     30.6  30.2  29.8       30.2
+    idle wakeups/s  32.3  31.6  32.6       32.3     26.2  25.4  27.2       26.2
+
+    progress        before runs            median   after runs             median
+    CPU %           11.6  9.8   9.6        9.8      12.5  12.9  12.3       12.5
+    bytes/s         31376 31425 31290      31376    31435 31698 31768      31698
+    bursts/s        32.4  32.8  32.4       32.4     32.8  32.5  33.0       32.8
+    idle wakeups/s  28.2  27.8  27.8       27.8     30.0  30.2  30.6       30.2
+
+    forms           before runs            median   after runs             median
+    CPU %           0.9   0.8   0.9        0.9      0.9   0.7   0.8        0.8
+    bytes/s         221   221   221        221      221   219   219        219
+    bursts/s        10.0  10.0  10.0       10.0     10.0  9.9   9.9        9.9
+    idle wakeups/s  9.0   8.8   8.8        8.8      7.9   8.5   9.1        8.5
+
+**Spinners.** Bursts fell from 37.0 a second to 30.2 (−18%), idle wakeups from
+32.3 to 26.2 (−19%), and CPU from 4.2% to 3.3%. The model's fall is larger,
+46.0 planned instants to 31.4, because before, a wake that arrived a few
+milliseconds late already served boundaries a few milliseconds apart, so the
+loop never woke 46 times a second. Afterwards bursts sit just under the model.
+Bytes rose 3.3%, with the same glyph changes: 1,570 against 1,565 in 12 s over
+the 15 named rows. That rise is not explained here.
+
+`animation_rate.py` shows each row stepping at its own frame. Before, dots and
+dancingLine stepped at 109.9 ms, line at 140.1, column and bar at 80.5-80.6,
+earth at 149.3, and the 120, 125 and 130 ms styles at 122.8-125.3, where
+`.automatic` had moved them onto 125 ms. After, the 7-tick styles step at
+116.4-116.9 ms, the 8-tick at 132.5 (box 130.3), column and bar at 83.9, and
+earth at 150.1: a median ratio to the nominal of 0.998 over 16 named rows
+(min 0.923, max 1.007). The minimum is `clock`, whose faces pyte measures at the
+wrong width (see the script's docstring).
+
+**Progress.** The model has planned instants rising 11%, from 30.0 to 33.3, and
+idle wakeups rose 8.6%. The CPU rise did not hold. A second round of three
+alternating runs, with a third binary at `f7f87342` (before either Example
+commit, so without the page's new pickers), gave:
+
+    progress        37aa9b97            f7f87342            0da36bbb
+    CPU %           11.1  9.3  11.0     3.8  10.2 12.9      9.2  11.3 10.5
+    bursts/s        31.6  31.9 33.4     35.4 32.5 34.1      32.6 32.4 32.4
+    idle wakeups/s  28.3  27.4 28.9     8.4  30.8 30.7      29.5 28.7 28.2
+
+The medians there are 11.0%, 10.2% and 10.5% CPU, and idle wakeups of 28.3
+before against 28.7 after (+1.4%). The page's CPU moves by more than the change
+from run to run, so no difference is claimed, and `0da36bbb`, with the page's
+new pickers, reads no higher than `f7f87342`. One `f7f87342` run read 3.8% with
+8.4 idle wakeups a second, unlike every other run of the page; it is left in.
+
+`animation_rate.py --page progress` names no rows (the labels are on the left),
+so they are identified by position. The barberPole row went from 38 changes in
+12 s (a median of 47.9 ms, the glitches of a pattern that stood still at 36
+cells) to 82 changes at 150.0 ms, one cell each 9 ticks. The sweep row held at
+269 and 268 changes (39.2 and 39.3 ms), the knightRider row went from 371
+changes at 33.7 ms to 346 at 33.2, and the Indeterminate section's bars stepped
+358 and 356 times (34.0 and 32.7 ms).
+
+**Forms.** Unchanged within the spread, as the model predicts: 10.0 bursts a
+second before and 9.9 after, and 8.8 and 8.5 idle wakeups.
+
+### What was left
+
+- Separate wakers and unpaced replays, the source of extra writes per planned
+  instant.
+- A List's dropped-run wake uses the next step rather than the next change.
+- Elapsed time is a `Double`; the round trip to nanoseconds is exact below
+  2^51 ns, about 26 days of uptime. Past that a wake exactly on a tick instant
+  may read the tick before.
+- Example and Stress timers still sleep relative durations, among them the
+  Mouse page's 90 ms poof, an Example animation off the grid.
