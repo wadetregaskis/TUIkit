@@ -5125,7 +5125,8 @@ terminal's own foreground and background:
   cut at ½, and so is `.opacity(_:)` over text already drawn in a slot, whose SGR 30–37 or
   90–97 the fade reads back as that slot;
 - a colour effect (brightness, contrast, saturation, grayscale, hue rotation, inversion)
-  leaves it as it is, and `.colorMultiply` by it changes nothing;
+  leaves it as it is, and `.colorMultiply` by it changes nothing, the line's 39 included
+  (§84);
 - a contrast floor leaves it as asked, and a control face tinted with it is the page, so a
   hover adds no fill (§78's caps apply); a hover lift climbs from it to its bright twin
   instead (§82);
@@ -5252,3 +5253,37 @@ What it leaves alone:
 leave blanks, and a wide glyph leaves two. At 0.5 and 0.6 the slot is drawn as 31. A dropped
 glyph's underline is cleared, and a reversed glyph after it keeps its own. Over a reported
 page, with slots reported and without, the glyph stays, in RGB.
+
+## 84. A multiply by a colour the terminal decides (2026-09-15)
+
+`.colorMultiply(tint)` rewrites every colour a view drew (`SGRColorRewrite`), and each is
+multiplied by the tint's RGB. A tint the terminal decides and has not reported, such as a
+slot, `Color.default`, or the terminal's foreground or page, has no RGB, so the arithmetic
+returns each colour as it was (§81). The multiply still walked the line, though, and the
+walk re-spells a 39 as the palette's ink. So
+`Text("ab").foregroundStyle(Color.default).colorMultiply(.ansi(.blue))`, before the
+terminal reports its slots, turned "ab" from the terminal's foreground, 39, into the
+palette's RGB ink (`38;2;51;255;51` on the default palette). It is the identity by
+arithmetic but not by spelling, which is §25.1's trap by another road.
+
+**The rule.** A multiply by a tint that `isTerminalDefined` and has no RGB is the identity:
+`isIdentity` answers true, as it does for white, and the line is not walked. Its alpha still
+fades the layer (§25), so `.colorMultiply(.ansi(.blue).opacity(0.5))` draws what
+`.colorMultiply(.white.opacity(0.5))` does. Once the terminal reports the colour, the tint
+multiplies by the reported colour: on Apple Terminal "Basic", slot 4 is (0, 0, 179), so
+(200, 100, 50) becomes (0, 0, 35).
+
+What it leaves alone:
+- **A semantic tint.** `.colorMultiply(Color.accentColor)` has no RGB either, but it is
+  waiting to be resolved against the palette, not one the terminal decides. It is not
+  resolved today, so it walks the line and multiplies nothing. That is a gap of its own,
+  not this rule's.
+- **Every other effect.** Brightness, contrast, saturation, grayscale, hue rotation and
+  inversion take their amount from the call, not from a colour, so a colour with no RGB
+  under them is left as it is and the rest of the line still changes.
+
+`ColorEffectTests` (TUIkitTests) pins it for `.ansi(.blue)`, `Color.default`, the
+terminal's foreground and `Color.palette(4)`, unreported: a label in 39, an RGB label and a
+slot on an RGB field draw byte for byte as they do unmultiplied, and at half alpha the
+lines are `.white.opacity(0.5)`'s. With Apple Terminal "Basic"'s slots reported, a multiply
+by slot 4 draws `38;2;0;0;35`.

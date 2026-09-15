@@ -8,6 +8,7 @@ import Foundation
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitStyling
 
 @MainActor
 @Suite("Colour effects")
@@ -87,6 +88,44 @@ struct ColorEffectTests {
         #expect(tinted == drawn(base))
         #expect(tinted.contains("\u{1B}[31m"), "\(tinted.debugDescription)")
         #expect(!tinted.contains("38;2;"), "\(tinted.debugDescription)")
+    }
+
+    /// A tint the terminal decides, before it has reported it, has no RGB to multiply by,
+    /// so each colour under it comes back as it was. The line must not be walked either:
+    /// the walk re-spells a 39 as the palette's ink, which is `.white`'s trap by another
+    /// road.
+    @Test(
+        "Multiplying by a colour the terminal has not reported changes nothing",
+        arguments: [Color.ansi(.blue), Color.default, Color(value: .terminalForeground), Color.palette(4)])
+    func multiplyByAnUnmeasurableColourChangesNothing(tint: Color) {
+        TerminalColors.withCurrent(.unknown) {
+            let bases = [
+                AnyView(Text("ab").foregroundStyle(Color.default)),
+                AnyView(Text("ab").foregroundStyle(Color.rgb(200, 100, 50))),
+                AnyView(Text("ab").foregroundStyle(Color.ansi(.red)).background(Color.rgb(10, 20, 30))),
+            ]
+            for base in bases {
+                let tinted = drawn(base.colorMultiply(tint))
+                let plain = drawn(base)
+                #expect(tinted == plain, "\(plain.debugDescription) → \(tinted.debugDescription)")
+            }
+            // Its alpha still fades the layer, which is not a rewrite: the lines are
+            // `.white.opacity(0.5)`'s.
+            let label = Text("ab").foregroundStyle(Color.default)
+            let faded = drawn(label.colorMultiply(tint.opacity(0.5)))
+            let whiteFaded = drawn(label.colorMultiply(Color.white.opacity(0.5)))
+            #expect(faded == whiteFaded, "\(whiteFaded.debugDescription) → \(faded.debugDescription)")
+        }
+    }
+
+    @Test("Multiplying by a slot the terminal has reported multiplies by the reported colour")
+    func multiplyByAReportedSlot() {
+        TerminalColors.withCurrent(UnreportedANSISlotTests.appleTerminal) {
+            let base = Text("ab").foregroundStyle(Color.rgb(200, 100, 50))
+            // (200, 100, 50) × Apple Basic's slot 4, (0, 0, 179), / 255: 50 × 179 / 255 → 35.
+            let tinted = drawn(base.colorMultiply(.ansi(.blue)))
+            #expect(tinted.contains("38;2;0;0;35"), "\(tinted.debugDescription)")
+        }
     }
 
     @Test("Hue rotation moves the hue and leaves the rest")

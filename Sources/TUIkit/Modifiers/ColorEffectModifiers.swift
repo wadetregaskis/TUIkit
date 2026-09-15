@@ -81,6 +81,11 @@ extension View {
     /// A tint: white leaves everything alone, and a colour with a zero channel
     /// removes that channel entirely.
     ///
+    /// A colour the terminal decides, such as `Color.ansi(.blue)` or
+    /// `Color.default`, is multiplied as the colour the terminal reported for it.
+    /// Until the terminal has reported it there is nothing to multiply by, so it
+    /// leaves everything alone too.
+    ///
     /// `color`'s own opacity multiplies too, as SwiftUI's does — the multiply is of
     /// RGBA, not RGB — so `.colorMultiply(.white.opacity(0.5))` leaves every hue
     /// alone and fades the subtree by half, and `.colorMultiply(.clear)` hides it.
@@ -130,12 +135,20 @@ struct _ColorEffectView<Content: View>: View {
         /// terminal's white slot, which measures as 229, and multiplies as that.
         /// Before `opaqueSpelling` was here a faded white slipped past the shortcut
         /// and changed the subtree as a side effect of fading it.
+        ///
+        /// A tint the terminal decides and has not reported (a slot, `Color.default`,
+        /// the terminal's foreground or page) is the identity too. It has no RGB, so
+        /// `applied(to:amount:)` returns every colour as it was, but walking the line
+        /// still re-spells a 39 as the palette's ink. Reported, it multiplies by the
+        /// reported colour. A semantic tint is not one of these: it is a colour
+        /// waiting to be resolved, not one that cannot be measured.
         func isIdentity(at amount: Double) -> Bool {
             switch self {
             case .brightness, .grayscale, .hueRotation: amount == 0
             case .contrast, .saturation: amount == 1
             case .invert: false
-            case .multiply(let color): color.opaqueSpelling == .white
+            case .multiply(let color):
+                color.opaqueSpelling == .white || (color.isTerminalDefined && color.rgbComponents == nil)
             }
         }
     }
