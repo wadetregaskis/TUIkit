@@ -478,7 +478,7 @@ extension Color {
     /// role.
     ///
     /// It measures as xterm's value for the slot, ``ANSIColor/xtermRGB``, which is
-    /// an estimate: nothing asks the terminal what the slot really is. Bold may
+    /// an estimate of what the user's profile keeps there. Bold may
     /// draw a standard slot's text in its bright twin on some terminals; see "What
     /// an ANSI colour actually paints" in `Documentation/Terminal-compatibility.md`.
     ///

@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import TUIkitCore
 import TUIkitStyling
 
@@ -57,11 +58,13 @@ struct TerminalColorReport: Equatable, Sendable {
 /// background (OSC 11) and sixteen ANSI slots (OSC 4), and the parsers for
 /// what comes back.
 ///
-/// Nothing sends these yet. They are the pieces the startup exchange will run
-/// through `Terminal.fencedExchange(request:timeout:sawFence:)`, reading to
-/// ``sawStatusFence(_:)``, handing back what ``isReply(_:)`` and
-/// ``isStatusFence(_:)`` do not claim, then keeping
-/// ``resolve(_:environment:)`` of ``parse(_:)``.
+/// `TerminalClient.detectColors(using:)` asks once at startup, before the
+/// first frame. It sends ``startupRequest(isTmux:)`` through
+/// `Terminal.fencedExchange(request:timeout:sawFence:)`, reads to
+/// ``sawStatusFence(_:)``, hands back what ``isReply(_:)`` and
+/// ``isStatusFence(_:)`` do not claim, and publishes
+/// ``colorsToPublish(_:environment:)`` of ``parse(_:)``. Nothing asks again
+/// later yet, so ``slotsRequest`` is not sent.
 ///
 /// ## The fence
 ///
@@ -371,5 +374,95 @@ enum TerminalColorQuery {
             (0..<TerminalColorReport.slotCount).contains(slot)
         else { return nil }
         return slot <= 6 || slot == 8
+    }
+}
+
+// MARK: - Asking at startup
+
+extension TerminalColorQuery {
+
+    /// How long the startup exchange waits for its fence: half a second, as
+    /// the other startup exchanges wait for theirs.
+    ///
+    /// Only a terminal that answers no `CSI 5 n` waits it out, because the
+    /// read ends when the fence lands. Every measured host answered it.
+    static let startupTimeout = 0.5
+
+    /// The request the startup exchange sends: ``tmuxStartupRequest`` under
+    /// tmux, ``nativeRequest`` everywhere else.
+    static func startupRequest(isTmux: Bool) -> String {
+        isTmux ? tmuxStartupRequest : nativeRequest
+    }
+
+    /// What the startup exchange publishes: ``resolve(_:environment:)`` of
+    /// what the terminal said, or `nil` when that says nothing at all.
+    ///
+    /// `nil` leaves `TerminalColors.current` as it was, `unknown` at startup,
+    /// rather than assigning `unknown` over it. A terminal that answered no
+    /// colour and no `997` still publishes what `COLORFGBG` says about dark,
+    /// which is a statement from the environment, not a colour guessed for
+    /// the terminal.
+    static func colorsToPublish(
+        _ report: TerminalColorReport, environment: [String: String]
+    ) -> TerminalColors? {
+        let resolved = resolve(report, environment: environment)
+        return resolved == .unknown ? nil : resolved
+    }
+}
+
+extension Terminal {
+
+    /// Asks the terminal for its colours, or returns `nil` without asking when
+    /// stdin is not a TTY in raw mode.
+    ///
+    /// The same exchange as ``queryGraphicsSupport(timeout:)``: one write
+    /// through ``fencedExchange(request:timeout:sawFence:)``, then read until
+    /// the status fence lands or the deadline passes. What arrives and is not
+    /// a reply, a keystroke typed while the app starts or a focus report, goes
+    /// back to the input parser through
+    /// ``handBackUnconsumed(from:isReply:isFence:)``.
+    ///
+    /// Asked of every host, measured or not. No measured host printed any of
+    /// these queries, and one that answers none of them costs the round trip
+    /// to its fence.
+    func queryColors(timeout: Double = TerminalColorQuery.startupTimeout) -> TerminalColorReport? {
+        guard isatty(STDIN_FILENO) == 1, isRawMode else { return nil }
+        return askColors(isTmux: TerminalHost.isTmux, timeout: timeout)
+    }
+
+    /// The exchange behind ``queryColors(timeout:)``, without its guard.
+    ///
+    /// Apart so a test can run the exchange through ``readSource`` and
+    /// ``exchangeTransport``: the guard wants a real TTY in raw mode, which a
+    /// test process does not have.
+    func askColors(
+        isTmux: Bool, timeout: Double = TerminalColorQuery.startupTimeout
+    ) -> TerminalColorReport {
+        let collected = fencedExchange(
+            request: TerminalColorQuery.startupRequest(isTmux: isTmux), timeout: timeout,
+            sawFence: TerminalColorQuery.sawStatusFence)
+        handBackUnconsumed(
+            from: collected, isReply: TerminalColorQuery.isReply,
+            isFence: TerminalColorQuery.isStatusFence)
+        return TerminalColorQuery.parse(collected)
+    }
+}
+
+extension TerminalClient {
+
+    /// Asks the terminal for its colours at startup, and publishes what it
+    /// said to `TerminalColors.current`.
+    ///
+    /// Run once, before `RenderLoop` is built, so the first frame is drawn
+    /// with whatever the terminal reported. A terminal that says nothing leaves
+    /// the record as it was. A reply later than the deadline is not read here:
+    /// the input parser takes it as a string sequence and drops it.
+    @MainActor
+    static func detectColors(using terminal: Terminal) {
+        guard let report = terminal.queryColors(),
+            let colors = TerminalColorQuery.colorsToPublish(
+                report, environment: ProcessInfo.processInfo.environment)
+        else { return }
+        TerminalColors.current = colors
     }
 }

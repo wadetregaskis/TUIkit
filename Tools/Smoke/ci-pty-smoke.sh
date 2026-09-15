@@ -104,6 +104,12 @@ echo "── identity: detection reaches the compensation ──"
 echo "── mode 2027: pinned when needed, and only then ──"
 "$VENV/bin/python" "$HERE/mode_pin_smoke.py" "$REPO/$BUILD_DIR/Example"
 
+# The same class, for the colour exchange: the terminal's colours are asked
+# once, with the request its host needs, and published before RenderLoop draws
+# its first frame. Five short runs, about twenty seconds (18.7 s measured).
+echo "── colours: asked before the first frame ──"
+"$VENV/bin/python" "$HERE/colour_query_smoke.py" "$REPO/$BUILD_DIR/Example"
+
 # A different class of check, and the only one that needs TWO processes: does a
 # setting written in one launch come back in the next? The framework's storage
 # layer has unit tests; what they cannot say is whether an app's own keys

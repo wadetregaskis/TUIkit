@@ -103,8 +103,8 @@ A slot is a name, not a colour. The terminal paints whatever the user's
 profile keeps in that slot, which need not be red at all, so use one where a
 colour should follow the user's terminal scheme. For a colour that looks the
 same everywhere, use RGB or a palette role. A slot measures as xterm's value
-for it, ``ANSIColor/xtermRGB``, which is an estimate: nothing asks the terminal
-what the slot really is.
+for it, ``ANSIColor/xtermRGB``, which is an estimate of what the user's profile
+keeps there.
 
 `Color.palette(1)` is the same slot spelled by its index, and stays `38;5;1`
 where the terminal has 256 colours.

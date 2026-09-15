@@ -12,10 +12,11 @@ import Testing
 /// The colour query's requests, its reply parsers, and the pure resolution of
 /// what a terminal said.
 ///
-/// Nothing asks a terminal these questions yet. The exchange-level tests run
-/// the pieces through `Terminal.fencedExchange` and the hand-back, with a
-/// scripted terminal behind `readSource` and `exchangeTransport`, as
-/// TerminalExchangeTests does for the other startup exchanges.
+/// The exchange-level tests here run the pieces through
+/// `Terminal.fencedExchange` and the hand-back, with a scripted terminal
+/// behind `readSource` and `exchangeTransport`, as TerminalExchangeTests does
+/// for the other startup exchanges. The startup exchange that asks these
+/// questions is TerminalColorStartupTests'.
 @MainActor
 @Suite("Terminal colour query")
 struct TerminalColorQueryTests {

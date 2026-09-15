@@ -24,7 +24,10 @@
 /// scoped pin, because a plain global mutate-and-restore bleeds across Swift
 /// Testing's parallel runner.
 ///
-/// Nothing assigns `current` yet, so it is `unknown` in every process.
+/// TUIkit's startup exchange assigns `current` once, before an app draws its
+/// first frame, when the terminal, or `COLORFGBG`, says anything about its
+/// colours. Nothing assigns it again later yet. A process that runs no app,
+/// and one whose terminal says nothing, keep `unknown`.
 package struct TerminalColors: Sendable, Hashable {
 
     /// A reported colour, eight bits per channel.

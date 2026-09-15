@@ -2094,8 +2094,8 @@ iTerm2's sixteen, as reported. They are not xterm's table either:
 - **screen:** its panes inherit `TERM_PROGRAM=Apple_Terminal` from the outer
   host, which is stale there.
 - **What the framework takes from this about light and dark.**
-  `TerminalColorQuery.resolve` ranks the answers. Nothing asks the terminal
-  at startup yet.
+  `TerminalColorQuery.resolve` ranks the answers the startup exchange (below)
+  gets.
   - A default colour the terminal did not report stays unknown. It is never
     inferred from the other one.
   - The reported background decides first: dark when white contrasts with it
@@ -2107,6 +2107,51 @@ iTerm2's sixteen, as reported. They are not xterm's table either:
     *Inferred*, not measured: a pane's environment comes from whatever started
     the session, so an inherited `COLORFGBG` can describe a terminal that is no
     longer attached. It was unset in every pane measured here.
+
+#### What the framework asks at startup
+
+`TerminalClient.detectColors(using:)` runs once, after graphics detection and
+before `RenderLoop` is built, so the first frame is drawn with whatever came
+back. It asks only when stdin is a TTY in raw mode.
+- **Native hosts:** OSC 10, OSC 11, then OSC 4 for slots 0–15, one query each,
+  all ended in ST, then `CSI 5n`: 170 bytes in one write.
+- **tmux:** OSC 10, OSC 11 and `CSI 5n` only. The slots are left out because
+  tmux forwards OSC 4 to one client and holds the fence about half a second
+  when that client is silent (below). Asking for them after the first frame
+  is not built yet.
+- **Waiting:** until the `CSI 0 n` fence, or 0.5 s, the deadline the other
+  startup exchanges use. Replies that arrived before the deadline are kept.
+  Keystrokes and focus reports that arrive among the replies go back to the
+  input parser.
+- **Published:** `TerminalColors.current` gets what `resolve` makes of the
+  answers, unless that says nothing. So a silent terminal leaves the record
+  unknown, but a `COLORFGBG` hint is still published.
+- **Not asked again:** not on resume from a suspend, not on focus-in, and not
+  on a `997` report. A reply later than the deadline is dropped by the input
+  parser.
+
+**Round trip.** The native request itself, one write with eighteen queries,
+was measured on one host only:
+- **Apple Terminal 455.1**, default profile, macOS 15.7.9, 2026-09-15, with the
+  probe's `batch-native` exchange, which is byte for byte the framework's
+  request. All 18 replies arrived before the fence, whose reply completed at
+  0.28 ms. Every reply ended in BEL, and nothing printed.
+
+The other hosts are known from single queries and the OSC 10 + 11 pair, on
+2026-09-14 (table above):
+- Ghostty 1.3.1: about 0.05 ms per query; the pair's replies took 0.10 and
+  0.12 ms, and its `6n` fence 0.15 ms.
+- iTerm2 3.7.1: 15–20 ms median per query (2.8–33 ms), fences 15–36 ms.
+- Warp: about 0.03 ms. OSC 4 is silent there, but the fence still came back in
+  about 0.1 ms.
+- GNU screen 4.00.03: every colour query silent; fences 0.1–0.3 ms.
+- tmux 3.7c: OSC 10 + 11 alone took 0.02–0.8 ms.
+
+*Inferred*, not measured: the batch costs about what its slowest query does,
+since tmux's batch shared one wait. **Not measured:** the native batch on
+iTerm2, Ghostty and Warp. On 2026-09-15 the Warp run blocked before its first
+exchange: 0.01 s of CPU in three minutes, and no record. The Ghostty instance
+started no child, as after 08:03 on 2026-09-14. iTerm2 was not launched.
 
 #### tmux 3.7c
 
@@ -3594,6 +3639,11 @@ until that run records it, with the host's version.
   `Tools/TerminalProbes/data/` by `TerminalLedgerConformanceTests` (which
   also carries the known-divergence ledger), with spot batteries in
   `GhosttyWarpCompatibilityTests` / `StringTerminalWidthTests`.
+- `TerminalClient.detectColors(using:)` — asks OSC 10, 11 and (outside tmux)
+  OSC 4 once at startup through `Terminal.queryColors`, and publishes the
+  answer to `TerminalColors.current` before the first frame. See "What the
+  framework asks at startup"; `Tools/Smoke/colour_query_smoke.py` checks the
+  wiring.
 - `Terminal.enableRawMode` / `disableRawMode` — focus reporting (mode 1004)
   on and off; `Terminal.finalize` reads the reports as
   `TerminalInput.focusChanged`; `AppRunner.terminalFocusChanged` moves

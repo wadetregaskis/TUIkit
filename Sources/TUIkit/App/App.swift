@@ -247,6 +247,15 @@ extension AppRunner {
         // to ask. Costs one terminal round trip at startup, and only when
         // nothing has already answered.
         TerminalClient.detectGraphics(using: terminal)
+        // And what colours it paints: its default foreground and background
+        // (OSC 10/11) and, outside tmux, its sixteen ANSI slots (OSC 4),
+        // published to `TerminalColors.current` so the first frame is drawn
+        // with them. Also asked rather than looked up, in one round trip
+        // fenced by `CSI 5n`, which every measured host answered. Under tmux
+        // the slots are left out: tmux forwards OSC 4 to one client and holds
+        // the fence about half a second when that client is silent. See
+        // ``TerminalColorQuery``.
+        TerminalClient.detectColors(using: terminal)
 
         let renderer = RenderLoop(
             app: app,
