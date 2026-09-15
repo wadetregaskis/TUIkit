@@ -63,7 +63,7 @@ struct CursorBlinkRegularityTests {
     /// The caret's blink cycle at `speed`.
     private func caretCycle(_ speed: IndicatorAnimationSpeed) -> TextFieldContentRenderer.CursorCycle {
         TextFieldContentRenderer.computeCursorCycle(
-            baseColor: .ansi(.red), over: .ansi(.black), animation: .blink, speed: speed, cursorTimer: nil)
+            baseColor: .red, over: .black, animation: .blink, speed: speed, cursorTimer: nil)
     }
 
     /// The caret's blink as the run a text field builds from it, showing "on " while
