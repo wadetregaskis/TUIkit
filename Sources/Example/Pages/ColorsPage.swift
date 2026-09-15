@@ -19,25 +19,25 @@ struct ColorsPage: View {
 
             DemoSection("page.colors.section.standard") {
                 HStack(spacing: 2) {
-                    Text("page.colors.black").foregroundStyle(.black).background(.white)
-                    Text("page.colors.red").foregroundStyle(.red)
-                    Text("page.colors.green").foregroundStyle(.green)
-                    Text("page.colors.yellow").foregroundStyle(.yellow)
+                    Text("page.colors.black").foregroundStyle(.ansi(.black)).background(.ansi(.white))
+                    Text("page.colors.red").foregroundStyle(.ansi(.red))
+                    Text("page.colors.green").foregroundStyle(.ansi(.green))
+                    Text("page.colors.yellow").foregroundStyle(.ansi(.yellow))
                 }
                 HStack(spacing: 2) {
-                    Text("page.colors.blue").foregroundStyle(.blue)
-                    Text("page.colors.magenta").foregroundStyle(.magenta)
-                    Text("page.colors.cyan").foregroundStyle(.cyan)
-                    Text("page.colors.white").foregroundStyle(.white)
+                    Text("page.colors.blue").foregroundStyle(.ansi(.blue))
+                    Text("page.colors.magenta").foregroundStyle(.ansi(.magenta))
+                    Text("page.colors.cyan").foregroundStyle(.ansi(.cyan))
+                    Text("page.colors.white").foregroundStyle(.ansi(.white))
                 }
             }
 
             DemoSection("page.colors.section.bright") {
                 HStack(spacing: 2) {
-                    Text("page.colors.brightRed").foregroundStyle(.brightRed)
-                    Text("page.colors.brightGreen").foregroundStyle(.brightGreen)
-                    Text("page.colors.brightYellow").foregroundStyle(.brightYellow)
-                    Text("page.colors.brightBlue").foregroundStyle(.brightBlue)
+                    Text("page.colors.brightRed").foregroundStyle(.ansi(.brightRed))
+                    Text("page.colors.brightGreen").foregroundStyle(.ansi(.brightGreen))
+                    Text("page.colors.brightYellow").foregroundStyle(.ansi(.brightYellow))
+                    Text("page.colors.brightBlue").foregroundStyle(.ansi(.brightBlue))
                 }
             }
 

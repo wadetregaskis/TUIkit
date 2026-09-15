@@ -245,7 +245,7 @@ struct ImageDemoSettings: Equatable {
             // colour the accent would never be the closest entry to anything in
             // a photograph and the demo would draw two colours while claiming
             // three.
-            return .palette(ASCIIPalette([.black, .palette.accent, .white]).asToneRamp())
+            return .palette(ASCIIPalette([.ansi(.black), .palette.accent, .ansi(.white)]).asToneRamp())
         }
     }
 
@@ -266,7 +266,7 @@ struct ImageDemoSettings: Equatable {
         case .off: return nil
         case .negative: return .inverted
         case .accent:
-            return ASCIIToneCurve([(.rgb(0, 0, 0), .black), (.rgb(255, 255, 255), .palette.accent)])
+            return ASCIIToneCurve([(.rgb(0, 0, 0), .ansi(.black)), (.rgb(255, 255, 255), .palette.accent)])
         case .duotone:
             return ASCIIToneCurve([
                 (.rgb(0, 0, 0), duotoneShadow), (.rgb(255, 255, 255), duotoneHighlight),
