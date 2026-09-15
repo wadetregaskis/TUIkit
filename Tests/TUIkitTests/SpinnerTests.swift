@@ -78,8 +78,8 @@ struct SpinnerStyleTests {
     func bouncingFrameRendering() {
         let frame = SpinnerStyle.renderBouncingFrame(
             frameIndex: 3,
-            color: .ansi(.red),
-            trackColor: .ansi(.white)
+            color: .red,
+            trackColor: .white
         )
 
         // All positions use ● with varying opacity
@@ -107,7 +107,7 @@ struct SpinnerStyleTests {
         }
 
         let frames = (0..<cycle).map {
-            cells(SpinnerStyle.renderBouncingFrame(frameIndex: $0, color: .ansi(.red), trackColor: .ansi(.white)))
+            cells(SpinnerStyle.renderBouncingFrame(frameIndex: $0, color: .red, trackColor: .white))
         }
         // Every frame has one cell per visible track position.
         #expect(frames.allSatisfy { $0.count == SpinnerStyle.trackWidth })
@@ -127,11 +127,11 @@ struct SpinnerStyleTests {
         // ends went blank for a frame, which reads as the animation resetting
         // early rather than the dots condensing into the end.
         let cycle = SpinnerStyle.bouncingPositions(trackLength: SpinnerStyle.trackWidth).count
-        let track = Color.ansi(.brightBlack)
+        let track = Color.gray
         for index in 0..<cycle {
             let frame = SpinnerStyle.renderBouncingFrame(
-                frameIndex: index, color: .ansi(.red), trackColor: track)
-            let lit = frame.contains(ANSIRenderer.colorize("●", foreground: .ansi(.red)))
+                frameIndex: index, color: .red, trackColor: track)
+            let lit = frame.contains(ANSIRenderer.colorize("●", foreground: .red))
                 || frame != String(
                     repeating: ANSIRenderer.colorize("●", foreground: track),
                     count: SpinnerStyle.trackWidth)
@@ -147,16 +147,16 @@ struct SpinnerStyleTests {
         // in leftward, so they must still be glowing. Under the old
         // direction-derived trail they were dark, because "behind" had just
         // flipped to mean the (off-track) left.
-        let plain = ANSIRenderer.colorize("●", foreground: Color.ansi(.brightBlack))
+        let plain = ANSIRenderer.colorize("●", foreground: Color.gray)
         let frame = SpinnerStyle.renderBouncingFrame(
-            frameIndex: 2, color: .ansi(.red), trackColor: .ansi(.brightBlack))
+            frameIndex: 2, color: .red, trackColor: .gray)
         let cells =
             frame
             .replacing("\u{1B}[0m", with: "\u{1B}[0m\u{1}")
             .split(separator: "\u{1}")
             .map(String.init)
         #expect(cells.count == SpinnerStyle.trackWidth)
-        #expect(cells[0] == ANSIRenderer.colorize("●", foreground: .ansi(.red)), "the highlight")
+        #expect(cells[0] == ANSIRenderer.colorize("●", foreground: .red), "the highlight")
         #expect(cells[1] != plain, "the cell the dot passed through is still warm")
     }
 }
@@ -214,13 +214,14 @@ struct SpinnerRenderingTests {
 
     @Test("Spinner renders with custom color")
     func spinnerCustomColor() {
-        let spinner = Spinner(style: .dots, color: .ansi(.red))
+        let spinner = Spinner(style: .dots, color: .red)
         let context = testContext()
         let buffer = renderToBuffer(spinner, context: context)
 
         #expect(buffer.lines.count == 1)
-        // Red foreground ANSI code
-        #expect(buffer.lines[0].contains("\u{1B}[31m"))
+        // Red's foreground, in the spelling this build's colour depth gives it
+        let red = "\u{1B}[" + Color.red.foregroundCodes().joined(separator: ";") + "m"
+        #expect(buffer.lines[0].contains(red), "\(buffer.lines[0].debugDescription)")
     }
 
     @Test("Dots spinner first frame is braille character")
