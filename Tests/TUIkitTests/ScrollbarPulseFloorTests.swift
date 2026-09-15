@@ -60,11 +60,11 @@ struct ScrollbarPulseFloorTests {
             let foregroundQuaternary = Color.rgb(70, 70, 70)
             let accent = Color.rgb(90, 90, 90)
             let foreground: Color
-            let success = Color.ansi(.green)
-            let warning = Color.ansi(.yellow)
-            let error = Color.ansi(.red)
-            let info = Color.ansi(.blue)
-            let border = Color.ansi(.brightBlack)
+            let success = Color.green
+            let warning = Color.yellow
+            let error = Color.red
+            let info = Color.blue
+            let border = Color.gray
         }
         func cold(_ palette: InkPalette) -> Color {
             ChromeTrack.resolvedTrack(
