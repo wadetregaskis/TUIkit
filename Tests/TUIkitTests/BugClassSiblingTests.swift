@@ -255,7 +255,7 @@ struct BugClassSiblingTests {
         // apple straddles column 5): the shortfall must be padded or the right
         // border shifts a column left.
         let line = BorderRenderer.standardContentLine(
-            content: "🍎🍎🍎🍎🍎", innerWidth: 5, style: .rounded, color: .ansi(.white))
+            content: "🍎🍎🍎🍎🍎", innerWidth: 5, style: .rounded, color: .white)
         #expect(
             line.strippedLength == 7,  // │ + 5 interior cells + │
             "the bordered line is exactly innerWidth+2 cells: '\(line.stripped)' (\(line.strippedLength))")
