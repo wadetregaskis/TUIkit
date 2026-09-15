@@ -28,9 +28,9 @@ struct OpacityTests {
     @Test("Full opacity changes nothing at all")
     func opaqueIsTheIdentity() {
         let context = makeRenderContext(width: 24, height: 2)
-        let plain = renderToScreen(Text("hello").foregroundStyle(.ansi(.red)), context: context)
+        let plain = renderToScreen(Text("hello").foregroundStyle(.red), context: context)
         let faded = renderToScreen(
-            Text("hello").foregroundStyle(.ansi(.red)).opacity(1), context: context)
+            Text("hello").foregroundStyle(.red).opacity(1), context: context)
         // Byte-for-byte, not just visually: an opaque view must not pay for,
         // or be perturbed by, a rewrite it doesn't need.
         #expect(faded.lines == plain.lines)
@@ -39,9 +39,9 @@ struct OpacityTests {
     @Test("Zero opacity draws nothing, and keeps its space")
     func transparentDrawsNothing() {
         let context = makeRenderContext(width: 24, height: 2)
-        let plain = renderToScreen(Text("hello").foregroundStyle(.ansi(.red)), context: context)
+        let plain = renderToScreen(Text("hello").foregroundStyle(.red), context: context)
         let faded = renderToScreen(
-            Text("hello").foregroundStyle(.ansi(.red)).opacity(0), context: context)
+            Text("hello").foregroundStyle(.red).opacity(0), context: context)
 
         // Not "drawn in the background colour" — not drawn. That distinction is
         // invisible over the plain page and is the whole point over anything
@@ -49,7 +49,7 @@ struct OpacityTests {
         // painted in the background colour hides it just as well as text
         // painted in any other.
         #expect(faded.lines[0].stripped.trimmingCharacters(in: .whitespaces).isEmpty)
-        #expect(!faded.lines[0].contains(codes(.ansi(.red))))
+        #expect(!faded.lines[0].contains(codes(.red)))
         // Opacity does not remove a view; it makes it invisible. The space is
         // still claimed, so nothing around it moves.
         #expect(faded.lines.count == plain.lines.count)
@@ -61,8 +61,8 @@ struct OpacityTests {
         let context = makeRenderContext(width: 24, height: 2)
         let composed = renderToScreen(
             ZStack {
-                Text("world").foregroundStyle(.ansi(.blue))
-                Text("hello").foregroundStyle(.ansi(.red)).opacity(0)
+                Text("world").foregroundStyle(.blue)
+                Text("hello").foregroundStyle(.red).opacity(0)
             },
             context: context)
 
@@ -70,7 +70,7 @@ struct OpacityTests {
         // this: it painted "hello" in a near-background colour ON TOP of the
         // blue text, which is neither invisible nor revealing.
         #expect(composed.lines[0].stripped.hasPrefix("world"))
-        #expect(composed.lines[0].contains(codes(.ansi(.blue))))
+        #expect(composed.lines[0].contains(codes(.blue)))
     }
 
     @Test("A half-faded colour is between the colour and the background")
@@ -78,13 +78,13 @@ struct OpacityTests {
         let context = makeRenderContext(width: 24, height: 2)
         let background = context.environment.palette.background
         let faded = renderToScreen(
-            Text("hello").foregroundStyle(.ansi(.red)).opacity(0.5), context: context)
+            Text("hello").foregroundStyle(.red).opacity(0.5), context: context)
 
         // Neither endpoint: this is the whole difference between a blend and
         // a switch.
-        #expect(!faded.lines[0].contains(codes(.ansi(.red))))
+        #expect(!faded.lines[0].contains(codes(.red)))
         #expect(!faded.lines[0].contains(codes(background)))
-        #expect(faded.lines[0].contains(codes(Color.ansi(.red).opacity(0.5, over: background))))
+        #expect(faded.lines[0].contains(codes(Color.red.opacity(0.5, over: background))))
     }
 
     @Test("Hue survives the fade")
@@ -150,8 +150,8 @@ struct OpacityTests {
         let context = makeRenderContext(width: 24, height: 3)
         let surface = context.environment.palette.background
         let faded = renderToScreen(
-            Text("hi").background(Color.ansi(.blue)).opacity(0.5), context: context)
-        let expected = Color.ansi(.blue).opacity(0.5, over: surface).backgroundCodes()
+            Text("hi").background(Color.blue).opacity(0.5), context: context)
+        let expected = Color.blue.opacity(0.5, over: surface).backgroundCodes()
             .joined(separator: ";")
         #expect(faded.lines[0].contains(expected))
     }
@@ -190,12 +190,12 @@ struct OpacityTests {
     @Test("Out-of-range values clamp")
     func clamping() {
         let context = makeRenderContext(width: 24, height: 2)
-        let below = renderToScreen(Text("hi").foregroundStyle(.ansi(.red)).opacity(-2), context: context)
-        let zero = renderToScreen(Text("hi").foregroundStyle(.ansi(.red)).opacity(0), context: context)
+        let below = renderToScreen(Text("hi").foregroundStyle(.red).opacity(-2), context: context)
+        let zero = renderToScreen(Text("hi").foregroundStyle(.red).opacity(0), context: context)
         #expect(below.lines == zero.lines)
 
-        let above = renderToScreen(Text("hi").foregroundStyle(.ansi(.red)).opacity(5), context: context)
-        let plain = renderToScreen(Text("hi").foregroundStyle(.ansi(.red)), context: context)
+        let above = renderToScreen(Text("hi").foregroundStyle(.red).opacity(5), context: context)
+        let plain = renderToScreen(Text("hi").foregroundStyle(.red), context: context)
         #expect(above.lines == plain.lines)
     }
 
@@ -207,12 +207,12 @@ struct OpacityTests {
         // applied in turn, which would round twice and, more importantly, would
         // apply the glyph threshold twice.
         let nested = renderToScreen(
-            Text("hi").foregroundStyle(.ansi(.red)).opacity(0.8).opacity(0.75), context: context)
+            Text("hi").foregroundStyle(.red).opacity(0.8).opacity(0.75), context: context)
         // `0.8 * 0.75` rather than `0.6`: the two are not the same `Double`, and
         // the blend truncates, so spelling the product out is the difference
         // between comparing pictures and comparing rounding.
         let once = renderToScreen(
-            Text("hi").foregroundStyle(.ansi(.red)).opacity(0.8 * 0.75), context: context)
+            Text("hi").foregroundStyle(.red).opacity(0.8 * 0.75), context: context)
         #expect(nested.lines == once.lines)
     }
 
@@ -227,8 +227,8 @@ struct OpacityTests {
         // threshold to cross, and the glyph would simply fade.)
         let faded = renderToScreen(
             ZStack {
-                Text("no").foregroundStyle(.ansi(.green))
-                Text("hi").foregroundStyle(.ansi(.red)).opacity(0.5).opacity(0.5)
+                Text("no").foregroundStyle(.green)
+                Text("hi").foregroundStyle(.red).opacity(0.5).opacity(0.5)
             },
             context: context)
         #expect(faded.lines[0].stripped.trimmingCharacters(in: .whitespaces) == "no")
@@ -290,7 +290,7 @@ struct OpacityTests {
         audit("border", renderToScreen(Text("x").padding().border(), context: context))
         audit("Gauge", renderToScreen(Gauge(value: 0.5) { Text("g") }, context: context))
         audit("TextField", renderToScreen(TextField("p", text: .constant("v")), context: context))
-        audit("background", renderToScreen(Text("b").background(Color.ansi(.blue)), context: context))
+        audit("background", renderToScreen(Text("b").background(Color.blue), context: context))
         audit("ZStack", renderToScreen(ZStack { Text("under"); Text("over") }, context: context))
 
         #expect(bare.isEmpty, "views drew ink in no colour: \(Set(bare).sorted())")
@@ -352,11 +352,11 @@ struct OpacityTests {
             var background: Color { .palette.accent }
             var foreground: Color { .palette.info }
             let accent = Color.rgb(0, 0, 0)
-            let success = Color.ansi(.green)
-            let warning = Color.ansi(.yellow)
-            let error = Color.ansi(.red)
+            let success = Color.green
+            let warning = Color.yellow
+            let error = Color.red
             let info = Color.rgb(255, 255, 255)
-            let border = Color.ansi(.brightBlack)
+            let border = Color.gray
         }
 
         let palette = SemanticPalette()
