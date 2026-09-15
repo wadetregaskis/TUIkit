@@ -93,7 +93,7 @@ struct ScrollIndicatorClaimTests {
     @Test("A focused list's indicator breathes, and owes nothing")
     func focusedListIndicator() throws {
         let palettes: [any Palette] = [
-            FadedAll(), TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5)),
+            FadedAll(), TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5)),
         ]
         for palette in palettes {
             let drawn = render(
@@ -138,7 +138,7 @@ struct ScrollIndicatorClaimTests {
     func focusedLinesSpendOverTheSurface(visibility: ScrollIndicatorVisibility) {
         withColorDepth(.truecolor) {
             let surface = Color.rgb(90, 20, 20)
-            let palette = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
+            let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
             let page = palette.background.resolve(with: palette)
             for host in hosts {
                 let context = makeRenderContext(width: Self.width, height: 10) { environment, _ in
