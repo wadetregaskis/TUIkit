@@ -26,7 +26,7 @@ struct KnightRiderBounceTests {
     /// Which cells are lit `step` steps into the bounce, a hundredth into the step.
     private func lit(atStep step: Int) -> String {
         IndeterminateRenderer.render(
-            width: 5, style: style, fillColor: .ansi(.green), backgroundColor: .ansi(.black), accentColor: .ansi(.white),
+            width: 5, style: style, fillColor: .green, backgroundColor: .black, accentColor: .white,
             elapsed: Double(step) * 0.5 + 0.01, palette: SystemPalette(.green)
         ).text.stripped
     }
@@ -63,7 +63,7 @@ struct KnightRiderBounceTests {
             IndeterminateConfiguration(motion: .knightRider, fill: "●", background: "·", period: 4, extent: 0.1))
         let walk = (0..<8).map { step in
             IndeterminateRenderer.render(
-                width: 5, style: pair, fillColor: .ansi(.green), backgroundColor: .ansi(.black), accentColor: .ansi(.white),
+                width: 5, style: pair, fillColor: .green, backgroundColor: .black, accentColor: .white,
                 elapsed: Double(step) * 0.5 + 0.01, palette: SystemPalette(.green)
             ).text.stripped
         }
@@ -83,12 +83,12 @@ struct KnightRiderBounceTests {
             IndeterminateConfiguration(motion: .knightRider, period: period, extent: 1.0 / 8.0))
         func draw(_ position: IndeterminateRenderer.Position) -> String {
             IndeterminateRenderer.render(
-                width: 80, style: style, fillColor: .ansi(.green), backgroundColor: .ansi(.black), accentColor: .ansi(.white),
+                width: 80, style: style, fillColor: .green, backgroundColor: .black, accentColor: .white,
                 position: position, palette: SystemPalette(.green)
             ).text
         }
         let cycle = IndeterminateRenderer.cycle(
-            width: 80, style: style, fillColor: .ansi(.green), backgroundColor: .ansi(.black), accentColor: .ansi(.white),
+            width: 80, style: style, fillColor: .green, backgroundColor: .black, accentColor: .white,
             palette: SystemPalette(.green), speed: .standard)
         #expect(cycle.frames.count == frames)
         let farWall = draw(.step(79))
