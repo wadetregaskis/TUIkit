@@ -221,23 +221,46 @@ swift.org's 6.2 builds are supported.
 
 ---
 
-## 4. `GenericOpaqueResultConversion` — a destructured closure parameter in a generic type
+## 4. `GenericOpaqueResultConversion` — converting a function with an opaque result, in a generic context
 
 ```
-cd GenericOpaqueResultConversion && ./variants.sh /path/to/swift-6.2.4-RELEASE.xctoolchain
+tcs=~/Library/Developer/Toolchains
+cd GenericOpaqueResultConversion && ./variants.sh "$tcs/swift-6.2.4-RELEASE.xctoolchain" \
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain \
+    "$tcs/swift-6.3.3-RELEASE.xctoolchain" \
+    "$tcs/swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-09-10-a.xctoolchain"
 ```
 
 ```
-generic type, destructuring closure     ASSERTS
-one closure parameter, not destructured ok
-type not generic                        ok
-helper's result not opaque              ok
-enclosing method's result not opaque    ASSERTS
-generic free function, not a type       ok
+                                                6.2.4 +a      Xcode 6.2.4   6.3.3         6.4.2-dev +a
+Crash.swift: zero as () -> Any                  ABORTS        ok            ok            ok
+zero returns Int, not some Any                  ok            ok            ok            ok
+enclosing function not generic                  ok            ok            ok            ok
+underlying type uses Element                    ok            ok            ok            ok
+no conversion: a direct call                    ok            ok            ok            ok
+conversion by annotation                        ABORTS        ok            ok            ok
+wrapped in a closure instead                    ok            ok            ok            ok
+methods of a generic struct                     ABORTS        ok            ok            ok
+a destructuring closure instead                 ABORTS        ok            ok            ok
+one closure parameter, not destructured         ok            ok            ok            ok
+destructuring, zero generic at top level        ABORTS        ok            ok            ok
+destructuring, zero outside generic context     ok            ok            ok            ok
+the old repro: generic type, destructuring      ABORTS        ok            ok            ok
 ```
 
-`Crash.swift` is one generic struct with two methods, and the compiler stops
-while it lowers the closure:
+`+a` marks a compiler built with assertions. Each variant is compiled with
+`-emit-silgen -Xfrontend -sil-verify-all`, so a column would say `BAD SIL` if the
+verifier rejected what SILGen emitted. None does.
+
+`Crash.swift` is one generic function, and the compiler stops while it builds
+the reabstraction thunk for the conversion:
+
+```swift
+func convert<Element>(_: Element) {
+    func zero() -> some Any { 0 }
+    _ = zero as () -> Any
+}
+```
 
 ```
 Assertion failed: (!type->hasTypeParameter() && "no generic environment
@@ -245,29 +268,71 @@ provided for type with type parameters"), function mapTypeIntoContext,
 file GenericEnvironment.cpp, line 337.
 ```
 
-Three ingredients, all necessary:
+Three things are needed:
 
-1. **A closure that destructures its tuple parameter**: `{ _, string in … }`
-   over `(Int, String)`. The same closure taking `pair` and reading `pair.1` is
-   fine.
-2. **Inside a method of a generic type.** `Root` is never used. The same code in
-   a non-generic type, or in a generic free function, is fine.
-3. **Calling a method whose result type is opaque** (`some Equatable`). A
-   concrete result is fine.
+1. **A function conversion that needs a reabstraction thunk:** `zero as () ->
+   Any`, or `let _: () -> Any = zero`. A direct call, or `{ zero() } as () ->
+   Any`, which wraps the call in a closure instead, is fine.
+2. **A generic context:** a generic function, or a method of a generic type.
+   The same code in a function that is not generic is fine.
+3. **An opaque result type that belongs to that context**, declared in it or on
+   a function that is itself generic, **whose underlying type does not use the
+   generic parameters.** `zero` returning `Int`, or `some Any` over `[Element]`,
+   is fine, and so is a `zero` declared outside the generic context.
 
-Whether the enclosing method's own result is opaque makes no difference, and
-nothing about views, result builders or `ForEach` is involved.
+The thunk's formal type then depends on the generic signature, while its lowered
+type does not.
 
-**Assertions-enabled 6.2.4 only.** Xcode's 6.2.4, swift.org's 6.3.3 and the
-6.4.x snapshot of 2026-09-10 (built `+assertions`) print `ok` for all six
-variants.
+A closure that destructures its tuple parameter, `{ _, _ in zero() }`, is one
+way to get the conversion. The type checker wraps the two-parameter closure in
+an implicit conversion to a function of one tuple parameter. A closure with one
+parameter needs no conversion.
+
+**Corrected on 2026-09-14.** This section used to say that a destructuring
+closure and a generic *type* are needed, and that a generic free function is
+fine. Neither a closure nor a type is needed, and a generic free function aborts
+too. The old free-function variant had also moved the opaque-result helper out
+of the generic context, which took away the third thing: the table's "zero
+outside generic context" row.
+
+### Affected versions
+
+Observed on macOS (arm64) on 2026-09-14, with `Crash.swift` and the variants
+above:
+
+| Toolchain | Build config | `Crash.swift` |
+|---|---|---|
+| swift.org 6.2.4 (`swift-6.2.4-RELEASE`) | +assertions | aborts |
+| Xcode 26.3's 6.2.4 (`swiftlang-6.2.4.1.4`) | no assertions | compiles |
+| swift.org 6.3.3 (`swift-6.3.3-RELEASE`) | no assertions | compiles |
+| swift.org 6.4 snapshot of 2026-09-10 (`6.4.2-dev`) | +assertions | compiles |
+
+Only a build with assertions can abort here, so the clean compiles on Xcode's
+6.2.4 and on 6.3.3 do not show the bug is absent from them. 6.3.3's source has
+the fix (below), and the 6.4 snapshot, which also has it, is the only
+assertions build that compiles `Crash.swift`. A separate runtime check found no
+sign of wrong code on the three compilers that do not abort: a program using
+both shapes printed the expected output at `-Onone` and `-O`.
+
+**Upstream.** This is <https://github.com/swiftlang/swift/issues/86118>, closed
+as completed. It was reported against a 6.3 development snapshot, with a generic
+SwiftUI view whose `ForEach` over `enumerated()` destructured its closure's
+parameter. <https://github.com/swiftlang/swift/pull/86131> fixed it on `main`,
+and <https://github.com/swiftlang/swift/pull/86159> took the fix to
+`release/6.3`, both in December 2025. They change one condition in
+`buildSILFunctionThunkType`. `swift-6.3.3-RELEASE` has the fix. `release/6.2`
+and `swift-6.2.4-RELEASE` do not, and no cherry-pick to 6.2 was found. #86131's
+own regression test aborts swift.org's 6.2.4.
 
 **Where TUIkit hit it:** the crumb trail in `NavigationStack`'s bar,
 `ForEach(Array(crumbs.enumerated()), id: \.offset) { _, crumb in crumbView(…) }`,
 in a method of `_NavigationStackCore<Root>`, where `crumbView` returns
-`some View`. It was the next thing swift.org's 6.2.4 stopped on once section 3
-was worked around. **Workaround:** `{ pair in crumbView(pair.element, …) }`. See
-`Sources/TUIkit/Views/NavigationStack.swift`.
+`some View`. The destructuring closure is the conversion, `Root` makes the
+context generic, and `crumbView`'s result is the opaque type. It was the next
+thing swift.org's 6.2.4 stopped on once section 3 was worked around.
+**Workaround:** `{ pair in crumbView(pair.element, …) }`, one closure parameter
+and so no conversion. See `Sources/TUIkit/Views/NavigationStack.swift`. The
+workaround is needed for as long as swift.org's 6.2 builds are supported.
 
 ---
 
