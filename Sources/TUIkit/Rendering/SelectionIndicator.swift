@@ -273,8 +273,9 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
 
     /// Whether a breath between `dim` and `bright` moves: this cycle animates, and the
     /// ends differ. `isAnimating` counts frames, which equal ends colour alike; they are
-    /// what `Color.breathEnds(dimmedTo:over:)` and `Palette.accentFillPulse(over:)` give
-    /// where a side has no RGB, and a run of one picture holds the clock open for nothing.
+    /// what `Color.breathEnds(dimmedTo:over:)`, `Color.breathEnds(dim:bright:)` and
+    /// `Palette.accentFillPulse(over:)` give where a side has no RGB, and a run of one
+    /// picture holds the clock open for nothing.
     func isAnimating(dim: Color, bright: Color) -> Bool {
         isAnimating && dim != bright
     }

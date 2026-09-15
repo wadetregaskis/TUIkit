@@ -331,4 +331,27 @@ struct BlendEndsTests {
             }
         }
     }
+
+    /// A breath between two colours chosen apart is blended by its cycle, and a blend with
+    /// an end that has no RGB snaps, so it would blink between the two ends.
+    @Test("A breath between two colours holds its bright end where either has no RGB")
+    func breathBetweenTwoColoursHoldsWithoutRGB() {
+        let label = Color.rgb(220, 220, 220)
+        TerminalColors.withCurrent(.unknown) {
+            for (dim, bright) in [(label, Self.ink), (Self.paper, label), (Color.default, Self.ink)] {
+                let ends = Color.breathEnds(dim: dim, bright: bright)
+                #expect(ends.dim == bright && ends.bright == bright, "\(dim) to \(bright): \(ends)")
+            }
+            // Two RGB ends move, whatever the terminal has said.
+            let rgb = Color.breathEnds(dim: label, bright: .rgb(0, 122, 255))
+            #expect(rgb.dim == label && rgb.bright == .rgb(0, 122, 255), "\(rgb)")
+            // A semantic end is left alone: its blend is already `from` at every phase.
+            let semantic = Color.breathEnds(dim: Self.ink, bright: .palette.accent)
+            #expect(semantic.dim == Self.ink && semantic.bright == .palette.accent, "\(semantic)")
+        }
+        TerminalColors.withCurrent(Self.reported) {
+            let ends = Color.breathEnds(dim: label, bright: Self.ink)
+            #expect(ends.dim == label && ends.bright == Self.ink, "\(ends)")
+        }
+    }
 }

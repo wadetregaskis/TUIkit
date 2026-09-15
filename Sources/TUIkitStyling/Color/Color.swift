@@ -736,6 +736,29 @@ extension Color {
         return (dim: opacity(factor, over: ground), bright: bright)
     }
 
+    /// The two ends of a breath between two colours chosen apart, as a cycle can draw
+    /// them: `dim` and `bright`, or `bright` twice where either has no RGB.
+    ///
+    /// For a breath that is not one colour dimmed toward its ground, which
+    /// ``breathEnds(dimmedTo:over:)`` builds: a switch's track to the accent, a tab's
+    /// resting label to the accent, a swatch to the ink that reads on it. A cycle blends
+    /// its two ends, and a blend with a side that has no RGB snaps to the heavier end
+    /// (see ``lerp(_:_:phase:)``), so such a breath was a hard blink between its ends.
+    /// Held at the bright end instead, it is still, as `breathEnds(dimmedTo:over:)`
+    /// holds its own.
+    ///
+    /// Asked of the two ends, not of the palette: two RGB inks breathing over a page
+    /// with no RGB are a measured breath, and move.
+    ///
+    /// A semantic side is left as it is. A blend with one returns `from` at every
+    /// phase, so it does not blink.
+    package static func breathEnds(dim: Color, bright: Color) -> (dim: Color, bright: Color) {
+        if case .semantic = dim.value { return (dim, bright) }
+        if case .semantic = bright.value { return (dim, bright) }
+        guard dim.rgbComponents != nil, bright.rgbComponents != nil else { return (bright, bright) }
+        return (dim, bright)
+    }
+
     /// This colour mixed with another — SwiftUI's spelling of ``lerp(_:_:phase:)``.
     ///
     /// ```swift

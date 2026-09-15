@@ -80,9 +80,17 @@ struct ActiveChipCycle {
             "a tab chip's breath ends disagree about alpha: \(labelDim.alpha) vs \(labelBright.alpha)")
     }
 
-    /// Whether the active chip is breathing — the strip holds the focus, and
-    /// the style animates. A hover must not fight that.
-    var isBreathing: Bool { cycle.isFocused && cycle.isAnimating }
+    /// The two ends the focused label breathes between: ``labelDim`` and
+    /// ``labelBright``, or the bright end twice where either has no RGB
+    /// (`Color.breathEnds(dim:bright:)`), where the breath would blink between them.
+    /// Kept apart from `labelDim`, which is also where an unfocused label rests.
+    private var breath: (dim: Color, bright: Color) {
+        Color.breathEnds(dim: labelDim, bright: labelBright)
+    }
+
+    /// Whether the active chip is breathing — the strip holds the focus, the
+    /// style animates, and the two ends differ. A hover must not fight that.
+    var isBreathing: Bool { cycle.isFocused && cycle.isAnimating(dim: breath.dim, bright: breath.bright) }
 
     /// The active label's colour right now — breathing while the strip holds
     /// the focus, resting otherwise.
@@ -93,14 +101,17 @@ struct ActiveChipCycle {
     /// label's contrast up and down with it.
     @MainActor
     var labelNow: Color {
-        cycle.isFocused ? cycle.colorNow(dim: labelDim, bright: labelBright) : labelDim
+        guard cycle.isFocused else { return labelDim }
+        let ends = breath
+        return cycle.colorNow(dim: ends.dim, bright: ends.bright)
     }
 
     /// The chip's run, drawn by `draw` at each label colour of the cycle — nil
     /// when the chip is not breathing.
     @MainActor
     func run(offsetX: Int, offsetY: Int, draw: (Color) -> String) -> AnimatedCellRun? {
-        cycle.run(
-            dim: labelDim, bright: labelBright, offsetX: offsetX, offsetY: offsetY, draw: draw)
+        let ends = breath
+        return cycle.run(
+            dim: ends.dim, bright: ends.bright, offsetX: offsetX, offsetY: offsetY, draw: draw)
     }
 }

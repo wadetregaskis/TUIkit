@@ -191,7 +191,9 @@ struct _SwatchGridCore: View, Renderable {
             // conditions above have just established — bound here so the run's
             // ends are the same two colours the draw above used, with no
             // second lookup and no fallback that could silently differ.
-            let ends = cursorMark
+            let ends = cursorMark,
+            // Equal ends (a swatch or an ink with no RGB) are a still mark.
+            cycle.isAnimating(dim: ends.dim, bright: ends.bright)
         {
             let row = handler.cursor / columns
             let col = handler.cursor % columns
@@ -253,8 +255,12 @@ struct _SwatchGridCore: View, Renderable {
     /// `SelectionEmphasisCycle.colors(dim:bright:)` ONCE. `cellText` used to
     /// take a `SelectionEmphasis` and resolve the mark itself, which rebuilt
     /// the pulse ramp for every frame of the run.
+    ///
+    /// The ink twice where either end has no RGB (`Color.breathEnds(dim:bright:)`): the
+    /// cycle's blend would snap, and the mark would blink between the swatch it sits on,
+    /// which hides it, and the ink (§79.1).
     static func markEnds(for color: Color, palette: any Palette) -> (dim: Color, bright: Color) {
-        (dim: color.resolve(with: palette), bright: ContrastingLabel.on(color, palette: palette))
+        Color.breathEnds(dim: color.resolve(with: palette), bright: ContrastingLabel.on(color, palette: palette))
     }
 
     /// One swatch: the colour as a background, with a check on the selected cell.

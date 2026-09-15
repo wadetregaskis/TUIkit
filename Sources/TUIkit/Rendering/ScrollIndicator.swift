@@ -116,9 +116,13 @@ struct ScrollIndicatorLine {
 /// own, and a faded `.tint` alone put 255 at one end and 128 at the other — a run
 /// whose alpha moved with its phase (§29). A navigation crumb's breath is the exact
 /// twin: a resting rung and the accent, both spent (§47.2).
+///
+/// The accent twice where either end has no RGB (`Color.breathEnds(dim:bright:)`): the
+/// cycle's blend would snap, and the line would blink between the two (§79.1).
 func scrollIndicatorBreath(palette: any Palette, over surface: Color) -> (dim: Color, bright: Color) {
-    (dim: palette.foregroundTertiary.spendingAlpha(over: surface),
-     bright: palette.accent.spendingAlpha(over: surface))
+    Color.breathEnds(
+        dim: palette.foregroundTertiary.spendingAlpha(over: surface),
+        bright: palette.accent.spendingAlpha(over: surface))
 }
 
 /// The width an indicator line draws, without drawing it — for `Table`'s measure,
@@ -205,11 +209,15 @@ func renderScrollIndicator(
     var owed = [drawn.claims.map { $0.shifted(byX: -parts.padding, y: 0) }]
     // One allocation for bookkeeping only the debug assertion below reads.
     owed.reserveCapacity(colors.count + 1)
-    let run = cycle.run(colors: colors, offsetX: parts.padding, offsetY: 0) {
-        let body = parts.body(ink: $0)
-        owed.append(body.claims)
-        return body.text
-    }
+    // The ends asked, because `run(colors:)` sees only the frames: equal ends are a
+    // still line.
+    let run =
+        cycle.isAnimating(dim: ends.dim, bright: ends.bright)
+        ? cycle.run(colors: colors, offsetX: parts.padding, offsetY: 0) {
+            let body = parts.body(ink: $0)
+            owed.append(body.claims)
+            return body.text
+        } : nil
     assertFramesOweOneClaim(owed, "a scroll indicator's breath")
     return ScrollIndicatorLine(drawn: drawn, animation: run)
 }

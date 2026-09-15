@@ -92,11 +92,13 @@ private struct _NavigationCrumbLabel: View, Renderable, Layoutable {
         // `BorderRenderer.breathEnds(from:on:)`: that breathes one colour against a
         // dimmed copy of itself, and would lose the accent. A still focus
         // (`.selectionIndicatorStyle(.none)`) is drawn spent too, as the plain
-        // button's ● is (§30.3), so focus shows one bright colour either way.
+        // button's ● is (§30.3), so focus shows one bright colour either way. Held at
+        // the accent where either end has no RGB, where the breath would blink (§79.1).
         let surface = context.environment.enclosingSurface
         return BreathingLabel.draw(
             label, style: style,
-            ends: (resting.spendingAlpha(over: surface), palette.accent.spendingAlpha(over: surface)),
+            ends: Color.breathEnds(
+                dim: resting.spendingAlpha(over: surface), bright: palette.accent.spendingAlpha(over: surface)),
             cycle: context.environment.selectionEmphasis.cycle(true),
             indicating: true, isMeasuring: context.isMeasuring)
     }

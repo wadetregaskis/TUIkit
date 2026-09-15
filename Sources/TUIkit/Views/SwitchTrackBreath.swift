@@ -50,6 +50,9 @@ enum SwitchTrackBreath {
             : Color.lerp(
                 offTrack(in: palette).spendingAlpha(over: ground),
                 palette.foreground.spendingAlpha(over: ground), phase: 0.45)
-        return (track.opacity(ViewConstants.focusPulseMin, over: ground), bright)
+        // Held at the bright end where either end has no RGB: the dim end is a composite
+        // over the page, which then snaps to the page or the track (§75), and the breath
+        // would blink between the two.
+        return Color.breathEnds(dim: track.opacity(ViewConstants.focusPulseMin, over: ground), bright: bright)
     }
 }

@@ -327,10 +327,12 @@ struct _Color256GridCore: View, Renderable {
         // One run, over the cursor swatch alone: it is the only cell whose
         // appearance moves, and `cells` already says exactly where it landed.
         if !context.isMeasuring, cycle.isAnimating,
-            let placement = cells.first(where: { $0.index == handler.cursor })
+            let placement = cells.first(where: { $0.index == handler.cursor }),
+            case let cursorEnds = Self.cursorMarkEnds(
+                forIndex: placement.index, palette: context.environment.palette),
+            // Equal ends (a swatch or an ink with no RGB) are a still mark.
+            cycle.isAnimating(dim: cursorEnds.dim, bright: cursorEnds.bright)
         {
-            let cursorEnds = Self.cursorMarkEnds(
-                forIndex: placement.index, palette: context.environment.palette)
             buffer.animatedCells = [
                 AnimatedCellRun(
                     offsetX: placement.x, offsetY: placement.y, width: cellWidth,
@@ -485,7 +487,8 @@ struct _Color256GridCore: View, Renderable {
         // would trap rather than draw something wrong. Both ends are the one
         // clamped swatch.
         let swatch = Color.palette(UInt8(clamping: index))
-        return (dim: swatch, bright: ContrastingLabel.on(swatch, palette: palette))
+        // The ink twice where either end has no RGB, as `_SwatchGridCore.markEnds` is.
+        return Color.breathEnds(dim: swatch, bright: ContrastingLabel.on(swatch, palette: palette))
     }
 
     /// The rendered content of one swatch: the selection check, the palette index

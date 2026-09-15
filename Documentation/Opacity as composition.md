@@ -4962,8 +4962,8 @@ A run built from an `AnimatedColor` (a focus section's ●, a resize grip,
 already drop a cycle whose frames are all one picture.
 
 **What does not go through `breathEnds`.** These pairs are two different colours by
-design, so the rule does not reach them. Where a side has no RGB, their `lerp` snaps at
-½ and they still alternate between their two ends (from the code; not tested):
+design, so the rule above does not reach them. Where a side had no RGB, their `lerp`
+snapped at ½ and they alternated between their two ends. §79.1 holds them the same way:
 - `ButtonCapCycle` (a standard button's and a picker's caps): face to accent. §78's own
   guard already holds the accent there.
 - `SwitchTrackBreath`: the track dimmed over the page, to the accent or the lifted off
@@ -4986,6 +4986,52 @@ leaves no run and reads no clock, draws its `.selectionIndicatorStyle(.none)` pi
 every point of the cycle, and gives the run loop nothing to wake for. Reported, the same
 controls breathe. `BlendEndsTests` (TUIkitStylingTests) pins both pairs, and that RGB
 pairs are the composite and the spent colour, as before.
+
+### 79.1 A breath between two colours chosen apart (2026-09-15)
+
+Seven breaths pick their two ends apart rather than dimming one colour:
+- a switch's track: the track dimmed over the page, to the accent or to the off track
+  lifted toward the foreground;
+- a tab's active label: its resting ink, to the floored accent;
+- a navigation crumb: the resting rung, to the accent;
+- a scroll view's bar: the separated accent, to its lift;
+- a scroll indicator line: the tertiary tier, to the accent;
+- the cursor marks of a swatch grid and of the 256-colour grid: the swatch, to the ink
+  that reads on it.
+
+A cycle blends its two ends, so where one had no RGB each frame snapped to one end or
+the other (§75), and the breath was a hard blink between them. A switch's track blinked
+between the page and the accent, a swatch's check between invisible and the ink, and a
+tab label or a crumb between its resting ink and the accent. Each went to the run loop
+as a run, which kept the cursor clock ticking.
+
+**The rule.** `Color.breathEnds(dim:bright:)` returns the bright end twice where either
+end has no RGB, and each of those producers takes its ends from it. A semantic side is
+left alone: its blend already returns `from` at every phase. The scroll indicator line
+and both grids' cursor marks build their runs from colours they already hold, so they now
+ask `isAnimating(dim:bright:)` before leaving one. A switch, a tab and a crumb go through
+run builders that already did (§79).
+
+It is asked of the two ends, not of the page. An RGB label breathing to an RGB accent over
+an unreported page is a measured breath, and moves: the page is not blended into either
+end. The off track, which dims over the page, holds still there; beside an accent with no
+RGB its ends are both RGB, and it moves.
+
+**The scroll view's bar already held.** Under an accent with no RGB it left no run and
+drew the same bar at every point of its cycle before this change. It is not changed; the
+test pins it.
+
+**What a built-in view sees: nothing.** Every built-in palette states RGB roles and every
+built-in swatch is RGB, so every breath is what it was, byte for byte. The 256-colour grid
+cannot reach the rule yet, because its sixteen slots still measure as xterm's table. Once
+a slot the terminal has not reported has no RGB, which is the next step of the
+terminal-colour plan, a cursor on slots 0 to 15 holds still.
+
+`SteadyBreathCopiesOnUnmeasurableColourTests` (TUIkitTests) pins it for all but the
+256-colour grid, over an accent of the terminal's foreground and over the terminal's page,
+both unreported. Where an end has no RGB, each leaves no run, reads no clock and draws its
+still picture at every point of the cycle. Where both ends are RGB, it still breathes.
+Reported, every one of them breathes. `BlendEndsTests` pins the helper.
 
 ## 80. The grounds are the terminal's own page (2026-09-15)
 
