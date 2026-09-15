@@ -233,7 +233,7 @@ struct ImageOpacityTests {
         ]
         let resolved = buffer.resolvingOpacity(
             over: FrameBuffer(lines: ["......", "......"], width: 6),
-            surface: .ansi(.black), palette: Self.palette())
+            surface: .black, palette: Self.palette())
         #expect(resolved.lines == rows, "the rows came through byte for byte")
         for line in resolved.lines {
             #expect(line.contains("38;2;1;2;3"), "id 0x010203, unblended")
@@ -245,13 +245,13 @@ struct ImageOpacityTests {
     @Test("Ordinary rows in the same fade still blend")
     func fadeStillAppliesToText() {
         var buffer = FrameBuffer(
-            lines: [ANSIRenderer.colorize("abcdef", foreground: .ansi(.white))], width: 6)
+            lines: [ANSIRenderer.colorize("abcdef", foreground: .white)], width: 6)
         buffer.opacityRegions = [
             OpacityRegion(offsetX: 0, offsetY: 0, width: 6, height: 1, opacity: 0.4)
         ]
         let resolved = buffer.resolvingOpacity(
             over: FrameBuffer(lines: ["......"], width: 6),
-            surface: .ansi(.black), palette: Self.palette())
+            surface: .black, palette: Self.palette())
         #expect(resolved.lines != buffer.lines, "text fades")
     }
 }
