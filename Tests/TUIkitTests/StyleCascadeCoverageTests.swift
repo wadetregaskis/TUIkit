@@ -93,17 +93,17 @@ struct StyleCascadeCoverageTests {
     func isEmpty() {
         #expect(StyleAttributes().isEmpty)
         #expect(!StyleAttributes(bold: true).isEmpty)
-        #expect(!StyleAttributes(foreground: .ansi(.red)).isEmpty)
-        #expect(!StyleAttributes(background: .ansi(.red)).isEmpty)
+        #expect(!StyleAttributes(foreground: .red).isEmpty)
+        #expect(!StyleAttributes(background: .red).isEmpty)
         #expect(!StyleAttributes(textCase: .uppercase).isEmpty)
     }
 
     @Test("merged carries foreground/background per property")
     func mergedColours() {
-        let result = StyleAttributes(background: .ansi(.red))
-            .merged(over: StyleAttributes(foreground: .ansi(.blue), background: .ansi(.green)))
-        #expect(result.background == .ansi(.red))   // self wins
-        #expect(result.foreground == .ansi(.blue))  // base fills
+        let result = StyleAttributes(background: .red)
+            .merged(over: StyleAttributes(foreground: .blue, background: .green))
+        #expect(result.background == .red)   // self wins
+        #expect(result.foreground == .blue)  // base fills
     }
 
     // MARK: - Broad modifiers
