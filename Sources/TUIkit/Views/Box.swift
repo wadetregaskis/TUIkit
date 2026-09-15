@@ -60,8 +60,8 @@
 /// }
 ///
 /// // Custom border style and color
-/// Box(.doubleLine, color: .brightCyan) {
-///     Text("Double-line border in cyan")
+/// Box(.doubleLine, color: .ansi(.brightCyan)) {
+///     Text("Double-line border in the terminal's bright cyan")
 /// }
 ///
 /// // Multiple children

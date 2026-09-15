@@ -39,11 +39,11 @@ extension ASCIIConverter {
     ///   finer lift would average straight back out before a character was
     ///   chosen. Here the pixels survive, so the radius is the conventional
     ///   one for an unsharp mask.
-    /// - **A named colour is xterm's default RGB, not the profile's.** The
-    ///   glyph path emits `.ansi16` (and any `.standard`/`.bright` palette
-    ///   entry) as SGR 30–37 / 90–97, which the terminal paints from the
-    ///   user's profile; a pixel cannot carry a name, and there is no query
-    ///   for what a profile paints, so here `.red` is (205, 0, 0) whatever
+    /// - **A terminal slot is xterm's default RGB, not the profile's.** The
+    ///   glyph path emits `.ansi16` (and any `.ansi(_:)` palette entry) as
+    ///   SGR 30–37 / 90–97, which the terminal paints from the user's
+    ///   profile; a pixel cannot carry a name, and there is no query for what
+    ///   a profile paints, so here `.ansi(.red)` is (205, 0, 0) whatever
     ///   the terminal thinks red is. One setting, two pictures on a
     ///   Solarized profile — and not something this path can fix.
     ///

@@ -60,18 +60,33 @@ let custom = Appearance(
 
 TUIkit's ``Color`` type supports multiple color modes:
 
-### Standard ANSI Colors (8)
+### Terminal Colors (ANSI)
+
+``Color/ansi(_:)`` names one of the terminal's sixteen colour slots:
 
 ```swift
-.black, .red, .green, .yellow, .blue, .magenta, .cyan, .white
+Color.ansi(.red)          // SGR 31, or 41 as a background
+Color.ansi(.brightBlack)  // SGR 90, or 100
 ```
 
-### Bright ANSI Colors (8)
+The slots are the cases of ``ANSIColor``, in slot order:
 
 ```swift
+.black, .red, .green, .yellow, .blue, .magenta, .cyan, .white,
 .brightBlack, .brightRed, .brightGreen, .brightYellow,
 .brightBlue, .brightMagenta, .brightCyan, .brightWhite
 ```
+
+A slot is a name, not a colour. The terminal paints whatever the user's
+profile keeps in that slot, which need not be red at all, so use one where a
+colour should follow the user's terminal scheme. For a colour that looks the
+same everywhere, use RGB or a palette role. A slot measures as xterm's value
+for it, ``ANSIColor/xtermRGB``, which is an estimate: nothing asks the terminal
+what the slot really is.
+
+`Color.palette(1)` is the same slot spelled by its index, and stays `38;5;1`
+where the terminal has 256 colours. Today the statics `Color.red`,
+`Color.brightBlack` and the rest are the same sixteen slots.
 
 ### 256-Color Palette
 

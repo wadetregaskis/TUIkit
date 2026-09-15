@@ -221,9 +221,9 @@ Two things it has to get right:
   agree with where `monoInkThreshold(for:)` will fall, and the curve runs
   immediately before it.
 
-`.inverted` is spelled with explicit RGB rather than `.black` and `.white`,
-because the named ANSI white is **229**, not 255 — it is a terminal colour, and
-terminals reserve the top of the range for bright white. A negative stopping at
+`.inverted` is spelled with explicit RGB rather than the slots `.ansi(.black)`
+and `.ansi(.white)`, because ANSI white measures as **229**, not 255 — it is a
+terminal colour, and terminals reserve the top of the range for bright white. A negative stopping at
 229 would quietly lose the last of its highlights.
 
 A stop may name a theme colour, resolved the same way a palette entry is. An

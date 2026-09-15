@@ -1937,9 +1937,10 @@ and **over-corrects** — which is the safe direction to be wrong in (it pushes
 toward legibility, never away). Two things still follow:
 
 - A colour it would have left alone gets adjusted anyway, so an app asking for
-  `Color.red` on this host may not get quite the red it asked for.
-- Slots 3 and 7 are below the floor on either table, so a bare `.yellow` or
-  `.white` foreground on a light terminal is illegible however it is computed.
+  `Color.ansi(.red)` on this host may not get quite the red it asked for.
+- Slots 3 and 7 are below the floor on either table, so an `.ansi(.yellow)` or
+  `.ansi(.white)` foreground on a light terminal is illegible however it is
+  computed.
   That is a fact about light backgrounds, not about the table.
 
 None of this reaches colours TUIkit chooses itself: those are palette roles,
@@ -2268,7 +2269,7 @@ Bold is the one that exists today; `SGR 2` (faint) is the same shape of hazard.
 
 | what we emit | what the terminal does with it |
 |---|---|
-| `SGR 30–37` / `90–97` (the 16 names) | Looks up slot *n* of the **user's colour scheme**. "Red" is a name, not a colour, and the user may make it green. |
+| `SGR 30–37` / `90–97` (the 16 slots, `Color.ansi(_:)`) | Looks up slot *n* of the **user's colour scheme**. "Red" is a name, not a colour, and the user may make it green. |
 | `SGR 38;5;n` (256-colour) | Slots 0–15 are the same sixteen, so they are remapped identically. 16–231 (the 6×6×6 cube) and 232–255 (the grey ramp) are conventionally fixed — but `OSC 4` can set any index, so "conventionally" is the strongest word available. |
 | `SGR 38;2;r;g;b` (24-bit) | The colour is stated exactly and there is nothing to look up. It can still be *adjusted* — iTerm2's minimum-contrast setting will move a foreground it judges illegible against its background, and a terminal applying a colour profile shifts everything. |
 | `SGR 39` / `49` (default fg/bg) | The user's configured default. This is what ``Color/default`` means, and it is the only spelling that is *defined* as "whatever the user chose". |
@@ -2299,11 +2300,11 @@ in the render path does today.
 ### What follows for the framework's own colours
 
 A colour TUIkit chooses for the user — a focus highlight, a disabled label —
-should not be a fixed ANSI name, because the name's appearance is not ours to
+should not be a fixed ANSI slot, because the slot's appearance is not ours to
 predict. It should be either a **palette role**, which the app's theme defines
 and which resolves to something we did choose, or ``Color/default``, which is
-explicitly the user's. Naming `Color.blue` and hoping is the one option with no
-defensible reading. (This is the reasoning that re-pointed
+explicitly the user's. Naming `Color.ansi(.blue)` and hoping is the one option
+with no defensible reading. (This is the reasoning that re-pointed
 ``Color/primary``/``Color/secondary``/``Color/accentColor`` at palette roles;
 see `Documentation/Parity-decisions-pending.md` §1–2 for the decision.)
 

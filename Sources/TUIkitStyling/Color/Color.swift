@@ -660,7 +660,7 @@ extension Color {
     /// end of a focus breath.
     ///
     /// An opaque colour is returned **untouched** rather than composited at 1, and
-    /// not as an economy: ``opacity(_:over:)`` lerps, and a lerp re-spells `.red`
+    /// not as an economy: ``opacity(_:over:)`` lerps, and a lerp re-spells `.ansi(.red)`
     /// (SGR 31, the terminal's OWN red) as `rgb(205, 0, 0)` (SGR 38;2;…). Same
     /// colour by arithmetic, a different colour on any terminal whose palette is
     /// not the default — and this is the bright end of every focus pulse on every
