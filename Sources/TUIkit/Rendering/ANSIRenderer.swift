@@ -153,6 +153,41 @@ extension ANSIRenderer {
         dim + restating(dim, afterResetsIn: string) + reset
     }
 
+    /// Wraps a string in reverse video (SGR 7) over a stated pair, restated after
+    /// every reset, and closes it with a reset.
+    ///
+    /// The reverse twin of ``applyPersistentDim(_:)``, with one difference that is
+    /// the point of it: the ink and the field are restated along with the 7, as
+    /// `ESC[7;<ink>;<field>m`. A bare 7 exchanges the colours in force, and after a
+    /// reset those are the TERMINAL's defaults, not the palette's. A row's padding
+    /// is plain spaces after its content's last reset, so restating only the 7
+    /// would fill those cells with the terminal's own foreground on a page the
+    /// palette paints, and the bar would come out in two colours. With the pair
+    /// restated, the 7 exchanges exactly `ink` and `field`, and a 39 or 49 is
+    /// emitted only where one of them is the terminal's own colour. What each host
+    /// paints for SGR 7 is recorded under "Reverse video (SGR 7)" in
+    /// `Documentation/Terminal-compatibility.md`.
+    ///
+    /// A child that states its own colours still reverses its own pair: the
+    /// restatement comes before whatever follows the reset.
+    ///
+    /// - Parameters:
+    ///   - string: The text to draw reversed.
+    ///   - ink: The colour the text would be drawn in, which reverse video paints
+    ///     as the cell.
+    ///   - field: The colour the cell would be filled with, which reverse video
+    ///     draws the glyph in.
+    /// - Returns: The string with persistent reverse video applied.
+    static func applyPersistentReverse(_ string: String, ink: Color, field: Color) -> String {
+        var style = TextStyle()
+        style.isInverted = true
+        style.foregroundColor = ink
+        style.backgroundColor = field
+        // Never nil: the 7 alone is a code, whatever the depth makes of the colours.
+        let opening = styleSequence(for: style) ?? "\(csi)\(StyleCode.inverse)m"
+        return opening + restating(opening, afterResetsIn: string) + reset
+    }
+
     /// `ESC[0;<params>m` spelled as `ESC[0m ESC[<params>m`, so that a
     /// re-injection keyed on the literal reset sees every reset.
     ///

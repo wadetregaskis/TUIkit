@@ -10,6 +10,8 @@
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitCore
+@testable import TUIkitStyling
 
 // MARK: - Style Rendering Tests
 
@@ -225,6 +227,79 @@ struct ANSIRendererConvenienceTests {
         let bgCode = ANSIRenderer.backgroundCode(for: .ansi(.red))
         // The reset in the middle should be followed by the bg code
         #expect(result.contains(ANSIRenderer.reset + bgCode))
+    }
+}
+
+// MARK: - Persistent Reverse Tests
+
+/// `applyPersistentReverse(_:ink:field:)`: SGR 7 with the ink and field restated after
+/// every reset. A bare 7 exchanges the TERMINAL's colours, not the palette's, so a cell
+/// after a child's reset, or plain padding, would fill with the terminal's foreground.
+@MainActor
+@Suite("ANSIRenderer persistent reverse")
+struct ANSIRendererPersistentReverseTests {
+
+    private static let ink = Color.rgb(10, 20, 30)
+    private static let field = Color.ansi(.blue)
+
+    /// The state `ESC[7;<ink>;<field>m` puts the terminal in from its defaults.
+    private static var reversed: SGRState {
+        var state = SGRState()
+        state.apply("\u{1B}[7;38;2;10;20;30;44m")
+        return state
+    }
+
+    private func wrapped(_ line: String) -> String {
+        ColorDepth.withCurrent(.truecolor) {
+            ANSIRenderer.applyPersistentReverse(line, ink: Self.ink, field: Self.field)
+        }
+    }
+
+    @Test("It opens with 7, the ink and the field, and closes with a reset")
+    func opensAndCloses() {
+        #expect(wrapped("ab") == "\u{1B}[7;38;2;10;20;30;44mab\u{1B}[0m")
+    }
+
+    @Test("A cell after a child's reset is reversed in the stated pair")
+    func survivesAnInnerReset() {
+        let line = wrapped("\u{1B}[31mab\u{1B}[0mcd")
+        for column in 2...3 {
+            #expect(line.ansiSGRStateAt(visibleColumn: column) == Self.reversed, "\(column): \(line.debugDescription)")
+        }
+        // The child's own colour stays its own, still reversed over the stated field.
+        var child = Self.reversed
+        child.apply("\u{1B}[31m")
+        #expect(line.ansiSGRStateAt(visibleColumn: 0) == child, "\(line.debugDescription)")
+    }
+
+    @Test("A collapsed reset restates the pair before the child's colour")
+    func survivesACollapsedReset() {
+        let line = wrapped("x\u{1B}[0;38;5;9my")
+        var child = Self.reversed
+        child.apply("\u{1B}[38;5;9m")
+        #expect(line.ansiSGRStateAt(visibleColumn: 0) == Self.reversed, "\(line.debugDescription)")
+        #expect(line.ansiSGRStateAt(visibleColumn: 1) == child, "\(line.debugDescription)")
+    }
+
+    /// The trap the ink and field are restated for: padding is plain spaces after the
+    /// content's last reset.
+    @Test("Padding after a child's reset carries the stated ink and field")
+    func paddingCarriesThePair() {
+        let line = wrapped("\u{1B}[0;38;5;9mchild\u{1B}[0m   ")
+        for column in 5...7 {
+            #expect(line.ansiSGRStateAt(visibleColumn: column) == Self.reversed, "\(column): \(line.debugDescription)")
+        }
+    }
+
+    @Test("Nothing reversed is left in force after the line")
+    func leavesNoTrailingReverse() {
+        for line in ["ab", "\u{1B}[31mab\u{1B}[0m", "x\u{1B}[0;38;5;9my", "\u{1B}[7mz"] {
+            var state = SGRState()
+            for segment in wrapped(line).ansiSegments() {
+                if case .ansi(let sequence, true) = segment { state.apply(sequence) }
+            }
+            #expect(state == SGRState(), "\(line.debugDescription)")
+        }
     }
 }
 
