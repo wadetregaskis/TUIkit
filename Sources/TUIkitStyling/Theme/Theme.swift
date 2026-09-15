@@ -983,12 +983,32 @@ extension Palette {
     /// terminal's own background before it has reported it) this is
     /// `foreground`, unchanged: neither side can be measured against it, so
     /// neither is chosen or floored for it.
+    ///
+    /// A `background` the terminal paints, ``Color/default`` or the terminal's
+    /// own background, is never chosen: drawn as text it would be the terminal's
+    /// foreground, or the page's colour spelled as RGB. `foreground` is floored
+    /// instead. A colour the terminal decides is floored by swapping it for
+    /// another of its names, never in RGB, and ``Color/default`` as the
+    /// foreground is measured as the foreground the terminal reported; see
+    /// ``Color/ensuringContrast(atLeast:against:)``.
     public func readableText(on surface: Color) -> Color {
         // Said outright rather than left to the tie below, where both ratios are 0
         // and `>=` happens to pick the foreground.
         guard surface.rgbComponents != nil else { return foreground }
+        // The terminal's page is never ink. In the foreground slot `.terminalBackground`
+        // is spelled as the page's RGB, and `Color.default` as 39, the opposite colour.
+        // On Apple Terminal "Basic" the white page read better on a blue selection
+        // (4.79:1) than the black ink (4.39:1), so the selection's text was RGB white.
+        switch background.value {
+        case .terminalBackground, .terminalDefault:
+            return foreground.ensuringContrast(atLeast: 4.5, against: surface)
+        case .rgb, .ansi, .palette256, .terminalForeground, .semantic:
+            break
+        }
+        // Measured as ink, so a foreground of `Color.default` is the foreground the
+        // terminal reported, not 0.
         let winner =
-            foreground.contrastRatio(against: surface) >= background.contrastRatio(against: surface)
+            foreground.inkContrastRatio(against: surface) >= background.inkContrastRatio(against: surface)
             ? foreground
             : background
         return winner.ensuringContrast(atLeast: 4.5, against: surface)

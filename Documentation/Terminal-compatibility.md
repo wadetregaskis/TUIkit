@@ -1932,15 +1932,37 @@ saturated than xterm's. Against its own white background that makes contrast
 | 8 br.black | 4.00 | 5.74 |
 | 12 br.blue | 4.74 | 8.59 |
 
-So `ensuringContrast` believes every ANSI colour is less legible than it is,
-and **over-corrects** — which is the safe direction to be wrong in (it pushes
-toward legibility, never away). Two things still follow:
+Measured by xterm's table, `ensuringContrast` believed every ANSI colour less
+legible than it is here, and **over-corrected**, which is the safe direction to
+be wrong in. Since 2026-09-15 it measures a slot as the terminal reported it,
+and as nothing until then (see "Why this is load-bearing rather than trivia",
+below). A slot, or 39, that falls short of the floor is swapped for another
+name the terminal keeps, never re-spelled as RGB: a standard slot's bright twin,
+then 39, then slots 0, 7, 8 and 15, and where none of them reaches the floor,
+whichever reads best, the colour itself included. The terminal's background is
+never one of them. Computed from this host's reported colours (black 39 on the
+white page):
 
-- A colour it would have left alone gets adjusted anyway, so an app asking for
-  `Color.ansi(.red)` on this host may not get quite the red it asked for.
-- Slots 3 and 7 are below the floor on either table, so an `.ansi(.yellow)` or
+| asked, on | measured | at 3:1 | at 4.5:1 |
+|---|---|---|---|
+| `.ansi(.yellow)`, the page | 3.04 | kept | 39 (its twin reads at 1.34) |
+| `.ansi(.cyan)`, the page | 2.96 | 39 (its twin reads at 1.56) | 39 |
+| `.ansi(.white)`, the page | 1.84 | 39 (its twin reads at 1.25) | 39 |
+| `.ansi(.brightWhite)`, slot 9 | 3.86 | kept | 39 at 4.36, the best: nothing reaches 4.5 (slot 0 ties with 39, and 39 comes first) |
+| 39, slot 4 at 60% over the page, (102, 102, 209) | 4.39 | kept | 39, the best: slot 15 reads at 3.84, slot 7 at 2.60 and slot 8 at 1.20 |
+
+The last row is a text field's selection on a palette whose grounds and ink are
+the terminal's. The page itself would read better on it, at 4.79:1, but drawn as
+text it is spelled as the page's RGB, so `readableText(on:)` never picks it.
+Before this rule the text was that RGB white, and the slot 9 row came back as
+RGB (248, 248, 248). Two things still follow:
+
+- An app asking for `Color.ansi(.cyan)` as text over this host's page, where a
+  floor applies, gets 39, black. It gets a name the profile keeps, not a darker
+  cyan the profile does not.
+- Slots 3 and 7 are below 4.5:1 on either table, so an `.ansi(.yellow)` or
   `.ansi(.white)` foreground on a light terminal is illegible however it is
-  computed.
+  measured.
   That is a fact about light backgrounds, not about the table.
 
 None of this reaches colours TUIkit chooses itself: those are palette roles,
@@ -2356,7 +2378,10 @@ says so. Two things derived real decisions from it:
   colour the terminal reported for the slot, which the startup exchange asks
   for (see "Asking the terminal for its colours"), and as nothing until it has
   reported all sixteen. A floor, a blend and a focus breath then read the
-  terminal's own sixteen, or leave the slot as asked. A hover never re-spells a
+  terminal's own sixteen, or leave the slot as asked. A floor never re-spells a
+  slot as RGB: one that falls short becomes its bright twin, 39, or slot 0, 7,
+  8 or 15, or stays, whichever reads best ("What that costs, computed", above).
+  A hover never re-spells a
   slot as RGB: it climbs from a standard slot to its bright twin to 39, and once
   the terminal has reported them takes a rung only if it is a visible step that
   reads no worse (Opacity as composition §82). On Apple Terminal

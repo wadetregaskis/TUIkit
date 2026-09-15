@@ -5143,6 +5143,10 @@ slot or xterm's value, and RGB still quantises to the sixteen by xterm's table. 
 tone curve's stops read `rgbComponents`, so a slot stop drops out while the slots are
 unreported, as a semantic stop does until it is resolved.
 
+A contrast floor never walks a reported slot in RGB: one that falls short is swapped for its
+bright twin, 39, or slot 0, 7, 8 or 15, and `readableText(on:)` never draws the terminal's
+page as text (Terminal-compatibility.md, "What that costs, computed"; 2026-09-15).
+
 Once the terminal reports its sixteen, each rule measures the reported colour. On Apple
 Terminal "Basic", slot 1 blended halfway to blue is rgb(77, 0, 128), from (153, 0, 0), where
 xterm's table gave (103, 0, 128).

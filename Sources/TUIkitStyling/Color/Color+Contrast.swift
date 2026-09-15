@@ -76,6 +76,14 @@ extension Color {
         return TerminalColors.current.foreground.map { (red: $0.red, green: $0.green, blue: $0.blue) }
     }
 
+    /// ``contrastRatio(against:)`` with this colour measured as ink (`inkRGB`), so
+    /// `Color.default` reads as the foreground the terminal reported. 0 when either
+    /// side has no RGB, as there.
+    func inkContrastRatio(against other: Color) -> Double {
+        guard let (red, green, blue) = inkRGB else { return 0 }
+        return Self.rgb(red, green, blue).contrastRatio(against: other)
+    }
+
     // MARK: - Readability floor
 
     /// Returns this colour adjusted — hue and saturation preserved, lightness
@@ -89,10 +97,24 @@ extension Color {
     /// (extreme minimums against mid-tone backgrounds), the closer of black /
     /// white is returned.
     ///
+    /// A colour the terminal decides is never moved in RGB, which would re-spell
+    /// a name the user's terminal profile keeps as a triple the profile does not:
+    /// a slot (``Color/ansi(_:)``, or a 256-colour index below 16),
+    /// ``Color/default``, or the terminal's own foreground or background. Once
+    /// the terminal has reported what it paints, such a colour that falls short
+    /// is swapped for the first name that reaches `minimum`, in this order: a
+    /// standard slot's bright twin (``ANSIColor/brightTwin``), the terminal's
+    /// default foreground (SGR 39), then slots 0, 7, 8 and 15, spelled by index
+    /// when the colour is. The terminal's background is never one of them. Where
+    /// none reaches it, whichever reads best is returned, the colour itself
+    /// included, so the result never reads worse than the colour did. As ink,
+    /// ``Color/default`` is 39, and measures as the foreground the terminal
+    /// reported.
+    ///
     /// A colour returns unchanged when it, or `background`, has no RGB
-    /// components: an unresolved semantic colour, ``Color/default``, or the
-    /// terminal's own foreground or background before the terminal has reported
-    /// it. There is no ratio to measure, and the floor makes no guess.
+    /// components: an unresolved semantic colour, ``Color/default`` as the
+    /// background, or a colour the terminal decides before the terminal has
+    /// reported it. There is no ratio to measure, and the floor makes no guess.
     public func ensuringContrast(atLeast minimum: Double, against background: Color) -> Color {
         flooring(atLeast: minimum, against: background, asRendered: false)
     }
@@ -125,6 +147,13 @@ extension Color {
     private func flooring(
         atLeast minimum: Double, against background: Color, asRendered: Bool
     ) -> Color {
+        // A name the terminal keeps is swapped for another name, not walked. The walk
+        // below re-spelled a reported slot that fell short as RGB, a triple the user's
+        // profile does not keep; `.ansi(.brightWhite)` on Apple Terminal's slot 9 came
+        // back as a dark red.
+        if isTerminalDefined {
+            return flooringByName(atLeast: minimum, against: background, asRendered: asRendered)
+        }
         // Both sides measured, or no floor. A side with no RGB has no luminance, so
         // `contrastRatio` answers 0, below any minimum; for an RGB ink on such a page
         // the walk then compared 0 with 0 at every lightness and fell through to RGB
@@ -175,6 +204,51 @@ extension Color {
         }
         return floored.carryingAlpha(of: self)
     }
+
+    /// The floor for a colour the terminal decides: itself if it reaches `minimum`,
+    /// else the first of `floorCandidates` that does, else whichever of them and
+    /// itself reads best, the earliest on a tie. Measured as ink, against the
+    /// background as rendered when `asRendered`. A colour the terminal decides is
+    /// its own name at every depth, so only the background can move in the cube.
+    private func flooringByName(
+        atLeast minimum: Double, against background: Color, asRendered: Bool
+    ) -> Color {
+        let target = asRendered ? background.downsampledToPalette256() : background
+        // Both sides measured, or no floor, as for RGB: a candidate the terminal has
+        // not reported measures 0 below, which neither passes nor beats a real ratio.
+        guard inkRGB != nil, target.rgbComponents != nil else { return self }
+        let own = inkContrastRatio(against: target)
+        guard own < minimum else { return self }
+        var best = self
+        var bestRatio = own
+        for candidate in floorCandidates {
+            let ratio = candidate.inkContrastRatio(against: target)
+            if ratio >= minimum { return candidate.carryingAlpha(of: self) }
+            if ratio > bestRatio {
+                best = candidate
+                bestRatio = ratio
+            }
+        }
+        return best.carryingAlpha(of: self)
+    }
+
+    /// The names a floor may swap this colour for, nearest first: a standard slot's
+    /// bright twin, 39, then the four neutral slots, 0, 7, 8 and 15, by index when
+    /// this colour is spelled by index. 39 is the terminal's foreground, measured
+    /// as it reported. Never the terminal's background: in the foreground slot it
+    /// is spelled as the page's RGB, or as 39 while unreported, the opposite colour.
+    private var floorCandidates: [Color] {
+        let neutrals: [Color]
+        if case .palette256 = value { neutrals = Self.neutralSlotsByIndex } else { neutrals = Self.neutralSlots }
+        guard let twin = brightTwinOfStandardSlot else { return [.terminalForeground] + neutrals }
+        return [twin, .terminalForeground] + neutrals
+    }
+
+    /// Slots 0, 7, 8 and 15, black, white and their bright twins, by name.
+    private static let neutralSlots: [Color] = [.ansi(.black), .ansi(.white), .ansi(.brightBlack), .ansi(.brightWhite)]
+
+    /// Slots 0, 7, 8 and 15, by 256-colour index.
+    private static let neutralSlotsByIndex: [Color] = [.palette(0), .palette(7), .palette(8), .palette(15)]
 }
 
 extension Color {

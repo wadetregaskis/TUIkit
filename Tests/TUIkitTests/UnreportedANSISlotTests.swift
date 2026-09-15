@@ -112,7 +112,9 @@ struct UnreportedANSISlotTests {
 
     // MARK: - §2, one row a line
 
-    @Test("The contrast floor leaves an unreported slot as asked, and walks from a reported one")
+    /// Reported, a slot that fails is swapped for another name the terminal keeps, never
+    /// walked in RGB; TerminalDefinedContrastFloorTests pins the order.
+    @Test("The contrast floor leaves an unreported slot as asked, and swaps a reported one for 39")
     func contrastFloor() {
         let paper = Color.rgb(250, 250, 250)
         TerminalColors.withCurrent(.unknown) {
@@ -123,7 +125,8 @@ struct UnreportedANSISlotTests {
             #expect(
                 Color.ansi(.brightWhite).relativeLuminance == Self.reportedColour(.brightWhite).relativeLuminance)
             let floored = Color.ansi(.brightWhite).ensuringContrast(atLeast: 4.5, against: paper)
-            #expect(floored != .ansi(.brightWhite), "\(floored)")
+            // Slot 15 has no twin above it, and 39 is black here.
+            #expect(floored == .terminalForeground, "\(floored)")
             #expect(floored.contrastRatio(against: paper) >= 4.5, "\(floored)")
         }
     }

@@ -133,7 +133,8 @@ when the colour is its content, not its chrome.
   a ``TabView``, the check mark on the swatch under the cursor in
   ``ColorPickerPanel``'s grids, and the index numbers on its 256-colour grid. These use
   ``Palette/readableText(on:)`` for the surface: whichever of `foreground` and
-  `background` reads better there, or `foreground` where the surface's colour
+  `background` reads better there, or `foreground` where `background` is one the
+  terminal paints, which is never drawn as text, or where the surface's colour
   can't be measured, as with ``Color/default``. A focused tab strip breathes the active label
   toward the accent. Where the two are too close to see apart, as on White, whose
   accent is white, the accent end moves just far enough to be seen.
