@@ -547,7 +547,8 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
     /// or fewer where shifts draw the same pixels, sent once and named by every frame
     /// showing it, and the pass cut to one repeat where it repeats
     /// (`IndeterminateRenderer.repeatLength(of:)`) — or `nil` when the box has no
-    /// pixels, or the store names no row, and the bar is drawn in glyphs.
+    /// pixels, a colour of the ramp has no RGB, or the store names no row, and the bar
+    /// is drawn in glyphs.
     private func pictureFrames(
         width: Int, frameCount: Int, configuration: IndeterminateConfiguration,
         graphics: GradientGraphicsContext, palette: any Palette

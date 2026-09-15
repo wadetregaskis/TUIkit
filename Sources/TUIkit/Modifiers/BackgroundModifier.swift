@@ -62,7 +62,9 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // protocol allows it, because the terminal would composite against the
         // cells' own background rather than against what TUIkit knows is behind
         // them — the guess this whole design exists to avoid. Sub-cell smoothness
-        // is lost for translucent ramps only.
+        // is lost for translucent ramps, and for a ramp with a colour that has no
+        // RGB, which `GradientRaster.picture` declines because a pixel cannot hold
+        // it.
         if case .gradient = paint, buffer.animatedCells.isEmpty, buffer.isBlank,
             paint.isOpaqueThroughout,
             let graphics = context.gradientGraphics(

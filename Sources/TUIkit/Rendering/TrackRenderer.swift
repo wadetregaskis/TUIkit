@@ -182,8 +182,9 @@ enum TrackRenderer {
     /// The ramp is memoised on `(gradient, span, depth)`, so asking cell by
     /// cell costs one dictionary hit each after the first.
     /// The track as one row of placeholder cells naming a picture of it — or
-    /// `nil` when the protocol declines the box, at which point the cells are
-    /// drawn as they always were.
+    /// `nil` when the protocol declines the box, or a colour of the track has no
+    /// RGB (`TrackRaster.picture`), at which point the cells are drawn as they
+    /// always were.
     ///
     /// The picture changes with the VALUE: every distinct boundary pixel is a
     /// new image, and a slider being dragged transmits one per frame. That is

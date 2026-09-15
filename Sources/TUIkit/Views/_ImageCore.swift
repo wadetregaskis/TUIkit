@@ -856,7 +856,7 @@ extension _ImageCore {
     /// rendering it replaces, so nothing downstream of here knows the
     /// difference. See ``KittyGraphics``.
     ///
-    /// ## The five gates, and why each is separate
+    /// ## The six gates, and why each is separate
     ///
     /// - **`isSupported`** — the startup handshake's answer. Default `false`,
     ///   so a terminal nobody asked draws glyphs.
@@ -870,6 +870,9 @@ extension _ImageCore {
     ///   ``ASCIIConverter/targetSize(imageWidth:imageHeight:maxWidth:maxHeight:contentMode:overrideAspectRatio:cellAspect:)``.
     /// - **a store** — `nil` in a headless render, where there is no terminal
     ///   to transmit to.
+    /// - **mono's two colours** — a `.mono` picture whose ink or paper has no
+    ///   RGB (the terminal's own colours before it reports them) cannot be baked
+    ///   into pixels, and glyphs can spell it. See `ImageMonoColours.pixels`.
     /// - **the store's own answer** — `nil` for an extent past what
     ///   placeholders can address (297 cells; there is no combining mark for
     ///   the 298th column).
@@ -953,7 +956,10 @@ extension _ImageCore {
         // palette whatever the mode, a theme change re-sent every true-colour
         // photograph on screen to draw exactly the pixels the terminal held.
         // Both halves are `ImageMonoColours`, the derivation `inked` reads.
-        let mono = ImageMonoColours.pixels(for: colorMode, in: context.environment)
+        // `nil` where mono's ink or paper has no RGB, which a pixel cannot hold.
+        guard let mono = ImageMonoColours.pixels(for: colorMode, in: context.environment) else {
+            return nil
+        }
 
         // The transmitted resolution, not the cell box: two boxes that resample
         // to the same pixels are the same picture, and the store answers the

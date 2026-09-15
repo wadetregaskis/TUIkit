@@ -9,6 +9,7 @@ import Testing
 
 @testable import TUIkit
 @testable import TUIkitCore
+@testable import TUIkitStyling
 
 /// `Image` drawing with the terminal's own graphics instead of glyphs.
 ///
@@ -107,6 +108,44 @@ struct ImageTerminalGraphicsTests {
         #expect(pending.contains("a=t,q=2,f=24"))
         #expect(!pending.contains("f=32"), "nothing here is transparent")
         #expect(pending.contains("a=p,U=1,q=2"))
+    }
+
+    /// A mono picture bakes its ink and paper into its pixels. A colour the terminal
+    /// decides and has not reported has none to bake, and was baked as white ink or
+    /// black paper. The glyph renderer can spell it, so the picture is drawn in glyphs.
+    @Test("A mono picture in a colour with no RGB is drawn in glyphs")
+    func monoWithoutRGBIsGlyphs() throws {
+        let (image, path) = try load(width: 40, height: 20)
+        let reported = TerminalColors(
+            foreground: TerminalColors.RGB(red: 171, green: 178, blue: 191),
+            background: TerminalColors.RGB(red: 40, green: 44, blue: 52))
+        let pairs: [(ink: Color, paper: Color)] = [
+            (Color(value: .terminalForeground), .rgb(0, 0, 60)),
+            (.rgb(230, 40, 40), Color(value: .terminalBackground)),
+        ]
+        for pair in pairs {
+            let configure: (inout EnvironmentValues) -> Void = {
+                $0.imageColorMode = .mono
+                $0.foregroundStyle = .color(pair.ink)
+                $0.backgroundStyle = .color(pair.paper)
+            }
+            TerminalColors.withCurrent(.unknown) {
+                let drawn = KittyGraphics.withSupport(true) {
+                    rendered(image, path: path, width: 20, height: 20, configure: configure)
+                }
+                #expect(!drawn.buffer.lines.isEmpty, "\(pair)")
+                #expect(placeholderCells(in: drawn.buffer) == 0, "\(pair)")
+                #expect(drawn.store.imageCount == 0, "\(pair)")
+            }
+            TerminalColors.withCurrent(reported) {
+                let drawn = KittyGraphics.withSupport(true) {
+                    rendered(image, path: path, width: 20, height: 20, configure: configure)
+                }
+                #expect(
+                    placeholderCells(in: drawn.buffer) == drawn.buffer.width * drawn.buffer.height,
+                    "reported, the picture path is taken: \(pair)")
+            }
+        }
     }
 
     /// The claim that makes this safe to switch on by default: the layout does

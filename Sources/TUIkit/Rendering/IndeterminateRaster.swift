@@ -60,8 +60,9 @@ enum IndeterminateRaster {
 
     /// The pictures of `configuration`'s ramp across a `width`-cell, one-row track,
     /// one for each of `shifts`, slid that many whole pixels along — or `nil` for a
-    /// box with no pixels. `palette` is what a ramp with too few usable stops falls
-    /// back to (`IndeterminateRenderer.cyclic(_:palette:)`).
+    /// box with no pixels, or for a ramp with a colour that has no RGB, which a pixel
+    /// cannot hold. `palette` is what a ramp with too few usable stops falls back to
+    /// (`IndeterminateRenderer.cyclic(_:palette:)`).
     static func frames(
         width: Int, shifts: [Int], configuration: IndeterminateConfiguration,
         cellPixels: TerminalCellPixels, palette: any Palette
@@ -73,8 +74,14 @@ enum IndeterminateRaster {
         // picture's own resolution so every frame reads from one table.
         let ramp = IndeterminateRenderer.cyclic(configuration.gradient, palette: palette)
         let steps = size.width
-        let samples = Color.quantisedRamp(ramp, count: steps + 1, depth: .truecolor).map { colour in
-            colour.rgbComponents.map { ($0.red, $0.green, $0.blue) } ?? (0, 0, 0)
+        var samples: [(UInt8, UInt8, UInt8)] = []
+        samples.reserveCapacity(steps + 1)
+        for colour in Color.quantisedRamp(ramp, count: steps + 1, depth: .truecolor) {
+            // A colour with no RGB declines the pictures, as a ramp's does; it was
+            // sent as black. `cyclic` skips such stops, but its last resort, a ramp
+            // of the accent alone, keeps one when the accent has no RGB either.
+            guard let rgb = colour.rgbComponents else { return nil }
+            samples.append((rgb.red, rgb.green, rgb.blue))
         }
         guard samples.count == steps + 1 else { return nil }
         return shifts.map { shift in

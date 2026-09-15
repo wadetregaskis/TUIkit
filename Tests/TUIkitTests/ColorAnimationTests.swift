@@ -113,6 +113,21 @@ struct ColorAnimationTests {
         #expect(changed.first?.contains("200;0;0") == true, "got \(changed)")
     }
 
+    /// A colour with no RGB has no components to interpolate, so a change to it shows
+    /// at once. So must the change away from it: the store still held the colour
+    /// before, and the next fade started from that, which was no longer on screen.
+    @Test("A change to or from a colour with no RGB is not animated")
+    func unmeasurableColourSnaps() {
+        let screen = Screen(.linear(duration: 1))
+        _ = screen.draw(styled(.rgb(0, 0, 0)), atMillis: 0)
+        let unmeasured = screen.draw(styled(.default), atMillis: 0)
+        #expect(unmeasured.first?.contains("38;2;") == false, "got \(unmeasured)")
+        let landed = screen.draw(styled(.rgb(200, 0, 0)), atMillis: 0)
+        #expect(landed.first?.contains("200;0;0") == true, "got \(landed)")
+        let half = screen.draw(styled(.rgb(200, 0, 0)), atMillis: 500)
+        #expect(half.first?.contains("200;0;0") == true, "got \(half)")
+    }
+
     @Test("A semantic colour animates between what it resolves to")
     func semanticColorsAnimate() {
         // `.palette.accent` is not a red, a green and a blue until it meets a

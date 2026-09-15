@@ -291,7 +291,7 @@ struct ImageMonoInkTests {
         environment.palette = SystemPalette(.green)
         let palette = environment.palette
 
-        let unstated = ImageMonoColours.pixels(for: .mono, in: environment)
+        let unstated = try #require(ImageMonoColours.pixels(for: .mono, in: environment))
         let theme = try #require(palette.foreground.resolve(with: palette).rgbComponents)
         #expect(unstated.ink == RGBA(r: theme.red, g: theme.green, b: theme.blue))
 
@@ -300,15 +300,22 @@ struct ImageMonoInkTests {
         let glyphs = try #require(ImageMonoColours(for: .mono, in: environment))
         #expect(glyphs.ink == .rgb(230, 40, 40))
         #expect(glyphs.paper == .rgb(10, 10, 60))
-        let pixels = ImageMonoColours.pixels(for: .mono, in: environment)
+        let pixels = try #require(ImageMonoColours.pixels(for: .mono, in: environment))
         #expect(pixels.ink == RGBA(r: 230, g: 40, b: 40))
         #expect(pixels.paper == RGBA(r: 10, g: 10, b: 60))
 
         // Outside mono neither renderer has a pair to read.
         #expect(ImageMonoColours(for: .trueColor, in: environment) == nil)
-        let other = ImageMonoColours.pixels(for: .trueColor, in: environment)
+        let other = try #require(ImageMonoColours.pixels(for: .trueColor, in: environment))
         #expect(other.ink == ImageMonoColours.defaultInk)
         #expect(other.paper == ImageMonoColours.defaultPaper)
+
+        // A mono ink with no RGB has no pixels, so the picture is drawn in glyphs;
+        // the glyph path still has the pair.
+        environment.foregroundStyle = .color(Color.default)
+        let hasPixels = ImageMonoColours.pixels(for: .mono, in: environment) != nil
+        #expect(!hasPixels, "Color.default was baked into pixels")
+        #expect(ImageMonoColours(for: .mono, in: environment)?.ink == Color.default)
     }
 
     /// A transparent surround keeps what is behind it, in every mono renderer.

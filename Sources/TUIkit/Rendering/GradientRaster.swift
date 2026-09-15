@@ -100,7 +100,10 @@ enum GradientRaster {
     /// The pixels for `paint` over a `columns` × `rows` box that sits at
     /// `frame` within the ramp's extent — or `nil` when the paint is not a
     /// ramp, or is a degenerate one, which is the cell renderer's answer too:
-    /// paint flat, and a flat colour is cells.
+    /// paint flat, and a flat colour is cells. Also `nil` when a colour of the
+    /// ramp has no RGB: a stop the terminal decides and has not reported, and the
+    /// stretch of the ramp that snaps to it. A pixel cannot hold that colour, so
+    /// the cells draw it, and they can spell it.
     ///
     /// - Parameters:
     ///   - paint: The paint, already resolved against the palette.
@@ -131,12 +134,15 @@ enum GradientRaster {
         else { return nil }
         let factor = size.factor
         let centre = (factor - 1) / 2
-        // The sampler's colours are `.rgb` by construction — a resolved ramp
-        // interpolates in RGB or OKLab and lands in RGB — but a ramp of
-        // palette entries lands where the palette says, so read them once.
-        let colours: [(UInt8, UInt8, UInt8)] = sampler.ramp.map { colour in
-            guard let rgb = colour.rgbComponents else { return (0, 0, 0) }
-            return (rgb.red, rgb.green, rgb.blue)
+        // The sampler's colours are `.rgb` between two measurable stops — a
+        // resolved ramp interpolates in RGB or OKLab and lands in RGB — but a ramp
+        // of palette entries lands where the palette says, so read them once. A
+        // colour with no RGB declines the picture. It used to be sent as black.
+        var colours: [(UInt8, UInt8, UInt8)] = []
+        colours.reserveCapacity(sampler.ramp.count)
+        for colour in sampler.ramp {
+            guard let rgb = colour.rgbComponents else { return nil }
+            colours.append((rgb.red, rgb.green, rgb.blue))
         }
         var bytes = [UInt8](repeating: 0, count: size.width * size.height * 3)
         var offset = 0

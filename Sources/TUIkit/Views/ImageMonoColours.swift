@@ -66,30 +66,35 @@ struct ImageMonoColours {
     /// `.mono`, so a picture in any other mode keeps one signature whatever the
     /// pair would have been.
     ///
+    /// `nil` for a `.mono` pair with a colour that has no RGB: `Color.default`, or
+    /// the terminal's own colours before it has reported them. A pixel cannot hold
+    /// such a colour, so the picture is drawn in glyphs, which can spell it. It used
+    /// to be baked as white ink or black paper.
+    ///
     /// The ink is the one place the two paths part: under a breathing label's
     /// own ink the picture takes the ink the breath holds instead. See
     /// ``PictureInkHold``.
     static func pixels(
         for colorMode: ASCIIColorMode, in environment: EnvironmentValues
-    ) -> (ink: RGBA, paper: RGBA) {
+    ) -> (ink: RGBA, paper: RGBA)? {
         guard let colours = Self(for: colorMode, in: environment) else {
             return (defaultInk, defaultPaper)
         }
-        var ink = rgb(colours.ink) ?? defaultInk
+        guard var ink = rgb(colours.ink), let paper = rgb(colours.paper) else { return nil }
         if let hold = environment.pictureInkHold {
             let palette = environment.palette
             // Compared as the pixels they would bake, which is what decides the
             // picture: the ink in force is the breath's own unless something
             // between the label and the picture stated a different one.
             if rgb(hold.breath.resolve(with: palette)) == ink {
-                ink = rgb(hold.held.resolve(with: palette)) ?? defaultInk
+                guard let held = rgb(hold.held.resolve(with: palette)) else { return nil }
+                ink = held
             }
         }
-        return (ink, rgb(colours.paper) ?? defaultPaper)
+        return (ink, paper)
     }
 
-    /// A resolved colour as pixels, or `nil` for a colour with no RGB, which only
-    /// a semantic colour lacks and resolution never leaves one.
+    /// A resolved colour as pixels, or `nil` for a colour with no RGB.
     private static func rgb(_ color: Color) -> RGBA? {
         // Alpha is not carried, for the reason `ASCIIPalette.init` states: this is
         // a colour being handed to the image pipeline as a MATCHING candidate or a

@@ -38,7 +38,9 @@ enum TrackRaster {
     /// `TrackRenderer.gradientColor` does, so the two renderings agree about
     /// every colour and share one ramp cache.
     ///
-    /// - Returns: the picture, or `nil` for a box with no pixels.
+    /// - Returns: the picture, or `nil` for a box with no pixels, or where a
+    ///   colour the track is drawn from has no RGB. A pixel cannot hold that
+    ///   colour (it was sent as black), and the cells can spell it.
     static func picture(
         fraction: Double, width: Int, config: TrackConfiguration,
         fillColor: Color, backgroundColor: Color,
@@ -57,11 +59,12 @@ enum TrackRaster {
         // The fill's ramp spans the bar or the lit part, as the cells' does;
         // `TrackRenderer` says why a scale-meaning ramp must span the bar.
         let fillSpan = fillScaling == .track ? size.width : lit
-        let fillRamp = ramp(config.fillGradient, span: fillSpan, fallback: fillColor)
         // The unfilled ramp starts AT the boundary (the cells' rule for the
         // same reason), spanning the bar or the remainder.
         let emptySpan = backgroundScaling == .track ? size.width : unlit
-        let emptyRamp = ramp(config.backgroundGradient, span: emptySpan, fallback: empty)
+        guard let fillRamp = ramp(config.fillGradient, span: fillSpan, fallback: fillColor),
+            let emptyRamp = ramp(config.backgroundGradient, span: emptySpan, fallback: empty)
+        else { return nil }
 
         var bytes = [UInt8](repeating: 0, count: size.width * size.height * 3)
         var row = [UInt8](repeating: 0, count: size.width * 3)
@@ -86,15 +89,23 @@ enum TrackRaster {
 
     /// `span` colours of a ramp, or of the fallback where there is no ramp —
     /// through the same quantiser the cells use, so a ramp cached for one
-    /// renderer serves the other.
-    private static func ramp(_ gradient: Gradient?, span: Int, fallback: Color) -> [(UInt8, UInt8, UInt8)] {
-        let flat = fallback.rgbComponents.map { ($0.red, $0.green, $0.blue) } ?? (0, 0, 0)
-        guard let gradient, !gradient.stops.isEmpty, span > 1 else { return [flat] }
+    /// renderer serves the other. `nil` when a colour it would use has no RGB.
+    private static func ramp(_ gradient: Gradient?, span: Int, fallback: Color) -> [(UInt8, UInt8, UInt8)]? {
+        guard let gradient, !gradient.stops.isEmpty, span > 1 else { return pixel(fallback).map { [$0] } }
         let colours = Color.quantisedRamp(gradient, count: span, depth: .truecolor)
-        guard !colours.isEmpty else { return [flat] }
-        return colours.map { colour in
-            colour.rgbComponents.map { ($0.red, $0.green, $0.blue) } ?? flat
+        guard !colours.isEmpty else { return pixel(fallback).map { [$0] } }
+        var pixels: [(UInt8, UInt8, UInt8)] = []
+        pixels.reserveCapacity(colours.count)
+        for colour in colours {
+            guard let rgb = pixel(colour) else { return nil }
+            pixels.append(rgb)
         }
+        return pixels
+    }
+
+    /// A colour as one pixel, or `nil` for a colour with no RGB.
+    private static func pixel(_ colour: Color) -> (UInt8, UInt8, UInt8)? {
+        colour.rgbComponents.map { ($0.red, $0.green, $0.blue) }
     }
 }
 

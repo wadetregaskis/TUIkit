@@ -1067,7 +1067,8 @@ A translucent ramp now declines the picture path outright (`Paint`
 RGBA would not fix it even where the protocol allows: the terminal composites
 against the cells' own background rather than against what TUIkit knows is behind
 them, which is the guess this design exists to avoid. The cost is sub-cell
-smoothness, for translucent ramps only.
+smoothness, for translucent ramps only. (Since 2026-09-15 also for a ramp with a
+colour that has no RGB, for the other half of the same reason: §77.)
 
 ### 15.2 Opaque only where the alpha is carried
 
@@ -4857,3 +4858,38 @@ step of the terminal-colour plan, which makes a `.clear` root that page.
 leaves no attribute; an ink at alpha 0.3 is gone over the page and over the text it
 covers, and at 0.6 is drawn over that text; and over a reported page the label at 0.3
 and the ink at 0.3 both keep their glyphs, in RGB.
+
+## 77. What reads RGB, handed a colour with none (2026-09-15)
+
+§75 made the blends answer a colour with no RGB. Five other places read `rgbComponents`
+to draw, and each had its own answer for a `nil`. Three of them invented a colour.
+
+- **The three rasters** (`GradientRaster.picture`, `TrackRaster.picture`,
+  `IndeterminateRaster.frames`) send pixels, and a pixel must be told its colour. Each
+  substituted black: a ramp from red to `.terminalBackground` was a picture from red to
+  black, a `.block` bar in `.terminalForeground` a black bar. Each now returns `nil`, and
+  the caller draws the cells it always drew where there is no picture, which spell the
+  terminal's colours as the terminal does. The indeterminate sweep skips such stops
+  already (`IndeterminateRenderer.cyclic`), but its last resort, a ramp of the accent
+  alone, keeps an accent with no RGB, and that is how a sweep reached the black picture.
+  This is §15.1's decline for the other half of its reason: a picture cannot carry an
+  alpha, and it cannot carry a colour the terminal will not name either.
+- **A `.mono` image's pixels** (`ImageMonoColours.pixels`) baked an ink with no RGB as
+  white and a paper as black. It is now `nil`, and `_ImageCore` draws the picture in
+  glyphs, whose ink and paper are stated as the terminal spells them. The glyph path's
+  own pair is unchanged.
+- **The contrast picker** (`ContrastingLabel.on`, for the tab chip, the swatch mark and
+  the 256-grid index) already returns the palette's foreground on a surface with no RGB.
+  `readableText(on:)` and the contrast floor say so since the 2026-09-15 guards, and a
+  test now pins it here.
+- **A colour animation** (`ColorAnimation.resolving`) already jumps to a colour with no
+  RGB, since it has no components to interpolate. The change away from it jumps too, and
+  not by any rule of its own: a frame that asks nothing of the store leaves its record
+  to `AnimationStore.endRenderPass`, which drops it, so the next colour is a first sight.
+  A test pins both directions.
+
+`GradientRasterTests`, `TrackRasterTests`, `GradientPictureTests`,
+`ImageTerminalGraphicsTests`, `ImageMonoInkTests`, `ContrastingLabelThemeTests` and
+`ColorAnimationTests` pin these, each with a reported pair beside the unreported one where
+a picture is involved: once the terminal reports its colours, the picture path is taken
+again.

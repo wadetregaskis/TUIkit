@@ -737,6 +737,15 @@ turned it off, those four are drawn as pictures through the same
 | The indeterminate `.gradient` motion over a `█` fill | 4 samples a cell, re-coloured every frame | `IndeterminateRaster` — a picture per frame, transmitted once; a frame is a row of unchanged cells naming a different id |
 | everything with a glyph in it — shade, braille, dot, knob, text over a ramp | unchanged | — |
 
+**What declines, and is drawn in cells instead.** A translucent colour
+(`Opacity as composition.md` §15.1). Since 2026-09-15, also a colour with no RGB:
+`Color.default`, or the terminal's own foreground or background before it has
+reported them. A pixel has to be told a colour, and such a colour has none to
+tell. The three rasters sent it as black; each now returns `nil` for it, and the
+cells spell it the way the terminal does. `Image` in `.mono` declines the same way
+when its ink or paper has none (`ImageMonoColours.pixels`), where the pixels had
+been baked white or black. §77 of the opacity document has the rest.
+
 **Three facts about the protocol decided the shape**, and two of them are
 the opposite of what one would guess:
 

@@ -28,6 +28,24 @@ struct ContrastingLabelThemeTests {
         #expect(ContrastingLabel.on(.rgb(250, 250, 250), palette: ThemeProbePalette()) == .rgb(10, 10, 10))
     }
 
+    /// A pin, not a red: `readableText(on:)` and the contrast floor already hand back
+    /// the palette's ink on a surface with no RGB (606d7cd8), where the floor used to
+    /// walk to white. The tab chip, the swatch mark and the 256-grid index all read it
+    /// from here.
+    @Test("A surface with no RGB takes the palette's foreground")
+    func unmeasurableSurfaceTakesTheForeground() {
+        TerminalColors.withCurrent(.unknown) {
+            for surface in [Color(value: .terminalBackground), .default] {
+                #expect(
+                    ContrastingLabel.on(surface, palette: ThemeProbePalette()) == .rgb(220, 220, 220),
+                    "on \(surface)")
+                #expect(
+                    _SwatchGridCore.markEnds(for: surface, palette: ThemeProbePalette()).bright
+                        == .rgb(220, 220, 220), "a swatch of \(surface)")
+            }
+        }
+    }
+
     /// Unfocused, so the active label does not breathe: what is drawn is its resting
     /// colour. Under this palette's dark surface that was white.
     @Test("An unfocused tab strip's active label is the palette's ink")

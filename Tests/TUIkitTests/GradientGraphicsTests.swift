@@ -8,6 +8,13 @@ import Testing
 
 @testable import TUIkit
 @testable import TUIkitCore
+@testable import TUIkitStyling
+
+/// One Dark's pair, as the carried-colour tests use: the terminal's colours once it
+/// has reported them.
+private let reportedOneDark = TerminalColors(
+    foreground: TerminalColors.RGB(red: 171, green: 178, blue: 191),
+    background: TerminalColors.RGB(red: 40, green: 44, blue: 52))
 
 // MARK: - The rasteriser
 
@@ -74,6 +81,29 @@ struct GradientRasterTests {
             raster(.gradient(GradientPaint(Gradient(colors: [.red]), .linear(from: .leading, to: .trailing))))
                 == nil)
     }
+
+    /// A stop the terminal decides and has not reported has no RGB, and a blend with
+    /// it snaps to it, so the ramp has entries with no pixels to send. They were sent
+    /// black. The cells can spell them.
+    @Test("A ramp with a colour that has no RGB is not a picture")
+    func unmeasurableStopIsCells() throws {
+        let page = Color(value: .terminalBackground)
+        func ramp(_ from: Color, _ to: Color) -> Paint {
+            .gradient(GradientPaint(Gradient(colors: [from, to]), .linear(from: .leading, to: .trailing)))
+        }
+        TerminalColors.withCurrent(.unknown) {
+            #expect(raster(ramp(.rgb(250, 1, 2), page)) == nil, "the terminal's page")
+            #expect(raster(ramp(.rgb(250, 1, 3), .default)) == nil, "the terminal's default")
+        }
+        // Reported, the page measures, and the picture ends on it rather than on black.
+        try TerminalColors.withCurrent(reportedOneDark) {
+            let picture = try #require(raster(ramp(.rgb(2, 250, 1), page)))
+            let stride = picture.width * 3
+            let last = Array(picture.bytes[(stride - 3)..<stride])
+            let expected: [UInt8] = [40, 44, 52]
+            #expect(zip(last, expected).allSatisfy { abs(Int($0) - Int($1)) <= 8 }, "\(last)")
+        }
+    }
 }
 
 // MARK: - The track raster
@@ -130,6 +160,33 @@ struct TrackRasterTests {
         let acrossFill = try lastLit(.region)
         #expect(acrossFill[2] > 200, "the fill's last pixel is the ramp's end")
         #expect(acrossTrack[0] > 100 && acrossTrack[2] > 100, "…and the ramp's middle when the bar is the scale")
+    }
+
+    /// A colour with no RGB was sent as black, and a fill gradient's entry with none
+    /// as the flat fill colour.
+    @Test("A track in a colour with no RGB is not a picture")
+    func unmeasurableTrackIsCells() throws {
+        let ink = Color(value: .terminalForeground)
+        func picture(
+            _ config: TrackConfiguration = .block, fill: Color, empty: Color
+        ) -> GradientRaster.Picture? {
+            TrackRaster.picture(
+                fraction: 0.5, width: 10, config: config, fillColor: fill, backgroundColor: empty,
+                fillScaling: .track, backgroundScaling: .track, cellPixels: cell)
+        }
+        TerminalColors.withCurrent(.unknown) {
+            #expect(picture(fill: ink, empty: .rgb(40, 40, 40)) == nil, "the fill")
+            #expect(picture(fill: .rgb(0, 255, 0), empty: Color(value: .terminalBackground)) == nil, "the unfill")
+            let ramped = TrackConfiguration(
+                fullGlyph: "█", background: .solid, fillGradient: Gradient(colors: [.rgb(255, 2, 1), ink]))
+            #expect(picture(ramped, fill: .rgb(255, 255, 255), empty: .rgb(0, 0, 0)) == nil, "a fill gradient's stop")
+        }
+        try TerminalColors.withCurrent(reportedOneDark) {
+            let drawn = try #require(picture(fill: ink, empty: .rgb(40, 40, 40)))
+            let first = Array(drawn.bytes[0..<3])
+            let expected: [UInt8] = [171, 178, 191]
+            #expect(first == expected, "the reported foreground")
+        }
     }
 }
 
@@ -349,5 +406,45 @@ struct GradientPictureTests {
         #expect(placeholders(buffer) == 40)
         #expect(store.imageCount == 1)
         #expect(buffer.lines[0] == buffer.lines[1], "the same cells naming the same id")
+    }
+
+    /// Each picture path declines a colour with no RGB, and the cells draw it. The
+    /// sweep's stops are the palette's error, warning, success, info and accent: with
+    /// none measurable it falls back to a ramp of the accent alone, which had no RGB
+    /// and was sent black.
+    @Test("A ramp, a block bar and a sweep in colours with no RGB are drawn in cells")
+    func unmeasurableColoursAreCells() {
+        let ink = Color(value: .terminalForeground)
+        let page = Color(value: .terminalBackground)
+        let palette: ThemeProbePalette = {
+            var palette = ThemeProbePalette()
+            palette.foregroundSecondary = ink
+            palette.accent = ink
+            palette.error = ink
+            palette.warning = page
+            palette.success = ink
+            palette.info = page
+            return palette
+        }()
+        let views: [(name: String, view: AnyView)] = [
+            ("a ramp", AnyView(LinearGradient(colors: [.rgb(255, 4, 3), ink], startPoint: .leading, endPoint: .trailing))),
+            ("a block bar", AnyView(ProgressView(value: 0.5).progressViewStyle(.block))),
+            ("a sweep", AnyView(ProgressView().indeterminateStyle(.gradient()))),
+        ]
+        for (name, view) in views {
+            TerminalColors.withCurrent(.unknown) {
+                let (buffer, store) = KittyGraphics.withSupport(true) {
+                    rendered(view, height: 1) { $0.palette = palette }
+                }
+                #expect(placeholders(buffer) == 0, "\(name) was a picture")
+                #expect(store.imageCount == 0, "\(name) was transmitted")
+            }
+            TerminalColors.withCurrent(reportedOneDark) {
+                let (buffer, _) = KittyGraphics.withSupport(true) {
+                    rendered(view, height: 1) { $0.palette = palette }
+                }
+                #expect(placeholders(buffer) == 20, "\(name): reported, the picture path is taken")
+            }
+        }
     }
 }
