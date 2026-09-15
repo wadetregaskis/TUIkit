@@ -17,14 +17,14 @@ import Testing
 private struct AlphaTestPalette: Palette {
     let id = "alpha-test"
     let name = "Alpha test"
-    let background = Color.ansi(.black)
-    let foreground = Color.ansi(.white)
-    let accent = Color.ansi(.cyan)
-    let success = Color.ansi(.green)
-    let warning = Color.ansi(.yellow)
-    let error = Color.ansi(.red)
-    let info = Color.ansi(.blue)
-    let border = Color.ansi(.brightBlack)
+    let background = Color.black
+    let foreground = Color.white
+    let accent = Color.cyan
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.red
+    let info = Color.blue
+    let border = Color.gray
 }
 
 /// A palette whose own slots are faded — the second tier of
@@ -34,14 +34,14 @@ private struct AlphaTestPalette: Palette {
 private struct FadedSlotPalette: Palette {
     let id = "faded-slot"
     let name = "Faded slot"
-    let background = Color.ansi(.black)
-    let foreground = Color.ansi(.white)
-    var accent = Color.ansi(.cyan).opacity(0.5)
-    let success = Color.ansi(.green)
-    let warning = Color.ansi(.yellow)
-    let error = Color.ansi(.red)
-    let info = Color.ansi(.blue)
-    let border = Color.ansi(.brightBlack)
+    let background = Color.black
+    let foreground = Color.white
+    var accent = Color.cyan.opacity(0.5)
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.red
+    let info = Color.blue
+    let border = Color.gray
 }
 
 @Suite("Colour alpha storage")
@@ -68,7 +68,7 @@ struct ColourAlphaStorageTests {
 
     @Test("A fresh colour is opaque")
     func freshColoursAreOpaque() {
-        #expect(Color.ansi(.red).isOpaque)
+        #expect(Color.red.isOpaque)
         #expect(Color.rgb(1, 2, 3).isOpaque)
         #expect(Color.hsl(180, 50, 50).isOpaque)
         #expect(Color.palette(42).isOpaque)
@@ -98,7 +98,7 @@ struct ColourAlphaStorageTests {
             ("downsampled(to: .basic16)", faded.downsampled(to: .basic16)),
             ("lerp(_:_:phase:)", Color.lerp(faded, faded, phase: 0.5)),
             ("mix(with:by:)", faded.mix(with: faded, by: 0.5)),
-            ("ensuringContrast", faded.ensuringContrast(atLeast: 3, against: .ansi(.black))),
+            ("ensuringContrast", faded.ensuringContrast(atLeast: 3, against: .black)),
             // A lightness step, rebuilt through `Color.hsl`, which builds at 255. The
             // base must be concrete: a semantic one leaves `adjusted(by:)` by its guard
             // as `self`, and would pass with the carry deleted.
@@ -168,17 +168,17 @@ struct ColourAlphaStorageTests {
     /// channel unit, not a fudge factor.
     @Test("opacity(_:) multiplies the alpha rather than replacing it")
     func opacityMultiplies() {
-        #expect(Color.ansi(.red).opacity(0.5).alpha == 128, "got \(Color.ansi(.red).opacity(0.5).alpha)")
+        #expect(Color.red.opacity(0.5).alpha == 128, "got \(Color.red.opacity(0.5).alpha)")
         #expect(
-            Color.ansi(.red).opacity(0.5).opacity(0.5).alpha == 64,
-            "0.5 x 0.5: got \(Color.ansi(.red).opacity(0.5).opacity(0.5).alpha)")
+            Color.red.opacity(0.5).opacity(0.5).alpha == 64,
+            "0.5 x 0.5: got \(Color.red.opacity(0.5).opacity(0.5).alpha)")
         #expect(
-            Color.ansi(.red).opacity(0.25).opacity(0.5).alpha == 32,
-            "0.25 x 0.5: got \(Color.ansi(.red).opacity(0.25).opacity(0.5).alpha)")
+            Color.red.opacity(0.25).opacity(0.5).alpha == 32,
+            "0.25 x 0.5: got \(Color.red.opacity(0.25).opacity(0.5).alpha)")
         // A factor of 1 is the identity in both directions.
-        #expect(Color.ansi(.red).opacity(1).alpha == 255, "an opaque colour stays opaque")
+        #expect(Color.red.opacity(1).alpha == 255, "an opaque colour stays opaque")
         #expect(
-            Color.ansi(.red).opacity(0.5).opacity(1).alpha == 128,
+            Color.red.opacity(0.5).opacity(1).alpha == 128,
             "and a translucent one is not promoted")
         // The clincher.
         #expect(
@@ -191,9 +191,9 @@ struct ColourAlphaStorageTests {
     /// which `UInt8(_: Double)` would trap on.
     @Test("An out-of-range or NaN opacity is clamped rather than trapping")
     func opacityClamps() {
-        #expect(Color.ansi(.red).opacity(2).alpha == 255, "above the range")
-        #expect(Color.ansi(.red).opacity(-1).alpha == 0, "below it")
-        #expect(Color.ansi(.red).opacity(.nan).alpha == 0, "and a NaN reads as nothing")
+        #expect(Color.red.opacity(2).alpha == 255, "above the range")
+        #expect(Color.red.opacity(-1).alpha == 0, "below it")
+        #expect(Color.red.opacity(.nan).alpha == 0, "and a NaN reads as nothing")
     }
 
     /// **A fully transparent colour still paints, on an unmigrated path** — and
@@ -249,7 +249,7 @@ struct ColourAlphaStorageTests {
     /// the alternative reading (carry it) would double-apply the fade.
     @Test("opacity(_:over:) consumes the alpha it applies")
     func compositingConsumesAlpha() {
-        let result = translucent(.rgb(255, 0, 0)).opacity(0.5, over: .ansi(.black))
+        let result = translucent(.rgb(255, 0, 0)).opacity(0.5, over: .black)
         #expect(result.isOpaque, "got \(result.alpha)")
     }
 }
@@ -298,7 +298,7 @@ struct FadedPaletteSlotTests {
         var faded = Color.rgb(200, 100, 50)
         faded.alpha = 128
         #expect(faded.resolve(with: palette).alpha == 128, "got \(faded.resolve(with: palette).alpha)")
-        #expect(Color.ansi(.red).resolve(with: palette).isOpaque)
+        #expect(Color.red.resolve(with: palette).isOpaque)
     }
 
     @Test("A reference cycle still terminates, and keeps what it accumulated")
@@ -310,14 +310,14 @@ struct FadedPaletteSlotTests {
         struct CyclicPalette: Palette {
             let id = "cyclic"
             let name = "Cyclic"
-            let background = Color.ansi(.black)
-            let foreground = Color.ansi(.white)
+            let background = Color.black
+            let foreground = Color.white
             let accent = Color(value: .semantic(.accent))
-            let success = Color.ansi(.green)
-            let warning = Color.ansi(.yellow)
-            let error = Color.ansi(.red)
-            let info = Color.ansi(.blue)
-            let border = Color.ansi(.brightBlack)
+            let success = Color.green
+            let warning = Color.yellow
+            let error = Color.red
+            let info = Color.blue
+            let border = Color.gray
         }
         let resolved = Color.Semantic.accent.opacity(0.5).resolve(with: CyclicPalette())
         if case .semantic = resolved.value {
@@ -337,11 +337,11 @@ private struct FadedEverythingPalette: Palette {
     let background = Color.rgb(10, 10, 20).opacity(0.5)
     let foreground = Color.rgb(230, 230, 240).opacity(0.5)
     let accent = Color.rgb(0, 180, 200).opacity(0.5)
-    let success = Color.ansi(.green).opacity(0.5)
-    let warning = Color.ansi(.yellow).opacity(0.5)
-    let error = Color.ansi(.red).opacity(0.5)
-    let info = Color.ansi(.blue).opacity(0.5)
-    let border = Color.ansi(.brightBlack).opacity(0.5)
+    let success = Color.green.opacity(0.5)
+    let warning = Color.yellow.opacity(0.5)
+    let error = Color.red.opacity(0.5)
+    let info = Color.blue.opacity(0.5)
+    let border = Color.gray.opacity(0.5)
 }
 
 /// **What every `Palette` derivation does with a faded slot's alpha, written down.**
@@ -435,7 +435,7 @@ struct FadedPaletteDerivationTests {
     /// the same colour, and the branch was unreachable for:
     ///
     /// - a page at `.rgb(0, 0, 0).opacity(0.5)`, because the rebuilt colour is opaque;
-    /// - a page at `.ansi(.black)`, because the rebuilt one is `.rgb` — the CASE
+    /// - a page at `.black`, because the rebuilt one is `.rgb` — the CASE
     ///   differs at full opacity, so this half was never about alpha at all.
     ///
     /// In both, every surface came back as the page colour: a field, a tab body and a
@@ -445,7 +445,7 @@ struct FadedPaletteDerivationTests {
     func blackPagesStillStep() {
         for (name, page) in [
             ("faded rgb black", Color.rgb(0, 0, 0).opacity(0.5)),
-            ("named black", Color.ansi(.black)),
+            ("the black slot", Color.ansi(.black)),
             ("opaque rgb black", Color.rgb(0, 0, 0)),
         ] {
             let palette = BlackPagePalette(background: page)
@@ -470,9 +470,9 @@ private struct BlackPagePalette: Palette {
     let background: Color
     let foreground = Color.rgb(230, 230, 240)
     let accent = Color.rgb(0, 180, 200)
-    let success = Color.ansi(.green)
-    let warning = Color.ansi(.yellow)
-    let error = Color.ansi(.red)
-    let info = Color.ansi(.blue)
-    let border = Color.ansi(.brightBlack)
+    let success = Color.green
+    let warning = Color.yellow
+    let error = Color.red
+    let info = Color.blue
+    let border = Color.gray
 }
