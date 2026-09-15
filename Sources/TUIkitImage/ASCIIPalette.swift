@@ -213,14 +213,43 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// image changes with it. As glyphs, that is — an image drawn as pixels
     /// through terminal graphics gets an RGB for each name, since pixels cannot
     /// carry one: the colour the terminal reported for the slot, or xterm's value
-    /// while it has reported none, as they stood when this palette was first used.
-    /// That is a best guess for a number to draw, not a measurement: a slot the
-    /// terminal has not reported measures as nothing (`Color.rgbComponents`).
+    /// while it has reported none. That is a best guess for a number to draw,
+    /// not a measurement: a slot the terminal has not reported measures as
+    /// nothing (`Color.rgbComponents`).
     ///
-    /// Mapped by nearest colour in OKLab like any other palette. `.default` is
-    /// deliberately absent: it is not one of the sixteen, it is "whatever the
-    /// terminal would have used", and an image cannot be drawn in it.
-    public static let ansi16 = Self(ANSIColor.allCases.map(Color.ansi))
+    /// Mapped by nearest colour in OKLab like any other palette, each slot
+    /// matched as that same RGB. So it is read afresh: once the terminal reports
+    /// its slots, the next read matches against them, and a pixel takes the slot
+    /// whose colour it is nearest on that terminal. The colours, and so `==`,
+    /// are the sixteen slots either way.
+    ///
+    /// `.default` is deliberately absent: it is not one of the sixteen, it is
+    /// "whatever the terminal would have used", and an image cannot be drawn in
+    /// it.
+    public static var ansi16: Self {
+        // One palette is kept, for the slots it was measured under. It is a
+        // `static let` no longer: that measured the slots at its first use and
+        // never again, so a report that arrived later never reached a picture.
+        //
+        // Keyed on the slots themselves, not on `TerminalColors.generation`: the
+        // generation moves only with the process-wide colours, and a task-local
+        // pin (`TerminalColors.withCurrent`) changes what a slot measures as
+        // without moving it. The colours are read ONCE and the palette built
+        // under exactly those, so a report landing on another thread between the
+        // two cannot store one terminal's entries under another's slots.
+        let colours = TerminalColors.current
+        ansi16Lock.lock()
+        defer { ansi16Lock.unlock() }
+        if let built = ansi16Built, built.slots == colours.slots { return built.palette }
+        let palette = TerminalColors.withCurrent(colours) { Self(ANSIColor.allCases.map(Color.ansi)) }
+        ansi16Built = (slots: colours.slots, palette: palette)
+        return palette
+    }
+
+    private static let ansi16Lock = NSLock()
+
+    /// The last ``ansi16`` built, with the slots it was measured under.
+    nonisolated(unsafe) private static var ansi16Built: (slots: TerminalColors.Slots?, palette: Self)?
 
     /// The terminal's own 256 — the 6×6×6 cube and the 24-step grey ramp,
     /// indices 16…255. What ``ASCIIColorMode/ansi256`` maps through.
@@ -521,8 +550,9 @@ public struct ASCIIPalette: Sendable, Equatable {
         // A slot is matched as the colour the terminal reported for it, or
         // xterm's value while it has reported none (`Color.estimatedRGB`): a
         // candidate needs a number, and it is still drawn as the slot's code.
-        // Measured when the palette is made, so `ansi16`, a `static let`, keeps
-        // whatever the slots were at its first use.
+        // Measured when the palette is made, so a palette keeps the slots it was
+        // made under; `ansi16` is made again when they change, and the search
+        // index is shared only between palettes whose entries agree.
         let rgb = color.estimatedRGB ?? (red: 128, green: 128, blue: 128)
         let lab = Color.oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
         let rgba = RGBA(r: rgb.red, g: rgb.green, b: rgb.blue)

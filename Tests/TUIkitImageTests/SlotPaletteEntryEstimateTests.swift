@@ -35,14 +35,16 @@ struct SlotPaletteEntryEstimateTests {
     /// nearer Apple Terminal's bright red (230) than its red (153).
     ///
     /// Each palette is built inside its pin: entries are measured when a
-    /// palette is made. `ASCIIPalette.ansi16` is a `static let`, made once, so it
-    /// is deliberately not used here.
+    /// palette is made. `ASCIIPalette.ansi16` is read inside it, and measures
+    /// its slots as the report in force when it is read.
     @Test("A pixel maps to the slot entry nearest by the report, else by xterm's value, and keeps the slot's code")
     func slotEntryMatchesByTheReport() {
         let pixel = RGBA(r: 220, g: 0, b: 0)
         TerminalColors.withCurrent(.unknown) {
             let palette = ASCIIPalette([.ansi(.red), .ansi(.brightRed)])
             #expect(palette.nearestIndex(to: pixel) == 0)
+            let sixteen = ASCIIPalette.ansi16
+            #expect(sixteen.sgrParameters(at: sixteen.nearestIndex(to: pixel), background: false) == "31")
         }
         TerminalColors.withCurrent(Self.appleTerminal) {
             let palette = ASCIIPalette([.ansi(.red), .ansi(.brightRed)])
@@ -50,6 +52,8 @@ struct SlotPaletteEntryEstimateTests {
             #expect(palette.sgrParameters(at: 1, background: false) == "91")
             let byIndex = ASCIIPalette([.palette(1), .palette(9)])
             #expect(byIndex.nearestIndex(to: pixel) == 1)
+            let sixteen = ASCIIPalette.ansi16
+            #expect(sixteen.sgrParameters(at: sixteen.nearestIndex(to: pixel), background: false) == "91")
         }
     }
 }

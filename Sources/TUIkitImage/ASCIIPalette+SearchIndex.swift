@@ -161,8 +161,9 @@ extension ASCIIPalette {
     static let indexedEntryThreshold = 16
 
     /// This palette's index, built on first use and shared by every palette
-    /// with these colours — so a `.shades(256)` made afresh each frame does
-    /// not build one each frame, and every copy of one palette shares one.
+    /// whose entries measure the same — so a `.shades(256)` made afresh each
+    /// frame does not build one each frame, and every copy of one palette
+    /// shares one.
     /// `nil` for a palette with more entries than a byte can name, exactly as
     /// ``quantisationTable()`` declines one and for the same reason: the
     /// candidate lists store an entry index in a `UInt8`, so building an index
@@ -193,9 +194,9 @@ extension ASCIIPalette {
     /// The per-instance memo, and the process-wide cache behind it.
     ///
     /// A reference held by every copy of the palette, so the first search
-    /// pays a hash of the colours (once per palette instance) and every later
-    /// one pays a lock. The cache behind it is keyed by the colours and keeps
-    /// the last few, the way `Color.quantisedRamp` keeps ramps.
+    /// pays a hash of the entries (once per palette instance) and every later
+    /// one pays a lock. The cache behind it is keyed by the entries' RGB and
+    /// keeps the last few, the way `Color.quantisedRamp` keeps ramps.
     final class SearchIndexHandle: @unchecked Sendable {
         private let lock = NSLock()
         private var index: SearchIndex?
@@ -204,7 +205,7 @@ extension ASCIIPalette {
             lock.lock()
             defer { lock.unlock() }
             if let index { return index }
-            let built = SearchIndexCache.shared.index(for: palette.colors, entries: palette.entries)
+            let built = SearchIndexCache.shared.index(for: palette.entries)
             index = built
             return built
         }
@@ -213,19 +214,37 @@ extension ASCIIPalette {
     private enum SearchIndexCache {
         nonisolated(unsafe) static var shared = Store()
 
+        /// Keyed by what each entry MEASURES, its RGB packed into a `UInt32`,
+        /// not by the colours as written.
+        ///
+        /// An index is a function of the entries alone: each one's OKLab is
+        /// computed from its RGB (`ASCIIPalette.entry(for:)`, the only place an
+        /// entry is made), and the index stores nothing else. The colours are
+        /// NOT a function of the entries, and that is the hole this closes. A
+        /// slot entry measures as the colour the terminal reported for it, or
+        /// as xterm's value while it has reported none, so one list of colours
+        /// made before a report and again after is two palettes with different
+        /// entries and equal colours. Keyed by the colours, the second was
+        /// searched through the first's index, which carries the first's entries,
+        /// and answered as the terminal it no longer was: measured, (220, 0, 0)
+        /// took slot 1 on Apple Terminal "Basic" where its own walk takes slot 9.
+        ///
+        /// Two palettes spelled differently that measure the same now share an
+        /// index, which is right for the same reason: they search identically.
         final class Store: @unchecked Sendable {
             private let lock = NSLock()
-            private var indexes: [[Color]: SearchIndex] = [:]
-            private var order: [[Color]] = []
+            private var indexes: [[UInt32]: SearchIndex] = [:]
+            private var order: [[UInt32]] = []
             private let capacity = 8
 
-            func index(for colors: [Color], entries: [Entry]) -> SearchIndex {
+            func index(for entries: [Entry]) -> SearchIndex {
+                let key = entries.map { UInt32($0.rgba.r) << 16 | UInt32($0.rgba.g) << 8 | UInt32($0.rgba.b) }
                 lock.lock()
                 defer { lock.unlock() }
-                if let cached = indexes[colors] { return cached }
+                if let cached = indexes[key] { return cached }
                 let built = SearchIndex(entries: entries)
-                indexes[colors] = built
-                order.append(colors)
+                indexes[key] = built
+                order.append(key)
                 if order.count > capacity {
                     indexes.removeValue(forKey: order.removeFirst())
                 }

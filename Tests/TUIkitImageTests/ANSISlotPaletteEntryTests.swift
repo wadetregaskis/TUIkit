@@ -78,16 +78,20 @@ struct ANSISlotPaletteEntryTests {
         #expect(!ASCIIPalette([.rgb(10, 20, 30), Color.default]).foregroundSurvivesBold)
     }
 
-    @Test("ansi16 is the sixteen slots in slot order, measured as xterm's values, at every depth")
+    /// Pinned to a terminal that has reported nothing: `ansi16` measures its slots as
+    /// the report in force (ANSI16FollowsReportedSlotsTests).
+    @Test("ansi16 is the sixteen slots in slot order, measured as xterm's values while unreported, at every depth")
     func ansi16() {
-        let expected = Self.slots.map(\.color)
-        #expect(ASCIIPalette.ansi16.colors == expected)
-        #expect(ASCIIPalette.ansi16.entries.map { [$0.rgba.r, $0.rgba.g, $0.rgba.b] } == Self.slots.map(\.xterm))
-        for depth in [ColorDepth.truecolor, .palette256, .basic16, .noColor] {
-            #expect(ASCIIPalette.ansi16.downsampled(to: depth).colors == expected, "@\(depth)")
-        }
-        for (index, slot) in Self.slots.enumerated() {
-            #expect(ASCIIPalette.ansi16.sgrParameters(at: index, background: false) == "\(slot.foreground)")
+        TerminalColors.withCurrent(.unknown) {
+            let expected = Self.slots.map(\.color)
+            #expect(ASCIIPalette.ansi16.colors == expected)
+            #expect(ASCIIPalette.ansi16.entries.map { [$0.rgba.r, $0.rgba.g, $0.rgba.b] } == Self.slots.map(\.xterm))
+            for depth in [ColorDepth.truecolor, .palette256, .basic16, .noColor] {
+                #expect(ASCIIPalette.ansi16.downsampled(to: depth).colors == expected, "@\(depth)")
+            }
+            for (index, slot) in Self.slots.enumerated() {
+                #expect(ASCIIPalette.ansi16.sgrParameters(at: index, background: false) == "\(slot.foreground)")
+            }
         }
     }
 }
