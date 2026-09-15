@@ -46,7 +46,7 @@ struct ForEachStandaloneTests {
         // axis, but it must not cost the rows themselves.
         let lines = render(
             VStack {
-                ForEach(["A", "B"], id: \.self) { Text($0) }.foregroundStyle(.ansi(.red))
+                ForEach(["A", "B"], id: \.self) { Text($0) }.foregroundStyle(.red)
             }
         ).filter { !$0.isEmpty }
         #expect(lines == ["A", "B"], "\(lines)")
