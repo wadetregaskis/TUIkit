@@ -234,11 +234,15 @@ extension NotificationHostModifier {
                 let due = entries.map {
                     NotificationTiming.timeUntilOpacityChanges(
                         elapsed: $0.age(atNanos: now), visibleDuration: $0.duration)
-                }.min() ?? NotificationTiming.frameInterval
-                let sleep = min(
-                    NotificationTiming.longestSleep,
-                    max(NotificationTiming.frameInterval, due))
-                try? await Task.sleep(nanoseconds: UInt64(sleep * 1_000_000_000))
+                }.min() ?? 0
+                // To an instant a 2-tick frame begins on the clock the frames are
+                // stamped with, where a bar or a view animation on the same screen
+                // changes too, rather than a fixed sleep from wherever this woke. The
+                // clock is read again for the sleep, so the work above is not added on.
+                let wake = UInt64(
+                    clamping: NotificationTiming.nextWakeNanos(after: Int64(clamping: now), due: due))
+                let current = nowNanos()
+                try? await Task.sleep(nanoseconds: wake > current ? wake - current : 0)
                 guard !Task.isCancelled else { break }
                 AppState.shared.setNeedsRender()
             }

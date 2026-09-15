@@ -28,9 +28,25 @@ struct StandardAnimationDuration: Sendable, CustomTestStringConvertible {
 struct StandardAnimationDurationTests {
     /// Every standard duration: each spinner style's interval, the caret blink's
     /// half, the focus pulse's frame and cycle, each indeterminate preset's bar
-    /// frame and pass at two widths, the standard frame and the focus clock's floor.
+    /// frame and pass at two widths, the standard frame and the focus clock's floor, and a
+    /// toast fade's frame and longest sleep.
     static let durations: [StandardAnimationDuration] =
-        spinnerDurations + cursorDurations + barDurations + clockDurations
+        spinnerDurations + cursorDurations + barDurations + clockDurations + notificationDurations
+
+    /// A toast fade's frame, as the wakes its animation task plans while a fade is
+    /// drawing are spaced: thirty of them from a frame's instant, over their count.
+    /// Thirty, so a gap's nanosecond rounding cannot move the mean off a whole tick. And
+    /// the longest the task sleeps when nothing is due.
+    private static let notificationDurations: [StandardAnimationDuration] = {
+        let start = AnimationClock.nanoseconds(atTick: 600)
+        var wakes = [NotificationTiming.nextWakeNanos(after: start, due: 0)]
+        for _ in 0..<30 { wakes.append(NotificationTiming.nextWakeNanos(after: wakes[wakes.count - 1], due: 0)) }
+        return [
+            StandardAnimationDuration(
+                name: "notificationFadeFrame", seconds: Double(wakes[30] - wakes[0]) / 30 / 1_000_000_000),
+            StandardAnimationDuration(name: "notificationLongestSleep", seconds: NotificationTiming.longestSleep),
+        ]
+    }()
 
     private static let spinnerDurations: [StandardAnimationDuration] = [
         ("dots", SpinnerStyle.dots), ("line", .line), ("dancingLine", .dancingLine),
