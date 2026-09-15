@@ -3643,7 +3643,8 @@ until that run records it, with the host's version.
   OSC 4 once at startup through `Terminal.queryColors`, and publishes the
   answer to `TerminalColors.current` before the first frame. See "What the
   framework asks at startup"; `Tools/Smoke/colour_query_smoke.py` checks the
-  wiring.
+  wiring, and that frame one of an app with clear grounds leaves them to the
+  terminal (SGR 49) over a reported page and over silence.
 - `Terminal.enableRawMode` / `disableRawMode` — focus reporting (mode 1004)
   on and off; `Terminal.finalize` reads the reports as
   `TerminalInput.focusChanged`; `AppRunner.terminalFocusChanged` moves

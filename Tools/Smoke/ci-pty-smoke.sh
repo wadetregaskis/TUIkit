@@ -106,7 +106,9 @@ echo "── mode 2027: pinned when needed, and only then ──"
 
 # The same class, for the colour exchange: the terminal's colours are asked
 # once, with the request its host needs, and published before RenderLoop draws
-# its first frame. Five short runs, about twenty seconds (18.7 s measured).
+# its first frame, and an app whose grounds are clear clears frame one's rows on
+# the terminal's own background (SGR 49) whether the terminal reported its page
+# or not. Eight short runs, about half a minute (27.5 s measured).
 echo "── colours: asked before the first frame ──"
 "$VENV/bin/python" "$HERE/colour_query_smoke.py" "$REPO/$BUILD_DIR/Example"
 

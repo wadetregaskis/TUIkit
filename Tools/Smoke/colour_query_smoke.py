@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Does the app ask the terminal for its colours before its first frame, with
-the request its host needs, and give back what was typed meanwhile?
+the request its host needs, give back what was typed meanwhile, and leave a
+clear page to the terminal?
 
 `TerminalClient.detectColors(using:)` sends one request at startup: OSC 10
 and 11 (the default foreground and background), OSC 4 for the sixteen ANSI
 slots except under tmux, and `CSI 5n` as the fence. Whatever the terminal
 answers is published to `TerminalColors.current` before `RenderLoop` draws
 anything. The unit tests (`TerminalColorStartupTests`) cover the exchange, the
-hand-back and what is published. What they cannot see is the WIRING:
+hand-back and what is published; `GroundedPaletteTerminalTests` covers how a
+translucent ground is spent against it. What they cannot see is the WIRING:
 
   1. the request is sent at all, once, and before the first frame, which must
      wait for the fence: a frame drawn before the answer is a frame drawn with
@@ -16,21 +18,35 @@ hand-back and what is published. What they cannot see is the WIRING:
      holds the fence about half a second (measured, tmux 3.7c);
   3. a keystroke that arrives among the replies reaches the app;
   4. a terminal that answers the fence alone, or never answers it, still gets
-     its first frame.
+     its first frame;
+  5. frame one of an app whose grounds are clear clears every row on SGR 49,
+     the terminal's own background, never an RGB ground: when the terminal has
+     reported its page (#282c34, which a clear ground must not paint either)
+     and when it has reported nothing.
 
 Runs the real binary under a PTY with a scrubbed environment, answers as each
 case's terminal would, and reads the bytes. The first frame is recognised by
 the Example header's glyph, as in `identity_smoke.py`. Exit 0 if every case
 matches.
 
-What this does NOT check: that frame one is drawn IN the reported colours. No
-built-in palette paints a colour the report changes yet, so the bytes are the
-same either way; the unit tests pin what is published.
+The clear grounds come from the Example's `TUIKIT_EXAMPLE_GROUND_ALPHA` seam at
+0, which fades its page, app header, status bar and overlay to alpha 0. That is
+not `.clear` spelled as such (black at alpha 0) but the green preset's own
+grounds at alpha 0, and grounding treats the two alike: a root at alpha 0 is
+the terminal's page. Before grounding each was painted as its own RGB, so
+`.clear` came out `48;2;0;0;0` and this page `48;2;5;10;5`; the check therefore
+rejects any ground on a frame-one row but 49, and black anywhere in frame one.
+`COLORTERM=truecolor` makes a painted ground spell as RGB, as it did then.
+
+What this does NOT check: that the rest of frame one is drawn in the reported
+colours. No built-in palette paints a colour the report changes, so those bytes
+are the same either way; the unit tests pin what is published and grounded.
 
 Usage:
   colour_query_smoke.py <binary> [--case NAME|all]
 """
 import argparse
+import collections
 import os
 import pty
 import re
@@ -68,6 +84,16 @@ GLYPH = "\U0001F5A5".encode()   # 🖥, the Example header's emoji: frame one is
 # An OSC colour query, or any CSI (DSR fences, DA, DECRQM).
 QUERY = re.compile(rb"\x1b\](10|11|4;\d+);\?(?:\x1b\\|\x07)|\x1b\[[?>=]?[0-9;]*[$ ]?[a-zA-Z@]")
 
+# A full frame starts each row at its first column, sets the row's ground and
+# erases the line in it (EL paints the current background), so the SGRs between
+# the cursor move and `CSI 2K` say what the row was cleared on.
+ROW_CLEAR = re.compile(rb"\x1b\[(\d+);1H((?:\x1b\[[0-9;]*m)*)\x1b\[2K")
+SGR = re.compile(rb"\x1b\[([0-9;]*)m")
+BLACK_GROUND = re.compile(rb"[\[;]48;2;0;0;0[;m]")
+
+# Every ground at alpha 0, and a terminal that takes RGB (see the docstring).
+CLEAR_GROUNDS = {"TUIKIT_EXAMPLE_GROUND_ALPHA": "0", "COLORTERM": "truecolor"}
+
 
 def spec(rgb):
     return b"rgb:" + b"/".join(b"%02x%02x" % (channel, channel) for channel in rgb)
@@ -84,26 +110,35 @@ def colour_reply(code):
 
 
 # name: (tmux?, answers colours?, answers the 5n fence?, delay before answering,
-#        a keystroke to slip in after the first reply, what must hold)
+#        a keystroke to slip in after the first reply, extra environment,
+#        what must hold)
 CASES = {
     # Replies held back 0.3 s: frame one must wait for them.
-    "answering": (False, True, True, 0.3, None, "request, then frame after the answer"),
-    "tmux": (True, True, True, 0.0, None, "no OSC 4 under tmux"),
-    "silent": (False, False, True, 0.0, None, "frame drawn after a fence-only answer"),
-    "no-fence": (False, True, False, 0.0, None, "frame drawn once the deadline passes"),
+    "answering": (False, True, True, 0.3, None, {}, "request, then frame after the answer"),
+    "tmux": (True, True, True, 0.0, None, {}, "no OSC 4 under tmux"),
+    "silent": (False, False, True, 0.0, None, {}, "frame drawn after a fence-only answer"),
+    "no-fence": (False, True, False, 0.0, None, {}, "frame drawn once the deadline passes"),
     # `q` quits the Example: if it reaches the app, the app exits on its own.
-    "keystroke": (False, True, True, 0.0, b"q", "a key among the replies quits the app"),
+    "keystroke": (False, True, True, 0.0, b"q", {}, "a key among the replies quits the app"),
+    # Held back too, so frame one is provably drawn with the page reported.
+    "clear-answering": (False, True, True, 0.3, None, CLEAR_GROUNDS,
+                        "clear grounds over a reported page: frame one clears on 49"),
+    "clear-silent": (False, False, True, 0.0, None, CLEAR_GROUNDS,
+                     "clear grounds, nothing reported: frame one clears on 49"),
+    "clear-keystroke": (False, True, True, 0.0, b"q", CLEAR_GROUNDS,
+                        "clear grounds: a key among the replies quits the app"),
 }
 
 
 def run(binary, case, config_dir, seconds):
-    tmux, answers, fences, delay, key, _ = CASES[case]
+    tmux, answers, fences, delay, key, environment, _ = CASES[case]
     pid, fd = pty.fork()
     if pid == 0:
         for name in STRIPPED:
             os.environ.pop(name, None)
         os.environ["TERM"] = "xterm-256color"
         os.environ["TUIKIT_CONFIG_DIR"] = config_dir
+        os.environ.update(environment)
         if tmux:
             # A socket that does not exist, so the app's tmux commands (its
             # client-change hooks) fail rather than reach a real server.
@@ -172,8 +207,58 @@ def run(binary, case, config_dir, seconds):
     return out, answered_at, exited
 
 
+def ground(sgrs):
+    """The background the SGR sequences `sgrs` leave set: `49`, a reset (`0`),
+    the colour's own spelling (`48;2;5;10;5`, `48;5;16`, `44`), or None."""
+    current = None
+    for parameters in SGR.findall(sgrs):
+        values = [int(value) if value else 0 for value in parameters.split(b";")]
+        index = 0
+        while index < len(values):
+            value = values[index]
+            if value in (38, 48):
+                # An extended colour's operands are not attributes of their own.
+                mode = values[index + 1] if index + 1 < len(values) else None
+                width = 3 if mode == 5 else 5 if mode == 2 else 1
+                if value == 48:
+                    current = ";".join(str(v) for v in values[index:index + width])
+                index += width
+                continue
+            if value in (0, 49) or 40 <= value <= 47 or 100 <= value <= 107:
+                current = str(value)
+            index += 1
+    return current
+
+
+def frame_one_rows(out, start):
+    """Each row of the first full frame after `start`, mapped to the ground it
+    was cleared on, and where that frame ends (the next frame's first repeat)."""
+    rows = {}
+    for match in ROW_CLEAR.finditer(out, start):
+        row = int(match.group(1))
+        if row in rows:
+            return rows, match.start()
+        rows[row] = ground(match.group(2))
+    return rows, len(out)
+
+
+def check_clear_grounds(out, start):
+    problems = []
+    rows, end = frame_one_rows(out, start)
+    if len(rows) < 3 or sorted(rows) != list(range(1, len(rows) + 1)):
+        problems.append(f"frame one cleared rows {sorted(rows)}, not 1 to n")
+    painted = collections.Counter(spelling for spelling in rows.values() if spelling != "49")
+    if painted:
+        problems.append("frame one cleared " + ", ".join(
+            f"{count} rows on {spelling}" for spelling, count in painted.most_common())
+            + f" of {len(rows)}, not 49")
+    if BLACK_GROUND.search(out, start, end):
+        problems.append("frame one paints a 48;2;0;0;0 ground")
+    return problems
+
+
 def check(case, out, answered_at, exited):
-    tmux, answers, fences, delay, key, _ = CASES[case]
+    tmux, answers, fences, delay, key, environment, _ = CASES[case]
     request = TMUX_REQUEST if tmux else NATIVE_REQUEST
     problems = []
     count = out.count(request)
@@ -196,6 +281,8 @@ def check(case, out, answered_at, exited):
         problems.append("frame one was drawn before the request")
     if delay and answered_at is not None and GLYPH in out[:answered_at]:
         problems.append("frame one was drawn before the answer arrived")
+    if environment == CLEAR_GROUNDS and GLYPH in out and count == 1:
+        problems += check_clear_grounds(out, out.find(request) + len(request))
     return problems
 
 
@@ -215,7 +302,7 @@ def main():
             out, answered_at, exited = run(args.binary, case, config_dir, args.seconds)
             problems = check(case, out, answered_at, exited)
             failures += bool(problems)
-            print(f"{case:<10} {'FAIL' if problems else 'ok  '} {CASES[case][5]}"
+            print(f"{case:<15} {'FAIL' if problems else 'ok  '} {CASES[case][6]}"
                   + (f": {'; '.join(problems)}" if problems else ""))
     finally:
         shutil.rmtree(config_dir, ignore_errors=True)
