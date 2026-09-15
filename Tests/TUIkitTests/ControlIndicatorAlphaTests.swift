@@ -34,7 +34,7 @@ struct ControlIndicatorAlphaTests {
         // and the bright end carried it — half a cycle honoured, half a debug trap.
         // They ask for the pair now. Asserted through the palette rather than
         // through each control, because it is the PAIR that has to agree.
-        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
+        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
         let surface = tinted.background
         for (name, pair) in [
             ("accentPulse", tinted.accentPulse()),
@@ -64,7 +64,7 @@ struct ControlIndicatorAlphaTests {
     ///
     /// The bright end is `spendingAlpha(over:)`, and the reason it guards on
     /// `isOpaque` instead of compositing at 1 is that `opacity(_:over:)` lerps —
-    /// and a lerp re-spells `.red` (SGR 31, the terminal's own red) as
+    /// and a lerp re-spells `.ansi(.red)` (SGR 31, the terminal's own red) as
     /// `rgb(205, 0, 0)`. Arithmetically the same colour; on any terminal whose
     /// palette is not the default, a visibly different one. This is the bright end
     /// of every focus pulse in all sixteen shipped palettes, so the assertion is
@@ -72,8 +72,8 @@ struct ControlIndicatorAlphaTests {
     @Test("An opaque pulse end keeps its named spelling")
     func opaqueEndKeepsItsSpelling() {
         let named = Color.ansi(.red)
-        #expect(named.spendingAlpha(over: .ansi(.black)) == named)
-        let ends = named.breathEnds(dimmedTo: 0.35, over: .ansi(.black))
+        #expect(named.spendingAlpha(over: .black) == named)
+        let ends = named.breathEnds(dimmedTo: 0.35, over: .black)
         #expect(
             ends.bright.foregroundCodes() == named.foregroundCodes(),
             "re-spelled as \(ends.bright.foregroundCodes())")
@@ -95,10 +95,10 @@ struct ControlIndicatorAlphaTests {
         // which is how a palette bound to a live colour editor reached this.
         // `SystemPalette` states its own opaque cursor colour, so a `TintedPalette`
         // is the wrong fixture and would pass for the wrong reason.
-        let faded = Color.ansi(.red).opacity(0.5)
+        let faded = Color.red.opacity(0.5)
         for animation in TextCursorStyle.Animation.allCases {
             let states = TextFieldContentRenderer.computeCursorCycle(
-                baseColor: faded, over: .ansi(.black), animation: animation,
+                baseColor: faded, over: .black, animation: animation,
                 speed: .standard, cursorTimer: nil
             ).states
             let carried = states.enumerated().filter { !$0.element.color.isOpaque }
@@ -114,7 +114,7 @@ struct ControlIndicatorAlphaTests {
     /// a run's frames all answer to one static claim.
     @Test("A button's cap breath is opaque at every phase under a faded tint")
     func capBreathIsOpaqueThroughout() {
-        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
+        let tinted = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
         let context = RenderContext(
             availableWidth: 20, availableHeight: 3, tuiContext: TUIContext())
         let caps = ButtonCapCycle(
@@ -133,7 +133,7 @@ struct ControlIndicatorAlphaTests {
     @Test("A checkbox's mark claims its own cells under a faded tint")
     func checkboxClaims() throws {
         let drawn = buffer(
-            Toggle("Enable", isOn: .constant(true)).tint(Color.ansi(.red).opacity(0.5)), width: 20)
+            Toggle("Enable", isOn: .constant(true)).tint(Color.red.opacity(0.5)), width: 20)
         let claim = try #require(
             drawn.opacityRegions.first, "the mark's own alpha: \(drawn.opacityRegions)")
         #expect(claim.offsetX == 0, "the indicator opens the row")
@@ -144,7 +144,7 @@ struct ControlIndicatorAlphaTests {
     @Test("An opaque tint leaves a checkbox claiming nothing")
     func opaqueCheckbox() {
         #expect(
-            buffer(Toggle("Enable", isOn: .constant(true)).tint(Color.ansi(.red)), width: 20)
+            buffer(Toggle("Enable", isOn: .constant(true)).tint(Color.red), width: 20)
                 .opacityRegions.isEmpty)
         #expect(
             buffer(Toggle("Enable", isOn: .constant(true)), width: 20).opacityRegions.isEmpty)
@@ -158,7 +158,7 @@ struct ControlIndicatorAlphaTests {
         let drawn = buffer(
             Toggle("Enable", isOn: .constant(true))
                 .toggleStyle(.switch)
-                .tint(Color.ansi(.red).opacity(0.5)),
+                .tint(Color.red.opacity(0.5)),
             width: 20)
         #expect(!drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
     }
@@ -173,7 +173,7 @@ struct ControlIndicatorAlphaTests {
         let drawn = focused(
             Toggle("Enable", isOn: .constant(true))
                 .toggleCharacterSet(.ascii)
-                .tint(Color.ansi(.red).opacity(0.5)))
+                .tint(Color.red.opacity(0.5)))
         #expect(drawn.animatedCells.count == 1, "the brackets breathe")
         let mark = owed(atColumn: 1, row: 0, in: drawn)
         #expect(mark.ink == 128.0 / 255 && mark.field == 1, "the mark owes \(mark)")
@@ -186,7 +186,7 @@ struct ControlIndicatorAlphaTests {
     @Test("A focused ASCII checkbox under an opaque tint breathes and claims nothing")
     func focusedOpaqueAsciiCheckbox() {
         let drawn = focused(
-            Toggle("Enable", isOn: .constant(true)).toggleCharacterSet(.ascii).tint(Color.ansi(.red)))
+            Toggle("Enable", isOn: .constant(true)).toggleCharacterSet(.ascii).tint(Color.red))
         #expect(drawn.animatedCells.count == 1, "the brackets breathe")
         #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
     }
@@ -200,7 +200,7 @@ struct ControlIndicatorAlphaTests {
             Toggle("Enable", isOn: .constant(true))
                 .toggleStyle(.switch)
                 .toggleCharacterSet(.ascii)
-                .tint(Color.ansi(.red).opacity(0.5)))
+                .tint(Color.red.opacity(0.5)))
         #expect(drawn.animatedCells.count == 1, "the brackets breathe")
         let knob = owed(atColumn: 2, row: 0, in: drawn)
         #expect(knob.ink == 128.0 / 255, "the knob owes \(knob)")
@@ -237,7 +237,7 @@ struct ControlIndicatorAlphaTests {
     @Test("A focused coloured switch under a faded tint breathes to the spent accent")
     func focusedSwitchUnderFadedTintSpendsTheAccent() throws {
         try withColorDepth(.truecolor) {
-            let palette = TintedPalette(base: SystemPalette.default, tint: Color.ansi(.red).opacity(0.5))
+            let palette = TintedPalette(base: SystemPalette.default, tint: Color.red.opacity(0.5))
             let drawn = focused(Toggle("Enable", isOn: .constant(true)).toggleStyle(.switch), palette: palette)
             let run = try #require(drawn.animatedCells.first, "the track breathes")
             #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
@@ -268,7 +268,7 @@ struct ControlIndicatorAlphaTests {
         let drawn = buffer(
             RadioButtonGroup(selection: .constant(1)) {
                 RadioButtonItem(1) { Text("One") }
-            }.tint(Color.ansi(.red).opacity(0.5)),
+            }.tint(Color.red.opacity(0.5)),
             width: 20)
         let claim = try #require(
             drawn.opacityRegions.first, "the indicator's alpha: \(drawn.opacityRegions)")
@@ -282,7 +282,7 @@ struct ControlIndicatorAlphaTests {
         let drawn = buffer(
             RadioButtonGroup(selection: .constant(1)) {
                 RadioButtonItem(1) { Text("One") }
-            }.tint(Color.ansi(.red)),
+            }.tint(Color.red),
             width: 20)
         #expect(drawn.opacityRegions.isEmpty, "\(drawn.opacityRegions)")
     }
