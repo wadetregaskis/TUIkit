@@ -655,6 +655,19 @@ extension Palette {
         accent.opacity(ViewConstants.focusBorderDim, over: background)
     }
 
+    /// Whether a tint of the accent over the page can be measured: both have RGB.
+    ///
+    /// A control that answers the pointer with a fill mixes the accent into the
+    /// page. Where either has no RGB (`Color.default`, or a colour of the
+    /// terminal's own that it has not reported), that mix has no RGB between its
+    /// ends: every share of it is the page or the whole accent (Opacity as
+    /// composition §75), so no tint of it can be checked for a visible step, nor
+    /// a label on it for contrast.
+    package var accentTintIsMeasurable: Bool {
+        accent.resolve(with: self).rgbComponents != nil
+            && background.resolve(with: self).rgbComponents != nil
+    }
+
     /// The face while the pointer is over the control.
     ///
     /// A step further into the accent than ``restingControlFace``, and — this
@@ -690,9 +703,7 @@ extension Palette {
         // page, or the whole accent. Whichever end the blend picks, the walk could
         // only stay at rest or jump to a solid accent under a label nobody can check,
         // and the second is not a hover.
-        guard accent.resolve(with: self).rgbComponents != nil,
-            background.resolve(with: self).rgbComponents != nil
-        else { return restingControlFace }
+        guard accentTintIsMeasurable else { return restingControlFace }
         let resting = restingControlFace.resolve(with: self).downsampledToPalette256()
         var distinct: [Color] = []
         var furthest: Color?
