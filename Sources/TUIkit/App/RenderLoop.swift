@@ -339,6 +339,16 @@ internal final class RenderLoop<A: App> {
             AppState.shared.setNeedsRender()
         })
 
+    /// What the terminal is asked about its colours once the app is drawing (see
+    /// ``TerminalColorRequester``): under tmux, the sixteen ANSI slots the
+    /// startup exchange left out, once the first frame is on screen.
+    ///
+    /// Lazy and capturing `terminal` rather than `self`, as the two refreshers
+    /// above are and do. The answer is not read here — it arrives on stdin like
+    /// a keystroke, and `terminalColors` publishes it.
+    private lazy var colorQueries = TerminalColorRequester(
+        isTmux: isTmux, send: { [terminal] request in terminal.write(request) })
+
     /// The environment snapshot from the previous frame.
     ///
     /// Compared after `buildEnvironment()` each frame. When the snapshot
@@ -362,6 +372,16 @@ internal final class RenderLoop<A: App> {
     /// from the actual height.
     private var isFirstFrame = true
 
+    /// Whether the app is running inside tmux, which decides what the terminal
+    /// is asked about its colours once frames are being drawn (see
+    /// ``TerminalColorRequester``).
+    ///
+    /// Taken at init rather than read from `TerminalHost.isTmux` at the point of
+    /// use, for the reason `Terminal.askColors(isTmux:)` takes it too: the
+    /// process's own answer is resolved once from the environment at launch, so
+    /// a test that needs the other branch has no way to say so otherwise.
+    private let isTmux: Bool
+
     init(
         app: A,
         terminal: any TerminalProtocol,
@@ -370,8 +390,10 @@ internal final class RenderLoop<A: App> {
         focusManager: FocusManager,
         paletteManager: ThemeManager,
         appearanceManager: ThemeManager,
-        tuiContext: TUIContext
+        tuiContext: TUIContext,
+        isTmux: Bool = TerminalHost.isTmux
     ) {
+        self.isTmux = isTmux
         self.app = app
         self.terminal = terminal
         self.statusBar = statusBar
@@ -625,6 +647,14 @@ extension RenderLoop {
         )
 
         endRenderPass()
+
+        // A frame is on screen. Under tmux that is when the sixteen ANSI slots
+        // are asked for — the startup exchange left them out, because tmux holds
+        // the fence about half a second when the client it forwards OSC 4 to is
+        // silent, and that half second would have come out of the time before
+        // this frame. Written and not waited for; the answer arrives as a late
+        // reply. See `TerminalColorRequester`.
+        colorQueries.noteFrameWritten()
 
         keepAnimating(scheduler: animationScheduler, frameNowNanos: frameNowNanos)
 

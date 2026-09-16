@@ -2141,8 +2141,8 @@ back. It asks only when stdin is a TTY in raw mode.
   all ended in ST, then `CSI 5n`: 170 bytes in one write.
 - **tmux:** OSC 10, OSC 11 and `CSI 5n` only. The slots are left out because
   tmux forwards OSC 4 to one client and holds the fence about half a second
-  when that client is silent (below). Asking for them after the first frame
-  is not built yet.
+  when that client is silent (below). They are asked for after the first frame
+  instead, where nothing that draws waits for them: see "Asked again" below.
 - **Waiting:** until the `CSI 0 n` fence, or 0.5 s, the deadline the other
   startup exchanges use. Replies that arrived before the deadline are kept.
   Keystrokes and focus reports that arrive among the replies go back to the
@@ -2150,8 +2150,13 @@ back. It asks only when stdin is a TTY in raw mode.
 - **Published:** `TerminalColors.current` gets what `resolve` makes of the
   answers, unless that says nothing. So a silent terminal leaves the record
   unknown, but a `COLORFGBG` hint is still published.
-- **Not asked again:** not on resume from a suspend, not on focus-in, and not
-  on a `997` report.
+- **Asked again, once the first frame is on screen:** under tmux only, and for
+  the sixteen slots only, since they are the ones left out above
+  (`TerminalColorRequester`). The request is written and not waited for — tmux's
+  half second holds no output of ours (a line printed straight after each batch
+  reached the client in 0.15–0.9 ms while the fence was still outstanding), and
+  the answer comes back as a late reply, below. Nothing is asked on resume from
+  a suspend, on focus-in, or on a `997` report.
 - **A reply later than the deadline is still read.** The input parser keeps an
   OSC 10, 11 or 4 answer and a `CSI ? 997 ; Ps n` report instead of dropping it
   with everything else nobody typed, the run loop takes what it kept once per
@@ -3868,8 +3873,13 @@ until that run records it, with the host's version.
   exchange has closed. `Terminal.noteVolunteeredColorReply` keeps an OSC 10, 11
   or 4 answer and a `CSI ? 997` report where the input parser would have dropped
   them, `AppRunner` hands them over once per drain, and a report that changes the
-  record is published to `TerminalColors.current` with a full repaint. Nothing
-  asks the terminal again yet.
+  record is published to `TerminalColors.current` with a full repaint.
+- `TerminalColorRequester` — when the terminal is asked again. Under tmux the
+  first frame is followed by the sixteen-slot request the startup exchange left
+  out, written and not waited for, because tmux holds the fence about half a
+  second when the client it forwards OSC 4 to is silent; its answer arrives as a
+  late reply, through the refresher above. Off tmux nothing is asked a second
+  time — the startup exchange asked for the slots itself and waited for them.
 - `Terminal.enableRawMode` / `disableRawMode` — focus reporting (mode 1004)
   on and off; `Terminal.finalize` reads the reports as
   `TerminalInput.focusChanged`; `AppRunner.terminalFocusChanged` moves

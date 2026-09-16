@@ -35,7 +35,12 @@ final class RenderLoopHarness {
         self.appearanceManager = ThemeManager(items: AppearanceRegistry.all, renderTrigger: {})
     }
 
-    func loop<A: App>(_ app: A) -> RenderLoop<A> {
+    /// A loop over this harness's terminal.
+    ///
+    /// `isTmux` is the seam `Terminal.askColors(isTmux:)` already uses:
+    /// `TerminalHost.isTmux` is read from the environment once per process, so a
+    /// test that needs the tmux branch has to say so rather than set it.
+    func loop<A: App>(_ app: A, isTmux: Bool = false) -> RenderLoop<A> {
         RenderLoop(
             app: app,
             terminal: terminal,
@@ -44,6 +49,7 @@ final class RenderLoopHarness {
             focusManager: focusManager,
             paletteManager: paletteManager,
             appearanceManager: appearanceManager,
-            tuiContext: tuiContext)
+            tuiContext: tuiContext,
+            isTmux: isTmux)
     }
 }
