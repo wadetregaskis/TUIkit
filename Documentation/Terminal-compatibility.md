@@ -2394,6 +2394,7 @@ keeps there:
 | A block text caret | the cell under it with its reversal flipped — a plain cell reversed, a selected cell's reversal taken off. A blink alternates the two; a pulse holds one | the caret's colour with the character punched out of it in the well |
 | A menu's highlight bar (a pop-up `Menu`, a `.contextMenu`, a `Picker`'s drop-down, a combo box's suggestions) | a steady `ESC[7;<ink>;<field>m` over the palette's own ink and page, restated after every reset in the row. A drop-down reverses its interior only: its frame and its scrollbar column are chrome | the accent's breath over the page |
 | A menu row under the pointer | nothing: its wash is the page there, and the label's ink lifts instead | a quiet accent tint over the page |
+| A date field's active component (`DatePicker`) | `ESC[7;<ink>;<field>m` over the palette's own ink and page, keeping the component's underline. Never a BARE 7 here: that would exchange the terminal's defaults and collapse to dark-on-dark on a mid-tone theme | the accent's breath as a block, with the digits punched out of it |
 
 The trigger is those colours and never the terminal's silence: a palette of
 ordinary RGB roles keeps its tints on a host that answers nothing. The ink and

@@ -5551,3 +5551,52 @@ too, through the renderer's other arm; neither leaves a run and the loop is aske
 the row under the pointer states exactly what it states at rest; the glyphs are where they are
 with the colours reported; and with Apple Terminal "Basic"'s sixteen reported, and under an RGB
 palette on a silent terminal, the tint and its breath are drawn as before.
+
+## 89. A date field's active component on a block the terminal decides (2026-09-15)
+
+A focused `DatePicker` says which component the arrow keys are on by drawing it on a block:
+the accent between 22% and 50% over the page (`Palette.accentFillPulse`), with the field's
+own text punched out of it, under the underline every editable component carries. Where the
+accent or the page has no RGB, every share of that blend is one end or the other (§75), so
+the breath was held (§79) at a solid half-strength accent under text nobody can check for
+contrast, or — for a translucent accent — at the page itself. Either way the field said
+nothing about which of the year, month, day, hour or minute was about to change.
+
+**The rule.** The cell is REVERSED instead, decided by `Palette.emphasisFill(over:)` exactly
+as a cursor row's fill (§86), a menu's bar (§88) and a text selection (§87) are: SGR 7 with
+the palette's ink and page stated beside it, and the underline kept. Stating the pair is not
+a detail here, it is the whole point, and it is what this site has always insisted on: a BARE
+`ESC[7m` exchanges the colours IN FORCE, which after a reset are the terminal's own defaults
+rather than the palette's, and on a mid-tone theme that collapses to dark-on-dark. The site's
+comment used to reject reverse video outright for that reason; it now says why reverse video
+is safe here — because both colours travel with the 7.
+
+What it leaves alone:
+- **A measurable block.** Every built-in palette states RGB roles, so every field is drawn as
+  it was, byte for byte, on a silent terminal and on a reporting one. Once the terminal
+  reports its sixteen, a slot accent breathes again.
+- **The rest of the field.** The components either side of the active one, and the separators
+  between them, are untouched — which is what makes the reversal say where you are.
+- **The claims.** A reversal states both sides opaque and claims nothing of its own, as §86's
+  rows and §87's selection do; the measurable path keeps the claim it always owed.
+- **The layout.** Only colours change — the same digits in the same cells — so the measure
+  pass and the render still agree, and the measure pass still draws no block at all.
+
+Limits:
+- A reversed component is stated opaque, so a faded palette's ink is spent rather than
+  blended under it.
+- The component is steady where it reverses: it leaves no run, and no cycle is built for it.
+  That is work avoided rather than a rule about the clock — building a cycle is not itself a
+  clock read (`IndicatorCycleTiming.step(on:)` does not mark the frame, unlike
+  `CursorTimer.pulsePhase(for:)`) — and this site already left no run there, because
+  `accentFillPulse` returns two equal ends where it cannot be measured.
+- What a host actually PAINTS for a reversed cell is unmeasured on every terminal
+  (Terminal-compatibility.md).
+
+`ReversedDateComponentTests` (TUIkitTests) pins it at all three depths, with an `.ansi(.blue)`
+accent over a mid-tone RGB page and with the terminal's own pair: the active component carries
+the 7 with the palette's ink and page and its underline; the reversal is never a bare 7 and
+always states a field; the components either side are not reversed; it leaves no run and the
+loop is asked for no tick; the digits are where they were; and with Apple Terminal "Basic"'s
+sixteen reported, and under an RGB palette on a silent terminal, the block and its breath are
+drawn as before.

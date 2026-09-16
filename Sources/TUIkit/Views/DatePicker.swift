@@ -355,10 +355,15 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let activeKind: DateFieldModel.Kind? = isFocused ? handler.activeKind : nil
 
         // The focused, active component is drawn as a dark glyph on a *pulsing
-        // accent* block — explicit palette colours (not SGR reverse-video, which
-        // inverts the terminal's default colours and collapses to dark-on-dark
-        // on a mid-tone theme), so it's readable on every palette and visibly
-        // breathes while focused, the same affordance List/Picker rows use.
+        // accent* block, in explicit palette colours, so it's readable on every
+        // palette and visibly breathes while focused, the same affordance
+        // List/Picker rows use. Where the accent or the page has no RGB there is
+        // nothing between them to breathe (`Documentation/Opacity as composition.md`
+        // §75) and the CELL is reversed instead — with the palette's pair stated
+        // beside the 7. Never a bare `ESC[7m`, which is what this site has always
+        // said: that exchanges the colours in force, which after a reset are the
+        // TERMINAL's defaults, and on a mid-tone theme it collapses to
+        // dark-on-dark (§89).
         //
         // The whole cycle, not the live phase: reading the phase marks the frame
         // as having consulted the clock, so every tick re-rendered the page to
@@ -366,11 +371,13 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         // ``AnimatedCellRun`` instead. Gated on `!isMeasuring` so the measure
         // pass never asks at all; it's colour-only, so the width is identical
         // whether or not it's applied.
-        let cycle = context.environment.selectionEmphasis.cycle(
-            isFocused && !context.isMeasuring)
+        let emphasis = palette.emphasisFill()
+        let showsActive = isFocused && !context.isMeasuring
+        // No cycle is built for a reversal: it has no phase to advance, and building
+        // one is sixteen frames and a pulse ramp for a picture that cannot change.
+        let breathes = showsActive && !emphasis.isReversed
+        let cycle = context.environment.selectionEmphasis.cycle(breathes)
         let (dimBlock, brightBlock) = palette.accentFillPulse()
-        let activeHighlight: Color? = isFocused && !context.isMeasuring
-            ? cycle.colorNow(dim: dimBlock, bright: brightBlock) : nil
 
         /// The active component's cell on its block — one description, used for
         /// the frame drawn now and for every frame of the run that replays it.
@@ -379,11 +386,21 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         /// once, which is right for every frame because only the BLOCK breathes here
         /// and `accentFillPulse` spends a faded accent at both ends, so no frame of
         /// this run states a translucent colour of its own (§29.2, §68.4).
-        func activeCell(_ text: String, on block: Color) -> String {
+        ///
+        /// Reversed, both sides are stated opaque beside the 7 and the cell claims
+        /// nothing at all, as every reversal does (§86, §89).
+        func activeCell(_ text: String, on block: HighlightFill) -> String {
             var style = TextStyle()
-            style.backgroundColor = block
-            style.foregroundColor = palette.foreground.opaqueSpelling
             style.isUnderlined = !isDisabled
+            switch block {
+            case .reversed(let ink, let field):
+                style.isInverted = true
+                style.foregroundColor = ink.opaqueSpelling
+                style.backgroundColor = field.opaqueSpelling
+            case .fill(let color), .pulse(_, let color):
+                style.backgroundColor = color
+                style.foregroundColor = palette.foreground.opaqueSpelling
+            }
             return ANSIRenderer.render(text, with: style.resolved(with: palette))
         }
 
@@ -411,18 +428,26 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                 // Separators (the "-", ":" and spaces) stay quiet.
                 claimCell(cell.text, ink: palette.foregroundSecondary)
                 style.foregroundColor = palette.foregroundSecondary.opaqueSpelling
-            } else if let activeKind, cell.kind == activeKind, activeHighlight != nil {
+            } else if let activeKind, cell.kind == activeKind, showsActive {
                 // Bright text on the pulsing accent block — the same
                 // high-contrast, readable affordance List/Picker focused rows use.
-                // The block breathes on its own, at the column it lands in.
-                if let run = cycle.run(
-                    dim: dimBlock, bright: brightBlock, offsetX: line.strippedLength, offsetY: 0,
-                    draw: { activeCell(cell.text, on: $0) })
-                {
-                    runs.append(run)
+                // The block breathes on its own, at the column it lands in. Where it
+                // cannot be measured the cell is reversed instead, which is steady:
+                // no run to leave, and nothing to claim, since both sides are stated
+                // opaque.
+                if breathes {
+                    if let run = cycle.run(
+                        dim: dimBlock, bright: brightBlock, offsetX: line.strippedLength, offsetY: 0,
+                        draw: { activeCell(cell.text, on: .fill($0)) })
+                    {
+                        runs.append(run)
+                    }
+                    claimCell(cell.text, ink: palette.foreground)
+                    line += activeCell(
+                        cell.text, on: .fill(cycle.colorNow(dim: dimBlock, bright: brightBlock)))
+                } else {
+                    line += activeCell(cell.text, on: emphasis)
                 }
-                claimCell(cell.text, ink: palette.foreground)
-                line += activeCell(cell.text, on: cycle.colorNow(dim: dimBlock, bright: brightBlock))
                 continue
             } else {
                 // Every editable component is underlined so the field reads as
