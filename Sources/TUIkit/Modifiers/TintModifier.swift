@@ -66,6 +66,11 @@ struct TintedPalette: DerivedPalette {
     var focusBackground: Color { base.focusBackground }
     var cursorColor: Color { base.cursorColor }
     var fieldBackground: Color { base.fieldBackground }
+
+    // Not a colour, and forwarded for exactly the reason the colours are: left
+    // unstated it would be recomputed from this palette's page, so a `.tint` inside
+    // an `.environment(\.colorScheme, …)` would throw the pin away.
+    var colorScheme: ColorScheme { base.colorScheme }
 }
 
 // MARK: - tint environment

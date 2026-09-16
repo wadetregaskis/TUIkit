@@ -37,7 +37,11 @@ extension EnvironmentValues {
         // Through `GroundedPalette.grounding`, which hands back every palette whose
         // root grounds are opaque, and none of whose stated roles is `Color.default`,
         // exactly as it was given. See there for what it does to the others, and why.
-        set { self[PaletteKey.self] = GroundedPalette.grounding(newValue) }
+        //
+        // Then through `schemed(_:)`, which states a scheme a view pinned — after
+        // grounding, because what a palette is grounded on is not what a pin is about,
+        // and both are idempotent, so a palette written back unchanged stays one value.
+        set { self[PaletteKey.self] = schemed(GroundedPalette.grounding(newValue)) }
     }
 }
 
@@ -106,6 +110,13 @@ package struct GroundedPalette: DerivedPalette {
     /// The terminal's colours when the roles were grounded, which is all they were
     /// derived from besides the base.
     package let terminal: TerminalColors
+
+    /// The base's own reading, kept rather than recomputed.
+    ///
+    /// Grounding re-spells the page; it does not change which one it is. And a palette
+    /// that STATES its scheme — the one case where the page is not the answer — would
+    /// otherwise lose it here, since `Palette`'s defaults are collapsing.
+    package let colorScheme: ColorScheme
 
     /// Grounded under the same terminal colours. Under different ones the roots and
     /// inks spend over a different page, so they are different palettes. The render
@@ -178,6 +189,7 @@ package struct GroundedPalette: DerivedPalette {
     package init(base: any Palette) {
         self.base = base
         terminal = TerminalColors.current
+        colorScheme = base.colorScheme
         let page = Self.grounded(root: base.background)
         background = page
         statusBarBackground = Self.grounded(root: base.statusBarBackground)

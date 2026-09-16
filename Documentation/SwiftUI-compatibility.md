@@ -124,7 +124,7 @@ Code that uses them compiles and behaves the same.
 | Modifiers | `padding`, `frame`, `overlay(alignment:content:)`, `fixedSize`, `foregroundStyle` (any `ShapeStyle` → §3), `background` (any style, or none — §3), `backgroundStyle`, `disabled` (on any `View`), `tint`, `tag`, `zIndex`, `badge`, `listStyle`, `formStyle`, `lineLimit` (on `Text` **and** on any `View`), `truncationMode`, `multilineTextAlignment`, `opacity` | ✓ | units are `Int` → §2.1; `lineLimit`/`truncationMode` on a `View` cascade to every `Text` below, and one written on a `Text` wins there — `.lineLimit(nil)` means *unlimited*, so it is also how a branch opts out of an inherited cap; `disabled` cascades via `\.isEnabled`; `tint` overrides the accent role (§2.5); `frame` default alignment is `.topLeading` → §2.7; `multilineTextAlignment` aligns a wrapped `Text`'s lines within its own block width (single-line text unaffected); **`opacity` is real compositing** — the subtree renders to its own layer and each of its cells is resolved against the cell beneath where the layer lands, so a view fading over a coloured panel moves toward the panel's colour rather than the page's, and nesting multiplies as in SwiftUI (`0.5` inside `0.5` is `0.25`). Hue is preserved (a red heading at `0.5` still reads red), and the view keeps its space and its hit-test regions at every alpha. **The mix is in encoded sRGB, matching SwiftUI** — measured through `ImageRenderer`, which composites `Color.opacity(a)` over a ground to the same byte an encoded lerp gives at every alpha tried and never to the linear-light one. TUIkit blended in linear light until 2026-09-04 on the argument that it is physically what a translucent layer does; it is, and it is also 22× more sensitive near transparent than near opaque, which showed up as a spring transition whose fade-out visibly bounced and whose fade-in did not. See `Documentation/Opacity as composition.md`, rule 5. Colours compose exactly at every alpha; **characters cannot** — two cannot share a cell at half strength each — so alpha is a decision for the glyph, taken only where two characters contest a cell: **over anything blank the subtree's characters draw at every alpha and fade all the way out; where a character sits underneath, the subtree's draws at or above `0.5` and the one behind shows below it**, keeping its own foreground while its field carries the veil (matching characters never snap — they cross-fade exactly). Text over different text therefore swaps characters at the midpoint instead of dissolving, which is the one visible departure from a graphical compositor; in exchange `opacity(0)` genuinely reveals what it covers rather than painting an invisible-coloured rectangle over it. Two rules make fading a container behave: a source SPACE composites its background and keeps what is behind it (so fading a `VStack` does not blank its rectangle), and the destination's foreground is never tinted (a translucent pane over text leaves the text legible). A repeating fade still costs no render passes — the compositor colours every phase of the cycle once and the run loop replays them |
 | App | `App`, `Scene`, `WindowGroup`, `SceneBuilder`, `@main`, `@AppStorage`, `@Environment(\.dismiss)` | ✓ | `@AppStorage` is *enhanced* (pluggable backend). `\.isPresented` says whether a view is inside something presented (a sheet, modal, cover, popover, alert or dialog) — `false` for a pushed `NavigationStack` screen, which was navigated to rather than presented. `\.dismiss` means the nearest thing that can be dismissed: a presentation closes, a pushed `NavigationStack` screen pops, and only at the top level — where a terminal app has nothing enclosing it — does dismissing mean quitting |
 | Text | `Text(_:)` (`LocalizedStringKey` **and** `StringProtocol`), `Text(verbatim:)`, `Text(_:format:)`, `Text + Text` | ✓ | a literal is a localization key, a computed `String` is not — SwiftUI's rule, and §4a records what it took to reproduce. **Every control and modifier that takes a title takes one too** — `Button`, `Toggle`, `TextField`, `Section`, `navigationTitle`, `alert`, … — as does the TUI-specific chrome (`Dialog`, `Alert`, `Card`, `StatusBarItem`, notifications); see §4a |
-| Color values | `Color.red`/`.white`/`.gray`/… (all fifteen of SwiftUI's names), `.clear`, `.primary`/`.secondary`/… and `.opacity(_:)` | ✓ | *constructing* a Color differs → §2.5. The fifteen names are fixed RGB at Apple's light values; SwiftUI adapts the hues to a dark appearance, and TUIkit has no `colorScheme` to adapt them to. The terminal's own slots are the TUI-only `Color.ansi(_:)`, and `Color.magenta` (#FF00FF) is TUI-only. `Color.opacity(_:)` stores an alpha, composited over whatever the colour is drawn on and multiplied into any alpha already there, as in SwiftUI; it shadows `ShapeStyle.opacity(_:)` for a `Color` receiver, as it does in SwiftUI |
+| Color values | `Color.red`/`.white`/`.gray`/… (all fifteen of SwiftUI's names), `.clear`, `.primary`/`.secondary`/… and `.opacity(_:)` | ✓ | *constructing* a Color differs → §2.5. The fifteen names are fixed RGB at Apple's light values; SwiftUI adapts the hues to a dark appearance and these do not, though `\.colorScheme` says which appearance is in force (→ §2.5). The terminal's own slots are the TUI-only `Color.ansi(_:)`, and `Color.magenta` (#FF00FF) is TUI-only. `Color.opacity(_:)` stores an alpha, composited over whatever the colour is drawn on and multiplied into any alpha already there, as in SwiftUI; it shadows `ShapeStyle.opacity(_:)` for a `Color` receiver, as it does in SwiftUI |
 
 The parity surface above is regression-tested in
 `Tests/TUIkitTests/SwiftUICompatFixesTests.swift`.
@@ -355,23 +355,40 @@ between the two spellings is exactly the difference between a *character* and a
 *picture*: an SF Symbol is the former, and that is the whole reason it can be in
 a terminal at all.
 
-### 2.5 Theming is `palette` / `appearance`; there is no `colorScheme`
+### 2.5 `colorScheme` is a read; the write is `palette` / `appearance`
 
 ```swift
 // SwiftUI                              // TUIkit
-@Environment(\.colorScheme) var scheme  .palette(SystemPalette(.blue))     // View or Scene — ANSI colour roles
+@Environment(\.colorScheme) var scheme  @Environment(\.colorScheme) var scheme  // supported, matches
+.environment(\.colorScheme, .dark)      .environment(\.colorScheme, .dark)      // supported, matches
+.preferredColorScheme(.dark)            .palette(SystemPalette(.blue))     // View or Scene — colour roles
                                         .appearance(.rounded)              // border/figure set
 .tint(.blue)                            .tint(.blue)                       // supported, matches (→ §1)
 ```
 
-**Why it's intentional / should NOT change:** a terminal's "look" is a small set
-of ANSI palette tokens and box-drawing styles, not a light/dark bitmap theme.
-There is no `\.colorScheme`; the `.palette` (colours) and `.appearance` (border/
-figure style) model maps cleanly to that reality and themes out-of-tree surfaces
-(status bar, app header) too. Light/dark *can* be expressed as palettes if
-desired. SwiftUI's `.tint(_:)` itself **is** supported and matches — it overrides
-the accent role for the subtree (§1); `.palette` is the broader, TUI-only
-superset (§4c).
+**What matches:** `\.colorScheme` asks whether the surroundings are light or dark,
+and TUIkit answers it. The answer is the palette's: the page it paints where that
+can be measured, what the terminal reported about its own colours (OSC 11, a
+`CSI ?997` theme report, `COLORFGBG`) where the palette leaves the page to the
+terminal, and `.light` where nothing said anything — nothing is assumed white and
+nothing is assumed dark. Writing it pins the scheme for the subtree exactly as
+SwiftUI's does, and the pin survives a `.palette(_:)` or `.tint(_:)` written
+inside it, because it is re-applied wherever a palette enters the environment.
+TUIkit's named colours do not yet adapt to it (→ the Color values row in §1).
+
+**Why the write half is intentional / should NOT change:** a terminal's "look" is
+a set of colour roles and box-drawing styles, not a light/dark bitmap theme, so
+the thing a view sets is a whole palette. The `.palette` (colours) and
+`.appearance` (border/figure style) model maps cleanly to that reality and themes
+out-of-tree surfaces (status bar, app header) too; `preferredColorScheme(_:)`
+stays absent, since what it would ask for is one of those palettes. SwiftUI's
+`.tint(_:)` itself **is** supported and matches — it overrides the accent role for
+the subtree (§1); `.palette` is the broader, TUI-only superset (§4c).
+
+**One stated limit.** Chrome drawn outside the content — the status bar, the app
+header, a modal's backdrop — renders against the app's ROOT palette, so a
+`\.colorScheme` pin (or a `.palette`) written inside content does not reach it,
+just as a SwiftUI subview's pin does not reach its window.
 
 ### 2.6 Chrome is the status bar, not toolbars/commands
 

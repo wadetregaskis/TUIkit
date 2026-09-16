@@ -837,10 +837,6 @@
       "how": "Spinner / SpinnerStyle (indeterminate); GaugeStyle.accessoryCircular (determinate dial)",
       "why": "Sources/TUIkit/Views/Spinner.swift (SpinnerStyle: .dots/.line/.pie/.moon/.clock/…) is SwiftUI's circular ProgressView — the indeterminate spinner — and `GaugeStyle.accessoryCircular`/`.accessoryCircularCapacity` (Sources/TUIkit/Views/Gauge.swift) draws a determinate dial. A true "
     },
-    "ColorScheme": {
-      "how": "Palette / SystemPalette (+ .palette(_:) on View and Scene)",
-      "why": "/Users/robot/Documents/TUIkit/Sources/TUIkitStyling/Theme/Theme.swift:30 (Palette roles incl. `background`) and Sources/TUIkit/Extensions/View+Environment.swift:94. §2.5 (Documentation/SwiftUI-compatibility.md:261-277) records the deviation: a terminal's look is a table of ANSI c"
-    },
     "DefaultPickerStyle": {
       "how": "PickerStyle.automatic / AutomaticPickerStyle",
       "why": "Sources/TUIkit/Styles/PickerStyle.swift — `.automatic` ships alongside `.inline`, `.menu` and the TUI-specific `.radioGroup`."

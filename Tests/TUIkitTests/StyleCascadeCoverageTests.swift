@@ -51,6 +51,11 @@ private struct EveryRolePalette: Palette {
     let focusBackground = Color.rgb(15, 15, 15)
     let cursorColor = Color.rgb(16, 16, 16)
     let fieldBackground = Color.rgb(17, 17, 17)
+
+    /// Deliberately the opposite of what this palette's near-black page reads as, so
+    /// a wrapper that recomputed the scheme instead of forwarding it fails below
+    /// rather than passing by coincidence.
+    let colorScheme = ColorScheme.light
 }
 
 /// Every colour role, read through the existential so the same entry can be
@@ -78,6 +83,12 @@ private let paletteRoles: [(name: String, read: @Sendable (any Palette) -> Color
     ("cursorColor", { $0.cursorColor }),
     ("fieldBackground", { $0.fieldBackground }),
 ]
+
+/// The roles that are not colours, and so cannot be rows of the table above.
+/// Each has its own expectation in the two delegation tests; this set is what
+/// keeps them in the completeness check, so a new one of either kind still has to
+/// be accounted for somewhere.
+private let nonColourRoles: Set<String> = ["colorScheme"]
 
 @MainActor
 @Suite("Style cascade — additional coverage")
@@ -154,7 +165,7 @@ struct StyleCascadeCoverageTests {
             Mirror(reflecting: EveryRolePalette()).children
                 .compactMap(\.label)
                 .filter { $0 != "id" && $0 != "name" })
-        #expect(Set(paletteRoles.map(\.name)) == stated)
+        #expect(Set(paletteRoles.map(\.name)).union(nonColourRoles) == stated)
     }
 
     @Test("TintedPalette overrides only accent; EVERY other role delegates to base")
@@ -175,6 +186,7 @@ struct StyleCascadeCoverageTests {
                 "\(role.name) did not delegate: \(role.read(tinted)) vs \(role.read(base))")
         }
         #expect(tinted.accent == tint.resolve(with: base))
+        #expect(tinted.colorScheme == base.colorScheme)
         #expect(tinted.id == base.id)
         #expect(tinted.name == base.name)
     }
@@ -198,6 +210,7 @@ struct StyleCascadeCoverageTests {
                 role.read(grounded) == expected,
                 "\(role.name) did not delegate: \(role.read(grounded)) vs \(expected)")
         }
+        #expect(grounded.colorScheme == base.colorScheme)
         #expect(grounded.id == base.id)
         #expect(grounded.name == base.name)
     }

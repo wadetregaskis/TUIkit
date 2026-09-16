@@ -115,6 +115,16 @@ public protocol Palette: Cyclable {
     /// tint rendered dark-on-light fields unreadable). Custom palettes can
     /// override for a distinct field tone.
     var fieldBackground: Color { get }
+
+    // MARK: - Color Scheme
+
+    /// Whether this palette draws a light page or a dark one.
+    ///
+    /// What ``EnvironmentValues/colorScheme`` answers. The default reads the page
+    /// this palette paints, so a palette states this only where it disagrees with
+    /// its own page — a deliberately mid-tone page that should still read as one
+    /// or the other.
+    var colorScheme: ColorScheme { get }
 }
 
 // MARK: - Default Palette Implementation
@@ -216,6 +226,27 @@ extension Palette {
             return stated
         }
         return surface(steppedFrom: base, separation: Self.wellSeparation)
+    }
+
+    // MARK: - Color Scheme Default
+
+    /// Light or dark: the page this palette paints, the terminal's own hint where
+    /// that cannot be measured, and ``ColorScheme/light`` where nothing said
+    /// anything.
+    public var colorScheme: ColorScheme {
+        // The page as it is PAINTED. A root ground's alpha is spent over the
+        // terminal's own page (see `GroundedPalette`), so `Color.clear` — a page
+        // that IS the terminal's — measures as whatever the terminal reported for
+        // it rather than as the black `.clear`'s components happen to hold.
+        let page = background.resolve(with: self).spendingAlpha(over: .terminalBackground)
+        if let scheme = ColorScheme(background: page) { return scheme }
+        // Only where there is nothing to measure: the hint can be a `CSI ?997`
+        // report or a guess from `COLORFGBG`, and a page the app paints is neither.
+        if let prefersDark = TerminalColors.current.prefersDark {
+            return prefersDark ? .dark : .light
+        }
+        // Nothing is assumed white, and nothing is assumed dark.
+        return .light
     }
 
     /// The field surface for a field drawn on `surface` instead of on the page.
