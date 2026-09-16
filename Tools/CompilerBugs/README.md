@@ -1,6 +1,6 @@
 # Compiler bugs TUIkit has hit
 
-Five Swift bugs the framework works around. Each has a self-contained repro here
+Six Swift bugs the framework works around. Each has a self-contained repro here
 so the workaround can be checked against a new toolchain and deleted the moment
 it stops being needed — and so they can be reported upstream without anyone
 having to build TUIkit.
@@ -10,7 +10,10 @@ The first two were found in August 2026. Toolchains: **Apple Swift 6.2.4**
 (`swift-DEVELOPMENT-SNAPSHOT-2026-08-30-a`, which is built `+assertions`).
 The third, fourth and fifth were found in September 2026, on swift.org's **Swift
 6.2.4** (`swift-6.2.4-RELEASE`, which is also built `+assertions`, and is what
-swiftly installs).
+swiftly installs). The sixth was found in September 2026 too, by the lane that
+builds the tests with **Swift 6.4** (`swift-6.4-RELEASE`). It is the only one
+here that swift.org's 6.2.4 — the local default, and so the compiler every other
+entry was found with — does not show at all.
 
 ---
 
@@ -506,3 +509,119 @@ Since 41a2bcc1 those tests (`DeclinedRunClockTests.swift`,
 instant as one literal or as a call to `AnimationClock.nanoseconds(atTick:)`,
 and neither forms the conversion. In an `#expect` on an optional, give
 arithmetic on the right a type, or write one literal.
+
+---
+
+## 6. `MacroClosureDiscriminatorCollision` — two closures lowered to one function
+
+```
+tcs=~/Library/Developer/Toolchains
+cd MacroClosureDiscriminatorCollision && \
+    DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./variants.sh \
+    "$tcs/swift-6.2.4-RELEASE.xctoolchain" \
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain \
+    "$tcs/swift-6.3.3-RELEASE.xctoolchain" \
+    "$tcs/swift-6.4.0-RELEASE.xctoolchain"
+```
+
+```
+                                              6.2.4 +a      Xcode 6.2.4   6.3.3         6.4
+Crash.swift: macro closure, then filter       ok            WRONG         WRONG         MISMATCH
+one source closure BEFORE the macro           ok            ok            ok            ok
+two source closures before the macro          ok            ok            ok            ok
+partner allSatisfy, not filter (no error)     ok            WRONG         WRONG         WRONG
+no enclosing closure                          ok            ok            ok            ok
+the macro call moved out of this scope        ok            ok            ok            ok
+#require instead of #expect                   ok            WRONG         WRONG         MISMATCH
+a struct element, not a tuple                 ok            WRONG         WRONG         MISMATCH
+an unlabelled tuple element                   ok            WRONG         WRONG         MISMATCH
+a source closure of a different type          ok            ok            ok            ok
+WORKAROUND: no closure inside the macro       ok            ok            ok            ok
+```
+
+`+a` marks a compiler built with assertions, though assertions have nothing to do
+with this one. `MISMATCH` is the `function type mismatch` error; `WRONG` means it
+built and then ran one closure in place of another; `ok` means both closures ran
+their own bodies.
+
+**The oracle here is the run, not the compile.** On 6.2 and 6.3 this bug emits no
+diagnostic at all — it drops one closure's body and calls the other — so a clean
+compile is not a clean bill, and every variant asserts a result for both closures
+so that a swap in either direction fails it. Each variant is built through
+SwiftPM, not by calling `swiftc` directly, so every toolchain uses its OWN
+swift-testing and macro plugin; that is load-bearing, because pointing one
+toolchain's compiler at another's swift-testing reports collisions the real build
+does not have.
+
+Two closure literals of the same type, in the same enclosing closure, are lowered
+to a SINGLE SIL function when the first is inside a macro expansion buffer and
+the second follows it in ordinary source. They get the same local discriminator,
+hence the same mangled name, so SILGen's `getOrCreateFunction` returns the
+function it already made and the second closure's body is never emitted:
+
+```swift
+withCurrent {
+    let drawn = cells()
+    #expect(drawn.allSatisfy { $0.character != "z" }, "the closure in the macro")
+    let flagged = drawn.filter { $0.state.flag }   // really runs the predicate above
+    #expect(flagged.map(\.character) == ["b", "c"], "\(flagged.map(\.character))")
+}
+```
+
+Four things are needed, each isolated by a row above:
+
+1. **An enclosing closure.** The same statements at the top level of the test
+   function are fine.
+2. **A closure inside a macro expansion buffer.** The identical call written as an
+   ordinary function taking the same closure is fine, so it is the BUFFER, not
+   swift-testing's API. `#require` does it as well as `#expect`.
+3. **The macro's closure FIRST.** A source closure before the macro is fine.
+4. **The same closure type on both sides.** A `map` returning `Character` beside an
+   `allSatisfy` returning `Bool` is fine.
+
+Neither the tuple nor its labels matter: a struct element and an unlabelled tuple
+both reproduce it.
+
+**`filter` is not required, and that is the dangerous part.** Only `filter` makes
+6.4 complain, because the standard library's `filter` is now typed-throws while
+`allSatisfy` still rethrows, so the two demanded types visibly disagree
+(`@error any Error` against `@error_indirect … Never` — the error quotes both).
+With `allSatisfy` as the partner the same collision happens on 6.4 too, silently.
+A clean 6.4 build therefore does not prove a file is free of this.
+
+### Affected versions
+
+Observed on macOS (arm64) on 2026-09-16, with `Crash.swift` and the variants
+above:
+
+| Toolchain | Build config | `Crash.swift` |
+|---|---|---|
+| swift.org 6.2.4 (`swift-6.2.4-RELEASE`) | +assertions | passes |
+| Xcode 26.3's 6.2.4 (`swiftlang-6.2.4.1.4`) | no assertions | **wrong code** |
+| swift.org 6.3.3 (`swift-6.3.3-RELEASE`) | no assertions | **wrong code** |
+| swift.org 6.4 (`swift-6.4-RELEASE`) | no assertions | compile error |
+
+The two 6.2.4 rows are the same compiler version and disagree, so the compiler
+version alone does not place a toolchain in this table. They ship different
+swift-testing builds — `Testing Library Version: 6.2.4 (5ee435b15ad40ec)` against
+Xcode's `1501` — and the expansion is what the discriminator is counted over.
+swift.org's 6.2.4 is the local default (`swiftly`), which is why the suite was
+green here while 6.3.3 was red.
+
+**Upstream.** No issue was found for it when this was diagnosed. The reduction is
+small and needs only `import Testing`, so it is worth reporting.
+
+**Where TUIkit hit it:** four sites in two test files —
+`ReversedTextSelectionTests.swift` (three) and `LiveTerminalPaletteRenderTests.swift`
+(one) — each a `#expect` whose closure was followed by a `filter` over cells of
+`(character: Character, state: SGRState)` inside a `TerminalColors.withCurrent`
+closure. Swift 6.4 could not build the test target at all. Swift 6.3.3 built it
+and ran the wrong predicates: the full suite recorded **27 issues (21 known, 6
+real)** where 6.2.4 recorded only its 21 known ones, so each `filter` really ran
+the preceding `#expect`'s closure. **Workaround:** the table's last row — every
+closure in those scopes is hoisted into a `let` above its `#expect`, leaving no
+closure inside a macro expansion there, which is safe on all four toolchains
+regardless of how many closures the scope holds. Reordering the statements also
+happens to work, but it depends on the closure counts in the scope and so is not
+a rule anyone can apply by eye. After the fix, 6.4 builds the test target clean
+and 6.3.3's full suite is back to 21 known issues.
