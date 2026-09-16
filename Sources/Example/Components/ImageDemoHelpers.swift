@@ -143,7 +143,7 @@ enum ImageDemoHelpers {
     /// the terminal's own 256 chosen by eye — a duotone, a sepia, a cool set and
     /// the cube's eight corners — and they are mapped by NEAREST COLOUR, so the
     /// order they are written in does not matter and no entry is guaranteed to
-    /// be drawn. Every entry is a `.palette(_:)` index, so it renders exactly on
+    /// be drawn. Every entry is a `.palette256(_:)` index, so it renders exactly on
     /// any 256-colour terminal.
     ///
     /// The names are `Text(verbatim:)` on purpose: they name a look the way a
@@ -158,26 +158,26 @@ enum ImageDemoHelpers {
         NamedPalette(
             name: "Sepia",
             palette: ASCIIPalette([
-                .palette(16), .palette(52), .palette(94), .palette(130),
-                .palette(172), .palette(179), .palette(223), .palette(230),
+                .palette256(16), .palette256(52), .palette256(94), .palette256(130),
+                .palette256(172), .palette256(179), .palette256(223), .palette256(230),
             ])),
         NamedPalette(
             name: "Ice",
             palette: ASCIIPalette([
-                .palette(17), .palette(18), .palette(25), .palette(31),
-                .palette(38), .palette(45), .palette(123), .palette(195),
+                .palette256(17), .palette256(18), .palette256(25), .palette256(31),
+                .palette256(38), .palette256(45), .palette256(123), .palette256(195),
             ])),
         NamedPalette(
             name: "Poster",
             palette: ASCIIPalette([
-                .palette(16), .palette(88), .palette(160), .palette(202),
-                .palette(214), .palette(226), .palette(231),
+                .palette256(16), .palette256(88), .palette256(160), .palette256(202),
+                .palette256(214), .palette256(226), .palette256(231),
             ])),
         NamedPalette(
             name: "Cube corners",
             palette: ASCIIPalette([
-                .palette(16), .palette(21), .palette(46), .palette(51),
-                .palette(196), .palette(201), .palette(226), .palette(231),
+                .palette256(16), .palette256(21), .palette256(46), .palette256(51),
+                .palette256(196), .palette256(201), .palette256(226), .palette256(231),
             ])),
     ]
 }
