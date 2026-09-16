@@ -2166,8 +2166,18 @@ back. It asks only when stdin is a TTY in raw mode.
   theme with a `997`. A burst — a resize drag — is one request and one resend:
   at most one is outstanding, and its fence releases the next. A fence that has
   not come back in a second is taken as lost, the request goes out once more,
-  and after that it is given up rather than polled. Nothing is asked on
-  focus-in.
+  and after that it is given up rather than polled.
+- **Asked again when the window comes back:** a focus report (mode 1004) that
+  moves the scene from inactive to active. Nothing on screen was thrown away —
+  but the user has been looking at another window, and may have changed this one
+  while they were: switched its profile, or flipped its theme with the system's.
+  Only a host that reports its own theme would have volunteered that, and most
+  do not. The same request, the same skip rule and the same coalescing as above,
+  so flicking focus back and forth is one request and one resend. A report of
+  the focus the scene already has asks nothing — a terminal may send one as
+  reporting is enabled, and the startup exchange has just run — and neither does
+  focus going away, nor a report while the app is suspended (the resume asks by
+  itself).
 - **A reply later than the deadline is still read.** The input parser keeps an
   OSC 10, 11 or 4 answer and a `CSI ? 997 ; Ps n` report instead of dropping it
   with everything else nobody typed, the run loop takes what it kept once per
@@ -3892,7 +3902,10 @@ until that run records it, with the host's version.
   second when the client it forwards OSC 4 to is silent; its answer arrives as a
   late reply, through the refresher above. A thrown-away screen (resize, resumed
   suspend, tmux client change) asks the whole request again, skipping a terminal
-  that has never answered unless it is tmux or has sent a `997`. One request is
+  that has never answered unless it is tmux or has sent a `997`, and so does a
+  window taking the focus back (`AppRunner.terminalFocusChanged` →
+  `RenderLoop.terminalFocusRegained`), which is the only notice most hosts give
+  that the user was away while their terminal changed. One request is
   outstanding at a time — `Terminal.takeStatusFence` hands over the `CSI 0 n`
   that releases the next, and a fence still missing a second later is taken as
   lost and the request sent once more.

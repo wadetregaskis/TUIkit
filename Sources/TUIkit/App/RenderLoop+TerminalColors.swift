@@ -36,4 +36,20 @@ extension RenderLoop {
         terminalColors.noteReplies(bytes)
         if sawStatusFence { colorQueries.noteStatusFence() }
     }
+
+    /// The terminal's window, tab or pane has taken the focus back, with the
+    /// scene inactive until now.
+    ///
+    /// Nothing on screen is thrown away — the window is the one we drew, and the
+    /// frame that follows is an ordinary one — but the user has been looking at
+    /// something else, and may have changed the terminal while they were:
+    /// switched its profile, or flipped its theme with the system's. Only a host
+    /// that reports its own theme would have volunteered that, and most do not.
+    ///
+    /// Written and not waited for, and not asked at all of a terminal that has
+    /// never said anything about its colours unless this is tmux — see
+    /// ``TerminalColorRequester``.
+    func terminalFocusRegained() {
+        colorQueries.focusRegained(terminalHasAnswered: terminalColors.hasAnsweredAboutColors)
+    }
 }

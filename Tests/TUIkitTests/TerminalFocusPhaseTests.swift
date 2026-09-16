@@ -32,19 +32,27 @@ struct TerminalFocusPhaseTests {
 
     private var timer: CursorTimer { CursorTimer(renderNotifier: AppState.shared) }
 
+    /// The loop the seam hands focus-in to, so it can ask the terminal what it
+    /// paints now (step 5d — `TerminalColorRequester`). One per test, over its
+    /// own `MockTerminal`, so what a test's terminal was asked is that test's.
+    private func freshLoop() -> RenderLoop<FocusStillApp> {
+        RenderLoopHarness().loop(FocusStillApp())
+    }
+
     // MARK: - The seam
 
     @Test("Focus out makes the scene inactive and asks for a frame; focus in makes it active")
     func reportsMoveThePhase() {
         let runner = freshRunner()
         let timer = timer
+        let loop = freshLoop()
 
-        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .inactive)
         #expect(AppState.shared.needsRender, "the inactive look needs a frame")
 
         AppState.shared.didRender()
-        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .active)
         #expect(AppState.shared.needsRender, "the active look needs a frame")
         AppState.shared.didRender()
@@ -54,14 +62,15 @@ struct TerminalFocusPhaseTests {
     func focusInRestartsTheCursorClock() {
         let runner = freshRunner()
         let timer = timer
+        let loop = freshLoop()
         // Whole seconds, so each is on the cursor clock's tick lattice.
         timer.observe(nowNanos: 1_000_000_000)
 
-        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
         timer.observe(nowNanos: 2_000_000_000)
         #expect(timer.elapsed(for: .cursor) == 1, "focus out left the clock running from its old zero")
 
-        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         timer.observe(nowNanos: 3_000_000_000)
         #expect(timer.elapsed(for: .cursor) == 0)
         AppState.shared.didRender()
@@ -72,7 +81,7 @@ struct TerminalFocusPhaseTests {
         let runner = freshRunner()
         runner.tuiContext.scenePhase = .background
 
-        runner.terminalFocusChanged(isFocused: isFocused, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: isFocused, cursorTimer: timer, renderer: freshLoop())
         #expect(runner.tuiContext.scenePhase == .background)
         #expect(!AppState.shared.needsRender)
     }
@@ -81,15 +90,16 @@ struct TerminalFocusPhaseTests {
     func duplicateReportsAreQuiet() {
         let runner = freshRunner()
         let timer = timer
+        let loop = freshLoop()
 
         // A terminal may report focus in as reporting is enabled.
-        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .active)
         #expect(!AppState.shared.needsRender)
 
-        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
         AppState.shared.didRender()
-        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer)
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .inactive)
         #expect(!AppState.shared.needsRender)
     }

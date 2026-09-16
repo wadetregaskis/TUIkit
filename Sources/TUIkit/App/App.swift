@@ -658,16 +658,24 @@ extension AppRunner {
     /// - A report of the phase the scene already has asks for no frame. A
     ///   terminal may report focus in as reporting is enabled.
     /// - Focus in restarts the focus breath and the caret, so they come back at
-    ///   their bright start rather than wherever the clock has run to.
+    ///   their bright start rather than wherever the clock has run to, and asks
+    ///   the terminal what colours it paints now: the user has been in another
+    ///   window, and may have changed this one while they were there (step 5d
+    ///   of the colour plan — see ``TerminalColorRequester``). Only when the
+    ///   phase actually moved, so the report a terminal may send as reporting is
+    ///   enabled costs nothing.
     /// - Otherwise it asks for a frame, which draws the new look. After a focus-out
     ///   frame nothing reads the cursor clock or leaves runs on it, so the
     ///   timer stops, or keeps running only for content animations.
-    func terminalFocusChanged(isFocused: Bool, cursorTimer: CursorTimer) {
+    func terminalFocusChanged(isFocused: Bool, cursorTimer: CursorTimer, renderer: RenderLoop<A>) {
         guard tuiContext.scenePhase != .background else { return }
         let phase: ScenePhase = isFocused ? .active : .inactive
         guard tuiContext.scenePhase != phase else { return }
         tuiContext.scenePhase = phase
-        if isFocused { cursorTimer.restartFocusPhase() }
+        if isFocused {
+            cursorTimer.restartFocusPhase()
+            renderer.terminalFocusRegained()
+        }
         appState.setNeedsRender()
     }
 
@@ -720,7 +728,8 @@ extension AppRunner {
                 // Deliberately no `noteInputSource`: a focus report is the
                 // terminal speaking, not the user choosing the keyboard or the
                 // pointer.
-                terminalFocusChanged(isFocused: isFocused, cursorTimer: cursorTimer)
+                terminalFocusChanged(
+                    isFocused: isFocused, cursorTimer: cursorTimer, renderer: renderer)
             }
             eventsProcessed += 1
         }

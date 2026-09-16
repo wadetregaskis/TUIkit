@@ -434,3 +434,143 @@ struct TerminalColorLateSlotsTests {
         #expect(colours.repaints == 1)
     }
 }
+
+/// The window coming back: what the terminal is asked then, and who is skipped.
+///
+/// A terminal the user left is one they may have changed while they were gone —
+/// a profile switched, a theme flipped, the whole window closed and another put
+/// in its place. The hosts that would say so unprompted are the ones that report
+/// their own theme; on the rest, focus-in is the moment worth asking at.
+@MainActor
+@Suite("Asking the terminal again when its window comes back")
+struct TerminalColorFocusReQueryTests {
+
+    private func makeRequester(isTmux: Bool) -> (TerminalColorRequester, RequestSink) {
+        let sink = RequestSink()
+        let requester = TerminalColorRequester(
+            isTmux: isTmux, fenceTimeoutNanos: 5_000_000, send: { sink.sent.append($0) })
+        return (requester, sink)
+    }
+
+    @Test("Focus coming back to a terminal that has answered asks it everything again")
+    func answeringTerminalIsAskedOnFocusIn() {
+        let (requester, sink) = makeRequester(isTmux: false)
+        requester.focusRegained(terminalHasAnswered: true)
+        #expect(
+            sink.sent == [TerminalColorQuery.nativeRequest],
+            "the pair as well as the slots: the theme may have changed while we were away")
+    }
+
+    @Test("A terminal that has never answered is left alone on focus-in")
+    func silentTerminalIsLeftAloneOnFocusIn() {
+        let (requester, sink) = makeRequester(isTmux: false)
+        requester.focusRegained(terminalHasAnswered: false)
+        requester.focusRegained(terminalHasAnswered: false)
+        #expect(sink.sent.isEmpty, "a host that answers nothing was asked \(sink.sent.count) times")
+    }
+
+    @Test("Under tmux even a pane that has heard nothing is asked on focus-in")
+    func tmuxPaneIsAskedOnFocusIn() {
+        let (requester, sink) = makeRequester(isTmux: true)
+        requester.focusRegained(terminalHasAnswered: false)
+        #expect(sink.sent == [TerminalColorQuery.nativeRequest])
+    }
+
+    /// Alt-tabbing back and forth is the focus equivalent of a resize drag, and
+    /// it coalesces the same way: one request outstanding, one waiting.
+    @Test("Flicking focus back and forth is one request, and one resend when the fence lands")
+    func focusBurstCoalesces() {
+        let (requester, sink) = makeRequester(isTmux: false)
+        for _ in 0..<4 { requester.focusRegained(terminalHasAnswered: true) }
+        #expect(sink.sent.count == 1, "alt-tabbing asked \(sink.sent.count) times")
+
+        requester.noteStatusFence()
+        #expect(sink.sent.count == 2)
+
+        requester.noteStatusFence()
+        #expect(sink.sent.count == 2, "asked again with nothing left to ask for")
+    }
+}
+
+/// The run loop's half of focus-in: the report the parser turns into a scene
+/// phase is also what asks the terminal again.
+///
+/// Serialized with the suites above because `AppRunner` binds itself to
+/// `AppState.shared`.
+@MainActor
+@Suite("A focus report asks the terminal again", .serialized)
+struct TerminalColorFocusWiringTests {
+
+    private func freshRunner() -> AppRunner<FrameProbeApp> {
+        AppState.shared.didRender()
+        _ = AppState.shared.consumePendingAnimationClocks()
+        // `Terminal.init()` only reserves a buffer, so this touches no TTY.
+        return AppRunner(app: FrameProbeApp())
+    }
+
+    private var timer: CursorTimer { CursorTimer(renderNotifier: AppState.shared) }
+
+    @Test("Focus coming back asks the terminal what it paints now")
+    func focusInAsksAgain() {
+        let runner = freshRunner()
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(FrameProbeApp(), isTmux: true)
+        let timer = timer
+
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
+        let afterFocusOut = harness.terminal.writtenOutput.count
+
+        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
+        #expect(
+            harness.terminal.writtenOutput.count > afterFocusOut,
+            "focus came back and the terminal was asked nothing")
+        #expect(harness.terminal.writtenOutput.last == TerminalColorQuery.nativeRequest)
+        AppState.shared.didRender()
+    }
+
+    @Test("Focus going away asks for nothing")
+    func focusOutAsksNothing() {
+        let runner = freshRunner()
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(FrameProbeApp(), isTmux: true)
+
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
+        #expect(
+            !harness.terminal.allOutput.contains("\u{1B}]11;?"),
+            "the window we just left was asked what it paints")
+        AppState.shared.didRender()
+    }
+
+    /// A terminal may report focus in as reporting is enabled, and the scene is
+    /// already active then: the startup exchange has just asked, so asking again
+    /// would be a second 170-byte request for nothing.
+    @Test("A report of the focus the scene already has asks for nothing")
+    func duplicateFocusInAsksNothing() {
+        let runner = freshRunner()
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(FrameProbeApp(), isTmux: true)
+
+        runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
+        #expect(harness.terminal.writtenOutput.isEmpty)
+        AppState.shared.didRender()
+    }
+
+    @Test("Off tmux a terminal that has said nothing is asked nothing when focus comes back")
+    func silentHostIsAskedNothingOnFocusIn() {
+        TerminalColors.withCurrent(.unknown) {
+            let runner = freshRunner()
+            let harness = RenderLoopHarness()
+            let loop = harness.loop(FrameProbeApp(), isTmux: false)
+            let timer = timer
+
+            runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
+            let afterFocusOut = harness.terminal.writtenOutput.count
+
+            runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
+            #expect(
+                harness.terminal.writtenOutput.count == afterFocusOut,
+                "a host that has answered nothing was asked again anyway")
+            AppState.shared.didRender()
+        }
+    }
+}

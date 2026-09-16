@@ -26,6 +26,15 @@
 /// asks again, for everything: the default pair belongs to whichever client
 /// answers now, not to the one that answered at startup.
 ///
+/// **The user may have changed it while they were away.** A window that has
+/// just taken the focus back (``focusRegained(terminalHasAnswered:)``) is a
+/// window somebody was looking at something else in: a profile switched, a
+/// theme flipped with the system's, the tab closed and another opened in its
+/// place. None of that throws our screen away, and a host that would say so
+/// unprompted is a host that reports its own theme — which most do not. So
+/// focus coming back is the moment to ask, and it asks for everything, for the
+/// reason a thrown-away screen does.
+///
 /// Nothing waits for any of these answers:
 /// - a request is written and forgotten, never read back, so tmux's wait is
 ///   tmux's own — and it holds no output of ours (measured: a line printed
@@ -141,6 +150,32 @@ internal final class TerminalColorRequester {
     ///   (`TerminalColorRefresher.hasAnsweredAboutColors`). One that has not is
     ///   left alone unless this is tmux.
     func screenInvalidated(terminalHasAnswered: Bool) {
+        askEverything(terminalHasAnswered: terminalHasAnswered)
+    }
+
+    /// The terminal's window, tab or pane has the focus again, and the scene was
+    /// inactive until now.
+    ///
+    /// Only when the focus actually moved. A terminal may report focus in as
+    /// reporting is enabled (`Terminal.enableRawMode`), with the scene already
+    /// active and the startup exchange a moment old, and that must not cost a
+    /// second 170-byte request; `AppRunner.terminalFocusChanged` is where that
+    /// is decided, because it is what knows the phase.
+    ///
+    /// - Parameter terminalHasAnswered: As ``screenInvalidated(terminalHasAnswered:)``
+    ///   takes it, and skipping for the same reason: a terminal that answered
+    ///   nothing when it was asked properly has not learned how while the user
+    ///   was in another window.
+    func focusRegained(terminalHasAnswered: Bool) {
+        askEverything(terminalHasAnswered: terminalHasAnswered)
+    }
+
+    /// The whole request, for a moment when the terminal may be a different one
+    /// or may have been changed: the default pair as well as the slots.
+    ///
+    /// Skipped for a terminal that has never said anything of its own about its
+    /// colours, unless this is tmux — see the type's discussion.
+    private func askEverything(terminalHasAnswered: Bool) {
         guard isTmux || terminalHasAnswered else { return }
         ask(TerminalColorQuery.nativeRequest)
     }
