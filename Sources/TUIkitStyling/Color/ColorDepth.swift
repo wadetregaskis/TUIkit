@@ -134,9 +134,16 @@ extension ColorDepth {
     }
 
     /// Async variant of ``withCap(_:operation:)-35lhk``.
+    ///
+    /// `operation` runs on the caller's execution context: the parameter is
+    /// `nonisolated(nonsending)`, so the closure inherits the caller's
+    /// isolation instead of hopping to the generic executor to run. That is
+    /// what a scoped pin wants — the ceiling is set for the caller's work,
+    /// where the caller already is. It is NOT `@Sendable`, and does not make
+    /// the closure concurrent: it removes a hop rather than adding one.
     @discardableResult
     public static func withCap<T>(
-        _ depth: ColorDepth, operation: () async throws -> T
+        _ depth: ColorDepth, operation: nonisolated(nonsending) () async throws -> T
     ) async rethrows -> T {
         try await $taskCap.withValue(depth, operation: operation)
     }
@@ -156,9 +163,16 @@ extension ColorDepth {
     /// Async variant of ``withCurrent(_:operation:)-8j0jn`` — the pin covers the
     /// whole async operation, including its suspensions (task-locals are
     /// inherited across awaits and by child tasks, but not by detached ones).
+    ///
+    /// `operation` runs on the caller's execution context: the parameter is
+    /// `nonisolated(nonsending)`, so the closure inherits the caller's
+    /// isolation instead of hopping to the generic executor to run. That is
+    /// what a scoped pin wants — the depth is pinned for the caller's work,
+    /// where the caller already is. It is NOT `@Sendable`, and does not make
+    /// the closure concurrent: it removes a hop rather than adding one.
     @discardableResult
     public static func withCurrent<T>(
-        _ depth: ColorDepth, operation: () async throws -> T
+        _ depth: ColorDepth, operation: nonisolated(nonsending) () async throws -> T
     ) async rethrows -> T {
         try await $taskCurrent.withValue(depth, operation: operation)
     }
