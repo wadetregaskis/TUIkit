@@ -529,6 +529,32 @@ extension Color {
         Self(value: .ansi(slot))
     }
 
+    /// One of the terminal's 256 colours, by index: `Color.palette256(202)`.
+    ///
+    /// Indices 0–15 are the sixteen slots, 16–231 a 6×6×6 cube and 232–255
+    /// twenty-four greys. It is SGR `38;5;n` as a foreground and `48;5;n` as a
+    /// background wherever the terminal has 256 colours; at sixteen colours an
+    /// index below 16 becomes that slot and the rest quantise to the nearest of
+    /// them.
+    ///
+    /// The first sixteen are NAMES, exactly as ``ansi(_:)`` is: the terminal
+    /// paints whatever the user's profile keeps in the slot, so
+    /// `Color.palette256(1)` measures as the colour it reported for slot 1, and as
+    /// nothing until it has reported all sixteen — ``rgbComponents`` is `nil`, and
+    /// xterm's value is not guessed in its place. The cube and the greys are fixed
+    /// colours, the same on every terminal that has them, and always measure.
+    ///
+    /// Spelled `palette256` rather than `palette` because ``palette`` is this
+    /// type's semantic namespace: `.palette.accent` is a palette ROLE, resolved
+    /// against whichever theme is in force, where this is one fixed index into the
+    /// terminal's own repertoire. The two read alike and mean opposite things.
+    ///
+    /// - Parameter index: The index, 0–255.
+    /// - Returns: That colour, fully opaque.
+    public static func palette256(_ index: UInt8) -> Self {
+        Self(value: .palette256(index))
+    }
+
     /// Creates a color from the 256-color palette.
     ///
     /// - Parameter index: The palette index (0-255).
