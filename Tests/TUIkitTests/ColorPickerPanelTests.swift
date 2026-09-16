@@ -306,7 +306,7 @@ struct ColorPickerPanelCrashSafetyTests {
         .rgb(0, 0, 0), .rgb(255, 255, 255), .rgb(255, 0, 0), .rgb(0, 255, 0),
         .rgb(0, 0, 255), .rgb(128, 128, 128), .rgb(38, 139, 210), .rgb(200, 100, 50),
         .rgb(1, 254, 130), .rgb(254, 1, 1),
-        .palette(0), .palette(15), .palette(16), .palette(123), .palette(231), .palette(255),
+        .palette256(0), .palette256(15), .palette256(16), .palette256(123), .palette256(231), .palette256(255),
         .ansi(.red), .ansi(.green), .ansi(.blue), .palette.accent, .palette.success, .palette.error,
     ]
 

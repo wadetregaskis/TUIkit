@@ -33,7 +33,7 @@ struct ColorTests {
 
     @Test("Palette colors with different indices are distinct")
     func paletteDistinct() {
-        #expect(Color.palette(42) != Color.palette(43))
+        #expect(Color.palette256(42) != Color.palette256(43))
     }
 
     /// `opacity(_:)` used to be the mix-toward-black shorthand, and this test

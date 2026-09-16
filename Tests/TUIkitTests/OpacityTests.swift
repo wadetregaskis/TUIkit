@@ -135,7 +135,7 @@ struct OpacityTests {
         // than an unfaded one.
         let context = makeRenderContext(width: 32, height: 2)
         let surface = context.environment.palette.background
-        for color in [Color.ansi(.red), .ansi(.brightCyan), .palette(93), .rgb(10, 200, 40)] {
+        for color in [Color.ansi(.red), .ansi(.brightCyan), .palette256(93), .rgb(10, 200, 40)] {
             let faded = renderToScreen(
                 Text("x").foregroundStyle(color).opacity(0.5), context: context)
             #expect(
@@ -401,7 +401,7 @@ struct ColonFormColorReadingTests {
         #expect(!seen.contains { $0.0 == .reset })
         #expect(seen.count == 1)
         #expect(seen.first?.0 == .foreground)
-        #expect(seen.first?.1 == Color.palette(104))
+        #expect(seen.first?.1 == Color.palette256(104))
     }
 
     @Test("The truecolor colon forms parse, with and without colourspace")

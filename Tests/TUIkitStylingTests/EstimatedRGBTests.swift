@@ -53,7 +53,7 @@ struct EstimatedRGBTests {
                 for slot in ANSIColor.allCases {
                     let xterm = Self.channels(slot.xtermRGB)
                     #expect(Self.channels(Color.ansi(slot).estimatedRGB) == xterm, "\(slot)")
-                    #expect(Self.channels(Color.palette(slot.rawValue).estimatedRGB) == xterm, "palette \(slot.rawValue)")
+                    #expect(Self.channels(Color.palette256(slot.rawValue).estimatedRGB) == xterm, "palette \(slot.rawValue)")
                 }
             }
         }
@@ -66,7 +66,7 @@ struct EstimatedRGBTests {
                 let reported = Self.channels(Self.appleBasic[Int(slot.rawValue)])
                 #expect(Self.channels(Color.ansi(slot).estimatedRGB) == reported, "\(slot)")
                 #expect(
-                    Self.channels(Color.palette(slot.rawValue).estimatedRGB) == reported, "palette \(slot.rawValue)")
+                    Self.channels(Color.palette256(slot.rawValue).estimatedRGB) == reported, "palette \(slot.rawValue)")
             }
         }
     }
@@ -74,7 +74,7 @@ struct EstimatedRGBTests {
     @Test("Every colour that is not a slot is exactly its rgbComponents, whatever the terminal reported")
     func everythingElseIsItsComponents() {
         let colours: [Color] = [
-            .rgb(1, 2, 3), .palette(16), .palette(231), .palette(232), .palette(255),
+            .rgb(1, 2, 3), .palette256(16), .palette256(231), .palette256(232), .palette256(255),
             Color(value: .terminalForeground), Color(value: .terminalBackground), .default, Color.palette.accent,
         ]
         for terminal in [TerminalColors.unknown, Self.pairOnly, Self.appleTerminal] {

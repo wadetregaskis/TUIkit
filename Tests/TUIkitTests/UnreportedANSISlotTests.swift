@@ -1,7 +1,7 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  UnreportedANSISlotTests.swift
 //
-//  A terminal slot, `Color.ansi(_:)` or `Color.palette(0...15)`, measures as the colour
+//  A terminal slot, `Color.ansi(_:)` or `Color.palette256(0...15)`, measures as the colour
 //  the terminal reported for it (OSC 4), or as nothing. xterm's table was a guess at
 //  what the user's profile paints, and a rule that measures a colour drew on the guess.
 //  Each row here is one line of the osc11-v5 design's §2 table, asked twice: of a
@@ -87,13 +87,13 @@ struct UnreportedANSISlotTests {
             TerminalColors.withCurrent(terminal) {
                 for slot in ANSIColor.allCases {
                     #expect(Color.ansi(slot).rgbComponents == nil, "\(slot)")
-                    #expect(Color.palette(slot.rawValue).rgbComponents == nil, "palette \(slot.rawValue)")
+                    #expect(Color.palette256(slot.rawValue).rgbComponents == nil, "palette \(slot.rawValue)")
                     #expect(Color.ansi(slot).relativeLuminance == nil, "\(slot)")
                 }
                 // The cube and the grey ramp are not slots, and keep their table.
-                #expect(Self.channels(Color.palette(16).rgbComponents) == [0, 0, 0])
-                #expect(Self.channels(Color.palette(196).rgbComponents) == [255, 0, 0])
-                #expect(Self.channels(Color.palette(244).rgbComponents) == [128, 128, 128])
+                #expect(Self.channels(Color.palette256(16).rgbComponents) == [0, 0, 0])
+                #expect(Self.channels(Color.palette256(196).rgbComponents) == [255, 0, 0])
+                #expect(Self.channels(Color.palette256(244).rgbComponents) == [128, 128, 128])
             }
         }
     }
@@ -105,7 +105,7 @@ struct UnreportedANSISlotTests {
                 let reported = Self.reported(slot)
                 let expected: [UInt8] = [reported.red, reported.green, reported.blue]
                 #expect(Self.channels(Color.ansi(slot).rgbComponents) == expected, "\(slot)")
-                #expect(Self.channels(Color.palette(slot.rawValue).rgbComponents) == expected, "palette \(slot.rawValue)")
+                #expect(Self.channels(Color.palette256(slot.rawValue).rgbComponents) == expected, "palette \(slot.rawValue)")
             }
         }
     }
@@ -283,13 +283,13 @@ struct UnreportedANSISlotTests {
         let ink = palette.foreground.resolve(with: palette)
         TerminalColors.withCurrent(.unknown) {
             for slot in ANSIColor.allCases {
-                #expect(ContrastingLabel.on(.palette(slot.rawValue), palette: palette) == ink, "\(slot)")
+                #expect(ContrastingLabel.on(.palette256(slot.rawValue), palette: palette) == ink, "\(slot)")
             }
         }
         TerminalColors.withCurrent(Self.appleTerminal) {
             for slot in ANSIColor.allCases {
                 #expect(
-                    ContrastingLabel.on(.palette(slot.rawValue), palette: palette)
+                    ContrastingLabel.on(.palette256(slot.rawValue), palette: palette)
                         == ContrastingLabel.on(Self.reportedColour(slot), palette: palette), "\(slot)")
             }
         }
@@ -329,7 +329,7 @@ struct UnreportedANSISlotTests {
                 for slot in ANSIColor.allCases {
                     let grey = [ANSIColor.black, .white, .brightBlack, .brightWhite].contains(slot)
                     #expect(Color.ansi(slot).isAchromatic == grey, "\(slot)")
-                    #expect(Color.palette(slot.rawValue).isAchromatic == grey, "palette \(slot.rawValue)")
+                    #expect(Color.palette256(slot.rawValue).isAchromatic == grey, "palette \(slot.rawValue)")
                 }
             }
         }

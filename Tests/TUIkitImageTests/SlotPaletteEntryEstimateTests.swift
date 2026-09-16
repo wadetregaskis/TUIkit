@@ -50,7 +50,7 @@ struct SlotPaletteEntryEstimateTests {
             let palette = ASCIIPalette([.ansi(.red), .ansi(.brightRed)])
             #expect(palette.nearestIndex(to: pixel) == 1)
             #expect(palette.sgrParameters(at: 1, background: false) == "91")
-            let byIndex = ASCIIPalette([.palette(1), .palette(9)])
+            let byIndex = ASCIIPalette([.palette256(1), .palette256(9)])
             #expect(byIndex.nearestIndex(to: pixel) == 1)
             let sixteen = ASCIIPalette.ansi16
             #expect(sixteen.sgrParameters(at: sixteen.nearestIndex(to: pixel), background: false) == "91")

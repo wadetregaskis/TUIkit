@@ -182,7 +182,7 @@ struct TerminalCarriedColourTests {
         #expect(Color.default.isTerminalDefined)
         #expect(Color(value: .terminalDefault) == Color.default)
         for index in 0...255 {
-            #expect(Color.palette(UInt8(index)).isTerminalDefined == (index < 16), "palette \(index)")
+            #expect(Color.palette256(UInt8(index)).isTerminalDefined == (index < 16), "palette \(index)")
         }
         #expect(!Color.rgb(0, 0, 0).isTerminalDefined)
         #expect(!Color.rgb(229, 229, 229).isTerminalDefined)

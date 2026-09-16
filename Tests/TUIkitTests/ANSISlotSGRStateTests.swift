@@ -69,10 +69,10 @@ struct ANSISlotSGRStateTests {
     func indexStatesItsSlotAtSixteen() {
         for slot in Self.slots {
             #expect(
-                SGRState().settingForeground(.palette(slot.index), depth: .basic16) == Self.applying(slot.foreground),
+                SGRState().settingForeground(.palette256(slot.index), depth: .basic16) == Self.applying(slot.foreground),
                 "\(slot.name) fg")
             #expect(
-                SGRState().settingBackground(.palette(slot.index), depth: .basic16) == Self.applying(slot.background),
+                SGRState().settingBackground(.palette256(slot.index), depth: .basic16) == Self.applying(slot.background),
                 "\(slot.name) bg")
         }
     }

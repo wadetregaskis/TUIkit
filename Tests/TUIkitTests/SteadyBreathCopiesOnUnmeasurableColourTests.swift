@@ -129,7 +129,7 @@ struct SteadyBreathCopiesOnUnmeasurableColourTests {
                     columns: 2,
                     selection: .constant(fixture.unmeasuredSwatch))
             case .color256Mark:
-                _Color256GridCore(selection: .constant(.palette(4)), showNumbers: false)
+                _Color256GridCore(selection: .constant(.palette256(4)), showNumbers: false)
             }
         }
 

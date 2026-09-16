@@ -52,7 +52,7 @@ struct BlendEndsTests {
     func fullStrengthKeepsTheSlot() {
         #expect(Color.ansi(.red).opacity(1, over: .white) == Color.ansi(.red))
         #expect(Color.ansi(.red).compositing(1, over: .white) == Color.ansi(.red))
-        #expect(Color.palette(9).opacity(1, over: .black) == Color.palette(9))
+        #expect(Color.palette256(9).opacity(1, over: .black) == Color.palette256(9))
         #expect(Color.white.opacity(0, over: .ansi(.blue)) == Color.ansi(.blue))
         #expect(Color.white.compositing(0, over: .ansi(.blue)) == Color.ansi(.blue))
     }
@@ -62,8 +62,8 @@ struct BlendEndsTests {
         let pairs: [(from: Color, to: Color)] = [
             (Color.ansi(.red), Color.ansi(.blue)),
             (Color.rgb(10, 20, 30), Color.ansi(.green)),
-            (Color.palette(200), Color.rgb(1, 2, 3)),
-            (Color.ansi(.brightWhite), Color.palette(3)),
+            (Color.palette256(200), Color.rgb(1, 2, 3)),
+            (Color.ansi(.brightWhite), Color.palette256(3)),
             (Color.ansi(.red).opacity(0.5), Color.ansi(.cyan)),
         ]
         for (from, to) in pairs {

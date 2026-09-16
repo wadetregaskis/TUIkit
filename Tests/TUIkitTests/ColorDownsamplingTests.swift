@@ -22,7 +22,7 @@ struct DownsampleToPalette256Tests {
         arguments: [
             Color.ansi(.red), .ansi(.blue), .ansi(.black), .ansi(.white),  // standard
             .ansi(.brightRed), .ansi(.brightCyan),  // bright
-            .palette(42), .palette(200),  // palette256
+            .palette256(42), .palette256(200),  // palette256
             Color.palette.accent,  // semantic
         ])
     func passthrough(_ color: Color) {
@@ -46,7 +46,7 @@ struct DownsampleToPalette256Tests {
             (Color.rgb(135, 175, 215), 110),  // exact cube levels 2,3,4
         ])
     func rgbToNearestIndex(_ input: Color, _ index: Int) {
-        #expect(input.downsampledToPalette256() == .palette(UInt8(index)))
+        #expect(input.downsampledToPalette256() == .palette256(UInt8(index)))
     }
 }
 
@@ -74,15 +74,15 @@ struct DownsampleToANSI16Tests {
     @Test(
         "palette256 and RGB colors downsample to the nearest ANSI16 color",
         arguments: [
-            (Color.palette(0), Color.ansi(.black)),
-            (.palette(1), .ansi(.red)),
-            (.palette(2), .ansi(.green)),
-            (.palette(7), .ansi(.white)),
-            (.palette(8), .ansi(.brightBlack)),
-            (.palette(9), .ansi(.brightRed)),
-            (.palette(14), .ansi(.brightCyan)),
-            (.palette(15), .ansi(.brightWhite)),
-            (.palette(196), .ansi(.brightRed)),  // pure red (255,0,0)
+            (Color.palette256(0), Color.ansi(.black)),
+            (.palette256(1), .ansi(.red)),
+            (.palette256(2), .ansi(.green)),
+            (.palette256(7), .ansi(.white)),
+            (.palette256(8), .ansi(.brightBlack)),
+            (.palette256(9), .ansi(.brightRed)),
+            (.palette256(14), .ansi(.brightCyan)),
+            (.palette256(15), .ansi(.brightWhite)),
+            (.palette256(196), .ansi(.brightRed)),  // pure red (255,0,0)
             (.rgb(255, 0, 0), .ansi(.brightRed)),  // exact bright red
             (.rgb(0, 0, 255), .ansi(.blue)),  // standard blue (0,0,238) closest
             (.rgb(0, 255, 0), .ansi(.brightGreen)),  // exact bright green
@@ -139,16 +139,16 @@ struct ANSIRendererDownsampleTests {
         arguments: [
             // truecolor — everything passes through
             (Color.rgb(100, 200, 50), ColorDepth.truecolor, Color.rgb(100, 200, 50)),
-            (.palette(42), .truecolor, .palette(42)),
+            (.palette256(42), .truecolor, .palette256(42)),
             (.ansi(.red), .truecolor, .ansi(.red)),
             // palette256 — RGB downsampled, the rest pass through
-            (.rgb(255, 0, 0), .palette256, .palette(196)),
-            (.palette(42), .palette256, .palette(42)),
+            (.rgb(255, 0, 0), .palette256, .palette256(196)),
+            (.palette256(42), .palette256, .palette256(42)),
             (.ansi(.red), .palette256, .ansi(.red)),
             (.ansi(.brightCyan), .palette256, .ansi(.brightCyan)),
             // basic16 — RGB and palette256 downsampled, ANSI passes through
             (.rgb(255, 0, 0), .basic16, .ansi(.brightRed)),
-            (.palette(196), .basic16, .ansi(.brightRed)),
+            (.palette256(196), .basic16, .ansi(.brightRed)),
             (.ansi(.red), .basic16, .ansi(.red)),
             (.ansi(.brightGreen), .basic16, .ansi(.brightGreen)),
             // noColor — passes through (stripped during code generation)
@@ -170,11 +170,11 @@ struct ANSIRendererExplicitDepthTests {
         "Foreground codes match the color and depth",
         arguments: [
             (Color.rgb(100, 200, 50), ColorDepth.truecolor, ["38", "2", "100", "200", "50"]),
-            (.palette(42), .truecolor, ["38", "5", "42"]),
+            (.palette256(42), .truecolor, ["38", "5", "42"]),
             (.ansi(.red), .truecolor, ["31"]),
             (.rgb(255, 0, 0), .palette256, ["38", "5", "196"]),
             (.rgb(255, 0, 0), .basic16, ["91"]),  // bright red
-            (.palette(196), .basic16, ["91"]),
+            (.palette256(196), .basic16, ["91"]),
             (.ansi(.red), .noColor, []),
             (.rgb(255, 0, 0), .noColor, []),
         ])

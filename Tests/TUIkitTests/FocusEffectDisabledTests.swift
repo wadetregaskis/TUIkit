@@ -412,7 +412,7 @@ struct FocusEffectDisabledTests {
     func color256Grid() {
         // The whole palette folds to about twenty rows at this width: a context
         // of 40 holds it and the sibling in both arrangements.
-        let grid = _Color256GridCore(selection: .constant(.palette(1)))
+        let grid = _Color256GridCore(selection: .constant(.palette256(1)))
         expectDistinguishable(grid, "Color256Grid", height: 40)
         expectIndistinguishable(grid, "Color256Grid", height: 40)
     }

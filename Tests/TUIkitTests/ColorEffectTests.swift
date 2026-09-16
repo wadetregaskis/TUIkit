@@ -96,7 +96,7 @@ struct ColorEffectTests {
     /// road.
     @Test(
         "Multiplying by a colour the terminal has not reported changes nothing",
-        arguments: [Color.ansi(.blue), Color.default, Color(value: .terminalForeground), Color.palette(4)])
+        arguments: [Color.ansi(.blue), Color.default, Color(value: .terminalForeground), Color.palette256(4)])
     func multiplyByAnUnmeasurableColourChangesNothing(tint: Color) {
         TerminalColors.withCurrent(.unknown) {
             let bases = [

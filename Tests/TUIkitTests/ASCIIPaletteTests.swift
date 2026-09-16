@@ -199,7 +199,7 @@ struct ASCIIPaletteTests {
         let rgb = ASCIIPalette([.rgb(10, 20, 30)])
         #expect(rgb.sgrParameters(at: 0, background: false) == "38;2;10;20;30")
         #expect(rgb.sgrParameters(at: 0, background: true) == "48;2;10;20;30")
-        let indexed = ASCIIPalette([.palette(123)])
+        let indexed = ASCIIPalette([.palette256(123)])
         #expect(indexed.sgrParameters(at: 0, background: false) == "38;5;123")
         let basic = ASCIIPalette([.ansi(.red), .ansi(.brightBlue)])
         #expect(basic.sgrParameters(at: 0, background: false) == "31")

@@ -142,7 +142,7 @@ struct IndicatorCycleTimingTests {
             // A cube swatch, which measures: the cursor on slots 0-15 holds still until the
             // terminal reports its sixteen, and leaves no run to time.
             focused(
-                _Color256GridCore(selection: .constant(Color.palette(196)), focusID: "grid-timing"),
+                _Color256GridCore(selection: .constant(Color.palette256(196)), focusID: "grid-timing"),
                 width: 80, height: 24)
         case .swatchGridCursor: swatchGridRuns()
         case .verticalScrollbar:

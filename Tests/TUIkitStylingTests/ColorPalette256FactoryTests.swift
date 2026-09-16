@@ -3,8 +3,8 @@
 //
 //  `Color.palette256(_:)` names one of the terminal's 256 colours by index: for
 //  every index it is that index, and emits and measures as ANSISlotPinTests and
-//  ColorTests pin it. It is the spelling `Color.palette(_:)` had, moved away from
-//  the `Color.palette` semantic namespace it reads like.
+//  ColorTests pin it. It is spelled `palette256` rather than `palette` to keep it
+//  apart from the `Color.palette` semantic namespace it would otherwise read like.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -20,12 +20,11 @@ struct ColorPalette256FactoryTests {
     /// 6×6×6 cube and the twenty-four greys.
     static let sampleIndices: [UInt8] = [0, 1, 9, 15, 16, 67, 196, 231, 232, 244, 255]
 
-    @Test("Every index is that index, opaque, and the colour the old spelling names")
+    @Test("Every index is that index, and opaque")
     func everyIndexIsTheIndex() {
         for index in UInt8.min...UInt8.max {
             let colour = Color.palette256(index)
             #expect(colour.value == Color.ColorValue.palette256(index), "\(index)")
-            #expect(colour == Color.palette(index), "\(index)")
             #expect(colour.isOpaque, "\(index)")
         }
     }

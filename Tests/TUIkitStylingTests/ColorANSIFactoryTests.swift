@@ -37,8 +37,8 @@ struct ColorANSIFactoryTests {
     @Test("A slot by name is not the 256-colour index of the same slot, until sixteen colours")
     func nameIsNotIndex() {
         for slot in ANSIColor.allCases {
-            #expect(Color.ansi(slot) != Color.palette(slot.rawValue), "\(slot)")
-            #expect(Color.palette(slot.rawValue).downsampledToANSI16() == Color.ansi(slot), "\(slot)")
+            #expect(Color.ansi(slot) != Color.palette256(slot.rawValue), "\(slot)")
+            #expect(Color.palette256(slot.rawValue).downsampledToANSI16() == Color.ansi(slot), "\(slot)")
         }
     }
 }

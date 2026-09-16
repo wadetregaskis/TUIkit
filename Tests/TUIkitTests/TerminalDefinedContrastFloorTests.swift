@@ -81,7 +81,7 @@ struct TerminalDefinedContrastFloorTests {
     /// Every ink the terminal decides: the sixteen by name and by index, 39, and the
     /// terminal's foreground and page.
     private static let terminalInks: [Color] =
-        ANSIColor.allCases.map(Color.ansi) + (0..<16).map { Color.palette(UInt8($0)) }
+        ANSIColor.allCases.map(Color.ansi) + (0..<16).map { Color.palette256(UInt8($0)) }
         + [.default, .terminalForeground, .terminalBackground]
 
     /// The ratio `ink` reads at on `page`, as the terminal paints it: 39 as the foreground
@@ -126,7 +126,7 @@ struct TerminalDefinedContrastFloorTests {
     @Test("A bright white on slot 9 that no name lifts to 4.5 becomes the best of them, 39, at 4.36")
     func bestRatioWhenNoNamePasses() {
         TerminalColors.withCurrent(Self.apple) {
-            let page = Color.palette(9)
+            let page = Color.palette256(9)
             #expect(abs(Self.ratio(.ansi(.brightWhite), on: page) - 3.8551) < 0.0001, "the fixture")
             for floored in [
                 Color.ansi(.brightWhite).ensuringContrast(atLeast: 4.5, against: page),
@@ -162,8 +162,8 @@ struct TerminalDefinedContrastFloorTests {
                 Color.ansi(.brightBlack).ensuringContrast(atLeast: 4.5, against: .rgb(100, 100, 100))
                     == .ansi(.brightWhite))
             // Spelled by index, the names stay spelled by index.
-            #expect(Color.palette(1).ensuringContrast(atLeast: 3, against: .palette(0)) == .palette(9))
-            #expect(Color.palette(4).ensuringContrast(atLeast: 3, against: .palette(0)) == .palette(7))
+            #expect(Color.palette256(1).ensuringContrast(atLeast: 3, against: .palette256(0)) == .palette256(9))
+            #expect(Color.palette256(4).ensuringContrast(atLeast: 3, against: .palette256(0)) == .palette256(7))
         }
     }
 

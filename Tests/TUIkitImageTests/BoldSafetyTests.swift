@@ -103,8 +103,8 @@ struct BoldSafetyTests {
     /// palette has to read it that way round.
     @Test("A 256-palette entry is safe only from index 16 up")
     func palette256Boundary() {
-        #expect(!ASCIIPalette([.palette(15)]).foregroundSurvivesBold)
-        #expect(ASCIIPalette([.palette(16)]).foregroundSurvivesBold)
+        #expect(!ASCIIPalette([.palette256(15)]).foregroundSurvivesBold)
+        #expect(ASCIIPalette([.palette256(16)]).foregroundSurvivesBold)
     }
 
     /// The trap that makes this more than a static property of the mode: a

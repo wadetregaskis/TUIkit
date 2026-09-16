@@ -52,13 +52,13 @@ struct Color256GridLayoutTests {
 @Suite("Color256Grid — handler")
 struct Color256GridHandlerTests {
 
-    @Test("commit clamps to 0…255 and writes .palette(index)")
+    @Test("commit clamps to 0…255 and writes .palette256(index)")
     func commitClamps() {
         let box = ColorBox(.rgb(0, 0, 0))
         let handler = Color256GridHandler(focusID: "g", cursor: 0, selection: box.binding)
         handler.commit(to: 5)
         #expect(handler.cursor == 5)
-        #expect(box.color == .palette(5))
+        #expect(box.color == .palette256(5))
         handler.commit(to: 999)
         #expect(handler.cursor == 255)
         handler.commit(to: -3)
@@ -75,7 +75,7 @@ struct Color256GridHandlerTests {
         // 16 is the top-left of the cube's first red slice (green 0, blue 0).
         #expect(handler.handleKeyEvent(KeyEvent(key: .down)))   // → green 1 (index 22)
         #expect(handler.cursor == 22)
-        #expect(box.color == .palette(22))
+        #expect(box.color == .palette256(22))
         #expect(handler.handleKeyEvent(KeyEvent(key: .right)))  // → blue 1 (index 23)
         #expect(handler.cursor == 23)
         #expect(handler.handleKeyEvent(KeyEvent(key: .up)))     // → green 0, blue 1 (index 17)
@@ -88,7 +88,7 @@ struct Color256GridHandlerTests {
 
     @Test("Left/right stay within the visual row; an edge move is a no-op")
     func horizontalStaysInRow() {
-        let box = ColorBox(.palette(232))  // first greyscale cell, left edge of its row
+        let box = ColorBox(.palette256(232))  // first greyscale cell, left edge of its row
         let handler = Color256GridHandler(focusID: "g", cursor: 232, selection: box.binding)
         handler.placements = Palette256Layout.place(cellWidth: 1).cells
         #expect(handler.handleKeyEvent(KeyEvent(key: .left)))  // already at the left edge
@@ -99,13 +99,13 @@ struct Color256GridHandlerTests {
 
     @Test("index(of:) recovers a palette index, else nil")
     func indexOf() {
-        #expect(_Color256GridCore.index(of: .palette(42)) == 42)
+        #expect(_Color256GridCore.index(of: .palette256(42)) == 42)
         #expect(_Color256GridCore.index(of: .rgb(1, 2, 3)) == nil)
     }
 
     @Test("Cursor seeds from a palette-colour selection")
     func cursorSeeds() {
-        let box = ColorBox(.palette(123))
+        let box = ColorBox(.palette256(123))
         let handler = Color256GridHandler(
             focusID: "g", cursor: _Color256GridCore.index(of: box.color) ?? 0, selection: box.binding)
         #expect(handler.cursor == 123)
@@ -115,7 +115,7 @@ struct Color256GridHandlerTests {
     func nearestIndex() {
         let palette = SystemPalette(.green)
         // Exact palette entries map to themselves.
-        #expect(_Color256GridCore.nearestIndex(of: .palette(200), palette: palette) == 200)
+        #expect(_Color256GridCore.nearestIndex(of: .palette256(200), palette: palette) == 200)
         // Pure colours map to their cube corners (index 16 = black, 231 = white).
         #expect(_Color256GridCore.nearestIndex(of: .rgb(0, 0, 0), palette: palette) == 16)
         #expect(_Color256GridCore.nearestIndex(of: .rgb(255, 255, 255), palette: palette) == 231)
@@ -208,9 +208,9 @@ struct Color256GridFocusTests {
         // The cursor seeds at black's nearest cube cell (index 16). Down a green
         // step → 22, then right a blue step → 23.
         #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .down)))
-        #expect(box.color == .palette(22))
+        #expect(box.color == .palette256(22))
         #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .right)))
-        #expect(box.color == .palette(23))
+        #expect(box.color == .palette256(23))
     }
 
     @Test("Clicking a swatch commits that palette index (the grid responds to the mouse)")
@@ -250,7 +250,7 @@ struct Color256GridFocusTests {
             MouseEvent(button: .left, phase: .pressed, x: target.x, y: target.y))
         _ = tui.mouseEventDispatcher.dispatch(
             MouseEvent(button: .left, phase: .released, x: target.x, y: target.y))
-        #expect(box.color == .palette(255), "the clicked swatch is selected, got \(box.color)")
+        #expect(box.color == .palette256(255), "the clicked swatch is selected, got \(box.color)")
     }
 
     /// Arrow-keying around the swatches must scroll the enclosing ScrollView to
@@ -261,7 +261,7 @@ struct Color256GridFocusTests {
     func revealTargetFollowsTheCursor() throws {
         let tui = TUIContext()
         let fm = FocusManager()
-        let box = ColorBox(.palette(0))
+        let box = ColorBox(.palette256(0))
         let grid = _Color256GridCore(selection: box.binding, focusID: "grid-reveal")
 
         var env = EnvironmentValues()
@@ -378,7 +378,7 @@ struct Palette256ReflowTests {
     @Test("The grid core folds to the width it is offered")
     func coreFoldsToTheOfferedWidth() {
         let tui = TUIContext()
-        let box = ColorBox(.palette(0))
+        let box = ColorBox(.palette256(0))
 
         func render(width: Int) -> FrameBuffer {
             let grid = _Color256GridCore(selection: box.binding, focusID: "grid-\(width)")
@@ -404,7 +404,7 @@ struct Palette256ReflowTests {
         // shape the spatial navigation was written against.
         let arrangement = Palette256Layout.arrangements[Palette256Layout.arrangements.count - 1]
         let cells = Palette256Layout.place(cellWidth: 2, arrangement: arrangement).cells
-        let box = ColorBox(.palette(0))
+        let box = ColorBox(.palette256(0))
         let handler = Color256GridHandler(focusID: "grid", cursor: 0, selection: box.binding)
         handler.placements = cells
 

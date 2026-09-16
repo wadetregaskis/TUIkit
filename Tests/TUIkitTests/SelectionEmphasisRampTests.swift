@@ -108,7 +108,7 @@ struct SelectionEmphasisRampTests {
 
     @Test("A Color256Grid's cursor swatch breathes")
     func colorGridCursorBreathes() {
-        let selection = Binding<Color>(get: { .palette(33) }, set: { _ in })
+        let selection = Binding<Color>(get: { .palette256(33) }, set: { _ in })
         #expect(!renderFocused(_Color256GridCore(selection: selection)).animatedCells.isEmpty, "no breath")
     }
 

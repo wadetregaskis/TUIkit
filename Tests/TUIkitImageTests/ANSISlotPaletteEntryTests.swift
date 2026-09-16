@@ -72,7 +72,7 @@ struct ANSISlotPaletteEntryTests {
         for (index, slot) in Self.slots.enumerated() {
             #expect(!ASCIIPalette([.rgb(10, 20, 30), slot.color]).foregroundSurvivesBold, "\(slot.name)")
             #expect(
-                !ASCIIPalette([.rgb(10, 20, 30), .palette(UInt8(index))]).foregroundSurvivesBold,
+                !ASCIIPalette([.rgb(10, 20, 30), .palette256(UInt8(index))]).foregroundSurvivesBold,
                 "palette \(index)")
         }
         #expect(!ASCIIPalette([.rgb(10, 20, 30), Color.default]).foregroundSurvivesBold)

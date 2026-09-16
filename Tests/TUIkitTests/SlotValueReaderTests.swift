@@ -38,11 +38,11 @@ struct SlotValueReaderTests {
         }
         TerminalColors.withCurrent(.unknown) {
             #expect(red(of: .ansi(.red)) == 205)
-            #expect(red(of: .palette(9)) == 255)
+            #expect(red(of: .palette256(9)) == 255)
         }
         TerminalColors.withCurrent(Self.appleTerminal) {
             #expect(red(of: .ansi(.red)) == 153)
-            #expect(red(of: .palette(9)) == 230)
+            #expect(red(of: .palette256(9)) == 230)
             #expect(red(of: .rgb(10, 20, 30)) == 10, "an RGB colour is its own channels")
         }
     }

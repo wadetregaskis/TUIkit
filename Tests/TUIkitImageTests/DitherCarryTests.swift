@@ -51,8 +51,8 @@ struct DitherCarryTests {
 
     /// The demo's "Ice": eight blues, no red anywhere in it.
     private static let ice = ASCIIPalette([
-        .palette(17), .palette(18), .palette(25), .palette(31),
-        .palette(38), .palette(45), .palette(123), .palette(195),
+        .palette256(17), .palette256(18), .palette256(25), .palette256(31),
+        .palette256(38), .palette256(45), .palette256(123), .palette256(195),
     ])
 
     /// A dark blue through greys: before, the carried blue pinned at 255 and

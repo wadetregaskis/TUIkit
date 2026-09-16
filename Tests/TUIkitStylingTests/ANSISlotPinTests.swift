@@ -83,7 +83,7 @@ struct ANSISlotPinTests {
     /// one, and becomes the named slot at sixteen colours.
     @Test("A 256-colour index below 16 is the same slot at sixteen colours", arguments: slots)
     func indexCodes(_ slot: Slot) {
-        let indexed = Color.palette(slot.index)
+        let indexed = Color.palette256(slot.index)
         for depth in [ColorDepth.truecolor, .palette256] {
             #expect(indexed.foregroundCodes(depth: depth) == ["38", "5", "\(slot.index)"], "fg @\(depth)")
             #expect(indexed.backgroundCodes(depth: depth) == ["48", "5", "\(slot.index)"], "bg @\(depth)")
@@ -111,9 +111,9 @@ struct ANSISlotPinTests {
     func unreportedSlotReadsAsXterm(_ slot: Slot) {
         TerminalColors.withCurrent(.unknown) {
             #expect(slot.color.rgbComponents == nil)
-            #expect(Color.palette(slot.index).rgbComponents == nil)
+            #expect(Color.palette256(slot.index).rgbComponents == nil)
             #expect(slot.color.estimatedRGB.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
-            #expect(Color.palette(slot.index).estimatedRGB.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
+            #expect(Color.palette256(slot.index).estimatedRGB.map { [$0.red, $0.green, $0.blue] } == slot.xterm)
         }
         let table = Color.palette256ToRGB(slot.index)
         #expect([table.red, table.green, table.blue] == slot.xterm)
@@ -154,7 +154,7 @@ struct ANSISlotPinTests {
 
     @Test("A 256-colour index below 16 downsamples to its named slot at sixteen colours", arguments: slots)
     func indexDownsamplesToItsSlot(_ slot: Slot) {
-        let indexed = Color.palette(slot.index)
+        let indexed = Color.palette256(slot.index)
         #expect(indexed.downsampledToPalette256() == indexed)
         #expect(indexed.downsampledToANSI16() == slot.color)
         var faded = indexed
@@ -190,7 +190,7 @@ struct ANSISlotPinTests {
     func achromaticSlots(_ slot: Slot) {
         let grey = [0, 7, 8, 15].contains(slot.index)
         #expect(slot.color.isAchromatic == grey)
-        #expect(Color.palette(slot.index).isAchromatic == grey)
+        #expect(Color.palette256(slot.index).isAchromatic == grey)
         for depth in Self.colourDepths + [.noColor] {
             #expect(slot.color.hasHue(depth: depth) == !grey, "@\(depth)")
         }
@@ -205,8 +205,8 @@ struct ANSISlotPinTests {
     func terminalDefinedAndDistinct() {
         for slot in Self.slots {
             #expect(slot.color.isTerminalDefined, "\(slot.name)")
-            #expect(Color.palette(slot.index).isTerminalDefined, "palette \(slot.index)")
-            #expect(Color.palette(slot.index) != slot.color, "an index and a name are two spellings")
+            #expect(Color.palette256(slot.index).isTerminalDefined, "palette \(slot.index)")
+            #expect(Color.palette256(slot.index) != slot.color, "an index and a name are two spellings")
         }
         #expect(Color.default.isTerminalDefined)
         #expect(Set(Self.slots.map(\.color) + [Color.default]).count == 17)

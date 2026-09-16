@@ -98,9 +98,9 @@ struct ReportedSlotQuantisationTests {
             #expect(Color.rgb(0, 0, 255).downsampledToANSI16() == .ansi(.brightBlue))
             #expect(Color.rgb(0, 0, 255).backgroundCodes(depth: .basic16) == ["104"])
             // A 256-colour index above the sixteen goes through its RGB: 21 is (0, 0, 255).
-            #expect(Color.palette(21).downsampledToANSI16() == .ansi(.brightBlue))
+            #expect(Color.palette256(21).downsampledToANSI16() == .ansi(.brightBlue))
             // The slots below 16 are the slots themselves, whatever the report.
-            #expect(Color.palette(4).downsampledToANSI16() == .ansi(.blue))
+            #expect(Color.palette256(4).downsampledToANSI16() == .ansi(.blue))
             // The colour's alpha is carried, as by every other derivation.
             var faded = Color.rgb(220, 0, 0)
             faded.alpha = 128
@@ -152,7 +152,7 @@ struct ReportedSlotQuantisationTests {
     func tiesGoToTheLowerSlot() {
         let grey = Self.rgb(128, 128, 128)
         TerminalColors.withCurrent(TerminalColors(slots: TerminalColors.Slots(repeating: grey))) {
-            for colour in [Color.rgb(255, 0, 0), .rgb(0, 0, 0), .rgb(255, 255, 255), .palette(196)] {
+            for colour in [Color.rgb(255, 0, 0), .rgb(0, 0, 0), .rgb(255, 255, 255), .palette256(196)] {
                 #expect(colour.downsampledToANSI16() == .ansi(.black), "\(colour)")
             }
         }

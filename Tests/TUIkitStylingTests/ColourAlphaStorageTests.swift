@@ -71,7 +71,7 @@ struct ColourAlphaStorageTests {
         #expect(Color.red.isOpaque)
         #expect(Color.rgb(1, 2, 3).isOpaque)
         #expect(Color.hsl(180, 50, 50).isOpaque)
-        #expect(Color.palette(42).isOpaque)
+        #expect(Color.palette256(42).isOpaque)
     }
 
     /// **The table.** Every `Color` → `Color` derivation in the styling module,
@@ -115,7 +115,7 @@ struct ColourAlphaStorageTests {
     ///
     /// `quantisedRamp` repairs a ramp whose 256-colour downsample is not monotonic
     /// by retiring a palette entry and re-deriving every sample that had chosen it.
-    /// That re-derivation built a bare `.palette(...)`, so the entries the repair
+    /// That re-derivation built a bare `.palette256(...)`, so the entries the repair
     /// touched came back OPAQUE while their untouched neighbours kept their alpha.
     /// One translucent gradient therefore rendered differently per entry at
     /// 256-colour depth and correctly at truecolor, with no diagnostic — an opaque

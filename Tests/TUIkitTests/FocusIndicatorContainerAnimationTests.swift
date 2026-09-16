@@ -290,7 +290,7 @@ struct FocusIndicatorContainerAnimationTests {
         // A cube swatch, which measures: the cursor on slots 0-15 holds still until the
         // terminal reports its sixteen (SteadyBreathCopiesOnUnmeasurableColourTests).
         let buffer = renderToBuffer(
-            _Color256GridCore(selection: .constant(Color.palette(196)), focusID: "grid-anim"),
+            _Color256GridCore(selection: .constant(Color.palette256(196)), focusID: "grid-anim"),
             context: makeRenderContext(width: 80, height: 24))
         expectAnimates(buffer, runs: 1, "256-colour grid cursor")
         // The cursor swatch and nothing else — a run per swatch would be 256
@@ -304,7 +304,7 @@ struct FocusIndicatorContainerAnimationTests {
         context.environment.focusManager!.register(FocusSentinel())
         #expect(
             renderToBuffer(
-                _Color256GridCore(selection: .constant(Color.palette(1)), focusID: "grid-still"),
+                _Color256GridCore(selection: .constant(Color.palette256(1)), focusID: "grid-still"),
                 context: context
             ).animatedCells.isEmpty)
     }

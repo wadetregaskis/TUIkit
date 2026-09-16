@@ -76,13 +76,13 @@ struct HoverLadderTests {
                 let palette = LadderPalette(background: page)
                 for slot in ANSIColor.allCases {
                     let byName = palette.hoveredForeground(.ansi(slot))
-                    let byIndex = palette.hoveredForeground(.palette(slot.rawValue))
+                    let byIndex = palette.hoveredForeground(.palette256(slot.rawValue))
                     if slot.isBright {
                         #expect(byName == .default, "\(slot) on \(page)")
                         #expect(byIndex == .default, "palette \(slot.rawValue) on \(page)")
                     } else {
                         #expect(byName == .ansi(slot.brightTwin), "\(slot) on \(page)")
-                        #expect(byIndex == .palette(slot.rawValue | 8), "palette \(slot.rawValue) on \(page)")
+                        #expect(byIndex == .palette256(slot.rawValue | 8), "palette \(slot.rawValue) on \(page)")
                     }
                 }
                 // 39 as ink, spelled either way: no rung above it.
@@ -130,7 +130,7 @@ struct HoverLadderTests {
         TerminalColors.withCurrent(Self.appleSlotsWhiteInk) {
             let palette = LadderPalette(background: Self.dark)
             #expect(palette.hoveredForeground(.ansi(.red)) == .ansi(.brightRed))
-            #expect(palette.hoveredForeground(.palette(1)) == .palette(9))
+            #expect(palette.hoveredForeground(.palette256(1)) == .palette256(9))
             #expect(palette.hoveredForeground(.ansi(.brightRed)) == .default)
         }
         // Black 39 on a dark page is harder to read than slot 9, so nothing is taken.
@@ -165,7 +165,7 @@ struct HoverLadderTests {
     @Test("A colour the terminal decides never lifts to RGB, nor to a harder read where both measure")
     func neverRGBNeverHarder() {
         let inks: [Color] =
-            ANSIColor.allCases.map { Color.ansi($0) } + (0..<16).map { Color.palette(UInt8($0)) }
+            ANSIColor.allCases.map { Color.ansi($0) } + (0..<16).map { Color.palette256(UInt8($0)) }
             + [.default, Color(value: .terminalForeground), Self.paper]
         for terminal in [TerminalColors.unknown, Self.appleTerminal, Self.appleSlotsWhiteInk, Self.ghostty] {
             TerminalColors.withCurrent(terminal) {
