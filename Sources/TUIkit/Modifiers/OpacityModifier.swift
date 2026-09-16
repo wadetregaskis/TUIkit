@@ -579,7 +579,7 @@ enum SGRColorRewrite {
             guard index + 2 < parameters.count, let value = UInt8(parameters[index + 2]) else {
                 return (nil, 1)
             }
-            return (Color.palette(value), 3)
+            return (Color.palette256(value), 3)
         case "2":
             guard index + 4 < parameters.count,
                 let red = UInt8(parameters[index + 2]),

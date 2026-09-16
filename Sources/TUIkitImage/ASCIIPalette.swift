@@ -262,7 +262,7 @@ public struct ASCIIPalette: Sendable, Equatable {
     /// The sixteen named colours are deliberately absent, as they are from
     /// `Color`'s search: an index below 16 is a NAME, which bold may repaint
     /// in its bright twin. See ``ASCIIColorMode/foregroundSurvivesBold``.
-    static let ansi256 = Self((16...255).map { .palette(UInt8($0)) })
+    static let ansi256 = Self((16...255).map { .palette256(UInt8($0)) })
 
     /// `count` colours spread as far apart as they can be, taken from the
     /// terminal's own 256-colour repertoire.
@@ -312,7 +312,7 @@ public struct ASCIIPalette: Sendable, Equatable {
                     Self.distanceSquared(candidates[position].lab, candidates[best].lab))
             }
         }
-        return Self(chosen.map { .palette(candidates[$0].index) })
+        return Self(chosen.map { .palette256(candidates[$0].index) })
     }
 
     /// This palette with every colour made concrete.

@@ -520,7 +520,7 @@ extension Color {
     /// bright twin on some terminals; see "What an ANSI colour actually paints" in
     /// `Documentation/Terminal-compatibility.md`.
     ///
-    /// `Color.palette(1)` is the same slot spelled by index, which stays `38;5;1`
+    /// `Color.palette256(1)` is the same slot spelled by index, which stays `38;5;1`
     /// where the terminal has 256 colours, and measures the same way.
     ///
     /// - Parameter slot: The slot.

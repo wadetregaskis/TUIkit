@@ -248,7 +248,7 @@ extension Color {
     private static let neutralSlots: [Color] = [.ansi(.black), .ansi(.white), .ansi(.brightBlack), .ansi(.brightWhite)]
 
     /// Slots 0, 7, 8 and 15, by 256-colour index.
-    private static let neutralSlotsByIndex: [Color] = [.palette(0), .palette(7), .palette(8), .palette(15)]
+    private static let neutralSlotsByIndex: [Color] = [.palette256(0), .palette256(7), .palette256(8), .palette256(15)]
 }
 
 extension Color {

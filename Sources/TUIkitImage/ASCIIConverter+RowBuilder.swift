@@ -143,7 +143,7 @@ struct CellColours {
         case .trueColor:
             return .rgb(pixel.r, pixel.g, pixel.b)
         case .grayscale:
-            return .palette(UInt8(232 + ASCIIConverter.greyRampStep(for: pixel)))
+            return .palette256(UInt8(232 + ASCIIConverter.greyRampStep(for: pixel)))
         case .mono:
             return nil
         case .palette:

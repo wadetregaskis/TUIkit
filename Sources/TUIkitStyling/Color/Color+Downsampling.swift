@@ -30,7 +30,7 @@ extension Color {
             return self
         case .rgb(let red, let green, let blue):
             let index = Self.nearestPalette256Index(red: red, green: green, blue: blue)
-            return Color.palette(index).carryingAlpha(of: self)
+            return Color.palette256(index).carryingAlpha(of: self)
         case .semantic:
             return self
         }
@@ -209,7 +209,7 @@ extension Color {
                 // translucent gradient rendered differently per entry at 256-colour
                 // depth and identically at truecolor — silently, since an opaque
                 // colour never trips the emitter's assertion.
-                entries[index] = Color.palette(
+                entries[index] = Color.palette256(
                     nearestPalette256Index(
                         red: rgb.red, green: rgb.green, blue: rgb.blue, among: survivors)
                 ).carryingAlpha(of: sampled[index])

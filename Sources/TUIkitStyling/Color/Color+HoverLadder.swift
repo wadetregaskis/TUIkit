@@ -62,8 +62,8 @@ extension Color {
     }
 
     /// The bright slot of this standard slot's pair, spelled as this colour is: by
-    /// name (`.ansi(.brightRed)` for `.ansi(.red)`) or by index (`.palette(9)` for
-    /// `.palette(1)`). Opaque, like every rung.
+    /// name (`.ansi(.brightRed)` for `.ansi(.red)`) or by index (`.palette256(9)` for
+    /// `.palette256(1)`). Opaque, like every rung.
     ///
     /// Nil for a colour with no twin ABOVE it: a bright slot, which
     /// ``ANSIColor/brightTwin`` answers with itself, and every colour that is not a

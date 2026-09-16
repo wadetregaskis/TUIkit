@@ -175,7 +175,7 @@ final class Color256GridHandler: PersistedFocusable {
     /// The cursor's palette index, 0–255.
     private(set) var cursor: Int
 
-    /// The colour being edited; cursor moves write `.palette(index)` to it.
+    /// The colour being edited; cursor moves write `.palette256(index)` to it.
     var selection: Binding<Color>
 
     /// The current frame's placed cells — set by the renderer so navigation
@@ -192,7 +192,7 @@ final class Color256GridHandler: PersistedFocusable {
     /// Clamps `index` to 0–255, stores it, and writes it to `selection`.
     func commit(to index: Int) {
         cursor = max(0, min(255, index))
-        selection.wrappedValue = .palette(UInt8(cursor))
+        selection.wrappedValue = .palette256(UInt8(cursor))
     }
 
     /// Moves the cursor to `index` *without* writing `selection` — used to keep
@@ -293,7 +293,7 @@ struct _Color256GridCore: View, Renderable {
         // Keep the highlighted cell on the swatch nearest the current colour (an
         // exact match for a palette entry, otherwise the closest cube/grey cell)
         // so the cursor tracks colours set on other tabs rather than defaulting
-        // to black. The grid's own navigation writes `.palette(cursor)`, so this
+        // to black. The grid's own navigation writes `.palette256(cursor)`, so this
         // round-trips to the same cell.
         handler.syncCursor(to: Self.nearestIndex(of: selection.wrappedValue, palette: context.environment.palette))
 
@@ -486,7 +486,7 @@ struct _Color256GridCore: View, Renderable {
         // 0...255, but this is a static entry point and a plain `UInt8(_:)`
         // would trap rather than draw something wrong. Both ends are the one
         // clamped swatch.
-        let swatch = Color.palette(UInt8(clamping: index))
+        let swatch = Color.palette256(UInt8(clamping: index))
         // The ink twice where either end has no RGB, as `_SwatchGridCore.markEnds` is.
         return Color.breathEnds(dim: swatch, bright: ContrastingLabel.on(swatch, palette: palette))
     }
@@ -502,7 +502,7 @@ struct _Color256GridCore: View, Renderable {
         index: Int, cellWidth: Int, mark: (color: Color, isBold: Bool)?, showNumbers: Bool,
         palette: any Palette
     ) -> String {
-        let color = Color.palette(UInt8(index))
+        let color = Color.palette256(UInt8(index))
         let foreground = ContrastingLabel.on(color, palette: palette)
         if let mark {
             // A check, centred on the swatch, in the palette's readable ink for the
