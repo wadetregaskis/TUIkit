@@ -130,18 +130,21 @@ struct AppleTerminalPaletteTests {
 
     @Test("Registry exposes the phosphor presets plus the 10 Terminal profiles")
     func registry() {
+        let stated = PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
         #expect(PaletteRegistry.phosphorPresets.count == 6)
         #expect(PaletteRegistry.appleTerminalProfiles.count == 10)
-        #expect(PaletteRegistry.all.count == 16)
+        // Counted and shaped per GROUP rather than over `all`, which is those two
+        // groups today and gains a palette that follows the terminal's own colours.
+        #expect(PaletteRegistry.phosphorPresets.allSatisfy { !$0.id.hasPrefix("appleTerminal.") })
+        #expect(PaletteRegistry.appleTerminalProfiles.allSatisfy { $0.id.hasPrefix("appleTerminal.") })
         // Phosphor presets come first, then the Terminal profiles.
-        #expect(PaletteRegistry.all.prefix(6).allSatisfy { !$0.id.hasPrefix("appleTerminal.") })
-        #expect(PaletteRegistry.all.suffix(10).allSatisfy { $0.id.hasPrefix("appleTerminal.") })
-        // No built-in palette claims the bare "terminal." namespace: it is kept
-        // for a palette that follows the running terminal's own colours.
-        #expect(!PaletteRegistry.all.contains { $0.id.hasPrefix("terminal.") })
+        #expect(PaletteRegistry.all.prefix(stated.count).map(\.id) == stated.map(\.id))
+        // No palette that states its own colours claims the bare "terminal."
+        // namespace: it is kept for one that follows the running terminal's.
+        #expect(!stated.contains { $0.id.hasPrefix("terminal.") })
 
         // IDs are unique and names match the Terminal display names.
-        let ids = PaletteRegistry.all.map(\.id)
+        let ids = stated.map(\.id)
         #expect(Set(ids).count == ids.count)
         #expect(PaletteRegistry.palette(withName: "Man Page")?.id == "appleTerminal.manPage")
         #expect(PaletteRegistry.palette(withName: "Homebrew")?.id == "appleTerminal.homebrew")

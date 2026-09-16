@@ -14,10 +14,12 @@ struct PaletteRegistryTests {
 
     @Test("Registry contains all predefined palettes")
     func registryCount() {
-        // 6 phosphor presets + 10 Terminal.app profiles = 16.
+        // Counted per GROUP: 6 phosphor presets and 10 Terminal.app profiles, the
+        // palettes that state their own colours. `all` is those two today, and gains
+        // a palette that follows the terminal's own; `AppleTerminalPaletteTests`
+        // pins that the two groups lead it, in order.
         #expect(PaletteRegistry.phosphorPresets.count == 6)
         #expect(PaletteRegistry.appleTerminalProfiles.count == 10)
-        #expect(PaletteRegistry.all.count == 16)
     }
 
     @Test("Registry cycling order follows color spectrum")

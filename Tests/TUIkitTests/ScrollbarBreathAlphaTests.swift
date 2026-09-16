@@ -17,10 +17,17 @@ import Testing
 @Suite("A focused scrollbar's breath carries the accent's alpha")
 struct ScrollbarBreathAlphaTests {
 
-    /// Every shipped palette under a half-faded tint, and one whose every slot is
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no alpha to carry
+    /// until the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
+    /// Every stated palette under a half-faded tint, and one whose every slot is
     /// faded — the palette `assertFramesOweOneClaim` first tripped on.
     private var palettes: [any Palette] {
-        PaletteRegistry.all.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
+        statedPalettes.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
             + [FadedAll()]
     }
 

@@ -19,10 +19,17 @@ import Testing
 @Suite("A scroll indicator's breath spends both ends; its still line claims")
 struct ScrollIndicatorBreathAlphaTests {
 
-    /// Every shipped palette under a half-faded tint, and one whose every slot is
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no alpha to spend
+    /// until the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
+    /// Every stated palette under a half-faded tint, and one whose every slot is
     /// faded.
     private var palettes: [any Palette] {
-        PaletteRegistry.all.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
+        statedPalettes.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
             + [FadedAll()]
     }
 
@@ -86,7 +93,7 @@ struct ScrollIndicatorBreathAlphaTests {
     @Test("An opaque palette breathes between its own two colours, unchanged")
     func opaqueBreathUnchanged() {
         let palettes: [any Palette] =
-            PaletteRegistry.all + PaletteRegistry.all.map { TintedPalette(base: $0, tint: .ansi(.red)) }
+            statedPalettes + statedPalettes.map { TintedPalette(base: $0, tint: .ansi(.red)) }
             + [NamedSlots()]
         // Reported, so every slot measures and the breath moves between its two ends. A
         // slot the terminal has not reported holds the breath at its bright end

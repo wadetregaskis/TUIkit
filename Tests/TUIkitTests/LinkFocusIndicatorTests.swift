@@ -171,7 +171,8 @@ struct LinkFocusIndicatorTests {
         "A focused link's breath never sinks into the tab body behind it",
         arguments: [LinkFocusIndicator.text, .bullet])
     func theBreathStepsOffTheSurfaceItIsDrawnOn(indicator: LinkFocusIndicator) throws {
-        let homebrew = try #require(PaletteRegistry.all.first { $0.name == "Homebrew" })
+        let homebrew = try #require(
+            PaletteRegistry.appleTerminalProfiles.first { $0.name == "Homebrew" })
         try withColorDepth(.truecolor) {
             let (tui, context) = harness(palette: homebrew)
             let manager = try #require(context.environment.focusManager)
@@ -206,7 +207,8 @@ struct LinkFocusIndicatorTests {
     /// an active section. Same rule, same surface.
     @Test("A focus section's ● never sinks into the tab body behind it")
     func theSectionIndicatorStepsOffTheSurface() throws {
-        let homebrew = try #require(PaletteRegistry.all.first { $0.name == "Homebrew" })
+        let homebrew = try #require(
+            PaletteRegistry.appleTerminalProfiles.first { $0.name == "Homebrew" })
         try withColorDepth(.truecolor) {
             let (tui, context) = harness(palette: homebrew)
             let manager = try #require(context.environment.focusManager)

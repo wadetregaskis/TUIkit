@@ -17,6 +17,13 @@ import Testing
 @Suite("Focus pulse ramp")
 struct PulseRampTests {
 
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no ramp to quantise
+    /// until the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
     /// The ramp the framework's own focus affordances use.
     private func ramp(_ palette: any Palette, depth: ColorDepth = .palette256) -> [Color] {
         Color.pulseRamp(
@@ -31,7 +38,7 @@ struct PulseRampTests {
     /// reads as a glitch, not as a dim.
     @Test("A chromatic accent never fades through grey")
     func noGreyFrames() {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let bright = palette.accent.opacity(
                 ViewConstants.focusPulseMax, over: palette.background)
             // An achromatic accent (White, Pro, Silver Aerogel) is *supposed* to
@@ -53,7 +60,7 @@ struct PulseRampTests {
     /// bounce walks straight past.
     @Test("A shade appears once, so the breath never doubles back")
     func noRepeatedShades() {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let rendered = ramp(palette).map { $0.rendered(at: .palette256) }
             for (index, colour) in rendered.enumerated() {
                 #expect(
@@ -65,7 +72,7 @@ struct PulseRampTests {
 
     @Test("The ramp is never empty, so a pulse always has something to show")
     func neverEmpty() {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             #expect(!ramp(palette).isEmpty, "\(palette.name)")
         }
     }
@@ -75,7 +82,7 @@ struct PulseRampTests {
     /// steps than the readability-bounded row fill.
     @Test("The full-accent span offers at least as many shades as the bounded one")
     func fullAccentSpanIsNoWorse() {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let capRamp = Color.pulseRamp(
                 from: palette.accent.opacity(
                     ViewConstants.focusBorderDim, over: palette.background),
@@ -89,7 +96,7 @@ struct PulseRampTests {
 
     @Test("Truecolor keeps the continuous fade — the ramp is only a fallback")
     func truecolorIsContinuous() {
-        let palette = PaletteRegistry.all[0]
+        let palette = statedPalettes[0]
         let steps = ramp(palette, depth: .truecolor)
         #expect(steps.count == 2, "just the endpoints; the caller lerps between them")
     }

@@ -18,13 +18,20 @@ import Testing
 @Suite("A switch track's breath spends both ends")
 struct SwitchTrackBreathTests {
 
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no end to spell until
+    /// the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
     /// Every tick, not the two ends: a cycle interpolates alpha as a fourth channel
     /// between ends that disagree (§29.3). Every shipped palette under a half-faded
     /// tint and a wholly faded one, the track on and off, lifted by a hover or not.
     @Test("Every tick of a focused switch track's breath is opaque", arguments: [true, false])
     func everyTickIsOpaque(isOn: Bool) {
         let palettes: [any Palette] =
-            PaletteRegistry.all.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
+            statedPalettes.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
             + [FadedAll()]
         var environment = EnvironmentValues()
         environment.selectionIndicatorStyle = .pulse
@@ -48,7 +55,7 @@ struct SwitchTrackBreathTests {
     /// spending an opaque colour returns it untouched.
     @Test("An opaque palette's switch track breathes between the colours it always did")
     func opaqueEndsKeepTheirSpelling() {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let on = SwitchTrackBreath.ends(track: palette.accent, isOn: true, palette: palette)
             #expect(on.bright == palette.accent, "\(palette.name): the on end was re-spelled")
             let track = SwitchTrackBreath.offTrack(in: palette)

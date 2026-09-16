@@ -121,7 +121,9 @@ struct DisabledTrackTests {
             ("bar", .bar), ("dot", .dot), ("braille", .braille),
         ]
         var sawAnAccentTrack = false
-        for palette in PaletteRegistry.all {
+        // The palettes that state their own accent: a palette that leaves it to the
+        // terminal paints no accent to tell a disabled track from a live one by.
+        for palette in PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles {
             // As it reaches the terminal: `38;5;n` or `38;2;r;g;b`, joined the
             // way an SGR sequence joins its parameters.
             let accent = palette.accent.resolve(with: palette)

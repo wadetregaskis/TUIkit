@@ -37,6 +37,13 @@ import Testing
 @Suite("Control labels stay readable")
 struct LabelContrastTests {
 
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no contrast to measure
+    /// until the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
     /// A rendered control's first explicit foreground/background pair.
     private struct Painted {
         let foreground: Color
@@ -128,7 +135,7 @@ struct LabelContrastTests {
         // `.destructive` under Green is the reported case: red text on the
         // green button face, "impossible to read". It measured 3.56:1 in
         // truecolor and 2.61:1 on screen.
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             for control in semanticControls() {
                 let painted = try #require(
                     paint(control.view, label: control.label, palette: palette),
@@ -148,7 +155,7 @@ struct LabelContrastTests {
     /// colour by the time they reach the screen.
     @Test("no palette paints a disabled label in its own background colour")
     func neverInvisible() throws {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             for control in disabledControls() {
                 let painted = try #require(
                     paint(control.view, label: control.label, palette: palette),
@@ -167,7 +174,7 @@ struct LabelContrastTests {
 
     @Test("a disabled label clears its (lower) contrast floor on every palette")
     func clearsTheFloor() throws {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             for control in disabledControls() {
                 let painted = try #require(
                     paint(control.view, label: control.label, palette: palette))
@@ -190,7 +197,7 @@ struct LabelContrastTests {
     /// different hat.
     @Test("a disabled label is never the same colour as an enabled one")
     func disabledIsDistinguishable() throws {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let off = try #require(
                 paint(Button("Label") {}.disabled(true), label: "Label", palette: palette))
             let on = try #require(paint(Button("Label") {}, label: "Label", palette: palette))
@@ -220,7 +227,7 @@ struct LabelContrastTests {
     @Test("a disabled label is never materially more contrasty than an enabled one")
     func disabledStaysRecessive() throws {
         let tolerance = 0.25
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let off = try #require(
                 paint(Button("Label") {}.disabled(true), label: "Label", palette: palette))
             let on = try #require(paint(Button("Label") {}, label: "Label", palette: palette))

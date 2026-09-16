@@ -180,16 +180,18 @@ struct PaletteContrastAuditTests {
         ]
     }
 
-    /// Every palette the framework ships.
-    private static var allPalettes: [any Palette] {
-        PaletteRegistry.all
+    /// Every palette that states its own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no ratio to measure
+    /// until the terminal reports one.
+    private static var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
     }
 
     // MARK: - Report (not an assertion; run with --filter to see the table)
 
     @Test("Report: contrast table for every shipped palette")
     func report() {
-        for palette in Self.allPalettes {
+        for palette in Self.statedPalettes {
             print("== \(palette.name) ==")
             for pair in Self.pairs(for: palette) {
                 let ratio = Self.contrast(pair.foreground, pair.background)
@@ -204,7 +206,7 @@ struct PaletteContrastAuditTests {
 
     @Test("Every shipped palette meets the readability floor")
     func readabilityFloor() {
-        for palette in Self.allPalettes {
+        for palette in Self.statedPalettes {
             for pair in Self.pairs(for: palette) {
                 let ratio = Self.contrast(pair.foreground, pair.background)
                 #expect(
@@ -226,7 +228,7 @@ struct PaletteContrastAuditTests {
     /// The floor is therefore stated where it bites: after downsampling.
     @Test("Hovering changes the face on every shipped palette")
     func hoverIsVisibleEverywhere() {
-        for palette in Self.allPalettes {
+        for palette in Self.statedPalettes {
             let resting = palette.restingControlFace.resolve(with: palette)
             let hovered = palette.hoveredControlFace.resolve(with: palette)
             #expect(
@@ -250,7 +252,7 @@ struct PaletteContrastAuditTests {
     /// passed through.
     @Test("The hover face walks two visible steps, not the first one it finds")
     func hoverWalksTwoSteps() {
-        for palette in Self.allPalettes {
+        for palette in Self.statedPalettes {
             let resting = palette.restingControlFace.resolve(with: palette)
                 .downsampledToPalette256()
             let hovered = palette.hoveredControlFace.resolve(with: palette)
@@ -284,7 +286,7 @@ struct PaletteContrastAuditTests {
     /// from the page. The result read as an accident, because it was one.
     @Test("Both bars are the same colour in every shipped palette")
     func barsShareOneTone() {
-        for palette in Self.allPalettes {
+        for palette in Self.statedPalettes {
             #expect(
                 palette.statusBarBackground.resolve(with: palette)
                     == palette.appHeaderBackground.resolve(with: palette),

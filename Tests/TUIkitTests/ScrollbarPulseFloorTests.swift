@@ -23,6 +23,13 @@ import TUIkitStyling
 @Suite("Scrollbar pulse floor")
 struct ScrollbarPulseFloorTests {
 
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no tone to measure
+    /// until the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
     /// Every shipped palette, at both ends of the breath, on both the terminals
     /// that matter — a sweep, because this is a per-palette collapse and one
     /// example proves nothing about the others.
@@ -30,7 +37,7 @@ struct ScrollbarPulseFloorTests {
     func dimEndStaysVisible() {
         for depth in [ColorDepth.truecolor, .palette256] {
             ColorDepth.withCurrent(depth) {
-                for palette in PaletteRegistry.all {
+                for palette in statedPalettes {
                     let track = ScrollbarColors.track(in: palette)
                     let lift = ScrollbarColors.pulseLift(palette)
                     let ratio = lift.downsampledToPalette256()
@@ -102,7 +109,7 @@ struct ScrollbarPulseFloorTests {
     func theBreathSurvives() {
         let noRoom: Set<String> = ["Grass"]
         ColorDepth.withCurrent(.palette256) {
-            for palette in PaletteRegistry.all {
+            for palette in statedPalettes {
                 let resting = ScrollbarColors.separated(
                     palette.accent.resolve(with: palette), in: palette)
                 let lift = ScrollbarColors.separated(
@@ -148,7 +155,7 @@ struct ScrollbarPulseFloorTests {
     func theRestingThumbStandsOffThePage() {
         for depth in [ColorDepth.truecolor, .palette256] {
             ColorDepth.withCurrent(depth) {
-                for palette in PaletteRegistry.all where palette.name != "Grass" {
+                for palette in statedPalettes where palette.name != "Grass" {
                     let page = palette.background.resolve(with: palette)
                     let track = ScrollbarColors.track(in: palette)
                     let groove = track.downsampledToPalette256()
@@ -176,6 +183,13 @@ struct ScrollbarPulseFloorTests {
 @Suite("A scroll track is not the colour of its own thumb")
 struct ScrollbarTrackTests {
 
+    /// The palettes that state their own colours: the phosphor presets and the Terminal
+    /// profiles. A palette that leaves a role to the terminal has no tone to measure
+    /// until the terminal reports it.
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
     /// Six of the sixteen shipped profiles derive `foregroundQuaternary` within
     /// the chrome-separation floor of their own accent, and Ocean's lands on the
     /// SAME 256-colour entry. A groove the colour of its thumb forces the thumb
@@ -183,7 +197,7 @@ struct ScrollbarTrackTests {
     @Test("Every palette's track is tellable from its own accent")
     func theTrackClearsTheAccent() {
         ColorDepth.withCurrent(.palette256) {
-            for palette in PaletteRegistry.all {
+            for palette in statedPalettes {
                 let track = ScrollbarColors.track(in: palette).downsampledToPalette256()
                 let accent = palette.accent.resolve(with: palette).downsampledToPalette256()
                 let ratio = track.contrastRatio(against: accent)
@@ -204,7 +218,7 @@ struct ScrollbarTrackTests {
     @Test("…and is still visible against the page it sits on")
     func theTrackClearsThePage() {
         ColorDepth.withCurrent(.palette256) {
-            for palette in PaletteRegistry.all {
+            for palette in statedPalettes {
                 let track = ScrollbarColors.track(in: palette).downsampledToPalette256()
                 let page = palette.background.resolve(with: palette).downsampledToPalette256()
                 let ratio = track.contrastRatio(against: page)
@@ -225,7 +239,7 @@ struct ScrollbarTrackTests {
     func anAcceptableRungIsUntouched() {
         ColorDepth.withCurrent(.palette256) {
             var untouched = 0
-            for palette in PaletteRegistry.all
+            for palette in statedPalettes
             where ScrollbarColors.track(in: palette)
                 == palette.foregroundQuaternary.resolve(with: palette)
             {
