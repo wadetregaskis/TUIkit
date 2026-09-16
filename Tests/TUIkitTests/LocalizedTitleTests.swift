@@ -38,11 +38,28 @@ struct LocalizedTitleTests {
     /// folding can turn it back into a literal.
     static var computedKey: String { "test.title" + ".control" }
 
-    init() {
+    /// The suite's one registration, made on first use rather than per test.
+    ///
+    /// Swift Testing builds a fresh instance for every test case, so doing this
+    /// in `init()` ran it once per case — and `register` ends by calling
+    /// `AppState.shared.setNeedsRenderWithCacheClear()`
+    /// (`Sources/TUIkit/Localization/LocalizationService.swift`), which empties
+    /// the GLOBAL render memo. Those clears landed in the middle of the run,
+    /// throwing away what every other suite rendering at the same time had just
+    /// built. Registrations merge and nothing ever removes one, so once is all
+    /// this suite needs; a `static let` is initialized on first use, under
+    /// `swift_once`.
+    ///
+    /// Not `init()`-free: the initializer is what forces the `static let`, so
+    /// the registration still happens before the first case runs, whichever
+    /// case that is.
+    private static let registered: Void = {
         LocalizationService.shared.register(translations: [
             "en": [Self.key: Self.translation]
         ])
-    }
+    }()
+
+    init() { _ = Self.registered }
 
     /// The rendered text of a view, stripped of styling — what the user reads.
     private func rendered(_ view: some View, width: Int = 44, height: Int = 8) -> String {
