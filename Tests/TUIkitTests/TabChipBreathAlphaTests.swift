@@ -22,10 +22,18 @@ import Testing
 @Suite("A tab chip's breath is opaque at every phase")
 struct TabChipBreathAlphaTests {
 
-    /// Every shipped palette under a half-faded tint, and one whose every slot is
+    /// Every palette that states its own colours: the phosphor presets and the Terminal
+    /// profiles. A chip's breath is two tints of the accent over its surface, and a
+    /// palette that leaves either to the terminal has no two ends to measure until the
+    /// terminal reports them (it holds still instead — Opacity as composition §79).
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
+    /// Every stated palette under a half-faded tint, and one whose every slot is
     /// faded — the chip's surface included.
     private var palettes: [any Palette] {
-        PaletteRegistry.all.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
+        statedPalettes.map { TintedPalette(base: $0, tint: $0.accent.opacity(0.5)) }
             + [FadedAll()]
     }
 
@@ -61,10 +69,10 @@ struct TabChipBreathAlphaTests {
     ///
     /// Measured as chrome's other breaths are, through the cube, at their floor
     /// (the hundredth is the slack a lightness walk in 1% steps leaves).
-    @Test("A focused chip's breath can be seen on every palette")
+    @Test("A focused chip's breath can be seen on every stated palette")
     func breathIsVisibleOnEveryPalette() {
         var still: [String] = []
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let chip = chip(palette: palette, animation: .pulse)
             let ratio = ChromeTrack.renderedRatio(chip.labelDim, chip.labelBright)
             if ratio < ViewConstants.chromePulseFloor - 0.01 {

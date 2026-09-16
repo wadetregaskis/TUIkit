@@ -317,11 +317,15 @@ struct GroundedPaletteTerminalTests {
         #expect(reported.isSamePalette(as: again))
     }
 
-    @Test("Every built-in palette is stored as it was given")
-    func builtInPalettesAreUntouched() {
+    /// Every palette that STATES its own colours: its grounds are opaque and no role of
+    /// it is `Color.default`, so there is nothing to ground. A palette that states none
+    /// of its own is grounded, which is the point of grounding, and is pinned with
+    /// itself rather than here.
+    @Test("Every palette that states its own colours is stored as it was given")
+    func statedPalettesAreUntouched() {
         for terminal in [TerminalColors.unknown, Self.reported] {
             TerminalColors.withCurrent(terminal) {
-                for palette in PaletteRegistry.all {
+                for palette in PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles {
                     #expect(!(stored(palette) is GroundedPalette), "\(palette.id)")
                 }
             }

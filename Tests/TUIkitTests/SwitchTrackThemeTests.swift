@@ -56,10 +56,13 @@ struct SwitchTrackThemeTests {
     /// The knob is drawn in the page's colour on the track, and the accent is what
     /// the same track turns when on. Measured as drawn, through the 256-colour cube,
     /// against the same floors a scroll track keeps.
-    @Test("Every shipped palette's off track stands off its page and its accent")
+    /// Every palette that STATES its own colours: a palette that leaves its page and its
+    /// accent to the terminal paints no ratio for a track to stand off until the
+    /// terminal reports them.
+    @Test("Every stated palette's off track stands off its page and its accent")
     func offTrackStandsOff() {
         var offenders: [String] = []
-        for palette in PaletteRegistry.all {
+        for palette in PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles {
             let track = SwitchTrackBreath.offTrack(in: palette).resolve(with: palette)
             let page = palette.background.resolve(with: palette)
             let accent = palette.accent.resolve(with: palette)

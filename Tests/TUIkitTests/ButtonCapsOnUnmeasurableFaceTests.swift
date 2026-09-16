@@ -208,12 +208,14 @@ struct ButtonCapsOnUnmeasurableFaceTests {
         }
     }
 
-    /// Every built-in palette states RGB roles, so on a silent terminal its caps are
-    /// what they were: the face at rest, a breath when focused.
+    /// Every palette that states its own colours states RGB roles, so on a silent
+    /// terminal its caps are what they were: the face at rest, a breath when focused.
+    /// A palette that states none of its own is this suite's whole subject, and such a
+    /// palette in the registry is pinned with itself rather than here.
     @Test("An RGB palette's caps rest in its face on a silent terminal", arguments: Control.allCases)
     func rgbPalettesKeepTheirFace(_ control: Control) {
         TerminalColors.withCurrent(.unknown) {
-            for palette in PaletteRegistry.all {
+            for palette in PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles {
                 expectCaps(
                     render(control, palette, focused: false), in: palette.restingControlFace,
                     "\(control) at rest under \(palette.id)")

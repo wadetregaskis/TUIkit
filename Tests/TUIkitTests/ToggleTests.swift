@@ -431,6 +431,14 @@ struct ToggleHoverTests {
         #expect(!after.joined().contains("48;"), "and none under the pointer either: \(after)")
     }
 
+    /// Every palette that STATES its own colours: the phosphor presets and the Terminal
+    /// profiles. A lift is measured against the page, and a palette that leaves its ink
+    /// or its page to the terminal has no ratio to measure until the terminal reports
+    /// them — it climbs a ladder of names instead (`HoverLadderTests`).
+    private var statedPalettes: [any Palette] {
+        PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles
+    }
+
     @Test("The lift never reads as the disabled fade")
     func hoverNeverLooksDisabled() {
         // The exact shape of the first wrong answer: a hover that moved the
@@ -440,7 +448,7 @@ struct ToggleHoverTests {
         // Ocean, Silver Aerogel, Solid Colors) lift in hue toward the accent
         // instead. Either way it has to stay clear of the one colour that means
         // "you cannot click this".
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let page = palette.background
             let disabled = palette.foregroundTertiary.opacity(
                 ViewConstants.disabledForeground, over: palette.background)
@@ -451,9 +459,9 @@ struct ToggleHoverTests {
         }
     }
 
-    @Test("The lifted foreground is still readable on every palette")
+    @Test("The lifted foreground is still readable on every stated palette")
     func hoverStaysReadable() {
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let hovered = palette.hoveredForeground(palette.foreground)
                 .downsampledToPalette256()
             let page = palette.background.resolve(with: palette).downsampledToPalette256()
@@ -469,7 +477,7 @@ struct ToggleHoverTests {
         // A lift finer than the cube is no lift at all on the terminals least
         // able to spare one — the rule `hoveredControlFace` and
         // `liftedBackground` already follow.
-        for palette in PaletteRegistry.all {
+        for palette in statedPalettes {
             let resting = palette.foreground.resolve(with: palette).downsampledToPalette256()
             let hovered = palette.hoveredForeground(palette.foreground)
                 .downsampledToPalette256()

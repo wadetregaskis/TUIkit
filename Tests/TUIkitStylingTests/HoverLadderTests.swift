@@ -188,11 +188,13 @@ struct HoverLadderTests {
     }
 
     /// The ladder is for what the terminal decides. An RGB ink keeps the RGB lift, and
-    /// every built-in palette states RGB roles, so none of their hovers climbs it.
-    @Test("An RGB ink still lifts in RGB, and every built-in palette's accent tint measures")
+    /// every palette that STATES its own colours states RGB roles, so none of their
+    /// hovers climbs it. A palette that states none of its own is the other case, and
+    /// is pinned with the palette rather than here.
+    @Test("An RGB ink still lifts in RGB, and every stated palette's accent tint measures")
     func rgbInksKeepTheirLift() {
         TerminalColors.withCurrent(.unknown) {
-            for palette in PaletteRegistry.all {
+            for palette in PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles {
                 #expect(palette.accentTintIsMeasurable, "\(palette.id)")
                 for role in [palette.foreground, palette.foregroundSecondary, palette.accent, palette.border] {
                     #expect(!palette.hoveredForeground(role).isTerminalDefined, "\(palette.id): \(role)")
