@@ -83,10 +83,15 @@ extension Terminal {
     /// acknowledgement, a DA answer and everything else is not kept, and the
     /// parser drops it as it always has.
     ///
-    /// The fence, `CSI 0 n`, is deliberately not kept either. It says a request
-    /// has been answered, and nothing asks again yet: the asking, and the fence
-    /// with it, come with the steps that re-query (plan 5b–5d).
+    /// The fence, `CSI 0 n`, is kept too, but apart — see ``takeStatusFence()``.
+    /// It says nothing about a colour; it says a request has been answered as
+    /// far as it is going to be, which is what `TerminalColorRequester` waits
+    /// for before sending the next one.
     func noteVolunteeredColorReply(_ bytes: [UInt8]) {
+        if TerminalColorQuery.isStatusFence(bytes[...]) {
+            sawVolunteeredStatusFence = true
+            return
+        }
         guard TerminalColorQuery.isReply(bytes[...]) else { return }
         // A reply nobody takes cannot pin memory: this is dropped rather than
         // buffered forever, the same bargain ``maxReplyBytes`` makes.
@@ -119,6 +124,20 @@ extension Terminal {
         guard !volunteeredColorReplies.isEmpty else { return [] }
         defer { volunteeredColorReplies = [] }
         return volunteeredColorReplies
+    }
+
+    /// Whether a request's fence arrived since the last call, clearing it.
+    ///
+    /// A flag of its own rather than a sequence in ``takeVolunteeredColorReplies()``,
+    /// because `TerminalColorQuery.parse` stops at the first fence, as the
+    /// startup exchange's hand-back does: a fence among a drain's bytes would
+    /// hide every reply behind it. Every measured host answers its fence last,
+    /// but only because it answers everything it is going to answer first — a
+    /// terminal silent on OSC 4 sends the fence with replies to nothing behind
+    /// it, and under tmux those two can be half a second apart.
+    func takeStatusFence() -> Bool {
+        defer { sawVolunteeredStatusFence = false }
+        return sawVolunteeredStatusFence
     }
 
     /// Hard cap on what is held for the run loop, past which a reply is dropped

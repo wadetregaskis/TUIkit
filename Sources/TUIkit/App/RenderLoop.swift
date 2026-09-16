@@ -840,6 +840,14 @@ extension RenderLoop {
         // the previous answer, and if the new one differs the screen is fully
         // invalidated and redrawn when it lands.
         clientCapabilities.refresh()
+        // And for the same reason the COLOURS may be a different terminal's: the
+        // screen is thrown away on a resize, on a resumed suspend, and on the
+        // client change those hooks turn into a SIGWINCH. Ask again — written
+        // and not waited for, and not asked at all of a terminal that has never
+        // said anything about its colours unless this is tmux, where the client
+        // that was silent may not be the client attached now. See
+        // `TerminalColorRequester`.
+        colorQueries.screenInvalidated(terminalHasAnswered: terminalColors.hasAnsweredAboutColors)
     }
 
     /// What the attached terminal(s) can render this frame: the emoji-chrome
@@ -858,8 +866,13 @@ extension RenderLoop {
     ///
     /// Called once per drain with whatever `Terminal.takeVolunteeredColorReplies`
     /// held, which on almost every frame is nothing.
-    func noteVolunteeredColorReplies(_ bytes: [UInt8]) {
+    ///
+    /// `sawStatusFence` is the other half of the same drain: the `CSI 0 n` that
+    /// says a request made here has been answered as far as it is going to be,
+    /// so the one waiting behind it may go out (see ``TerminalColorRequester``).
+    func noteVolunteeredColorReplies(_ bytes: [UInt8], sawStatusFence: Bool) {
         terminalColors.noteReplies(bytes)
+        if sawStatusFence { colorQueries.noteStatusFence() }
     }
 
     /// The effective ``MouseSupport`` configuration after combining

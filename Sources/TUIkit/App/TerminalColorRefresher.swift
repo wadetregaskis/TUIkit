@@ -85,6 +85,26 @@ internal final class TerminalColorRefresher {
         self.onChange = onChange
     }
 
+    /// Whether the terminal has ever said anything of its own about its
+    /// colours: named one in the startup exchange, named one since, or reported
+    /// its own theme with a `CSI ? 997`.
+    ///
+    /// What decides whether it is worth asking again — see
+    /// ``TerminalColorRequester``. A terminal that answered nothing when it was
+    /// asked properly will not have learned how by the next resize.
+    ///
+    /// `prefersDark` alone is deliberately not enough: it can come from
+    /// `COLORFGBG`, which is the environment talking rather than the terminal,
+    /// and under a multiplexer it can describe a terminal that is no longer
+    /// attached. Limit: a `997` the STARTUP exchange heard is folded into
+    /// `prefersDark` by `TerminalColorQuery.resolve` and is indistinguishable
+    /// from that hint here, so only one heard since the app started counts.
+    var hasAnsweredAboutColors: Bool {
+        known.foreground != nil || known.background != nil || known.slots != nil
+            || heard.foreground != nil || heard.background != nil || heard.appearance != nil
+            || heard.slots.contains(where: { $0 != nil })
+    }
+
     /// Applies the replies the parser siphoned out of one drain's bytes.
     ///
     /// `TerminalColorQuery.parse(_:)` is the walk, as it is for the exchange —

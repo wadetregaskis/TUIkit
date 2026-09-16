@@ -175,6 +175,13 @@ final class Terminal: TerminalProtocol {
     /// stored properties.
     var volunteeredColorReplies: [UInt8] = []
 
+    /// Whether the terminal has answered the fence (`CSI 0 n`) of a colour
+    /// request made after the startup exchange, since the run loop last took it.
+    ///
+    /// Kept apart from ``volunteeredColorReplies`` rather than among them, for
+    /// the reason ``takeStatusFence()`` gives: the reply walk stops at a fence.
+    var sawVolunteeredStatusFence = false
+
     /// The raw byte source feeding the parser. Production reads from stdin;
     /// tests inject a closure to script split reads deterministically, since
     /// the parser is otherwise impossible to drive without a live TTY.

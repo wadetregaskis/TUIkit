@@ -730,7 +730,8 @@ extension AppRunner {
         // or one the terminal volunteered because its theme changed. The parser
         // siphons them out of the keystrokes; taking them once per drain makes a
         // burst of replies one publication and one repaint.
-        renderer.noteVolunteeredColorReplies(terminal.takeVolunteeredColorReplies())
+        renderer.noteVolunteeredColorReplies(
+            terminal.takeVolunteeredColorReplies(), sawStatusFence: terminal.takeStatusFence())
     }
 
     fileprivate func cleanup(renderer: RenderLoop<A>) {

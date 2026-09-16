@@ -2155,8 +2155,19 @@ back. It asks only when stdin is a TTY in raw mode.
   (`TerminalColorRequester`). The request is written and not waited for — tmux's
   half second holds no output of ours (a line printed straight after each batch
   reached the client in 0.15–0.9 ms while the fence was still outstanding), and
-  the answer comes back as a late reply, below. Nothing is asked on resume from
-  a suspend, on focus-in, or on a `997` report.
+  the answer comes back as a late reply, below.
+- **Asked again when the screen is thrown away:** on a resize, on a resumed
+  suspend, and on the tmux client change our hooks turn into a SIGWINCH — each
+  of them a moment when the terminal in front of the user may be a different
+  one. The whole request goes out again, the default pair included, since the
+  pair belongs to whichever client answers now. A terminal that has never said
+  anything of its own about its colours is left alone, unless this is tmux (the
+  silent client may not be the one attached now) or it has reported its own
+  theme with a `997`. A burst — a resize drag — is one request and one resend:
+  at most one is outstanding, and its fence releases the next. A fence that has
+  not come back in a second is taken as lost, the request goes out once more,
+  and after that it is given up rather than polled. Nothing is asked on
+  focus-in.
 - **A reply later than the deadline is still read.** The input parser keeps an
   OSC 10, 11 or 4 answer and a `CSI ? 997 ; Ps n` report instead of dropping it
   with everything else nobody typed, the run loop takes what it kept once per
@@ -3878,8 +3889,12 @@ until that run records it, with the host's version.
   first frame is followed by the sixteen-slot request the startup exchange left
   out, written and not waited for, because tmux holds the fence about half a
   second when the client it forwards OSC 4 to is silent; its answer arrives as a
-  late reply, through the refresher above. Off tmux nothing is asked a second
-  time — the startup exchange asked for the slots itself and waited for them.
+  late reply, through the refresher above. A thrown-away screen (resize, resumed
+  suspend, tmux client change) asks the whole request again, skipping a terminal
+  that has never answered unless it is tmux or has sent a `997`. One request is
+  outstanding at a time — `Terminal.takeStatusFence` hands over the `CSI 0 n`
+  that releases the next, and a fence still missing a second later is taken as
+  lost and the request sent once more.
 - `Terminal.enableRawMode` / `disableRawMode` — focus reporting (mode 1004)
   on and off; `Terminal.finalize` reads the reports as
   `TerminalInput.focusChanged`; `AppRunner.terminalFocusChanged` moves

@@ -255,7 +255,7 @@ struct TerminalColorReplyWiringTests {
             "the fixture: an unchanged frame writes less than the first: \(unchangedFrame) of \(firstFrame)")
 
         let reply = TerminalColorLateReplyTests.reply("11", TerminalColorLateReplyTests.ghosttyBackground)
-        loop.noteVolunteeredColorReplies(Array(reply.utf8))
+        loop.noteVolunteeredColorReplies(Array(reply.utf8), sawStatusFence: false)
         #expect(TerminalColors.current.background == TerminalColorLateReplyTests.ghosttyBackground)
         #expect(AppState.shared.needsRender, "the loop was not asked for a frame")
 
