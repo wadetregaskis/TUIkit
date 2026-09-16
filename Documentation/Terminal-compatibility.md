@@ -2287,6 +2287,57 @@ slot and hold the fence was observed; why was not established.
   and `OSC 11;?` twice;
 - at detach: `?2004l`, `?1004l` and `?2031l`.
 
+### Colour-palette update notifications (mode 2031) — measured 2026-09-14
+
+DEC private mode 2031 is how an application asks to be TOLD its colours changed
+rather than having to ask: with it set, a terminal that repaints its palette
+sends `CSI ? 997 ; Ps n`, the same report `CSI ? 996 n` asks for on demand
+(above). tmux sets it on its own clients at attach and resets it at detach
+(measured, listed just above), which is what made it worth measuring here.
+
+**Status:** measured on five hosts. **Ghostty is UNMEASURED**, for both this and
+reverse video: `open -na Ghostty.app --args -e <script>` made a window and
+started no child, on 2026-09-14 (twice) and again on 2026-09-15. The earlier
+session's `error initializing surface err=error.OutOfMemory` was not reproduced,
+so the cause is unknown.
+
+| Host | `CSI ? 2031 h` / `l` | Unsolicited `997` on enable | DECRQM `CSI ? 2031 $ p` | Does the DECRQM print? |
+|---|---|---|---|---|
+| Apple Terminal 455.1, "Basic" | nothing printed, cursor unmoved, in all 7 steps | none | *silent* | **yes — one cell (+1 column)**, and so did the `?25` control |
+| iTerm2 3.7.1, profile "Default" | nothing printed, cursor unmoved | none | `ESC[?2031;2$y` reset, `ESC[?2031;1$y` set, `ESC[?2031;2$y` after reset — it tracks the mode | no |
+| Warp v0.2026.09.02.08.27.stable_01 | nothing printed, cursor unmoved | none | *silent* | no |
+| GNU screen 4.00.03, inside Apple Terminal 455.1 | nothing printed, cursor unmoved | none | *silent* | no — screen consumes the query, so Apple Terminal's leak never reaches the outer screen |
+| tmux 3.7c, inside Apple Terminal 455.1 | nothing printed, cursor unmoved | none | `;2` reset, `;1` set, `;2` after reset, in 0.03–0.13 ms — per pane | no |
+| Ghostty 1.3.1 | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+
+The `?25` control matters: on Apple Terminal it leaked a cell exactly as `?2031`
+did, so the leak is that host's `?`-plus-intermediate CSI rule (see "Asking the
+terminal — Device Attributes") and not something about this mode. **So mode 2031
+may be set and reset anywhere, and its DECRQM may not be sent to a bare Apple
+Terminal.** There is also nothing to gain by asking: the one host that answers
+it natively is iTerm2, and the answer only says whether the mode this process
+just set is set.
+
+**Provenance.**
+- `Tools/TerminalProbes/osc_colour_probe.py` with `PROBE_SUITE=m3m7`, run inside
+  each host; macOS 15.7.9 (24G830), system appearance Light, on the virtual Mac
+  above. Records not committed, as that probe's never are.
+- Judged by the cursor, as the reverse-video rows below are: a step "printed"
+  when the cursor is not where it should have left it. Output that moves no
+  cursor goes unseen, and under screen and tmux the report comes from the
+  multiplexer's own grid.
+- Where iTerm2's record came from: the same launch that produced its
+  reverse-video row, and the same caveat — see that section's provenance.
+
+**What "no unsolicited `997`" does and does not say.** It says none arrived
+within 1.5 s of each of four enables, plus a 0.8 s final drain, on a host whose
+appearance nobody touched during the run. It says **nothing** about whether a
+host reports when its theme actually changes, which is the case the mode exists
+for: measuring that needs a system appearance or a profile changed under a
+running probe, and no run here has done it. Under tmux the question is doubly
+open — whether tmux forwards a client's report into a pane that set the mode was
+not measured either.
+
 ### A host may recolour a foreground it cannot read — measured 2026-09-01
 
 **Status: the framework no longer emits the sequence that provokes it.**
