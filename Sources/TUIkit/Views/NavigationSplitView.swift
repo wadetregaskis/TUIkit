@@ -864,6 +864,10 @@ extension _NavigationSplitViewCore {
         let dot = palette.accent.breathEnds(
             dimmedTo: ViewConstants.focusBorderDim, over: palette.background)
         let pulse = palette.accentFillPulse()
+        // What an ACTIVE divider fills with: that breath, or — where the accent or the page
+        // has no RGB, so there is nothing between them to fill with (`Documentation/Opacity
+        // as composition.md` §75) — reverse video over the palette's own pair (§90).
+        let highlight = palette.emphasisFill()
 
         /// One divider cell as it looks at a given point in the pulse, with the
         /// claim its colours owe.
@@ -874,6 +878,18 @@ extension _NavigationSplitViewCore {
         /// to reproduce exactly what was drawn here, not an approximation of it.
         func cell(row: Int, at emphasis: SelectionEmphasis) -> ClaimingRow {
             let mark = glyph(row)
+            // An active divider whose fill cannot be measured reverses the palette's pair
+            // instead, cell by cell. A reversed cell has only two colours, so the dot comes
+            // through in the page's colour on a bar of the foreground's — which is what
+            // reversing a column means, and it still reads as a handle. Both sides are
+            // stated opaque, so the cell claims nothing (§90).
+            if info.isActive, case .reversed(let ink, let field) = highlight {
+                var reversed = ClaimingRow()
+                reversed.append(
+                    mark ?? " ", cells: 1, ink: ink.opaqueSpelling, field: field.opaqueSpelling,
+                    inverted: true)
+                return reversed
+            }
             // Grip foreground: a quiet dot, pulsing toward the accent while
             // hovered.
             let dotColor = info.isHovered

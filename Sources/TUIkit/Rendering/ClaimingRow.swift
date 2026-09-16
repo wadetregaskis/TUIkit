@@ -60,11 +60,19 @@ struct ClaimingRow {
     /// per cell would state twenty rectangles where two will do. The BYTES are not
     /// merged, deliberately: this type does not know whether its caller's runs are
     /// separable, and every caller today emits its own SGR introducer per run anyway.
+    ///
+    /// `inverted` states the pair beside an SGR 7 rather than painting it directly — what a
+    /// highlight whose colours cannot be measured draws (``HighlightFill``, `Documentation/
+    /// Opacity as composition.md` §90). It is part of how the cell is PAINTED, not a second
+    /// kind of cell, which is why it belongs here with the rest of the pairing: a caller
+    /// passes the two colours it wants exchanged, already opaque, and so owes no claim.
     mutating func append(
-        _ glyphs: String, cells count: Int, ink: Color?, field: Color? = nil, bold: Bool = false
+        _ glyphs: String, cells count: Int, ink: Color?, field: Color? = nil, bold: Bool = false,
+        inverted: Bool = false
     ) {
         text += ANSIRenderer.colorize(
-            glyphs, foreground: ink?.opaqueSpelling, background: field?.opaqueSpelling, bold: bold)
+            glyphs, foreground: ink?.opaqueSpelling, background: field?.opaqueSpelling, bold: bold,
+            inverted: inverted)
         claims.appendCoalescing(
             OpacityRegion.claim(
                 offsetX: cells, width: count, height: 1, ink: ink, field: field))

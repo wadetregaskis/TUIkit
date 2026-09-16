@@ -5600,3 +5600,54 @@ always states a field; the components either side are not reversed; it leaves no
 loop is asked for no tick; the digits are where they were; and with Apple Terminal "Basic"'s
 sixteen reported, and under an RGB palette on a silent terminal, the block and its breath are
 drawn as before.
+
+## 90. A split view's divider on a fill the terminal decides (2026-09-15)
+
+A `NavigationSplitView`'s divider says it holds the keyboard by filling its whole one-cell
+column: the accent between 22% and 50% over the page (`Palette.accentFillPulse`), breathing,
+with the grip dots drawn over it. Where the accent or the page has no RGB, every share of
+that blend is one end or the other (§75), so the fill was held (§79) at a solid half-strength
+accent, or — for a translucent accent — at the page itself. A focused divider then looked
+exactly like a resting one, and the arrow keys resized a column with nothing on screen saying
+which handle they were on.
+
+**The rule.** Such a divider reverses the palette's own pair down its column, decided by
+`Palette.emphasisFill(over:)` as every other unmeasurable highlight is (§86, §87, §88, §89):
+SGR 7 with the ink and the field stated beside it, cell by cell. A reversed cell has only two
+colours, so the grip dots and the leftmost divider's ◀ come through in the page's colour on a
+bar of the foreground's — which is what reversing a column means, and it still reads as a
+handle. The sidebar toggle's edge column is drawn by the same helper, so it follows.
+
+`ClaimingRow.append` gains an `inverted:` parameter for it. That is the one place where a
+cell's opaque bytes are paired with the claim its colours owe (§16.1, §18.3), and a reversal
+is a way of painting a cell rather than a new kind of cell, so it belongs there rather than
+spelled out at the call site.
+
+What it leaves alone:
+- **A measurable fill.** Every built-in palette states RGB roles, so every divider is drawn as
+  it was, byte for byte, on a silent terminal and on a reporting one. Once the terminal
+  reports its sixteen, a slot accent breathes again.
+- **A resting divider, and the hovered grip.** Only the ACTIVE divider — focused, or being
+  dragged — reverses. The hovered dots' own breath comes from `breathEnds`, which answers for
+  itself (§79): held still where it cannot be measured, moving where it can.
+- **The drag.** The hit region, its focus identity and the resize arithmetic are untouched;
+  only the cell's colours change.
+- **The claims.** A reversal states both sides opaque and claims nothing of its own, as §86's
+  rows do, so a faded palette's divider is spent rather than blended there; the measurable
+  path keeps the dots' claim exactly as `SplitDividerAlphaTests` pins it.
+
+Limits:
+- On a reversed divider the hovered dots cannot be told from the resting ones — reverse video
+  has two colours and both are spent on the bar. They could not be told apart on top of a
+  solid accent block either, which is what that case drew before.
+- A reversed column leaves no run, so it does not breathe: there is nothing for a breath to
+  move between.
+- What a host actually PAINTS for a reversed cell is unmeasured on every terminal
+  (Terminal-compatibility.md).
+
+`ReversedSplitDividerTests` (TUIkitTests) pins it at all three depths, with an `.ansi(.blue)`
+accent over an RGB page and with the terminal's own pair: a focused divider carries the 7 with
+the palette's ink and page down every cell of its column; a resting one carries none; it
+leaves no run and the loop is asked for no tick; the grip is where it was; and with Apple
+Terminal "Basic"'s sixteen reported, and under an RGB palette on a silent terminal, the fill
+and its breath are drawn as before.
