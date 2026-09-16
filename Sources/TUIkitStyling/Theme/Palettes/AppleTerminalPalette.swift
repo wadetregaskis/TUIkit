@@ -261,11 +261,20 @@ extension AppleTerminalPalette {
 
 extension AppleTerminalPalette {
 
-    /// Whether a colour reads as "dark" by perceived luminance (Rec. 601 luma).
+    /// Whether a profile's background reads as "dark" — ``ColorScheme``'s reading
+    /// of a page, so the framework asks that question in one place.
+    ///
+    /// It was this file's own: Rec. 601 luma against 128. The two rules agree on
+    /// every profile — all ten backgrounds sit far from either crossover — but not
+    /// in general (a saturated red is dark by luma and light by contrast), which is
+    /// why this is a *closed* substitution: the only colours it is ever called with
+    /// are the ten in `spec(for:)`.
+    ///
+    /// A colour with no RGB to measure reads as dark, as it did here before. No
+    /// profile has one; every background is a literal sRGB triple decoded from the
+    /// shipped `.terminal` file.
     private static func isDark(_ color: Color) -> Bool {
-        guard let (red, green, blue) = color.rgbComponents else { return true }
-        let luma = 0.299 * Double(red) + 0.587 * Double(green) + 0.114 * Double(blue)
-        return luma < 128
+        (ColorScheme(background: color) ?? .dark) == .dark
     }
 
     /// Euclidean distance between two colours in RGB (0 if either is unresolved).
