@@ -5253,9 +5253,9 @@ What it leaves alone:
 - **Text the rewrite does not restate.** At the start of a line and after a reset, the
   terminal's own colours are in force, and the rewrite never fades them. The glyph is
   judged in them, so it stays.
-- **A reversed cell.** Its field is its ink, so even a blank one is a fill, and dropping its
-  glyph would hide nothing. What reverse video does over a colour that cannot be measured
-  is for the reverse-video steps of the terminal-colour plan, not this rule.
+- **A reversed cell whose fill the rewrite does not restate.** A reversed cell is judged in
+  the colours it DISPLAYS (§91), and where nothing states its ink the fill it shows is the
+  terminal's own foreground, in force rather than stated, which the rewrite never fades.
 - **The colour effects.** They share the rewrite, but a colour with no RGB passes through
   them unchanged, so none of them turns a colour into the page.
 
@@ -5336,8 +5336,9 @@ What it leaves alone:
 - **Cells nothing reversed reached.** A fill stated as `.terminalForeground` still emits 49
   (§75's limit), inside a fade as outside one, so a composite never disagrees with the
   frame it was composited into.
-- **The dissolve.** `.transition(.opacity)` rewrites the colours in place, 7 and all (§83),
-  and is not this rule's.
+- **The dissolve.** `.transition(.opacity)` rewrites the colours in place, 7 and all (§83).
+  It edits bytes rather than cells, so it cannot restate a pair it has not been given; where
+  a reversed cell of its own comes out unspellable the glyph is dropped instead (§91).
 
 The plan (osc11-v5, R1) asked for the 7 to be kept through the decomposition, with such a
 cell blended as a unit at layer alpha ½. The spelling rule was taken instead: it keeps one
@@ -5651,3 +5652,43 @@ the palette's ink and page down every cell of its column; a resting one carries 
 leaves no run and the loop is asked for no tick; the grip is where it was; and with Apple
 Terminal "Basic"'s sixteen reported, and under an RGB palette on a silent terminal, the fill
 and its breath are drawn as before.
+
+## 91. A dissolving reversed cell over the terminal's page (2026-09-15)
+
+§83 made the dissolve a cut at ½ over a page the terminal has not reported, and left one cell
+out of it: a reversed one. The reason given was that a reversed cell's field is its ink, so
+even a blank one is a fill — true of the cell, and not of the bytes. `.transition(.opacity)`
+rewrites each colour an SGR names in place (`OpacityFade`), and below ½ every one of them
+becomes that page (§75), which the foreground slot can only spell 39. So `ESC[7;31;44m` "ab"
+came out as `ESC[7;39;49m` "ab": reverse video over the terminal's own default pair, which
+paints a full-strength bar of its foreground. A view drawn in a slot on a stated field, or in
+any RGB pair, held that bar at every phase of its dissolve, down to 0.
+
+**The rule.** §83's, on the colours a reversed cell DISPLAYS (rule 6): its stated field is the
+ink the viewer sees, and its stated ink the fill. Where both of those are the unreported page
+the glyph is invisible, so it becomes as many spaces as it took cells — and the 7 goes with
+the attributes that ink a blank cell, because reverse video inks one too, painting it in the
+INK colour. Cleared with them, the blank is the page. Below ½ every colour the rewrite
+restates is that page, so this is the whole of the rule: over such a page a dissolve is a cut
+at ½ in a reversed cell as in a plain one.
+
+What it leaves alone:
+- **A fill the rewrite does not restate.** Where nothing states the ink, the fill a reversed
+  cell displays is the terminal's own foreground, in force rather than stated, and the rewrite
+  never fades those (§83). `ESC[7m` "ab" and `ESC[7;44m` "ab" dissolve to themselves, as
+  unstyled text does.
+- **½ and above.** Every colour keeps itself there (§75), so the line is what it was, 7 and
+  all.
+- **A reported page, and every other surface.** Each faded colour then has a spelling in the
+  slot it lands in, so the cell is rewritten in place and stays reversed.
+- **The composite.** A cell composited over or under a reversed one is spelled WITH the 7
+  rather than dropped (§85). The compositor holds both sides' colours and can state them in
+  either slot; the rewrite only edits the bytes in front of it, and for a cell it cannot spell
+  the answer is the one §76 and §83 already give.
+
+`FadeOverUnreportedPageTests` (TUIkitTests) pins it on `OpacityFade` and through
+`AnyTransition.Effect.opacity`: at 0, 0.3 and 0.49 a slot, an RGB ink and the palette's own
+pair, each reversed, leave blanks carrying no 7, and a wide glyph leaves two; at 0.5 and 0.6
+the cell keeps its 7 with its colours; a reversed cell with nothing stated, and one stating
+only a field, are unchanged at every phase; and with the terminal's pair reported the cell
+dissolves in place, still reversed.

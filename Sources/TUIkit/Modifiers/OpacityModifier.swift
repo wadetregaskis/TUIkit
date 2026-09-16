@@ -275,7 +275,8 @@ enum OpacityFade {
     /// Over the terminal's page before it has reported it, a colour below ½
     /// becomes that page, which the foreground slot can only spell 39. A glyph
     /// left in it would show at full strength in the terminal's foreground, so
-    /// it is dropped, as the composite drops it (§76, §83).
+    /// it is dropped, as the composite drops it (§76, §83). A reversed cell is
+    /// judged in the colours it displays, and its 7 is dropped with it (§91).
     static func fading(
         _ line: String, by factor: Double, over surface: Color, defaultForeground: Color
     ) -> String {
@@ -303,8 +304,14 @@ enum OpacityFade {
     ///
     /// A blank takes as many cells as the glyph did. Underline, blink and strike
     /// ink a blank cell in the foreground colour (rule 6), so they are cleared
-    /// across the blanks and put back after them. A reversed cell is left as it
-    /// is: its field is its ink, so even a blank one is a fill.
+    /// across the blanks and put back after them. Reverse video inks one too, in
+    /// the INK colour, so it is cleared with them (§91).
+    ///
+    /// A reversed cell is judged in the colours it DISPLAYS: its stated field is
+    /// the ink the viewer sees, and its stated ink the fill. Where either is
+    /// unstated the terminal's OTHER default is in force — an ink from the
+    /// default background, a fill from the default foreground — and the rewrite
+    /// never fades those, so such a cell stays.
     private static func fadingOverTheUnreportedPage(
         _ line: String, surface: Color, defaultForeground: Color, fade: (Color) -> Color
     ) -> String {
@@ -336,8 +343,12 @@ enum OpacityFade {
                 result += rewritten
                 if isSGR { state.apply(rewritten) }
             case .visible(let character):
-                guard !state.reversesVideo,
-                    FrameBuffer.isTheUnreportedPageOnItself(ink: ink, field: field ?? surface)
+                let displayedInk = state.reversesVideo ? (field ?? surface) : ink
+                let displayedField =
+                    state.reversesVideo ? (ink ?? defaultForeground) : (field ?? surface)
+                guard
+                    FrameBuffer.isTheUnreportedPageOnItself(
+                        ink: displayedInk, field: displayedField)
                 else {
                     if let off = cleared {
                         result += state.rendered(changingFrom: off)
@@ -346,9 +357,9 @@ enum OpacityFade {
                     result.append(character)
                     continue
                 }
-                if cleared == nil, state.paintsInkOnBlankCell {
+                if cleared == nil, state.paintsInkOnBlankCell || state.reversesVideo {
                     var off = state
-                    off.apply("\u{1B}[24;25;29m")
+                    off.apply("\u{1B}[24;25;27;29m")
                     result += off.rendered(changingFrom: state)
                     cleared = off
                 }

@@ -202,17 +202,110 @@ struct FadeOverUnreportedPageTests {
         }
     }
 
-    /// Rule 6 on the rewrite. The glyph kept after the dropped one is reversed: a reversed
-    /// cell is a fill whatever its glyph, so the rule leaves it, and its underline, which
-    /// no sequence restates, has to come back after the dropped glyph's is cleared.
+    /// Rule 6 on the rewrite. The glyph kept after the dropped one is drawn after a reset,
+    /// in the terminal's own colours, which the rewrite never restates and so never fades
+    /// — its fill is the terminal's foreground even reversed (§91), so the rule leaves it,
+    /// and its underline, which no later sequence restates, has to come back after the
+    /// dropped glyph's is cleared.
     @Test("A dissolved glyph leaves no underline, and a glyph kept after it keeps its own")
     func aDissolvedGlyphLeavesNoUnderline() {
         TerminalColors.withCurrent(.unknown) {
-            let line = "\u{1B}[4;31ma \u{1B}[7mb\u{1B}[0m"
+            let line = "\u{1B}[4;31ma \u{1B}[0;4;7mb\u{1B}[0m"
             let faded = dissolved(line, 0.3)
             #expect(faded.stripped == "  b", "\(faded.debugDescription)")
             #expect(inkedBlanks(faded) == "b", "\(faded.debugDescription)")
             #expect(inkedBlanks(dissolved(line, 0.6)) == "a b", "the fixture: underlines that stay must be seen")
+        }
+    }
+
+    /// Each visible character of `line` with whether reverse video is in force on it.
+    private func reversals(_ line: String) -> [(character: Character, reversed: Bool)] {
+        var state = SGRState()
+        var result: [(character: Character, reversed: Bool)] = []
+        for segment in line.ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, true): state.apply(sequence)
+            case .ansi: continue
+            case .visible(let character): result.append((character, state.reversesVideo))
+            }
+        }
+        return result
+    }
+
+    /// The characters of `line` drawn reversed, spaces included.
+    private func reversedCharacters(_ line: String) -> String {
+        String(reversals(line).filter(\.reversed).map(\.character))
+    }
+
+    /// A reversed cell is judged in the colours it DISPLAYS (rule 6): its stated field
+    /// is the ink, its stated ink the fill. Faded below ½ both become the page, which
+    /// the foreground slot can only spell 39 — so the cell came out as a full-strength
+    /// bar of the terminal's foreground, at every phase down to 0.
+    @Test(
+        "Below ½ a dissolve drops a reversed cell whose colours it restated",
+        arguments: [0, 0.3, 0.49])
+    func belowHalfTheReversedCellIsGone(phase: Double) {
+        TerminalColors.withCurrent(.unknown) {
+            // A slot, an RGB ink and the palette's own ink, each reversed over a
+            // stated field, and a slot ink over the unstated one.
+            for line in [
+                "\u{1B}[7;31;44mab\u{1B}[0m", "\u{1B}[7;38;2;200;40;40;44mab\u{1B}[0m",
+                "\u{1B}[7;39;49mab\u{1B}[0m", "\u{1B}[7;31mab\u{1B}[0m",
+            ] {
+                let faded = dissolved(line, phase)
+                #expect(faded.stripped == "  ", "\(line.debugDescription) → \(faded.debugDescription)")
+                #expect(
+                    reversedCharacters(faded).isEmpty,
+                    "\(line.debugDescription) → \(faded.debugDescription)")
+            }
+            let wide = dissolved("\u{1B}[7;31;44m漢x\u{1B}[0m", phase)
+            #expect(wide.stripped == "   ", "\(wide.debugDescription)")
+            let view = dissolving(
+                Text("ab").foregroundStyle(Color.ansi(.red)).inverted(), at: phase)
+            #expect(text(view).isEmpty, "\(view.debugDescription)")
+            #expect(reversedCharacters(view).isEmpty, "\(view.debugDescription)")
+        }
+    }
+
+    @Test("At ½ and above a dissolved reversed cell keeps its 7", arguments: [0.5, 0.6])
+    func atHalfTheReversedCellStays(phase: Double) {
+        TerminalColors.withCurrent(.unknown) {
+            let line = dissolved("\u{1B}[7;31;44mab\u{1B}[0m", phase)
+            #expect(line.stripped == "ab", "\(line.debugDescription)")
+            #expect(reversedCharacters(line) == "ab", "\(line.debugDescription)")
+            #expect(line.contains("31") && line.contains("44"), "\(line.debugDescription)")
+            let view = dissolving(
+                Text("ab").foregroundStyle(Color.ansi(.red)).inverted(), at: phase)
+            #expect(text(view) == "ab", "\(view.debugDescription)")
+            #expect(reversedCharacters(view) == "ab", "\(view.debugDescription)")
+        }
+    }
+
+    /// The rewrite never fades what it does not restate (the terminal's own colours are
+    /// in force there), so a reversed cell whose fill is the terminal's foreground is
+    /// left alone — its ink is the page, but its fill is not.
+    @Test("A reversed cell the dissolve does not restate is left alone", arguments: [0, 0.3])
+    func anUnrestatedReversedCellStays(phase: Double) {
+        TerminalColors.withCurrent(.unknown) {
+            for line in ["\u{1B}[7mab\u{1B}[0m", "\u{1B}[7;44mab\u{1B}[0m"] {
+                let faded = dissolved(line, phase)
+                #expect(faded.stripped == "ab", "\(line.debugDescription) → \(faded.debugDescription)")
+                #expect(
+                    reversedCharacters(faded) == "ab",
+                    "\(line.debugDescription) → \(faded.debugDescription)")
+            }
+        }
+    }
+
+    /// Keyed on what can be measured: with the pair reported every faded colour has an
+    /// RGB spelling in either slot, so a reversed cell dissolves in place, 7 and all.
+    @Test("Over a reported page a dissolved reversed cell keeps its glyph")
+    func aReportedPageDissolvesAReversedCell() {
+        TerminalColors.withCurrent(Self.reported) {
+            let faded = dissolved("\u{1B}[7;31;44mab\u{1B}[0m", 0.3)
+            #expect(faded.stripped == "ab", "\(faded.debugDescription)")
+            #expect(reversedCharacters(faded) == "ab", "\(faded.debugDescription)")
+            #expect(faded.contains("38;2;40;44;52"), "\(faded.debugDescription)")
         }
     }
 

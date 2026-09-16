@@ -2374,7 +2374,11 @@ table above; not measured on a hovered control.
 terminal's pair is unreported (2026-09-15): the compositor reads a reversed cell
 with its colours exchanged, and states that pair with the 7 again where 39 and 49
 cannot state it without (`Opacity as composition` §85). That relies on the 7
-exchanging the pair in force, below. It is also in the output path's vocabulary
+exchanging the pair in force, below — and so does the other direction: a
+dissolve (`.transition(.opacity)`) DROPS the 7, with the glyph, where the pair
+a reversed cell would show has faded to that unreported page, since reversed
+over the terminal's own defaults it would paint a full-strength bar of its
+foreground (§91). It is also in the output path's vocabulary
 ("SGR codes the output path emits", below), which never emits `27` and restates
 from `ESC[0m` instead. And, since 2026-09-15, for a highlight whose colours it
 cannot measure, below. So what each host paints for SGR 7 is now relied on.
