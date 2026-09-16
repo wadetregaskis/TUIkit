@@ -333,7 +333,11 @@ internal final class RenderLoop<A: App> {
     /// been spelled or blended from the colours before the report, and the diff
     /// writer's idea of what is on screen is not reached by the generation that
     /// clears the render cache.
-    private lazy var terminalColors = TerminalColorRefresher(
+    /// Not private, alone among this type's stored properties, because the seam
+    /// that reads it lives in `RenderLoop+TerminalColors.swift` — and `private`
+    /// is file scope. The type itself is internal, so this is visible no further
+    /// than it already was.
+    lazy var terminalColors = TerminalColorRefresher(
         onChange: { [diffWriter] in
             diffWriter.invalidate()
             AppState.shared.setNeedsRender()
@@ -346,7 +350,8 @@ internal final class RenderLoop<A: App> {
     /// Lazy and capturing `terminal` rather than `self`, as the two refreshers
     /// above are and do. The answer is not read here — it arrives on stdin like
     /// a keystroke, and `terminalColors` publishes it.
-    private lazy var colorQueries = TerminalColorRequester(
+    /// Not private, for the reason ``terminalColors`` gives.
+    lazy var colorQueries = TerminalColorRequester(
         isTmux: isTmux, send: { [terminal] request in terminal.write(request) })
 
     /// The environment snapshot from the previous frame.
@@ -858,21 +863,6 @@ extension RenderLoop {
     /// ``ClientCapabilityRefresher``.
     func resolveClientCapabilities() -> ClientCapabilities {
         clientCapabilities.resolve()
-    }
-
-    /// Applies the colour answers the input parser siphoned out of one drain's
-    /// bytes — see ``TerminalColorRefresher``, which publishes what they add to
-    /// what was known and asks for the repaint.
-    ///
-    /// Called once per drain with whatever `Terminal.takeVolunteeredColorReplies`
-    /// held, which on almost every frame is nothing.
-    ///
-    /// `sawStatusFence` is the other half of the same drain: the `CSI 0 n` that
-    /// says a request made here has been answered as far as it is going to be,
-    /// so the one waiting behind it may go out (see ``TerminalColorRequester``).
-    func noteVolunteeredColorReplies(_ bytes: [UInt8], sawStatusFence: Bool) {
-        terminalColors.noteReplies(bytes)
-        if sawStatusFence { colorQueries.noteStatusFence() }
     }
 
     /// The effective ``MouseSupport`` configuration after combining
