@@ -16,11 +16,13 @@ in the middle of a session:
   * does anything PRINT.
 
 Non-interactive. Run INSIDE the terminal under test (see `palette_probe.py` for
-why a pipe or a private pty cannot stand in for the window). Nothing on the host
-is changed: every request is a `?` query, and no colour is ever set. No DECRQM
-is sent (Apple Terminal prints the final byte of `CSI ? Ps $ p`), so
-`probe_stamp.stamp()` is NOT called; only its environment list and version
-reader are reused.
+why a pipe or a private pty cannot stand in for the window). In the default
+suite nothing on the host is changed: every request is a `?` query, no colour is
+ever set, and no DECRQM is sent (Apple Terminal prints the final byte of
+`CSI ? Ps $ p`), so `probe_stamp.stamp()` is NOT called; only its environment
+list and version reader are reused. `PROBE_SUITE=m3m7` is the exception: it sets
+mode 2031 and SGR attributes, and sends DECRQM to hosts that do not print it —
+see "The m3m7 suite" below.
 
 What it sends, in this order:
 
@@ -37,6 +39,26 @@ What it sends, in this order:
      fenced by each.
   5. `OSC 4;n;?` for the sixteen ANSI slots, both terminators, both fences.
   6. A final drain, for anything later still.
+
+The m3m7 suite (`PROBE_SUITE=m3m7`) replaces all six sections with two other
+questions, both about sequences the framework was about to start emitting:
+
+  * **M3, mode 2031** (the terminal tells the app its colour palette changed):
+    does `CSI ? 2031 h` or `l` PRINT or move the cursor; does enabling it bring
+    an unsolicited `CSI ? 997 ; Ps n` within `PROBE_GRACE_997`; and is the mode's
+    DECRQM (`CSI ? 2031 $ p`) answered. DECRQM is `?`-plus-intermediate, the one
+    shape Apple Terminal prints, so it is sent as its own steps with `?25` as a
+    control — expect a leaked cell there, and read the record rather than the
+    screen.
+  * **M7, reverse video**: whether the four SGR 7 spellings print anything, and
+    whether text under them advances as plain text (exactly +2 for the `ab`
+    steps). What a reversed cell PAINTS no report can answer; that is
+    `reverse_video_card.py`'s question.
+
+DECRQSS (`DCS $ q m ST`) is asked only where a DCS payload is safe: not on bare
+Apple Terminal, which prints it, and not under GNU screen, which passes it
+through to the outer terminal where it would print unseen by screen's cursor.
+Mode 2031 and SGR are reset on the way out, whichever way the run ends.
 
 For every exchange the record keeps the raw reply bytes with the colour spelling
 taken apart; latency on the monotonic clock (from just before the write to the
@@ -60,6 +82,10 @@ Environment:
   PROBE_BATCH_FENCE_TIMEOUT  the same for the pair and the batches (default 10,
                              so a per-query stall is measured, not cut off)
   PROBE_TMUX                 the tmux binary for the pane context (default: PATH)
+  PROBE_SUITE                `m3m7` for the mode-2031 and SGR-7 suite instead of
+                             the colour queries (default: the colour queries)
+  PROBE_GRACE_997            seconds the m3m7 suite waits for an unsolicited
+                             `CSI ? 997 ; Ps n` after each enable (default 1.5)
 
 Under tmux, when the client OSC 4 is forwarded to does not answer it, every
 OSC 4 exchange waits about half a second (tmux 3.7c, measured), so the hard
@@ -67,7 +93,8 @@ limit ends the run partway through section 5.
 
 `python3 osc_colour_probe.py --summarise FILE...` prints the compact table for
 records already written. `osc_colour_selftest.py` checks this probe against a
-scripted terminal; run it after changing anything here.
+scripted terminal, and `selftest_m3m7.py` checks the m3m7 suite against three
+more; run both after changing anything here.
 """
 import datetime
 import json
@@ -375,6 +402,10 @@ class Probe:
         return result.get("cursor_after"), result
 
     def check_printing(self, result):
+        """`printed` is True when the cursor is not where the request should leave
+        it: the reference, moved right by `expected_advance` columns when the
+        request itself writes text (the m3m7 suite's "text" steps). The cursor is
+        put back on the reference whenever it moved, expected or not."""
         if self.reference is None:
             return
         cursor = result.get("cursor_after")
@@ -383,12 +414,20 @@ class Probe:
             result["cursor_check"] = cursor
             if probe.get("other_tokens"):
                 result["cursor_check_other_tokens"] = probe["other_tokens"]
-        result["printed"] = None if cursor is None else cursor != self.reference
+        advance = result.get("expected_advance", 0)
+        expected = [self.reference[0], self.reference[1] + advance]
+        if cursor is None:
+            result["printed"] = None
+            return
+        result["cursor_delta"] = [cursor[0] - self.reference[0], cursor[1] - self.reference[1]]
+        result["printed"] = cursor != expected
         if result["printed"]:
-            self.printing_events.append({"exchange": result["name"],
-                                         "reference": self.reference, "cursor": cursor})
+            self.printing_events.append({"exchange": result["name"], "step": result.get("step"),
+                                         "reference": self.reference, "expected": expected,
+                                         "cursor": cursor})
+        if cursor != self.reference:
             row, col = self.reference
-            self.wire.write(b"\x1b[%d;%dH\x1b[J" % (row, col))
+            self.wire.write(b"\x1b[%d;%dH\x1b[0m\x1b[J" % (row, col))
 
 
 def osc_reply(number):
@@ -398,6 +437,135 @@ def osc_reply(number):
 
 def scheme_reply(token):
     return token["kind"] == "csi" and SCHEME.match(token["raw"]) is not None
+
+
+# ---------------------------------------------------------------------------
+# PROBE_SUITE=m3m7: mode 2031 (colour-palette-update notifications), its DECRQM,
+# and SGR 7 (reverse video) spellings. Every step is judged by the cursor: the
+# 6n fence's report, or a separate 6n after a 5n or unfenced step.
+# ---------------------------------------------------------------------------
+
+GRACE_997 = env_seconds("PROBE_GRACE_997", 1.5)
+SGR7_CASES = [
+    ("A", b"\x1b[7m"),
+    ("B", b"\x1b[7;31;44m"),
+    ("C", b"\x1b[7;1m"),
+    ("D", b"\x1b[7;38;2;10;20;30;48;2;200;200;200m"),
+]
+SGR_RESET = b"\x1b[0m"
+MODE_2031_ON = b"\x1b[?2031h"
+MODE_2031_OFF = b"\x1b[?2031l"
+
+
+def decrpm_reply(mode):
+    pattern = re.compile(rb"^\x1b\[\?%d;(\d+)\$y$" % mode)
+    return lambda token: token["kind"] == "csi" and pattern.match(token["raw"]) is not None
+
+
+def decrqss_reply(token):
+    return token["kind"] == "dcs" and b"$r" in token["raw"]
+
+
+def decrqss_is_safe():
+    """DECRQSS is a DCS. Apple Terminal prints a DCS payload (measured, see
+    Terminal-compatibility.md), and GNU screen passes a DCS payload through to its
+    outer terminal, where it would print on the real screen without moving
+    screen's own cursor. So neither is asked; tmux consumes DCS itself."""
+    if os.environ.get("STY"):
+        return False, "not asked: GNU screen passes a DCS payload through to the outer terminal"
+    if os.environ.get("TERM_PROGRAM") == "Apple_Terminal" and not os.environ.get("TMUX"):
+        return False, "not asked: Apple Terminal prints a DCS payload"
+    return True, "asked"
+
+
+def run_m3m7(probe, result):
+    def step(step_id, request, wanted=(), fence="6n", grace=None, **extra):
+        extra["step"] = step_id
+        return probe.exchange(step_id.split("-")[0], request, list(wanted), fence,
+                              GRACE_DEFAULT if grace is None else grace, extra=extra)
+
+    # M3: does 2031 print or move the cursor; does enabling it send an unsolicited 997?
+    # The first enable is unfenced, so nothing but the enable is on the wire while
+    # it waits GRACE_997 for a report.
+    step("m3-h-nofence", MODE_2031_ON, [scheme_reply], fence=None, grace=GRACE_997)
+    step("m3-l-nofence", MODE_2031_OFF, fence=None, grace=0.3)
+    step("m3-h-6n", MODE_2031_ON, [scheme_reply], grace=GRACE_997)
+    step("m3-h-again-6n", MODE_2031_ON, [scheme_reply], grace=GRACE_997)
+    step("m3-l-6n", MODE_2031_OFF, grace=0.3)
+    step("m3-h-5n", MODE_2031_ON, [scheme_reply], fence="5n", grace=GRACE_997)
+    step("m3-l-5n", MODE_2031_OFF, fence="5n", grace=0.3)
+
+    # DECRQM, a separate step: `CSI ? Ps $ p` is the shape Apple Terminal prints.
+    step("rqm-2031-reset-6n", b"\x1b[?2031$p", [decrpm_reply(2031)])
+    step("rqm-2031-reset-5n", b"\x1b[?2031$p", [decrpm_reply(2031)], fence="5n")
+    step("rqm-25-control-6n", b"\x1b[?25$p", [decrpm_reply(25)])
+    step("m3-h-before-rqm-6n", MODE_2031_ON, [scheme_reply], grace=GRACE_997)
+    step("rqm-2031-set-6n", b"\x1b[?2031$p", [decrpm_reply(2031)])
+    step("m3-l-after-rqm-6n", MODE_2031_OFF, grace=0.3)
+    step("rqm-2031-after-reset-6n", b"\x1b[?2031$p", [decrpm_reply(2031)])
+
+    # M7: SGR 7 spellings. Alone (must not move the cursor), then a reset, then the
+    # SGR with two letters and a reset (must move it exactly two columns).
+    ask_decrqss, why = decrqss_is_safe()
+    result["decrqss"] = why
+    for key, sgr in SGR7_CASES:
+        step("m7-%s-sgr-6n" % key, sgr, case=key)
+        if ask_decrqss:
+            step("m7-%s-decrqss-6n" % key, b"\x1bP$qm\x1b\\", [decrqss_reply], case=key)
+        step("m7-%s-reset-6n" % key, SGR_RESET, case=key)
+        step("m7-%s-sgr-text-reset-6n" % key, sgr + b"ab" + SGR_RESET, case=key,
+             expected_advance=2)
+    step("m7-A-27m-6n", b"\x1b[7m\x1b[27m", case="A")
+    step("m7-bare-reset-6n", b"\x1b[m")
+    if ask_decrqss:
+        step("m7-after-reset-decrqss-6n", b"\x1bP$qm\x1b\\", [decrqss_reply])
+
+
+def esc_text(text):
+    """A reply as printable text: ESC spelled out, other controls as \\xNN."""
+    return "".join("ESC" if ch == "\x1b" else ch if 0x20 <= ord(ch) < 0x7F else "\\x%02x" % ord(ch)
+                   for ch in text)
+
+
+def build_summary_m3m7(result):
+    rows, scheme_reports = [], []
+    for exchange in result["exchanges"]:
+        row = {"step": exchange["step"], "fence": exchange["fence"],
+               "printed": exchange.get("printed"), "cursor_delta": exchange.get("cursor_delta"),
+               "fence_ms": (exchange.get("fence_reply") or {}).get("complete_ms"),
+               "replies": [None if r is None else {"raw": esc_text(r["raw"]), "ms": r["complete_ms"],
+                                                    "vs_fence": r["vs_fence"]}
+                           for r in exchange["replies"]],
+               "other_tokens": [esc_text(t["raw"]) for t in exchange["other_tokens"]
+                                + exchange.get("cursor_check_other_tokens", [])]}
+        rows.append(row)
+        for token in ([r for r in exchange["replies"] if r] + exchange["other_tokens"]
+                      + exchange.get("cursor_check_other_tokens", [])):
+            if SCHEME.match(token["raw"].encode("latin-1")):
+                scheme_reports.append({"step": exchange["step"], "raw": esc_text(token["raw"]),
+                                       "ms": token["complete_ms"]})
+    for token in result.get("late_drain", []):
+        if SCHEME.match(token["raw"].encode("latin-1")):
+            scheme_reports.append({"step": "late_drain", "raw": esc_text(token["raw"])})
+    return {"rows": rows, "scheme_reports": scheme_reports,
+            "printed_steps": [r["step"] for r in rows if r["printed"]],
+            "unchecked_steps": [r["step"] for r in rows if r["printed"] is None]}
+
+
+def summary_lines_m3m7(result):
+    lines = ["%s  %s  TERM_PROGRAM=%s %s  TERM=%s" % (
+        result.get("label") or "", result.get("measured"), result["env"].get("TERM_PROGRAM"),
+        result["env"].get("TERM_PROGRAM_VERSION") or "", result["env"].get("TERM"))]
+    lines.append("elapsed %ss, hard limit hit: %s, fence timeouts %s, printed steps %s, "
+                 "997 reports %s, decrqss %s" % (
+                     result.get("elapsed_s"), result.get("hard_limit_hit"),
+                     result.get("fence_timeouts"), result["summary"]["printed_steps"],
+                     result["summary"]["scheme_reports"], result.get("decrqss")))
+    for row in result["summary"]["rows"]:
+        lines.append("%-26s %-4s printed=%-5s delta=%-8s replies=%s other=%s" % (
+            row["step"], row["fence"], row["printed"], row["cursor_delta"],
+            [None if r is None else r["raw"] for r in row["replies"]], row["other_tokens"]))
+    return lines
 
 
 def parent_chain():
@@ -613,13 +781,28 @@ def main():
         result["pre_existing_input"] = [t["raw"].decode("latin-1") for t in tokens]
         probe.wire.consumed = consumed
 
+        # PROBE_SUITE=m3m7 runs run_m3m7 instead of the colour queries: it SETS
+        # mode 2031 and SGR attributes, and resets both before exit.
+        # PROBE_GRACE_997 is how long it waits for an unsolicited
+        # `CSI ?997;Ps n` after each enable (default 1.5 s).
+        m3m7 = os.environ.get("PROBE_SUITE") == "m3m7"
+        result["suite"] = "m3m7" if m3m7 else "colour"
+        if m3m7:
+            result["probe"] = "osc_colour_probe (m3m7 suite)"
+            result["method"] = ("raw-mode tty; fences CSI 6n / CSI 5n; printed = cursor not at the "
+                                "reference (+ expected_advance) after a step")
+            result["grace_s"]["unsolicited_997"] = GRACE_997
         probe.wire.write(b"\x1b[H\x1b[2J osc_colour_probe: " + label.encode() +
-                         b" (queries only; nothing is set)\r\n\r\n")
+                         (b" (m3m7: sets ?2031 and SGR 7, resets both)\r\n\r\n" if m3m7
+                          else b" (queries only; nothing is set)\r\n\r\n"))
         probe.reference, reference_probe = probe.position()
         result["reference_cursor"] = probe.reference
         result["reference_probe"] = reference_probe
 
-        run_exchanges(probe)
+        if m3m7:
+            run_m3m7(probe, result)
+        else:
+            run_exchanges(probe)
 
         probe.wire.drain(FINAL_DRAIN)
         tokens, consumed = probe.wire.pending_tokens()
@@ -629,6 +812,8 @@ def main():
         result["hard_limit_hit"] = True
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
+        if result.get("suite") == "m3m7":
+            os.write(fd, MODE_2031_OFF + SGR_RESET)
         try:
             termios.tcsetattr(fd, termios.TCSADRAIN, saved)
         finally:
@@ -639,13 +824,16 @@ def main():
         result["exchanges"] = probe.exchanges
         result["printing_events"] = probe.printing_events
         result["unparsed_tail_hex"] = bytes(probe.wire.data[probe.wire.consumed:]).hex()
-        result["summary"] = build_summary(result)
+        if result.get("suite") == "m3m7":
+            result["summary"] = build_summary_m3m7(result)
+        else:
+            result["summary"] = build_summary(result)
         with open(out_path, "w") as handle:
             json.dump(result, handle, indent=1)
         os.close(fd)
 
     print("\r")
-    for line in summary_lines(result):
+    for line in (summary_lines_m3m7 if result.get("suite") == "m3m7" else summary_lines)(result):
         print(line)
     print("written to " + out_path)
 

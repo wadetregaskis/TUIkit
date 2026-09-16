@@ -345,6 +345,25 @@ measures no host. Run it after any change to the probe. It has been seen to
 fail: making the probe call every reply "before the fence" fails the `late`
 mode.
 
+`PROBE_SUITE=m3m7` asks two different questions with the same machinery — DEC
+mode 2031 (the terminal telling an app its palette changed) and the SGR 7
+spellings — because both are sequences the framework emits and neither is a
+colour query:
+
+```sh
+PROBE_OUT=/tmp/m3m7.json PROBE_LABEL=iterm2 PROBE_SUITE=m3m7 python3 osc_colour_probe.py
+```
+
+It is the one mode in which this probe SETS anything: mode 2031 and SGR
+attributes, both reset on the way out. It also sends DECRQM, which is the shape
+Apple Terminal prints — that is why `?25` is asked as a control, so a leaked
+cell reads as the host's parser rather than as mode 2031 being special.
+`selftest_m3m7.py` checks it against three scripted terminals (clean; an
+Apple-like one that prints a `?`-plus-intermediate final byte and a DCS payload;
+one that prints part of an SGR and reports late) and takes about a minute.
+Results are in `Documentation/Terminal-compatibility.md` under "Colour-palette
+update notifications" and "Reverse video (SGR 7)".
+
 `tmux_colour_harness.py` measures tmux itself: a real tmux on a private socket
 with no configuration, whose clients are ptys this script plays, with known
 answers and every forwarded query logged.
@@ -421,6 +440,5 @@ and that would show up as a mismatch in the named rows for a reason other than
 SGR 7.
 
 **Not yet read on any host (as of 2026-09-15).** It has only been run in a pty,
-where nothing is painted. The cursor measurements above came from a working
-copy of `osc_colour_probe.py` with an extra suite of steps; that copy is not
-committed.
+where nothing is painted. The cursor measurements above came from
+`osc_colour_probe.py`'s `PROBE_SUITE=m3m7` steps, above.

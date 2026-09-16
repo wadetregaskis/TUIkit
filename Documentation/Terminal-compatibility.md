@@ -2447,8 +2447,9 @@ check, below.
 
 **Provenance.**
 - macOS 15.7.9 (24G830), system appearance Light, on the virtual Mac above.
-- **The probe** is a working copy of `osc_colour_probe.py` with a suite added
-  for mode 2031 and SGR 7. Neither that copy nor its records are committed.
+- **The probe** is `osc_colour_probe.py` run with `PROBE_SUITE=m3m7`, the suite
+  it carries for mode 2031 and SGR 7. Its records are not committed, as that
+  probe's own are not (see the probes' README).
 - **How a step is judged:** by the cursor, read from the reply to a `CSI 6n`
   sent behind the step. A step counts as "printed" when the cursor is not where
   the step should leave it: at its starting point, or two columns right of it
