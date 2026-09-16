@@ -254,11 +254,16 @@ struct LiveTerminalPaletteRenderTests {
             }
             let selected = cells(content.line).filter { "bcd".contains($0.character) }
             #expect(selected.count == 3, "\(content.line.debugDescription)")
-            #expect(
-                selected.allSatisfy { $0.state.reversesVideo }, "\(content.line.debugDescription)")
+            // The `allSatisfy` closures are hoisted out of their `#expect`s on purpose. A
+            // closure inside a macro expansion and one in ordinary source, in the same
+            // enclosing closure, are lowered to a SINGLE SIL function — so one of the two
+            // bodies never runs. Do not fold them back in; see
+            // Tools/CompilerBugs/MacroClosureDiscriminatorCollision.
+            let selectionIsReversed = selected.allSatisfy { $0.state.reversesVideo }
+            #expect(selectionIsReversed, "\(content.line.debugDescription)")
             let others = cells(content.line).filter { "aef".contains($0.character) }
-            #expect(
-                others.allSatisfy { !$0.state.reversesVideo }, "\(content.line.debugDescription)")
+            let othersAreNotReversed = others.allSatisfy { !$0.state.reversesVideo }
+            #expect(othersAreNotReversed, "\(content.line.debugDescription)")
         }
     }
 

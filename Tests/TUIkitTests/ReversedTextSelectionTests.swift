@@ -255,12 +255,19 @@ struct ReversedTextSelectionTests {
                     palette: fixture.palette, cursor: 1, selection: 1..<4,
                     cursorStyle: TextCursorStyle(shape: .block, animation: .none)
                 ).line)
+            // Every closure below is hoisted out of its `#expect` on purpose. A closure
+            // inside a macro expansion and one in ordinary source, in the same enclosing
+            // closure, are lowered to a SINGLE SIL function — so one of the two bodies
+            // never runs. Do not fold these back into the `#expect`s; see
+            // Tools/CompilerBugs/MacroClosureDiscriminatorCollision.
+            let caret = drawn.first { $0.character == "b" }
             #expect(
-                drawn.first { $0.character == "b" }?.state.reversesVideo == false,
+                caret?.state.reversesVideo == false,
                 "\(fixture): the caret's cell is reversed with its neighbours")
             let rest = drawn.filter { "cd".contains($0.character) }
+            let restIsReversed = rest.allSatisfy { $0.state.reversesVideo }
             #expect(
-                rest.count == 2 && rest.allSatisfy { $0.state.reversesVideo },
+                rest.count == 2 && restIsReversed,
                 "\(fixture): the rest of the selection is not reversed")
         }
     }
@@ -318,12 +325,14 @@ struct ReversedTextSelectionTests {
                 palette: fixture.palette, cursor: 0, selection: 1..<4,
                 cursorStyle: TextCursorStyle(shape: .block, animation: .none))
             let drawn = cells(content.line)
-            #expect(
-                drawn.allSatisfy { !$0.state.reversesVideo },
-                "\(fixture): \(content.line.debugDescription)")
+            // Hoisted out of the `#expect`s — see `blockCaretOnAReversedSelection` above
+            // and Tools/CompilerBugs/MacroClosureDiscriminatorCollision.
+            let noneReversed = drawn.allSatisfy { !$0.state.reversesVideo }
+            #expect(noneReversed, "\(fixture): \(content.line.debugDescription)")
             let selected = drawn.filter { "bcd".contains($0.character) }
+            let selectionNamesBackground = selected.allSatisfy { $0.state.namesBackground }
             #expect(
-                selected.count == 3 && selected.allSatisfy { $0.state.namesBackground },
+                selected.count == 3 && selectionNamesBackground,
                 "\(fixture): the selection states no fill in \(content.line.debugDescription)")
         }
     }
@@ -350,12 +359,14 @@ struct ReversedTextSelectionTests {
                 palette: SystemPalette(.green), cursor: 0, selection: 1..<4,
                 cursorStyle: TextCursorStyle(shape: .block, animation: .none))
             let drawn = cells(content.line)
-            #expect(
-                drawn.allSatisfy { !$0.state.reversesVideo },
-                "\(content.line.debugDescription)")
+            // Hoisted out of the `#expect`s — see `blockCaretOnAReversedSelection` above
+            // and Tools/CompilerBugs/MacroClosureDiscriminatorCollision.
+            let noneReversed = drawn.allSatisfy { !$0.state.reversesVideo }
+            #expect(noneReversed, "\(content.line.debugDescription)")
             let selected = drawn.filter { "bcd".contains($0.character) }
+            let selectionNamesBackground = selected.allSatisfy { $0.state.namesBackground }
             #expect(
-                selected.count == 3 && selected.allSatisfy { $0.state.namesBackground },
+                selected.count == 3 && selectionNamesBackground,
                 "the selection states no fill in \(content.line.debugDescription)")
         }
     }
