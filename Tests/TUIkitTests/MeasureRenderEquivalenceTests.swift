@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -28,7 +29,8 @@ import Testing
 /// probe below is kept only as a *descriptive* diagnostic of the render-to-
 /// measure fallback's heuristic — it over-reports flexibility for wrapping
 /// content (it calls any view that reflows wider "flexible"), so it is NOT the
-/// contract and is intentionally not asserted against.
+/// contract and is intentionally not asserted against. Being descriptive, it
+/// runs only when asked for: `TUIKIT_MEASURE_FLEX_PROBE=1`.
 @MainActor
 @Suite("Measure/render equivalence")
 struct MeasureRenderEquivalenceTests {
@@ -39,6 +41,20 @@ struct MeasureRenderEquivalenceTests {
     /// Widths to probe. `nil` = unspecified proposal (context width 80).
     private let widths: [Int?] = [nil, 80, 40, 20, 12]
     private let height = 24
+
+    /// Whether to run the descriptive `+8` flexibility probe. Off unless asked
+    /// for, with `TUIKIT_MEASURE_FLEX_PROBE=1`.
+    ///
+    /// It is one of the three renders `compare(_:_:)` makes per width — a third
+    /// of this suite's renders — and **nothing asserts on what it finds**: its
+    /// output goes to `flexOut`, which is printed for a reader. The flexibility
+    /// contract itself is pinned by ``flexibilityContract()`` and by the size
+    /// invariant, neither of which consults the probe, so switching it off
+    /// removes no assertion. Same shape as this suite's neighbours'
+    /// diagnostic switches (`TUIKIT_VERIFY_RENDER_MEMO`,
+    /// `TUIKIT_RECORD_SNAPSHOTS`): any value at all turns it on.
+    private static let runsFlexProbe =
+        ProcessInfo.processInfo.environment["TUIKIT_MEASURE_FLEX_PROBE"] != nil
 
     /// Per-axis check. Working contract: a NON-flexible axis must measure
     /// exactly what it renders; a FLEXIBLE axis reports a *minimum* and the
@@ -77,14 +93,17 @@ struct MeasureRenderEquivalenceTests {
             }
 
             // Flexibility (descriptive only): sizeThatFits's claim vs the
-            // imprecise +8 render probe.
-            var probeCtx = makeContext(width: rendered.width + 8, height: height)
-            probeCtx.hasExplicitWidth = false
-            let probedWidth = renderToBuffer(view, context: probeCtx).width
-            let probeGrew = probedWidth > rendered.width
-            if measured.isWidthFlexible != probeGrew {
-                flexOut.append(
-                    "  \(label) @w=\(wLabel): sizeThatFits.flexW=\(measured.isWidthFlexible) vs +8-probe-grew=\(probeGrew)")
+            // imprecise +8 render probe. Gated: it is a third render of every
+            // view at every width, and no assertion reads its result.
+            if Self.runsFlexProbe {
+                var probeCtx = makeContext(width: rendered.width + 8, height: height)
+                probeCtx.hasExplicitWidth = false
+                let probedWidth = renderToBuffer(view, context: probeCtx).width
+                let probeGrew = probedWidth > rendered.width
+                if measured.isWidthFlexible != probeGrew {
+                    flexOut.append(
+                        "  \(label) @w=\(wLabel): sizeThatFits.flexW=\(measured.isWidthFlexible) vs +8-probe-grew=\(probeGrew)")
+                }
             }
         }
         return (sizeOut, flexOut)
@@ -304,7 +323,13 @@ struct MeasureRenderEquivalenceTests {
         if sizeDiv.isEmpty { print("  (none)") } else { sizeDiv.forEach { print($0) } }
         print("---- diverged types (size): \(divergedTypes.sorted().joined(separator: ", "))")
         print("\n========== FLEXIBILITY: sizeThatFits vs +8 probe (descriptive, NOT a bug list) ==========")
-        if flexDiv.isEmpty { print("  (none)") } else { flexDiv.forEach { print($0) } }
+        if !Self.runsFlexProbe {
+            print("  (not run — set TUIKIT_MEASURE_FLEX_PROBE=1)")
+        } else if flexDiv.isEmpty {
+            print("  (none)")
+        } else {
+            flexDiv.forEach { print($0) }
+        }
         print("=========================================================\n")
 
         // Regression guard. Size is a clean invariant — the renderer is the
