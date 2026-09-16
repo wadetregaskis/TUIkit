@@ -2664,7 +2664,7 @@ says so. Two things derived real decisions from it:
 - **The contrast floor.** `ensuringContrast` computes a WCAG ratio, which needs
   luminances, which need RGB. Against a remapped scheme the ratio it computed
   was not the ratio on screen. **Since 2026-09-15 a slot no longer measures as
-  xterm's table.** `Color.ansi(_:)` and `Color.palette(0...15)` measure as the
+  xterm's table.** `Color.ansi(_:)` and `Color.palette256(0...15)` measure as the
   colour the terminal reported for the slot, which the startup exchange asks
   for (see "Asking the terminal for its colours"), and as nothing until it has
   reported all sixteen. A floor, a blend and a focus breath then read the

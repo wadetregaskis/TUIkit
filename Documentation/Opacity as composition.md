@@ -5116,7 +5116,7 @@ stored as given.
 
 ## 81. A slot the terminal has not reported (2026-09-15)
 
-`Color.ansi(_:)` and `Color.palette(0...15)` name one of the terminal's sixteen slots, and
+`Color.ansi(_:)` and `Color.palette256(0...15)` name one of the terminal's sixteen slots, and
 the terminal paints whatever the user's profile keeps there. Every rule that measures a
 colour read a slot as xterm's table (`ANSIColor.xtermRGB`), which Apple Terminal's "Basic"
 profile disagrees with on fifteen of the sixteen (Terminal-compatibility.md). A floor, a
@@ -5294,7 +5294,7 @@ What it leaves alone:
   under them is left as it is and the rest of the line still changes.
 
 `ColorEffectTests` (TUIkitTests) pins it for `.ansi(.blue)`, `Color.default`, the
-terminal's foreground and `Color.palette(4)`, unreported: a label in 39, an RGB label and a
+terminal's foreground and `Color.palette256(4)`, unreported: a label in 39, an RGB label and a
 slot on an RGB field draw byte for byte as they do unmultiplied, and at half alpha the
 lines are `.white.opacity(0.5)`'s. With Apple Terminal "Basic"'s slots reported, a multiply
 by slot 4 draws `38;2;0;0;35`.

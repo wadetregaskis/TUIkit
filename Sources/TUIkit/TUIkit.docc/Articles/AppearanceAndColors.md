@@ -113,13 +113,13 @@ need not keep it. Until the terminal reports its sixteen, a blend with a slot
 takes whichever end is heavier rather than a colour between, a contrast floor
 leaves it as asked, and a focus breath in it holds still.
 
-`Color.palette(1)` is the same slot spelled by its index, stays `38;5;1`
+`Color.palette256(1)` is the same slot spelled by its index, stays `38;5;1`
 where the terminal has 256 colours, and measures the same way.
 
 ### 256-Color Palette
 
 ```swift
-Color.palette(202)  // orange
+Color.palette256(202)  // orange
 ```
 
 ### True Color (RGB)
