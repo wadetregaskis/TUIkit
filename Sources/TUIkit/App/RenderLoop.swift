@@ -319,6 +319,26 @@ internal final class RenderLoop<A: App> {
             AppState.shared.setNeedsRender()
         })
 
+    /// What the terminal says about its colours after the startup exchange has
+    /// closed (see ``TerminalColorRefresher``): a reply that missed its deadline,
+    /// or one volunteered when the terminal's theme changes.
+    ///
+    /// Instance state on the @MainActor render loop rather than a global, and
+    /// lazy so its `onChange` can take `diffWriter` — both for the reasons
+    /// ``clientCapabilities`` gives. Being lazy also means it seeds from
+    /// `TerminalColors.current` at the first drain, which is after the startup
+    /// exchange has published whatever it heard.
+    ///
+    /// A changed record repaints the whole screen: every colour on it may have
+    /// been spelled or blended from the colours before the report, and the diff
+    /// writer's idea of what is on screen is not reached by the generation that
+    /// clears the render cache.
+    private lazy var terminalColors = TerminalColorRefresher(
+        onChange: { [diffWriter] in
+            diffWriter.invalidate()
+            AppState.shared.setNeedsRender()
+        })
+
     /// The environment snapshot from the previous frame.
     ///
     /// Compared after `buildEnvironment()` each frame. When the snapshot
@@ -800,6 +820,16 @@ extension RenderLoop {
     /// ``ClientCapabilityRefresher``.
     func resolveClientCapabilities() -> ClientCapabilities {
         clientCapabilities.resolve()
+    }
+
+    /// Applies the colour answers the input parser siphoned out of one drain's
+    /// bytes — see ``TerminalColorRefresher``, which publishes what they add to
+    /// what was known and asks for the repaint.
+    ///
+    /// Called once per drain with whatever `Terminal.takeVolunteeredColorReplies`
+    /// held, which on almost every frame is nothing.
+    func noteVolunteeredColorReplies(_ bytes: [UInt8]) {
+        terminalColors.noteReplies(bytes)
     }
 
     /// The effective ``MouseSupport`` configuration after combining

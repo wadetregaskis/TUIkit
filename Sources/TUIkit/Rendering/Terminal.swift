@@ -162,6 +162,19 @@ final class Terminal: TerminalProtocol {
     /// out to be a split sequence's introducer rather than the Escape key.
     var pendingAltEsc: Bool = false
 
+    /// Colour answers the terminal volunteered, siphoned out of the keystrokes
+    /// by the parser and waiting for the run loop to take them.
+    ///
+    /// Empty except between a reply landing and the end of that frame's drain,
+    /// where `AppRunner` hands what is here to
+    /// `RenderLoop.noteVolunteeredColorReplies`. Bounded, because a `Terminal`
+    /// with no run loop behind it — a test, a one-off render — never drains it.
+    ///
+    /// Declared here for the reason the parser state above it is: the code that
+    /// owns it lives in `Terminal+Replies.swift`, and an extension cannot hold
+    /// stored properties.
+    var volunteeredColorReplies: [UInt8] = []
+
     /// The raw byte source feeding the parser. Production reads from stdin;
     /// tests inject a closure to script split reads deterministically, since
     /// the parser is otherwise impossible to drive without a live TTY.

@@ -26,8 +26,12 @@
 ///
 /// TUIkit's startup exchange assigns `current` once, before an app draws its
 /// first frame, when the terminal, or `COLORFGBG`, says anything about its
-/// colours. Nothing assigns it again later yet. A process that runs no app,
-/// and one whose terminal says nothing, keep `unknown`.
+/// colours. An answer that arrives after that exchange has closed — one that
+/// missed its deadline, or one the terminal volunteers when its own theme
+/// changes — is assigned by `TerminalColorRefresher`, over what was already
+/// known, and the screen is repainted. Nothing asks the terminal a second time
+/// yet. A process that runs no app, and one whose terminal says nothing, keep
+/// `unknown`.
 package struct TerminalColors: Sendable, Hashable {
 
     /// A reported colour, eight bits per channel.

@@ -18,9 +18,16 @@
 /// `q=2` — and "every one of them" is the kind of claim that holds until it
 /// does not.
 ///
+/// Swallowing one is right for the keyboard, and not the end of it: an answer
+/// about the terminal's COLOURS is the only thing in the process that will ever
+/// say what the terminal paints, and the startup exchange closes half a second
+/// after it asks. So a reply that says something about them is kept here for the
+/// run loop (``noteVolunteeredColorReply(_:)``), and everything else is dropped
+/// as before.
+///
 /// Separate from `Terminal.swift` because that file is at its length limit,
-/// and this is a coherent thing to lift out: one question, asked of the head
-/// of the input buffer.
+/// and this is a coherent thing to lift out: what the terminal says that nobody
+/// typed — how far one such sequence reaches, and which of them is worth keeping.
 extension Terminal {
 
     /// How many bytes the string-terminated sequence at the head of the input
@@ -64,4 +71,61 @@ extension Terminal {
     /// truncate a 37-byte device-attributes reply mid-sequence and leak its
     /// tail as typing.
     static let maxReplyBytes = 4096
+
+    // MARK: - Keeping the answers that say what the terminal paints
+
+    /// Keeps the complete escape sequence `bytes` when it answers a colour
+    /// question, for the run loop to take.
+    ///
+    /// Told apart by ``TerminalColorQuery/isReply(_:)``, the rule the startup
+    /// exchange keeps its own replies by: an OSC 10, 11 or 4 answer, well formed
+    /// or not, and a `CSI ? 997 ; Ps n` appearance report. A graphics
+    /// acknowledgement, a DA answer and everything else is not kept, and the
+    /// parser drops it as it always has.
+    ///
+    /// The fence, `CSI 0 n`, is deliberately not kept either. It says a request
+    /// has been answered, and nothing asks again yet: the asking, and the fence
+    /// with it, come with the steps that re-query (plan 5b–5d).
+    func noteVolunteeredColorReply(_ bytes: [UInt8]) {
+        guard TerminalColorQuery.isReply(bytes[...]) else { return }
+        // A reply nobody takes cannot pin memory: this is dropped rather than
+        // buffered forever, the same bargain ``maxReplyBytes`` makes.
+        guard volunteeredColorReplies.count + bytes.count <= Self.maxVolunteeredReplyBytes else {
+            return
+        }
+        volunteeredColorReplies.append(contentsOf: bytes)
+    }
+
+    /// The same, for the string-terminated sequence of `length` bytes at the head
+    /// of the input buffer, before ``tryExtractRegularEvent()`` consumes it.
+    ///
+    /// Copied out only for an OSC, which is the only string-terminated family a
+    /// colour answer comes in. A graphics acknowledgement is an APC and arrives
+    /// for every image transmitted unless every one of them says `q=2`, so
+    /// copying those out would pay an allocation a frame to learn nothing.
+    func noteVolunteeredColorReply(headOfInputLength length: Int) {
+        guard length > 1, input.count >= length, input[1] == 0x5D else { return }  // ESC ]
+        var sequence: [UInt8] = []
+        sequence.reserveCapacity(length)
+        for index in 0..<length { sequence.append(input[index]) }
+        noteVolunteeredColorReply(sequence)
+    }
+
+    /// Everything kept since the last call, emptying the buffer.
+    ///
+    /// The run loop takes these once per drain, so a burst of eighteen replies is
+    /// parsed, published and repainted once. Empty on almost every frame.
+    func takeVolunteeredColorReplies() -> [UInt8] {
+        guard !volunteeredColorReplies.isEmpty else { return [] }
+        defer { volunteeredColorReplies = [] }
+        return volunteeredColorReplies
+    }
+
+    /// Hard cap on what is held for the run loop, past which a reply is dropped
+    /// rather than buffered.
+    ///
+    /// A reply is about twenty-five bytes and a whole table is eighteen of them,
+    /// so this is room for several tables — and a bound on a `Terminal` nobody
+    /// drains, which is every `Terminal` outside an app run.
+    static let maxVolunteeredReplyBytes = 4096
 }

@@ -162,10 +162,17 @@ extension Terminal {
         // the reply is right whether or not it was asked for: this parser reads
         // the keyboard, and nothing here is the keyboard.
         //
+        // Swallowed, but not always thrown away: an OSC 10, 11 or 4 answer says
+        // what the terminal paints, and the startup exchange stops listening half
+        // a second after it asks, so one that arrives later — tmux's sixteen
+        // slots, a terminal whose theme changed — is kept for the run loop (see
+        // `Terminal+Replies.swift`). Nothing else is.
+        //
         // Recursion, like the meta-prefix branch above, and bounded by the same
         // thing: each pass consumes bytes, and the buffer is finite.
         if String.isStringFamilyIntroducer(UInt32(second)) {
             guard let length = stringSequenceLength() else { return nil }
+            noteVolunteeredColorReply(headOfInputLength: length)
             consume(length)
             return tryExtractRegularEvent()
         }
@@ -709,6 +716,11 @@ extension Terminal {
                 TerminalHost.isAppleTerminal
                     ? key.normalizingLegacyShiftedFunctionKeys() : key)
         }
+        // Not a key, and about to be dropped: a `CSI ? 997 ; Ps n` report is the
+        // terminal saying which theme it is now in, and nothing else in the
+        // process will hear it. The OSC answers are kept where the string-family
+        // branch consumes them, which is before anything reaches here.
+        noteVolunteeredColorReply(bytes)
         return nil
     }
 

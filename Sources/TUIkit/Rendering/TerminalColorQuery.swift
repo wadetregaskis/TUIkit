@@ -66,6 +66,11 @@ struct TerminalColorReport: Equatable, Sendable {
 /// ``colorsToPublish(_:environment:)`` of ``parse(_:)``. Nothing asks again
 /// later yet, so ``slotsRequest`` is not sent.
 ///
+/// An answer that arrives after that exchange has closed is not lost: the input
+/// parser keeps it (`Terminal.noteVolunteeredColorReply`) instead of dropping it
+/// with the rest of what nobody typed, and `TerminalColorRefresher` applies it
+/// through ``refreshed(_:over:environment:)``.
+///
 /// ## The fence
 ///
 /// Each request ends with `CSI 5 n`, a status report every measured host
@@ -329,6 +334,9 @@ enum TerminalColorQuery {
     ///
     /// A terminal that said nothing, in an environment with nothing to say, is
     /// `TerminalColors.unknown`.
+    ///
+    /// For a report that arrived once something was already published, see
+    /// ``refreshed(_:over:environment:)``.
     static func resolve(_ report: TerminalColorReport, environment: [String: String]) -> TerminalColors {
         var resolved = TerminalColors(foreground: report.foreground, background: report.background)
         let answered = report.slots.compactMap { $0 }
@@ -343,6 +351,27 @@ enum TerminalColorQuery {
             resolved.prefersDark = environment["COLORFGBG"].flatMap(prefersDark(colorFgBg:))
         }
         return resolved
+    }
+
+    /// The record after a report that arrived once `known` was published: what
+    /// the report says, over what was already known.
+    ///
+    /// A late answer is not a fresh start. A terminal that reports its sixteen
+    /// slots after the exchange closed — tmux, whose silent client holds the
+    /// fence about half a second (measured) — has said nothing about the default
+    /// pair it answered before, and ``resolve(_:environment:)`` reads a silence as
+    /// `nil`. So each field the report does not fill keeps what was known, and
+    /// each field it fills replaces it, `prefersDark` included: a background
+    /// reported now outranks a hint published then, by `resolve`'s own ranking.
+    static func refreshed(
+        _ report: TerminalColorReport, over known: TerminalColors, environment: [String: String]
+    ) -> TerminalColors {
+        var refreshed = resolve(report, environment: environment)
+        if refreshed.foreground == nil { refreshed.foreground = known.foreground }
+        if refreshed.background == nil { refreshed.background = known.background }
+        if refreshed.slots == nil { refreshed.slots = known.slots }
+        if refreshed.prefersDark == nil { refreshed.prefersDark = known.prefersDark }
+        return refreshed
     }
 
     /// Whether `rgb` is a dark background: white contrasts with it at least as
@@ -456,7 +485,8 @@ extension TerminalClient {
     /// Run once, before `RenderLoop` is built, so the first frame is drawn
     /// with whatever the terminal reported. A terminal that says nothing leaves
     /// the record as it was. A reply later than the deadline is not read here:
-    /// the input parser takes it as a string sequence and drops it.
+    /// the input parser siphons it out of the keystrokes instead, and
+    /// `TerminalColorRefresher` publishes what it adds to what was known.
     @MainActor
     static func detectColors(using terminal: Terminal) {
         guard let report = terminal.queryColors(),

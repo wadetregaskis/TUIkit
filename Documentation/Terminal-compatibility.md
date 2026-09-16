@@ -2151,8 +2151,16 @@ back. It asks only when stdin is a TTY in raw mode.
   answers, unless that says nothing. So a silent terminal leaves the record
   unknown, but a `COLORFGBG` hint is still published.
 - **Not asked again:** not on resume from a suspend, not on focus-in, and not
-  on a `997` report. A reply later than the deadline is dropped by the input
-  parser.
+  on a `997` report.
+- **A reply later than the deadline is still read.** The input parser keeps an
+  OSC 10, 11 or 4 answer and a `CSI ? 997 ; Ps n` report instead of dropping it
+  with everything else nobody typed, the run loop takes what it kept once per
+  drain, and `TerminalColorRefresher` publishes what the reply adds to what was
+  known — each field it does not mention keeping its published value — and
+  repaints the screen. A reply that changes nothing publishes nothing. That is
+  also how a terminal that changes its own theme mid-run is heard, and the only
+  way tmux's sixteen slots could arrive at all, since its silent client holds
+  the fence past the deadline.
 
 **Round trip.** The native request itself, one write with eighteen queries,
 was measured on one host only:
@@ -3856,6 +3864,12 @@ until that run records it, with the host's version.
   framework asks at startup"; `Tools/Smoke/colour_query_smoke.py` checks the
   wiring, and that frame one of an app with clear grounds leaves them to the
   terminal (SGR 49) over a reported page and over silence.
+- `TerminalColorRefresher` — what the terminal says about its colours after that
+  exchange has closed. `Terminal.noteVolunteeredColorReply` keeps an OSC 10, 11
+  or 4 answer and a `CSI ? 997` report where the input parser would have dropped
+  them, `AppRunner` hands them over once per drain, and a report that changes the
+  record is published to `TerminalColors.current` with a full repaint. Nothing
+  asks the terminal again yet.
 - `Terminal.enableRawMode` / `disableRawMode` — focus reporting (mode 1004)
   on and off; `Terminal.finalize` reads the reports as
   `TerminalInput.focusChanged`; `AppRunner.terminalFocusChanged` moves

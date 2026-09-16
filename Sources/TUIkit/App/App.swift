@@ -724,6 +724,13 @@ extension AppRunner {
             }
             eventsProcessed += 1
         }
+        // Colour answers that came in among those bytes: one that missed the
+        // startup exchange's deadline (under tmux that is the normal case for the
+        // sixteen slots — a silent client holds its fence about half a second),
+        // or one the terminal volunteered because its theme changed. The parser
+        // siphons them out of the keystrokes; taking them once per drain makes a
+        // burst of replies one publication and one repaint.
+        renderer.noteVolunteeredColorReplies(terminal.takeVolunteeredColorReplies())
     }
 
     fileprivate func cleanup(renderer: RenderLoop<A>) {
