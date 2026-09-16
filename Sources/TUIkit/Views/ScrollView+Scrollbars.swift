@@ -147,7 +147,8 @@ extension _ScrollViewCore {
             proportional: context.environment.scrollbarProportionalThumb,
             isFocused: isFocused, isScrollEnabled: context.environment.isScrollEnabled,
             hoveredCell: handler.hoveredBarCell, palette: ComparablePalette(palette),
-            depth: ColorDepth.current, cycle: pulse?.cycle)
+            depth: ColorDepth.current, terminalColors: TerminalColors.current,
+            cycle: pulse?.cycle)
         let memo: VerticalScrollbarMemo
         if let remembered = handler.verticalScrollbarMemo, remembered.key == key {
             handler.verticalScrollbarMemoHits += 1
@@ -277,6 +278,21 @@ struct VerticalScrollbarMemo {
         /// place keeps the id, and a key of the id served the bar drawn before the edit.
         let palette: ComparablePalette
         let depth: ColorDepth
+        /// The colours the terminal had reported when the bar was drawn.
+        ///
+        /// At sixteen colours an RGB colour is emitted as the slot nearest to what that
+        /// slot PAINTS — the colour the terminal reported for it, or xterm's value while
+        /// it has reported none — so the bar's bytes are a function of the report as well
+        /// as of the palette. A palette whose roles are the terminal's own carries the
+        /// report through its grounding, which `ComparablePalette` compares; a palette of
+        /// RGB colours carries nothing, and without this a bar drawn before a report was
+        /// served to every frame after it.
+        ///
+        /// By value, not by `TerminalColors.generation`, as the image caches are keyed
+        /// (b7a2f35d): a task-local pin changes what a slot measures as without moving the
+        /// generation. The render cache's clear on a moved generation does not reach this
+        /// memo either — it lives on the handler, not in the cache.
+        let terminalColors: TerminalColors
         let cycle: SelectionEmphasisCycle?
     }
 
