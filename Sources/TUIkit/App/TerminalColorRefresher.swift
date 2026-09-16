@@ -51,6 +51,10 @@ internal final class TerminalColorRefresher {
     /// of them spread over several drains are a table only once the last lands.
     private var heard = TerminalColorReport()
 
+    /// Whether a theme report has arrived and not yet been taken — see
+    /// ``takeAppearanceReport()``.
+    private var sawAppearanceReport = false
+
     /// What the startup exchange published, which a late answer adds to.
     private let known: TerminalColors
 
@@ -120,6 +124,23 @@ internal final class TerminalColorRefresher {
         onChange()
     }
 
+    /// Whether a `CSI ? 997 ; Ps n` has arrived since the last call, clearing it.
+    ///
+    /// The terminal saying its own theme changed — which is not a colour. It
+    /// names light or dark and nothing else, so the colours behind it have to be
+    /// asked for: `RenderLoop` hands this to `TerminalColorRequester`, the one
+    /// moment a host volunteers that anything changed at all.
+    ///
+    /// Kept apart from what this class publishes, because the two answer
+    /// different questions. A report that resolves to the colours already in
+    /// force publishes nothing — and still means the theme changed, since it
+    /// says nothing about the sixteen slots or the default pair it does not
+    /// carry.
+    func takeAppearanceReport() -> Bool {
+        defer { sawAppearanceReport = false }
+        return sawAppearanceReport
+    }
+
     /// Folds one drain's report into everything heard before it. A field the
     /// report does not fill is not a denial of what an earlier one said.
     private func record(_ report: TerminalColorReport) {
@@ -128,6 +149,9 @@ internal final class TerminalColorRefresher {
         for (index, slot) in report.slots.enumerated() where slot != nil {
             heard.slots[index] = slot
         }
-        if let appearance = report.appearance { heard.appearance = appearance }
+        if let appearance = report.appearance {
+            heard.appearance = appearance
+            sawAppearanceReport = true
+        }
     }
 }

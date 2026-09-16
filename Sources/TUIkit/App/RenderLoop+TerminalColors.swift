@@ -34,7 +34,15 @@ extension RenderLoop {
     /// so the one waiting behind it may go out (see ``TerminalColorRequester``).
     func noteVolunteeredColorReplies(_ bytes: [UInt8], sawStatusFence: Bool) {
         terminalColors.noteReplies(bytes)
+        // The fence first: it belongs to a request made before any of this
+        // drain's bytes arrived, so it is the older news, and clearing it lets
+        // the theme report's request go out now rather than queue behind it.
+        // Either order sends exactly one request — the coalescer sees to that —
+        // but this one sends it without waiting.
         if sawStatusFence { colorQueries.noteStatusFence() }
+        // A `CSI ? 997` is not a colour: it says the theme changed, and names
+        // light or dark. What the terminal now PAINTS has to be asked for.
+        if terminalColors.takeAppearanceReport() { colorQueries.terminalReportedTheme() }
     }
 
     /// The terminal's window, tab or pane has taken the focus back, with the

@@ -2106,13 +2106,17 @@ iTerm2's sixteen, as reported. They are not xterm's table either:
 - **`?996n`:** answered by Ghostty, iTerm2 and tmux (under tmux, tmux itself
   answers). Apple Terminal, Warp and screen were silent. Both native answers
   were `997;2`.
-- **Ghostty's `997` does not follow the background it paints.** It answered
-  `997;2` (light) on its default 40, 44, 52 and on 0, 0, 0 alike, while OSC 11
-  reported each background correctly. The system appearance was Light for both
-  runs, so Ghostty may follow that instead. *Inferred*, not measured: it needs a
-  run under Dark. iTerm2's `997;2` came with a light background, so it cannot
-  tell the two rules apart. Under tmux, `997` followed the client's background
-  (below).
+- **Ghostty's `997` follows neither the background it paints nor its own
+  OSC 11.** It answered `997;2` (light) on its default 40, 44, 52 and on 0, 0, 0
+  alike, while its OSC 11 reported each of those backgrounds correctly in the
+  same run — so the two contradict each other on the same host, within
+  milliseconds. The system appearance was Light for both runs, so Ghostty may
+  follow that instead. *Inferred*, not measured: it needs a run under Dark.
+  iTerm2's `997;2` came with a light background, so it cannot tell the two rules
+  apart. Under tmux, `997` followed the client's background (below). This is why
+  a `997` is treated as a signal to ask rather than as an answer: the framework
+  re-reads OSC 10, 11 and 4 when one arrives, and ranks `prefersDark` from the
+  reported background first.
 - **`COLORFGBG`:** only iTerm2 set it (`0;15`). It was unset in Apple Terminal,
   Ghostty and Warp, and in the screen and tmux panes.
 - **screen:** its panes inherit `TERM_PROGRAM=Apple_Terminal` from the outer
@@ -2178,6 +2182,14 @@ back. It asks only when stdin is a TTY in raw mode.
   reporting is enabled, and the startup exchange has just run — and neither does
   focus going away, nor a report while the app is suspended (the resume asks by
   itself).
+- **Asked again when the terminal says its theme changed:** a `CSI ? 997 ; Ps n`
+  report, which a host sends unprompted while mode 2031 is set — TUIkit sets it
+  for the life of the app (see "Colour-palette update notifications"). The report
+  names light or dark and no colour at all, so the whole request goes out: what
+  the terminal PAINTS now is what nothing has said. No skip rule applies, since a
+  host that sent one has answered by definition. A reply to a request of ours is
+  not a report and asks nothing back, or every answer would ask the question
+  again.
 - **A reply later than the deadline is still read.** The input parser keeps an
   OSC 10, 11 or 4 answer and a `CSI ? 997 ; Ps n` report instead of dropping it
   with everything else nobody typed, the run loop takes what it kept once per
@@ -2328,6 +2340,18 @@ just set is set.
   multiplexer's own grid.
 - Where iTerm2's record came from: the same launch that produced its
   reverse-video row, and the same caveat — see that section's provenance.
+
+**What TUIkit does.** `Terminal.enableRawMode` sets mode 2031 straight after
+focus reporting's `?1004h`, and `disableRawMode` resets it just after `?1004l`,
+so a Ctrl-Z suspend and quitting both turn it off and resuming turns it back on —
+the mode outlives the process, and the shell never asked to be told about themes.
+`Tools/Smoke/suspend_probe.py` checks all four, beside the focus-reporting rows
+it already checked. It is sent blind to every host, as the focus request is: five
+printed nothing, tmux sets it on its own clients anyway, and the DECRQM that
+could ask first is the one shape Apple Terminal prints. A `CSI ? 997` that then
+arrives is not a colour — it names light or dark — so the framework asks the
+whole colour request again rather than believing it (see "What the framework asks
+at startup").
 
 **What "no unsolicited `997`" does and does not say.** It says none arrived
 within 1.5 s of each of four enables, plus a 0.8 s final drain, on a host whose
@@ -3946,7 +3970,13 @@ until that run records it, with the host's version.
   exchange has closed. `Terminal.noteVolunteeredColorReply` keeps an OSC 10, 11
   or 4 answer and a `CSI ? 997` report where the input parser would have dropped
   them, `AppRunner` hands them over once per drain, and a report that changes the
-  record is published to `TerminalColors.current` with a full repaint.
+  record is published to `TerminalColors.current` with a full repaint. A
+  `CSI ? 997` is handed on separately (`takeAppearanceReport`), because it says
+  the theme changed rather than what anything paints.
+- `Terminal.enableRawMode` / `disableRawMode` — DEC mode 2031 on and off, so the
+  terminal reports its own palette changes while the app runs and stops the
+  moment it suspends or quits. See "Colour-palette update notifications
+  (mode 2031)".
 - `TerminalColorRequester` — when the terminal is asked again. Under tmux the
   first frame is followed by the sixteen-slot request the startup exchange left
   out, written and not waited for, because tmux holds the fence about half a

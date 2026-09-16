@@ -398,6 +398,22 @@ extension Terminal {
         // Documentation/Terminal-compatibility.md, "Focus reporting (mode 1004)".
         writeImmediate("\u{1B}[?1004h")
 
+        // Ask to be told when the terminal's own palette changes (DEC mode
+        // 2031): it then sends `CSI ? 997 ; Ps n`, which `TerminalColorRefresher`
+        // turns into asking what it paints now. Without it, a theme flipped
+        // under a running app goes unnoticed until something else asks — a
+        // resize, or the window taking the focus back.
+        //
+        // Sent to every host, measured or not, as the focus request above is.
+        // On the five hosts measured (2026-09-14) it printed nothing and moved
+        // no cursor, and tmux sets it on its own clients at attach; Ghostty is
+        // unmeasured. Its DECRQM is never sent: `CSI ? Ps $ p` is the
+        // `?`-plus-intermediate shape Apple Terminal prints, and the answer
+        // would only say whether the mode this process just set is set. See
+        // Documentation/Terminal-compatibility.md, "Colour-palette update
+        // notifications (mode 2031)".
+        writeImmediate("\u{1B}[?2031h")
+
         // Ask xterm-compatible terminals (iTerm2, Ghostty, kitty, wezterm,
         // gnome-terminal, …) to report modified cursor keys in canonical
         // `ESC[1;<mod><letter>` form so that combinations like
@@ -443,6 +459,10 @@ extension Terminal {
         // Focus reports off, so the shell (or whatever runs after a suspend or
         // quit) is not sent `ESC [ I` / `ESC [ O` it never asked for.
         writeImmediate("\u{1B}[?1004l")
+
+        // Palette-change reports off, for the same reason: mode 2031 outlives
+        // this process, and the shell never asked to be told about themes.
+        writeImmediate("\u{1B}[?2031l")
 
         // Disable bracketed paste mode before restoring terminal state.
         writeImmediate("\u{1B}[?2004l")

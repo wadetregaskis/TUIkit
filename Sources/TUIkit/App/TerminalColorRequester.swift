@@ -180,6 +180,18 @@ internal final class TerminalColorRequester {
         ask(TerminalColorQuery.nativeRequest)
     }
 
+    /// The terminal reported its own theme, `CSI ? 997 ; Ps n` — which it does
+    /// unprompted while mode 2031 is set (`Terminal.enableRawMode`).
+    ///
+    /// Asked without the skip rule the other two apply, because the terminal has
+    /// just spoken: `hasAnsweredAboutColors` is true by the time this is
+    /// reached, so a guard on it would only restate that. The report names light
+    /// or dark and no colour at all, so everything it implies has to be asked
+    /// for — and it is the only notice most hosts give that anything changed.
+    func terminalReportedTheme() {
+        ask(TerminalColorQuery.nativeRequest)
+    }
+
     /// The terminal answered a request's fence, `CSI 0 n`, which the input
     /// parser kept out of the keystrokes.
     ///

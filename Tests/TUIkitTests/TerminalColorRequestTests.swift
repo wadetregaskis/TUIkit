@@ -435,6 +435,98 @@ struct TerminalColorLateSlotsTests {
     }
 }
 
+/// A terminal that says its own theme changed, and what is asked of it then.
+///
+/// `CSI ? 997 ; Ps n` says which theme the terminal is in now — not what it
+/// paints. The colours behind it have to be asked for, and this is the one
+/// moment a host volunteers that anything changed at all.
+@MainActor
+@Suite("A terminal reporting its own theme is asked what it paints now")
+struct TerminalThemeReportReQueryTests {
+
+    typealias RGB = TerminalColors.RGB
+
+    private func refresher(known: TerminalColors = .unknown) -> TerminalColorRefresher {
+        TerminalColorRefresher(
+            known: known, environment: [:], publish: { _ in }, onChange: {})
+    }
+
+    @Test("A theme report is handed over once")
+    func themeReportIsHandedOverOnce() {
+        let refresher = refresher()
+        refresher.noteReplies(Array("\u{1B}[?997;1n".utf8))
+        #expect(refresher.takeAppearanceReport(), "the report nobody else in the process will hear")
+        #expect(!refresher.takeAppearanceReport(), "taking it does not leave it behind")
+    }
+
+    /// A reply to a question we asked must not ask the question again.
+    @Test("A colour answer is not a theme report")
+    func colourAnswerIsNotAThemeReport() {
+        let refresher = refresher()
+        refresher.noteReplies(
+            Array(TerminalColorLateReplyTests.reply("11", RGB(red: 40, green: 44, blue: 52)).utf8))
+        #expect(!refresher.takeAppearanceReport())
+    }
+
+    /// The report says the theme changed; publishing nothing means the colours
+    /// it implies were already in force, which is not an answer about the ones
+    /// it does not carry — the sixteen slots, and the pair.
+    @Test("A theme report that changes nothing still says the theme changed")
+    func unchangedThemeReportIsStillAReport() {
+        let refresher = refresher(known: TerminalColors(prefersDark: true))
+        refresher.noteReplies(Array("\u{1B}[?997;1n".utf8))
+        #expect(refresher.takeAppearanceReport())
+    }
+
+    @Test("The requester asks everything when the terminal reports its theme")
+    func themeReportAsksEverything() {
+        let sink = RequestSink()
+        let requester = TerminalColorRequester(
+            isTmux: false, fenceTimeoutNanos: 5_000_000, send: { sink.sent.append($0) })
+        requester.terminalReportedTheme()
+        #expect(sink.sent == [TerminalColorQuery.nativeRequest])
+    }
+}
+
+/// The run loop's half: the drain that carries a `997` is the drain that asks.
+@MainActor
+@Suite("A theme report in a drain asks the terminal again", .serialized)
+struct TerminalThemeReportWiringTests {
+
+    @Test("A 997 in a drain asks the terminal what it paints now")
+    func themeReportAsksAgain() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(FrameProbeApp(), isTmux: false)
+        loop.render()
+        let afterFrame = harness.terminal.writtenOutput.count
+
+        loop.noteVolunteeredColorReplies(Array("\u{1B}[?997;1n".utf8), sawStatusFence: false)
+        #expect(
+            harness.terminal.writtenOutput.count > afterFrame,
+            "the terminal said its theme changed and was asked nothing")
+        #expect(harness.terminal.writtenOutput.last == TerminalColorQuery.nativeRequest)
+    }
+
+    /// Otherwise every answer would ask the question again, for ever.
+    @Test("An answer to our own question asks nothing")
+    func colourAnswerAsksNothing() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(FrameProbeApp(), isTmux: false)
+        loop.render()
+        let afterFrame = harness.terminal.writtenOutput.count
+
+        loop.noteVolunteeredColorReplies(
+            Array(
+                TerminalColorLateReplyTests.reply(
+                    "11", TerminalColors.RGB(red: 40, green: 44, blue: 52)
+                ).utf8),
+            sawStatusFence: false)
+        #expect(
+            harness.terminal.writtenOutput.count == afterFrame,
+            "answering a question asked another one")
+    }
+}
+
 /// The window coming back: what the terminal is asked then, and who is skipped.
 ///
 /// A terminal the user left is one they may have changed while they were gone —

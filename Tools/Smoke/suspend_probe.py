@@ -6,7 +6,8 @@ suspend round trip:
 
   1. Ctrl-Z (0x1A — raw mode clears ISIG, so it arrives as a KEY) makes the
      app hand the terminal back FIRST (exit the alternate screen, show the
-     cursor, mouse reporting off) and then genuinely stop (WUNTRACED).
+     cursor, mouse reporting off, focus and palette-change reporting off) and
+     then genuinely stop (WUNTRACED).
   2. SIGCONT (what `fg` sends) resumes it: it re-enters the alternate screen,
      re-enables its modes, and repaints the UI.
   3. The app still quits cleanly afterwards.
@@ -36,6 +37,11 @@ EXIT_ALT = "\x1b[?1049l"
 SHOW_CURSOR = "\x1b[?25h"
 FOCUS_REPORTS_ON = "\x1b[?1004h"
 FOCUS_REPORTS_OFF = "\x1b[?1004l"
+# DEC mode 2031: the terminal reports its own palette changes (`CSI ?997;Ps n`).
+# Turned on and off with focus reporting, and for the same reason — a mode set
+# for this app must not be left set for whatever runs after it.
+PALETTE_REPORTS_ON = "\x1b[?2031h"
+PALETTE_REPORTS_OFF = "\x1b[?2031l"
 
 failures: list[str] = []
 
@@ -80,6 +86,7 @@ pump(2.0)
 check(ENTER_ALT in captured, "startup enters the alternate screen")
 check("TUIkit" in captured, "the UI painted")
 check(FOCUS_REPORTS_ON in captured, "startup turns focus reporting on")
+check(PALETTE_REPORTS_ON in captured, "startup turns palette-change reporting on")
 
 # 2. Ctrl-Z: the app must restore the terminal, then stop.
 marker = len(captured)
@@ -97,6 +104,9 @@ suspended_output = captured[marker:]
 check(EXIT_ALT in suspended_output, "the alternate screen was exited BEFORE stopping")
 check(SHOW_CURSOR in suspended_output, "the cursor was shown before stopping")
 check(FOCUS_REPORTS_OFF in suspended_output, "focus reporting was turned off before stopping")
+check(
+    PALETTE_REPORTS_OFF in suspended_output,
+    "palette-change reporting was turned off before stopping")
 
 # 3. SIGCONT (fg): re-init + repaint.
 marker = len(captured)
@@ -106,6 +116,7 @@ resumed_output = captured[marker:]
 check(ENTER_ALT in resumed_output, "resume re-enters the alternate screen")
 check("TUIkit" in resumed_output, "resume repaints the UI")
 check(FOCUS_REPORTS_ON in resumed_output, "resume turns focus reporting back on")
+check(PALETTE_REPORTS_ON in resumed_output, "resume turns palette-change reporting back on")
 
 # 4. Still alive and quits cleanly.
 os.write(fd, b"q")
@@ -121,6 +132,7 @@ check(exited, "the app quits cleanly after the round trip")
 final_output = captured[len(captured) - 4096 :]
 check(EXIT_ALT in final_output, "quitting leaves the alternate screen")
 check(FOCUS_REPORTS_OFF in final_output, "quitting turns focus reporting off")
+check(PALETTE_REPORTS_OFF in final_output, "quitting turns palette-change reporting off")
 
 try:
     os.close(fd)
