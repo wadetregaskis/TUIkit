@@ -555,14 +555,6 @@ extension Color {
         Self(value: .palette256(index))
     }
 
-    /// Creates a color from the 256-color palette.
-    ///
-    /// - Parameter index: The palette index (0-255).
-    /// - Returns: The corresponding color.
-    public static func palette(_ index: UInt8) -> Self {
-        Self(value: .palette256(index))
-    }
-
     /// Creates a True Color RGB color.
     ///
     /// - Parameters:
