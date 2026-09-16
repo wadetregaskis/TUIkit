@@ -135,14 +135,21 @@ extension ColorDepth {
 
     /// Async variant of ``withCap(_:operation:)-35lhk``.
     ///
-    /// `operation` runs on the caller's execution context: the parameter is
-    /// `nonisolated(nonsending)`, so the closure inherits the caller's
-    /// isolation instead of hopping to the generic executor to run. That is
-    /// what a scoped pin wants — the ceiling is set for the caller's work,
-    /// where the caller already is. It is NOT `@Sendable`, and does not make
-    /// the closure concurrent: it removes a hop rather than adding one.
+    /// The function AND `operation` are both `nonisolated(nonsending)`, so the
+    /// ceiling is set on the caller's execution context rather than on the
+    /// generic executor: a `@MainActor` caller's `operation` stays on the main
+    /// actor and may touch main-actor state directly.
+    ///
+    /// Marking only the parameter would not achieve that. A plain `nonisolated`
+    /// async function hops to the generic executor before it ever invokes the
+    /// closure, so the closure runs there too — and an actor-isolated caller
+    /// cannot pass an actor-isolated closure to it at all, because that sends a
+    /// non-`Sendable` value across an isolation boundary.
+    ///
+    /// This is NOT `@Sendable` and does not make the closure concurrent: it
+    /// removes a hop rather than adding one.
     @discardableResult
-    public static func withCap<T>(
+    nonisolated(nonsending) public static func withCap<T>(
         _ depth: ColorDepth, operation: nonisolated(nonsending) () async throws -> T
     ) async rethrows -> T {
         try await $taskCap.withValue(depth, operation: operation)
@@ -164,14 +171,21 @@ extension ColorDepth {
     /// whole async operation, including its suspensions (task-locals are
     /// inherited across awaits and by child tasks, but not by detached ones).
     ///
-    /// `operation` runs on the caller's execution context: the parameter is
-    /// `nonisolated(nonsending)`, so the closure inherits the caller's
-    /// isolation instead of hopping to the generic executor to run. That is
-    /// what a scoped pin wants — the depth is pinned for the caller's work,
-    /// where the caller already is. It is NOT `@Sendable`, and does not make
-    /// the closure concurrent: it removes a hop rather than adding one.
+    /// The function AND `operation` are both `nonisolated(nonsending)`, so the
+    /// depth is pinned on the caller's execution context rather than on the
+    /// generic executor: a `@MainActor` caller's `operation` stays on the main
+    /// actor and may touch main-actor state directly.
+    ///
+    /// Marking only the parameter would not achieve that. A plain `nonisolated`
+    /// async function hops to the generic executor before it ever invokes the
+    /// closure, so the closure runs there too — and an actor-isolated caller
+    /// cannot pass an actor-isolated closure to it at all, because that sends a
+    /// non-`Sendable` value across an isolation boundary.
+    ///
+    /// This is NOT `@Sendable` and does not make the closure concurrent: it
+    /// removes a hop rather than adding one.
     @discardableResult
-    public static func withCurrent<T>(
+    nonisolated(nonsending) public static func withCurrent<T>(
         _ depth: ColorDepth, operation: nonisolated(nonsending) () async throws -> T
     ) async rethrows -> T {
         try await $taskCurrent.withValue(depth, operation: operation)

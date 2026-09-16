@@ -53,3 +53,41 @@ struct ColorDepthCapTests {
         #expect(ColorDepth.cap == before)
     }
 }
+
+// MARK: - A main-actor caller can pin the depth around suspending work
+
+/// A COMPILE-time guard, deliberately never run.
+///
+/// Before the async pins were marked `nonisolated(nonsending)` *themselves*,
+/// this body did not build: the wrapper hopped to the generic executor before
+/// invoking the closure, so handing it a main-actor-isolated closure was
+/// "sending value of non-Sendable type '() async -> ()' risks causing data
+/// races". Compiling is the whole assertion, which is why this is not a
+/// `@Test` — as one it has to wait for the main actor that the rest of the
+/// suite keeps busy, and occupying the main actor perturbs the timing-sensitive
+/// tests elsewhere in the run.
+@MainActor
+private func mainActorCanPinAroundSuspension() async {
+    let counter = MainActorCounter()
+
+    await ColorDepth.withCurrent(.basic16) {
+        // Load-bearing: a genuine suspension is what selects the ASYNC
+        // overload. With a closure that never suspends, the synchronous
+        // overload wins and the `await` is vacuous, so this proves nothing.
+        await Task.yield()
+
+        // Load-bearing too: touching main-actor state with no `await` only
+        // compiles because the closure kept the caller's isolation rather than
+        // hopping off it.
+        counter.n += 1
+    }
+
+    _ = counter.n
+}
+
+/// Main-actor state for `mainActorCanPinAroundSuspension()` to touch from
+/// inside the pinned operation.
+@MainActor
+private final class MainActorCounter {
+    var n = 0
+}
