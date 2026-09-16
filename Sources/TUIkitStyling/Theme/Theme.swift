@@ -1033,9 +1033,19 @@ public struct PaletteRegistry {
         AppleTerminalPalette($0)
     }
 
+    /// The palettes that state no colour of their own, built from
+    /// ``LiveTerminalPalette``.
+    ///
+    /// One, today: the terminal's own page, foreground and sixteen slots. A group of
+    /// its own because it answers a different question from the other two — every
+    /// palette here follows the user's terminal profile, so none of its colours can be
+    /// measured until the terminal reports them.
+    public static let terminalPalettes: [any Palette] = [LiveTerminalPalette()]
+
     /// All built-in palettes in cycling order: the phosphor presets first, then
-    /// the Terminal.app profiles.
-    public static let all: [any Palette] = phosphorPresets + appleTerminalProfiles
+    /// the Terminal.app profiles, then the palette that follows the terminal's own
+    /// colours.
+    public static let all: [any Palette] = phosphorPresets + appleTerminalProfiles + terminalPalettes
 
     /// Finds a palette by ID.
     public static func palette(withId id: String) -> (any Palette)? {

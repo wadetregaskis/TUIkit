@@ -4,7 +4,7 @@ A visual reference for all built-in color palettes with their exact color values
 
 ## Overview
 
-TUIkit ships with **16 palettes**: 6 classic-phosphor presets generated from hand-tuned HSL parameters via ``SystemPalette``, plus 10 ``AppleTerminalPalette`` recreations of the built-in macOS Terminal.app profiles. Each palette defines semantic color tokens that the framework resolves at render time.
+TUIkit ships with **17 palettes**: 6 classic-phosphor presets generated from hand-tuned HSL parameters via ``SystemPalette``, 10 ``AppleTerminalPalette`` recreations of the built-in macOS Terminal.app profiles, and ``LiveTerminalPalette``, which states no colour of its own and draws in the user's terminal's. Each palette defines semantic color tokens that the framework resolves at render time.
 
 Users access palette colors via `Color.palette.*`:
 
@@ -35,7 +35,7 @@ Palette (17 properties)
               focusBackground, cursorColor, fieldBackground
 ```
 
-The 16 built-in palettes are instances of ``SystemPalette`` (the 6 phosphor presets) and ``AppleTerminalPalette`` (the 10 Terminal.app profiles), both of which conform to ``Palette``. Custom palettes can conform to ``Palette`` directly.
+The 17 built-in palettes are instances of ``SystemPalette`` (the 6 phosphor presets), ``AppleTerminalPalette`` (the 10 Terminal.app profiles) and ``LiveTerminalPalette`` (the terminal's own colours), all of which conform to ``Palette``. Custom palettes can conform to ``Palette`` directly.
 
 ## Color Token Categories
 
@@ -241,9 +241,39 @@ Inspired by vintage vacuum fluorescent displays (VFDs). The characteristic brigh
 environment.paletteManager.setCurrent(AppleTerminalPalette(.homebrew))
 ```
 
+## Terminal
+
+``LiveTerminalPalette`` is the one built-in that names no colour of its own: every role is a colour the user's terminal decides, so an app drawn with it matches the rest of their terminal and follows their profile when they change it.
+
+**ID:** `"terminal.live"` · **Name:** `"Terminal"`
+
+| Token | Value | Emitted as |
+|-------|-------|------------|
+| `background`, `statusBarBackground`, `appHeaderBackground` | ``Color/clear`` — the terminal's own page | SGR 49 |
+| `overlayBackground`, `foreground` | ``Color/default`` | 49 as a fill, 39 as ink |
+| `foregroundSecondary` / `foregroundTertiary` / `foregroundQuaternary` | ``Color/default`` at 75% / 55% / 38% | 39, a real dimming once the terminal reports its page |
+| `accent`, `cursorColor` | ``Color/ansi(_:)`` blue | SGR 34 |
+| `success` / `warning` / `error` / `info` | ``Color/ansi(_:)`` green / yellow / red / cyan | 32 / 33 / 31 / 36 |
+| `border` | ``Color/ansi(_:)`` bright black | SGR 90 |
+
+`focusBackground` and `fieldBackground` are left to their derived defaults, which step off that page once it is known.
+
+TUIkit asks the terminal for these colours at startup (OSC 10, 11 and 4). Until it answers — and some hosts never do — none of them can be *measured*: a colour with no RGB cannot be dimmed, tinted, blended or checked for contrast. The framework then draws what it can state exactly rather than guessing a value:
+
+- the three dimmer text tiers are the terminal's plain foreground, SGR 39, undimmed;
+- a control's face is the page, so it shows nothing, and a hover lifts the label's ink to another *name* (a slot's bright twin) instead of tinting a fill;
+- a highlight that would have been a tint — a cursor row, a text selection, a menu's highlight bar — is drawn in reverse video over the palette's own pair;
+- a focus breath holds still at its bright end.
+
+Once the terminal answers, every one of those measures and the palette behaves like any other. The colours are still *emitted* as slots and 39/49, so they keep following the user's profile; the report only says what they paint.
+
+```swift
+environment.paletteManager.setCurrent(LiveTerminalPalette())
+```
+
 ## Palette Cycling Order
 
-When pressing `t` to cycle themes (opt-in — see above), palettes rotate in this order: the phosphor presets first, then the Terminal.app profiles.
+When pressing `t` to cycle themes (opt-in — see above), palettes rotate in this order: the phosphor presets first, then the Terminal.app profiles, then the terminal's own colours.
 
 | # | Palette | Preset / Profile |
 |---|---------|------------------|
@@ -263,6 +293,7 @@ When pressing `t` to cycle themes (opt-in — see above), palettes rotate in thi
 | 14 | Red Sands | `.redSands` |
 | 15 | Silver Aerogel | `.silverAerogel` |
 | 16 | Solid Colors | `.solidColors` |
+| 17 | Terminal | `LiveTerminalPalette()` |
 
 ## Color Resolution Flow
 
@@ -285,6 +316,7 @@ This means the same view code produces different colors depending on the active 
 
 - ``SystemPalette``
 - ``AppleTerminalPalette``
+- ``LiveTerminalPalette``
 
 ### Color System
 

@@ -24,9 +24,16 @@ profiles as ``AppleTerminalPalette`` — Basic, Grass, Homebrew, Man Page, Novel
 Ocean, Pro, Red Sands, Silver Aerogel and Solid Colors — built from the exact
 colours those profiles ship with.
 
-``PaletteRegistry/all`` lists every built-in palette (the six presets followed by
-the ten profiles); ``PaletteRegistry/phosphorPresets`` and
-``PaletteRegistry/appleTerminalProfiles`` expose the two groups separately.
+And one palette that states no colour of its own: ``LiveTerminalPalette`` draws every
+role in the terminal's — its page, its foreground and its sixteen ANSI slots — so an app
+takes the colours of the user's terminal profile and follows them when it changes. What
+it draws before the terminal has answered TUIkit's startup query for those colours is in
+<doc:PaletteReference>.
+
+``PaletteRegistry/all`` lists every built-in palette (the six presets, then the ten
+profiles, then the terminal's own); ``PaletteRegistry/phosphorPresets``,
+``PaletteRegistry/appleTerminalProfiles`` and ``PaletteRegistry/terminalPalettes``
+expose the three groups separately.
 
 ## Using Palettes
 

@@ -215,7 +215,15 @@ Available presets (`SystemPalette.Preset`):
 .palette(AppleTerminalPalette(.homebrew))
 ```
 
-`PaletteRegistry.all` enumerates all 16 built-in palettes (`.phosphorPresets` + `.appleTerminalProfiles`), with `PaletteRegistry.palette(withId:)` / `palette(withName:)` lookups. Custom palettes conform to `Palette` directly, and the `ColorPicker` lets users edit colours interactively — R/G/B inline, or the full modal editor from a click or `Return` on its swatch.
+**The terminal's own colours** — `LiveTerminalPalette` states no colour of its own: its page is the terminal's (SGR 49), its text the terminal's foreground (39), and its accent, status roles and border the terminal's own ANSI slots, so an app takes the colours of the user's terminal profile and follows them when it changes:
+
+```swift
+.palette(LiveTerminalPalette())
+```
+
+Until the terminal answers TUIkit's startup query for those colours (OSC 10, 11 and 4) none of them can be measured — and some hosts never answer — so the text tiers stay plain rather than dimmed, faces and hovers show no fill (a hover lifts the label's ink to another name instead), and the highlights that would have been tints, like a cursor row or a text selection, are drawn in reverse video.
+
+`PaletteRegistry.all` enumerates all 17 built-in palettes (`.phosphorPresets` + `.appleTerminalProfiles` + `.terminalPalettes`), with `PaletteRegistry.palette(withId:)` / `palette(withName:)` lookups. Custom palettes conform to `Palette` directly, and the `ColorPicker` lets users edit colours interactively — R/G/B inline, or the full modal editor from a click or `Return` on its swatch.
 
 ## Internationalization
 
