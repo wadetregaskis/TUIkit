@@ -666,6 +666,23 @@ enum TerminalHost {
         "client-attached", "client-detached", "client-session-changed",
     ]
 
+    /// The tmux hooks that mean "a client changed its theme": the only notice a
+    /// pane gets that the colours it is being drawn in have moved under it.
+    ///
+    /// tmux learns a client's theme because it sets mode 2031 on it at attach
+    /// and reads the `CSI ? 997` it then sends (measured, 3.7c — see
+    /// `Documentation/Terminal-compatibility.md`). A pane is told nothing; these
+    /// hooks are how it can be.
+    ///
+    /// Registered SEPARATELY from ``tmuxClientChangeHooks``, and that is
+    /// load-bearing: tmux refuses an unknown hook name with "invalid option" and
+    /// a non-zero exit, and **stops at the first failing command in an
+    /// invocation** — measured on 3.7c with a bogus name first, after which the
+    /// real hook that followed it in the same argv was never set. A tmux too old
+    /// for these two would therefore have taken the client-change hooks down
+    /// with them.
+    static let tmuxThemeChangeHooks = ["client-light-theme", "client-dark-theme"]
+
     /// The `set-hook` arguments that make tmux notify a process of client
     /// changes, as one flat tmux argv (`;`-separated commands). Pure, so the
     /// exact registration is testable without a tmux server.
@@ -698,8 +715,29 @@ enum TerminalHost {
     ///   is gone, and the hook removes itself on its first firing after this
     ///   app dies without running its own cleanup.
     static func tmuxClientChangeHookArguments(pid: pid_t) -> [String] {
+        hookArguments(for: tmuxClientChangeHooks, pid: pid)
+    }
+
+    /// The same registration for ``tmuxThemeChangeHooks``, as its own tmux argv:
+    /// a server too old to know these names refuses the whole invocation, and
+    /// this way that costs only the theme hooks (see the constant).
+    ///
+    /// The channel is SIGWINCH again, which is not a coincidence: the resize
+    /// path already throws the screen away and asks the terminal what it paints
+    /// now (`RenderLoop.invalidateDiffCache`), which is exactly what a client's
+    /// new theme needs. Zero new plumbing, and a signal whose default action is
+    /// IGNORE, so a stale hook signalling a recycled PID is harmless.
+    static func tmuxThemeChangeHookArguments(pid: pid_t) -> [String] {
+        hookArguments(for: tmuxThemeChangeHooks, pid: pid)
+    }
+
+    /// One flat tmux argv registering every hook in `hooks` at this process's
+    /// PID index. Shared by both sets rather than written twice: every clause is
+    /// load-bearing in the same way for both, and two copies would be two things
+    /// to keep right.
+    private static func hookArguments(for hooks: [String], pid: pid_t) -> [String] {
         var arguments: [String] = []
-        for hook in tmuxClientChangeHooks {
+        for hook in hooks {
             if !arguments.isEmpty { arguments.append(";") }
             let slot = "\(hook)[\(pid)]"
             arguments += [
@@ -715,8 +753,17 @@ enum TerminalHost {
     /// unsetting one array index leaves the user's other indices untouched
     /// (measured). Pure, for the same testability.
     static func tmuxClientChangeUnhookArguments(pid: pid_t) -> [String] {
+        unhookArguments(for: tmuxClientChangeHooks, pid: pid)
+    }
+
+    /// The same removal for ``tmuxThemeChangeHooks``, ours and only ours.
+    static func tmuxThemeChangeUnhookArguments(pid: pid_t) -> [String] {
+        unhookArguments(for: tmuxThemeChangeHooks, pid: pid)
+    }
+
+    private static func unhookArguments(for hooks: [String], pid: pid_t) -> [String] {
         var arguments: [String] = []
-        for hook in tmuxClientChangeHooks {
+        for hook in hooks {
             if !arguments.isEmpty { arguments.append(";") }
             arguments += ["set-hook", "-gu", "\(hook)[\(pid)]"]
         }
@@ -749,5 +796,50 @@ enum TerminalHost {
         guard isTmux else { return }
         let pid = ProcessInfo.processInfo.processIdentifier
         _ = runTmux(tmuxClientChangeUnhookArguments(pid: pid_t(pid)))
+    }
+
+    /// Registers the theme-change hooks for this process, so tmux pushes a
+    /// SIGWINCH whenever a client switches to a light or a dark theme — which
+    /// makes the app ask the terminal what it paints now.
+    ///
+    /// Its own invocation, and its own failure: a tmux that does not know these
+    /// hook names refuses the command, and the client-change hooks registered by
+    /// ``installTmuxClientChangeHooks()`` are unaffected either way. Returns
+    /// whether registration succeeded; failure is tolerated, and the app then
+    /// notices a theme change only when something else throws the screen away.
+    @discardableResult
+    static func installTmuxThemeChangeHooks() -> Bool {
+        guard isTmux else { return false }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        return runTmux(tmuxThemeChangeHookArguments(pid: pid_t(pid))) != nil
+    }
+
+    /// Removes this process's theme-change hooks; the graceful-shutdown half of
+    /// ``installTmuxThemeChangeHooks()``, and safe when nothing is registered.
+    static func removeTmuxThemeChangeHooks() {
+        guard isTmux else { return }
+        let pid = ProcessInfo.processInfo.processIdentifier
+        _ = runTmux(tmuxThemeChangeUnhookArguments(pid: pid_t(pid)))
+    }
+
+    /// Registers every tmux hook this process wants: the client changes that
+    /// alter which terminal paints our output, and the theme changes that alter
+    /// what it paints them in.
+    ///
+    /// Two `set-hook` invocations rather than one, which is this function's
+    /// whole reason for existing as well as an implementation detail its caller
+    /// does not need: tmux stops at the first command it refuses, so a server
+    /// too old for ``tmuxThemeChangeHooks`` would otherwise lose the
+    /// client-change hooks with them. Each half fails on its own and is
+    /// tolerated on its own.
+    static func installTmuxHooks() {
+        installTmuxClientChangeHooks()
+        installTmuxThemeChangeHooks()
+    }
+
+    /// Removes everything ``installTmuxHooks()`` registered, ours and only ours.
+    static func removeTmuxHooks() {
+        removeTmuxClientChangeHooks()
+        removeTmuxThemeChangeHooks()
     }
 }

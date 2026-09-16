@@ -276,8 +276,13 @@ extension AppRunner {
         // signals.install() so the SIGWINCH source exists before the first
         // hook can fire. Failure (a tmux too old for these hooks) is tolerated:
         // the app then adapts only on real resizes.
+        // Also the hooks for a client switching its THEME, which changes what
+        // the pane is painted in without changing which client is attached; they
+        // ride the same SIGWINCH, and go out as their own `set-hook` invocation
+        // so a tmux too old for them cannot take the rest down with them (see
+        // `TerminalHost.installTmuxHooks`).
         if TerminalHost.isTmux {
-            TerminalHost.installTmuxClientChangeHooks()
+            TerminalHost.installTmuxHooks()
         }
 
         // Apply the initial mouse-tracking mode based on the scene's
@@ -749,7 +754,7 @@ extension AppRunner {
         // hooks' own `||` arm removes them on their next firing instead (see
         // `TerminalHost.tmuxClientChangeHookArguments`).
         if TerminalHost.isTmux {
-            TerminalHost.removeTmuxClientChangeHooks()
+            TerminalHost.removeTmuxHooks()
         }
         // Give the terminal back the images this app put in it, while there is
         // still a terminal to write to. A transmitted image is retained under

@@ -1745,6 +1745,31 @@ Steady state — no client changes, no resizes — runs **no subprocess at all**
 A tmux too old for these hooks degrades gracefully: registration fails, and
 the app adapts only on real SIGWINCHes.
 
+**A client's THEME, on the same channel — measured 2026-09-15 (tmux 3.7c).** A
+client that switches between a light and a dark theme changes what the pane is
+painted in without changing which client is attached, so none of the three hooks
+above fires. tmux does know — it sets mode 2031 on its clients at attach and
+reads the `CSI ? 997` they send (see "Colour-palette update notifications") — and
+it offers `client-light-theme` and `client-dark-theme`. TUIkit registers both,
+identically to the three above (global, PID-indexed, `run-shell -b`, SIGWINCH,
+self-cleaning), because the resize path already throws the screen away and asks
+the terminal for its colours again, which is exactly what a new theme needs.
+
+**In their own `set-hook` invocation**, and that is measured rather than
+cautious: on a private socket with an empty config, both names were accepted and
+appeared in `show-hooks -g`, while an unknown hook name was refused with
+`invalid option: …` and a non-zero exit — **and the commands after it in the same
+argv did not run**. With a bogus name first, the real hook that followed it was
+never set; with the bogus name last, the real one before it was. So sharing one
+invocation with the client-change hooks would let a tmux too old for these two
+take the other three down with it.
+
+*Unmeasured:* whether either hook actually fires on a real client's theme change,
+which needs a terminal that reports its theme attached to tmux and its appearance
+changed under it. What is measured is that tmux accepts the registration, and
+that the hook body — a backgrounded `kill -s WINCH` — is the same one the three
+client-change hooks have been firing all along.
+
 **The attach race (measured).** `client-attached` fires — and the hook-driven
 probe runs — BEFORE the new client's XTVERSION reply has arrived, so
 `#{client_termtype}` is empty at that instant even for a terminal that names
@@ -2161,9 +2186,10 @@ back. It asks only when stdin is a TTY in raw mode.
   reached the client in 0.15–0.9 ms while the fence was still outstanding), and
   the answer comes back as a late reply, below.
 - **Asked again when the screen is thrown away:** on a resize, on a resumed
-  suspend, and on the tmux client change our hooks turn into a SIGWINCH — each
-  of them a moment when the terminal in front of the user may be a different
-  one. The whole request goes out again, the default pair included, since the
+  suspend, and on the tmux client change — or, since 2026-09-15, the tmux client
+  THEME change — that our hooks turn into a SIGWINCH; each of them a moment when
+  the terminal in front of the user may be a different one, or the same one
+  painting differently. The whole request goes out again, the default pair included, since the
   pair belongs to whichever client answers now. A terminal that has never said
   anything of its own about its colours is left alone, unless this is tmux (the
   silent client may not be the one attached now) or it has reported its own
@@ -3977,6 +4003,11 @@ until that run records it, with the host's version.
   terminal reports its own palette changes while the app runs and stops the
   moment it suspends or quits. See "Colour-palette update notifications
   (mode 2031)".
+- `TerminalHost.installTmuxThemeChangeHooks()` — the tmux half of the same
+  question: `client-light-theme` and `client-dark-theme`, registered in their own
+  invocation so a tmux that does not know them cannot take the client-change
+  hooks down too, and firing the same backgrounded SIGWINCH. See "Identifying the
+  client terminal".
 - `TerminalColorRequester` — when the terminal is asked again. Under tmux the
   first frame is followed by the sixteen-slot request the startup exchange left
   out, written and not waited for, because tmux holds the fence about half a
