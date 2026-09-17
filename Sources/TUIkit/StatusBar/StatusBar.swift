@@ -557,6 +557,7 @@ private struct _StatusBarCore: View, Renderable {
         return result
     }
 
+    @MainActor
     private func applyHitTestRegions(
         buffer: FrameBuffer,
         layouts: [ItemLayout],
@@ -574,7 +575,7 @@ private struct _StatusBarCore: View, Renderable {
         // Per-frame motion request — the dispatcher only emits
         // .entered / .exited transitions when motion tracking is
         // active.
-        dispatcher.requestFeature(.motion)
+        dispatcher.requestFeature(.motion, in: context)
         guard let statusBarState = context.environment.statusBar else { return buffer }
         let captureSynthesizeKey = context.environment.synthesizeKeyEvent
 

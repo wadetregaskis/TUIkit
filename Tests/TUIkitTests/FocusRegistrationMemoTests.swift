@@ -23,11 +23,11 @@ import Testing
 /// `FocusRegistration.register`, the single registrar every interactive control
 /// goes through, and draws whether it holds the focus.
 ///
-/// A real `Button` would do as well but for its hit-test region, which
-/// `RenderCache.isStorable` refuses outright — that gate is phase 3's to lift,
-/// and until then a Button can only be memoized where no mouse dispatcher is
-/// wired. The mark is the same width either way, so a served buffer reads as the
-/// wrong mark rather than as a different layout.
+/// A real `Button` would do as well — its hit-test region no longer holds it
+/// out of the cache (`MouseRegionMemoTests`) — but it would bring a mouse
+/// registration and a motion request of its own to cases that are about the
+/// focus ring. The mark here is the same width focused or not, so a served
+/// buffer reads as the wrong mark rather than as a different layout.
 private struct FocusProbe: View, Renderable {
     let focusID: String
 

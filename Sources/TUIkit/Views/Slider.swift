@@ -549,6 +549,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
     /// (which routes wheel + arrow + track behaviour) and emits
     /// its hit-test region. The handler is composed from the
     /// per-axis helpers below.
+    @MainActor
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
@@ -568,7 +569,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
 
         let focusManager = context.environment.focusManager
         let track = TrackGeometry(left: 2, width: drawnTrackWidth)  // 2 = "◀ "

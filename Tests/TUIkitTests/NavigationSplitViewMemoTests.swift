@@ -7,12 +7,11 @@
 //  registrations go into a focus manager emptied the same way, which no memo
 //  may serve.
 //
-//  No split view can be served today: its buffer carries hit-test regions (3
-//  for an enabled two-column split, 2 for a disabled one, measured with the
-//  environment's mouse dispatcher set to nil), and a buffer with regions is
-//  never stored. So these tests pin the declarations and the recorded chords
-//  themselves, rather than a served frame. The day the hit-region gate goes,
-//  they are what keeps a served split correct.
+//  A split's buffer carries hit-test regions, and those no longer hold it out
+//  of the cache: the handlers behind them are replayed as the chords are. What
+//  decides a split now is its focus manager — with one, its sections declare an
+//  effect no memo can make again; without one, everything it registers is
+//  replayable. These tests pin both, and the recorded chords themselves.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -112,12 +111,15 @@ struct NavigationSplitViewMemoTests {
         #expect(tracker.sideEffects >= 1, "\(shape): the section registrations were not declared")
     }
 
-    @Test("A split's sidebar chords count as a replayable effect, and nothing else in it declares without a focus manager")
+    @Test("A split's chords and its mouse handlers are replayable, and without a focus manager nothing in it is not")
     func chordsCountAsReplayable() {
         let harness = SplitHarness(focus: false)
         let tracker = VolatileReadTracker()
         harness.frame(split(VisibilityBox()), tracker: tracker)
-        #expect(tracker.replayableEffects == 1)
+        // One for the chords and one per column handler. Counted exactly on
+        // purpose: an unreplayable registration hidden among them is what would
+        // quietly stop a split being served.
+        #expect(tracker.replayableEffects == 3)
         #expect(tracker.sideEffects == 0)
     }
 
@@ -133,7 +135,9 @@ struct NavigationSplitViewMemoTests {
         harness.frame(split(box))
         let entries = Array(journal.entries(since: start))
         journal.endRecording()
-        #expect(entries.map(\.kind.name) == ["sidebarChords"])
+        // The chords first — registered before any column renders — then a
+        // handler per column.
+        #expect(entries.map(\.kind.name) == ["sidebarChords", "mouseHandler", "mouseHandler"])
 
         // A later walk, whose registry is empty, served from those entries.
         harness.beginWalk()

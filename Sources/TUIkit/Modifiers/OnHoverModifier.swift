@@ -61,7 +61,7 @@ extension OnHoverModifier: Renderable {
         // Ask the dispatcher to enable motion reporting for this
         // frame — necessary because the terminal only emits
         // `.moved` events when motion tracking is active.
-        dispatcher.requestFeature(.motion)
+        dispatcher.requestFeature(.motion, in: context)
 
         let capturedAction = action
         // An OBSERVER, not an ordinary region. This region goes on after the

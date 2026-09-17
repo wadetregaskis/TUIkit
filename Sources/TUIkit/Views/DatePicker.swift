@@ -475,6 +475,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
     /// under the cursor; the wheel steps the component under the pointer (the
     /// active one if the pointer is on a separator) and is swallowed, so it
     /// never also scrolls an enclosing page.
+    @MainActor
     private func registerMouse(
         context: RenderContext, buffer: inout FrameBuffer, handler: DatePickerHandler,
         cells: [DateFieldModel.Cell], isDisabled: Bool
@@ -489,7 +490,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                 identity: context.identity, propertyIndex: StateIndex.isHovered),
             default: false)
         // An editable field answers the pointer like every other control.
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
         let handlerID = mouseDispatcher.register(in: context) { event in
             switch event.phase {
             case .entered, .moved:

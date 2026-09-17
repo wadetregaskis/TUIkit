@@ -654,6 +654,7 @@ enum DropdownMenu {
     /// (highest priority for their cells). Rows start at y=1 (after the top
     /// border). Divider rows get no region — clicks on them land in the
     /// catcher and are consumed.
+    @MainActor
     private static func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         config: Configuration,
@@ -670,8 +671,8 @@ enum DropdownMenu {
         // tracking needs DRAG reports — a held move is reported as a drag, not
         // as motion. (The collapsed control usually asked for both already;
         // this is idempotent.)
-        mouseDispatcher.requestFeature(.motion)
-        mouseDispatcher.requestFeature(.drag)
+        mouseDispatcher.requestFeature(.motion, in: context)
+        mouseDispatcher.requestFeature(.drag, in: context)
         let rows = config.rows
         let scroll = config.scroll
         let innerWidth = config.innerWidth

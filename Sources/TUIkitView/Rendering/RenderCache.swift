@@ -706,9 +706,12 @@ extension RenderCache {
     ///   controls suppress their hit-test regions while measuring — and it
     ///   CLOBBERS, since a non-`Layoutable` ancestor renders its children once
     ///   per measure and again per render at a different size.
-    /// - **Regions or overlays** mean an interactive subtree. A region names a
-    ///   handler by an id that outlives the frame, but the closure it names is
-    ///   registered by the render this would skip.
+    /// - **An overlay** is a layer this buffer has not composited yet: what it
+    ///   draws, and where, is settled by the frame rather than by this subtree.
+    ///   Hit-test **regions** were refused here too, for a reason that no
+    ///   longer holds — a region names its handler by an id, that id is the
+    ///   control's own (`MouseHandlerIDTable`), and the closure behind it is
+    ///   registered again on every hit from the effect journal.
     /// - **A volatile read** means the next frame differs even though the value
     ///   compares equal — a cached `Spinner` would freeze.
     /// - **An invalidation during the render** — an environment change or a
@@ -726,7 +729,6 @@ extension RenderCache {
         invalidatedDuringRender: Bool
     ) -> Bool {
         !context.isMeasuring
-            && buffer.hitTestRegions.isEmpty
             && buffer.overlays.isEmpty
             && !readVolatile
             && !invalidatedDuringRender

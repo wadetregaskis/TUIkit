@@ -542,7 +542,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             // Ask the dispatcher to enable motion reporting this
             // frame so the hover state machine sees .moved
             // events.
-            mouseDispatcher.requestFeature(.motion)
+            mouseDispatcher.requestFeature(.motion, in: context)
 
             let focusManager = context.environment.focusManager
             let captureFocusID = persistedFocusID

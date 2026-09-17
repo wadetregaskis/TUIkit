@@ -631,6 +631,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     /// caret at the clicked line/column (mapping the click through the current
     /// scroll offsets), and dragging extends a selection from the press point.
     /// Shift-click extends the existing selection instead of starting a new one.
+    @MainActor
     private func registerMouse(
         context: RenderContext, buffer: inout FrameBuffer, handler: TextEditorHandler,
         contentWidth: Int, height: Int, focusID: String, isDisabled: Bool
@@ -639,7 +640,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
         // Drag reporting is needed for click-and-drag selection.
-        mouseDispatcher.requestFeature(.drag)
+        mouseDispatcher.requestFeature(.drag, in: context)
         let focusManager = context.environment.focusManager
 
         // Map a buffer-local (x, y) to a text position through the scroll

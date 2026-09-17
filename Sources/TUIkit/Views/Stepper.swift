@@ -565,6 +565,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
     /// value / right-arrow regions mirrors the macOS / SwiftUI
     /// behaviour: clicking the numeric area moves the keyboard
     /// caret into the control without perturbing its value.
+    @MainActor
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
@@ -580,7 +581,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
 
         let focusManager = context.environment.focusManager
         let totalWidth = buffer.width

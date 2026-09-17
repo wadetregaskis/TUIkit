@@ -540,7 +540,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             // Ask the dispatcher to enable motion reporting this
             // frame so .moved events come through and feed the
             // hover state machine.
-            mouseDispatcher.requestFeature(.motion)
+            mouseDispatcher.requestFeature(.motion, in: context)
 
             // A menu row is not a focus stop, so clicking one must not try to
             // move the focus onto an id nothing registered; the click just runs

@@ -87,7 +87,7 @@ extension HelpModifier: Renderable {
 
         // Hover needs the terminal's any-event motion mode, requested per frame
         // exactly as `.onHover` requests it.
-        dispatcher.requestFeature(.motion)
+        dispatcher.requestFeature(.motion, in: context)
 
         let captured = text
         let trigger = context.environment.tooltipTrigger

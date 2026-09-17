@@ -30,10 +30,11 @@ private struct IdentityProbe: View, Renderable {
     }
 }
 
-/// Proves the `_MemoizedRow` safety gate: an inert row is memoized, but a row
-/// whose content is interactive (emits hit-test regions / overlays) is NOT —
-/// because the render cache deliberately does not invalidate on the per-frame
-/// pulse tick, so a cached *focused, animating* control would freeze. @State
+/// Proves the `_MemoizedRow` safety gate: an inert row is memoized, a row that
+/// reads a per-frame-volatile value is NOT — the render cache deliberately does
+/// not invalidate on the pulse tick, so a cached *animating* control would
+/// freeze — and an interactive row IS, because the registration behind its
+/// hit-test region is made again on every hit (`EffectJournal`). @State
 /// changes are a separate matter: they already invalidate the cache via
 /// `StateBox.didSet` → `clearAffected`, so stateful rows stay correct (covered
 /// by `RenderCacheTests` / `StateBindingIdentityTests`).
@@ -70,8 +71,8 @@ struct MemoizedRowGateTests {
         #expect(cache.stats.hits >= 1)  // second render was a hit
     }
 
-    @Test("Interactive row is NOT memoized: gate excludes hit-test regions")
-    func interactiveRowIsNotMemoized() {
+    @Test("Interactive row IS memoized: the handler behind its region is replayed")
+    func interactiveRowIsMemoized() {
         let cache = RenderCache()
         let context = makeContext(cache: cache)
 
@@ -79,7 +80,13 @@ struct MemoizedRowGateTests {
         let buffer = renderToBuffer(row, context: context)
 
         #expect(!buffer.hitTestRegions.isEmpty)  // it really is interactive
-        #expect(cache.isEmpty)  // gate refused to cache it
+        // The gate used to refuse any buffer carrying a region, because the
+        // closure the region's id names is registered by the render a hit
+        // skips. Both halves of that are answered now: the id is the control's
+        // own (`MouseHandlerIDTable`) rather than its place in the walk, and
+        // the registration is replayed from the effect journal. What a served
+        // row then does under the pointer is `MouseRegionMemoTests`.
+        #expect(cache.count == 1)
     }
 
     /// An `Image` records its appearance every frame and registers a

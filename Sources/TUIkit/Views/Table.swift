@@ -2814,6 +2814,7 @@ where Value.ID: Hashable {
     ///
     /// The header line is `y = 1`: the container's top border is `y = 0` and
     /// the rows start below it (see the layout sketch above).
+    @MainActor
     private func attachHeaderSortHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,

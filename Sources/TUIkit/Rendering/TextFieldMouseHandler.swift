@@ -45,6 +45,7 @@ enum TextFieldMouseHandler {
     ///   - disclosureRange: The buffer-x columns of the combo box's `▾`
     ///     disclosure, when the field has one. A click there toggles the
     ///     suggestions menu instead of positioning the caret.
+    @MainActor
     static func register(
         buffer: inout FrameBuffer,
         context: RenderContext,
@@ -62,8 +63,8 @@ enum TextFieldMouseHandler {
 
         // Motion drives the hover machine (.entered / .exited); drag drives
         // click-and-drag selection.
-        mouseDispatcher.requestFeature(.motion)
-        mouseDispatcher.requestFeature(.drag)
+        mouseDispatcher.requestFeature(.motion, in: context)
+        mouseDispatcher.requestFeature(.drag, in: context)
 
         let focusManager = context.environment.focusManager
         let captureFocusID = persistedFocusID

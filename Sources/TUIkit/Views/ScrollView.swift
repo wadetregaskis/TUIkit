@@ -755,6 +755,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     ///     reach it without the user having to Tab to it.
     /// The region is inserted at the front of the array so any interactive child
     /// inside the content still wins its clicks (this is the fall-through).
+    @MainActor
     private func attachViewportMouseHandler(
         to buffer: inout FrameBuffer, context: RenderContext, handler: ScrollViewHandler,
         persistedFocusID: String, viewportWidth: Int, viewportHeight: Int, wantsHorizontal: Bool

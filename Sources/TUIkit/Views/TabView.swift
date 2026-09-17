@@ -521,6 +521,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// shorter one is revealed entirely. The handler is inert and the
     /// region sits at the BACK of the dispatch order, so the tab-strip
     /// click regions and interactive tab content keep winning every click.
+    @MainActor
     private func attachRevealRegion(
         to buffer: inout FrameBuffer, persistedFocusID: String, context: RenderContext
     ) {
@@ -543,6 +544,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     }
 
     /// Registers a click handler per tab region (selecting that tab).
+    @MainActor
     private func attachTabClicks(
         to buffer: inout FrameBuffer,
         regions: [(x: Int, y: Int, width: Int, height: Int, index: Int)],
@@ -552,7 +554,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let captureFocusID = persistedFocusIDForClicks(context)
         let focusManager = context.environment.focusManager
         // A tab is a click target, so it answers the pointer like one.
-        dispatcher.requestFeature(.motion)
+        dispatcher.requestFeature(.motion, in: context)
         let hoverBox = hoveredTabBox(context: context)
         for region in regions {
             let value = tabs[region.index].value

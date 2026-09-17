@@ -347,6 +347,7 @@ extension _NavigationSplitViewCore {
     /// Tab stop, but it keeps its cell: removing it would move every column one
     /// cell whenever the enabled state flips, where the dividers only change
     /// glyphs.
+    @MainActor
     func wireEdge(
         context: RenderContext, focusManager: FocusManager?, toggleState: SplitViewToggleState?
     ) -> EdgeWiring {
@@ -381,7 +382,7 @@ extension _NavigationSplitViewCore {
 
         var mouseHandlerID: HitTestRegion.HandlerID?
         if let mouseDispatcher = context.environment.mouseEventDispatcher {
-            mouseDispatcher.requestFeature(.motion)
+            mouseDispatcher.requestFeature(.motion, in: context)
             let captureHandler = handler
             mouseHandlerID = mouseDispatcher.register(in: context) { event in
                 switch event.phase {

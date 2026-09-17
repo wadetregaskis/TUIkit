@@ -114,9 +114,10 @@ func renderValueMemoized<Key: Equatable>(
     //   • never a measure-pass buffer (incomplete — interactive controls suppress
     //     their hit-test regions while measuring — and it would clobber the
     //     render-pass entry at a different size every frame);
-    //   • never an interactive subtree (a region names its handler by an id
-    //     that outlives the frame, but the closure behind it is registered by
-    //     the render a hit skips, and a focused control pulses);
+    //   • never a subtree carrying an overlay (a layer this buffer has not
+    //     composited yet, settled by the frame rather than by the subtree). A
+    //     hit-test REGION no longer stops it: its id is the control's own, and
+    //     the handler behind it is registered again from the journal below;
     //   • never a time-varying subtree (a pulse-phase read or an animation
     //     request means the next frame differs even though the value compares
     //     equal — a cached Spinner would freeze, issue #1);

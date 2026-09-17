@@ -400,6 +400,7 @@ struct _Color256GridCore: View, Renderable {
     /// Both carry an inert handler: these exist to be measured, not clicked —
     /// the per-cell regions above own the mouse, and they are registered after
     /// these so they win the hit test.
+    @MainActor
     private func publishRevealRegions(
         to buffer: inout FrameBuffer, cells: [Palette256Layout.Cell], cursor: Int,
         focusID: String, dispatcher: MouseEventDispatcher, context: RenderContext

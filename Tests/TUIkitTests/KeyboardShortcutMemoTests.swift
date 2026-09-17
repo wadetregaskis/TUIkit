@@ -63,11 +63,11 @@ private final class LoopHarness {
     /// Renders one frame and returns how many memo lookups missed — zero when
     /// every memoized subtree was served.
     ///
-    /// No mouse dispatcher: a `Button` emits a hit-test region wherever one is
-    /// wired, and `RenderCache.isStorable` refuses any buffer carrying one — so
-    /// with a dispatcher here every expectation below would read as "declines"
-    /// whatever a shortcut declared. Lifting that gate is the mouse phase's
-    /// work.
+    /// No mouse dispatcher: wherever one is wired a `Button` also registers a
+    /// hit-test handler and asks for motion, and both are declarations of their
+    /// own — so leaving it out keeps every expectation below about what the
+    /// shortcut declared. The region itself no longer decides anything; see
+    /// `MouseRegionMemoTests`.
     ///
     /// Which is why the context is built from the environment rather than from
     /// the `TUIContext`: `RenderContext.init(…tuiContext:)` injects the

@@ -45,8 +45,8 @@ extension DragGestureModifier: Renderable {
         // own and the framework's — receiving a press and then nothing at all.
         // Per-frame, unioned onto the base, exactly as `.onHover` asks for
         // motion and `DialogDrag` asks for these two.
-        dispatcher.requestFeature(.clicks)
-        dispatcher.requestFeature(.drag)
+        dispatcher.requestFeature(.clicks, in: context)
+        dispatcher.requestFeature(.drag, in: context)
 
         // Reference cell so the start position is shared across the
         // press → drag → release call sequence the same handler will

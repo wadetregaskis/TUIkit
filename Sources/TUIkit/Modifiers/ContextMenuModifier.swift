@@ -198,6 +198,7 @@ extension ContextMenuModifier: Renderable {
     /// (``MouseEventDispatcher/handOffGesture()``) so the drag and release reach
     /// the menu rather than routing back here — see ``Button/menuTrigger()``,
     /// which is the same move for a pull-down.
+    @MainActor
     private func attachTrigger(
         to buffer: inout FrameBuffer, state: ContextMenuState, context: RenderContext
     ) {

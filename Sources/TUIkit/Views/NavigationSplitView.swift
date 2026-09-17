@@ -646,6 +646,7 @@ extension _NavigationSplitViewCore {
     /// `currentWidth` is the width `column` is rendering at THIS frame,
     /// and is what every resize steps from (see
     /// ``_SplitDividerHandler/currentWidth``).
+    @MainActor
     fileprivate func wireDivider(
         column: NavigationSplitViewColumn,
         togglesColumn: Bool,
@@ -735,7 +736,7 @@ extension _NavigationSplitViewCore {
         if let mouseDispatcher = context.environment.mouseEventDispatcher {
             // Enable motion reporting so the dispatcher can synthesise the
             // hover enter/exit transitions that pulse the grip dots.
-            mouseDispatcher.requestFeature(.motion)
+            mouseDispatcher.requestFeature(.motion, in: context)
             let captureWidths = widths
             let captureHandler = handler
             let captureFocus = focusManager

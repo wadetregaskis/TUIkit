@@ -155,10 +155,19 @@ extension MouseEventDispatcher {
     ///
     /// The entry point for everything a render walk registers; the id is
     /// interned per `(identity, slot)` — see ``MouseHandlerIDTable``.
+    ///
+    /// The handler table is emptied before every walk, so a control served from
+    /// a value memo would leave the region in its stored buffer naming nothing
+    /// — a `Button` still on screen that no click could reach. Registering again
+    /// is all it takes, so this declares a REPLAYABLE effect and records the
+    /// registration in the effect journal while a memo is recording; every hit
+    /// files the same closure under the same id, at the point in the walk where
+    /// the control would have rendered. See ``MouseHandlerRegistrar``.
+    @MainActor
     func register(
         in context: RenderContext, _ handler: @escaping (MouseEvent) -> Bool
     ) -> HitTestRegion.HandlerID {
-        register(id: handlerIDs.id(registeredIn: context), handler)
+        registerInterned(handler, isHoverObserver: false, in: context)
     }
 
     /// Registers `handler`, with the pointer's enter/exit tracked into
@@ -174,6 +183,7 @@ extension MouseEventDispatcher {
     /// Both phases are consumed, as all three copies did: a synthetic
     /// enter/exit belongs to whichever region the dispatcher resolved it
     /// against, and passing it on would offer it to the control underneath.
+    @MainActor
     func register(
         in context: RenderContext, hoverBox: StateBox<Bool>,
         _ handler: @escaping (MouseEvent) -> Bool
@@ -220,11 +230,88 @@ extension MouseEventDispatcher {
     ///
     /// Named apart from ``register(in:_:)`` rather than given a label: both take
     /// a single closure, and a trailing closure would match either.
+    @MainActor
     func registerHoverObserver(
         in context: RenderContext, _ handler: @escaping (MouseEvent) -> Bool
     ) -> HitTestRegion.HandlerID {
-        let id = register(in: context, handler)
-        noteHoverObserver(id)
+        registerInterned(handler, isHoverObserver: true, in: context)
+    }
+
+    /// Mints this control's id, files `handler` under it, and — while a value
+    /// memo records — records the registration so a hit can make it again.
+    ///
+    /// The lane is a parameter rather than a second registration path so that
+    /// an observer's replay puts it back on the observer lane: a replayed
+    /// `.onHover` filed as an ordinary region would take the hover away from
+    /// the control it wraps.
+    ///
+    /// `@MainActor`, as every `Renderable.renderToBuffer` that calls it already
+    /// is: the recorded closure holds the handler, which is not `Sendable`, so
+    /// it can only be built where the render walk runs.
+    @MainActor
+    private func registerInterned(
+        _ handler: @escaping (MouseEvent) -> Bool, isHoverObserver: Bool,
+        in context: RenderContext
+    ) -> HitTestRegion.HandlerID {
+        let id = handlerIDs.id(registeredIn: context)
+        MouseHandlerRegistrar.register(
+            id: id, handler: handler, isHoverObserver: isHoverObserver, into: self)
+        // A measure pass registers nothing a frame can be served from: the
+        // controls that emit regions suppress them while measuring, and the id
+        // above names no control. Nothing to declare, and nothing to replay.
+        guard !context.isMeasuring else { return id }
+        context.environment.volatileReadTracker?.recordReplayableEffect()
+        guard let journal = context.recordingEffectJournal else { return id }
+        // Built only while a memo records, so the live path allocates no second
+        // closure. The id is captured rather than minted again: it is the one
+        // baked into the region of the buffer this memo is about to store, and
+        // a replay must not consume the slot a live registration will ask for.
+        journal.append(
+            EffectJournal.Entry(
+                kind: MouseHandlerRegistrar.kind, channelToken: context.environment.keyChannelToken
+            ) { replay in
+                MouseHandlerRegistrar.register(
+                    id: id, handler: handler, isHoverObserver: isHoverObserver, context: replay)
+            })
         return id
+    }
+}
+
+// MARK: - Registration
+
+/// The mouse registrations a render walk makes, shared by the live render and
+/// by a value memo replaying them — see `EffectJournal`.
+enum MouseHandlerRegistrar {
+    /// The journal kind of a hit-test handler registration.
+    static let kind = EffectJournal.Kind("mouseHandler")
+
+    /// The journal kind of a per-frame mouse feature request.
+    static let featureKind = EffectJournal.Kind("mouseFeature")
+
+    /// Files `handler` under `id` in `dispatcher`, on the lane
+    /// `isHoverObserver` names.
+    static func register(
+        id: HitTestRegion.HandlerID, handler: @escaping (MouseEvent) -> Bool,
+        isHoverObserver: Bool, into dispatcher: MouseEventDispatcher
+    ) {
+        _ = dispatcher.register(id: id, handler)
+        if isHoverObserver { dispatcher.noteHoverObserver(id) }
+    }
+
+    /// The same, into the dispatcher `context` carries rather than a captured
+    /// one, so a replay registers into the services of the frame that serves
+    /// the subtree rather than the one that stored it.
+    static func register(
+        id: HitTestRegion.HandlerID, handler: @escaping (MouseEvent) -> Bool,
+        isHoverObserver: Bool, context: RenderContext
+    ) {
+        guard let dispatcher = context.environment.mouseEventDispatcher else { return }
+        register(id: id, handler: handler, isHoverObserver: isHoverObserver, into: dispatcher)
+    }
+
+    /// Asks `context`'s dispatcher for `feature`, for the same reason and in
+    /// the same way — see ``MouseEventDispatcher/requestFeature(_:in:)``.
+    static func requestFeature(_ feature: MouseFeature, context: RenderContext) {
+        context.environment.mouseEventDispatcher?.requestFeature(feature)
     }
 }

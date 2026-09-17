@@ -695,6 +695,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// multi-view label's subtitle nor the controls ``View/toggleContent(_:)``
     /// carries is a click target: clicking a slider under a toggle must move
     /// the slider, not flip the switch out from under it.
+    @MainActor
     private func registerPointer(
         on buffer: inout FrameBuffer, focusID persistedFocusID: String,
         hoverBox: StateBox<Bool>, clickWidth: Int, clickHeight: Int, isDisabled: Bool,
@@ -703,7 +704,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
         let focusManager = context.environment.focusManager
         let captureFocusID = persistedFocusID
         let toggleBinding = isOn

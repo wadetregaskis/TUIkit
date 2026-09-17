@@ -244,6 +244,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// its hit-test region. A click on the collapsed control
     /// toggles the drop-down and grants focus; hover transitions
     /// drive the visual affordance.
+    @MainActor
     private func attachCollapsedMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
@@ -258,7 +259,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         guard !isDisabled, !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         else { return }
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
         let focusManager = context.environment.focusManager
         let mouseHandlerID = mouseDispatcher.register(in: context) { event in
             switch event.phase {

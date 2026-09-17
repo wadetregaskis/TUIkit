@@ -69,11 +69,11 @@ struct EquatableViewEffectGateTests {
         environment.statusBar = StatusBarState()
         environment.renderCache = RenderCache()
         environment.preferenceStorage = tuiContext.preferences
-        // No mouse dispatcher. `.focusable()` registers a hit-test region when
-        // one is wired, and `RenderCache.isStorable` refuses any buffer carrying
-        // one — so with a dispatcher here the focus cases below would measure
-        // that gate instead of this suite's, and would read as "declines" no
-        // matter what a focus registration declared.
+        // No mouse dispatcher. A hit-test region no longer decides anything —
+        // the handler behind it is replayed like the rest — but a control under
+        // a dispatcher registers that handler and asks for motion, and each of
+        // those is a declaration of its own. Leaving it out keeps every case
+        // below measuring exactly the registration it names.
         environment.mouseEventDispatcher = nil
         return RenderContext(
             availableWidth: 40,

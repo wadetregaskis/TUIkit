@@ -298,10 +298,10 @@ private struct TalliedButton: View, @MainActor Equatable {
 /// `EquatableView` used to store its rendered buffer unconditionally. That
 /// cached measure-pass buffers (incomplete — interactive controls suppress
 /// their hit-test regions while measuring — and the measure-size entry
-/// clobbered the render-size one every frame) and interactive buffers (whose
-/// hit-test handlers capture per-frame state). It now applies the same gate
-/// as `_MemoizedRow`; these tests pin each branch. The time-varying branch
-/// (Spinner/`requestAnimation`) is pinned in `SpinnerRowAnimationTests`.
+/// clobbered the render-size one every frame) and buffers whose subtree made a
+/// per-frame registration the cache could not make again. It now applies the
+/// same gate as `_MemoizedRow`; these tests pin each branch. The time-varying
+/// branch (Spinner/`requestAnimation`) is pinned in `SpinnerRowAnimationTests`.
 @MainActor
 @Suite("EquatableView cache-safety gates", .serialized)
 struct EquatableViewGateTests {
@@ -336,8 +336,8 @@ struct EquatableViewGateTests {
             "the second render pass serves the cache")
     }
 
-    @Test("An interactive subtree re-renders every frame (its regions are per-frame state)")
-    func interactiveContentNotCached() {
+    @Test("A FOCUSED control re-renders every frame, region or no region")
+    func focusedContentNotCached() {
         let tally = RenderTally()
         let view = EquatableView(content: TalliedButton(title: "Press", tally: tally))
         let renderContext = context(TUIContext())
@@ -346,7 +346,11 @@ struct EquatableViewGateTests {
         let second = renderToBuffer(view, context: renderContext)
         #expect(!first.hitTestRegions.isEmpty, "the button registers a hit region")
         #expect(!second.hitTestRegions.isEmpty)
-        #expect(tally.count == 2, "interactive content declines the cache")
+        // Not because of the region — the handler behind that is replayed
+        // (`MouseRegionMemoTests`) — but because this button is the only focus
+        // stop here, so it takes the focus as it registers, and a control whose
+        // buffer draws the focus ring is one a hit cannot stand in for.
+        #expect(tally.count == 2, "a focused control declines the cache")
     }
 
     @Test("Static content still caches (the gates cost nothing where safe)")

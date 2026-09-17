@@ -480,9 +480,8 @@ declines when it:
 - was produced by a **measure pass** (incomplete: interactive controls suppress
   their hit-test regions while measuring, and it was produced at a different
   size);
-- contains **hit-test regions or overlays** (a region names its handler by an
-  id, and though that id is the control's own, nothing re-registers the closure
-  behind it on a frame the subtree is served rather than rendered);
+- contains an **overlay** (a layer the buffer has not composited yet: what it
+  draws, and where, is settled by the frame rather than by the subtree);
 - **read a time-varying value** or requested an animation (a cached ``Spinner``
   would freeze);
 - **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
@@ -500,14 +499,16 @@ subtree declines the cache.
 A key handler (`onKeyPress`, or the <kbd>Ctrl</kbd>-<kbd>R</kbd> binding of
 `.refreshable`), a status-bar item (`.statusBarItems`), an unfocused control's
 place in the focus ring (`FocusRegistration.register`), an inactive
-`.focusSection` and a `Button`'s `.keyboardShortcut` do not decline the cache. While a memoized subtree renders on a
+`.focusSection`, a `Button`'s `.keyboardShortcut`, and a hit-test handler with
+the mouse features its control asks for, do not decline the cache. While a memoized subtree renders on a
 miss, each such registration is also recorded, and the recording is stored with
 the buffer. Every hit then makes those registrations again, in the order they
 were made, at the point in the walk where the subtree would have rendered. So
-the dispatcher sees the same handlers in the same precedence, the status bar the
-same items with the same per-section replacement, and Tab the same ring in the
-same order, whether a row rendered or was served; and a frame the render loop
-walks twice gets them once per walk.
+the key dispatcher sees the same handlers in the same precedence, the status bar
+the same items with the same per-section replacement, Tab the same ring in the
+same order, and the mouse dispatcher the same closure under the same id as the
+region the buffer carries, whether a row rendered or was served; and a frame the
+render loop walks twice gets them once per walk.
 
 Three rules keep that equivalent to rendering:
 
@@ -558,17 +559,21 @@ for real, and the verifier compares the kinds and number of registrations that
 render makes against the stored ones.
 
 An inline menu's paging keys and a split view's sidebar chords are recorded the
-same way, and what is left standing between them and a served frame is the
-hit-test region. A buffer carrying one is never stored, and every `Button` adds
-one wherever a mouse dispatcher is wired — which is everywhere in a running app,
-so a menu's rows are storable today only where nothing is listening for the
-mouse. A split view's own buffer carries regions as well.
+same way, and so is the mouse. A handler id is the control's own — interned per
+view identity and slot rather than counted off in registration order — so the id
+baked into a stored buffer's regions still names the control it was taken from
+on every frame that serves it, and the replay files that control's own closure
+back under it. The per-frame feature requests that go with it (`.motion` for a
+control that lifts under the pointer, `.drag` for one that tracks it) are
+recorded beside it, because they lapse every walk as well: without them a page
+whose only hovering control was memoized would stop being told where the pointer
+is at all.
 
-The mouse phase has taken its first step: a handler id is the control's own now,
-interned per view identity and slot instead of being counted off in registration
-order, so an id baked into a stored buffer's regions still names the control it
-was taken from on the frames that serve it. Lifting the gate itself waits on the
-registration being replayed, which nothing does yet.
+A dimmed subtree is the one place where a region and its handler part company,
+and they part the right way. `.dimmed()` flattens its content to an inert
+picture and drops the regions with the rest of it, while the throwaway key
+channels it renders under keep everything it registered out of the memo above
+it — so nothing is left for a click to reach, which is what dimming means.
 
 ### Keeping Nested Entries Alive
 

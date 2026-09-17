@@ -17,6 +17,7 @@ extension _ScrollViewCore {
     /// the front of the regions array *before* the viewport handler's own
     /// `insert(at: 0)` pushes it back one, so the bar is hit-tested ahead of the
     /// viewport for its column (the viewport still wins everywhere else).
+    @MainActor
     func attachScrollbarMouseHandler(
         to buffer: inout FrameBuffer, contentWidth: Int,
         handler: ScrollViewHandler, focusID persistedFocusID: String, context: RenderContext
@@ -26,7 +27,7 @@ extension _ScrollViewCore {
               !isDisabled(in: context)
         else { return }
         // The bar's arrows and thumb answer the pointer, which needs motion.
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
         let barHandler = ScrollbarRenderer.verticalMouseHandler(
             for: handler, length: buffer.height,
             arrows: context.environment.scrollbarArrows,
@@ -58,6 +59,7 @@ extension _ScrollViewCore {
     /// chrome, so its click PAGES in its direction, the same move the
     /// scrollbar track answers with; the wheel is not consumed and falls
     /// through to the viewport handler as everywhere else.
+    @MainActor
     func attachIndicatorMouseHandlers(
         to buffer: inout FrameBuffer, contentWidth: Int,
         handler: ScrollViewHandler, context: RenderContext
@@ -95,6 +97,7 @@ extension _ScrollViewCore {
     /// step, track pages/jumps, thumb drags). The region spans `contentWidth` only,
     /// so the bottom-right corner cell (when the vertical bar is also present) stays
     /// inert. A distinct repeat token lets both axes auto-repeat independently.
+    @MainActor
     func attachHorizontalScrollbarMouseHandler(
         to buffer: inout FrameBuffer, contentWidth: Int,
         handler: ScrollViewHandler, focusID persistedFocusID: String, context: RenderContext
@@ -103,7 +106,7 @@ extension _ScrollViewCore {
               let mouseDispatcher = context.environment.mouseEventDispatcher,
               !isDisabled(in: context)
         else { return }
-        mouseDispatcher.requestFeature(.motion)
+        mouseDispatcher.requestFeature(.motion, in: context)
         let barHandler = ScrollbarRenderer.horizontalMouseHandler(
             for: handler.horizontal, length: contentWidth,
             arrows: context.environment.scrollbarArrows,

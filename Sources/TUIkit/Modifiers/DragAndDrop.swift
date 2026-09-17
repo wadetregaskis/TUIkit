@@ -154,6 +154,7 @@ enum _DragHandle {
     /// to). Callback events are localized to the buffer's origin; a drag's
     /// events stay localized to the ORIGINAL press region even when content
     /// re-renders mid-drag (the dispatcher's press capture).
+    @MainActor
     static func install(
         on buffer: inout FrameBuffer,
         context: RenderContext,

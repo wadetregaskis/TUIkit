@@ -83,6 +83,13 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// - `.focusSection`, once per section registered while it is inactive;
     /// - a `Button`'s `.keyboardShortcut`, once per registration whose carrier
     ///   was planted inside the memo now recording;
+    /// - a hit-test handler, once per registration a render walk makes with a
+    ///   mouse dispatcher — the handler table is emptied every walk, and the
+    ///   region naming it travels in the buffer, so a served frame has to file
+    ///   the closure again under the id its region already carries;
+    /// - a mouse feature request, once per `.motion` / `.drag` / `.clicks` /
+    ///   `.scrolling` a control asks for, which is per-frame state in the same
+    ///   way and would otherwise lapse the first time the control was served;
     /// - the buffer memo itself, once per hit that replays a stored subtree's
     ///   registrations, so an enclosing gate sees the same delta whether the
     ///   subtree rendered or was served.

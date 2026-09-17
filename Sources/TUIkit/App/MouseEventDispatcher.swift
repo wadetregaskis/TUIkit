@@ -288,6 +288,10 @@ extension MouseEventDispatcher {
     /// modifier calls this every frame the view is rendered; the
     /// AppRunner takes the union with the base config when deciding
     /// which terminal tracking mode to apply.
+    ///
+    /// A render walk asks through ``requestFeature(_:in:)``, which also records
+    /// the request for the memo that may serve the subtree; this bare form is
+    /// what both that and a replay file through.
     func requestFeature(_ feature: MouseFeature) {
         switch feature {
         case .clicks: requestedFeatures.clicks = true
@@ -295,6 +299,35 @@ extension MouseEventDispatcher {
         case .drag: requestedFeatures.drag = true
         case .motion: requestedFeatures.motion = true
         }
+    }
+
+    /// Asks for `feature` on behalf of the control `context` is rendering.
+    ///
+    /// The request is per-frame state exactly as the handler table is — emptied
+    /// before every walk, refilled by whatever renders — so a control served
+    /// from a value memo would stop asking. A page whose only control that
+    /// lifts under the pointer is memoized would then be told nothing about
+    /// where the pointer is, and its hover would die on the first frame the
+    /// cache answered. So this declares a replayable effect and records the
+    /// request beside the handler registration it accompanies.
+    ///
+    /// Required of every render-walk caller rather than defaulted, so the
+    /// compiler asks the question of the next control somebody writes: the
+    /// silent version of this is a control that stops hearing the pointer on
+    /// the frames it is served.
+    @MainActor
+    func requestFeature(_ feature: MouseFeature, in context: RenderContext) {
+        requestFeature(feature)
+        guard !context.isMeasuring else { return }
+        context.environment.volatileReadTracker?.recordReplayableEffect()
+        guard let journal = context.recordingEffectJournal else { return }
+        journal.append(
+            EffectJournal.Entry(
+                kind: MouseHandlerRegistrar.featureKind,
+                channelToken: context.environment.keyChannelToken
+            ) { replay in
+                MouseHandlerRegistrar.requestFeature(feature, context: replay)
+            })
     }
 
     /// Returns the effective ``MouseSupport`` for the current frame.

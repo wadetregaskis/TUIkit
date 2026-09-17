@@ -21,6 +21,7 @@ enum DialogDrag {
     /// Wires the dialog `buffer`'s title/border cells as a drag handle and
     /// returns the current offset to feed into the centred ``OverlayLayer``.
     /// Returns `(0, 0)` while measuring or when no dispatcher/state is available.
+    @MainActor
     static func offset(
         for buffer: inout FrameBuffer,
         context: RenderContext,
@@ -36,8 +37,8 @@ enum DialogDrag {
 
         if let mouseDispatcher = context.environment.mouseEventDispatcher {
             // Clicks claim the press; drag reporting moves the dialog.
-            mouseDispatcher.requestFeature(.clicks)
-            mouseDispatcher.requestFeature(.drag)
+            mouseDispatcher.requestFeature(.clicks, in: context)
+            mouseDispatcher.requestFeature(.drag, in: context)
             let handlerID = mouseDispatcher.register(in: context) { event in
                 switch event.phase {
                 case .pressed where event.button == .left:

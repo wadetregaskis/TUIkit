@@ -325,6 +325,7 @@ struct _UserResizableCore<Content: View>: View, Renderable {
     /// either invisible (if it is subtle) or damage (if it is not). Marking the
     /// corner and accepting the edges resolves that: the mark says where, and
     /// the target is generous enough to hit.
+    @MainActor
     private func registerDragTarget(
         handler: _UserResizeHandler, axes: ResizableAxes, buffer: inout FrameBuffer,
         focusID: String, context: RenderContext
@@ -332,7 +333,7 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
         // Motion reporting, so the dispatcher can synthesise the hover
         // enter/exit transitions that light the grip.
-        dispatcher.requestFeature(.motion)
+        dispatcher.requestFeature(.motion, in: context)
 
         // One handler per edge, each knowing which dimensions ITS edge changes:
         // the bottom edge is height, the right edge is width, and the corner —
