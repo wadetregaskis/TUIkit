@@ -110,9 +110,13 @@ extension FocusSectionModifier: Renderable {
         // the shades the cube can actually show. As a CYCLE rather than a live
         // phase, so the border can leave a run behind instead of the page
         // re-rendering on every tick.
-        sectionContext.environment.focusIndicator = AnimatedColor.activeSection(
-            !context.isMeasuring && (focusManager?.isActiveSection(sectionID) ?? false),
-            in: context.environment)
+        //
+        // Published rather than assigned, so a value memo below hears the
+        // answer change: the branch above declines to store only while the
+        // section is ACTIVE, and a subtree stored while it was inactive would
+        // otherwise be served unchanged once it became active.
+        context.publishSectionIndicator(
+            isActive: focusManager?.isActiveSection(sectionID) ?? false, into: &sectionContext)
 
         return TUIkit.renderToBuffer(content, context: sectionContext)
     }

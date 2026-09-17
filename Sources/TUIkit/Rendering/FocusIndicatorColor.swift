@@ -57,3 +57,48 @@ extension AnimatedColor {
         run(offsetX: offsetX, offsetY: offsetY) { focusIndicatorGlyph($0) }
     }
 }
+
+// MARK: - Publishing the indicator to the render memo
+
+extension RenderContext {
+    /// Hands `sectionContext` the section's breathing ●, and tells the render
+    /// memo that the answer changed — which the assignment on its own cannot.
+    ///
+    /// ``EnvironmentValues/focusIndicator`` is written straight into the child
+    /// context, so neither a value memo's key nor `noteAppliedEnvironment` can
+    /// see it move. `FocusSectionModifier` covers one direction already, by
+    /// declining to STORE while its section is active. The other direction was
+    /// open: a subtree stored while its section was INACTIVE compares equal
+    /// afterwards, and `activateSection(id:)` clears nothing — it only asks for
+    /// a repaint, which serves the same entry again. So a section that had taken
+    /// the keyboard went on drawing no ●, and one that had lost it went on
+    /// drawing one.
+    ///
+    /// Noted as the gated `Bool` rather than as the colour: the ● breathes, and
+    /// noting a value that moves every tick would clear the subtree on every
+    /// frame. Whether a ● shows at all is the whole of what the memo cannot
+    /// otherwise see.
+    ///
+    /// The same shape as `FocusRegistration.publishIsFocused`, for the same
+    /// reason and with the same depth handling — the bump is on both walks, so
+    /// an `EnvironmentModifier` below finds the same slot either way.
+    ///
+    /// - Parameters:
+    ///   - isActive: Whether this section is the active one.
+    ///   - sectionContext: The context the section's content renders with.
+    @MainActor
+    func publishSectionIndicator(isActive: Bool, into sectionContext: inout RenderContext) {
+        sectionContext.environmentApplicationDepth += 1
+        // Never during measurement, as both producers spelled it themselves.
+        let indicating = !isMeasuring && isActive
+        sectionContext.environment.focusIndicator = AnimatedColor.activeSection(
+            indicating, in: environment)
+        guard !isMeasuring, let cache = renderCache else { return }
+        if case .changed = cache.noteAppliedEnvironment(
+            environment.indicatesFocus(indicating), identity: identity,
+            keyPath: \EnvironmentValues.focusIndicator, depth: environmentApplicationDepth)
+        {
+            cache.clearAffected(by: identity)
+        }
+    }
+}

@@ -273,7 +273,26 @@ struct KeyPressMemoTests {
         #expect(harness.press(log, sectionID: "s2") == ["leaf"], "the handler is not in s2")
         #expect(harness.press(log, sectionID: "s1").isEmpty, "the handler is still in s1")
 
-        #expect(harness.frame(view("s2")) == 0, "an unchanged section was not served")
+        // The section's ACTIVE-ness settles a pass behind the section itself: s2
+        // registered on the frame above while the manager still named s1, and
+        // only afterwards did s2 become the active one. So this is the first
+        // frame on which the section indicator's answer changes, and that answer
+        // is published to the memo now (`RenderContext.publishSectionIndicator`)
+        // rather than assigned silently — so the subtree is rendered again
+        // instead of being served the picture drawn while its section held
+        // nothing. It draws no ● itself; the clear is conservative, exactly as
+        // `publishIsFocused`'s is, because only the border below knows whether
+        // it would have drawn one.
+        #expect(harness.frame(view("s2")) > 0, "the indicator's arrival did not re-render the subtree")
+        #expect(harness.press(log, sectionID: "s2") == ["leaf"], "the handler left s2")
+        #expect(harness.press(log, sectionID: "s1").isEmpty, "the handler went back to s1")
+
+        // And it SETTLES, which is the half worth pinning: once the active
+        // section stops moving the subtree is served again. Were the indicator
+        // noted as the breathing colour rather than as the gated Bool, this
+        // would clear on every frame and the fix would have cost the cache every
+        // sectioned subtree in the app.
+        #expect(harness.frame(view("s2")) == 0, "a settled, unchanged section was not served")
         #expect(harness.press(log, sectionID: "s2") == ["leaf"], "the replay left s2")
         #expect(harness.press(log, sectionID: "s1").isEmpty, "the replay went back to s1")
     }
