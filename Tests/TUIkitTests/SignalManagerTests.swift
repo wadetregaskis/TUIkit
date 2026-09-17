@@ -27,17 +27,28 @@ import Testing
 /// the test runner.
 ///
 /// The time limit is for a source that never arms — a real bug, and one that
-/// would otherwise hang the suite. It is five minutes rather than one because
-/// of where the wake arrives. The source's handler runs on the main queue,
-/// and in a full run that queue already holds every main-actor test not yet
-/// started, so the handler cannot run until they have: the wake lands
-/// seconds before the run ends, whatever the run's length. Measured on CI at
-/// one commit, the first test here "passed after" 46.9 s of a 50.3 s macOS
-/// run and 57.9 s of a 61.6 s Linux run, and failed a one-minute limit on a
-/// Linux 6.2 lane whose run took 72.7 s. A limit inside the run's own length
-/// is a limit on the run, not on signal delivery.
+/// would otherwise hang the suite. It is HALF AN HOUR, and the size is the
+/// whole point: this limit cannot be a budget, only a hang-breaker, because of
+/// where the wake arrives. The source's handler runs on the main queue, and in
+/// a full run that queue already holds every main-actor test not yet started,
+/// so the handler cannot run until they have: the wake lands seconds before
+/// the run ends, WHATEVER the run's length. Any limit shorter than the run is
+/// therefore a limit on the run, not on signal delivery — and it fails the
+/// slowest lane rather than the broken one.
+///
+/// That is not hypothetical. One minute failed a Linux 6.2 lane whose run took
+/// 72.7 s. Five minutes then failed `Linux · Swift 6.3 · x86_64` at 480bf113,
+/// the last pushed commit: the limit expired at 300 s of a run that took
+/// 338.4 s, so the wake was about 18 s from arriving. The same test passed on
+/// the 6.2 lane in the same CI run, whose identical 6,158 tests took 165.9 s —
+/// the discriminator was the runner's speed and nothing else.
+///
+/// Thirty minutes is ~5x the longest run yet seen and far past anything
+/// healthy, so it fires only when a source genuinely never arms. The job's own
+/// timeout is the real backstop for a wedged run; this one only has to be
+/// bigger than a run and smaller than forever.
 @MainActor
-@Suite("SignalManager", .serialized, .timeLimit(.minutes(5)))
+@Suite("SignalManager", .serialized, .timeLimit(.minutes(30)))
 struct SignalManagerTests {
     /// Installs `signals`, sends `signal`, and returns once the source handler
     /// has run and woken us — proving delivery reached the main-actor handler.
