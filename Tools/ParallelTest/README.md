@@ -125,28 +125,33 @@ The critical path can never fall below the slowest single test, because nothing
 can split one test — and a test parameterised over N arguments is ONE test
 here: the weights are keyed by test ID, so `foo(_:)` has a single weight
 covering every argument, and no partition can deal its arguments out. What does
-move the floor is splitting such a test into several FUNCTIONS, which is why
-`PaletteSearchIndexTests` now asks its question from ten of them rather than
-two. Re-measured serially at this HEAD:
+move the floor is splitting such a test into several FUNCTIONS, which is what
+`PaletteSearchIndexTests` and `MenuHeightCeilingTests` now do. Re-measured
+serially at this HEAD:
 
 | test | cost alone |
 |---|---:|
-| `TUIkitTests.MenuHeightCeilingTests/popUpReachesItsLastRow(count:)` | 5.73 s |
-| `TUIkitTests.MenuHeightCeilingTests/inlineScrollsAtAnyLength(count:)` | 5.51 s |
-| `TUIkitTests.MenuMeasureParityTests/everyWidthAgrees(rows:)` | 3.74 s |
+| `TUIkitTests.MenuHeightCeilingTests/popUpReachesItsLastRowAtItsLongest(count:)` | 3.85 s |
+| `TUIkitTests.ColorPickerPanelCrashSafetyTests/keyEventMonkeyDoesNotTrap()` | 3.79 s |
+| `TUIkitTests.MenuMeasureParityTests/everyWidthAgrees(rows:)` | 3.79 s |
 
-Against 99.8 s of total serial work, that floor binds at about `-j 18`; beyond
+Against 104.9 s of total serial work, that floor binds at about `-j 28`; beyond
 it the extra processes finish early and wait. The harness prints the floor and
 the `-j` past which it cannot help as part of its plan.
 
-`PaletteSearchIndexTests/gamutSampleAgrees(_:)` headed that table at 12.21 s,
-with `cornersAgree(_:)` second at 5.57 s; the pair's worst single test is now
-2.96 s, and the suite enumerates 7,583 tests rather than 7,573. Both totals
-here are a fresh serial measurement, not a delta against the 86.8 s this
-section used to quote: five commits landed between that calibration and this
-one, and the work they added — a wait whose deadline went to 60 s among it —
-is most of the difference. Splitting the palette suite accounted for +1.4 s of
-it, one index build per palette per process being the price of the split.
+That floor was **12.21 s** before these splits, and the four tests that set it
+are the four that moved: `gamutSampleAgrees(_:)` and `cornersAgree(_:)` each
+walked all four palettes in one function, and both menu tests rendered 50-,
+5,000- and 9,000-row menus in one. Fifteen functions now cover exactly what
+those four covered — same pixels, same palettes, same lengths, same assertions
+— and the suite enumerates 7,585 tests rather than 7,573.
+
+Treat the totals in this section as ±4 s. Three calibrations of this tree read
+86.8 s, 99.8 s and 104.9 s, and most of that movement is not the splits: five
+commits landed between the first two, and between the second and third — where
+only the menu file was edited, worth +0.4 s — everything NOT edited still grew
+3.9 s. One calibration is a single serial sample of a debug build, not a
+constant.
 
 `-j 6` is the default rather than `-j 8` because it was the only arm that never
 failed a run (7/7 clean, against 5/7 for both `-j 8` and single-process), it

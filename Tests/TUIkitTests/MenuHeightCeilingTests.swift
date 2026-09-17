@@ -28,13 +28,33 @@ struct MenuHeightCeilingTests {
             tuiContext: tui)
     }
 
+    /// The lengths both checks below are held to, in one place so that the two
+    /// functions each is split into cannot between them cover anything else.
+    ///
     /// 50 is the ordinary case; the other two straddle the 4,096 the old canvas
     /// stopped at. At 5,000 and 9,000 rows the highlight could be moved to the
     /// last ordinal — the rows all rendered and published — but the column had
     /// only 4,096 LINES to be sliced into, so the drop-down had nothing to show
     /// for it and no way to scroll there.
-    @Test("a pop-up menu can show its last row", arguments: [50, 5_000, 9_000])
-    func popUpReachesItsLastRow(count: Int) {
+    ///
+    /// Each check is two functions rather than one because a parameterised test
+    /// is a single item to `parallel_test.py` — one weight, which no partition
+    /// can deal out — and these two were the slowest tests left in the package,
+    /// 5.7 s and 5.5 s, setting a floor no `-j` could get under. The 9,000-row
+    /// case is 3.9 s of that by itself and nothing can split one case, so it
+    /// goes alone and the other two go together.
+    ///
+    /// `dropLast()` and `suffix(1)`, not two literal lists: those partition this
+    /// array whatever it holds, so a length added here is covered by exactly one
+    /// of the two functions and can never be dropped by both.
+    /// `nonisolated` because this suite is `@MainActor` and the `@Test` macro
+    /// evaluates `arguments:` outside the actor — not a claim that the lengths
+    /// are shared mutable state, which a `let` array of `Int` cannot be.
+    nonisolated private static let lengths = [50, 5_000, 9_000]
+
+    /// The one check, so both functions below assert identically and differ only
+    /// in the length they are handed.
+    private func reachesItsLastRow(count: Int) {
         let controller = MenuPopupController()
         let items = ForEach(0..<count, id: \.self) { index in Button("Item \(index)") {} }
         // Twice: the first render is what publishes the selectable ordinals the
@@ -47,17 +67,38 @@ struct MenuHeightCeilingTests {
         #expect(text.contains("Item \(count - 1)"), "\(count) rows: last row not drawn")
     }
 
+    @Test("a pop-up menu can show its last row", arguments: lengths.dropLast())
+    func popUpReachesItsLastRow(count: Int) {
+        reachesItsLastRow(count: count)
+    }
+
+    /// The longest case, alone, for the reason ``lengths`` gives.
+    @Test("a pop-up menu nine thousand rows long can show its last row", arguments: lengths.suffix(1))
+    func popUpReachesItsLastRowAtItsLongest(count: Int) {
+        reachesItsLastRow(count: count)
+    }
+
     /// The inline menu's overflow question is "taller than the cap?", and the
     /// answer must not depend on how much taller. It asks at `capHeight + 1`
     /// now; a menu of any length is the same one bit.
-    @Test("an inline menu scrolls at any length", arguments: [50, 5_000, 9_000])
-    func inlineScrollsAtAnyLength(count: Int) {
+    private func scrollsAtLength(count: Int) {
         let items = ForEach(0..<count, id: \.self) { index in Button("Item \(index)") {} }
         let size = measureMenuColumn(items, context: context(), capHeight: 40)
         let drawn = renderMenuColumn(items, context: context(), capHeight: 40)
         #expect(size.height == 40, "\(count) rows: measured \(size.height)")
         #expect(drawn.height == 40, "\(count) rows: drew \(drawn.height)")
         #expect(size.width == drawn.width, "\(count) rows")
+    }
+
+    @Test("an inline menu scrolls at any length", arguments: lengths.dropLast())
+    func inlineScrollsAtAnyLength(count: Int) {
+        scrollsAtLength(count: count)
+    }
+
+    /// The longest case, alone, for the reason ``lengths`` gives.
+    @Test("an inline menu nine thousand rows long still scrolls", arguments: lengths.suffix(1))
+    func inlineScrollsAtItsLongest(count: Int) {
+        scrollsAtLength(count: count)
     }
 
     /// The overflow question has to be asked of the height the menu DRAWS, not
