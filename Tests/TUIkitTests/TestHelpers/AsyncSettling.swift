@@ -15,6 +15,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Testing
+
 /// Waits until `condition` holds, or gives up after `timeout`.
 ///
 /// Mostly by yielding, because a yield is the thing that actually helps here:
@@ -31,11 +33,18 @@
 /// these tests hold a refresh body open while they wait — took other suites
 /// down with it.)
 ///
-/// A timeout is not reported here. The caller's `#expect` is the one that knows
-/// what was being waited for, and it runs immediately afterwards with its own
-/// message; the deadline exists so that a genuinely broken expectation FAILS
-/// instead of hanging the suite. It is deliberately short for the same reason
-/// the mechanism is a yield: a doomed wait must not hold the process.
+/// The deadline is a HANG-BREAKER, NOT A SCHEDULE, and it is long for a
+/// measured reason: in a full run this package's main actor is saturated — 81%
+/// of its tests are `@MainActor` — and a single `Task.yield()` hop has been
+/// measured taking **17.4 s** to come back (also 21.7, 5.0, 3.6). A wait whose
+/// deadline is shorter than one hop gives up on work that was merely queued,
+/// which is a slower way of not waiting at all. Sixty seconds is far past
+/// anything healthy, so it fires only when something is genuinely stuck; the
+/// cost of being generous is paid by broken tests alone.
+///
+/// Giving up is reported here, with the iteration count and the elapsed time:
+/// the caller's `#expect` says what was not true, and only this can say whether
+/// the wait was served slowly, spun without being served, or never really ran.
 ///
 /// - Important: wait on an edge the code under test actually crosses. "A run
 ///   has started" is sound to observe from inside a refresh body, because the
@@ -45,12 +54,20 @@
 ///   from the state itself (`isRunning`) or from a frame rendered after it.
 @MainActor
 func settle(
-    until condition: @MainActor () -> Bool, timeout: Duration = .seconds(2)
+    until condition: @MainActor () -> Bool, timeout: Duration = .seconds(60)
 ) async {
-    let deadline = ContinuousClock.now + timeout
+    let started = ContinuousClock.now
+    let deadline = started + timeout
     var iterations = 0
     while !condition() {
-        guard ContinuousClock.now < deadline else { return }
+        guard ContinuousClock.now < deadline else {
+            // Say so. The caller's `#expect` reports what was not true; only
+            // this knows whether the wait was served slowly, spun without being
+            // served, or never really ran at all.
+            Issue.record(
+                "settle(until:) gave up after \(iterations) iterations in \(started.duration(to: .now))")
+            return
+        }
         iterations += 1
         if iterations.isMultiple(of: 50) {
             try? await Task.sleep(for: .milliseconds(1))
