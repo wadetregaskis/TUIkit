@@ -97,7 +97,10 @@ public struct FrameBuffer: Sendable, Equatable {
     ///
     /// - Invariant: when non-`nil`, `lineWidths == lines.map(\.strippedLength)`
     ///   and `lineWidths!.count == lines.count`. Checked in debug builds wherever
-    ///   the field is set (see `assertLineWidthsInvariant(_:file:line:)`).
+    ///   the field is set (see `assertLineWidthsInvariant(_:checkedFrom:file:line:)`),
+    ///   each row measured once as it enters the buffer rather than the whole
+    ///   buffer re-walked per append — that method has the induction making the
+    ///   two equivalent.
     public private(set) var lineWidths: [Int]?
 
     /// The height of the buffer (number of lines).
@@ -428,6 +431,14 @@ extension FrameBuffer {
         // stack of uniform rows of two different widths would forget all of
         // them and every consumer downstream (a scroll window, a scrollbar,
         // the writer's pad) would scan the lines to learn them again.
+        //
+        // Read BEFORE the branch below overwrites it: a carried array is a claim
+        // the debug invariant has already measured, while one derived from the
+        // uniform hint is a brand-new claim about rows that are already here.
+        // That is the whole difference between checking this buffer in linear
+        // time and checking it in quadratic time — see
+        // `assertLineWidthsInvariant(_:checkedFrom:file:line:)`.
+        let lineWidthsWereCarried = lineWidths != nil
         if selfWasEmpty {
             lineWidths = other.lineWidths
         } else if resultUniform {
@@ -466,7 +477,11 @@ extension FrameBuffer {
         storage.append(contentsOf: other.lines)
         width = newWidth
         linesAreUniformWidth = resultUniform
-        Self.assertLineWidthsInvariant(self)
+        // Only the rows this call newly claims. `priorHeight` covers the
+        // `selfWasEmpty` case too (it is 0 there), and the branches that set the
+        // field to `nil` check nothing at all.
+        Self.assertLineWidthsInvariant(
+            self, checkedFrom: lineWidthsWereCarried ? priorHeight : 0)
 
         // Same story for the three carried side-channels: `a + b` allocates and
         // copies both sides every child, so accumulating N children's overlays
@@ -1245,21 +1260,72 @@ extension FrameBuffer {
     /// walk it performs is exactly the cost ``lineWidths`` exists to avoid, so it
     /// must never run in production. Call it wherever the field is assigned a
     /// non-`nil` value.
+    ///
+    /// `checkedFrom` is the first row the caller is making a NEW claim about.
+    /// It defaults to 0 — "the whole buffer", the only safe answer for a caller
+    /// that cannot say, and what every producer coming through
+    /// ``init(lines:width:uniformWidth:lineWidths:)`` gets.
+    /// ``appendVertically(_:spacing:)`` *can* say, and that is the difference
+    /// between checking a stack in linear time and checking it in quadratic
+    /// time: it grows ONE accumulator child by child, so re-measuring the whole
+    /// buffer per append cost `N(N+1)/2` row measures to verify N rows — the
+    /// same O(n²) in the child count that `88fede9c` took out of the append
+    /// itself, put back by the check meant to guard it.
+    ///
+    /// Skipping the prefix is not a weaker check. Three facts about the append
+    /// make it the same check, spread out:
+    ///
+    /// 1. a row is measured by the call that ADDS it — an appended row is never
+    ///    below that call's `checkedFrom`;
+    /// 2. the append only ever GROWS `storage`, so a row's text never changes
+    ///    afterwards; and
+    /// 3. the only thing that restates an existing row's WIDTH is the
+    ///    uniform-hint derivation in the merge, which passes 0 and so
+    ///    re-measures everything it restated.
+    ///
+    /// So every (row, width) pair in a non-`nil` ``lineWidths`` has been measured
+    /// against its own line, exactly as when the whole buffer was walked every
+    /// time. It rests on every OTHER mutator in this file dropping the field to
+    /// `nil` rather than leaving it stale — the premise
+    /// `FrameBufferLineWidthInvariantTests` exists to pin.
     fileprivate static func assertLineWidthsInvariant(
-        _ buffer: FrameBuffer, file: StaticString = #fileID, line: UInt = #line
+        _ buffer: FrameBuffer, checkedFrom first: Int = 0,
+        file: StaticString = #fileID, line: UInt = #line
     ) {
         #if DEBUG
         guard let widths = buffer.lineWidths else { return }
-        assert(
-            widths.count == buffer.lines.count,
-            "FrameBuffer.lineWidths count \(widths.count) != lines count \(buffer.lines.count)",
-            file: file, line: line)
-        let measured = buffer.lines.map(\.strippedLength)
-        assert(
-            widths == measured,
-            "FrameBuffer.lineWidths \(widths) != measured \(measured)",
-            file: file, line: line)
+        guard widths.count == buffer.lines.count else {
+            assertionFailure(
+                "FrameBuffer.lineWidths count \(widths.count) != lines count \(buffer.lines.count)",
+                file: file, line: line)
+            return
+        }
+        if let row = firstLineWidthMismatch(in: buffer.lines, against: widths, from: first) {
+            assertionFailure(
+                """
+                FrameBuffer.lineWidths[\(row)] is \(widths[row]), but row \(row) \
+                measures \(buffer.lines[row].strippedLength)
+                """,
+                file: file, line: line)
+        }
         #endif
+    }
+
+    /// The first row at or after `from` whose carried width disagrees with a
+    /// fresh measure of the line, or `nil` when every one of them agrees.
+    ///
+    /// Split out of ``assertLineWidthsInvariant(_:checkedFrom:file:line:)`` for
+    /// two reasons: a test can ask exactly what the assertion asks without
+    /// trapping, and the failure can name the offending row rather than dump two
+    /// arrays that are routinely thousands of entries long. Deliberately not
+    /// itself `#if DEBUG` — a predicate nobody calls costs a release build
+    /// nothing, and one that exists only in debug rots unnoticed.
+    static func firstLineWidthMismatch(
+        in lines: [String], against widths: [Int], from first: Int
+    ) -> Int? {
+        let end = Swift.min(lines.count, widths.count)
+        let start = Swift.min(Swift.max(0, first), end)
+        return (start..<end).first(where: { lines[$0].strippedLength != widths[$0] })
     }
     /// Recomputes the cached ``width`` and ``linesAreUniformWidth`` from the
     /// current ``lines``, and invalidates ``lineWidths``.

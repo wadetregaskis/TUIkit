@@ -8,6 +8,11 @@
 //  every accumulated row each time. These guard the shape of the growth, not an
 //  absolute speed, so they stay meaningful on any machine.
 //
+//  The same shape came back a second time, as measuring rather than copying: the
+//  debug `lineWidths` invariant re-walked the whole accumulator on every append.
+//  The guards below were blind to it because their children carry no per-line
+//  widths, so the last of them stacks children that do.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -122,5 +127,45 @@ struct FrameBufferCombineScalingTests {
         var spelled = left
         spelled.appendVertically(FrameBuffer(lines: ["efg"]), spacing: 0)
         #expect(spelled.lineWidths == [2, 3])
+    }
+
+    /// The guards above stack children built by `FrameBuffer(lines:)`, which
+    /// carries no per-line widths — so `lineWidths` stays `nil` the whole way and
+    /// the debug invariant check returns at its first `guard`. That is exactly
+    /// why they never saw the second quadratic: children that DO know their
+    /// widths take the other path, and the check used to re-measure the entire
+    /// accumulator on every append — `N(N+1)/2` row measures to verify N rows,
+    /// the same O(n²) in the child count moved from copying into measuring.
+    /// Debug-only, like the check, which is where the suite and every developer
+    /// build live.
+    @Test("Stacking children that know their widths stays sub-quadratic too")
+    func verticalAppendWithKnownWidthsIsNotQuadratic() {
+        func accumulate(_ count: Int) -> TimeInterval {
+            // Two widths, so the result is RAGGED and the merged array is really
+            // carried: a uniform result drops it to nil and checks nothing.
+            // Widths measured, never hand-counted — a wrong `width:` here is a
+            // lie the check would (rightly) trap on rather than a failed test.
+            let narrowText = "a row of text wide enough to be worth measuring"
+            let wideText = "a row of text wide enough to be worth measuring twice over"
+            let narrow = FrameBuffer(
+                lines: [narrowText], width: narrowText.strippedLength, uniformWidth: true)
+            let wide = FrameBuffer(
+                lines: [wideText], width: wideText.strippedLength, uniformWidth: true)
+            return best {
+                var result = FrameBuffer()
+                for index in 0..<count {
+                    result.appendVertically(index.isMultiple(of: 2) ? narrow : wide, spacing: 0)
+                }
+                precondition(result.lineWidths?.count == count)
+            }
+        }
+        let ratio = accumulate(4000) / accumulate(500)
+        #expect(
+            ratio < 20,
+            """
+            appendVertically grew \(String(format: "%.1f", ratio))× for 8× the children \
+            (linear ≈ 8×, quadratic ≈ 64×) — the debug line-width invariant is re-measuring \
+            the whole accumulator per child again.
+            """)
     }
 }
