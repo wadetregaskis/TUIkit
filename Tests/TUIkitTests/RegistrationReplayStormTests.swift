@@ -166,6 +166,15 @@ private enum StormKeys {
     static let events: [KeyEvent] =
         (rowKeys + itemKeys).map { KeyEvent(character: $0) }
         + [KeyEvent(key: .character("r"), ctrl: true), KeyEvent(key: .escape)]
+
+    /// Whether this is the Ctrl-R that `.refreshable` binds — the only press in
+    /// this script that can start anything off the main actor. Spelled the way
+    /// the binding itself spells it (`RefreshRegistrar.register`: ctrl, and the
+    /// letter `r` in either case), so the two cannot drift apart.
+    static func startsRefresh(_ event: KeyEvent) -> Bool {
+        guard event.ctrl, case .character(let character) = event.key else { return false }
+        return character.lowercased() == "r"
+    }
 }
 
 /// A seeded generator, so a failing step can be replayed.
@@ -363,13 +372,37 @@ private final class StormRun {
     }
 }
 
-/// Lets the refreshes a Ctrl-R started run, and waits, briefly, for the two
-/// logs to agree: a refresh runs off the main actor.
+/// Waits for the refresh a Ctrl-R started — the one thing a press here does off
+/// the main actor — to have run. Bounded.
+///
+/// `reaching` is each copy's log count from before the press, plus the entry
+/// the refresh that press started will append. GROWTH is the signal, and it has
+/// to be: waiting for the two counts to AGREE, which is what this did, is
+/// satisfied the instant the press returns, because both copies are then
+/// equally stale and equally stale counts are equal. That wait was doing
+/// nothing, and the 20 unconditional `Task.yield()`s in front of it were all
+/// that let a refresh get going at all — on every press, including the nine in
+/// ten that start nothing.
+///
+/// The expected count is exact, not a guess. `KeyEventDispatcher.dispatch`
+/// stops at the FIRST handler that returns true and `.refreshable`'s Ctrl-R
+/// binding always returns true, so a CONSUMED Ctrl-R is exactly one run started
+/// in that copy, and a run appends exactly one entry. Nothing else in this page
+/// can consume a Ctrl-R: no row key and no status-bar item binds `r`, the focus
+/// system has no Ctrl binding, and `InputHandler`'s chrome shortcuts require
+/// the letter bare. A press that started nothing has nothing to wait for — row
+/// handlers and item actions ran inside `handle`, on the main actor — and the
+/// loop below then exits without sleeping once.
+///
+/// Polled, not yielded, deliberately: the action appends its entry and the run
+/// marks itself finished a few instructions later, off the main actor. A 1 ms
+/// poll cannot observe the first without the second; a yield, being
+/// microseconds, could — and a copy still holding a running refresh draws the
+/// in-flight spinner that the other one does not.
 @MainActor
-private func settle(_ cached: StormRun, _ uncached: StormRun) async {
-    for _ in 0..<20 { await Task.yield() }
+private func settle(_ cached: StormRun, _ uncached: StormRun, reaching expected: (Int, Int)) async {
     var spins = 0
-    while cached.log.count != uncached.log.count, spins < 200 {
+    while cached.log.count < expected.0 || uncached.log.count < expected.1, spins < 200 {
         try? await Task.sleep(nanoseconds: 1_000_000)
         spins += 1
     }
@@ -426,8 +459,17 @@ struct RegistrationReplayStormTests {
                 for _ in 0...random.next(2) {
                     let event = StormKeys.events[random.next(StormKeys.events.count)]
                     history.append("  press \(event.key)\(event.ctrl ? " ctrl" : "")")
+                    let before = (cached.log.count, uncached.log.count)
                     let consumed = (cached.input.handle(event), uncached.input.handle(event))
-                    await settle(cached, uncached)
+                    // A consumed Ctrl-R is one refresh started in that copy,
+                    // and its entry lands after `handle` has returned; every
+                    // other press has already done everything it is going to.
+                    let startsRefresh = StormKeys.startsRefresh(event)
+                    await settle(
+                        cached, uncached,
+                        reaching: (
+                            before.0 + (startsRefresh && consumed.0 ? 1 : 0),
+                            before.1 + (startsRefresh && consumed.1 ? 1 : 0)))
                     if consumed.0 != consumed.1 {
                         return describe("consumed", consumed.0, consumed.1, history)
                     }
