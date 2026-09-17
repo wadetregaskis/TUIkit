@@ -398,13 +398,35 @@ private final class StormRun {
 /// marks itself finished a few instructions later, off the main actor. A 1 ms
 /// poll cannot observe the first without the second; a yield, being
 /// microseconds, could — and a copy still holding a running refresh draws the
-/// in-flight spinner that the other one does not.
+/// in-flight spinner that the other one does not. That is also why the shared
+/// `settle(until:)` is not used here: it yields on all but every fiftieth
+/// iteration, which is the behaviour this one exists to avoid.
+///
+/// The bound is a HANG-BREAKER, NOT A SCHEDULE, and it used to be a schedule:
+/// 200 spins of 1 ms, after which the wait simply returned and the storm
+/// compared two copies that had not finished. On a machine where the
+/// cooperative pool is contended by eleven other test processes, 200 ms is a
+/// budget a healthy refresh can miss, and missing it produced a divergence
+/// report about the picture rather than about the wait — the failure blaming
+/// the wrong thing. It now waits for the edge it named, and says so if the
+/// edge never arrives, so a stuck refresh reads as a stuck refresh.
 @MainActor
 private func settle(_ cached: StormRun, _ uncached: StormRun, reaching expected: (Int, Int)) async {
-    var spins = 0
-    while cached.log.count < expected.0 || uncached.log.count < expected.1, spins < 200 {
-        try? await Task.sleep(nanoseconds: 1_000_000)
-        spins += 1
+    let started = ContinuousClock.now
+    let deadline = started + .seconds(60)
+    var polls = 0
+    while cached.log.count < expected.0 || uncached.log.count < expected.1 {
+        guard ContinuousClock.now < deadline else {
+            Issue.record(
+                """
+                a refresh never ran: \(cached.log.count)/\(expected.0) cached and \
+                \(uncached.log.count)/\(expected.1) uncached, after \(polls) polls \
+                in \(started.duration(to: .now))
+                """)
+            return
+        }
+        polls += 1
+        try? await Task.sleep(for: .milliseconds(1))
     }
 }
 
