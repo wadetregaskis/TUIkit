@@ -443,12 +443,36 @@ extension FrameBuffer {
             lineWidths = other.lineWidths
         } else if resultUniform {
             lineWidths = nil
-        } else if let mine = lineWidths ?? (linesAreUniformWidth ? Array(repeating: width, count: storage.count) : nil),
-            let theirs = other.lineWidths
-                ?? (other.linesAreUniformWidth ? Array(repeating: other.width, count: other.lines.count) : nil)
+        } else if let theirs = other.lineWidths
+            ?? (other.linesAreUniformWidth
+                ? Array(repeating: other.width, count: other.lines.count) : nil),
+            lineWidths != nil || linesAreUniformWidth
         {
-            var merged = mine
-            merged.reserveCapacity(mine.count + spacing + theirs.count)
+            // TAKE the accumulated widths out of the field before growing them.
+            // Binding them and copying — `var merged = mine`, where `mine` came
+            // from `lineWidths` — left the field referencing that same buffer, so
+            // it was never uniquely referenced and every append copied the WHOLE
+            // accumulator: 4,000 fresh buffers for 4,000 appends, measured by
+            // counting them. That is a second O(n²) in the child count and,
+            // unlike the debug invariant re-measure, it shipped in RELEASE.
+            //
+            // So the `nil` is not tidying up; it is the fix. It drops the
+            // field's reference, leaving `merged` the only owner, and the appends
+            // below then grow the array in place.
+            //
+            // Deliberately an expression and an assignment rather than
+            // `if let mine = lineWidths { lineWidths = nil; … }`: at `-Onone` a
+            // `let` binding lives to the end of its scope, so the buffer would
+            // still be shared at the appends and every debug build — the whole
+            // test suite included — would go on copying.
+            var merged = lineWidths ?? Array(repeating: width, count: storage.count)
+            lineWidths = nil
+            // No `reserveCapacity` here. It sizes to exactly what is asked for,
+            // so reserving the exact final length on each of N appends
+            // reallocates on each of them — the copy survives the fix above.
+            // `append(contentsOf:)` grows geometrically instead, which is what
+            // makes the accumulation amortised O(rows added): ~12 reallocations
+            // for those same 4,000 appends.
             if spacing > 0 {
                 merged.append(contentsOf: repeatElement(0, count: spacing))
             }

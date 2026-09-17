@@ -134,19 +134,23 @@ struct FrameBufferCombineScalingTests {
     /// the same O(n²) in the child count moved from copying into measuring.
     /// Debug-only, like the check, which is where the suite and every developer
     /// build live.
+    /// Two widths, so a stack of these is RAGGED and the merged array is really
+    /// carried: a uniform result drops it to `nil` and merges nothing. Widths are
+    /// measured, never hand-counted — a wrong `width:` here is a lie the debug
+    /// invariant check would (rightly) trap on rather than a failed test.
+    private static func widthCarryingChildren() -> (narrow: FrameBuffer, wide: FrameBuffer) {
+        let narrowText = "a row of text wide enough to be worth measuring"
+        let wideText = "a row of text wide enough to be worth measuring twice over"
+        return (
+            FrameBuffer(lines: [narrowText], width: narrowText.strippedLength, uniformWidth: true),
+            FrameBuffer(lines: [wideText], width: wideText.strippedLength, uniformWidth: true)
+        )
+    }
+
     @Test("Stacking children that know their widths stays sub-quadratic too")
     func verticalAppendWithKnownWidthsIsNotQuadratic() {
         func accumulate(_ count: Int) -> TimeInterval {
-            // Two widths, so the result is RAGGED and the merged array is really
-            // carried: a uniform result drops it to nil and checks nothing.
-            // Widths measured, never hand-counted — a wrong `width:` here is a
-            // lie the check would (rightly) trap on rather than a failed test.
-            let narrowText = "a row of text wide enough to be worth measuring"
-            let wideText = "a row of text wide enough to be worth measuring twice over"
-            let narrow = FrameBuffer(
-                lines: [narrowText], width: narrowText.strippedLength, uniformWidth: true)
-            let wide = FrameBuffer(
-                lines: [wideText], width: wideText.strippedLength, uniformWidth: true)
+            let (narrow, wide) = Self.widthCarryingChildren()
             return bestCPUSeconds {
                 var result = FrameBuffer()
                 for index in 0..<count {
@@ -162,6 +166,70 @@ struct FrameBufferCombineScalingTests {
             appendVertically grew \(String(format: "%.1f", ratio))× for 8× the children \
             (linear ≈ 8×, quadratic ≈ 64×) — the debug line-width invariant is re-measuring \
             the whole accumulator per child again.
+            """)
+    }
+
+    /// The guards above bound the SHAPE of the growth in CPU time. This one
+    /// counts instead, which is both stronger and cheaper: a count is
+    /// deterministic and immune to load, and it says which of the two shapes the
+    /// code HAS rather than how fast today's machine ran it. Same reasoning as
+    /// `3fadcb1d`, which moved a growth guard off the wall clock, taken to its
+    /// conclusion.
+    ///
+    /// What it caught: the merge handed `lineWidths` a NEW buffer on every
+    /// append. It bound `mine` from the field and copied it (`var merged = mine`)
+    /// while the field still referenced that buffer, so the accumulator was never
+    /// uniquely referenced and the whole of it was copied per child — a residual
+    /// O(n²) in the child count which, unlike the invariant re-measure above, is
+    /// NOT `#if DEBUG` and so shipped in release builds.
+    ///
+    /// The oracle is the STORAGE IDENTITY, not `capacity`. Capacity was tried
+    /// first and is not a guard at all: it counted fewer than 400 changes across
+    /// the 4,000 copies above and so passed the defect it was meant to catch.
+    /// `Array` allocates the malloc size class rather than the exact figure
+    /// asked for, so a copy into a fresh buffer usually lands at the capacity the
+    /// old one had. A new buffer, though, cannot share an address with the old
+    /// one — the old is still live, which is the whole reason it was copied — so
+    /// the address changing is exactly "was given a new buffer". It is reported
+    /// alongside for diagnosis; only the identity count is asserted on.
+    @Test("The carried widths grow in place rather than being copied per child")
+    func carriedWidthsAreNotCopiedPerChild() {
+        let (narrow, wide) = Self.widthCarryingChildren()
+        let count = 4000
+        var result = FrameBuffer()
+        var freshBuffers = 0
+        var capacityChanges = 0
+        var lastIdentity = UInt.max
+        var lastCapacity = -1
+
+        for index in 0..<count {
+            result.appendVertically(index.isMultiple(of: 2) ? narrow : wide, spacing: 0)
+            // Read BETWEEN appends and never held across one: a binding that
+            // outlived its statement would share the buffer itself, and so cause
+            // the very copy being counted here.
+            let identity =
+                result.lineWidths?.withUnsafeBufferPointer { widths in
+                    widths.baseAddress.map { UInt(bitPattern: UnsafeRawPointer($0)) } ?? 0
+                } ?? 0
+            let capacity = result.lineWidths?.capacity ?? -1
+            if identity != lastIdentity { freshBuffers += 1 }
+            if capacity != lastCapacity { capacityChanges += 1 }
+            lastIdentity = identity
+            lastCapacity = capacity
+        }
+
+        // Byte-identical widths: growing in place is an implementation detail and
+        // must change nothing about the answer.
+        #expect(result.lineWidths == result.lines.map(\.strippedLength))
+
+        // ~12 reallocations for 4,000 appends if geometric, 4,000 if per-append.
+        // The bound sits far from both rather than pinning a growth factor.
+        #expect(
+            freshBuffers < count / 10,
+            """
+            the carried lineWidths array was given a new buffer \(freshBuffers) times for \
+            \(count) appends (capacity changed \(capacityChanges) times) — the merge is \
+            copying the whole accumulator per child again.
             """)
     }
 }
