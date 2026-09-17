@@ -9,7 +9,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("searchable")
+@Suite("searchable", .rendersEnglishUI)
 struct SearchableTests {
     private final class QueryBox { var query = "" }
     private func binding(_ box: QueryBox) -> Binding<String> {

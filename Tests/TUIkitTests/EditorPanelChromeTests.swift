@@ -19,7 +19,7 @@ import TUIkitCore
 /// exist at all — so a broken revert means an editor that silently keeps changes
 /// the user cancelled, and nothing in the picture says so.
 @MainActor
-@Suite("Cancel means the edit never happened", .serialized)
+@Suite("Cancel means the edit never happened", .serialized, .rendersEnglishUI)
 struct EditorPanelChromeTests {
 
     /// A host that can take the panel away, which is how every dismissal that is

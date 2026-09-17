@@ -17,7 +17,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("Modal/alert render against the content area, not full height")
+@Suite("Modal/alert render against the content area, not full height", .rendersEnglishUI)
 struct ModalContentHeightTests {
 
     /// Renders `view` on a short terminal — total height `terminalH`, of which

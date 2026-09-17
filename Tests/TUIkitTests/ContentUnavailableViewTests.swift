@@ -10,7 +10,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("ContentUnavailableView Tests")
+@Suite("ContentUnavailableView Tests", .rendersEnglishUI)
 struct ContentUnavailableViewTests {
 
     @Test("Full init renders label, description, and actions")

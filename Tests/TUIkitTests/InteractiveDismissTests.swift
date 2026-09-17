@@ -18,7 +18,7 @@ import TUIkitCore
 @testable import TUIkitView
 
 @MainActor
-@Suite("Interactive dismissal can be disabled")
+@Suite("Interactive dismissal can be disabled", .rendersEnglishUI)
 struct InteractiveDismissTests {
 
     /// A frame rendered the way the run loop does, reporting what the

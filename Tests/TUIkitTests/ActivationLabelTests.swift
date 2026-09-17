@@ -12,7 +12,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("Return verb")
+@Suite("Return verb", .rendersEnglishUI)
 struct ActivationLabelTests {
     /// Renders `view` with the focus on whatever registers first, and reports
     /// the verb it published.

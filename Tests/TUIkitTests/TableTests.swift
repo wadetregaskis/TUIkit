@@ -96,7 +96,7 @@ struct TableColumnTests {
 
 // MARK: - Table Rendering Tests
 
-@Suite("Table Rendering Tests")
+@Suite("Table Rendering Tests", .rendersEnglishUI)
 @MainActor
 struct TableRenderingTests {
     @Test("Table renders header row")

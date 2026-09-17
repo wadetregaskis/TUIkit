@@ -314,6 +314,18 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
 
 - Uses Swift Testing framework (`@Test`, `#expect`, `@Suite`)
 - Tests run in parallel; the few that mutate global state are serialised
+- **A test that asserts the framework's own UI words** — "No items", "dismiss",
+  "Done" — depends on the language `LocalizationService.shared` picked from
+  `LANGUAGE` / `LC_ALL` / `LC_MESSAGES` / `LANG`. Declare that on the suite with
+  `.rendersEnglishUI` (see `Tests/TUIkitTests/TestHelpers/RendersEnglishUI.swift`),
+  which pins English for the process before the suite runs. Without it the suite
+  passes for you and fails for anyone whose POSIX locale is not English. Do not
+  set a locale variable from inside a test: `LocalizationService.shared` is a
+  lazy global whose first touch reads the live process environment, so a
+  process-wide `setenv` latches that language for every test that follows.
+- **Numbers** in rendered chrome are grouped by `\.locale`, which is republished
+  from the app language every frame. A test asserting "4,994" pins
+  `environment.locale` explicitly rather than relying on the default.
 - Test files mirror source structure in `Tests/TUIkitTests/`
 - Each library module also has its own test target (`TUIkitCoreTests`,
   `TUIkitStylingTests`, `TUIkitViewTests`, `TUIkitImageTests`) that links **only

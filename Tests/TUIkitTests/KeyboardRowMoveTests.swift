@@ -16,7 +16,7 @@ import Testing
 @testable import TUIkitCore
 
 @MainActor
-@Suite("Keyboard row move")
+@Suite("Keyboard row move", .rendersEnglishUI)
 struct KeyboardRowMoveTests {
 
     /// A handler over five rows, wired the way a render wires one.

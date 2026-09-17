@@ -13,7 +13,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("A hidden leading column leaves a ▶ edge column that brings it back")
+@Suite("A hidden leading column leaves a ▶ edge column that brings it back", .rendersEnglishUI)
 struct NavigationSplitViewEdgeColumnTests {
 
     private func splitContext(width: Int = 60, height: Int = 9) -> RenderContext {

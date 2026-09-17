@@ -19,7 +19,7 @@ import Testing
 /// candidate selection at different widths, and the container/tab chrome built on
 /// top of them.
 @MainActor
-@Suite("Golden snapshots")
+@Suite("Golden snapshots", .rendersEnglishUI)
 struct SnapshotCorpusTests {
 
     @Test("layout corpus matches the committed snapshots")

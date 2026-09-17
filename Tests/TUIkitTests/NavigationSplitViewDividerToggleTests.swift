@@ -14,7 +14,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("The leftmost divider's ◀ hides the column to its left")
+@Suite("The leftmost divider's ◀ hides the column to its left", .rendersEnglishUI)
 struct NavigationSplitViewDividerToggleTests {
 
     private func splitContext(width: Int = 60, height: Int = 9) -> RenderContext {

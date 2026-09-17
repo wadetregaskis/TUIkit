@@ -215,7 +215,7 @@ struct GradientEditorPanelMutationTests {
 }
 
 @MainActor
-@Suite("GradientEditorPanel — rendering")
+@Suite("GradientEditorPanel — rendering", .rendersEnglishUI)
 struct GradientEditorPanelRenderTests {
 
     @Test("The dialog embeds the colour-panel body (stops, actions, tabs, one Done)")

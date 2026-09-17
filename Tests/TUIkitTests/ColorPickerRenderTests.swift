@@ -14,7 +14,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("ColorPicker rendering")
+@Suite("ColorPicker rendering", .rendersEnglishUI)
 struct ColorPickerRenderTests {
 
     /// All rendered lines joined — the pickers lay content out in 2D, so most

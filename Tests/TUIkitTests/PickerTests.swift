@@ -93,7 +93,7 @@ struct TagModifierTests {
 // MARK: - Picker Rendering Tests
 
 @MainActor
-@Suite("Picker Tests", .serialized)
+@Suite("Picker Tests", .serialized, .rendersEnglishUI)
 struct PickerTests {
 
     @Test("Menu picker renders a collapsed line showing the selection")

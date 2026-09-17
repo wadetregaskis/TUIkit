@@ -102,7 +102,7 @@ private func expectClosedBorder(
 // MARK: - Suite
 
 @MainActor
-@Suite("Table rendering")
+@Suite("Table rendering", .rendersEnglishUI)
 struct TableRenderTests {
 
     // MARK: Default

@@ -11,7 +11,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("Alert rendering")
+@Suite("Alert rendering", .rendersEnglishUI)
 struct AlertRenderTests {
 
     // MARK: - Helpers

@@ -96,7 +96,7 @@ private func expectClosedBorder(
 // MARK: - Suite
 
 @MainActor
-@Suite("List rendering")
+@Suite("List rendering", .rendersEnglishUI)
 struct ListRenderTests {
 
     // MARK: Default / populated

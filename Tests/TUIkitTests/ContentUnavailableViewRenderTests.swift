@@ -24,7 +24,7 @@ private func strippedLines<V: View>(_ view: V, width: Int = 30, height: Int = 8)
 // MARK: - ContentUnavailableView Rendering Tests
 
 @MainActor
-@Suite("ContentUnavailableView rendering")
+@Suite("ContentUnavailableView rendering", .rendersEnglishUI)
 struct ContentUnavailableViewRenderTests {
 
     // MARK: Single label

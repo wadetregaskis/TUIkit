@@ -20,7 +20,7 @@ import TUIkitCore
 @testable import TUIkit
 
 @MainActor
-@Suite("Alert dismissal")
+@Suite("Alert dismissal", .rendersEnglishUI)
 struct AlertDismissalTests {
 
     /// A stand-in theme item: `ThemeManager` requires at least one, and this

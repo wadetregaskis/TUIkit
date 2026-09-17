@@ -19,7 +19,7 @@ import Testing
 @testable import TUIkitView
 
 @MainActor
-@Suite("list static row identity")
+@Suite("list static row identity", .rendersEnglishUI)
 struct ListStaticRowIdentityTests {
     private struct Row: Identifiable, Hashable {
         let id = UUID()

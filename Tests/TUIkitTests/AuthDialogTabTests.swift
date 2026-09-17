@@ -9,7 +9,7 @@ import Testing
 @testable import TUIkit
 
 @MainActor
-@Suite("Auth dialog Tab navigation")
+@Suite("Auth dialog Tab navigation", .rendersEnglishUI)
 struct AuthDialogTabTests {
 
     private func makeContext(focusManager: FocusManager) -> RenderContext {

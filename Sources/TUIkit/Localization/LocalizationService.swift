@@ -162,6 +162,36 @@ public final class LocalizationService: @unchecked Sendable {
         return try body()
     }
 
+    /// Sets the active language WITHOUT persisting it and without asking for a
+    /// re-render — the seam a test suite needs against the shared service.
+    ///
+    /// ``setLanguage(_:)`` is the wrong tool for a test on two counts, both of
+    /// them process-global state a concurrently running test can see:
+    ///
+    /// * it **persists**, into the directory named after `ProcessInfo.processName`
+    ///   — under the test runner a real file in the developer's own home (see
+    ///   ``withPersistence(redirectedTo:)``), read back as the stored preference
+    ///   by every later run on that machine;
+    /// * it calls `AppState.shared.setNeedsRender()`, a second process-global
+    ///   flag that several suites assert on.
+    ///
+    /// This does neither: it moves `currentLanguage` under the lock and stops.
+    ///
+    /// Internal, and named for its one caller: the test suite's
+    /// `.rendersEnglishUI` trait, which pins English on the shared service
+    /// before a suite whose assertions read the framework's own words back out
+    /// of a rendered buffer. That pin is deliberately ONE-WAY — it never puts a
+    /// previous language back — because a window during which the process
+    /// language is something else is exactly the defect the trait exists to
+    /// prevent, and restoring one would reintroduce it.
+    ///
+    /// - Parameter language: The language to pin.
+    func pinLanguageForTesting(_ language: Language) {
+        lock.lock()
+        currentLanguage = language
+        lock.unlock()
+    }
+
     /// Registers additional translations supplied by the host application.
     ///
     /// The framework only bundles translations for its own strings; an app uses
