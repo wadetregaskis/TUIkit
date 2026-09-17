@@ -13,6 +13,15 @@
 //  The guards below were blind to it because their children carry no per-line
 //  widths, so the last of them stacks children that do.
 //
+//  They are measured in CPU time on the calling thread, not wall time. A ratio
+//  of a big accumulation to a small one is exactly the shape a loaded machine
+//  distorts: the big arm runs 8x longer and so is exposed to 8x the preemption,
+//  and the ratio climbs with the load rather than with the growth. Under the
+//  parallel harness at `-j 12` these read 36.3x and 57.6x against a bound of
+//  20; the same tests alone, on an idle box, read 8.7x — and wall and CPU then
+//  agree to four significant figures (8.697 vs 8.696), which is what says the
+//  two measure the same thing when there is nothing to steal the CPU away.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -23,15 +32,33 @@ import Testing
 
 @Suite("Frame buffer combine scaling")
 struct FrameBufferCombineScalingTests {
-    /// Fastest of several batches: scheduler noise under the parallel suite only
-    /// ever inflates a timing, so the minimum is the closest estimate of the true
-    /// cost. Mirrors `RenderBottleneckTests.measure`.
+    /// Seconds of CPU time on THIS THREAD for the fastest of several batches.
+    ///
+    /// Two independent defences against noise, because the statistic here is a
+    /// ratio and a ratio inflates from below as readily as from above. The
+    /// minimum of several batches drops the runs that were interrupted; thread
+    /// CPU time means an interrupted run was never counted as slower in the
+    /// first place. `threadCPUNanoseconds()` is the framework's own answer to
+    /// this — it exists because render budgets measured in wall time failed on
+    /// loaded CI runners with nothing changed — so this reuses it rather than
+    /// hand-rolling a second clock.
+    ///
+    /// The wall clock is the fallback only where a platform has no per-thread
+    /// CPU clock (the function answers `nil`), which today is neither of the
+    /// two these tests run on.
     private func best(of batches: Int = 5, _ block: () -> Void) -> TimeInterval {
         var best = TimeInterval.infinity
         for _ in 0..<batches {
-            let start = Date()
+            let startCPU = threadCPUNanoseconds()
+            let startWall = Date()
             block()
-            best = min(best, Date().timeIntervalSince(start))
+            let elapsed: TimeInterval
+            if let startCPU, let endCPU = threadCPUNanoseconds() {
+                elapsed = TimeInterval(endCPU &- startCPU) / 1_000_000_000
+            } else {
+                elapsed = Date().timeIntervalSince(startWall)
+            }
+            best = min(best, elapsed)
         }
         return best
     }
