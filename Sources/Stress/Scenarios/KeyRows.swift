@@ -20,7 +20,7 @@ import TUIkit
 /// holds them out of the cache. Beside them, one `.refreshable` panel binds
 /// Ctrl-R.
 ///
-/// It needs the bench's key channels (`HeadlessKeyChannels`): an `onKeyPress`
+/// It needs the bench's key channels (`HeadlessInputChannels`): an `onKeyPress`
 /// with no dispatcher traps.
 enum KeyRowsScenario {
     @MainActor

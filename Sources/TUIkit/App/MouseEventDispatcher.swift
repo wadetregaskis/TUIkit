@@ -522,6 +522,14 @@ extension MouseEventDispatcher {
         hoverObserverIDs.insert(id)
     }
 
+    /// How many handlers this walk has registered so far.
+    ///
+    /// For the headless bench (`HeadlessInputChannels`), which otherwise has no
+    /// way to see whether the tree it rendered registered anything at all — the
+    /// failure mode being a bench that measures controls with their pointer half
+    /// missing and says nothing about it.
+    var handlerCount: Int { handlers.count }
+
     /// The handler registered under `id` this frame, if any.
     ///
     /// Lets a wrapping modifier forward events to its content's handlers —
