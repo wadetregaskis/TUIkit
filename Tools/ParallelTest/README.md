@@ -122,17 +122,31 @@ control characters are stripped before parsing.
 ## Where the limit is
 
 The critical path can never fall below the slowest single test, because nothing
-can split one test. Measured serially:
+can split one test — and a test parameterised over N arguments is ONE test
+here: the weights are keyed by test ID, so `foo(_:)` has a single weight
+covering every argument, and no partition can deal its arguments out. What does
+move the floor is splitting such a test into several FUNCTIONS, which is why
+`PaletteSearchIndexTests` now asks its question from ten of them rather than
+two. Re-measured serially at this HEAD:
 
 | test | cost alone |
 |---|---:|
-| `TUIkitImageTests.PaletteSearchIndexTests/gamutSampleAgrees(_:)` | 12.21 s |
-| `TUIkitImageTests.PaletteSearchIndexTests/cornersAgree(_:)` | 5.57 s |
-| `TUIkitTests.MenuHeightCeilingTests/popUpReachesItsLastRow(count:)` | 5.24 s |
+| `TUIkitTests.MenuHeightCeilingTests/popUpReachesItsLastRow(count:)` | 5.73 s |
+| `TUIkitTests.MenuHeightCeilingTests/inlineScrollsAtAnyLength(count:)` | 5.51 s |
+| `TUIkitTests.MenuMeasureParityTests/everyWidthAgrees(rows:)` | 3.74 s |
 
-Against 86.8 s of total serial work, that floor binds at about `-j 8`; beyond it
-the extra processes finish early and wait. The harness prints the floor and the
-`-j` past which it cannot help as part of its plan.
+Against 99.8 s of total serial work, that floor binds at about `-j 18`; beyond
+it the extra processes finish early and wait. The harness prints the floor and
+the `-j` past which it cannot help as part of its plan.
+
+`PaletteSearchIndexTests/gamutSampleAgrees(_:)` headed that table at 12.21 s,
+with `cornersAgree(_:)` second at 5.57 s; the pair's worst single test is now
+2.96 s, and the suite enumerates 7,583 tests rather than 7,573. Both totals
+here are a fresh serial measurement, not a delta against the 86.8 s this
+section used to quote: five commits landed between that calibration and this
+one, and the work they added — a wait whose deadline went to 60 s among it —
+is most of the difference. Splitting the palette suite accounted for +1.4 s of
+it, one index build per palette per process being the price of the split.
 
 `-j 6` is the default rather than `-j 8` because it was the only arm that never
 failed a run (7/7 clean, against 5/7 for both `-j 8` and single-process), it

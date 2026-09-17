@@ -15,6 +15,32 @@ import Testing
 /// exact search's answers — including its tie-break — everywhere a cell's
 /// bound could be wrong: at every cell corner, where a colour is farthest from
 /// its cell's centre, and across a strided sample of the whole gamut.
+///
+/// ## Why one question is asked by several test functions
+///
+/// Nothing can split a single test, so the slowest one sets a floor under the
+/// whole suite no matter how many processes run it — see `Tools/ParallelTest`.
+/// These two checks were the two slowest tests in the package, 14.8 s and 7.6 s
+/// of serial work, because their cost is pixels times palette entries and each
+/// asked about every palette in one function.
+///
+/// The same work is therefore dealt out across functions along the two axes it
+/// is already generated on. Nothing is sampled down and no tolerance moves: the
+/// pixels and the palettes are exactly the ones this suite checked before.
+///
+/// * **By palette**, because cost is proportional to entry count and the two
+///   large palettes dwarf the two small ones — and because a palette's
+///   ``ASCIIPalette/SearchIndex`` is built once per process on first use, so a
+///   function that touches two large palettes pays two builds. Splitting along
+///   any other axis would multiply that fixed cost instead of dividing the work.
+/// * **By stride phase**, for the gamut sample only, which is large enough that
+///   one large palette is still too much for one function. Phase `p` of three
+///   takes every third sample starting at the `p`th, so the three together are
+///   the one stride they replace, exactly and without overlap.
+///
+/// ``everySubjectIsCovered`` and ``theGamutPhasesPartitionTheStride`` hold the
+/// split to that claim: they fail if a palette or a sample ever stops being
+/// covered by exactly one function.
 @Suite("Palette search index")
 struct PaletteSearchIndexTests {
 
@@ -57,14 +83,32 @@ struct PaletteSearchIndexTests {
         return out
     }
 
-    private static func strided(_ step: Int) -> [RGBA] {
+    private static func strided(from start: Int, step: Int) -> [RGBA] {
         var out: [RGBA] = []
-        var value = 0
+        var value = start
         while value < 1 << 24 {
             out.append(RGBA(r: UInt8((value >> 16) & 0xFF), g: UInt8((value >> 8) & 0xFF), b: UInt8(value & 0xFF)))
             value += step
         }
         return out
+    }
+
+    /// The stride the gamut sample walks: every 97th colour of the 16,777,216.
+    private static let gamutStep = 97
+
+    /// How many functions share that stride between them.
+    private static let gamutPhases = 3
+
+    /// Phase `phase` of the whole gamut stride — every ``gamutPhases``th sample,
+    /// starting at the `phase`th.
+    ///
+    /// The union over `0..<gamutPhases` is the whole stride and the phases do
+    /// not overlap, because phase `p` is `{ step * (gamutPhases * m + p) }` and
+    /// every whole number is one of `gamutPhases * m + p` for exactly one `p`.
+    /// ``theGamutPhasesPartitionTheStride`` checks that against the stride
+    /// itself rather than leaving it as arithmetic in a comment.
+    private static func gamutSlice(_ phase: Int) -> [RGBA] {
+        strided(from: phase * gamutStep, step: gamutStep * gamutPhases)
     }
 
     /// A graded field with a red patch — the shape of a photograph, so the
@@ -91,25 +135,122 @@ struct PaletteSearchIndexTests {
         "optimal32": ASCIIPalette.adaptive(32, by: .leastError).derived(from: photograph(), depth: .truecolor),
     ]
 
-    @Test("Every cell corner agrees with the walk, tie-break included", arguments: subjects.keys.sorted())
-    func cornersAgree(_ name: String) throws {
+    /// The palettes small enough that one function can hold both: 64 and 32
+    /// entries, against the 240 and 256 the other two carry.
+    private static let smallSubjects = ["optimal32", "spread64"]
+
+    /// The terminal's 256, less the sixteen slots: 240 entries.
+    private static let ansi256Subject = "ansi256"
+
+    /// The largest palette here, and so the most expensive: 256 entries.
+    private static let shades256Subject = "shades256"
+
+    /// The one check, so that every function below makes byte-identical
+    /// assertions and differs only in which pixels and which palette it is
+    /// handed.
+    private func agrees(_ name: String, _ pixels: [RGBA], _ what: String) throws {
         let palette = try #require(Self.subjects[name])
         var disagreements = 0
-        for pixel in Self.corners() where palette.nearestIndex(to: pixel) != Self.walked(palette, pixel) {
+        for pixel in pixels where palette.nearestIndex(to: pixel) != Self.walked(palette, pixel) {
             disagreements += 1
         }
-        #expect(disagreements == 0, "\(name): \(disagreements) corner colours differ from the walk")
+        #expect(disagreements == 0, "\(name): \(disagreements) \(what) differ from the walk")
     }
 
-    @Test("A stride across the gamut agrees with the walk", arguments: subjects.keys.sorted())
-    func gamutSampleAgrees(_ name: String) throws {
-        let palette = try #require(Self.subjects[name])
-        var disagreements = 0
-        for pixel in Self.strided(97) where palette.nearestIndex(to: pixel) != Self.walked(palette, pixel) {
-            disagreements += 1
-        }
-        #expect(disagreements == 0, "\(name): \(disagreements) sampled colours differ from the walk")
+    // MARK: - Every cell corner
+
+    @Test("Every cell corner agrees with the walk, tie-break included", arguments: smallSubjects)
+    func cornersAgree(_ name: String) throws {
+        try agrees(name, Self.corners(), "corner colours")
     }
+
+    @Test("Every cell corner agrees with the walk for the terminal's 256")
+    func cornersAgreeForANSI256() throws {
+        try agrees(Self.ansi256Subject, Self.corners(), "corner colours")
+    }
+
+    @Test("Every cell corner agrees with the walk for 256 shades")
+    func cornersAgreeForShades256() throws {
+        try agrees(Self.shades256Subject, Self.corners(), "corner colours")
+    }
+
+    // MARK: - A stride across the gamut
+
+    @Test("A stride across the gamut agrees with the walk", arguments: smallSubjects)
+    func gamutSampleAgrees(_ name: String) throws {
+        try agrees(name, Self.strided(from: 0, step: Self.gamutStep), "sampled colours")
+    }
+
+    @Test("A third of the gamut stride agrees with the walk for the terminal's 256")
+    func gamutSampleAgreesForANSI256FirstThird() throws {
+        try agrees(Self.ansi256Subject, Self.gamutSlice(0), "sampled colours")
+    }
+
+    @Test("The second third of the gamut stride agrees with the walk for the terminal's 256")
+    func gamutSampleAgreesForANSI256SecondThird() throws {
+        try agrees(Self.ansi256Subject, Self.gamutSlice(1), "sampled colours")
+    }
+
+    @Test("The last third of the gamut stride agrees with the walk for the terminal's 256")
+    func gamutSampleAgreesForANSI256LastThird() throws {
+        try agrees(Self.ansi256Subject, Self.gamutSlice(2), "sampled colours")
+    }
+
+    @Test("A third of the gamut stride agrees with the walk for 256 shades")
+    func gamutSampleAgreesForShades256FirstThird() throws {
+        try agrees(Self.shades256Subject, Self.gamutSlice(0), "sampled colours")
+    }
+
+    @Test("The second third of the gamut stride agrees with the walk for 256 shades")
+    func gamutSampleAgreesForShades256SecondThird() throws {
+        try agrees(Self.shades256Subject, Self.gamutSlice(1), "sampled colours")
+    }
+
+    @Test("The last third of the gamut stride agrees with the walk for 256 shades")
+    func gamutSampleAgreesForShades256LastThird() throws {
+        try agrees(Self.shades256Subject, Self.gamutSlice(2), "sampled colours")
+    }
+
+    // MARK: - The split covers what one function used to
+
+    /// Every palette in ``subjects`` is checked by one of the functions above.
+    ///
+    /// The checks used to be parameterised over `subjects.keys` itself, so a
+    /// palette added to that dictionary was checked by the act of adding it.
+    /// Split by palette, the argument lists are the place a new one could be
+    /// forgotten, and this is what notices.
+    @Test("Every palette is covered by exactly one of the split argument lists")
+    func everySubjectIsCovered() {
+        let covered = Self.smallSubjects + [Self.ansi256Subject, Self.shades256Subject]
+        #expect(Set(covered) == Set(Self.subjects.keys), "\(covered) against \(Self.subjects.keys.sorted())")
+        #expect(Set(covered).count == covered.count, "a palette is checked twice: \(covered)")
+    }
+
+    /// The three phases are the one stride they replace: same samples, same
+    /// number of them, none twice.
+    ///
+    /// Sample `index` of the whole stride is sample `index / gamutPhases` of
+    /// phase `index % gamutPhases`, which is a bijection — so this is the
+    /// partition, checked rather than argued.
+    @Test("The gamut phases together are exactly the stride they replace")
+    func theGamutPhasesPartitionTheStride() {
+        let whole = Self.strided(from: 0, step: Self.gamutStep)
+        let phases = (0..<Self.gamutPhases).map { Self.gamutSlice($0) }
+        #expect(
+            phases.reduce(0) { $0 + $1.count } == whole.count,
+            "\(phases.map(\.count)) samples against the stride's \(whole.count)")
+        // One expectation over the whole comparison, not one per sample: this
+        // walks 172,961 of them, and an expectation apiece would cost more than
+        // the tests it is guarding.
+        let interleaves = whole.indices.allSatisfy { index in
+            let phase = phases[index % Self.gamutPhases]
+            let position = index / Self.gamutPhases
+            return phase.indices.contains(position) && phase[position] == whole[index]
+        }
+        #expect(interleaves, "the phases do not deal the stride out between them")
+    }
+
+    // MARK: - The index itself
 
     @Test("The lists are short: a few candidates a cell, not the palette")
     func listsAreShort() throws {
