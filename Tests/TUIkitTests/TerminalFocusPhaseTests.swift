@@ -152,9 +152,13 @@ struct TerminalFocusPhaseTests {
             harness.tuiContext.scenePhase = phase
             let loop = harness.loop(RefreshProbeApp())
             _ = loop.render()
+            let entered = refreshGate.entered
             _ = harness.tuiContext.keyEventDispatcher.dispatch(
                 KeyEvent(key: .character("r"), ctrl: true, alt: false, shift: false))
-            for _ in 0..<20 { await Task.yield() }
+            // The body reaching the gate is the edge — the run state is claimed
+            // before the body runs, so the spinner is up by then. A count of
+            // yields is not; see `AsyncSettling.swift`.
+            await settle(until: { refreshGate.entered > entered })
             return loop.render()
         }
         let active = await runningRefresh(in: .active)
@@ -216,15 +220,9 @@ private struct ProgressProbeApp: App {
     }
 }
 
-/// Holds a refresh open until the test lets it finish.
-private final class RefreshGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var open = false
-
-    var isClosed: Bool { lock.withLock { !open } }
-    func release() { lock.withLock { open = true } }
-}
-
+/// Holds a refresh open until the test lets it finish: `RefreshGate` in
+/// `TestHelpers`, shared with the two `Refreshable` suites, which each had a
+/// copy of it.
 private let refreshGate = RefreshGate()
 
 private struct RefreshProbeApp: App {
@@ -233,7 +231,7 @@ private struct RefreshProbeApp: App {
     var body: some Scene {
         WindowGroup {
             Text("abcdefghij")
-                .refreshable { while refreshGate.isClosed { await Task.yield() } }
+                .refreshable { await refreshGate.hold() }
         }
     }
 }

@@ -48,29 +48,10 @@ struct RefreshableTests {
         }
     }
 
-    /// Lets the `Task` the handler spawned run to completion.
-    private func settle() async {
-        for _ in 0..<20 { await Task.yield() }
-    }
-
-    /// The gate a refresh body waits on, so the test decides when it finishes.
-    ///
-    /// A refresh action is `@Sendable` and runs off the test's own actor, so a
-    /// captured `nonisolated(unsafe) var` opened afterwards is precisely the
-    /// mutation-after-capture the compiler warns about. Reference semantics
-    /// behind a lock are what these tests always meant —
-    /// ``RefreshAction/RunState`` is the same shape for the same reason.
-    private final class Latch: @unchecked Sendable {
-        private let lock = NSLock()
-        private var open = false
-
-        /// Whether a body waiting on this latch must keep waiting.
-        var isClosed: Bool { lock.withLock { !open } }
-        /// Lets every waiting body finish.
-        func release() { lock.withLock { open = true } }
-        /// Shuts the gate again, for a test that runs a second body.
-        func reset() { lock.withLock { open = false } }
-    }
+    /// The gate a refresh body waits at is `RefreshGate` in `TestHelpers`,
+    /// shared with `RefreshableMemoTests` and `TerminalFocusPhaseTests`, which
+    /// each had a copy of it. What a test waits ON is an edge that gate records
+    /// — not a count of yields; see `AsyncSettling.swift`.
 
     @Test("Ctrl-R runs the action")
     func controlRRefreshes() async {
@@ -80,7 +61,7 @@ struct RefreshableTests {
 
         _ = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { refreshes == 1 })
         #expect(refreshes == 1)
     }
 
@@ -95,7 +76,9 @@ struct RefreshableTests {
         harness.press(.character("r"))
         harness.press(.character("x"), ctrl: true)
         harness.press(.enter)
-        await settle()
+        // A budget, deliberately: the claim is that nothing ran, so waiting too
+        // little can only weaken it — never make it fail.
+        await yieldToSpawnedWork()
         #expect(refreshes == 0)
     }
 
@@ -105,30 +88,33 @@ struct RefreshableTests {
         // an app's reload is rarely re-entrant.
         let harness = Harness()
         nonisolated(unsafe) var started = 0
-        let gate = Latch()
+        let gate = RefreshGate()
         let view = Text("content").refreshable {
             started += 1
-            while gate.isClosed { await Task.yield() }
+            await gate.hold()
         }
 
-        _ = harness.frame(view)
+        let idle = harness.frame(view).lines
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { started == 1 })
         #expect(started == 1)
 
         // Still in flight: the handler must consume the key, not queue work.
         _ = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await yieldToSpawnedWork()
         #expect(started == 1)
 
+        // The run has to have ENDED before the next request, and the body
+        // returning is not that edge — `RefreshAction` clears the run state
+        // after it. The frame losing its indicator is.
         gate.release()
-        await settle()
+        await settle(until: { harness.frame(view).lines == idle })
 
         // Finished: the next one is allowed again.
         _ = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { started == 2 })
         #expect(started == 2)
     }
 
@@ -140,36 +126,37 @@ struct RefreshableTests {
     func environmentRouteCoalesces() async {
         let harness = Harness()
         nonisolated(unsafe) var runs = 0
-        let gate = Latch()
+        let gate = RefreshGate()
         let action = RefreshAction(
             {
                 runs += 1
-                while gate.isClosed { await Task.yield() }
+                await gate.hold()
             }, state: RefreshAction.RunState())
 
         // Two calls through the environment, the second while the first is in
         // flight — the shape a second click on "Refresh Now" makes.
         let first = Task { @MainActor in await action() }
-        await settle()
+        await settle(until: { runs == 1 })
         #expect(runs == 1)
         // Spawned rather than awaited: if coalescing breaks, this call runs the
-        // action body and blocks on the latch, so awaiting it here would HANG a
+        // action body and blocks on the gate, so awaiting it here would HANG a
         // regression instead of failing it.
         let second = Task { @MainActor in await action() }
-        await settle()
+        await yieldToSpawnedWork()
         #expect(runs == 1, "a second request while running started another")
         #expect(action.isRunning)
 
         gate.release()
         await first.value
         await second.value
-        await settle()
+        // Both calls have returned, so the run state is settled by construction
+        // — there is nothing left to wait for.
         #expect(!action.isRunning)
 
         // …and once it has finished, it can run again.
         gate.reset()
         let third = Task { @MainActor in await action() }
-        await settle()
+        await settle(until: { runs == 2 })
         #expect(runs == 2)
         gate.release()
         await third.value
@@ -191,16 +178,16 @@ struct RefreshableTests {
 
         let harness = Harness()
         nonisolated(unsafe) var runs = 0
-        let gate = Latch()
+        let gate = RefreshGate()
         nonisolated(unsafe) var seen: RefreshAction?
         let view = Reader(report: { seen = $0 }).refreshable {
             runs += 1
-            while gate.isClosed { await Task.yield() }
+            await gate.hold()
         }
 
         _ = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { runs == 1 })
         #expect(runs == 1)
 
         guard let action = seen else {
@@ -210,12 +197,11 @@ struct RefreshableTests {
         // Spawned, not awaited: a broken guard would block here forever, and a
         // hang is a much worse regression signal than a failed expectation.
         let viaEnvironment = Task { @MainActor in await action() }
-        await settle()
+        await yieldToSpawnedWork()
         #expect(runs == 1, "the environment route stacked onto a running refresh")
 
         gate.release()
         await viaEnvironment.value
-        await settle()
     }
 
     @Test("The action reaches the subtree through the environment")
@@ -291,18 +277,18 @@ struct RefreshableTests {
         // frame that started it, and every frame after asked a freshly-zeroed
         // one. The indicator never drew.
         let harness = Harness()
-        let gate = Latch()
+        let gate = RefreshGate()
         func rebuilt() -> some View {
             VStack {
                 Text("one")
                 Text("two")
             }
-            .refreshable { while gate.isClosed { await Task.yield() } }
+            .refreshable { await gate.hold() }
         }
 
         let idle = harness.frame(rebuilt())
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { gate.entered == 1 })
         let busy = harness.frame(rebuilt())
 
         #expect(
@@ -310,7 +296,7 @@ struct RefreshableTests {
             "a rebuilt frame still has to know a refresh is running: \(busy.lines)")
 
         gate.release()
-        await settle()
+        await yieldToSpawnedWork()
     }
 
     @Test("The size does not change while a refresh runs")
@@ -318,16 +304,16 @@ struct RefreshableTests {
         // The spinner overlays the content. If it insetted instead, starting a
         // refresh would reflow everything below it.
         let harness = Harness()
-        let gate = Latch()
+        let gate = RefreshGate()
         let view = VStack {
             Text("one")
             Text("two")
         }
-        .refreshable { while gate.isClosed { await Task.yield() } }
+        .refreshable { await gate.hold() }
 
         let idle = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { gate.entered == 1 })
         let busy = harness.frame(view)
 
         #expect(busy.lines.count == idle.lines.count)
@@ -336,29 +322,30 @@ struct RefreshableTests {
         #expect(busy.lines != idle.lines)
 
         gate.release()
-        await settle()
+        await yieldToSpawnedWork()
     }
 
     // MARK: - The indicator
 
     /// Renders a refreshable mid-flight and returns its top row, stripped.
     private func busyTopRow<V: View>(
-        _ view: V, harness: Harness, gate: Latch
+        _ view: V, harness: Harness, gate: RefreshGate
     ) async -> String {
+        let entered = gate.entered
         _ = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { gate.entered > entered })
         let busy = harness.frame(view)
         gate.release()
-        await settle()
+        await yieldToSpawnedWork()
         return busy.lines.first?.stripped ?? ""
     }
 
     @Test("The indicator has a blank cell on each side")
     func indicatorIsPadded() async {
         let harness = Harness()
-        let gate = Latch()
-        let view = Text("abcdefghij").refreshable { while gate.isClosed { await Task.yield() } }
+        let gate = RefreshGate()
+        let view = Text("abcdefghij").refreshable { await gate.hold() }
 
         let row = await busyTopRow(view, harness: harness, gate: gate)
         // "abcdefghij" with a three-cell badge over its middle (`.top` centres
@@ -380,9 +367,9 @@ struct RefreshableTests {
     @Test("refreshIndicator chooses the spinner")
     func indicatorIsCustomisable() async {
         let harness = Harness()
-        let gate = Latch()
+        let gate = RefreshGate()
         let view = Text("abcdefghij")
-            .refreshable { while gate.isClosed { await Task.yield() } }
+            .refreshable { await gate.hold() }
             .refreshIndicator(style: .line)
 
         let row = await busyTopRow(view, harness: harness, gate: gate)
@@ -416,17 +403,17 @@ struct RefreshableTests {
     @Test("The indicator animates at the speed set for spinners")
     func indicatorFollowsSpinnerSpeed() async {
         let harness = Harness()
-        let gate = Latch()
+        let gate = RefreshGate()
         let view = Text("abcdefghij")
-            .refreshable { while gate.isClosed { await Task.yield() } }
+            .refreshable { await gate.hold() }
             .indicatorAnimationSpeed(2, for: .spinners)
 
         _ = harness.frame(view)
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { gate.entered == 1 })
         let busy = harness.frame(view)
         gate.release()
-        await settle()
+        await yieldToSpawnedWork()
         // `.dots` is 7 ticks a frame at the standard speed; at twice it, 3.5 rounds to 4.
         #expect(busy.animatedCells.map { $0.frameTicks } == [4])
     }
@@ -441,22 +428,22 @@ struct RefreshableTests {
         // the second walk claimed a fresh, empty slot and fired the `initial`
         // call again for a value that never changed.
         let harness = Harness()
-        let gate = Latch()
+        let gate = RefreshGate()
         nonisolated(unsafe) var fires = 0
         // `_, _ in` rather than a bare `{ }`: both `onChange` overloads accept
         // a closure literal, and only the arity disambiguates them.
         let view = Text("abcdefghij")
             .onChange(of: 0, initial: true) { _, _ in fires += 1 }
-            .refreshable { while gate.isClosed { await Task.yield() } }
+            .refreshable { await gate.hold() }
 
         _ = harness.frame(view)
         #expect(fires == 1, "the `initial` call, once")
 
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { gate.entered == 1 })
         _ = harness.frame(view)
         gate.release()
-        await settle()
+        await yieldToSpawnedWork()
 
         #expect(fires == 1, "nothing changed, so the running frame must add no calls")
     }
@@ -488,7 +475,7 @@ struct RefreshableTests {
         harness.tuiContext.stateStorage.endRenderPass()
 
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await settle(until: { refreshes == 1 })
         #expect(refreshes == 1)
     }
 
@@ -515,7 +502,7 @@ struct RefreshableTests {
         harness.tuiContext.stateStorage.endRenderPass()
 
         harness.press(.character("r"), ctrl: true)
-        await settle()
+        await yieldToSpawnedWork()
         #expect(refreshes == 0)
     }
 }

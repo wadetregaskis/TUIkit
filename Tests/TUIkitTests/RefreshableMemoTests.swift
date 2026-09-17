@@ -24,15 +24,6 @@ private final class RunCounter: @unchecked Sendable {
     func increment() { lock.withLock { runs += 1 } }
 }
 
-/// Holds a refresh body until the test lets it finish.
-private final class Gate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var open = false
-
-    var isClosed: Bool { lock.withLock { !open } }
-    func release() { lock.withLock { open = true } }
-}
-
 /// Renders frames the way `RenderLoop` brackets them, and reports how many memo
 /// lookups missed: a frame whose memoized subtrees were all served takes none.
 @MainActor
@@ -68,12 +59,6 @@ private final class MemoHarness {
     }
 }
 
-/// Lets the `Task` a Ctrl-R spawned run as far as it can.
-@MainActor
-private func settle() async {
-    for _ in 0..<20 { await Task.yield() }
-}
-
 @MainActor
 @Suite("refreshable through the render memos")
 struct RefreshableMemoTests {
@@ -98,7 +83,7 @@ struct RefreshableMemoTests {
             #expect(harness.cache.stats.hits > hitsBefore, "round \(number): nothing was served")
             #expect(harness.dispatcher.handlerCount == 1, "round \(number)")
             #expect(harness.pressControlR(), "round \(number): Ctrl-R was not taken on a served frame")
-            await settle()
+            await settle(until: { runs.value == number })
             #expect(runs.value == number, "round \(number): \(runs.value) refreshes")
         }
         #expect(!harness.cache.isEmpty, "the row was never stored")
@@ -107,10 +92,10 @@ struct RefreshableMemoTests {
     @Test("A served refreshable shows its spinner on the frame after Ctrl-R, and loses it when the refresh ends")
     func servedRefreshableRedrawsForItsRun() async {
         let harness = MemoHarness()
-        let gate = Gate()
+        let gate = RefreshGate()
         let view = VStack {
             ForEach(["abcdefghij"], id: \.self) { name in
-                Text(name).refreshable { while gate.isClosed { await Task.yield() } }
+                Text(name).refreshable { await gate.hold() }
             }
         }
 
@@ -120,12 +105,15 @@ struct RefreshableMemoTests {
         // Nothing about the row's value changed, so only the run starting can
         // stop the memo serving the idle picture it stored.
         harness.pressControlR()
-        await settle()
+        await settle(until: { gate.entered == 1 })
         let busy = harness.frame(view).buffer.lines
         #expect(busy != idle, "the frame after Ctrl-R still drew the row idle: \(busy)")
 
+        // The end of a run is not the body returning — the run state is cleared
+        // after it, with a suspension point in between — so the frame losing
+        // the spinner is the edge to wait on.
         gate.release()
-        await settle()
+        await settle(until: { harness.frame(view).buffer.lines == idle })
         let after = harness.frame(view).buffer.lines
         #expect(after == idle, "the frame after the refresh ended still drew it running: \(after)")
     }
@@ -179,7 +167,8 @@ struct RefreshableMemoTests {
             #expect(harness.dispatcher.handlerCount == 0, "frame \(number)")
             #expect(!harness.pressControlR(), "frame \(number): a dimmed row took Ctrl-R")
         }
-        await settle()
+        // A budget: the claim is that a dimmed row starts nothing.
+        await yieldToSpawnedWork()
         #expect(runs.value == 0)
         #expect(!harness.cache.isEmpty, "the dimmed row was never stored")
     }
