@@ -21,7 +21,7 @@ struct SearchableTests {
     }
 
     @Test("Presents a search field above the searchable content")
-    func presentsFieldAboveContent() {
+    func presentsFieldAboveContent() throws {
         let out = render(Text("CONTENT").searchable(text: binding(QueryBox())))
         let joined = out.joined(separator: "\n")
         // No emoji chrome in a bare context, so the icon is omitted (a tiny
@@ -34,13 +34,21 @@ struct SearchableTests {
         #expect(!joined.contains("\u{1F50E}"), "no magnifier at all without emoji chrome")
         #expect(joined.contains("CONTENT"), "the searchable content renders too")
 
-        let promptLine = out.firstIndex { $0.contains("Search") } ?? Int.max
-        let contentLine = out.firstIndex { $0.contains("CONTENT") } ?? Int.min
+        // `try #require`, not a `?? Int.max` sentinel: the prompt is the
+        // framework's own word, and when it is not on screen at all — a
+        // developer whose LANG says German saw "Suchen..." — the sentinel turned
+        // "not found" into `(promptLine → 9223372036854775807) < (contentLine → 1)`,
+        // which reads as a layout bug in the searchable modifier. A missing
+        // line should say it is missing.
+        let promptLine = try #require(
+            out.firstIndex { $0.contains("Search") }, "the prompt is on some line")
+        let contentLine = try #require(
+            out.firstIndex { $0.contains("CONTENT") }, "the content is on some line")
         #expect(promptLine < contentLine, "the field sits above the content")
     }
 
     @Test("Draws a magnifier where the terminal renders emoji chrome")
-    func magnifierWithEmojiChrome() {
+    func magnifierWithEmojiChrome() throws {
         let out = render(
             Text("CONTENT")
                 .searchable(text: binding(QueryBox()))
@@ -48,8 +56,10 @@ struct SearchableTests {
         let joined = out.joined(separator: "\n")
         #expect(joined.contains("\u{1F50E}"), "the leading 🔎 magnifier renders under emoji chrome")
 
-        let glyphLine = out.firstIndex { $0.contains("\u{1F50E}") } ?? Int.max
-        let contentLine = out.firstIndex { $0.contains("CONTENT") } ?? Int.min
+        let glyphLine = try #require(
+            out.firstIndex { $0.contains("\u{1F50E}") }, "the magnifier is on some line")
+        let contentLine = try #require(
+            out.firstIndex { $0.contains("CONTENT") }, "the content is on some line")
         #expect(glyphLine < contentLine, "the field sits above the content")
     }
 

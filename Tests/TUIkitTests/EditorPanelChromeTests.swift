@@ -124,7 +124,13 @@ struct EditorPanelChromeTests {
         harness.frame(host)
         let armed = harness.frame(host)
         value = 42
-        #expect(harness.click("Done", in: armed), "the Done button is hittable")
+        // `try #require`, not `#expect`: `click` matches the footer button by
+        // its TEXT, which is the framework's own word, so a miss means no mouse
+        // event was ever dispatched. Left as an `#expect`, the two assertions
+        // below still ran and reported "Done dismissed the panel" == false and
+        // a lost edit — a modal-dismissal regression that had not happened. A
+        // click that found nothing must fail as a click that found nothing.
+        try #require(harness.click("Done", in: armed), "the Done button is hittable")
         #expect(presented == false, "Done dismissed the panel")
         harness.frame(host)  // the frame the panel is gone from
 
@@ -143,7 +149,7 @@ struct EditorPanelChromeTests {
         harness.frame(host)
         let armed = harness.frame(host)
         value = 42
-        #expect(harness.click("Cancel", in: armed), "the Cancel button is hittable")
+        try #require(harness.click("Cancel", in: armed), "the Cancel button is hittable")
         #expect(presented == false, "Cancel dismissed the panel")
         harness.frame(host)
 
@@ -151,7 +157,7 @@ struct EditorPanelChromeTests {
     }
 
     @Test("Done's extra work runs on Done and only on Done")
-    func onDoneRunsOnlyOnDone() {
+    func onDoneRunsOnlyOnDone() throws {
         /// `GradientEditorPanel` hangs its recents bookkeeping here, and a
         /// recents list is a history of what the user KEPT.
         final class Tally { var applies = 0 }
@@ -186,14 +192,14 @@ struct EditorPanelChromeTests {
         harness.frame(host)
         let armed = harness.frame(host)
         #expect(tally.applies == 0, "not while the panel is open")
-        _ = harness.click("Cancel", in: armed)
+        try #require(harness.click("Cancel", in: armed), "the Cancel button is hittable")
         harness.frame(host)
         #expect(tally.applies == 0, "not on Cancel")
 
         presented = true
         harness.frame(host)
         let reopened = harness.frame(host)
-        _ = harness.click("Done", in: reopened)
+        try #require(harness.click("Done", in: reopened), "the Done button is hittable")
         harness.frame(host)
         #expect(tally.applies == 1, "once on Done, got \(tally.applies)")
     }
