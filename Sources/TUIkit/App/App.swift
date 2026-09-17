@@ -109,15 +109,26 @@ internal final class AppRunner<A: App> {
     private var isRunning = false
     private let signals = SignalManager()
 
-    init(app: A) {
+    /// - Parameters:
+    ///   - app: The app whose scene this runner drives.
+    ///   - appState: The render-request queue the loop polls, and the one every
+    ///     seam here signals. An app MUST leave this at the shared singleton:
+    ///     `@State`/`StateBox`, `@Observable`, `Spinner`, `AppStorage`, etc. all
+    ///     signal re-renders through `AppState.shared`, and the loop polls
+    ///     *this* instance's `needsRender`, so it has to be the same object —
+    ///     otherwise state changes never reach the loop. (This was masked while
+    ///     the pulse/cursor timers force-rendered ~30×/sec; demand-driven
+    ///     rendering exposed it as a frozen screen.)
+    ///
+    ///     It is a parameter only so a TEST can watch the instance this runner
+    ///     signals rather than the one the whole process shares. swift-testing
+    ///     runs suites concurrently inside one process and a dozen-odd of them
+    ///     touch `AppState.shared`, so `#expect(!AppState.shared.needsRender)`
+    ///     after driving a runner asserts on a flag a stranger may have set in
+    ///     between — and its positive twin passes on a flag a stranger set.
+    init(app: A, appState: AppState = .shared) {
         self.app = app
-        // MUST be the shared singleton: `@State`/`StateBox`, `@Observable`,
-        // `Spinner`, `AppStorage`, etc. all signal re-renders through
-        // `AppState.shared`. The run loop polls *this* instance's `needsRender`,
-        // so it has to be the same object — otherwise state changes never reach
-        // the loop. (This was masked while the pulse/cursor timers force-rendered
-        // ~30×/sec; demand-driven rendering exposed it as a frozen screen.)
-        self.appState = AppState.shared
+        self.appState = appState
         self.appearanceManager = ThemeManager(items: AppearanceRegistry.all, renderTrigger: { [appState] in appState.setNeedsRender() })
         self.appHeader = AppHeaderState()
         self.focusManager = FocusManager()

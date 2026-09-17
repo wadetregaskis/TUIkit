@@ -587,20 +587,27 @@ struct TerminalColorFocusReQueryTests {
 /// The run loop's half of focus-in: the report the parser turns into a scene
 /// phase is also what asks the terminal again.
 ///
-/// Serialized with the suites above because `AppRunner` binds itself to
-/// `AppState.shared`.
+/// Serialized with the suites above because the loop these drive still reaches
+/// `AppState.shared` in places of its own.
 @MainActor
 @Suite("A focus report asks the terminal again", .serialized)
 struct TerminalColorFocusWiringTests {
 
+    /// The runner's render-request queue, owned by the test.
+    ///
+    /// Nothing here asserts on it — these tests watch the terminal — but a
+    /// focus report SETS it, and clearing it afterwards on the shared instance
+    /// is precisely the stray write that breaks a concurrent suite's
+    /// `#expect(needsRender)`. See `TerminalFocusPhaseTests`, which asserts on
+    /// the flag and now owns one too.
+    private let appState = AppState()
+
     private func freshRunner() -> AppRunner<FrameProbeApp> {
-        AppState.shared.didRender()
-        _ = AppState.shared.consumePendingAnimationClocks()
         // `Terminal.init()` only reserves a buffer, so this touches no TTY.
-        return AppRunner(app: FrameProbeApp())
+        AppRunner(app: FrameProbeApp(), appState: appState)
     }
 
-    private var timer: CursorTimer { CursorTimer(renderNotifier: AppState.shared) }
+    private var timer: CursorTimer { CursorTimer(renderNotifier: appState) }
 
     @Test("Focus coming back asks the terminal what it paints now")
     func focusInAsksAgain() {
@@ -617,7 +624,6 @@ struct TerminalColorFocusWiringTests {
             harness.terminal.writtenOutput.count > afterFocusOut,
             "focus came back and the terminal was asked nothing")
         #expect(harness.terminal.writtenOutput.last == TerminalColorQuery.nativeRequest)
-        AppState.shared.didRender()
     }
 
     @Test("Focus going away asks for nothing")
@@ -630,7 +636,6 @@ struct TerminalColorFocusWiringTests {
         #expect(
             !harness.terminal.allOutput.contains("\u{1B}]11;?"),
             "the window we just left was asked what it paints")
-        AppState.shared.didRender()
     }
 
     /// A terminal may report focus in as reporting is enabled, and the scene is
@@ -644,7 +649,6 @@ struct TerminalColorFocusWiringTests {
 
         runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         #expect(harness.terminal.writtenOutput.isEmpty)
-        AppState.shared.didRender()
     }
 
     @Test("Off tmux a terminal that has said nothing is asked nothing when focus comes back")
@@ -662,7 +666,6 @@ struct TerminalColorFocusWiringTests {
             #expect(
                 harness.terminal.writtenOutput.count == afterFocusOut,
                 "a host that has answered nothing was asked again anyway")
-            AppState.shared.didRender()
         }
     }
 }

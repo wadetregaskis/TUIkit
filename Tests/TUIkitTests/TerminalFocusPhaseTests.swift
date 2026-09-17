@@ -21,16 +21,30 @@ import Testing
 @Suite("A terminal focus report sets the scene phase", .serialized)
 struct TerminalFocusPhaseTests {
 
-    /// `AppRunner` binds itself to `AppState.shared`, so these tests share one
-    /// queue and start from a clean one, as `RunLoopFoldTests` does.
+    /// The render-request queue these tests drive and assert on: their own, not
+    /// `AppState.shared`.
+    ///
+    /// An app's runner binds to the shared singleton, and must — every `@State`
+    /// write, `@Observable` change and animated cell posts there (see
+    /// `AppRunner.init`). A TEST reading it is reading a flag any other suite
+    /// may set: swift-testing runs suites concurrently inside one process,
+    /// sixteen test files touch that singleton, and the render paths beneath
+    /// them set it from spawned tasks. `.serialized` does not help — it orders
+    /// the tests within this suite and nothing else.
+    ///
+    /// Both directions were affected, not only the flaky one: a stranger's
+    /// `setNeedsRender()` breaks `#expect(!needsRender)` and *satisfies*
+    /// `#expect(needsRender)`. swift-testing builds a fresh suite value per
+    /// test, so this is one clean queue per test that nothing else can reach,
+    /// and the assertions below are exact rather than merely usually right.
+    private let appState = AppState()
+
     private func freshRunner() -> AppRunner<FocusStillApp> {
-        AppState.shared.didRender()
-        _ = AppState.shared.consumePendingAnimationClocks()
         // `Terminal.init()` only reserves a buffer, so this touches no TTY.
-        return AppRunner(app: FocusStillApp())
+        AppRunner(app: FocusStillApp(), appState: appState)
     }
 
-    private var timer: CursorTimer { CursorTimer(renderNotifier: AppState.shared) }
+    private var timer: CursorTimer { CursorTimer(renderNotifier: appState) }
 
     /// The loop the seam hands focus-in to, so it can ask the terminal what it
     /// paints now (step 5d — `TerminalColorRequester`). One per test, over its
@@ -49,13 +63,12 @@ struct TerminalFocusPhaseTests {
 
         runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .inactive)
-        #expect(AppState.shared.needsRender, "the inactive look needs a frame")
+        #expect(appState.needsRender, "the inactive look needs a frame")
 
-        AppState.shared.didRender()
+        appState.didRender()
         runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .active)
-        #expect(AppState.shared.needsRender, "the active look needs a frame")
-        AppState.shared.didRender()
+        #expect(appState.needsRender, "the active look needs a frame")
     }
 
     @Test("Focus in restarts the focus breath and the caret at their bright start; focus out does not")
@@ -73,7 +86,6 @@ struct TerminalFocusPhaseTests {
         runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         timer.observe(nowNanos: 3_000_000_000)
         #expect(timer.elapsed(for: .cursor) == 0)
-        AppState.shared.didRender()
     }
 
     @Test("While suspended a report changes nothing", arguments: [false, true])
@@ -83,7 +95,7 @@ struct TerminalFocusPhaseTests {
 
         runner.terminalFocusChanged(isFocused: isFocused, cursorTimer: timer, renderer: freshLoop())
         #expect(runner.tuiContext.scenePhase == .background)
-        #expect(!AppState.shared.needsRender)
+        #expect(!appState.needsRender)
     }
 
     @Test("A report of the focus the scene already has asks for no frame")
@@ -95,13 +107,13 @@ struct TerminalFocusPhaseTests {
         // A terminal may report focus in as reporting is enabled.
         runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .active)
-        #expect(!AppState.shared.needsRender)
+        #expect(!appState.needsRender)
 
         runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
-        AppState.shared.didRender()
+        appState.didRender()
         runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
         #expect(runner.tuiContext.scenePhase == .inactive)
-        #expect(!AppState.shared.needsRender)
+        #expect(!appState.needsRender)
     }
 
     // MARK: - What an inactive frame asks of the loop
