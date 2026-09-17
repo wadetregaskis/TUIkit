@@ -13,6 +13,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -51,7 +52,7 @@ struct LocalizationExtensionsTests {
     // MARK: - AppState language forwarding
 
     @Test("AppState language accessors forward to the shared service")
-    func appStateForwardsLanguage() {
+    func appStateForwardsLanguage() throws {
         let appState = AppState()
 
         #expect(appState.currentLanguage == LocalizationService.shared.currentLanguage)
@@ -61,11 +62,28 @@ struct LocalizationExtensionsTests {
         // this suite in parallel with others that assert English strings — so
         // actually switching languages here would flake them. Re-setting the
         // current value still executes the forward, which is the whole body.
+        //
+        // The forward also PERSISTS, which that reasoning missed: the shared
+        // service writes to the config directory named after the running
+        // process, so this test wrote `~/Library/Application Support/
+        // swiftpm-testing-helper/language` — a real file in the developer's own
+        // home, which outlives the run and is then read back as the stored
+        // preference, ahead of the environment, by every later one. So the
+        // write goes to a directory of this test's own, and that it landed
+        // there is asserted: nothing covered the persisting half of this path.
+        let directory = NSTemporaryDirectory() + "tuikit-loc-forward-\(UUID().uuidString)"
+        defer { try? FileManager.default.removeItem(atPath: directory) }
         let current = appState.currentLanguage
-        appState.setLanguage(current)
+        LocalizationService.shared.withPersistence(redirectedTo: directory) {
+            appState.setLanguage(current)
+        }
 
         #expect(appState.currentLanguage == current)
         #expect(LocalizationService.shared.currentLanguage == current)
+        let written = (directory as NSString).appendingPathComponent("language")
+        let stored = try String(contentsOfFile: written, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(stored == current.rawValue, "the forward persisted \(stored), not \(current.rawValue)")
     }
 
     // MARK: - Appearance.localizedName

@@ -71,8 +71,13 @@ public final class LocalizationService: @unchecked Sendable {
     /// Lock for thread-safe access
     private let lock = NSLock()
 
-    /// Optional config directory override for testing.
-    private let configDirectoryOverride: String?
+    /// Where this service persists its preference, when that is not the app's
+    /// own config directory: the constructor override the localization tests
+    /// use, and the scoped redirect in ``withPersistence(redirectedTo:_:)``.
+    ///
+    /// Read under `lock`, so that redirect is safe against a concurrent
+    /// ``setLanguage(_:)``.
+    private var configDirectoryOverride: String?
 
     /// Creates and initializes the localization service.
     ///
@@ -128,6 +133,33 @@ public final class LocalizationService: @unchecked Sendable {
         // After the lock, deliberately — see `currentLanguage`.
         saveLanguagePreference(language)
         AppState.shared.setNeedsRender()
+    }
+
+    /// Runs `body` with this service persisting its language into `directory`
+    /// rather than into the app's config directory, and puts the previous
+    /// destination back afterwards.
+    ///
+    /// The seam a test of the SHARED service needs, and internal because
+    /// nothing about it is API an app wants. ``setLanguage(_:)`` writes the
+    /// choice to ``defaultConfigDirectoryPath()``, which is named after
+    /// `ProcessInfo.processName` — under the test runner that is a real file in
+    /// the developer's own home, `~/Library/Application Support/
+    /// swiftpm-testing-helper/language`. It outlives the run, and the next
+    /// process to build this service reads it as the stored preference in
+    /// preference to the environment, so one test that set a language pinned
+    /// that language for every later run on that machine.
+    ///
+    /// - Parameters:
+    ///   - directory: Where the preference may be written for the duration.
+    ///   - body: The work to run with the redirect in force.
+    func withPersistence<T>(redirectedTo directory: String, _ body: () throws -> T) rethrows -> T {
+        let previous = lock.withLock { () -> String? in
+            let previous = configDirectoryOverride
+            configDirectoryOverride = directory
+            return previous
+        }
+        defer { lock.withLock { configDirectoryOverride = previous } }
+        return try body()
     }
 
     /// Registers additional translations supplied by the host application.
@@ -358,8 +390,12 @@ public final class LocalizationService: @unchecked Sendable {
     }
 
     /// Returns the config file path, using override if set.
+    ///
+    /// Its one caller, ``saveLanguagePreference(_:)``, runs OUTSIDE `lock` —
+    /// deliberately, see ``currentLanguage`` — so reading the override under
+    /// the lock here is not re-entrant.
     private func configFilePath() -> String {
-        let dir = configDirectoryOverride ?? Self.defaultConfigDirectoryPath()
+        let dir = lock.withLock { configDirectoryOverride } ?? Self.defaultConfigDirectoryPath()
         return (dir as NSString).appendingPathComponent("language")
     }
 
