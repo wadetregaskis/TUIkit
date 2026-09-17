@@ -170,8 +170,12 @@ swift build
 # from invalidating each other.
 xcrun --toolchain XcodeDefault swift build --build-tests --scratch-path .build/xcode
 
-# Run all tests (~6,300 tests, Swift Testing framework)
+# Run all tests (7,573 tests in 1,081 suites, Swift Testing framework)
 swift test
+
+# The same tests, in 6 processes instead of 1: 54.7s -> 21.8s (see below)
+Tools/ParallelTest/parallel_test.py --calibrate   # once, ~95s
+Tools/ParallelTest/parallel_test.py
 
 # Run a single test suite. NOTE: --filter matches the Swift TYPE name, not the
 # @Suite display string — `--filter AlertDismissalTests`, not "Alert dismissal".
@@ -191,6 +195,38 @@ Tools/BuildDocs/build-docs.sh            # add --analyze for every diagnostic
 > The latter documents only what the umbrella module itself declares, which
 > silently omits `View`, `Color`, `Binding` and everything else the sibling
 > modules define — see [`Tools/BuildDocs/README.md`](Tools/BuildDocs/README.md).
+
+## Running the suite in parallel
+
+`swift test` runs the suite in one process. 81% of the tests are in
+`@MainActor` suites, so they queue on that one actor: 77% of the CPU in the
+late part of a run is `syscall_thread_switch` and friends — threads taking
+turns, not working. `Tools/ParallelTest/parallel_test.py` splits the suite
+across processes, each with its own main actor. Measured here (12 cores,
+medians of four consecutive runs, first discarded):
+
+| command | median | speedup |
+|---|---:|---:|
+| `swift test` | 54.71 s | 1.00x |
+| `Tools/ParallelTest/parallel_test.py -j 6` | **21.79 s** | **2.51x** |
+| `Tools/ParallelTest/parallel_test.py -j 8` | 17.44 s | 3.14x |
+
+At `-j 6` that is 32.9 s a run, or ~5.5 hours across a 600-run landing batch.
+Beyond `-j 8` nothing improves: one test takes 12.2 s on its own and cannot be
+split, which the tool reports as part of its plan.
+
+**CI does not use it, and neither does the merge gate** — those run `swift
+test` in one process, exactly as above. The harness is for anyone running the
+suite repeatedly. It runs every test, and fails loudly unless the union of test
+IDs returned by its processes matches the enumerated suite exactly, so a
+process that quietly ran nothing cannot be mistaken for a pass.
+
+Because the tests are spread differently, anything depending on the
+interleaving one process happens to give it can behave differently — that is a
+property of the test. [`Tools/ParallelTest/README.md`](Tools/ParallelTest/README.md)
+records the one such test known today, the flakes seen while building it (the
+worst of which fires under plain `swift test` too), and why weights are
+measured serially rather than taken from the timings swift-testing reports.
 
 ## Pull Request Requirements
 
@@ -254,6 +290,8 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
   test in the module target it belongs to; `Tests/TUIkitTests` is for
   integration tests and everything in the umbrella module.
   `Tools/validate-test-boundaries.sh` checks this and runs in CI.
+- To run the whole suite faster while developing, see "Running the suite in
+  parallel" above. CI and the merge gate still run plain `swift test`.
 
 ## The `project-template/` directory
 
