@@ -26,24 +26,11 @@ import Testing
 @Suite("A text field's render scales with its text")
 struct TextFieldScalingTests {
 
-    /// Fastest of several batches: scheduler noise under the parallel suite
-    /// only ever inflates a timing, so the minimum is the closest estimate of
-    /// the true cost. Mirrors `FrameBufferCombineScalingTests.best`.
-    private func best(of batches: Int = 5, _ block: () -> Void) -> TimeInterval {
-        var best = TimeInterval.infinity
-        for _ in 0..<batches {
-            let start = Date()
-            block()
-            best = min(best, Date().timeIntervalSince(start))
-        }
-        return best
-    }
-
     /// The width scan alone — the loop that is called for both the widths and
     /// the emit, and the one with no early exit.
     private func scanCost(characters: Int) -> TimeInterval {
         let text = String(repeating: "a", count: characters)
-        return best {
+        return bestCPUSeconds {
             let widths = TextFieldContentRenderer.displayCellWidths(
                 of: text, displayCharacter: { $0 })
             precondition(widths.count == characters)

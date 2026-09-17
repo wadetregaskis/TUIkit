@@ -20,28 +20,21 @@ struct RenderBottleneckTests {
         RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
-    /// Measures execution time of a block over multiple iterations.
+    /// CPU seconds this thread spends running `block` `iterations` times.
     ///
-    /// Uses `Date` instead of `CFAbsoluteTimeGetCurrent` because CoreFoundation
-    /// timing functions are not available on Linux. The precision difference
-    /// is negligible for performance benchmarks at millisecond granularity.
-    ///
-    /// The iterations run in several batches and the *fastest* batch is
-    /// reported, scaled back to the full iteration count. Scheduler noise (a
-    /// descheduled core mid-run under the parallel full-suite load) only ever
-    /// inflates a timing, so the minimum is the closest estimate of the true
-    /// cost — the single-run average this used to return made the ratio
-    /// assertions flake whenever one operand's run absorbed a stall.
+    /// The fastest of several batches, scaled back to the full iteration count,
+    /// read on the per-thread CPU clock — see `bestCPUSeconds`. The minimum
+    /// drops the batches that were interrupted; the CPU clock means an
+    /// interrupted batch was never counted as slower to begin with. This used
+    /// to be a wall clock, and `analyzeForEachIterations` failed 2 of 6
+    /// full-suite runs at `-j 6` because of it.
     private func measure(_ name: String, iterations: Int = 1000, block: () -> Void) -> TimeInterval {
         let batches = 5
         let perBatch = max(1, iterations / batches)
-        var best = TimeInterval.infinity
-        for _ in 0..<batches {
-            let start = Date()
+        let best = bestCPUSeconds(batches: batches) {
             for _ in 0..<perBatch {
                 block()
             }
-            best = min(best, Date().timeIntervalSince(start))
         }
         let time = best * Double(iterations) / Double(perBatch)
         let perIteration = (time / Double(iterations)) * 1000
@@ -100,17 +93,16 @@ struct RenderBottleneckTests {
 
         print("=====================================\n")
 
-        // Calculate overhead per nesting level
-        let overheadPerLevel = (time10 - time1) / 9.0 / Double(iterations) * 1000
-        print("Overhead per nesting level: \(String(format: "%.4f", overheadPerLevel))ms")
+        // Overhead per nesting level, in units of one depth-1 render. A pure
+        // number: the machine divides out, so it means the same on this laptop
+        // and on a shared runner five times slower.
+        let overheadPerLevel = (time10 - time1) / 9.0 / time1
+        print("Overhead per nesting level: \(String(format: "%.2f", overheadPerLevel))x a depth-1 render")
 
-        // With two-pass layout, there's additional overhead per level due to
-        // measure + render passes. The threshold is relaxed to account for this.
-        // For typical UIs (3-5 levels), the overhead is acceptable:
-        // - Depth 3: ~0.04ms
-        // - Depth 5: ~0.16ms
-        // - Depth 10: ~5ms (edge case, rare in practice)
-        #expect(overheadPerLevel < 1.0, "Nesting overhead too high: \(overheadPerLevel)ms per level")
+        // Two-pass layout costs a measure and a render at every level, so a
+        // level is a fraction of a whole depth-1 render, not a multiple of one:
+        // measured 1.50-1.58x.
+        #expect(overheadPerLevel < 5, "each nesting level costs \(overheadPerLevel)x a depth-1 render")
     }
 
     // MARK: - Child Count Analysis
@@ -124,7 +116,7 @@ struct RenderBottleneckTests {
 
         // 1 child
         let children1 = VStack { Text("A") }
-        _ = measure("1 child", iterations: iterations) {
+        let time1 = measure("1 child", iterations: iterations) {
             _ = renderToBuffer(children1, context: context)
         }
 
@@ -159,8 +151,11 @@ struct RenderBottleneckTests {
 
         print("=====================================\n")
 
-        // 10 children in 500 iterations should still be fast
-        #expect(time10 < 0.5, "10 children VStack too slow: \(time10)s")
+        // Ten rows against one: linear is ~10x, quadratic ~100x, and the bound
+        // sits between them and far from both — measured 7.5-7.9x.
+        let ratio = time10 / time1
+        print("Scale factor (10 vs 1 child): \(String(format: "%.2f", ratio))x")
+        #expect(ratio < 25, "a 10-row VStack costs \(ratio)x a 1-row VStack")
     }
 
     // MARK: - ForEach Analysis
@@ -235,7 +230,7 @@ struct RenderBottleneckTests {
 
         // No modifiers
         let noModifiers = Text("Hello")
-        _ = measure("0 modifiers", iterations: iterations) {
+        let time0 = measure("0 modifiers", iterations: iterations) {
             _ = renderToBuffer(noModifiers, context: context)
         }
 
@@ -264,7 +259,11 @@ struct RenderBottleneckTests {
 
         print("=====================================\n")
 
-        #expect(time5 < 0.5, "5 modifiers too slow: \(time5)s")
+        // Five modifiers over the very Text the 0-modifier arm renders bare, so
+        // this reads the modifier pipeline almost neat: measured 8.7-9.2x.
+        let ratio = time5 / time0
+        print("Scale factor (5 modifiers vs 0): \(String(format: "%.2f", ratio))x")
+        #expect(ratio < 25, "five modifiers cost \(ratio)x an unmodified Text")
     }
 
     // MARK: - Interactive Controls Analysis
@@ -278,7 +277,7 @@ struct RenderBottleneckTests {
 
         // Simple Text (baseline)
         let text = Text("Hello")
-        _ = measure("Text (baseline)", iterations: iterations) {
+        let timeText = measure("Text (baseline)", iterations: iterations) {
             _ = renderToBuffer(text, context: context)
         }
 
@@ -321,7 +320,11 @@ struct RenderBottleneckTests {
 
         print("=====================================\n")
 
-        #expect(timeRadio < 0.5, "RadioButtonGroup too slow: \(timeRadio)s")
+        // The dearest control here against the bare primitive — the baseline
+        // this test already measured and then threw away: measured 13.3-14.3x.
+        let ratio = timeRadio / timeText
+        print("RadioButtonGroup vs Text: \(String(format: "%.2f", ratio))x")
+        #expect(ratio < 50, "a 3-item RadioButtonGroup costs \(ratio)x a Text")
     }
 
     // MARK: - String Operations Analysis
@@ -335,7 +338,7 @@ struct RenderBottleneckTests {
 
         // Short text
         let shortText = Text("Hi")
-        _ = measure("Short text (2 chars)", iterations: iterations) {
+        let timeShort = measure("Short text (2 chars)", iterations: iterations) {
             _ = renderToBuffer(shortText, context: context)
         }
 
@@ -359,11 +362,13 @@ struct RenderBottleneckTests {
 
         print("=====================================\n")
 
-        // Threshold is intentionally generous: the test runs in CI on
-        // shared Linux VMs where wall-clock measurements can be twice as
-        // noisy as on a local laptop. We want to catch egregious
-        // regressions (~10x), not every fractional slowdown.
-        #expect(timeLong < 1.5, "Very long text too slow: \(timeLong)s")
+        // 1000 characters against 2. A per-character cost that stopped being
+        // linear — a width scan that rewalks the string, the defect
+        // `TextFieldScalingTests` guards next door — would read in the hundreds,
+        // not as a small multiple: measured 1.9-2.1x.
+        let ratio = timeLong / timeShort
+        print("Scale factor (1000 chars vs 2): \(String(format: "%.2f", ratio))x")
+        #expect(ratio < 8, "1000 characters cost \(ratio)x two characters")
     }
 
     // MARK: - LazyStack vs Regular Stack

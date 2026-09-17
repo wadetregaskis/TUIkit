@@ -32,40 +32,9 @@ import Testing
 
 @Suite("Frame buffer combine scaling")
 struct FrameBufferCombineScalingTests {
-    /// Seconds of CPU time on THIS THREAD for the fastest of several batches.
-    ///
-    /// Two independent defences against noise, because the statistic here is a
-    /// ratio and a ratio inflates from below as readily as from above. The
-    /// minimum of several batches drops the runs that were interrupted; thread
-    /// CPU time means an interrupted run was never counted as slower in the
-    /// first place. `threadCPUNanoseconds()` is the framework's own answer to
-    /// this — it exists because render budgets measured in wall time failed on
-    /// loaded CI runners with nothing changed — so this reuses it rather than
-    /// hand-rolling a second clock.
-    ///
-    /// The wall clock is the fallback only where a platform has no per-thread
-    /// CPU clock (the function answers `nil`), which today is neither of the
-    /// two these tests run on.
-    private func best(of batches: Int = 5, _ block: () -> Void) -> TimeInterval {
-        var best = TimeInterval.infinity
-        for _ in 0..<batches {
-            let startCPU = threadCPUNanoseconds()
-            let startWall = Date()
-            block()
-            let elapsed: TimeInterval
-            if let startCPU, let endCPU = threadCPUNanoseconds() {
-                elapsed = TimeInterval(endCPU &- startCPU) / 1_000_000_000
-            } else {
-                elapsed = Date().timeIntervalSince(startWall)
-            }
-            best = min(best, elapsed)
-        }
-        return best
-    }
-
     private func accumulateVertically(_ count: Int) -> TimeInterval {
         let child = FrameBuffer(lines: ["a row of text wide enough to be worth copying"])
-        return best {
+        return bestCPUSeconds {
             var result = FrameBuffer()
             for _ in 0..<count { result.appendVertically(child, spacing: 0) }
             precondition(result.height == count)
@@ -100,7 +69,7 @@ struct FrameBufferCombineScalingTests {
                     offsetX: 0, offsetY: 0, width: 3, height: 1,
                     handlerID: HitTestRegion.HandlerID(1))
             ]
-            return best {
+            return bestCPUSeconds {
                 var result = FrameBuffer()
                 for _ in 0..<count { result.appendVertically(child, spacing: 0) }
                 precondition(result.hitTestRegions.count == count)
@@ -178,7 +147,7 @@ struct FrameBufferCombineScalingTests {
                 lines: [narrowText], width: narrowText.strippedLength, uniformWidth: true)
             let wide = FrameBuffer(
                 lines: [wideText], width: wideText.strippedLength, uniformWidth: true)
-            return best {
+            return bestCPUSeconds {
                 var result = FrameBuffer()
                 for index in 0..<count {
                     result.appendVertically(index.isMultiple(of: 2) ? narrow : wide, spacing: 0)

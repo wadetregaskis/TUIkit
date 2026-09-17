@@ -1,6 +1,39 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RenderPerformanceTests.swift
 //
+//  These guard the View Architecture refactor — every public control became a
+//  `body: some View` wrapping a private `_*Core` — against the cost of the
+//  wrapping. They used to do it with an absolute budget: "1000 renders in under
+//  1 second".
+//
+//  AN ABSOLUTE BUDGET IS A BUDGET ON THE MACHINE, and it was calibrated on the
+//  machine it was written on. `9db88827` moved these onto the per-thread CPU
+//  clock, which removes preemption, and the menu case still failed on every
+//  Linux x86_64 lane of CI — measured at 480bf113, the last pushed commit:
+//
+//      Linux · Swift 6.2 · x86_64      1.038857983s  for 500 iterations
+//      Linux · Swift 6.4 nightly       1.114143209s
+//      Linux · Swift main nightly      1.545232380s
+//      Linux · Swift 6.3 · x86_64      1.575375514s      bound: 1.0
+//
+//  while Linux 6.3 arm64 passed the same image and this development Mac reads
+//  0.21s for the same 500 renders. Nothing was wrong with the render: the
+//  runners are 5-7.5x slower per render in a debug build, and the budget had
+//  4.7x of headroom on one particular laptop. CPU time cannot fix that, because
+//  a slower CPU honestly spends more CPU.
+//
+//  SO THE STATEMENT IS A RATIO. Each control's per-render cost is compared with
+//  a `Text` render measured in the same process, on the same thread, against
+//  the same context. A ratio divides the machine out: both arms get slower
+//  together, so the bound means the same thing on a laptop and on a shared
+//  runner, and it says the thing the file was always for — how much the
+//  wrapping costs over the primitive it wraps, not how fast the box is.
+//
+//  The bounds sit at roughly 3x the measured ratio, quoted per test. That is
+//  tighter than what it replaces (which fired at a 0x regression on a slow
+//  runner and a 4.7x one on a fast one) and it fires on the same machine that
+//  set it.
+//
 //  Created by LAYERED.work
 //  License: MIT
 
@@ -16,8 +49,9 @@ import TUIkitCore
 /// (converting controls to `body: some View`) does not significantly
 /// impact render performance.
 ///
-/// These tests measure render time for various view hierarchies and
-/// compare against baseline expectations.
+/// Each measures a control against a `Text` primitive rendered the same number
+/// of times, and bounds the ratio — see the file header for why an absolute
+/// budget could not survive CI.
 @MainActor
 @Suite("Render Performance Tests")
 struct RenderPerformanceTests {
@@ -28,32 +62,33 @@ struct RenderPerformanceTests {
         RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
-    /// The CPU time this thread spends rendering a view `iterations` times,
-    /// in seconds — or the wall time, where the platform has no per-thread
-    /// CPU clock.
+    /// The CPU cost of ONE render of `view`, in seconds.
     ///
-    /// CPU time rather than wall time because these run inside the full
-    /// suite, which keeps every core busy. A wall clock then charges the
-    /// render for whatever else the scheduler ran in the meantime: the menu
-    /// loop below takes 0.43 s alone and read 1.1–1.6 s on CI runners, over
-    /// its budget with nothing having changed. Thread CPU time excludes the
-    /// preemption, so a budget here is a budget on the render — see
-    /// `threadCPUNanoseconds()`. It is not a budget on the machine: a slower
-    /// CPU still reads slower, which is what the budgets are for.
-    private func measureRenderTime<V: View>(
-        _ view: V,
-        iterations: Int = 100,
-        context: RenderContext
-    ) -> TimeInterval {
-        let cpuStart = threadCPUNanoseconds()
-        let wallStart = Date()
-        for _ in 0..<iterations {
-            _ = renderToBuffer(view, context: context)
+    /// The fastest of several batches, divided by the iteration count — see
+    /// `bestCPUSeconds`.
+    private func cost<V: View>(_ view: V, iterations: Int, context: RenderContext) -> TimeInterval {
+        let batch = bestCPUSeconds {
+            for _ in 0..<iterations {
+                _ = renderToBuffer(view, context: context)
+            }
         }
-        if let cpuStart, let cpuEnd = threadCPUNanoseconds() {
-            return TimeInterval(cpuEnd - cpuStart) / 1_000_000_000
-        }
-        return Date().timeIntervalSince(wallStart)
+        return batch / Double(iterations)
+    }
+
+    /// What one render of `view` costs, in units of one `Text` render.
+    ///
+    /// Both arms are measured here, adjacent in time, on one thread and one
+    /// context: whatever the machine is, it is the same machine for both, which
+    /// is the whole point of quoting a ratio rather than a stopwatch.
+    private func costInTextRenders<V: View>(
+        _ view: V, iterations: Int = 500, _ name: String
+    ) -> Double {
+        let context = testContext()
+        let baseline = cost(Text("Baseline"), iterations: iterations, context: context)
+        let subject = cost(view, iterations: iterations, context: context)
+        let ratio = subject / baseline
+        print("  \(name): \(String(format: "%.1f", ratio))x a Text render")
+        return ratio
     }
 
     // MARK: - Stack Performance Tests
@@ -68,11 +103,9 @@ struct RenderPerformanceTests {
             Text("Line 5")
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        // Should render 1000 iterations in under 1 second
-        #expect(time < 1.0, "VStack render took \(time)s for 1000 iterations - too slow")
+        // Five rows plus the stack: measured 12.4-12.9x.
+        let ratio = costInTextRenders(view, "VStack (5 children)")
+        #expect(ratio < 40, "a 5-row VStack costs \(ratio)x a Text render")
     }
 
     @Test("HStack render performance is acceptable")
@@ -85,10 +118,9 @@ struct RenderPerformanceTests {
             Text("E")
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "HStack render took \(time)s for 1000 iterations - too slow")
+        // measured 12.2-12.4x.
+        let ratio = costInTextRenders(view, "HStack (5 children)")
+        #expect(ratio < 40, "a 5-column HStack costs \(ratio)x a Text render")
     }
 
     @Test("Nested stacks render performance is acceptable")
@@ -108,10 +140,9 @@ struct RenderPerformanceTests {
             }
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.5, "Nested stacks render took \(time)s for 1000 iterations - too slow")
+        // Six leaves under four stacks: measured 25.6-26.4x.
+        let ratio = costInTextRenders(view, "Nested stacks (3 HStacks in a VStack)")
+        #expect(ratio < 80, "nested stacks cost \(ratio)x a Text render")
     }
 
     // MARK: - Interactive Control Performance Tests
@@ -120,10 +151,9 @@ struct RenderPerformanceTests {
     func buttonPerformance() {
         let view = Button("Test Button") {}
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "Button render took \(time)s for 1000 iterations - too slow")
+        // The whole point of the refactor, in one number: measured 3.7-3.9x.
+        let ratio = costInTextRenders(view, "Button")
+        #expect(ratio < 12, "a Button costs \(ratio)x a Text render")
     }
 
     @Test("Toggle render performance is acceptable")
@@ -131,10 +161,9 @@ struct RenderPerformanceTests {
         var isOn = false
         let view = Toggle("Test Toggle", isOn: Binding(get: { isOn }, set: { isOn = $0 }))
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "Toggle render took \(time)s for 1000 iterations - too slow")
+        // measured 4.3-4.5x.
+        let ratio = costInTextRenders(view, "Toggle")
+        #expect(ratio < 14, "a Toggle costs \(ratio)x a Text render")
     }
 
     @Test("Menu render performance is acceptable")
@@ -146,10 +175,11 @@ struct RenderPerformanceTests {
         }
         .menuStyle(.inline)
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 500, context: context)
-
-        #expect(time < 1.0, "Menu render took \(time)s for 500 iterations - too slow")
+        // The case that turned CI red for nine days. A menu is genuinely the
+        // dearest control here — it lays out its own rows — so the ratio is
+        // large and the bound is large with it: measured 113-123x.
+        let ratio = costInTextRenders(view, "Menu (3 items)")
+        #expect(ratio < 380, "an inline Menu costs \(ratio)x a Text render")
     }
 
     @Test("RadioButtonGroup render performance is acceptable")
@@ -163,10 +193,9 @@ struct RenderPerformanceTests {
             RadioButtonItem("c", "Option C")
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 500, context: context)
-
-        #expect(time < 1.0, "RadioButtonGroup render took \(time)s for 500 iterations - too slow")
+        // measured 13.8-14.3x.
+        let ratio = costInTextRenders(view, "RadioButtonGroup (3 items)")
+        #expect(ratio < 45, "a 3-item RadioButtonGroup costs \(ratio)x a Text render")
     }
 
     // MARK: - LazyStack Performance Tests
@@ -181,10 +210,9 @@ struct RenderPerformanceTests {
             Text("Line 5")
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "LazyVStack render took \(time)s for 1000 iterations - too slow")
+        // measured 12.4-12.6x.
+        let ratio = costInTextRenders(view, "LazyVStack (5 children)")
+        #expect(ratio < 40, "a 5-row LazyVStack costs \(ratio)x a Text render")
     }
 
     @Test("LazyHStack render performance is acceptable")
@@ -197,10 +225,9 @@ struct RenderPerformanceTests {
             Text("E")
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "LazyHStack render took \(time)s for 1000 iterations - too slow")
+        // measured 12.1-12.4x.
+        let ratio = costInTextRenders(view, "LazyHStack (5 children)")
+        #expect(ratio < 40, "a 5-column LazyHStack costs \(ratio)x a Text render")
     }
 
     // MARK: - Complex Hierarchy Performance Tests
@@ -218,10 +245,9 @@ struct RenderPerformanceTests {
             Text("Footer")
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 500, context: context)
-
-        #expect(time < 1.5, "Complex hierarchy render took \(time)s for 500 iterations - too slow")
+        // Two buttons, a toggle, two texts and three stacks: measured 37.7-39.8x.
+        let ratio = costInTextRenders(view, "Complex hierarchy")
+        #expect(ratio < 120, "a mixed page costs \(ratio)x a Text render")
     }
 
     @Test("Deeply nested hierarchy render performance is acceptable")
@@ -238,10 +264,10 @@ struct RenderPerformanceTests {
             }
         }
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "Deeply nested hierarchy render took \(time)s for 1000 iterations - too slow")
+        // One leaf under five stacks — the per-level cost of the two-pass
+        // layout, and nothing else: measured 18.2-19.5x.
+        let ratio = costInTextRenders(view, "Deeply nested (5 levels)")
+        #expect(ratio < 60, "five levels of nesting cost \(ratio)x a Text render")
     }
 
     // MARK: - Modifier Chain Performance Tests
@@ -253,10 +279,10 @@ struct RenderPerformanceTests {
             .bold()
             .padding(2)
 
-        let context = testContext()
-        let time = measureRenderTime(view, iterations: 1000, context: context)
-
-        #expect(time < 1.0, "Modifier chain render took \(time)s for 1000 iterations - too slow")
+        // Three modifiers over the same primitive the baseline renders bare,
+        // so this one reads the modifier pipeline almost neat: measured 1.6-1.7x.
+        let ratio = costInTextRenders(view, "Modifier chain (3 modifiers)")
+        #expect(ratio < 6, "three modifiers cost \(ratio)x a Text render")
     }
 
     // MARK: - Comparative Tests
@@ -276,8 +302,8 @@ struct RenderPerformanceTests {
         }
 
         let context = testContext(height: 5)  // Only 5 lines visible
-        let regularTime = measureRenderTime(regularStack, iterations: 500, context: context)
-        let lazyTime = measureRenderTime(lazyStack, iterations: 500, context: context)
+        let regularTime = cost(regularStack, iterations: 500, context: context)
+        let lazyTime = cost(lazyStack, iterations: 500, context: context)
 
         // LazyVStack may have overhead for small datasets due to truncation logic.
         // Allow up to 3x for measurement variance on small datasets.
@@ -295,77 +321,70 @@ struct RenderPerformanceStatistics {
         RenderContext(availableWidth: width, availableHeight: height, tuiContext: TUIContext()).isolatingRenderCache()
     }
 
-    /// Thread CPU seconds spent in `work`, or wall seconds where the platform
-    /// has no per-thread clock — the same measurement as
-    /// `RenderPerformanceTests`, for the same reason.
-    private func measure(_ work: () -> Void) -> TimeInterval {
-        let cpuStart = threadCPUNanoseconds()
-        let wallStart = Date()
-        work()
-        if let cpuStart, let cpuEnd = threadCPUNanoseconds() {
-            return TimeInterval(cpuEnd - cpuStart) / 1_000_000_000
+    /// The CPU cost of one render of `view`, in seconds — the same measurement
+    /// as `RenderPerformanceTests`, for the same reason.
+    private func cost<V: View>(_ view: V, iterations: Int, context: RenderContext) -> TimeInterval {
+        let batch = bestCPUSeconds {
+            for _ in 0..<iterations {
+                _ = renderToBuffer(view, context: context)
+            }
         }
-        return Date().timeIntervalSince(wallStart)
+        return batch / Double(iterations)
     }
 
     @Test("Print render performance statistics")
     func printStatistics() {
         let context = testContext()
         let iterations = 1000
+        var isOn = false
+
+        let baseline = cost(Text("Baseline"), iterations: iterations, context: context)
 
         var results: [(String, TimeInterval)] = []
-
-        // Measure each view type
-        results.append(("VStack (2 children)", measure {
-            for _ in 0..<iterations {
-                _ = renderToBuffer(
+        results.append(
+            (
+                "VStack (2 children)",
+                cost(
                     VStack {
                         Text("A")
                         Text("B")
-                    },
-                    context: context
-                )
-            }
-        }))
-
-        results.append(("HStack (2 children)", measure {
-            for _ in 0..<iterations {
-                _ = renderToBuffer(
+                    }, iterations: iterations, context: context)
+            ))
+        results.append(
+            (
+                "HStack (2 children)",
+                cost(
                     HStack {
                         Text("A")
                         Text("B")
-                    },
-                    context: context
-                )
-            }
-        }))
-
-        results.append(("Button", measure {
-            for _ in 0..<iterations {
-                _ = renderToBuffer(Button("Test") {}, context: context)
-            }
-        }))
-
-        var isOn = false
-        results.append(("Toggle", measure {
-            for _ in 0..<iterations {
-                _ = renderToBuffer(Toggle("Test", isOn: Binding(get: { isOn }, set: { isOn = $0 })), context: context)
-            }
-        }))
+                    }, iterations: iterations, context: context)
+            ))
+        results.append(("Button", cost(Button("Test") {}, iterations: iterations, context: context)))
+        results.append(
+            (
+                "Toggle",
+                cost(
+                    Toggle("Test", isOn: Binding(get: { isOn }, set: { isOn = $0 })),
+                    iterations: iterations, context: context)
+            ))
 
         // Print results
         print("\n=== Render Performance Statistics ===")
         print("Iterations: \(iterations)")
+        print("Text baseline: \(String(format: "%.4f", baseline * 1000))ms per render")
         print("")
-        for (name, time) in results {
-            let perIteration = (time / Double(iterations)) * 1000  // ms
-            print("\(name): \(String(format: "%.3f", time))s total, \(String(format: "%.3f", perIteration))ms per render")
+        for (name, perRender) in results {
+            print(
+                "\(name): \(String(format: "%.4f", perRender * 1000))ms per render, "
+                    + "\(String(format: "%.1f", perRender / baseline))x a Text render")
         }
         print("=====================================\n")
 
-        // All should complete in reasonable time
-        for (name, time) in results {
-            #expect(time < 2.0, "\(name) took too long: \(time)s")
+        // None of these is a control that lays out rows of its own, so they all
+        // sit in the same band as the simple cases above: measured 3.6-5.5x.
+        for (name, perRender) in results {
+            let ratio = perRender / baseline
+            #expect(ratio < 18, "\(name) costs \(ratio)x a Text render")
         }
     }
 }
