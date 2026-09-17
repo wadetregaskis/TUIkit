@@ -41,6 +41,18 @@ private func split(_ box: VisibilityBox) -> some View {
     }
 }
 
+/// The same split at its concrete type, so it can be wrapped in a memo:
+/// `NavigationSplitView` is `Equatable` where its columns are, and both `Text`
+/// and the `EmptyView` the two-column init plants are.
+@MainActor
+private func memoizableSplit(_ box: VisibilityBox) -> NavigationSplitView<Text, EmptyView, Text> {
+    NavigationSplitView(columnVisibility: box.binding) {
+        Text("side")
+    } detail: {
+        Text("detail")
+    }
+}
+
 /// Frames bracketed the way `RenderLoop` brackets them, with or without a focus
 /// manager and a shortcut registry.
 @MainActor
@@ -74,14 +86,26 @@ private final class SplitHarness {
         focusManager?.beginSceneRender()
     }
 
-    func frame(_ view: some View, tracker: VolatileReadTracker = VolatileReadTracker()) {
+    @discardableResult
+    func frame(
+        _ view: some View, tracker: VolatileReadTracker = VolatileReadTracker()
+    ) -> FrameBuffer {
         var context = self.context
         context.environment.installVolatileReadTracker(tracker)
         beginWalk()
-        _ = renderToBuffer(view, context: context)
+        let buffer = renderToBuffer(view, context: context)
         focusManager?.endRenderPass()
         tui.stateStorage.endRenderPass()
         tui.renderCache.removeInactive()
+        return buffer
+    }
+
+    /// Renders one frame and returns how many memo lookups missed — zero when
+    /// every memoized subtree was served.
+    func misses(_ view: some View) -> Int {
+        let before = tui.renderCache.stats.misses
+        frame(view)
+        return tui.renderCache.stats.misses - before
     }
 
     func press(_ event: KeyEvent) -> Bool {
@@ -163,5 +187,48 @@ struct NavigationSplitViewMemoTests {
         #expect(saves.value == 1 && held.value == 1, "an app shortcut did not beat the defaults")
         #expect(harness.press(optionControlS), "the replayed ⌥⌃S did nothing")
         #expect(box.visibility == .detailOnly)
+    }
+
+    @Test("A split served from the cache still toggles on the chords its own replay registered")
+    func servedSplitStillTogglesOnItsChords() {
+        // What the recorded-chords test above could only do by hand, now that a
+        // split's hit-test regions no longer hold its buffer out of the cache:
+        // the same thing through a real memo, on a frame the cache answered.
+        let harness = SplitHarness(focus: false)
+        let box = VisibilityBox()
+        let view = memoizableSplit(box).equatable()
+
+        harness.frame(view)
+        #expect(!harness.tui.renderCache.isEmpty, "the split's buffer was never stored")
+
+        // Nothing under the memo renders on this frame, and `beginWalk` emptied
+        // the shortcut registry as the render loop does — so only the replay
+        // can have put the chords back.
+        #expect(harness.misses(view) == 0, "the split rendered again")
+        #expect(harness.press(controlS), "the served frame left ⌃S unregistered")
+        #expect(box.visibility == .detailOnly)
+        // The visibility the chord just changed lives in a plain box here, so
+        // nothing invalidates the entry; in an app it is `@State`, whose write
+        // clears the split's cached picture before the next frame can serve it.
+    }
+
+    @Test("A split with a focus manager is never served, because its sections cannot be replayed")
+    func splitWithAFocusManagerIsNeverServed() {
+        let harness = SplitHarness(focus: true)
+        let view = memoizableSplit(VisibilityBox()).equatable()
+
+        harness.frame(view)
+        harness.frame(view)
+        // The declaration is the only thing standing between a split and the
+        // cache now, and this is what it buys: the focus manager is emptied
+        // before every walk and a served split would refill it with nothing, so
+        // its columns' sections — and the dividers and edge that register in
+        // them — have to be rendered rather than served.
+        #expect(
+            harness.tui.renderCache.isEmpty,
+            "a split whose sections no replay can make again was stored")
+        #expect(
+            harness.focusManager?.sectionIDs.isEmpty == false,
+            "the second frame registered no sections: \(harness.focusManager?.sectionIDs ?? [])")
     }
 }
