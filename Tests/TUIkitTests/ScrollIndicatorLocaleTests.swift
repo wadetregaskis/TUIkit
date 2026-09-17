@@ -57,11 +57,15 @@ struct ScrollIndicatorLocaleTests {
         #expect(approximateCountLabel(5400, locale: Locale(identifier: "de")) == "~5,4K")
     }
 
-    @Test("A List renders its 'N more' count grouped (default locale)")
+    @Test("A List renders its 'N more' count grouped, in the environment's locale")
     func listIndicatorGrouped() {
         // 3000 items in a short frame → a "N more below" indicator whose count
-        // is in the thousands, so grouping is observable. The default app
-        // language is English, so a comma is expected.
+        // is in the thousands, so grouping is observable. Which separator is
+        // asked for below, not assumed: `applyRuntimeServices` republishes
+        // `\.locale` from the app language, so "the default is English" was
+        // only true for a developer whose LANG said so — a German one got
+        // "2.999" and this case failed for reasons that had nothing to do
+        // with the List.
         struct Item: Identifiable { let id: Int }
         let tuiContext = TUIContext()
         let view = List(
@@ -71,6 +75,7 @@ struct ScrollIndicatorLocaleTests {
 
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
+        environment.locale = Locale(identifier: "en")
         // Predates the visibility/style split (#555): these assertions are written
         // against the "N more above / below" lines, which are now a style. The
         // shipped default is a scrollbar; cases about THAT ask for it by name.

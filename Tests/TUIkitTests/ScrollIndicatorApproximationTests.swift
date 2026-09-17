@@ -13,6 +13,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -35,6 +36,14 @@ struct ScrollIndicatorApproximationTests {
         environment.scrollIndicatorStyle = .text
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
+        // `applyRuntimeServices` republishes `\.locale` from the app language
+        // every frame, and the app language comes from the developer's own
+        // LANG. These cases are about the ARITHMETIC — which count is exact and
+        // which reads as an estimate — so the grouping separator is pinned here
+        // rather than inherited: "4,994" is asserted below and a German app
+        // draws "4.994". `ScrollIndicatorLocaleTests` owns the grouping itself,
+        // and asks for each locale by name.
+        environment.locale = Locale(identifier: "en")
         let context = RenderContext(
             availableWidth: 40, availableHeight: Self.viewport,
             environment: environment, tuiContext: tuiContext)
