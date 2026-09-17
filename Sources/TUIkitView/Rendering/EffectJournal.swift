@@ -150,4 +150,16 @@ extension RenderContext {
         guard let journal = renderCache?.effectJournal, journal.isRecording else { return nil }
         return journal
     }
+
+    /// How many value memos are recording at this point in the walk, and zero
+    /// outside every memo.
+    ///
+    /// A claimable carrier planted in the environment stamps itself with this,
+    /// so the registrar that claims it can tell whether the carrier sits inside
+    /// the memo now recording (the same depth) or above it (a smaller one) —
+    /// see `KeyboardShortcutModifier`. A registration under a carrier the memo's
+    /// key cannot see is not one a hit may make again.
+    package var effectRecordingDepth: Int {
+        renderCache?.effectJournal.recordingDepth ?? 0
+    }
 }

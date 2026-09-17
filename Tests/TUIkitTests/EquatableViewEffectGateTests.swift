@@ -165,6 +165,42 @@ struct EquatableViewEffectGateTests {
             })
     }
 
+    @Test("A Button's keyboard shortcut inside the subtree is stored, because a hit registers it again")
+    func keyboardShortcutStores() {
+        // The registry is emptied every pass like the dispatcher, so this is
+        // recorded and replayed as `onKeyPress` is. The stop ahead takes the
+        // focus, so the button's own focus registration is not what decides
+        // this. What proves the replay is KeyboardShortcutMemoTests.
+        #expect(
+            storesBuffer {
+                VStack {
+                    Text("ahead").focusable()
+                    EffectLeaf(label: "x") { _ in
+                        Button("go") {}.keyboardShortcut("s", modifiers: [])
+                    }
+                    .equatable()
+                }
+            })
+    }
+
+    @Test("A keyboard shortcut planted ABOVE the subtree declines the cache")
+    func keyboardShortcutAboveTheBoundaryDeclines() {
+        // The exception to the case above, and the reason it is not simply "a
+        // shortcut is replayable": the carrier is claimed by the first control
+        // that renders under it, and on a served frame no control does. The key
+        // is made of the view value BELOW the modifier, so it cannot see the
+        // shortcut change either.
+        #expect(
+            !storesBuffer {
+                VStack {
+                    Text("ahead").focusable()
+                    EffectLeaf(label: "x") { _ in Button("go") {} }
+                        .equatable()
+                        .keyboardShortcut("s", modifiers: [])
+                }
+            })
+    }
+
     @Test("A FOCUSED focus registration inside the subtree declines the cache")
     func focusedFocusableDeclines() {
         // The only stop here, so it takes the focus as it registers. Its buffer
@@ -250,7 +286,7 @@ struct EquatableViewEffectGateTests {
     /// would be indistinguishable from a miss.
     @Test(
         "Every gate condition holds through both memo wrappers",
-        arguments: [0, 1], 0..<10)
+        arguments: [0, 1], 0..<11)
     func gateHoldsThroughBothWrappers(wrapper: Int, condition: Int) {
         @MainActor func wrapped<V: View & Equatable>(_ inner: V) -> AnyView {
             wrapper == 0
@@ -294,13 +330,25 @@ struct EquatableViewEffectGateTests {
                         EffectLeaf(label: "x") { $0.preference(key: CountKey.self, value: 1) }),
                     false
                 )
-            default:
+            case 9:
                 (
                     "an UNFOCUSED focus registration inside (replayed on a hit)",
                     AnyView(
                         VStack {
                             Text("ahead").focusable()
                             wrapped(EffectLeaf(label: "x") { $0.focusable() })
+                        }), true
+                )
+            default:
+                (
+                    "a Button's keyboard shortcut inside (replayed on a hit)",
+                    AnyView(
+                        VStack {
+                            Text("ahead").focusable()
+                            wrapped(
+                                EffectLeaf(label: "x") { _ in
+                                    Button("go") {}.keyboardShortcut("s", modifiers: [])
+                                })
                         }), true
                 )
             }

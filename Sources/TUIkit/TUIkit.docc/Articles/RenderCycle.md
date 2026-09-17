@@ -498,8 +498,8 @@ subtree declines the cache.
 
 A key handler (`onKeyPress`, or the <kbd>Ctrl</kbd>-<kbd>R</kbd> binding of
 `.refreshable`), a status-bar item (`.statusBarItems`), an unfocused control's
-place in the focus ring (`FocusRegistration.register`) and an inactive
-`.focusSection` do not decline the cache. While a memoized subtree renders on a
+place in the focus ring (`FocusRegistration.register`), an inactive
+`.focusSection` and a `Button`'s `.keyboardShortcut` do not decline the cache. While a memoized subtree renders on a
 miss, each such registration is also recorded, and the recording is stored with
 the buffer. Every hit then makes those registrations again, in the order they
 were made, at the point in the walk where the subtree would have rendered. So
@@ -542,15 +542,27 @@ active section hands its subtree a breathing ● that is drawn into the buffer a
 assigned straight into the environment, where neither the key nor
 `noteAppliedEnvironment` can see it change.
 
+A `Button`'s `.keyboardShortcut` is replayed only when the modifier carrying it
+is INSIDE the memoized subtree, which is where writing the button and its
+shortcut together puts it. Planted above the boundary it keeps declining, for a
+reason particular to a claimable carrier: the modifier offers its shortcut to
+the first control that renders under it, and on a served frame no control
+renders under it at all — so the offer would stand while the replay registered
+anyway, and a sibling rendered after the memo could take a shortcut that belongs
+to the button inside it. The key cannot rule that out either, being made of the
+view value below the modifier.
+
 Under `TUIKIT_VERIFY_RENDER_MEMO` a hit renders fresh instead, which registers
 for real, and the verifier compares the kinds and number of registrations that
 render makes against the stored ones.
 
 An inline menu's paging keys and a split view's sidebar chords are recorded the
-same way, but neither view can be served yet. A `.menuStyle(_:)` puts a value in
-the environment that cannot be compared, which stops every memo beneath it
-storing. And a split view's buffer carries hit-test regions, which are never
-stored.
+same way, and what is left standing between them and a served frame is the
+hit-test region. A buffer carrying one is never stored, and every `Button` adds
+one wherever a mouse dispatcher is wired — which is everywhere in a running app,
+so a menu's rows are storable today only where nothing is listening for the
+mouse. A split view's own buffer carries regions as well. Lifting that gate is
+the mouse phase's work, not this one's.
 
 ### Keeping Nested Entries Alive
 

@@ -484,8 +484,35 @@ final class KeyboardShortcutAssignment: @unchecked Sendable {
     private var measureClaimant: ViewIdentity?
     private var renderClaimant: ViewIdentity?
 
+    /// How many value memos were recording where this carrier was last planted
+    /// — `RenderContext.effectRecordingDepth` at that point in the walk.
+    ///
+    /// What it answers is whether the modifier sits INSIDE the memo that would
+    /// store the control claiming it, which is what decides whether that
+    /// control's registration can be replayed on a served frame. Stamped by
+    /// `KeyboardShortcutModifier` on each plant rather than taken at init,
+    /// because the carrier is built with the view value and the memo nesting is
+    /// a property of where it is rendered.
+    private var plantedAtEffectRecordingDepth = 0
+
     init(_ shortcut: KeyboardShortcut) {
         self.shortcut = shortcut
+    }
+
+    /// Records that this carrier was planted where `depth` value memos were
+    /// recording.
+    func planted(atEffectRecordingDepth depth: Int) {
+        plantedAtEffectRecordingDepth = depth
+    }
+
+    /// Whether the memo now recording — the innermost of `recordingDepth` of
+    /// them — is one this carrier was planted inside.
+    ///
+    /// Equal depths mean the modifier rendered below that memo's root, since a
+    /// carrier is always an ancestor of the control claiming it and the depth
+    /// only grows down the tree.
+    func isPlanted(insideMemoAtDepth recordingDepth: Int) -> Bool {
+        plantedAtEffectRecordingDepth == recordingDepth
     }
 
     /// Claims the assignment for the control at `identity`; returns nil if some
@@ -541,7 +568,11 @@ extension View {
     /// ``KeyboardShortcut/cancelAction`` (Escape). Attach it directly to a
     /// single `Button`; see ``KeyboardShortcut`` for the fall-through rules.
     public func keyboardShortcut(_ shortcut: KeyboardShortcut) -> some View {
-        environment(\.assignedKeyboardShortcut, KeyboardShortcutAssignment(shortcut))
+        // Not `environment(\.assignedKeyboardShortcut, …)`: the carrier has to
+        // know how deep in the value memos it was planted, and a subtree under
+        // an uncomparable environment value can never be cached. See
+        // `KeyboardShortcutModifier`.
+        KeyboardShortcutModifier(content: self, assignment: KeyboardShortcutAssignment(shortcut))
     }
 
     /// Assigns a key-equivalent shortcut to the wrapped control — SwiftUI's

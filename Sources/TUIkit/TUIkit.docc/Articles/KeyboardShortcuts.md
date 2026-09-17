@@ -145,6 +145,8 @@ VStack {
 
 This precedence holds inside memoized subtrees too. A `ForEach` row or an `.equatable()` view served from the render cache registers its handlers again at the place in the tree where it would have rendered, so they rank exactly as they would if it had rendered (see <doc:RenderCycle#Registrations-a-Hit-Makes-Again>).
 
+A `Button`'s own shortcut is registered again the same way, on one condition: the `keyboardShortcut(_:)` modifier has to be inside the memoized subtree, as it is when you write the button and its shortcut together. Planted above the boundary instead — `Button("Save") { … }.equatable().keyboardShortcut("s")` — the subtree goes on declining the cache, because the modifier offers its shortcut to the first control that renders *under* it and a served frame renders none.
+
 ## Focus Navigation
 
 The `FocusManager` dispatches key events in three steps:

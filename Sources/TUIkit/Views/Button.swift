@@ -465,10 +465,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
 
         // A `.keyboardShortcut(.defaultAction / .cancelAction)` wrapper plants a
         // claimable assignment in the environment; the wrapped button claims it
-        // and registers its action for the frame. Registration is a per-frame
-        // render side effect — declared so the value memos don't cache it away
-        // (a memoised button that skipped this would leave the default button
-        // dead from the second frame on).
+        // and registers its action for the frame.
         var resolvedShortcut: KeyboardShortcut?
         if !isDisabled,
             let assignment = context.environment.assignedKeyboardShortcut,
@@ -482,15 +479,22 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             // equivalent), and a measure that didn't see the hint would size
             // the menu too narrow for the render to fit it.
             resolvedShortcut = shortcut.resolved(commandKey: context.environment.commandKey)
-            // Registration, though, is a per-frame render side effect —
-            // declared so the value memos don't cache it away (a memoised
-            // button that skipped this would leave the default button dead
-            // from the second frame on).
+            // Registration, though, is per-frame presence: the registry is
+            // emptied before every walk, so a button whose subtree was served
+            // from a value memo has to register again or its key equivalent is
+            // dead while the button is still on screen. Declared to any
+            // value-memoizing ancestor either way — as REPLAYABLE when the
+            // modifier carrying the shortcut is inside the memo, and as a plain
+            // render side effect when it was planted above one, where a served
+            // frame would leave the offer standing. See
+            // `KeyboardShortcutRegistrar`.
             if let resolvedShortcut, !context.isMeasuring,
-                let registry = context.environment.keyboardShortcutRegistry
+                KeyboardShortcutRegistrar.register(
+                    resolvedShortcut, action: effectiveAction, context: context)
             {
-                context.environment.volatileReadTracker?.recordRenderSideEffect()
-                registry.register(resolvedShortcut, action: effectiveAction)
+                KeyboardShortcutRegistrar.declare(
+                    resolvedShortcut, action: effectiveAction, carrier: assignment,
+                    context: context)
             }
         }
 
