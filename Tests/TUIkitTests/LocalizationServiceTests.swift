@@ -500,17 +500,41 @@ struct LanguageDetectionTests {
 
     @Test("The real process environment reaches the detection")
     func processEnvironmentIsTheDefault() {
-        // The wiring, not the rule: the defaulted arguments must actually read
-        // `ProcessInfo` and `NSLocale`. Setting LC_ALL is process-wide, but
-        // neither Foundation's locale nor any other suite reads it — Darwin
-        // takes its locale from the preferences domain, and swift-foundation
-        // off Darwin never calls `getenv` for one at all.
-        let name = "LC_ALL"
-        let saved = ProcessInfo.processInfo.environment[name]
-        setenv(name, "ja_JP.UTF-8", 1)
-        defer {
-            if let saved { setenv(name, saved, 1) } else { unsetenv(name) }
-        }
-        #expect(LocalizationService.systemPreferredLanguage() == .japanese)
+        // The wiring, not the rule: the defaulted arguments must read the live
+        // process rather than some fixed value.
+        //
+        // NOT by calling `setenv`, which is what this used to do —
+        // `setenv("LC_ALL", "ja_JP.UTF-8", 1)` for the length of this test,
+        // reasoning that "neither Foundation's locale nor any other suite reads
+        // it". `LocalizationService.init()` reads it, through this very
+        // default, and `.shared` is a lazy `static let`: whichever
+        // concurrently-running test first touched it inside that window latched
+        // Japanese for the REST OF THE PROCESS, and every view resolving
+        // `label.noItems` then drew 項目がありません.
+        // `ListRenderTests/emptyDefaultPlaceholder()` and
+        // `SnapshotCorpusTests/corpus()` failed together that way in 2 of 10
+        // full runs at `-j 12`; with the bundle filtered to this suite plus
+        // `ListRenderTests`, 15 runs of 15 failed against 0 of 15 for
+        // `ListRenderTests` alone. Setting a process-wide environment variable
+        // inside an in-process parallel test runner is a hazard to every
+        // lazily-initialised global, not only this one.
+        //
+        // So the defaults are posed against the live values instead. Passing
+        // only `preferredLanguages: []` isolates the `environment:` default:
+        // were it `[:]`, the answer would be nil while the process's own POSIX
+        // variables still name a language. That is a real failure on a machine
+        // whose locale names a bundled language and vacuously true on one whose
+        // does not — the honest limit of checking a default in-process, and the
+        // reason the rule itself is tested through injected parameters in
+        // `LanguageDetectionTests` rather than here.
+        #expect(
+            LocalizationService.systemPreferredLanguage(preferredLanguages: [])
+                == LocalizationService.posixEnvironmentLanguage(
+                    ProcessInfo.processInfo.environment))
+        #expect(
+            LocalizationService.systemPreferredLanguage()
+                == LocalizationService.systemPreferredLanguage(
+                    environment: ProcessInfo.processInfo.environment,
+                    preferredLanguages: NSLocale.preferredLanguages))
     }
 }

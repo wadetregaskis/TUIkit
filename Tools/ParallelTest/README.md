@@ -224,11 +224,12 @@ fire either. Attributing the third to `1d6eacd9` is inference from what that
 commit changed, not something these runs prove: 25 runs cannot distinguish a
 fixed 2-in-7 flake from a lucky one, and nothing here re-measured it before.
 
-Two remain. The first is a **product defect, not a flaky test**:
+One remains. The other was a **product defect, not a flaky test**, and is now
+closed:
 
-* `ListRenderTests/emptyDefaultPlaceholder()` and `SnapshotCorpusTests/corpus()`
-  fail **together**, 2 of 10 runs at `-j 12`, always in the same process. The
-  placeholder renders in Japanese:
+* **Fixed.** `ListRenderTests/emptyDefaultPlaceholder()` and
+  `SnapshotCorpusTests/corpus()` used to fail **together**, 2 of 10 runs at
+  `-j 12`, always in the same process, with the placeholder in Japanese:
 
   ```
   (joined → "╭────────╮│項目がありません│…").contains("No items")
@@ -238,22 +239,25 @@ Two remain. The first is a **product defect, not a flaky test**:
   touch in a process is what fixes its language, and `init()` asks
   `systemPreferredLanguage()`, whose `environment:` argument defaults to the
   live `ProcessInfo.processInfo.environment`. Meanwhile
-  `LocalizationServiceTests/processEnvironmentIsTheDefault()` does
+  `LocalizationServiceTests/processEnvironmentIsTheDefault()` did
   `setenv("LC_ALL", "ja_JP.UTF-8", 1)` process-wide for the length of one test.
-  Any test that first touches `.shared` inside that window latches Japanese for
+  Any test that first touched `.shared` inside that window latched Japanese for
   the **rest of the process**, and every view resolving `label.noItems` through
-  `ViewConstants+Localized` then draws it. That test's own comment reasons the
-  `setenv` is safe because "neither Foundation's locale nor any other suite
+  `ViewConstants+Localized` then drew it. That test's own comment reasoned the
+  `setenv` was safe because "neither Foundation's locale nor any other suite
   reads it" — `LocalizationService.init()` does, through the defaulted
-  argument. It is the same shape as `561f7f0b`: a lazy global whose defect is
-  *when* it is first touched.
+  argument. Same shape as `561f7f0b`: a lazy global whose defect is *when* it
+  is first touched.
 
-  Partitioning should make this more likely, by reasoning rather than by
-  measurement: one process runs thousands of tests that touch `.shared` long
-  before the window opens, while a twelfth of the suite is ~630 tests and far
-  likelier to have its first touch land inside it. Both sightings were at
-  `-j 12`, but with 10 runs there and 4 at each other arm that is not on its
-  own a measured rate difference.
+  Closed from both ends, and the halves are worth telling apart. `76cd4d05`
+  gave every suite that asserts the framework's own English words a
+  `.rendersEnglishUI` trait, which pins English before that suite runs, so no
+  earlier touch of `.shared` decides what it renders — measured on the filter
+  that made the latch deterministic (`LanguageDetectionTests|ListRenderTests`,
+  15 failures in 15 before), that alone took it to 0 of 15. The `setenv` then
+  went as well, because setting a process-wide environment variable inside an
+  in-process parallel runner is a hazard to every lazily-initialised global and
+  not only to this one.
 
 * `RenderBottleneckTests/analyzeForEachIterations()` failed 2 of 6 runs at
   `-j 6` — `#expect(time10 < 0.5)`, a wall-clock budget, which is the shape
