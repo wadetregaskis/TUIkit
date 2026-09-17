@@ -43,6 +43,12 @@ extension ItemListHandler {
     ///     says why.
     ///   - focusID: This control's persisted focus identity.
     /// - Returns: Whether the control holds the keyboard focus this frame.
+    ///
+    /// `@MainActor`, as `FocusRegistration.register` now is and as every
+    /// `renderToBuffer` that reaches this already was: a replayable
+    /// registration hands the render cache a closure holding a non-`Sendable`
+    /// `Focusable`, so it can only be built where the render walk runs.
+    @MainActor
     @discardableResult
     func engageFocus(context: RenderContext, focusID: String) -> Bool {
         FocusRegistration.register(context: context, handler: self, focusID: focusID)

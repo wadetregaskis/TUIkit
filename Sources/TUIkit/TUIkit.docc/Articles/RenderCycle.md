@@ -445,7 +445,7 @@ Cache invalidation is **identity-scoped** where possible, with full clears as th
 | A `@State` change | `StateBox.value.didSet` calls `renderCache.invalidateRender(for: identity)`, which queues the identity behind a lock (the write may come from a background `Task`) and requests a render. `beginRenderPass()` drains the queue on the main actor into `clearAffected(by: identity)`, so only the affected subtree's cached buffers are invalidated. A box gets its identity and its render cache together, when `StateStorage` binds it, so a `@State` that has not been bound yet has no cache to invalidate and requests no render |
 | An `@Observable` change | The body that read the property was evaluated under `withObservationTracking` at its view's identity, so the change calls `renderCache.invalidateRender(for: identity)` — the same sink as a `@State` write, and the same scope. `AppState.setNeedsRenderWithCacheClear()` → `clearAll()` is the fallback only when the render has no cache to scope to |
 | A `.refreshable` run starting or ending | The run state behind `\.refresh` is the one thing about a `.refreshable` that changes without its view value changing, so a memo above it would keep serving the idle picture and the spinner would never draw. Each render binds the run state to its render cache and identity, and a run starting or ending calls `invalidateRender(for: identity)`, the same sink and scope as a `@State` write |
-| A focus move | A buffer draws the focus ring its control had while it rendered, and nothing in the key can see that the focus has moved since — the identity, the view value and the size are all unchanged by a move. So the focus manager keeps, per focus id, the identity the control last rendered at (recorded by `FocusRegistration.register`, the one registrar every interactive control goes through, and pruned to the controls that rendered this pass, like the `@FocusState` registry), and every write of the focused id calls `clearAffected(by: identity)` for the id the focus left and the id it arrived on. Unlike a `@State` write it is applied at once rather than queued, so a memo still rendering above a control that auto-focused mid-walk declines to store the buffer it drew unfocused; and it asks for no frame, because a focus move already announces itself through `FocusManager.onFocusChange`, which is what schedules the repaint. Nothing memoized holds such a buffer yet, because a focus registration still declines the cache; this is what has to be in place before an unfocused one can be replayed instead |
+| A focus move | A buffer draws the focus ring its control had while it rendered, and nothing in the key can see that the focus has moved since — the identity, the view value and the size are all unchanged by a move. So the focus manager keeps, per focus id, the identity the control last rendered at (recorded by `FocusRegistration.register`, the one registrar every interactive control goes through, and pruned to the controls that rendered this pass, like the `@FocusState` registry), and every write of the focused id calls `clearAffected(by: identity)` for the id the focus left and the id it arrived on. Unlike a `@State` write it is applied at once rather than queued, so a memo still rendering above a control that auto-focused mid-walk declines to store the buffer it drew unfocused; and it asks for no frame, because a focus move already announces itself through `FocusManager.onFocusChange`, which is what schedules the repaint. This is what lets an UNFOCUSED registration be replayed rather than decline (below): the buffers it drops are exactly the ones a memo would otherwise go on serving |
 | An `@AppStorage` / `@SceneStorage` write | Nothing can scope it: the wrapper is not `Equatable` so it cannot be in the memo's key, it is read as a plain field so `noteAppliedEnvironment` never sees it, and the write carries no view identity — so not even the ancestor `clearAffected` that rescues the equivalent `@State`. The setter calls `AppState.setNeedsRenderWithCacheClear()` → `clearAll()`. This is the framework's only per-user-action full clear (the `@Observable` row above scopes instead; the nearest neighbour is `LocalizationService.register`, at startup), affordable because a storage write is a user action and the flag coalesces a frame's writes into one clear — but a `Slider` bound straight to `$storage` writes per interaction tick and pays per tick |
 | A global environment change | `RenderLoop` compares an `EnvironmentSnapshot` each frame and clears on mismatch: the palette (by value where it is `Equatable`, by ID where it is not — a palette edited in place keeps its ID), the appearance ID, the resolved toggle glyphs, the locale and the scene phase |
 | A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)`, dropping the subtree below it. A paint or tint change passes `keepingSizes: true` — ink moves no cell, so the memoized sizes below survive and only the buffers go |
@@ -497,14 +497,16 @@ subtree declines the cache.
 ### Registrations a Hit Makes Again
 
 A key handler (`onKeyPress`, or the <kbd>Ctrl</kbd>-<kbd>R</kbd> binding of
-`.refreshable`) or a status-bar item (`.statusBarItems`) does not decline the
-cache. While a memoized subtree renders on a miss, each such registration is
-also recorded, and the recording is stored with the buffer. Every hit then
-makes those registrations again, in the order they were made, at the point in
-the walk where the subtree would have rendered. So the dispatcher sees the same
-handlers in the same precedence, and the status bar the same items with the
-same per-section replacement, whether a row rendered or was served; and a frame
-the render loop walks twice gets them once per walk.
+`.refreshable`), a status-bar item (`.statusBarItems`), an unfocused control's
+place in the focus ring (`FocusRegistration.register`) and an inactive
+`.focusSection` do not decline the cache. While a memoized subtree renders on a
+miss, each such registration is also recorded, and the recording is stored with
+the buffer. Every hit then makes those registrations again, in the order they
+were made, at the point in the walk where the subtree would have rendered. So
+the dispatcher sees the same handlers in the same precedence, the status bar the
+same items with the same per-section replacement, and Tab the same ring in the
+same order, whether a row rendered or was served; and a frame the render loop
+walks twice gets them once per walk.
 
 Three rules keep that equivalent to rendering:
 
@@ -521,6 +523,24 @@ Three rules keep that equivalent to rendering:
   reach any memo (they clear the entry), and bindings read current values. A
   value a `ForEach` row captures from *outside* its element stays as it was,
   the same captured-data hole a row's drawing already has.
+
+A focus registration keeps declining in four cases, because in each of them
+registering again is not the same thing as having rendered:
+
+- **A control that holds the focus**, whose buffer draws the focus ring.
+- **A backdrop's focus manager.** The page beneath a modal is a picture drawn
+  with everything unfocused; stored, it would be served after the modal was
+  dismissed, and a modal carrying no focusables of its own moves no focused id,
+  so nothing would invalidate it.
+- **A probe's focus manager**, which renders rows the frame never draws.
+- **A control named by an offered declaration** — `.focused(_:equals:)` or
+  `.focusHandoff(_:_:)` — since the offer is planted above the control and
+  possibly above the memo, where the key cannot see it.
+
+A `.focusSection` likewise declines while its section is ACTIVE, because an
+active section hands its subtree a breathing ● that is drawn into the buffer and
+assigned straight into the environment, where neither the key nor
+`noteAppliedEnvironment` can see it change.
 
 Under `TUIKIT_VERIFY_RENDER_MEMO` a hit renders fresh instead, which registers
 for real, and the verifier compares the kinds and number of registrations that

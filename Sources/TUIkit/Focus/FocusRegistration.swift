@@ -111,6 +111,12 @@ enum FocusRegistration {
     ///     compiler asks the question of the next handler somebody persists —
     ///     the silent version of this is a control the focus ring can no longer
     ///     find. Pass the handler's own id where it is rebuilt each frame.
+    ///
+    /// `@MainActor`, as every `Renderable.renderToBuffer` that calls it already
+    /// is: a registration that can be replayed has to hand the render cache a
+    /// closure holding this `Focusable`, and a handler is not `Sendable`, so
+    /// building that closure anywhere else would be sending an isolated value.
+    @MainActor
     static func register(context: RenderContext, handler: Focusable, focusID: String) {
         guard !context.isMeasuring else { return }
         // A persisted handler was built once, from the id in force on the frame
@@ -126,40 +132,104 @@ enum FocusRegistration {
         if let persisted = handler as? any PersistedFocusable, persisted.focusID != focusID {
             persisted.focusID = focusID
         }
-        // Focus registration is per-frame presence (sections are rebuilt every
-        // pass), so a value-memoized row serving a cached buffer would drop
-        // its focusables from the ring while still on screen. In practice an
-        // interactive row is already uncacheable via its hit-test regions, but
-        // that only holds when a mouse dispatcher is wired in — declare the
-        // side effect so keyboard-only configurations are safe too.
-        context.environment.volatileReadTracker?.recordRenderSideEffect()
-        // A nil focus manager means "no focus system" (e.g. an isolated test or
-        // dimmed-backdrop render): skip registration so nothing auto-focuses.
-        // `isFocusSuppressed` is the narrower form of the same thing — a
-        // `.hidden()` subtree, which has no picture for Tab to land on but is
-        // otherwise alive (see `EnvironmentValues.isFocusSuppressed`).
-        // markActive is unrelated to focus (state GC) and always runs.
-        if !context.environment.isFocusSuppressed, let manager = context.environment.focusManager {
-            // Before the registration, not after. Registering can focus this
-            // control on the spot — an empty section auto-focuses its first
-            // registrant — and the write that does it drops the cached buffers
-            // drawing this control, which it can only do once the manager knows
-            // where this control is.
-            manager.noteFocusIdentity(
-                context.identity, for: focusID, cachedIn: context.renderCache)
-            manager.register(handler, inSection: context.environment.activeFocusSectionID)
-            // A `.focusHandoff(_:_:)` above names where this control's focus goes
-            // when it can no longer hold it. Declared only where the control
-            // registers, so a control that stops registering (removed, hidden, a
-            // disabled `.focusable()`) stops declaring, and the manager recovers it
-            // by what it declared on its last frame. Behind the side-effect note
-            // above, so no memo can serve a subtree without its declarations.
-            if let handoff = context.environment.focusHandoffOffer?.claim(context.identity) {
-                manager.registerFocusHandoff(from: focusID, store: handoff.store, value: handoff.value)
-            }
+        let sectionID = context.environment.activeFocusSectionID
+        // Read BEFORE the claim below, because claiming is what consumes it.
+        // `.focused($x, equals:)` offers an id to the first focusable that
+        // renders under it, and `.focusHandoff(_:_:)` offers a target the same
+        // way; both are planted above the control and may be planted above a
+        // memo boundary too, where the memo's key cannot see them.
+        let carriesOfferedDeclaration =
+            context.environment.assignedFocusID != nil
+            || context.environment.focusHandoffOffer != nil
+        FocusRegistrar.register(
+            identity: context.identity, handler: handler, focusID: focusID,
+            sectionID: sectionID, context: context)
+        // A `.focusHandoff(_:_:)` above names where this control's focus goes
+        // when it can no longer hold it. Declared only where the control
+        // registers, so a control that stops registering (removed, hidden, a
+        // disabled `.focusable()`) stops declaring, and the manager recovers it
+        // by what it declared on its last frame.
+        if !context.environment.isFocusSuppressed, let manager = context.environment.focusManager,
+            let handoff = context.environment.focusHandoffOffer?.claim(context.identity)
+        {
+            manager.registerFocusHandoff(from: focusID, store: handoff.store, value: handoff.value)
         }
+        declareRegistration(
+            context: context, handler: handler, focusID: focusID, sectionID: sectionID,
+            carriesOfferedDeclaration: carriesOfferedDeclaration)
+        // markActive is unrelated to focus (state GC) and always runs.
         context.stateStorage!.markActive(context.identity)
         publishHelpText(context: context, focusID: focusID)
+    }
+
+    /// Tells a value-memoizing ancestor what this registration was: whether it
+    /// must decline to store the subtree, or may store it and make the
+    /// registration again on every hit.
+    ///
+    /// Focus registration is per-frame presence — the ring is rebuilt every pass
+    /// (`FocusManager.beginSceneRender`) — so a served subtree that did not
+    /// register again would drop its controls out of the Tab ring while they are
+    /// still on screen. Most registrations can simply be made again, which is
+    /// what ``FocusRegistrar`` is: recorded here while a memo records, and
+    /// replayed at the point in the walk where the control would have rendered,
+    /// so the ring is in the same order whether the subtree rendered or was
+    /// served. Four cases cannot be made again and keep declining:
+    ///
+    /// - **A control that holds the focus.** Its buffer draws the focus ring,
+    ///   and nothing in the memo's key sees the focus move away from it.
+    /// - **A backdrop's manager** (`isBackdrop`). The page beneath a modal is a
+    ///   picture drawn with everything unfocused. Stored, it would be served
+    ///   again once the modal was dismissed — and a modal carrying no focusables
+    ///   of its own moves no focused id, so nothing would invalidate it and the
+    ///   page would keep drawing no focus at all.
+    /// - **A probe's manager** (`suppressesAutoFocus`). The windowed stack's
+    ///   focus-reach probe renders rows the frame never draws.
+    /// - **A control under an offered declaration**, per the caller: replayed, it
+    ///   would hold an id another focusable is free to claim on the frame that
+    ///   serves it, and a handoff — pruned at the end of every pass — would not
+    ///   be re-declared at all.
+    ///
+    /// The entry carries the key channels in force, as every other replayable
+    /// registration does, even though the focus ring is not one of them. That is
+    /// exact rather than merely cautious: the only two contexts with throwaway
+    /// key channels are `RenderContext.isolatedForBackground()` and the
+    /// focus-reach probe, and both carry a manager refused above — so no entry a
+    /// memo would filter out on its token is ever recorded, and no control can
+    /// vanish from the ring that way.
+    @MainActor
+    private static func declareRegistration(
+        context: RenderContext, handler: Focusable, focusID: String, sectionID: String?,
+        carriesOfferedDeclaration: Bool
+    ) {
+        let tracker = context.environment.volatileReadTracker
+        let manager = context.environment.focusManager
+        guard !carriesOfferedDeclaration,
+            manager?.isBackdrop != true,
+            manager?.suppressesAutoFocus != true,
+            // Asked AFTER registering, because registering is what can focus it:
+            // an empty section auto-focuses its first registrant, and a pending
+            // intent resolves the moment its target appears.
+            manager?.isFocused(id: focusID) != true
+        else {
+            tracker?.recordRenderSideEffect()
+            return
+        }
+        tracker?.recordReplayableEffect()
+        guard let journal = context.recordingEffectJournal else { return }
+        // Built only while a memo records, so the live path allocates no second
+        // closure. The identity and the section are captured rather than looked
+        // up: they are where this control rendered and the section it registered
+        // in, and the memo checks that the section it is served under is the one
+        // the registration was recorded in.
+        let identity = context.identity
+        journal.append(
+            EffectJournal.Entry(
+                kind: FocusRegistrar.kind, channelToken: context.environment.keyChannelToken
+            ) { [handler] replay in
+                FocusRegistrar.register(
+                    identity: identity, handler: handler, focusID: focusID,
+                    sectionID: sectionID, context: replay)
+            })
     }
 
     /// Claims the subtree's `EnvironmentValues.helpText` for this control, if
@@ -197,7 +267,7 @@ enum FocusRegistration {
             revealsItself: trigger.revealsOnFocus)
     }
 
-    /// Determines whether the given focusID currently has focus.
+    /// Whether the given focusID currently has focus.
     ///
     /// Always returns `false` during measurement passes.
     ///
@@ -282,5 +352,42 @@ enum FocusRegistration {
     ) {
         guard isFocused, !context.isMeasuring, let label else { return }
         context.environment.statusBar?.activationLabelOverride = label
+    }
+}
+
+// MARK: - Registration
+
+/// The one focus registration every interactive control makes, shared by the
+/// live render and by a value memo replaying it — see `EffectJournal`.
+enum FocusRegistrar {
+    /// The journal kind of a focus registration.
+    static let kind = EffectJournal.Kind("focusRegistration")
+
+    /// Files `handler` under `focusID` in `sectionID` of `context`'s focus ring.
+    ///
+    /// It looks the focus manager and the render cache up in `context` rather
+    /// than taking them, so a replay registers into the services of the frame
+    /// that serves it. `identity` is passed instead, because it is the
+    /// CONTROL's, and the context a replay runs against is the memo's — whose
+    /// identity is the memo root, not the control.
+    @MainActor
+    static func register(
+        identity: ViewIdentity, handler: Focusable, focusID: String, sectionID: String?,
+        context: RenderContext
+    ) {
+        // A nil focus manager means "no focus system" (e.g. an isolated test):
+        // skip registration so nothing auto-focuses. `isFocusSuppressed` is the
+        // narrower form of the same thing — a `.hidden()` subtree, which has no
+        // picture for Tab to land on but is otherwise alive (see
+        // `EnvironmentValues.isFocusSuppressed`).
+        guard !context.environment.isFocusSuppressed,
+            let manager = context.environment.focusManager
+        else { return }
+        // Before the registration, not after. Registering can focus this control
+        // on the spot — an empty section auto-focuses its first registrant — and
+        // the write that does it drops the cached buffers drawing this control,
+        // which it can only do once the manager knows where this control is.
+        manager.noteFocusIdentity(identity, for: focusID, cachedIn: context.renderCache)
+        manager.register(handler, inSection: sectionID)
     }
 }

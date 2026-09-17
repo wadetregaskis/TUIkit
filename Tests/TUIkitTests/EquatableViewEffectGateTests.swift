@@ -69,6 +69,12 @@ struct EquatableViewEffectGateTests {
         environment.statusBar = StatusBarState()
         environment.renderCache = RenderCache()
         environment.preferenceStorage = tuiContext.preferences
+        // No mouse dispatcher. `.focusable()` registers a hit-test region when
+        // one is wired, and `RenderCache.isStorable` refuses any buffer carrying
+        // one — so with a dispatcher here the focus cases below would measure
+        // that gate instead of this suite's, and would read as "declines" no
+        // matter what a focus registration declared.
+        environment.mouseEventDispatcher = nil
         return RenderContext(
             availableWidth: 40,
             availableHeight: 10,
@@ -143,8 +149,27 @@ struct EquatableViewEffectGateTests {
             })
     }
 
-    @Test("Focus registration inside the subtree declines the cache")
-    func focusableDeclines() {
+    @Test("An UNFOCUSED focus registration inside the subtree is stored, because a hit replays it")
+    func unfocusedFocusableStores() {
+        // The stop ahead of it takes the focus as it registers (an empty section
+        // auto-focuses its first registrant), so the memoized one renders
+        // unfocused — and an unfocused registration is one a hit can make again.
+        // What proves the replay, and the Tab ring surviving it, is
+        // FocusRegistrationMemoTests.
+        #expect(
+            storesBuffer {
+                VStack {
+                    Text("ahead").focusable()
+                    EffectLeaf(label: "x") { $0.focusable() }.equatable()
+                }
+            })
+    }
+
+    @Test("A FOCUSED focus registration inside the subtree declines the cache")
+    func focusedFocusableDeclines() {
+        // The only stop here, so it takes the focus as it registers. Its buffer
+        // draws the focus ring, and nothing in the memo's key would see the
+        // focus leave it again.
         #expect(!storesBuffer { EffectLeaf(label: "x") { $0.focusable() }.equatable() })
     }
 
@@ -156,9 +181,25 @@ struct EquatableViewEffectGateTests {
             })
     }
 
-    @Test("A focus section inside the subtree declines the cache")
-    func focusSectionDeclines() {
+    @Test("An ACTIVE focus section inside the subtree declines the cache")
+    func activeFocusSectionDeclines() {
+        // The first section registered on an empty manager becomes the active
+        // one, and an active section hands its subtree a breathing ● drawn from
+        // focus state the key never sees.
         #expect(!storesBuffer { EffectLeaf(label: "x") { $0.focusSection("rows") }.equatable() })
+    }
+
+    @Test("An INACTIVE focus section inside the subtree is stored, because a hit registers it again")
+    func inactiveFocusSectionStores() {
+        // The section ahead of it is the active one, so this section shows no ●
+        // and its registration is one a hit can make again.
+        #expect(
+            storesBuffer {
+                VStack {
+                    Text("ahead").focusSection("ahead")
+                    EffectLeaf(label: "x") { $0.focusSection("rows") }.equatable()
+                }
+            })
     }
 
     @Test("A focus section inside the subtree is still registered on every later frame")
@@ -201,7 +242,7 @@ struct EquatableViewEffectGateTests {
     /// (`renderValueMemoized`), and the reason they are is that written twice
     /// they drifted: `_MemoizedRow` was missing the uncomparable-environment
     /// clause its twin had. This is what would notice a wrapper that stopped
-    /// going through the shared path — the nine conditions asserted once are
+    /// going through the shared path — the ten conditions asserted once are
     /// asserted for both.
     ///
     /// The row arm keys on a CONSTANT element, so the memo always wants to hit
@@ -209,7 +250,7 @@ struct EquatableViewEffectGateTests {
     /// would be indistinguishable from a miss.
     @Test(
         "Every gate condition holds through both memo wrappers",
-        arguments: [0, 1], 0..<9)
+        arguments: [0, 1], 0..<10)
     func gateHoldsThroughBothWrappers(wrapper: Int, condition: Int) {
         @MainActor func wrapped<V: View & Equatable>(_ inner: V) -> AnyView {
             wrapper == 0
@@ -237,18 +278,30 @@ struct EquatableViewEffectGateTests {
                     wrapped(EffectLeaf(label: "x") { $0.onKeyPress { _ in false } }), true
                 )
             case 6:
-                ("focus registration inside", wrapped(EffectLeaf(label: "x") { $0.focusable() }), false)
+                (
+                    "a FOCUSED focus registration inside",
+                    wrapped(EffectLeaf(label: "x") { $0.focusable() }), false
+                )
             case 7:
                 (
-                    "a focus section inside",
+                    "an ACTIVE focus section inside",
                     wrapped(EffectLeaf(label: "x") { $0.focusSection("rows") }), false
                 )
-            default:
+            case 8:
                 (
                     "a preference write inside",
                     wrapped(
                         EffectLeaf(label: "x") { $0.preference(key: CountKey.self, value: 1) }),
                     false
+                )
+            default:
+                (
+                    "an UNFOCUSED focus registration inside (replayed on a hit)",
+                    AnyView(
+                        VStack {
+                            Text("ahead").focusable()
+                            wrapped(EffectLeaf(label: "x") { $0.focusable() })
+                        }), true
                 )
             }
         let arm = wrapper == 0 ? ".equatable()" : "_MemoizedRow"

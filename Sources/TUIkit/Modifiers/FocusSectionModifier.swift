@@ -52,19 +52,47 @@ extension FocusSectionModifier: Renderable {
         let focusManager = context.environment.focusManager
         let sectionID = declaredSectionID ?? "section-\(context.identity.path)"
 
-        // Register the section with the focus manager (idempotent, skip during measurement).
+        // Register the section with the focus manager (idempotent, skip during
+        // measurement). Only with a focus manager present, because without one
+        // nothing happens and the subtree is as cacheable as its content.
         //
-        // A per-frame side effect, twice over, so it is declared to any
-        // value-memoizing ancestor. Sections are rebuilt every pass
-        // (`FocusManager.beginSceneRender`), so a subtree served from the cache
-        // left the frame with no section: whatever registers under it had
-        // nowhere to go, and the ● handed down below is drawn from whether the
-        // section is active, which the memo's key never sees. Only with a focus
-        // manager present, because without one neither happens and the
-        // subtree is as cacheable as its content.
+        // Declared to any value-memoizing ancestor either way. Sections are
+        // rebuilt every pass (`FocusManager.beginSceneRender`), so a subtree
+        // served from the cache would leave the frame with no section at all and
+        // whatever registers under it would have nowhere to go.
+        //
+        // While the section is INACTIVE that registration is simply made again
+        // on every hit, at the point in the walk where this modifier would have
+        // rendered — so section order, which is Tab's order, is the same whether
+        // the subtree rendered or was served.
+        //
+        // While it is ACTIVE it still declines, because active-ness is not
+        // something registering again reproduces: it is the manager's to decide,
+        // and it is what picks the breathing ● handed to the subtree below. That
+        // ● is drawn into the buffer, and it is assigned straight into the
+        // environment rather than applied through a modifier, so neither the
+        // memo's key nor `noteAppliedEnvironment` can see it change.
+        //
+        // Asked after registering rather than before: the first section
+        // registered on an empty manager becomes the active one.
         if !context.isMeasuring, let focusManager {
-            context.environment.volatileReadTracker?.recordRenderSideEffect()
-            focusManager.registerSection(id: sectionID)
+            FocusSectionRegistrar.register(sectionID: sectionID, context: context)
+            if focusManager.isActiveSection(sectionID) {
+                context.environment.volatileReadTracker?.recordRenderSideEffect()
+            } else {
+                context.environment.volatileReadTracker?.recordReplayableEffect()
+                if let journal = context.recordingEffectJournal {
+                    // Built only while a memo records, so the live path
+                    // allocates no second closure.
+                    journal.append(
+                        EffectJournal.Entry(
+                            kind: FocusSectionRegistrar.kind,
+                            channelToken: context.environment.keyChannelToken
+                        ) { replay in
+                            FocusSectionRegistrar.register(sectionID: sectionID, context: replay)
+                        })
+                }
+            }
         }
 
         // Create a child context with the active section ID set,
@@ -87,6 +115,24 @@ extension FocusSectionModifier: Renderable {
             in: context.environment)
 
         return TUIkit.renderToBuffer(content, context: sectionContext)
+    }
+}
+
+// MARK: - Registration
+
+/// The one registration `.focusSection` makes, shared by the live render and by
+/// a value memo replaying it — see `EffectJournal`.
+enum FocusSectionRegistrar {
+    /// The journal kind of a focus-section registration.
+    static let kind = EffectJournal.Kind("focusSection")
+
+    /// Registers `sectionID` with `context`'s focus manager.
+    ///
+    /// It looks the manager up in `context` rather than taking one, so a replay
+    /// registers into the ring of the frame that serves it.
+    @MainActor
+    static func register(sectionID: String, context: RenderContext) {
+        context.environment.focusManager?.registerSection(id: sectionID)
     }
 }
 

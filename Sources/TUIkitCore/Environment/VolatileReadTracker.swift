@@ -42,10 +42,14 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   the frame's collection (and a cached observer stops firing);
     /// - `onChange(of:)` — the change detection is a per-frame comparison;
     ///   a cached row never compares, so changes go permanently unnoticed.
-    /// - `.focusSection` — focus sections are cleared and rebuilt every pass,
-    ///   so a cached subtree's section vanishes from the ring, and the active
-    ///   section's indicator it hands down keeps the focus state it was stored
-    ///   with.
+    /// - `.focusSection`, while its section is ACTIVE — an active section hands
+    ///   its subtree a breathing indicator drawn from focus state the memo's key
+    ///   never sees. While it is inactive the registration is replayed instead
+    ///   (below).
+    /// - a focus registration the buffer memo cannot make again: one by a
+    ///   control that holds the focus, one against a backdrop's or a probe's
+    ///   focus manager, and one by a control an offered declaration named. See
+    ///   `FocusRegistration.register`.
     /// - `NavigationSplitView`, with a focus manager — its column sections, its
     ///   dividers' and edge's focus registrations, and the hand-over of the
     ///   keyboard when a column hides.
@@ -67,6 +71,10 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// - `onKeyPress`, once per registration on a render pass;
     /// - `.refreshable`, once per Ctrl-R binding on a render pass;
     /// - `.statusBarItems`, once per registration with a status bar;
+    /// - `FocusRegistration.register`, once per interactive control whose
+    ///   registration a hit can make again — every control that does not fall
+    ///   into one of the four cases listed under ``sideEffects``;
+    /// - `.focusSection`, once per section registered while it is inactive;
     /// - the buffer memo itself, once per hit that replays a stored subtree's
     ///   registrations, so an enclosing gate sees the same delta whether the
     ///   subtree rendered or was served.
