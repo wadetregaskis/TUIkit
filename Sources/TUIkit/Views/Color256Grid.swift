@@ -360,7 +360,7 @@ struct _Color256GridCore: View, Renderable {
             let focusManager = context.environment.focusManager
             for cell in cells {
                 let index = cell.index
-                let handlerID = dispatcher.register { event in
+                let handlerID = dispatcher.register(in: context) { event in
                     guard event.phase == .released, event.button == .left else {
                         return event.phase == .pressed && event.button == .left
                     }
@@ -382,7 +382,7 @@ struct _Color256GridCore: View, Renderable {
             }
             publishRevealRegions(
                 to: &buffer, cells: cells, cursor: handler.cursor,
-                focusID: persistedFocusID, dispatcher: dispatcher)
+                focusID: persistedFocusID, dispatcher: dispatcher, context: context)
         }
 
         return buffer
@@ -402,10 +402,10 @@ struct _Color256GridCore: View, Renderable {
     /// these so they win the hit test.
     private func publishRevealRegions(
         to buffer: inout FrameBuffer, cells: [Palette256Layout.Cell], cursor: Int,
-        focusID: String, dispatcher: MouseEventDispatcher
+        focusID: String, dispatcher: MouseEventDispatcher, context: RenderContext
     ) {
         guard !cells.isEmpty else { return }
-        let inert = dispatcher.register { _ in false }
+        let inert = dispatcher.register(in: context) { _ in false }
         let top = cells.map(\.y).min() ?? 0
         let bottom = cells.map(\.y).max() ?? 0
         let left = cells.map(\.x).min() ?? 0

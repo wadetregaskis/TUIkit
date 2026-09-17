@@ -977,9 +977,13 @@ extension RenderLoop {
     ///   log-the-key pattern) ran its side effect once per duplicate.
     /// - preference values are REDUCED into a stack, so an accumulating
     ///   `reduce` collected every published value twice.
-    /// - mouse handler ids are positional and restart at 0 each reset, so a
-    ///   two-walk frame shifted every control's id and the hover tracker's
-    ///   cross-frame comparison sent `.exited` to a *different* control.
+    /// - mouse handler SLOTS are positional: a handler id is interned per
+    ///   `(identity, slot)`, and the slot is the ordinal of the registration at
+    ///   that identity within the walk, so the counters must restart with the
+    ///   walk or the second walk would mint a second id for every control.
+    ///   (The IDS themselves were positional once, and a two-walk frame then
+    ///   shifted every control's id, so the hover tracker's cross-frame
+    ///   comparison sent `.exited` to a *different* control.)
     /// - focus sections accumulate (registration merely de-duplicates by
     ///   focusID), so a corrected frame's Tab ring was the union of both walks
     ///   in the DISCARDED walk's order — which was built at the wrong content

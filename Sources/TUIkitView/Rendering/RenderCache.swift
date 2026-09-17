@@ -500,6 +500,16 @@ public final class RenderCache: @unchecked Sendable {
     /// hit can make them again — see `EffectJournal`.
     package let effectJournal = EffectJournal()
 
+    /// Ids interned per view identity that have to live exactly as long as the
+    /// entries here do — in practice the mouse dispatcher's handler ids, which
+    /// a stored buffer carries baked into its hit-test regions. Pruned in
+    /// ``removeInactive()`` by this cache's own retention rule; see
+    /// ``InternedIDTable``.
+    ///
+    /// Weak, and wired by the `TUIContext` that owns both sides, so a cache
+    /// outliving nothing keeps nothing alive.
+    package weak var internedIDTable: (any InternedIDTable)?
+
     /// Whether debug logging is enabled via the `TUIKIT_DEBUG_RENDER` environment variable.
     public static let debugEnabled: Bool = {
         ProcessInfo.processInfo.environment["TUIKIT_DEBUG_RENDER"] == "1"
@@ -696,8 +706,9 @@ extension RenderCache {
     ///   controls suppress their hit-test regions while measuring — and it
     ///   CLOBBERS, since a non-`Layoutable` ancestor renders its children once
     ///   per measure and again per render at a different size.
-    /// - **Regions or overlays** mean an interactive subtree, whose buffer
-    ///   captures per-frame handler state.
+    /// - **Regions or overlays** mean an interactive subtree. A region names a
+    ///   handler by an id that outlives the frame, but the closure it names is
+    ///   registered by the render this would skip.
     /// - **A volatile read** means the next frame differs even though the value
     ///   compares equal — a cached `Spinner` would freeze.
     /// - **An invalidation during the render** — an environment change or a
@@ -1167,6 +1178,11 @@ extension RenderCache {
         var staleSizeKeys: [SizeKey] = []
         for (key, entry) in sizeEntries where !isLive(entry.identity) { staleSizeKeys.append(key) }
         for key in staleSizeKeys { sizeEntries.removeValue(forKey: key) }
+        // Ids interned per identity go the same way, and by the same rule: a
+        // handler id baked into a stored buffer's regions must still name its
+        // control for as long as that buffer can be served, so retention — not
+        // merely "something asked for it this pass" — is what keeps one.
+        internedIDTable?.pruneInternedIDs { retained.retains($0) }
         lastPrune = (
             renderEntries: entries.count + staleKeys.count, sizeEntries: sizeEntries.count + staleSizeKeys.count,
             retainedChecks: retainedChecks, prunedRender: staleKeys.count, prunedSizes: staleSizeKeys.count)

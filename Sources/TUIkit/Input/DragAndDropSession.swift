@@ -200,10 +200,10 @@ final class DragAndDropSession: @unchecked Sendable {
         var originX = 0
         var originY = 0
 
-        /// The id of the currently targeted destination, if any — valid only
-        /// within the frame that registered it (handler ids reset to 0 every
-        /// render pass), so it is used purely to detect targeting
-        /// *transitions*, never to look a target up later.
+        /// The id of the currently targeted destination, if any. An id names
+        /// its control for as long as that control keeps rendering, but a zone
+        /// can stop rendering mid-drag, so this is used purely to detect
+        /// targeting *transitions*, never to look a target up later.
         var targetedID: HitTestRegion.HandlerID?
 
         /// The targeted destination itself, held by value so its
@@ -256,8 +256,9 @@ final class DragAndDropSession: @unchecked Sendable {
 
     /// The focus identity of the control whose row reorder is in flight, or
     /// `nil`. The key the gesture is resumed against, because it is the one
-    /// name that survives a re-render — handler ids reset every pass, and the
-    /// control's state object does not survive leaving the view tree.
+    /// name that survives the control LEAVING the view tree and coming back —
+    /// a handler id is dropped with the control that stopped rendering, and the
+    /// control's state object does not survive the trip either.
     var reorderFocusID: String?
 
     /// The control that currently holds the reorder's rows.
@@ -563,11 +564,12 @@ final class DragAndDropSession: @unchecked Sendable {
     func performDrop() -> Bool {
         guard let drag = active else { return false }
         // Resolve against the CURRENT frame's registrations at the release
-        // position — never through the id stored at the last movement:
-        // handler ids reset every render pass, and a re-render between the
-        // last drag event and the release is routine (the consumed drag
-        // requests one). A stale id would silently lose the drop — or, if
-        // the tree shape shifted the ids, deliver it to the WRONG zone.
+        // position — never through the id stored at the last movement. A
+        // re-render between the last drag event and the release is routine
+        // (the consumed drag requests one), and what sits under the cursor can
+        // change with it: the zone may have scrolled, resized, or stopped
+        // rendering altogether. A stale id would silently lose the drop — and
+        // while ids were positional it delivered it to the WRONG zone.
         guard let event = lastAbsoluteEvent,
             let target = resolveTarget(atX: event.x, y: event.y, payload: drag.payload)
         else {
@@ -795,9 +797,9 @@ final class DragAndDropSession: @unchecked Sendable {
 
     /// Clears ``ScrollableOffsetState/isAutoScrolling`` on whatever this session
     /// last drove. Held as a reference rather than re-derived, because the zone
-    /// that engaged may already be gone (its handler ids reset every render, and
-    /// a scrollable can leave the tree mid-drag) — and a scrollable left flagged
-    /// would never settle again.
+    /// that engaged may already be gone (a scrollable can leave the tree
+    /// mid-drag, taking its registration and its id with it) — and a scrollable
+    /// left flagged would never settle again.
     private func releaseAutoScrollFlags() {
         autoScrollDriven?.isAutoScrolling = false
         autoScrollDriven = nil

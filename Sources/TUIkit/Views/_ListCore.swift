@@ -1897,6 +1897,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 proportional: context.environment.scrollbarProportionalThumb,
                 behavior: context.environment.scrollbarClickBehavior)
             let barHandlerID = mouseDispatcher.register(
+                in: context,
                 ScrollbarRenderer.focusing(
                     barHandler, focusID: state.focusID,
                     focusManager: context.environment.focusManager))
@@ -1924,6 +1925,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let borderInset = showsBorder ? 1 : 0
         let contentColumns = borderInset..<max(borderInset, buffer.width - borderInset)
         let mouseHandlerID = mouseDispatcher.register(
+            in: context,
             containerMouseHandler(
                 state: state,
                 focusManager: focusManager,

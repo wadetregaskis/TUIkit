@@ -490,7 +490,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
             default: false)
         // An editable field answers the pointer like every other control.
         mouseDispatcher.requestFeature(.motion)
-        let handlerID = mouseDispatcher.register { event in
+        let handlerID = mouseDispatcher.register(in: context) { event in
             switch event.phase {
             case .entered, .moved:
                 hoverBox.value = true

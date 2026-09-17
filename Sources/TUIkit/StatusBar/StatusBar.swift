@@ -583,7 +583,7 @@ private struct _StatusBarCore: View, Renderable {
             guard itemIsClickable(layout.item) else { continue }
             let captureItem = layout.item
             let captureItemID = layout.item.id
-            let handlerID = dispatcher.register { event in
+            let handlerID = dispatcher.register(in: context) { event in
                 switch event.phase {
                 case .entered:
                     statusBarState.hoveredItemID = captureItemID

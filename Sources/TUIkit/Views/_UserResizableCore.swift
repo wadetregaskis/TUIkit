@@ -338,7 +338,7 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // the bottom edge is height, the right edge is width, and the corner —
         // registered last, so it wins the overlap — is both.
         func register(_ dragAxes: ResizableAxes) -> HitTestRegion.HandlerID {
-            dispatcher.register { event in
+            dispatcher.register(in: context) { event in
                 self.handleResizeEvent(
                     event, axes: dragAxes, handler: handler, focusID: focusID, context: context)
             }

@@ -310,7 +310,7 @@ enum DropdownMenu {
         to buffer: inout FrameBuffer, context: RenderContext, onDismiss: @escaping () -> Void
     ) {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
-        let dismissID = dispatcher.register { event in
+        let dismissID = dispatcher.register(in: context) { event in
             switch event.phase {
             case .pressed where event.button == .right:
                 // macOS: a right-click outside an open menu closes it AND is
@@ -357,6 +357,7 @@ enum DropdownMenu {
     @MainActor
     private static func rowHandler(
         index: Int,
+        context: RenderContext,
         onWheel: @escaping (MouseEvent) -> Bool,
         tracks: @escaping (MouseButton) -> Bool,
         mouseDispatcher: MouseEventDispatcher,
@@ -364,7 +365,7 @@ enum DropdownMenu {
         onActivate: @escaping (Int) -> Void,
         onDismiss: @escaping () -> Void
     ) -> HitTestRegion.HandlerID {
-        mouseDispatcher.register { event in
+        mouseDispatcher.register(in: context) { event in
             if onWheel(event) { return true }
             switch event.phase {
             case .entered:
@@ -683,7 +684,7 @@ enum DropdownMenu {
         //
         // Left clicks on chrome/empty area are consumed so they don't fall
         // through.
-        let wheelID = mouseDispatcher.register { event in
+        let wheelID = mouseDispatcher.register(in: context) { event in
             if scroll.handleWheelEvent(event) { return true }
             // The popup's own chrome — its frame, its padding, a divider — is
             // not a row, so a held gesture ending here ends the way it would
@@ -708,7 +709,7 @@ enum DropdownMenu {
                 arrows: context.environment.scrollbarArrows,
                 proportional: context.environment.scrollbarProportionalThumb,
                 behavior: context.environment.scrollbarClickBehavior)
-            let barID = mouseDispatcher.register(barHandler)
+            let barID = mouseDispatcher.register(in: context, barHandler)
             buffer.hitTestRegions.append(
                 HitTestRegion(
                     offsetX: innerWidth, offsetY: 1, width: 1, height: window.maxVisible,
@@ -743,7 +744,7 @@ enum DropdownMenu {
                 return true
             }
             let mouseHandlerID = rowHandler(
-                index: index, onWheel: onWheel,
+                index: index, context: context, onWheel: onWheel,
                 tracks: tracks, mouseDispatcher: mouseDispatcher,
                 onHover: onHover, onActivate: onActivate, onDismiss: onDismiss)
             buffer.hitTestRegions.append(

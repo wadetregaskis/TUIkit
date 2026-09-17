@@ -480,8 +480,9 @@ declines when it:
 - was produced by a **measure pass** (incomplete: interactive controls suppress
   their hit-test regions while measuring, and it was produced at a different
   size);
-- contains **hit-test regions or overlays** (they capture per-frame handler
-  state);
+- contains **hit-test regions or overlays** (a region names its handler by an
+  id, and though that id is the control's own, nothing re-registers the closure
+  behind it on a frame the subtree is served rather than rendered);
 - **read a time-varying value** or requested an animation (a cached ``Spinner``
   would freeze);
 - **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
@@ -561,8 +562,13 @@ same way, and what is left standing between them and a served frame is the
 hit-test region. A buffer carrying one is never stored, and every `Button` adds
 one wherever a mouse dispatcher is wired — which is everywhere in a running app,
 so a menu's rows are storable today only where nothing is listening for the
-mouse. A split view's own buffer carries regions as well. Lifting that gate is
-the mouse phase's work, not this one's.
+mouse. A split view's own buffer carries regions as well.
+
+The mouse phase has taken its first step: a handler id is the control's own now,
+interned per view identity and slot instead of being counted off in registration
+order, so an id baked into a stored buffer's regions still names the control it
+was taken from on the frames that serve it. Lifting the gate itself waits on the
+registration being replayed, which nothing does yet.
 
 ### Keeping Nested Entries Alive
 

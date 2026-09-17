@@ -202,10 +202,15 @@ public struct HitTestRegion: Sendable, Equatable {
 extension HitTestRegion {
     /// A stable id paired with a closure on the `MouseEventDispatcher`.
     ///
-    /// The wrapped `Int` is unique only for the lifetime of one render
-    /// pass — the dispatcher hands out fresh ids on every frame and
-    /// drops them at the end. The id is also `Sendable` and `Equatable`
-    /// so regions can be diffed cheaply.
+    /// The id names a CONTROL, and keeps naming it for as long as that control
+    /// keeps rendering: the dispatcher interns one per registering view and
+    /// hands the same one back on later frames, so an id held across a frame —
+    /// a drop target's, a drag zone's — still resolves to the control it was
+    /// taken from. The dispatcher's table of *closures* is a different matter,
+    /// rebuilt from scratch on every walk of the scene, so an id whose control
+    /// has stopped rendering resolves to nothing; ids are never re-used, so it
+    /// can never come to mean some other control. `Sendable` and `Hashable`, so
+    /// regions can be diffed cheaply.
     public struct HandlerID: Sendable, Hashable {
         /// The raw token value.
         public let raw: UInt64

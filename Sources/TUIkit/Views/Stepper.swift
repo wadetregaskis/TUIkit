@@ -592,6 +592,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         // entire stepper (the narrower arrow regions below
         // intentionally don't carry a focusID).
         let rowID = mouseDispatcher.register(
+            in: context,
             wholeRowHandler(
                 handler: handler,
                 hoverBox: hoverBox,
@@ -626,6 +627,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
         // @MainActor @Sendable () -> Void to capture; an
         // unapplied method reference isn't Sendable on its own.
         let incrementID = mouseDispatcher.register(
+            in: context,
             arrowHandler(
                 handler: handler,
                 timer: incrementTimer,
@@ -645,6 +647,7 @@ private struct _StepperCore: View, Renderable, Layoutable {
 
         // Left-arrow region — single cell at x = 0.
         let decrementID = mouseDispatcher.register(
+            in: context,
             arrowHandler(
                 handler: handler,
                 timer: decrementTimer,

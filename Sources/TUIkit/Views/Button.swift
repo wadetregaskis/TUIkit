@@ -549,7 +549,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             let captureFocusID = persistedFocusID
             let captureAction = effectiveAction
             let captureHoverBox = hoverBox
-            let handlerID = mouseDispatcher.register(hoverBox: captureHoverBox) { event in
+            let handlerID = mouseDispatcher.register(in: context, hoverBox: captureHoverBox) { event in
                 switch event.phase {
                 case .pressed where event.button == .left:
                     guard isMenuTrigger else {

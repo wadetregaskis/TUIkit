@@ -222,7 +222,7 @@ struct _SwatchGridCore: View, Renderable {
                 for col in 0..<columns {
                     let index = row * columns + col
                     guard index < entries.count else { break }
-                    let handlerID = dispatcher.register { event in
+                    let handlerID = dispatcher.register(in: context) { event in
                         guard event.phase == .released, event.button == .left else {
                             return event.phase == .pressed && event.button == .left
                         }

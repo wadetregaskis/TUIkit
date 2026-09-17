@@ -585,6 +585,7 @@ private struct _SliderCore<Label: View, ValueLabel: View>: View, Renderable, Lay
         )
 
         let handlerID = mouseDispatcher.register(
+            in: context,
             mouseHandler(
                 handler: handler,
                 hoverBox: hoverBox,

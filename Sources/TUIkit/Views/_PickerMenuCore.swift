@@ -260,7 +260,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         else { return }
         mouseDispatcher.requestFeature(.motion)
         let focusManager = context.environment.focusManager
-        let mouseHandlerID = mouseDispatcher.register { event in
+        let mouseHandlerID = mouseDispatcher.register(in: context) { event in
             switch event.phase {
             case .entered:
                 hoverBox.value = true

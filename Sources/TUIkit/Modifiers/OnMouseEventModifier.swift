@@ -48,7 +48,7 @@ extension OnMouseEventModifier: Renderable {
             return buffer
         }
 
-        let handlerID = dispatcher.register(handler)
+        let handlerID = dispatcher.register(in: context, handler)
         buffer.hitTestRegions.append(
             HitTestRegion(
                 offsetX: 0,

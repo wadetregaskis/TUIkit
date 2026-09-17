@@ -102,8 +102,8 @@ extension HelpModifier: Renderable {
         // content's, so as an ordinary region it took the `.entered` /
         // `.exited` the control it explains needs for its own hover face —
         // `Button("Save") {}.help("…")` never lit up under the pointer. See
-        // `MouseEventDispatcher.registerHoverObserver(_:)`.
-        let handlerID = dispatcher.registerHoverObserver { event in
+        // `MouseEventDispatcher.registerHoverObserver(in:_:)`.
+        let handlerID = dispatcher.registerHoverObserver(in: context) { event in
             switch event.phase {
             case .entered:
                 // The event's own arrival time, not this frame's clock: the

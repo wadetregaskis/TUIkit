@@ -352,6 +352,9 @@ final class TUIContext: @unchecked Sendable {
         // shared singleton there is no implicit common target — the owner must
         // wire the two together.
         self.stateStorage.renderCache = self.renderCache
+        // And the cache at the dispatcher's interned handler ids: a stored
+        // buffer carries them in its regions, so the two prune together.
+        self.renderCache.internedIDTable = self.mouseEventDispatcher
     }
 
     /// Creates a new TUI context with the given services.
@@ -384,6 +387,8 @@ final class TUIContext: @unchecked Sendable {
         self.renderCache = renderCache
         // See init(): wire state-change invalidation to this context's cache.
         self.stateStorage.renderCache = self.renderCache
+        // See init(): and the interned handler ids, which prune with it.
+        self.renderCache.internedIDTable = self.mouseEventDispatcher
     }
 }
 

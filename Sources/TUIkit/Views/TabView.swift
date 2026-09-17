@@ -527,7 +527,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         guard !context.isMeasuring,
             let dispatcher = context.environment.mouseEventDispatcher
         else { return }
-        let handlerID = dispatcher.register { _ in false }
+        let handlerID = dispatcher.register(in: context) { _ in false }
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0, offsetY: 0, width: buffer.width, height: buffer.height,
@@ -558,7 +558,7 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             let value = tabs[region.index].value
             let capture = selection
             let index = region.index
-            let handlerID = dispatcher.register { event in
+            let handlerID = dispatcher.register(in: context) { event in
                 switch event.phase {
                 case .entered, .moved:
                     // Only a CHANGE means something: consuming every .moved

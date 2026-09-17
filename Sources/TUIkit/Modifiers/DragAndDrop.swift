@@ -122,6 +122,7 @@ extension DraggableModifier: Renderable, Layoutable {
         let anchor = context.environment.dragPreviewAnchor
         _DragHandle.install(
             on: &buffer,
+            context: context,
             dispatcher: dispatcher,
             onDragBegin: { _, grab in
                 session.begin(
@@ -155,6 +156,7 @@ enum _DragHandle {
     /// re-renders mid-drag (the dispatcher's press capture).
     static func install(
         on buffer: inout FrameBuffer,
+        context: RenderContext,
         dispatcher: MouseEventDispatcher,
         onDragBegin: @escaping (MouseEvent, _ grab: (x: Int, y: Int)) -> Void,
         onDragMove: @escaping (MouseEvent) -> Void,
@@ -162,11 +164,11 @@ enum _DragHandle {
     ) {
         // The content's interactive regions, captured WITH their handler
         // closures. Clicks and hover forward to them below — and that must
-        // go through closures, never ids: handler ids reset every render
-        // pass while a press or hover routinely spans one (a consumed press
-        // requests a re-render), so an id resolved at delivery time would
-        // hit the wrong handler. Same reasoning as the dispatcher's own
-        // press capture.
+        // go through closures, never ids: the dispatcher's table of closures
+        // is rebuilt on every walk while a press or hover routinely spans one
+        // (a consumed press requests a re-render), so a child that stopped
+        // rendering would leave an id resolving to nothing at delivery time.
+        // Same reasoning as the dispatcher's own press capture.
         let children: [(region: HitTestRegion, handler: (MouseEvent) -> Bool)] =
             buffer.hitTestRegions.compactMap { region in
                 dispatcher.handler(for: region.handlerID).map { (region, $0) }
@@ -190,7 +192,7 @@ enum _DragHandle {
         }
 
         let scratch = DragScratch()
-        let id = dispatcher.register { event in
+        let id = dispatcher.register(in: context) { event in
             // Hover transitions land here (the handle's region is the
             // innermost); ride them through to the children so they keep
             // their hover affordance. STATELESSLY: the hover-on re-render
@@ -329,7 +331,7 @@ extension DropDestinationModifier: Renderable, Layoutable {
         // Picker containers use), while drop TARGETING is unaffected — it
         // matches hit ids against the registered targets and skips
         // non-targets, so the zone is still found at any depth.
-        let id = dispatcher.register { _ in false }
+        let id = dispatcher.register(in: context) { _ in false }
         buffer.hitTestRegions.insert(
             HitTestRegion(
                 offsetX: 0,

@@ -33,6 +33,7 @@ extension _ScrollViewCore {
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
         let barHandlerID = mouseDispatcher.register(
+            in: context,
             ScrollbarRenderer.focusing(
                 barHandler, focusID: persistedFocusID,
                 focusManager: context.environment.focusManager))
@@ -67,7 +68,7 @@ extension _ScrollViewCore {
         else { return }
         let scroller = handler
         func shield(paging delta: Int, atY y: Int) {
-            let handlerID = mouseDispatcher.register { event in
+            let handlerID = mouseDispatcher.register(in: context) { event in
                 guard event.button == .left else { return false }
                 switch event.phase {
                 case .pressed:
@@ -109,6 +110,7 @@ extension _ScrollViewCore {
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
         let barHandlerID = mouseDispatcher.register(
+            in: context,
             ScrollbarRenderer.focusing(
                 barHandler, focusID: persistedFocusID,
                 focusManager: context.environment.focusManager))

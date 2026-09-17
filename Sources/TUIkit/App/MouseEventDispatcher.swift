@@ -57,15 +57,17 @@ final class MouseEventDispatcher: @unchecked Sendable {
     private struct PressCapture {
         /// The handler that claimed the press — captured directly, NOT by id.
         /// `pressedHandlers` spans frames (a press and its release can straddle
-        /// one or more renders), but handler ids do not: `beginRenderPass`
-        /// clears the table and re-registers everything from a counter reset to
-        /// 0, so the same id maps to a *different* handler after any re-render.
-        /// A render between press and release is routine — a consumed press
-        /// requests one — so looking the handler up by the captured id on
-        /// release would route the release to the wrong handler (the classic
-        /// symptom: the first menu click always activated item 0). Holding the
-        /// closure keeps the release/drag bound to the exact handler that took
-        /// the press, which is the whole point of drag capture.
+        /// one or more renders), and while an id now names the same control
+        /// across them, the table of CLOSURES does not survive: every walk
+        /// clears it and re-registers what renders. A control that stops
+        /// rendering mid-gesture — the row of a menu the press closed — leaves
+        /// its id resolving to nothing, and a render between press and release
+        /// is routine, since a consumed press requests one. Holding the closure
+        /// keeps the release/drag bound to the exact handler that took the
+        /// press, which is the whole point of drag capture. (It was load-bearing
+        /// against a sharper failure when ids were positional and a re-render
+        /// renumbered every control: the first menu click always activated item
+        /// 0.)
         let handler: (MouseEvent) -> Bool
         let regionOffsetX: Int
         let regionOffsetY: Int
@@ -100,31 +102,33 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// `beginRenderPass`.
     private var regions: [HitTestRegion] = []
 
-    /// Monotonic source of fresh ids per render pass. We don't need
-    /// the ids to be globally unique — clearing on `beginRenderPass`
-    /// guarantees no carry-over between frames.
-    private var nextHandlerID: UInt64 = 0
+    /// Where handler ids come from: interned per `(identity, slot)` so a
+    /// control keeps its own id while it renders, and minted fresh for a
+    /// registration with no view identity behind it. See
+    /// ``MouseHandlerIDTable``, whose file also holds the registration entry
+    /// points a render walk uses.
+    let handlerIDs = MouseHandlerIDTable()
 
     /// One lane of the hover state machine: the region the pointer was last
     /// resolved against, and the closure still owed its exit across a reshape.
     ///
     /// There are two lanes, ``hover`` and ``observedHover``, and they run the
-    /// same transitions independently — see ``registerHoverObserver(_:)``.
+    /// same transitions independently — see ``registerHoverObserver(in:_:)``.
     private struct HoverSlot {
         /// The handler ID of the region the cursor was sitting on
         /// when the previous `.moved` event was processed, or `nil`
         /// if the cursor wasn't over any region this lane resolves. Used to
         /// synthesise `.entered` / `.exited` transitions when the
-        /// cursor crosses region boundaries. Preserved across
-        /// render passes — handler IDs are stable across renders
-        /// for view trees whose shape doesn't change, which covers
-        /// the common case.
+        /// cursor crosses region boundaries. Preserved across render passes,
+        /// and an id is the control's own, so it still names the control the
+        /// cursor was on however the tree around it has changed.
         var handlerID: HitTestRegion.HandlerID?
 
-        /// The hovered REGION itself, kept beside the id: handler ids are
-        /// per-frame numbers, so identifying "the same control" across a render
-        /// needs the region's own identity — its focusID when it has one, its
-        /// rectangle otherwise. See ``reconcileHoverAfterReshape()``.
+        /// The hovered REGION itself, kept beside the id: what the cursor rests
+        /// on is a rectangle, and a control that MOVED under a still cursor has
+        /// left it even though its id is unchanged. So "the same control" is
+        /// asked of the region — its focusID when it has one, its rectangle
+        /// otherwise. See ``reconcileHoverAfterReshape()``.
         var region: HitTestRegion?
 
         /// The hovered region's closure, retained across the handler-table
@@ -268,7 +272,9 @@ extension MouseEventDispatcher {
         handlers.removeAll(keepingCapacity: true)
         hoverObserverIDs.removeAll(keepingCapacity: true)
         regions.removeAll(keepingCapacity: true)
-        nextHandlerID = 0
+        // The interned ids survive this: only the per-identity slot counters
+        // restart, because this runs once per WALK of the scene.
+        handlerIDs.beginWalk()
         requestedFeatures = .disabled
         configOverride = nil
     }
@@ -378,12 +384,14 @@ extension MouseEventDispatcher {
 
     /// Re-resolves the hover after the tree reshapes under a resting cursor.
     ///
-    /// Handler ids are reassigned from zero every frame, but a lane's
-    /// `handlerID` survived — so after any shape change the region
-    /// now under the stationary cursor commonly INHERITED the old number:
-    /// the same-region branch of `dispatchMotion` then synthesised nothing,
-    /// stranding hover on a control the cursor left (its box stuck lit) and
-    /// never lighting the one that arrived. The id is remapped here by the
+    /// A reshape can slide a different control under a cursor that has not
+    /// moved, and the lane would go on believing it hovers what it hovered: the
+    /// same-region branch of `dispatchMotion` synthesises nothing, so hover
+    /// strands on the control the cursor left (its box stuck lit) and never
+    /// lights the one that arrived. Ids being positional made that the COMMON
+    /// case, since the newcomer usually inherited the old number outright; they
+    /// are interned per control now, and the re-resolve below is still what
+    /// answers a control moving. The id is remapped here by the
     /// region's own identity — focusID when it has one, rectangle otherwise —
     /// and when a genuinely different control (or none) sits under the
     /// cursor, `.exited` goes to the RETAINED closure of the one that was
@@ -456,86 +464,39 @@ extension MouseEventDispatcher {
             && a.width == b.width && a.height == b.height
     }
 
-    /// Registers a new handler and returns the id `.onMouseEvent`
-    /// should emit alongside its region.
-    /// Registers `handler`, with the pointer's enter/exit tracked into
-    /// `hoverBox` first.
+    /// Registers `handler` under a fresh id that names no control.
     ///
-    /// Every control that lifts under the pointer opened its handler with the
-    /// same six lines, and three of them had their own copy: `Button`,
-    /// `_ToggleCore` and the text-field handler. Hover is one behaviour — the
-    /// pointer is over the control or it is not — so a change to what that
-    /// means should land once rather than three times, and a fourth control
-    /// should get it by asking rather than by remembering.
-    ///
-    /// Both phases are consumed, as all three copies did: a synthetic
-    /// enter/exit belongs to whichever region the dispatcher resolved it
-    /// against, and passing it on would offer it to the control underneath.
-    func register(
-        hoverBox: StateBox<Bool>, _ handler: @escaping (MouseEvent) -> Bool
-    ) -> HitTestRegion.HandlerID {
-        register { event in
-            switch event.phase {
-            case .entered:
-                hoverBox.value = true
-                return true
-            case .exited:
-                hoverBox.value = false
-                return true
-            default:
-                return handler(event)
-            }
-        }
+    /// The mint for a registration with no view identity to intern against: a
+    /// test driving the dispatcher directly. Everything a render walk registers
+    /// goes through ``register(in:_:)`` instead, so that its id is the
+    /// control's own rather than its position in the walk.
+    func register(_ handler: @escaping (MouseEvent) -> Bool) -> HitTestRegion.HandlerID {
+        register(id: handlerIDs.freshID(), handler)
     }
 
-    func register(_ handler: @escaping (MouseEvent) -> Bool) -> HitTestRegion.HandlerID {
-        let id = HitTestRegion.HandlerID(nextHandlerID)
-        nextHandlerID += 1
+    /// Files `handler` under `id`: the one write of the handler table, so the
+    /// interned and the fresh paths cannot drift apart.
+    func register(
+        id: HitTestRegion.HandlerID, _ handler: @escaping (MouseEvent) -> Bool
+    ) -> HitTestRegion.HandlerID {
         handlers[id] = handler
         return id
     }
 
-    /// Registers a hover OBSERVER: a handler that hears the pointer enter and
-    /// leave its region without taking the hover from the control inside it.
-    ///
-    /// For the wrappers that watch the pointer and act on nothing else,
-    /// `.onHover` and `help(_:)`. Each renders its content and then appends a
-    /// full-size region, so on every cell it is the innermost match — and hover
-    /// resolves one region per point. Registered as an ordinary region, the
-    /// wrapper took every `.entered` / `.exited` from what it wrapped:
-    /// `Button("Save") {}.onHover { … }` never lit up under the pointer (SwiftUI
-    /// keeps both), and `.onHover` or `.help` on a container killed the hover
-    /// face of every control inside it. The click half was fixed by letting a
-    /// declined click fall through; hover cannot fall through that way, because
-    /// the wrapper has to hear the transition AND leave it for the control, and
-    /// one hover slot would forget the wrapper and strand its callback `true`.
-    /// Forwarding the transitions down, as `_DragHandle` does, is not enough
-    /// either: moving from one wrapped control to its neighbour never leaves the
-    /// wrapper's region, so nothing would exit the first or enter the second.
-    ///
-    /// So an observer runs on a lane of its own. The control under the pointer
-    /// is resolved as though observers were not there and runs the machine
-    /// exactly as it always did — enter, exit, per-cell `.moved`, the reshape
-    /// remap — while the observer in front of it runs a second copy. See
-    /// ``resolveHover(at:y:)`` for which observer that is. Still ONE observer
-    /// per point: nested observers resolve to the outermost (the last
-    /// appended), not to all of them.
-    ///
-    /// Named apart from ``register(_:)`` rather than given a label: both take a
-    /// single closure, and a trailing closure would match either.
-    func registerHoverObserver(_ handler: @escaping (MouseEvent) -> Bool) -> HitTestRegion.HandlerID {
-        let id = register(handler)
+    /// Records that `id`'s handler watches the pointer rather than being the
+    /// control under it — see ``registerHoverObserver(in:_:)``.
+    func noteHoverObserver(_ id: HitTestRegion.HandlerID) {
         hoverObserverIDs.insert(id)
-        return id
     }
 
     /// The handler registered under `id` this frame, if any.
     ///
     /// Lets a wrapping modifier forward events to its content's handlers —
     /// ``DraggableModifier`` resolves its content's regions to closures at
-    /// render time (ids die at the next render pass; closures don't — the
-    /// same reasoning as ``PressCapture``) so a click or hover on the
-    /// draggable surface can reach the interactive children beneath it.
+    /// render time (an id outlives the walk but its entry in this table does
+    /// not, and a control that stops rendering leaves nothing to look up — the
+    /// same reasoning as `PressCapture`) so a click or hover on the draggable
+    /// surface can reach the interactive children beneath it.
     func handler(for id: HitTestRegion.HandlerID) -> ((MouseEvent) -> Bool)? {
         handlers[id]
     }
@@ -980,7 +941,7 @@ extension MouseEventDispatcher {
     /// handlers care only about entering and leaving.
     ///
     /// The machine runs on two lanes: the control under the pointer, and the
-    /// hover observer in front of it (``registerHoverObserver(_:)``). Each lane
+    /// hover observer in front of it (``registerHoverObserver(in:_:)``). Each lane
     /// transitions on its own, and the motion wants a render when either does.
     private func dispatchMotion(_ event: MouseEvent) -> Bool {
         let resolved = resolveHover(at: event.x, y: event.y)

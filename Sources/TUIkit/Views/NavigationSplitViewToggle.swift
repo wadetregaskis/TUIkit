@@ -383,7 +383,7 @@ extension _NavigationSplitViewCore {
         if let mouseDispatcher = context.environment.mouseEventDispatcher {
             mouseDispatcher.requestFeature(.motion)
             let captureHandler = handler
-            mouseHandlerID = mouseDispatcher.register { event in
+            mouseHandlerID = mouseDispatcher.register(in: context) { event in
                 switch event.phase {
                 case .entered:
                     captureHandler.isHovered = true

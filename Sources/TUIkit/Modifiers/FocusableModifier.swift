@@ -98,7 +98,7 @@ extension FocusableModifier: Renderable {
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
             let focusManager = context.environment.focusManager
-            let handlerID = mouseDispatcher.register { event in
+            let handlerID = mouseDispatcher.register(in: context) { event in
                 switch event.phase {
                 case .pressed where event.button == .left:
                     // Claim the press so the release routes back here.

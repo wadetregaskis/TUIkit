@@ -54,7 +54,7 @@ extension DragGestureModifier: Renderable {
         let start = DragStart()
         let action = self.action
 
-        let id = dispatcher.register { event in
+        let id = dispatcher.register(in: context) { event in
             guard event.button == .left else { return false }
             switch event.phase {
             case .pressed:

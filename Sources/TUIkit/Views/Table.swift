@@ -2788,6 +2788,7 @@ where Value.ID: Hashable {
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
         let barHandlerID = mouseDispatcher.register(
+            in: context,
             ScrollbarRenderer.focusing(
                 barHandler, focusID: state.focusID,
                 focusManager: context.environment.focusManager))
@@ -2828,7 +2829,7 @@ where Value.ID: Hashable {
             gutter: selectionGutter(context.environment))
         where columns.indices.contains(index) && columns[index].sortComparator != nil {
             let column = columns[index]
-            let handlerID = mouseDispatcher.register { event in
+            let handlerID = mouseDispatcher.register(in: context) { event in
                 guard event.button == .left else { return false }
                 // Claim the press so the release routes back here, and act on
                 // the release — the same press/release split every other
@@ -2916,6 +2917,7 @@ where Value.ID: Hashable {
         // equivalent `rowContentLeft`.
         let rowContentLeft = contentColumns.lowerBound + Self.containerPadding.leading
         let mouseHandlerID = mouseDispatcher.register(
+            in: context,
             containerMouseHandler(
                 state: state,
                 context: context,

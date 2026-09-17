@@ -707,7 +707,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         let focusManager = context.environment.focusManager
         let captureFocusID = persistedFocusID
         let toggleBinding = isOn
-        let handlerID = mouseDispatcher.register(hoverBox: hoverBox) { event in
+        let handlerID = mouseDispatcher.register(in: context, hoverBox: hoverBox) { event in
             switch event.phase {
             case .pressed where event.button == .left:
                 return true

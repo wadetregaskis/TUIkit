@@ -203,7 +203,7 @@ extension ContextMenuModifier: Renderable {
     ) {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
         let onOpen = context.environment.menuOpenAction
-        let handlerID = dispatcher.register { event in
+        let handlerID = dispatcher.register(in: context) { event in
             // Secondary click = right button, or Ctrl + left (the fallback where a
             // terminal claims right-click for itself, e.g. iTerm2 by default).
             let isSecondary =

@@ -330,7 +330,7 @@ struct _NavigationSplitViewCore<Sidebar: View, Content: View, Detail: View>: Vie
             {
                 let captureManager = focusManager
                 let captureSectionID = sectionID
-                let columnHandlerID = mouseDispatcher.register { event in
+                let columnHandlerID = mouseDispatcher.register(in: context) { event in
                     guard event.button == .left else { return false }
                     switch event.phase {
                     case .pressed: return true
@@ -739,7 +739,7 @@ extension _NavigationSplitViewCore {
             let captureWidths = widths
             let captureHandler = handler
             let captureFocus = focusManager
-            mouseHandlerID = mouseDispatcher.register { event in
+            mouseHandlerID = mouseDispatcher.register(in: context) { event in
                 // Hover transitions first — these arrive with a non-`.left`
                 // button, so they'd be dropped by the button guard below.
                 switch event.phase {

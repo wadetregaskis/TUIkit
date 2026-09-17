@@ -69,8 +69,8 @@ extension OnHoverModifier: Renderable {
         // ordinary region it took the `.entered` / `.exited` the wrapped
         // control needs for its own hover face — `Button("Save") {}.onHover { … }`
         // never lit up, where SwiftUI keeps both. See
-        // `MouseEventDispatcher.registerHoverObserver(_:)`.
-        let handlerID = dispatcher.registerHoverObserver { event in
+        // `MouseEventDispatcher.registerHoverObserver(in:_:)`.
+        let handlerID = dispatcher.registerHoverObserver(in: context) { event in
             switch event.phase {
             case .entered:
                 capturedAction(true)

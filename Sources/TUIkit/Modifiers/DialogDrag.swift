@@ -38,7 +38,7 @@ enum DialogDrag {
             // Clicks claim the press; drag reporting moves the dialog.
             mouseDispatcher.requestFeature(.clicks)
             mouseDispatcher.requestFeature(.drag)
-            let handlerID = mouseDispatcher.register { event in
+            let handlerID = mouseDispatcher.register(in: context) { event in
                 switch event.phase {
                 case .pressed where event.button == .left:
                     handler.beginDrag(atX: event.x, y: event.y)

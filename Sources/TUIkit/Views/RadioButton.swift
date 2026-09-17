@@ -560,7 +560,7 @@ private struct _RadioButtonGroupCore<Value: Hashable>: View, Renderable, Layouta
             // hit-test region falls through cleanly because
             // mismatched IDs are skipped.
             for (index, region) in itemRegions.enumerated() {
-                let mouseHandlerID = mouseDispatcher.register { event in
+                let mouseHandlerID = mouseDispatcher.register(in: context) { event in
                     switch event.phase {
                     case .entered:
                         captureHoveredIndexBox.value = index

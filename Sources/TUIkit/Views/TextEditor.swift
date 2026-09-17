@@ -669,7 +669,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
             handler.moveCursor(toLine: line, column: column)
         }
 
-        let handlerID = mouseDispatcher.register { event in
+        let handlerID = mouseDispatcher.register(in: context) { event in
             switch event.phase {
             case .pressed where event.button == .left:
                 focusManager?.focus(id: focusID)

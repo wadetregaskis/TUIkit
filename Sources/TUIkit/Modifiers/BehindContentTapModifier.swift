@@ -38,7 +38,7 @@ extension _BehindContentTapModifier: Renderable {
             buffer.width > 0, buffer.height > 0
         else { return buffer }
         let action = self.action
-        let handlerID = dispatcher.register { event in
+        let handlerID = dispatcher.register(in: context) { event in
             guard event.button == .left else { return false }
             switch event.phase {
             // Claimed, so the release routes back here even if the pointer moved.

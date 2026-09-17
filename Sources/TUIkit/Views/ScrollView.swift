@@ -767,7 +767,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let focusManager = context.environment.focusManager
         let captureFocusID = persistedFocusID
         let captureHorizontal = wantsHorizontal
-        let mouseHandlerID = mouseDispatcher.register { event in
+        let mouseHandlerID = mouseDispatcher.register(in: context) { event in
             // Shift + vertical wheel IS the horizontal gesture, decided before
             // the vertical capture gets a look: the vertical handler consumes
             // .scrollUp/.scrollDown without ever reading the shift bit, so
