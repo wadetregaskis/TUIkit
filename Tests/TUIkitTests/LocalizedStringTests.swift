@@ -12,10 +12,13 @@ import Testing
 /// Tests for the `LocalizedString` view.
 ///
 /// `LocalizedString` is a thin wrapper — its body is
-/// `Text(LocalizationService.shared.string(for: key))` — so these verify it
-/// faithfully surfaces whatever the (separately-tested) `LocalizationService`
-/// resolves, including the missing-key fallback. The service is used as the
-/// oracle so the tests don't hard-code specific translations.
+/// `Text(service.string(for: key))`, where `service` comes from the
+/// environment and defaults to the shared one — so these verify it faithfully
+/// surfaces whatever the (separately-tested) `LocalizationService` resolves,
+/// including the missing-key fallback. The service is used as the oracle so
+/// the tests don't hard-code specific translations, which is also why they say
+/// nothing about WHICH service was consulted: that is
+/// `LocalizedRenderGuardTests`, where a subtree is handed one in German.
 @MainActor
 @Suite("LocalizedString")
 struct LocalizedStringTests {
