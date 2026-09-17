@@ -5,28 +5,52 @@ refuses to report success unless it can prove every test ran exactly once.
 
 ```bash
 Tools/ParallelTest/parallel_test.py --calibrate   # once, ~95 s
-Tools/ParallelTest/parallel_test.py               # thereafter, -j 6 by default
+Tools/ParallelTest/parallel_test.py -j 12         # thereafter; the flag's own
+                                                  # default is 6, see below
 ```
 
-Measured on this repository at `510e0ad0`, 12 logical cores / 16 GiB, medians of
-four consecutive runs per arm with the first discarded:
+Re-measured at `3fadcb1d`, after the test splits in `a7bdea3f` and `638dd69f`,
+12 logical cores / 16 GiB. These are the suite times each command reports for
+itself, which is the only figure the build cost below cannot distort:
 
-| command | median wall | range | speedup |
-|---|---:|---|---:|
-| `swift test` | 54.71 s | 52.53–57.08 | 1.00x |
-| `parallel_test.py -j 6` | **21.79 s** | 21.10–21.92 | **2.51x** |
-| `parallel_test.py -j 8` | 17.44 s | 17.20–17.70 | 3.14x |
+| command | median suite wall | range | reps | sd | speedup |
+|---|---:|---|---:|---:|---:|
+| `swift test` | 54.10 s | 52.22–58.14 | 4 | 2.50 | 1.00x |
+| `parallel_test.py -j 1` | 56.66 s | — | 1 | — | 0.95x |
+| `parallel_test.py -j 6` | 20.73 s | 19.55–21.58 | 6 | 0.74 | 2.61x |
+| `parallel_test.py -j 8` | 17.32 s | 16.87–18.19 | 4 | 0.55 | 3.12x |
+| `parallel_test.py -j 12` | **13.96 s** | 13.41–14.90 | 10 | 0.59 | **3.88x** |
 
-That is **−32.9 s per run at `-j 6`**, or about 5.5 hours across a 600-run
-landing batch. A paired A/B with the arm order randomised per rep agreed:
-+40.9 s median paired difference for `-j 6`, +37.4 s for `-j 4`.
+That is **−40.1 s per run at `-j 12`**, or about 6.7 hours across a 600-run
+landing batch. Three paired reps with the arm order randomised per rep agreed
+on every arm, same sign in every rep: `-j 6` − `-j 12` = +6.64 s, `-j 8` −
+`-j 12` = +3.47 s, `swift test` − `-j 12` = +40.14 s. The ±2.4 s band this repo
+quotes for wall-clock noise is a SINGLE-PROCESS figure and does not apply to
+these arms — their own sd is 0.55–0.74 s, which is what makes the 3.5 s between
+`-j 8` and `-j 12` readable at all.
 
-Those walls are end to end — they include the incremental build, the
-enumeration and the planning done before anything is spawned, which together
-cost about 1.6 s when the harness is run repeatedly. Running it straight after
-a `swift test` or `swift build` costs roughly 6.6 s more, because SwiftPM
-recompiles its plugins: measured 26.93 s end to end immediately after a build,
-then 20.33 s on the very next run. A landing batch pays the cheap number.
+**The curve has not flattened at 12**, even though the floor is far below it
+(see "Where the limit is"). At `-j 12` the run reaches 10.2x cores on a 12-core
+machine: what binds is the machine, not the slowest test.
+
+Those are suite times. The wall you wait for adds about 1.5 s of enumeration,
+planning and reconciliation, plus the incremental build — and the build is
+bimodal. Two consecutive `swift build --build-tests` cost 0.3 s, but the first
+one **after a `swift test` costs 6.5–7.2 s** (5 of 5 observed; a repeat
+`-j 12` run therefore lands around 16.3 s of wall, and one following a
+`swift test` around 22 s). Alternating the two routes pays that toll each time;
+a landing batch that stays on one route does not. A handful of expensive builds
+were also seen with no `swift test` before them, and those are unattributed —
+touching `.build`, and `--plan-only`'s `swift build --show-bin-path`, were both
+ruled out by direct probe.
+
+Memory, at `-j 12` on 16 GiB: the twelve test processes peaked at 2,576 MiB of
+combined RSS (`ps` RSS, which counts shared pages once per process, so this
+over-estimates), the largest single one 265 MiB. `swift test` peaks lower in
+total, 1,177 MiB, but far higher in one process, 1,031 MiB. No arm touched
+swap: `vm.swapusage` read `total = 0.00M` before, during and after every run,
+the compressor never moved, and there were no swapins or swapouts. `-j 12` is
+comfortable on this machine; the ceiling is cores, not RAM.
 
 ## Why one process is slow
 
@@ -38,9 +62,10 @@ HEAD, not re-measured here — puts 77% of the late-regime CPU in
 cooperative-pool threads burning CPU taking turns rather than doing work.
 
 Each process has its own main actor, so N processes turn that contention back
-into throughput. The measurement that makes the point: a single process spends
-~53 s of wall and ~175 CPU-seconds; eight processes finish the same tests in
-~16 s for roughly the same total CPU.
+into throughput. The measurement that makes the point: one process spends
+~57 s of wall and ~171 CPU-seconds; twelve processes finish the same tests in
+~14 s for ~142 CPU-seconds — less total CPU, not more, because the CPU the one
+process spent taking turns was never work.
 
 ## It is not a substitute for `swift test`
 
@@ -83,7 +108,21 @@ Speed is worthless if a process quietly runs nothing, so every run is gated on:
 * every process produced a parseable summary line and exited 0.
 
 All 21 full-suite harness runs in the session that built this, at `-j 3`
-through `-j 8`, reconciled to 7,573 tests / 1,081 suites / 21 known issues.
+through `-j 8`, reconciled to 7,573 tests / 1,081 suites / 21 known issues. A
+later 25-run pass at `-j 1` through `-j 12` reconciled to 7,591 / 1,082 / 21,
+every run, including the four runs that had a failing test.
+
+One gap in that gate, worth knowing before it is believed: `parse_summary_text`
+handles three shapes of the final line, and there is a fourth. A group that
+fails with issues but has **no known issues of its own** ends with `failed
+after N seconds with 1 issue.` — neither `N known issues` nor `N issues
+(including M known issues)` — so it does not parse, and the gate reports
+"produced no summary line" for a group that in fact ran and simply failed. It
+degrades safe (it raises a problem rather than hiding one) and it cannot
+corrupt the known-issue total, because the count it fails to read is zero by
+construction. What it does cost is the trap-2 guard: the per-group
+`tests ran == tests predicted` check is skipped for exactly that group, leaving
+only the union check to cover it. Seen twice, both at `-j 6`.
 
 ## Four traps this is built around
 
@@ -102,7 +141,7 @@ never open it.
 toolchain renaming `--filter`, would therefore make every process run everything
 and still "pass". That is why each process's reported test count is checked
 against the partition's prediction, and why `--list-tests` ignoring `--filter`
-(it returns all 7,573 whatever you ask for) is worked around by filtering in
+(it returns all 7,591 whatever you ask for) is worked around by filtering in
 Python instead.
 
 **3. A test's apparent duration is not its cost.** swift-testing starts tests
@@ -144,7 +183,8 @@ are the four that moved: `gamutSampleAgrees(_:)` and `cornersAgree(_:)` each
 walked all four palettes in one function, and both menu tests rendered 50-,
 5,000- and 9,000-row menus in one. Fifteen functions now cover exactly what
 those four covered — same pixels, same palettes, same lengths, same assertions
-— and the suite enumerates 7,585 tests rather than 7,573.
+— and the suite went from 7,573 tests to 7,585. It enumerates 7,591 today; the
+extra six are `561f7f0b`'s new conversion suite, not these splits'.
 
 Treat the totals in this section as ±4 s. Three calibrations of this tree read
 86.8 s, 99.8 s and 104.9 s, and most of that movement is not the splits: five
@@ -153,10 +193,13 @@ only the menu file was edited, worth +0.4 s — everything NOT edited still grew
 3.9 s. One calibration is a single serial sample of a debug build, not a
 constant.
 
-`-j 6` is the default rather than `-j 8` because it was the only arm that never
-failed a run (7/7 clean, against 5/7 for both `-j 8` and single-process), it
-leaves half the machine for whatever else is running, and the 4.4 s it gives up
-is within the noise band this repo uses for wall-clock comparisons.
+`-j 6` remains the flag's default, but the reliability argument that chose it
+no longer holds. Re-measured over 25 runs, `-j 6` was the *least* clean arm —
+4/6, against 4/4 for `-j 8`, 8/10 for `-j 12` and 4/4 for `swift test` — and
+both of its failures were a wall-clock budget that a loaded box fails, not
+anything about six processes. `-j 12` is both the fastest arm and no worse for
+reliability, so pass it explicitly; the default is left alone because changing
+it is a code change, not a documentation one.
 
 ## Known order dependence, and flakes
 
@@ -166,23 +209,61 @@ codes another test leaves set, so it passes only under the interleaving a
 parallel run happens to give it. Calibration reports the failure and still
 writes the table, because a failure does not make a duration wrong.
 
-Two tests failed intermittently across the runs that built this harness, and
-**the flakiest arm was plain `swift test`**, not the partition:
+Re-measured over 25 full-suite runs — 10 at `-j 12`, 6 at `-j 6`, 4 each at
+`-j 8` and `swift test`, 1 at `-j 1` — of which 21 were clean. **The three
+flakes this file used to list are gone**; none fired once:
 
-| test | single | `-j 6` | `-j 8` |
-|---|---:|---:|---:|
-| `TerminalFocusPhaseTests/backgroundIgnoresReports(isFocused:)` | **2/7** | 0/7 | 1/7 |
-| `FrameClockTests/defaultIsNow()` | 0/7 | 0/7 | 1/7 |
+| test | was | now | what closed it |
+|---|---|---:|---|
+| `FrameClockTests/defaultIsNow()` | 1/7 at `-j 8` | 0/25 | `561f7f0b` |
+| `FrameBufferCombineScalingTests/verticalAppendWithKnownWidthsIsNotQuadratic()` | 1/8 at `-j 6` | 0/25 | `3fadcb1d` |
+| `TerminalFocusPhaseTests/backgroundIgnoresReports(isFocused:)` | 2/7 single | 0/25 | probably `1d6eacd9` |
 
-The first asserts `#expect(!AppState.shared.needsRender)` on a process-global
-singleton, and it fails under plain `swift test` more often than under any
-partition. The second failed as `(first → 0) > 0` — `FrameClock.nowNanos`
-returned zero — which looks like a defect in the clock rather than a timing
-race, and is worth a look independently of this harness.
+Its `AppState.shared` sibling `RunLoopFoldTests/idleIterationIsQuiet()` did not
+fire either. Attributing the third to `1d6eacd9` is inference from what that
+commit changed, not something these runs prove: 25 runs cannot distinguish a
+fixed 2-in-7 flake from a lucky one, and nothing here re-measured it before.
 
-They share a cause the harness cannot fix: swift-testing already runs suites
-concurrently inside one process, so global state such as `AppState.shared` is
-contended whether or not the suite is split across processes.
+Two remain. The first is a **product defect, not a flaky test**:
+
+* `ListRenderTests/emptyDefaultPlaceholder()` and `SnapshotCorpusTests/corpus()`
+  fail **together**, 2 of 10 runs at `-j 12`, always in the same process. The
+  placeholder renders in Japanese:
+
+  ```
+  (joined → "╭────────╮│項目がありません│…").contains("No items")
+  ```
+
+  `LocalizationService.shared` is a lazy `public static let`, so its first
+  touch in a process is what fixes its language, and `init()` asks
+  `systemPreferredLanguage()`, whose `environment:` argument defaults to the
+  live `ProcessInfo.processInfo.environment`. Meanwhile
+  `LocalizationServiceTests/processEnvironmentIsTheDefault()` does
+  `setenv("LC_ALL", "ja_JP.UTF-8", 1)` process-wide for the length of one test.
+  Any test that first touches `.shared` inside that window latches Japanese for
+  the **rest of the process**, and every view resolving `label.noItems` through
+  `ViewConstants+Localized` then draws it. That test's own comment reasons the
+  `setenv` is safe because "neither Foundation's locale nor any other suite
+  reads it" — `LocalizationService.init()` does, through the defaulted
+  argument. It is the same shape as `561f7f0b`: a lazy global whose defect is
+  *when* it is first touched.
+
+  Partitioning should make this more likely, by reasoning rather than by
+  measurement: one process runs thousands of tests that touch `.shared` long
+  before the window opens, while a twelfth of the suite is ~630 tests and far
+  likelier to have its first touch land inside it. Both sightings were at
+  `-j 12`, but with 10 runs there and 4 at each other arm that is not on its
+  own a measured rate difference.
+
+* `RenderBottleneckTests/analyzeForEachIterations()` failed 2 of 6 runs at
+  `-j 6` — `#expect(time10 < 0.5)`, a wall-clock budget, which is the shape
+  `3fadcb1d` fixed elsewhere by measuring thread CPU time instead. It is
+  load-sensitive by construction and is not evidence about the partition.
+
+What the harness cannot fix stays true: swift-testing already runs suites
+concurrently inside one process, so process-global state — `AppState.shared`,
+`LocalizationService.shared`, the process environment — is contended whether or
+not the suite is split across processes.
 
 ## Portability
 

@@ -170,12 +170,12 @@ swift build
 # from invalidating each other.
 xcrun --toolchain XcodeDefault swift build --build-tests --scratch-path .build/xcode
 
-# Run all tests (7,573 tests in 1,081 suites, Swift Testing framework)
+# Run all tests (7,591 tests in 1,082 suites, Swift Testing framework)
 swift test
 
-# The same tests, in 6 processes instead of 1: 54.7s -> 21.8s (see below)
+# The same tests, in 12 processes instead of 1: 54.1s -> 14.0s (see below)
 Tools/ParallelTest/parallel_test.py --calibrate   # once, ~95s
-Tools/ParallelTest/parallel_test.py
+Tools/ParallelTest/parallel_test.py -j 12
 
 # Run a single test suite. NOTE: --filter matches the Swift TYPE name, not the
 # @Suite display string — `--filter AlertDismissalTests`, not "Alert dismissal".
@@ -202,31 +202,62 @@ Tools/BuildDocs/build-docs.sh            # add --analyze for every diagnostic
 `@MainActor` suites, so they queue on that one actor: 77% of the CPU in the
 late part of a run is `syscall_thread_switch` and friends — threads taking
 turns, not working. `Tools/ParallelTest/parallel_test.py` splits the suite
-across processes, each with its own main actor. Measured here (12 cores,
-medians of four consecutive runs, first discarded):
+across processes, each with its own main actor. Re-measured here (12 logical
+cores / 16 GiB) after the test splits in `a7bdea3f` and `638dd69f`, as the
+suite time each command reports for itself:
 
-| command | median | speedup |
-|---|---:|---:|
-| `swift test` | 54.71 s | 1.00x |
-| `Tools/ParallelTest/parallel_test.py -j 6` | **21.79 s** | **2.51x** |
-| `Tools/ParallelTest/parallel_test.py -j 8` | 17.44 s | 3.14x |
+| command | median suite wall | reps | sd | speedup |
+|---|---:|---:|---:|---:|
+| `swift test` | 54.10 s | 4 | 2.50 | 1.00x |
+| `Tools/ParallelTest/parallel_test.py -j 6` | 20.73 s | 6 | 0.74 | 2.61x |
+| `Tools/ParallelTest/parallel_test.py -j 8` | 17.32 s | 4 | 0.55 | 3.12x |
+| `Tools/ParallelTest/parallel_test.py -j 12` | **13.96 s** | 10 | 0.59 | **3.88x** |
 
-At `-j 6` that is 32.9 s a run, or ~5.5 hours across a 600-run landing batch.
-Beyond `-j 8` nothing improves: one test takes 12.2 s on its own and cannot be
-split, which the tool reports as part of its plan.
+That is −40.1 s a run at `-j 12`, or ~6.7 hours across a 600-run landing batch.
+Three paired reps with the arm order randomised agreed on all three arms:
+`-j 6` − `-j 12` = +6.64 s, `-j 8` − `-j 12` = +3.47 s, `swift test` − `-j 12`
+= +40.14 s, each with the same sign in every rep. The ±2.4 s band this repo
+quotes for wall-clock noise is a SINGLE-PROCESS figure — the harness arms
+repeat far more tightly, which is what makes the 3.5 s between `-j 8` and
+`-j 12` readable at all.
+
+**The curve has not flattened at 12.** The harness prints the floor as part of
+its plan — today `popUpReachesItsLastRowAtItsLongest(count:)`, 3.85 s alone, so
+`-j` beyond 28 cannot help — but `-j 12` is nowhere near it: the run reaches
+10.2x cores on a 12-core machine, so what binds is the machine, not the slowest
+test. More cores would keep paying until about 28.
+
+Add ~1.5 s of enumeration, planning and reconciliation for the wall you
+actually wait for, plus the incremental build — 0.1–0.8 s if the last thing you
+ran was another harness run, but **6.5–7.2 s on the first `swift build
+--build-tests` after a `swift test`** (5 of 5 observed; two consecutive builds
+with nothing between them cost 0.3 s). A repeat `-j 12` run therefore lands
+around 16.3 s of wall, against ~62 s for `swift test`.
+
+Memory at `-j 12` on 16 GiB: the twelve test processes peaked at 2,576 MiB of
+combined RSS, the largest single one 265 MiB. `swift test` peaks lower in total
+(1,177 MiB) but far higher in one process (1,031 MiB). No arm touched swap —
+`vm.swapusage` read `total = 0.00M` before, during and after every run, the
+compressor never moved, and there were no swapins or swapouts. `-j 12` is
+comfortable here; the ceiling is cores, not RAM.
 
 **CI does not use it, and neither does the merge gate** — those run `swift
-test` in one process, exactly as above. The harness is for anyone running the
-suite repeatedly. It runs every test, and fails loudly unless the union of test
-IDs returned by its processes matches the enumerated suite exactly, so a
-process that quietly ran nothing cannot be mistaken for a pass.
+test` in one process, exactly as above, and that is unchanged. The harness is
+for anyone running the suite repeatedly. It runs every test, and fails loudly
+unless the union of test IDs returned by its processes matches the enumerated
+suite exactly, so a process that quietly ran nothing cannot be mistaken for a
+pass. That identity check held in all 25 full-suite runs behind this section:
+7,591 tests, 1,082 suites, 21 known issues, nothing missing, extra or
+duplicated. Two of the 25 did print a reconciliation problem, but it was a gap
+in how the harness parses a summary line — documented in its README — and not a
+test that failed to run.
 
 Because the tests are spread differently, anything depending on the
 interleaving one process happens to give it can behave differently — that is a
 property of the test. [`Tools/ParallelTest/README.md`](Tools/ParallelTest/README.md)
-records the one such test known today, the flakes seen while building it (the
-worst of which fires under plain `swift test` too), and why weights are
-measured serially rather than taken from the timings swift-testing reports.
+records the tests known to do that today, the flakes seen while measuring, and
+why weights are measured serially rather than taken from the timings
+swift-testing reports.
 
 ## Pull Request Requirements
 
