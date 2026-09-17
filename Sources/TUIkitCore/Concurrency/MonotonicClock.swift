@@ -7,7 +7,15 @@
 // MARK: - The clock the run loop runs on
 
 /// Nanoseconds on a clock that only ever goes forward, from an arbitrary point
-/// fixed at process start.
+/// fixed one nanosecond before this process's first reading.
+///
+/// **Zero is reserved: it means "no reading", and a working clock never gives
+/// it.** That matters because three places already spell 0 exactly that way —
+/// `AnimationFrame(nowNanos:)`'s default ("0 outside the run loop"),
+/// ``CursorTimer``'s `snapshotNanos` ("never shown") and
+/// `LinkActivationGate.lastNanos` ("the first activation of this link's life").
+/// The origin is offset off zero so a genuine early reading can never be
+/// mistaken for any of them; only a clock that has run BACKWARDS answers 0.
 ///
 /// Every part of the framework that measures an *interval* reads this: the run
 /// loop's frame pacing, the animation clocks (whose content clock IS this reading,
@@ -60,11 +68,37 @@ package enum MonotonicClock {
         // WebAssembly launch to find and would have been a rare, unreproducible
         // crash on the first frame anywhere.
         let origin = epoch
-        let (seconds, attoseconds) = (SuspendingClock.now - origin).components
+        return nanoseconds(from: origin, to: SuspendingClock.now)
+    }
+
+    /// `now`'s reading on a clock whose origin is `origin`, or `0` when that is
+    /// not a reading at all because `now` precedes `origin`.
+    ///
+    /// Split out of ``nowNanoseconds`` so the conversion can be tested against
+    /// instants chosen by the caller. The interesting one cannot be produced on
+    /// demand through the property: the process's FIRST call is the one that
+    /// initialises `epoch`, and a test only ever gets to make that call once.
+    static func nanoseconds(
+        from origin: SuspendingClock.Instant, to now: SuspendingClock.Instant
+    ) -> UInt64 {
+        let (seconds, attoseconds) = (now - origin).components
         // Both halves are signed, and a clamp on both is the only form that
         // cannot trap — a negative reading is answered with zero, which is the
         // truth for a clock that has not moved.
         guard seconds >= 0, attoseconds >= 0 else { return 0 }
-        return UInt64(seconds) &* 1_000_000_000 &+ UInt64(attoseconds / 1_000_000_000)
+        // Offset by one, so the origin sits one nanosecond BEFORE the first
+        // reading and a working clock never returns 0. Without it the first
+        // call of a process — the one that initialises `epoch` and then reads
+        // the clock again — returns however many nanoseconds those two reads
+        // are apart, which on a 41 ns timebase is exactly zero about a tenth of
+        // the time. Measured: 392 of 4,000 debug-built processes.
+        //
+        // The offset costs nothing and changes no interval, because every
+        // reader subtracts two readings and it cancels (see `epoch`). What it
+        // buys is that 0 keeps ONE meaning across the framework — "no reading"
+        // — which is what `AnimationFrame(nowNanos:)`'s default,
+        // `CursorTimer.snapshotNanos`'s initial value and
+        // `LinkActivationGate.lastNanos` all already take it to mean.
+        return 1 &+ UInt64(seconds) &* 1_000_000_000 &+ UInt64(attoseconds / 1_000_000_000)
     }
 }
