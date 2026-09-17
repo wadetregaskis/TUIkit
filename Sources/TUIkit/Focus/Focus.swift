@@ -80,7 +80,45 @@ public final class FocusManager: @unchecked Sendable {
     private var activeSectionID: String?
 
     /// The currently focused element's ID within the active section.
-    private var focusedID: String?
+    ///
+    /// Written through `didSet` because a focus move leaves a cached buffer at
+    /// either end of it stale, and nothing a memo keys on can see that: a
+    /// control's buffer draws the focus ring it had while it rendered, while
+    /// its identity, its view value and its size are all unchanged by the move.
+    /// So every assignment drops the cached renders of the id it left and the
+    /// id it took (``invalidateCachedRender(of:)``), which covers the paths
+    /// that assign focus straight from section memory — a modal dismissal, a
+    /// Tab across a section boundary — by construction rather than by each of
+    /// them remembering to.
+    private var focusedID: String? {
+        didSet {
+            guard oldValue != focusedID else { return }
+            invalidateCachedRender(of: oldValue)
+            invalidateCachedRender(of: focusedID)
+        }
+    }
+
+    /// Where the control answering to each focus id last rendered, with the
+    /// render generation it registered in. Filled by
+    /// `FocusRegistration.register` — the one registrar every interactive
+    /// control goes through — and pruned like ``focusBindings``, so a windowed
+    /// list of thousands of rows keeps only the ones on screen.
+    ///
+    /// A focus id is what this manager moves focus between; a `ViewIdentity` is
+    /// what the render cache keys buffers on. Registration is the only moment
+    /// the two are known together.
+    private var focusIdentities: [String: (identity: ViewIdentity, generation: UInt64)] = [:]
+
+    /// The cache holding the buffers that draw those controls, so a focus move
+    /// can drop the ones at either end of it. Weak, like `StateStorage`'s
+    /// reference to the same object: the cache is not owned here.
+    ///
+    /// Recorded by each registration rather than wired at construction, because
+    /// a manager meets a cache only through the contexts that render into it —
+    /// which is also what keeps the throwaway managers right: a dimmed
+    /// backdrop's manager and the focus-reach probe's scratch one each end up
+    /// pointed at the cache their own render used.
+    private weak var renderCache: RenderCache?
 
     /// The last focused element ID per section, so returning to a section
     /// (e.g. dismissing a modal whose overlay activated its own section)
@@ -423,6 +461,57 @@ extension FocusManager {
         register(element, inSection: nil)
     }
 
+    /// Records where the control answering to `focusID` rendered, and the cache
+    /// holding what it drew.
+    ///
+    /// Called by `FocusRegistration.register` for every interactive control,
+    /// *before* it registers the element: ``register(_:inSection:)`` can focus
+    /// the element on the spot — an empty section auto-focuses its first
+    /// registrant, and a pending intent resolves the moment its target appears
+    /// — and that write drops this control's cached renders, which it can only
+    /// do once this is known.
+    ///
+    /// - Parameters:
+    ///   - identity: Where the control rendered this pass.
+    ///   - focusID: The id it declared this pass.
+    ///   - cache: The render cache of the render that made it, or `nil` when
+    ///     there is none (an isolated render, a test).
+    func noteFocusIdentity(
+        _ identity: ViewIdentity, for focusID: String, cachedIn cache: RenderCache?
+    ) {
+        renderCache = cache
+        focusIdentities[focusID] = (identity: identity, generation: focusRenderGeneration)
+    }
+
+    /// Drops the cached buffers that draw the control answering to `focusID`,
+    /// whose focus state has just changed while its buffer has not.
+    ///
+    /// The scope is a `@State` write's — the identity, its ancestors and its
+    /// descendants — but this is applied at once rather than queued, and asks
+    /// for no frame. Both differences are deliberate:
+    ///
+    /// - **At once**, because focus moves mid-walk as well as between frames:
+    ///   ``register(_:inSection:)`` auto-focuses the first registrant of an
+    ///   empty section, and a memo still rendering above it must see the
+    ///   invalidation and decline to store the buffer it drew before the focus
+    ///   landed. That is what `RenderCache.isStorable`'s
+    ///   `invalidatedDuringRender` asks, and only a synchronous clear moves the
+    ///   counter it reads.
+    /// - **No frame request**, because a move already announces itself through
+    ///   ``onFocusChange``, which is what schedules the repaint. Asking here as
+    ///   well would also ask for managers whose owner wired no callback — a
+    ///   backdrop's, a probe's, a test's — so a first registrant auto-focusing
+    ///   into a manager built fresh each frame would ask for another frame
+    ///   forever, which is a settled page that never idles.
+    ///
+    /// A focus id with nothing recorded — a control that has not rendered since
+    /// the map was last pruned — drops nothing, which is right: the cache drops
+    /// a subtree's entries in the pass that stops rendering it.
+    private func invalidateCachedRender(of focusID: String?) {
+        guard let focusID, let known = focusIdentities[focusID] else { return }
+        renderCache?.clearAffected(by: known.identity)
+    }
+
     /// Unregisters a focusable element from all sections.
     ///
     /// A focused element is told it lost the focus on its way out — the same
@@ -494,6 +583,10 @@ extension FocusManager {
         focusDefaultValues.removeAll()
         appliedDefaultFocus.removeAll()
         focusHandoffs.removeAll()
+        // After `focusedID` went, not before: clearing the focus drops the
+        // cached renders of the control that held it, and it needs this map to
+        // find them.
+        focusIdentities.removeAll()
     }
 
     /// Focuses a specific element.
@@ -699,6 +792,10 @@ extension FocusManager {
             focusDefaultValues[store] = nil
             appliedDefaultFocus.remove(store)
         }
+        // Where controls drew, on the same rule: one that did not render this
+        // pass has no cached buffers left to drop either, the cache having
+        // pruned its entries for the same reason.
+        focusIdentities = focusIdentities.filter { $0.value.generation == focusRenderGeneration }
         pruneFocusHandoffs()
     }
 

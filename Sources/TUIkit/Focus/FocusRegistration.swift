@@ -140,6 +140,13 @@ enum FocusRegistration {
         // otherwise alive (see `EnvironmentValues.isFocusSuppressed`).
         // markActive is unrelated to focus (state GC) and always runs.
         if !context.environment.isFocusSuppressed, let manager = context.environment.focusManager {
+            // Before the registration, not after. Registering can focus this
+            // control on the spot — an empty section auto-focuses its first
+            // registrant — and the write that does it drops the cached buffers
+            // drawing this control, which it can only do once the manager knows
+            // where this control is.
+            manager.noteFocusIdentity(
+                context.identity, for: focusID, cachedIn: context.renderCache)
             manager.register(handler, inSection: context.environment.activeFocusSectionID)
             // A `.focusHandoff(_:_:)` above names where this control's focus goes
             // when it can no longer hold it. Declared only where the control
