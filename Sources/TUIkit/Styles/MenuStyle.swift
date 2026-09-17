@@ -77,6 +77,27 @@ extension MenuStyleConfiguration.Content: ChildViewProvider {
 ///   floating menu, the way a pop-up button behaves everywhere else.
 /// - ``InlineMenuStyle`` (``inline``) — the items expanded in place under a
 ///   heading, always visible.
+///
+/// ## Styles and the render cache
+///
+/// ``View/menuStyle(_:)`` puts the style into the environment, and the render
+/// cache keeps memoized subtrees honest by comparing each injected value with
+/// the one applied there last frame. A value it cannot compare may have changed
+/// under a buffer it is about to serve with nothing able to notice, so every
+/// memo below one declines to cache at all.
+///
+/// Both built-in styles are therefore `Equatable`, as is the row styling a menu
+/// injects around its items. Without that, nothing under a styled menu could be
+/// memoized — which is every row of an inline menu, the shape a terminal app's
+/// landing screen is usually made of. A custom style need not conform: one that
+/// does not simply turns memoization off below itself, which costs render time
+/// rather than correctness.
+///
+/// - Note: SwiftUI's `DefaultMenuStyle` declares no such conformance, and this
+///   is one of the places a terminal renderer has to differ. SwiftUI diffs the
+///   view graph the compiler builds for it and never has to ask whether an
+///   environment value changed; TUIkit re-runs `body` and compares values, so
+///   here the question must be answerable.
 public protocol MenuStyle: Sendable {
     /// A view that represents the body of a menu.
     associatedtype Body: View
@@ -130,7 +151,7 @@ extension MenuStyle {
 /// menu, dismissed by Escape, by choosing an item, or by clicking outside.
 ///
 /// Access this style with the ``MenuStyle/automatic`` static property.
-public struct DefaultMenuStyle: MenuStyle {
+public struct DefaultMenuStyle: MenuStyle, Equatable {
     /// Creates a default menu style.
     public init() {}
 
@@ -149,7 +170,7 @@ public struct DefaultMenuStyle: MenuStyle {
 ///   the user open the only thing on the page. Rendering it inline keeps that
 ///   screen a `Menu` — one API, one look, one set of keyboard shortcuts —
 ///   rather than a hand-built column of buttons.
-public struct InlineMenuStyle: MenuStyle {
+public struct InlineMenuStyle: MenuStyle, Equatable {
     /// Creates an inline menu style.
     public init() {}
 
@@ -177,6 +198,10 @@ private struct MenuStyleKey: EnvironmentKey {
 extension EnvironmentValues {
     /// The menu style for this environment — see ``MenuStyle``. Set via
     /// ``View/menuStyle(_:)``. Default: ``DefaultMenuStyle``.
+    ///
+    /// The render cache compares this value between frames to decide whether
+    /// what it memoized below is still good, so a style that is not `Equatable`
+    /// turns memoization off in its subtree — see ``MenuStyle``.
     public var menuStyle: any MenuStyle {
         get { self[MenuStyleKey.self] }
         set { self[MenuStyleKey.self] = newValue }

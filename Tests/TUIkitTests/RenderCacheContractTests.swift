@@ -58,6 +58,17 @@ private struct AccentLeaf: View, Equatable {
     }
 }
 
+/// A caller's own menu style with no `Equatable` conformance, so nothing can
+/// tell whether the value it injects has changed.
+private struct UncomparableMenuStyle: MenuStyle {
+    let token = 0
+
+    @MainActor
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+    }
+}
+
 /// A value with no `Equatable` conformance, so a change under it is
 /// undetectable by construction.
 private struct Incomparable {
@@ -450,6 +461,37 @@ struct RenderCacheContractTests {
             }
             .environment(\.incomparableProbe, Incomparable()))
         #expect(cache.isEmpty, "a row cached under an uncomparable environment value")
+    }
+
+    @Test("A built-in menu style does not stop the subtree below it caching")
+    func builtInMenuStyleKeepsCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        // `.menuStyle(_:)` injects an `any MenuStyle`, and what decides whether
+        // a memo below it may store is the DYNAMIC type's `Equatable`
+        // conformance. The built-in styles carry one; without it every memo
+        // under a styled menu declined, which is every row of an inline menu.
+        frame(shared, CacheLeaf(text: "hi").equatable().menuStyle(.inline))
+        #expect(!cache.isEmpty, "a memo under a built-in menu style must store")
+
+        let before = cache.stats
+        frame(shared, CacheLeaf(text: "hi").equatable().menuStyle(.inline))
+        let delta = cache.stats.delta(since: before)
+        #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+    }
+
+    @Test("A menu style that cannot be compared still declines caching")
+    func uncomparableMenuStyleDeclinesCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        // The other half of the same rule. A caller's style is free not to be
+        // `Equatable`, and one that is not can change its stored values under a
+        // served subtree with nothing to notice — so it declines, exactly as
+        // any other uncomparable value does.
+        frame(shared, CacheLeaf(text: "hi").equatable().menuStyle(UncomparableMenuStyle()))
+        #expect(cache.isEmpty, "nothing may be stored under an uncomparable menu style")
     }
 
     /// The SIZE half of the same clause, on both arms, with an oracle that can

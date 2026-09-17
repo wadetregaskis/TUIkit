@@ -18,7 +18,14 @@
 ///
 /// Applied by ``ContextMenuModifier`` to the whole item stack, so every item
 /// picks it up without the caller styling anything.
-struct _MenuItemButtonStyle: ButtonStyle {
+///
+/// `Equatable` because it is injected into the environment around every menu
+/// column, inline and pop-up alike: the render cache refuses to memoize
+/// anything below a value it cannot compare, so while this style could not be
+/// compared, no subtree inside a menu could be stored or served however
+/// comparable everything else in force was. It holds nothing, so every instance
+/// styles a row identically — see ``MenuStyle``.
+struct _MenuItemButtonStyle: ButtonStyle, Equatable {
     func makeBody(configuration: Configuration) -> some View {
         _MenuItemRowBar(configuration: configuration)
     }
