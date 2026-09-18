@@ -373,9 +373,18 @@ struct ShapeStyleTests {
     // MARK: - What the memo needs
 
     /// The render memo asks whether an applied environment value
-    /// `is any Equatable`, and an existential answers no — which disables
-    /// memoization for the whole subtree beneath it. `Paint` is what travels,
-    /// and it must stay concrete and comparable.
+    /// `is any Equatable` — of the `Any` it is handed, which unwraps an
+    /// existential to the concrete type, so `as Any` below is how the cache
+    /// actually sees a paint and not a convenience of the assertion.
+    ///
+    /// A `no` there does NOT disable memoization beneath, whatever this said
+    /// until now: that is `EnvironmentModifier`'s arm, and the only publisher
+    /// of this slot — `_StyleEnvironmentView` — matches `.changed` alone. It
+    /// would deaden the slot instead, which then never answers `.changed`
+    /// again and leaves the subtree painted in the ink from before. So `Paint`
+    /// must stay concrete and comparable, for correctness rather than speed.
+    /// (The test's display name still frames it as memoization; changing a
+    /// string literal is not comment text, so it was left for a later pass.)
     @Test("A paint is Equatable, so a styled subtree can still be memoized")
     func paintIsComparable() {
         let paint: Paint = .color(.rgb(1, 2, 3))

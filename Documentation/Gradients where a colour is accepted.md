@@ -156,11 +156,35 @@ public protocol ShapeStyle: Sendable, Equatable {
 ```
 
 The performance review's hardest constraint lands here: an **existential** in the
-environment turns memoization off for its whole subtree.
-`RenderCache.noteAppliedEnvironment` tests `value is any Equatable`
-([RenderCache.swift:599](Sources/TUIkitView/Rendering/RenderCache.swift:599));
-`.incomparable` sets `hasUncomparableEnvironmentValue` and every store below is
-refused ([Environment.swift:85](Sources/TUIkitView/Environment/Environment.swift:85)).
+environment cannot be compared, and the slot then cannot be kept honest.
+
+> **Corrected 2026-09-18, after the design shipped.** As written, this paragraph
+> said an existential "turns memoization off for its whole subtree", because
+> `.incomparable` "sets `hasUncomparableEnvironmentValue` and every store below
+> is refused". Both halves are wrong, and the conclusion below survives for a
+> different and stronger reason.
+>
+> `RenderCache.noteAppliedEnvironment` does test `value is any Equatable`
+> ([RenderCache.swift:1061](Sources/TUIkitView/Rendering/RenderCache.swift:1061)),
+> but it only RETURNS `.incomparable`; it never sets that flag. The only writes
+> are in `EnvironmentModifier`
+> ([Environment.swift:47](Sources/TUIkitView/Environment/Environment.swift:47)
+> and [:140](Sources/TUIkitView/Environment/Environment.swift:140)), on the
+> strength of its own `.incomparable` arm — and the slot proposed here is not
+> published through that modifier. `_StyleEnvironmentView` publishes it, matches
+> `.changed` alone, and so refuses nothing. Nor does an existential answer `no`
+> to the probe: converting `any P` to `Any` unwraps it to the concrete type, so
+> the answer is the concrete type's conformance.
+>
+> The real consequence of `.incomparable` at a site that matches `.changed`
+> alone is that the answer falls through ignored and the slot is DEADENED
+> (`previous.isComparable = false`,
+> [RenderCache.swift:1079](Sources/TUIkitView/Rendering/RenderCache.swift:1079)):
+> it can never report a change again, so the subtree keeps the ink it was
+> painted with. Wrong pixels, not lost memoization. Since `ShapeStyle` ships
+> with no `Equatable` refinement, a third-party style in that slot is exactly
+> the value that would trip it — which makes the concrete `Paint` below a
+> correctness requirement rather than the performance one argued here.
 
 So: **generic API, concrete storage.** `foregroundStyle<S: ShapeStyle>(_ style: S)`
 resolves `S` at the modifier — which is where SwiftUI resolves too, and what the

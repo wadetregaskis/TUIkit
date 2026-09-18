@@ -102,9 +102,11 @@ extension EnvironmentValues {
     /// stated and the palette's own background applies.
     ///
     /// A ``Paint`` rather than SwiftUI's `AnyShapeStyle?`, for the reason
-    /// ``foregroundStyle`` is one: an existential is not `Equatable`, and the
-    /// render memo answers "incomparable" for anything that is not — which
-    /// turns memoization off for the whole subtree beneath it.
+    /// ``foregroundStyle`` is one, and it is a correctness reason rather than
+    /// the performance one this used to claim: the only publisher of either
+    /// slot matches `.changed` alone, so a value the render memo cannot
+    /// compare does not turn memoization off below — it deadens the slot, and
+    /// the subtree keeps the ink it was painted with. See ``Paint``.
     public var backgroundStyle: Paint? {
         get { self[BackgroundStyleKey.self] }
         set { self[BackgroundStyleKey.self] = newValue }
@@ -179,13 +181,28 @@ struct _StyleEnvironmentView<Content: View, S: ShapeStyle>: View {
         // this a scoped `.foregroundStyle` change serves a buffer rendered in
         // the old colour. Wrong pixels, not merely stale work — and there is a
         // test that says so.
-        // The PAINT is what is tracked, not the style: a style is not required
-        // to be `Equatable`, and `noteAppliedEnvironment` answers
-        // `.incomparable` for anything that is not — which sets
-        // `hasUncomparableEnvironmentValue` and refuses every memo store in the
-        // subtree. Tracking the resolved paint also means a style that resolves
-        // to the same colour does not count as a change, which is the right
-        // answer as well as the cheap one.
+        // The PAINT is what is tracked, not the style. A style is not required
+        // to be `Equatable` — `ShapeStyle` carries no such refinement — and
+        // `noteAppliedEnvironment` answers `.incomparable` for one that is not.
+        //
+        // What that answer would do here is NOT what this said until now. It
+        // would not "set `hasUncomparableEnvironmentValue` and refuse every
+        // memo store in the subtree": `noteAppliedEnvironment` never sets that
+        // flag at all — the only two writes are in `EnvironmentModifier`
+        // (Environment.swift:47 and :140), on the strength of its own
+        // `.incomparable` arm, and this site has no counterpart to it. Matching
+        // `.changed` alone, the answer would fall through ignored and DEADEN
+        // the slot for good (`previous.isComparable = false`,
+        // RenderCache.swift:1079), so it could never answer `.changed` again
+        // and the subtree below would keep the ink it was painted with. Wrong
+        // pixels, not lost memoization — the same failure `5819aed2` fixed at
+        // `ThemeModifier` and `ffbc51fa` at its style slots.
+        //
+        // A resolved `Paint` is `Equatable` by construction, which makes that
+        // answer unreachable here rather than unhandled, as `ThemeModifier`'s
+        // `some Equatable` parameter does by type. Tracking the resolved paint
+        // also means a style that resolves to the same colour does not count as
+        // a change, which is the right answer as well as the cheap one.
         var paint = style.paint(in: context.environment)
         // A ramp fades as a colour does: every stop and every number of the
         // geometry moves on its own store entry. See ``PaintAnimation``.

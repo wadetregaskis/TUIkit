@@ -14,7 +14,9 @@
 ///
 /// - **It stopped every memo below it storing.** `KeyboardShortcutAssignment` is
 ///   a per-frame claim box, not a value, so `RenderCache.noteAppliedEnvironment`
-///   answered `.incomparable` for it and set `hasUncomparableEnvironmentValue`
+///   answered `.incomparable` for it and `EnvironmentModifier` — which is what
+///   a plain `.environment(_:_:)` is, and the only thing that writes the flag
+///   (Environment.swift:47 and :140) — set `hasUncomparableEnvironmentValue`
 ///   over the whole subtree. That is the right answer for a value a subtree
 ///   might draw from and nothing could compare; it is the wrong one here,
 ///   because the only reader is `Button`, and what a `Button` does with it —

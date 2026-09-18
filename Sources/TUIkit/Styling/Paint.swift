@@ -17,11 +17,26 @@ import TUIkitStyling
 /// this — not the style — is what travels in the environment. That is
 /// deliberate and load-bearing in two ways:
 ///
-/// - **The render memo.** `RenderCache.noteAppliedEnvironment` asks whether a
-///   value `is any Equatable`; an existential answers no, which sets
-///   `hasUncomparableEnvironmentValue` and refuses every memo store in that
-///   subtree. A concrete `Equatable` enum keeps memoization alive under a
-///   styled subtree — an existential would silently turn it off.
+/// - **The render memo**, and for a stronger reason than the one written here
+///   until now. That reason was wrong three times over. An existential does not
+///   "answer no" to `value is any Equatable`: converting `any P` to the `Any`
+///   that `RenderCache.noteAppliedEnvironment` takes unwraps it to the CONCRETE
+///   type, so an `any ShapeStyle` holding a `Color` answers yes perfectly well
+///   — the same measurement `TintModifier` records for `any Palette`.
+///   `noteAppliedEnvironment` does not set `hasUncomparableEnvironmentValue`
+///   either; it only RETURNS `.incomparable`, and the only writes of that flag
+///   are `EnvironmentModifier`'s (Environment.swift:47 and :140). And this slot
+///   is not published through that modifier: `_StyleEnvironmentView` is, and it
+///   matches `.changed` alone, so nothing there refuses a memo store.
+///
+///   What is true is worse, which is why the enum stays. `ShapeStyle` carries
+///   no `Equatable` refinement, so a third-party style that has none would
+///   answer `.incomparable` at that site; the answer would fall through
+///   ignored, and the slot would be DEADENED for good (`previous.isComparable
+///   = false`, RenderCache.swift:1079) — never `.changed` again, so the subtree
+///   keeps the ink it was painted with. Wrong pixels, not lost memoization. A
+///   concrete `Equatable` enum makes `.incomparable` unreachable by
+///   construction, as `ThemeModifier`'s `some Equatable` does by type.
 /// - **One slot, not two.** A colour and a gradient share
 ///   ``EnvironmentValues/foregroundStyle``, so a leaf reads one dictionary key
 ///   however it was styled, and an outer gradient with an inner colour has an
