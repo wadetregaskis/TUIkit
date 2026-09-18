@@ -91,6 +91,25 @@ private struct CachePicker: View, Equatable {
     }
 }
 
+/// A real ``Form``, whose whole layout comes from the ``FormStyle`` in force
+/// above it.
+///
+/// Like ``CachePicker`` it is the shipped control rather than a stand-in for
+/// one, and what separates the two built-in layouts is readable straight out of
+/// the buffer without matching any text: ``GroupedFormStyle`` draws each section
+/// as a bordered box, ``ColumnsFormStyle`` draws no border at all. So a stale
+/// serve across that swap would leave a box drawn around a form that no longer
+/// asks for one.
+private struct CacheForm: View, Equatable {
+    var body: some View {
+        Form {
+            Section("General") {
+                LabeledContent("Name", value: "Alice")
+            }
+        }
+    }
+}
+
 /// A caller's own menu style with no `Equatable` conformance, so nothing can
 /// tell whether the value it injects has changed.
 private struct UncomparableMenuStyle: MenuStyle {
@@ -831,6 +850,75 @@ struct RenderCacheContractTests {
         #expect(
             drawn(menu) == "N ▐ One ▾ ▌",
             "a radio group was served under .menu: \(drawn(menu))")
+    }
+
+    @Test("No built-in form style stops the subtree below it caching")
+    func builtInFormStyleKeepsCaching() {
+        // The same clause on the last of the eight style key paths.
+        // `.formStyle(_:)` injects an `any FormStyle`, and what decides whether
+        // a memo below it may store is the DYNAMIC type's `Equatable`
+        // conformance. Without one the refusal covered everything under the
+        // modifier — a form is a whole settings panel, so that is typically a
+        // screenful.
+        //
+        // All three built-ins are asked, in their own contexts, because
+        // conforming only one would leave the other two exactly as they were.
+        func styleStoresAndServes<S: FormStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().formStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().formStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.automatic, ".formStyle(.automatic)")
+        styleStoresAndServes(.columns, ".formStyle(.columns)")
+        styleStoresAndServes(.grouped, ".formStyle(.grouped)")
+    }
+
+    /// The safety half, asked of a real ``Form``'s drawing rather than of a hit
+    /// count.
+    ///
+    /// None of the three styles holds anything, so there is no stored value to
+    /// change under a served buffer the way ``_ColorSwatchButtonStyle``'s colour
+    /// can. What varies is the TYPE, and ``Form`` reads nothing off the style
+    /// BUT its type — so the whole of what a swap can change is the layout that
+    /// type selects, and between grouped and columns that is the section's
+    /// border. A stale serve would draw a box around a form that asked for none,
+    /// and the only thing standing between that and the frame below is the
+    /// downcast in `Equatable.isEqual(to:)`.
+    ///
+    /// Vacuous before the conformances — nothing stored, so nothing could be
+    /// served stale — and an assertion only after them, which is why it belongs
+    /// with them rather than on its own.
+    @Test("Swapping one built-in form style for another redraws the form below it")
+    func formStyleTypeChangeRedrawsTheForm() {
+        let shared = context(width: 30, height: 10)
+        let cache = shared.environment.renderCache!
+
+        func isBoxed(_ buffer: FrameBuffer) -> Bool {
+            buffer.lines.contains { $0.stripped.contains("\u{2500}") || $0.stripped.contains("\u{2502}") }
+        }
+
+        let grouped = frame(shared, CacheForm().equatable().formStyle(.grouped))
+        #expect(isBoxed(grouped), "the grouped style draws its section as a bordered box")
+        #expect(!cache.isEmpty, "a memo under a built-in form style must store")
+
+        // The premise, without which the swap below would pass for a form that
+        // is never served from cache at all: the SAME style twice is a hit, so
+        // there really is a stored buffer for the swap to have to invalidate.
+        let before = cache.stats
+        frame(shared, CacheForm().equatable().formStyle(.grouped))
+        let repeated = cache.stats.delta(since: before)
+        #expect(repeated.hits >= 1, "an unchanged form style must serve the memo: \(repeated)")
+
+        let columns = frame(shared, CacheForm().equatable().formStyle(.columns))
+        #expect(!isBoxed(columns), "a grouped form was served under .columns")
     }
 
     /// The half the menu styles cannot pin, and the reason this is a safety
