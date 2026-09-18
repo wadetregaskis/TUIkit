@@ -52,7 +52,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     let focusID: String?
     let isDisabled: Bool
 
-    /// The controls this toggle governs — see ``View/toggleContent(_:)``.
+    /// The controls this toggle governs — see ``Toggle/toggleContent(_:)``.
     let content: (@MainActor () -> AnyView)?
 
     var body: Never {
@@ -606,7 +606,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         // so the hit region must not extend over it.
         let clickWidth: Int
         let clickHeight: Int
-        /// The column ``View/toggleContent(_:)``'s controls start in.
+        /// The column ``Toggle/toggleContent(_:)``'s controls start in.
         let contentIndent: Int
         let toggleStyle = context.environment.toggleStyle
         if toggleStyle is DefaultToggleStyle || toggleStyle is CheckboxToggleStyle
@@ -692,7 +692,7 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// dispatcher) flip the hover StateBox.
     ///
     /// The region covers the indicator-and-title row ONLY. Neither a
-    /// multi-view label's subtitle nor the controls ``View/toggleContent(_:)``
+    /// multi-view label's subtitle nor the controls ``Toggle/toggleContent(_:)``
     /// carries is a click target: clicking a slider under a toggle must move
     /// the slider, not flip the switch out from under it.
     @MainActor

@@ -585,7 +585,7 @@ struct RenderCacheContractTests {
         // `any ToggleStyle`, and what decides whether a memo below it may store
         // is the DYNAMIC type's `Equatable` conformance. Without one, every memo
         // under a `.toggleStyle(...)` declined — the toggle's own label, and
-        // whatever `View/toggleContent(_:)` puts under it.
+        // whatever `Toggle/toggleContent(_:)` puts under it.
         //
         // All three built-ins are asked, in their own contexts, because
         // conforming only one would leave the others exactly as they were.

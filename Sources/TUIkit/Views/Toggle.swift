@@ -42,7 +42,7 @@
 ///
 /// All three built-in styles are therefore `Equatable`. Without that, a single
 /// `.toggleStyle(...)` turned the cache off for everything below it — the
-/// toggle's label, and whatever ``View/toggleContent(_:)`` puts under it. None
+/// toggle's label, and whatever ``Toggle/toggleContent(_:)`` puts under it. None
 /// of them holds anything, so `==` within a type is vacuously true and every
 /// instance of one styles a toggle identically. Between types it is the
 /// downcast in the comparison that answers, which is what a toggle needs: the
@@ -288,7 +288,7 @@ public struct Toggle<Label: View>: View {
 
     /// Builds the controls this toggle governs, drawn under it — `nil` for a
     /// toggle that governs nothing but its own value. See
-    /// ``View/toggleContent(_:)``.
+    /// ``Toggle/toggleContent(_:)``.
     var content: (@MainActor () -> AnyView)?
 
     public var body: some View {
