@@ -189,3 +189,95 @@ struct PaletteEditedInPlaceFrameTests {
             "the memoized probe kept the accent from before the edit")
     }
 }
+
+// MARK: - The palette an app writes, under a `.theme(…)`
+
+@MainActor
+@Suite("A palette that cannot be compared, under a theme", .serialized)
+struct IncomparablePaletteThemeTests {
+    /// A context with a fresh, test-local cache, and one frame of the loop's
+    /// cache lifecycle around a walk — the same pair `RenderCacheContractTests`
+    /// builds by hand, and for the same reason: these assert cache statistics,
+    /// so nothing else may touch this cache. The frame boundary is load-bearing
+    /// rather than ceremony — `noteAppliedEnvironment` answers every visit
+    /// within one pass from its short circuit, so two renders without one
+    /// between them are one pass and compare nothing.
+    private func context() -> RenderContext {
+        let tuiContext = TUIContext()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        environment.renderCache = RenderCache()
+        environment.preferenceStorage = tuiContext.preferences
+        return RenderContext(
+            availableWidth: 40, availableHeight: 4, environment: environment,
+            identity: ViewIdentity(path: "Root"))
+    }
+
+    @discardableResult
+    private func frame(_ context: RenderContext, _ view: some View) -> FrameBuffer {
+        let cache = context.environment.renderCache!
+        cache.beginRenderPass()
+        let buffer = renderToBuffer(view, context: context)
+        cache.removeInactive()
+        return buffer
+    }
+
+    private func palette(_ id: String, accent: Color) -> IdentifiedOnlyPalette {
+        var palette = IdentifiedOnlyPalette()
+        palette.id = id
+        palette.accent = accent
+        return palette
+    }
+
+    /// `RenderCacheContractTests` asks this of a theme carrying a `SystemPalette`,
+    /// which is `Hashable` — as every palette this package ships is. The palette
+    /// an APP writes need not be: the shape ``ThemingGuide`` tells one to write
+    /// conforms to `Palette` and nothing else, and `noteAppliedEnvironment`
+    /// answers `.incomparable` for it. `ThemeModifier` matched only `.changed`,
+    /// so that answer fell through ignored, the slot was deadened for good, and
+    /// the memoized subtree below went on drawing the accent from the palette
+    /// before.
+    ///
+    /// The control is what makes this the modifier's bug rather than the
+    /// palette's: `.palette(_:)` is an ordinary `EnvironmentModifier`, which
+    /// handles `.incomparable` by declining the memo below it, so the SAME two
+    /// palettes through THAT door have always painted correctly.
+    @Test("A theme carrying a palette that cannot be compared still repaints")
+    func themeWithIncomparablePaletteIsNotServedStale() {
+        let green = palette("green", accent: .rgb(0, 200, 0))
+        let blue = palette("blue", accent: .rgb(0, 0, 200))
+
+        let themed = context()
+        frame(themed, AccentProbe().equatable().theme(Theme(palette: green)))
+        let servedByTheme = frame(themed, AccentProbe().equatable().theme(Theme(palette: blue)))
+        #expect(
+            servedByTheme.lines.map(\.stripped) == [AccentProbe.label(blue.accent)],
+            "the memo below .theme served the buffer painted in the old palette")
+
+        let plain = context()
+        frame(plain, AccentProbe().equatable().palette(green))
+        let servedByPalette = frame(plain, AccentProbe().equatable().palette(blue))
+        #expect(
+            servedByPalette.lines.map(\.stripped) == [AccentProbe.label(blue.accent)],
+            "control: .palette(_:) declines the memo for a palette it cannot compare")
+    }
+
+    /// The other direction, and the one a careless fix breaks: the SAME
+    /// incomparable palette every frame must not clear the subtree every frame.
+    /// `isSamePalette(as:)` answers that from the `id`, which is exactly what
+    /// `Palette`'s documentation says such a palette is known by.
+    @Test("An unchanged palette that cannot be compared does not defeat the memo")
+    func unchangedIncomparablePaletteStillMemoizes() {
+        let shared = context()
+        func themed() -> some View {
+            AccentProbe().equatable()
+                .theme(Theme(palette: palette("green", accent: .rgb(0, 200, 0))))
+        }
+        frame(shared, themed())
+        let before = shared.renderCache?.stats.subtreeClears ?? 0
+        frame(shared, themed())
+        #expect(
+            shared.renderCache?.stats.subtreeClears == before,
+            "an unchanged palette cleared the subtree anyway")
+    }
+}

@@ -95,12 +95,14 @@ public struct ThemeModifier<Content: View>: View {
     /// Not used during rendering — ``Renderable`` conformance takes priority.
     public var body: some View { content }
 
-    /// A comparable stand-in for a control style, which is not `Equatable`.
+    /// A comparable stand-in for a control style, whose protocols carry no
+    /// `Equatable` refinement — so an app's own style cannot be compared here
+    /// even though every built-in one now can.
     ///
-    /// The built-in styles are stateless singletons distinguished only by their
-    /// type, so the type IS the value — and unlike the style itself it can be
-    /// compared, which is what keeps the note below from answering
-    /// `.incomparable` and refusing every memo store in the subtree.
+    /// Comparing the METATYPE tells apart a style of one type from a style of
+    /// another and nothing finer, which is a floor rather than the answer; it is
+    /// what lets these slots be noted at all, since ``note(_:_:)`` takes a value
+    /// the compiler knows is `Equatable`.
     private func styleToken(_ style: Any?) -> ObjectIdentifier? {
         style.map { ObjectIdentifier(type(of: $0)) }
     }
@@ -116,17 +118,33 @@ public struct ThemeModifier<Content: View>: View {
         // subtree; one driven by `@AppStorage`, a cousin's state or a plain box
         // is not.
         //
-        // What is noted is the theme's INPUTS, never `environment.palette`.
-        // With a tint that slot holds a `TintedPalette`, which has no
-        // `Equatable` conformance — noting it would answer `.incomparable` and
-        // refuse every memo store below every tinted theme, which is a worse
-        // regression than the bug. The palette is a pure function of (base,
-        // tint) and both of those are comparable, so comparing them is the same
-        // question asked of values that can answer it. Same trade, same
-        // reasoning, as the note in `TintModifier.modifiedContext`.
+        // What is noted is the theme's INPUTS, never the `environment.palette`
+        // assembled below: with a tint that slot holds a `TintedPalette`, and
+        // the tint is noted on a slot of its own, so the BASE palette is the
+        // whole of the rest of that question.
+        //
+        // `note` takes `some Equatable` rather than `Any`, which is the point
+        // and not a tidy-up. `noteAppliedEnvironment` answers `.incomparable`
+        // for a value it cannot compare, this site matches only `.changed`, and
+        // dropping `.incomparable` here does NOT decline the memo below (that is
+        // `EnvironmentModifier`'s arm, and it has no counterpart here) — it
+        // deadens the slot permanently, so it can never answer `.changed` again
+        // and the subtree keeps the ink it was painted with. Taking a value the
+        // compiler knows is `Equatable` makes `.incomparable` unreachable here
+        // instead of unhandled, and makes a future note of a value that cannot
+        // be compared a build error rather than silently wrong pixels.
+        //
+        // `theme.palette` is what needed the wrapper: it is `any Palette`, and
+        // `Palette` carries no `Equatable` refinement — the shape ``ThemingGuide``
+        // tells an app to write conforms to neither. `ComparablePalette` asks
+        // `isSamePalette(as:)`, which is the id first, then by value where the
+        // palette can answer, and through the derivation for the framework's own
+        // wrappers. That is the same comparison `EnvironmentSnapshot` already
+        // makes at the root, and it keeps memoization alive under a custom
+        // palette instead of switching it off.
         if let cache = context.renderCache {
             var changed = false
-            func note(_ value: Any, _ keyPath: PartialKeyPath<EnvironmentValues>) {
+            func note(_ value: some Equatable, _ keyPath: PartialKeyPath<EnvironmentValues>) {
                 if case .changed = cache.noteAppliedEnvironment(
                     value, identity: context.identity, keyPath: keyPath,
                     depth: context.environmentApplicationDepth)
@@ -135,12 +153,12 @@ public struct ThemeModifier<Content: View>: View {
                 }
             }
             note(theme.appearance, \EnvironmentValues.appearance)
-            note(theme.palette, \EnvironmentValues.palette)
-            note(theme.tint as Any, \EnvironmentValues.tint)
+            note(ComparablePalette(theme.palette), \EnvironmentValues.palette)
+            note(theme.tint, \EnvironmentValues.tint)
             note(theme.styles, \EnvironmentValues.styleCascade)
-            note(styleToken(theme.buttonStyle) as Any, \EnvironmentValues.buttonStyle)
-            note(styleToken(theme.listStyle) as Any, \EnvironmentValues.listStyle)
-            note(styleToken(theme.pickerStyle) as Any, \EnvironmentValues.pickerStyle)
+            note(styleToken(theme.buttonStyle), \EnvironmentValues.buttonStyle)
+            note(styleToken(theme.listStyle), \EnvironmentValues.listStyle)
+            note(styleToken(theme.pickerStyle), \EnvironmentValues.pickerStyle)
             note(theme.indicatorAnimationSpeeds, \EnvironmentValues.indicatorAnimationSpeeds)
             if changed {
                 // A theme is ink; the sizes below it stay, as `TintModifier` and

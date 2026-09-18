@@ -323,6 +323,11 @@ enum FocusRegistration {
         guard !context.isMeasuring else { return }
         let published = isFocused ?? contentContext.environment.isFocused
         if let isFocused { contentContext.environment.isFocused = isFocused }
+        // Matching only `.changed` is exhaustive here, unlike at
+        // `ThemeModifier`, where it was not: `published` is a `Bool` and so is
+        // `\EnvironmentValues.isFocused`'s value, so `noteAppliedEnvironment`
+        // has an `Equatable` value at this slot however it is reached and can
+        // never answer `.incomparable`.
         if let cache = context.renderCache,
             case .changed = cache.noteAppliedEnvironment(
                 published, identity: context.identity,

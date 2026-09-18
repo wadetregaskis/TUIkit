@@ -320,12 +320,10 @@ struct RenderCacheContractTests {
     /// context and told the cache nothing. A memoized subtree below a theme that
     /// changed therefore served the buffer painted in the OLD palette.
     ///
-    /// What it notes is the theme's INPUTS, never the resolved
-    /// `environment.palette`: with a tint that slot holds a `TintedPalette`,
-    /// which has no `Equatable` conformance, so noting it would answer
-    /// `.incomparable` and refuse every memo store below every tinted theme.
-    /// That would be a worse regression than the bug, so the second case here
-    /// pins that memoization still WORKS under a theme.
+    /// What it notes is the theme's INPUTS — the base palette and the tint on
+    /// slots of their own — never the `TintedPalette` the two of them resolve
+    /// to. The next case pins the other half, that memoization still WORKS
+    /// under a theme that did not change.
     @Test("A .theme change above an .equatable() re-renders it")
     func scopedThemeChangeIsNotServedStale() {
         let base = context()
@@ -348,10 +346,10 @@ struct RenderCacheContractTests {
     }
 
     /// The other half, and the one a careless fix breaks: an UNCHANGED theme
-    /// must still let the subtree memoize. Noting the resolved palette instead
-    /// of the theme's inputs would answer `.incomparable` every frame and turn
-    /// the memo off under every tinted theme — which no output comparison would
-    /// catch, only the miss count.
+    /// must still let the subtree memoize. A comparison that answered "changed"
+    /// for an equal rebuild — and `.theme(…)` rebuilds its `TintedPalette` on
+    /// every frame — would clear the subtree on every frame, which no output
+    /// comparison would catch, only the clear count.
     @Test("An unchanged theme does not defeat the memo below it")
     func unchangedThemeStillMemoizes() {
         let shared = context()
