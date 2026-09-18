@@ -107,6 +107,10 @@ extension EnvironmentValues {
     /// Set via `.listStyle()` modifier on List views.
     /// Default: ``InsetGroupedListStyle`` (bordered and inset; it does NOT
     /// alternate row backgrounds — neither built-in style does).
+    ///
+    /// The render cache compares this value between frames to decide whether
+    /// what it memoized below is still good, so a style that is not `Equatable`
+    /// turns memoization off in its subtree — see ``ListStyle``.
     var listStyle: any ListStyle {
         get { self[ListStyleKey.self] }
         set { self[ListStyleKey.self] = newValue }

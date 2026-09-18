@@ -501,6 +501,33 @@ struct RenderCacheContractTests {
         #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
     }
 
+    @Test("Neither built-in list style stops the subtree below it caching")
+    func builtInListStyleKeepsCaching() {
+        // The same clause once more, on a container key path rather than a
+        // control's: `.listStyle(_:)` injects an `any ListStyle`, and what
+        // decides whether a memo below it may store is the DYNAMIC type's
+        // `Equatable` conformance. Without one the refusal covered every row of
+        // the styled list, and `_ListCore`'s own hug-width size memo with them.
+        //
+        // Both built-ins are asked, in their own contexts, because conforming
+        // only one would leave the other's lists exactly as they were.
+        func styleStoresAndServes<S: ListStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().listStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().listStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.plain, ".listStyle(.plain)")
+        styleStoresAndServes(.insetGrouped, ".listStyle(.insetGrouped)")
+    }
+
     /// The half the menu styles cannot pin, and the reason this is a safety
     /// question before it is a performance one.
     ///

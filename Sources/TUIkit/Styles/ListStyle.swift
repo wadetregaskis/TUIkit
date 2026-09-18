@@ -29,6 +29,29 @@
 /// }
 /// .listStyle(.insetGrouped)
 /// ```
+///
+/// ## Styles and the render cache
+///
+/// ``View/listStyle(_:)`` puts the style into the environment, and the render
+/// cache keeps memoized subtrees honest by comparing each injected value with
+/// the one applied there last frame. A value it cannot compare may have changed
+/// under a buffer it is about to serve with nothing able to notice, so every
+/// memo below one declines to cache at all.
+///
+/// Both built-in styles are therefore `Equatable`. Without that, a single
+/// `.listStyle(...)` turned the cache off for the whole list below it — every
+/// row of it, and the list's own hug-width measurement with them. Neither style
+/// holds anything, and all three of what a style says about a list are literal
+/// constants on both, so the conformance is a formality here: every instance of
+/// one styles a list identically. A custom style need not conform: one that does
+/// not simply turns memoization off below itself, which costs render time rather
+/// than correctness.
+///
+/// - Note: SwiftUI's list styles declare no such conformance, and this is one of
+///   the places a terminal renderer has to differ. SwiftUI diffs the view graph
+///   the compiler builds for it and never has to ask whether an environment
+///   value changed; TUIkit re-runs `body` and compares values, so here the
+///   question must be answerable.
 public protocol ListStyle: Sendable {
     /// Whether the list should display borders around the container.
     var showsBorder: Bool { get }
@@ -63,7 +86,12 @@ public protocol ListStyle: Sendable {
 /// - No border around the list
 /// - No row separators or backgrounds
 /// - Content takes full available space
-public struct PlainListStyle: ListStyle {
+///
+/// `Equatable` for the reason given under ``ListStyle``: a memo below a value
+/// the render cache cannot compare declines to cache. It holds nothing, and its
+/// three answers are literal constants, so every instance styles a list
+/// identically.
+public struct PlainListStyle: ListStyle, Equatable {
     /// Creates a plain list style.
     public init() {}
 
@@ -92,7 +120,13 @@ public struct PlainListStyle: ListStyle {
 /// - Border surrounds the entire list
 /// - No alternating row backgrounds: ``alternatingRowColors`` is false, so a
 ///   row's background comes from focus and selection alone
-public struct InsetGroupedListStyle: ListStyle {
+///
+/// `Equatable` on the same terms as ``PlainListStyle``, and a list spelling
+/// `.listStyle(.insetGrouped)` explicitly needs it as much: the default value of
+/// the environment key is an instance of this type, but a default is only read
+/// out of the environment, never injected into it, so it is the explicit
+/// modifier that the cache has to be able to compare.
+public struct InsetGroupedListStyle: ListStyle, Equatable {
     /// Creates an inset grouped list style.
     public init() {}
 
