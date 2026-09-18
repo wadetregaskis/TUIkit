@@ -128,6 +128,43 @@ public struct NavigationSplitViewColumn: Equatable, Hashable, Sendable {
 /// - ``AutomaticNavigationSplitViewStyle``: Resolves based on context.
 /// - ``BalancedNavigationSplitViewStyle``: Columns share space proportionally.
 /// - ``ProminentDetailNavigationSplitViewStyle``: Detail gets more space.
+///
+/// ## Styles and the render cache
+///
+/// ``TUIkit/View/navigationSplitViewStyle(_:)`` puts the style into the
+/// environment, and the render cache keeps memoized subtrees honest by comparing
+/// each injected value with the one applied there last frame. A value it cannot
+/// compare may have changed under a buffer it is about to serve with nothing
+/// able to notice, so every memo below one declines to cache at all — and what
+/// sits below this modifier is a whole split view, all of its columns.
+///
+/// All four built-in styles are therefore `Equatable`. This protocol is pure
+/// data: it builds no view and has no `makeBody(configuration:)`, only the three
+/// read-only requirements below, and ``NavigationSplitView`` consults nothing
+/// else. None of the four holds anything either, so `==` within a type is
+/// vacuously true, and two instances of one type really do size the columns
+/// identically — there is no state for them to differ in, and the numbers they
+/// answer with depend only on the type they share.
+///
+/// Equality is per-type, and that is load-bearing rather than incidental here.
+/// ``SizeToFitFromLeftNavigationSplitViewStyle`` carries exactly
+/// ``AutomaticNavigationSplitViewStyle``'s proportions and differs only in
+/// ``sizesToFit``, which selects a different sizing algorithm outright. A
+/// comparison written structurally across the protocol — matching the
+/// proportions, or a shared `==` on an extension — would call those two equal
+/// and let a split laid out one way be served where the other was asked for. The
+/// per-type conformance cannot: the comparison downcasts to `Self` first, so two
+/// different styles are never equal whatever they hold.
+///
+/// A custom style need not conform. One that is not `Equatable` simply turns
+/// memoization off below itself, which costs render time rather than
+/// correctness.
+///
+/// - Note: SwiftUI's navigation split view styles declare no such conformance,
+///   and this is one of the places a terminal renderer has to differ. SwiftUI
+///   diffs the view graph the compiler builds for it and never has to ask
+///   whether an environment value changed; TUIkit re-runs `body` and compares
+///   values, so here the question must be answerable.
 public protocol NavigationSplitViewStyle: Sendable {
     /// The proportion of width allocated to the sidebar in a two-column layout.
     ///
@@ -166,7 +203,10 @@ extension NavigationSplitViewStyle {
 ///
 /// Use the ``NavigationSplitViewStyle/automatic`` static property to access
 /// this style.
-public struct AutomaticNavigationSplitViewStyle: NavigationSplitViewStyle {
+///
+/// `Equatable` for the reason given under ``NavigationSplitViewStyle``: a memo
+/// below a value the render cache cannot compare declines to cache.
+public struct AutomaticNavigationSplitViewStyle: NavigationSplitViewStyle, Equatable {
     /// Creates an automatic navigation split view style.
     public init() {}
 
@@ -189,7 +229,9 @@ public struct AutomaticNavigationSplitViewStyle: NavigationSplitViewStyle {
 ///
 /// Use the ``NavigationSplitViewStyle/balanced`` static property to access
 /// this style.
-public struct BalancedNavigationSplitViewStyle: NavigationSplitViewStyle {
+///
+/// `Equatable` on the same terms as ``AutomaticNavigationSplitViewStyle``.
+public struct BalancedNavigationSplitViewStyle: NavigationSplitViewStyle, Equatable {
     /// Creates a balanced navigation split view style.
     public init() {}
 
@@ -210,7 +252,9 @@ public struct BalancedNavigationSplitViewStyle: NavigationSplitViewStyle {
 ///
 /// Use the ``NavigationSplitViewStyle/prominentDetail`` static property to
 /// access this style.
-public struct ProminentDetailNavigationSplitViewStyle: NavigationSplitViewStyle {
+///
+/// `Equatable` on the same terms as ``AutomaticNavigationSplitViewStyle``.
+public struct ProminentDetailNavigationSplitViewStyle: NavigationSplitViewStyle, Equatable {
     /// Creates a prominent detail navigation split view style.
     public init() {}
 
@@ -234,7 +278,12 @@ public struct ProminentDetailNavigationSplitViewStyle: NavigationSplitViewStyle 
 ///
 /// Use the ``NavigationSplitViewStyle/sizeToFitFromLeft`` static property to
 /// access this style.
-public struct SizeToFitFromLeftNavigationSplitViewStyle: NavigationSplitViewStyle {
+///
+/// `Equatable` on the same terms as ``AutomaticNavigationSplitViewStyle``, and
+/// this is the one that earns the per-type comparison: its proportions are that
+/// style's exactly, so only the type tells them apart — see
+/// ``NavigationSplitViewStyle``.
+public struct SizeToFitFromLeftNavigationSplitViewStyle: NavigationSplitViewStyle, Equatable {
     /// Creates a size-to-fit-from-left navigation split view style.
     public init() {}
 
@@ -293,6 +342,10 @@ private struct NavigationSplitViewStyleKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// The navigation split view style for this environment.
+    ///
+    /// The built-in styles are `Equatable` so that a memo below one can still
+    /// store — see ``NavigationSplitViewStyle`` for why the render cache has to
+    /// ask.
     public var navigationSplitViewStyle: any NavigationSplitViewStyle {
         get { self[NavigationSplitViewStyleKey.self] }
         set { self[NavigationSplitViewStyleKey.self] = newValue }

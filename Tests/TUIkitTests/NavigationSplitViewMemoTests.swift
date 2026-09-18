@@ -53,6 +53,31 @@ private func memoizableSplit(_ box: VisibilityBox) -> NavigationSplitView<Text, 
     }
 }
 
+/// The same split again, spelled so that what a ``NavigationSplitViewStyle``
+/// decides can be read straight out of the row: the sidebar is one character
+/// wide and the detail is a long run of `D`, so the column the `D`s begin at IS
+/// the leading column's width plus its divider.
+///
+/// A one-character sidebar is what separates
+/// ``SizeToFitFromLeftNavigationSplitViewStyle`` from
+/// ``AutomaticNavigationSplitViewStyle``, whose proportions it shares exactly:
+/// one hugs the content, the other takes the share.
+@MainActor
+private func measurableSplit(_ box: VisibilityBox) -> NavigationSplitView<Text, EmptyView, Text> {
+    NavigationSplitView(columnVisibility: box.binding) {
+        Text(verbatim: "S")
+    } detail: {
+        Text(verbatim: String(repeating: "D", count: 200))
+    }
+}
+
+/// Where ``measurableSplit(_:)``'s detail column begins in the rendered row.
+@MainActor
+private func detailStart(_ buffer: FrameBuffer) -> Int {
+    let row = buffer.lines.first?.stripped ?? ""
+    return row.firstIndex(of: "D").map { row.distance(from: row.startIndex, to: $0) } ?? -1
+}
+
 /// Frames bracketed the way `RenderLoop` brackets them, with or without a focus
 /// manager and a shortcut registry.
 @MainActor
@@ -210,6 +235,86 @@ struct NavigationSplitViewMemoTests {
         // The visibility the chord just changed lives in a plain box here, so
         // nothing invalidates the entry; in an app it is `@State`, whose write
         // clears the split's cached picture before the next frame can serve it.
+    }
+
+    @Test("No built-in split view style stops the split below it being served")
+    func builtInStyleKeepsTheSplitCaching() {
+        // `.navigationSplitViewStyle(_:)` injects an `any NavigationSplitViewStyle`
+        // into the environment, and the render cache refuses to store below a
+        // value it cannot compare — see the note under
+        // ``NavigationSplitViewStyle``. What decides is the DYNAMIC type's
+        // `Equatable` conformance, so each of the four built-ins is asked on its
+        // own harness: conforming only one would leave the other three exactly
+        // as they were, and asking them together would not say so.
+        //
+        // Nothing here is a stand-in. What the refusal was costing is a whole
+        // split view, and that is what is memoized.
+        func storesAndServes<S: NavigationSplitViewStyle>(_ style: S, _ spelling: String) {
+            let harness = SplitHarness(focus: false)
+            let view = memoizableSplit(VisibilityBox()).equatable().navigationSplitViewStyle(style)
+
+            harness.frame(view)
+            #expect(
+                !harness.tui.renderCache.isEmpty,
+                "a memo under .navigationSplitViewStyle(\(spelling)) must store")
+            #expect(
+                harness.misses(view) == 0,
+                "and must be served next frame: the split under \(spelling) rendered again")
+        }
+
+        storesAndServes(.automatic, ".automatic")
+        storesAndServes(.balanced, ".balanced")
+        storesAndServes(.prominentDetail, ".prominentDetail")
+        storesAndServes(.sizeToFitFromLeft, ".sizeToFitFromLeft")
+    }
+
+    /// The safety half, and the one pair in this protocol a careless comparison
+    /// really would get wrong.
+    ///
+    /// None of the four styles holds anything, so there is no stored value to
+    /// change under a served buffer. What varies is the TYPE — and
+    /// ``AutomaticNavigationSplitViewStyle`` and
+    /// ``SizeToFitFromLeftNavigationSplitViewStyle`` carry byte-identical
+    /// proportions (0.33, and (0.25, 0.25, 0.50)), separated only by
+    /// `sizesToFit`, which switches the sizing algorithm outright. An equality
+    /// written structurally across the protocol — comparing the proportions, or
+    /// a shared `==` on an extension — would call those two equal and serve a
+    /// proportionally-sized split where a content-hugging one was asked for.
+    /// Per-type equality cannot, because the comparison downcasts to `Self`
+    /// first. So this swaps exactly that pair, not a pair that differs in its
+    /// numbers.
+    ///
+    /// Vacuous before the conformances — nothing stored, so nothing could be
+    /// served stale — and an assertion only after them, which is why it belongs
+    /// with them.
+    @Test("A split laid out by proportion is not served where size-to-fit was asked for")
+    func swappingToTheStyleWithTheSameProportionsRedrawsTheSplit() {
+        let harness = SplitHarness(focus: false)
+        let box = VisibilityBox()
+
+        // Both modifiers sit ABOVE the memo, which is the point: they are what
+        // the cache has to compare. `.navigationSplitViewResizable(false)` for
+        // the reason the sizing suite gives — no stored-width override, so what
+        // is drawn is the style's own default.
+        func split(_ style: some NavigationSplitViewStyle) -> some View {
+            measurableSplit(box).equatable()
+                .navigationSplitViewResizable(false)
+                .navigationSplitViewStyle(style)
+        }
+
+        let proportional = detailStart(harness.frame(split(.automatic)))
+        #expect(proportional > 8, "the automatic style gives the sidebar its share: \(proportional)")
+        #expect(!harness.tui.renderCache.isEmpty, "the split's buffer was never stored")
+
+        // The premise, without which the swap below would pass for a split that
+        // is never served at all: the SAME style twice is a hit, so there really
+        // is a stored buffer for the swap to have to invalidate.
+        #expect(harness.misses(split(.automatic)) == 0, "an unchanged style did not serve the memo")
+
+        let fitted = detailStart(harness.frame(split(.sizeToFitFromLeft)))
+        #expect(
+            fitted < proportional,
+            "a proportional split was served under .sizeToFitFromLeft: detail at \(fitted)")
     }
 
     @Test("A split with a focus manager is never served, because its sections cannot be replayed")
