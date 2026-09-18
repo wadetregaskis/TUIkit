@@ -119,13 +119,27 @@ public struct TintModifier<Content: View>: View {
         // ancestor, so its own invalidation reaches the row); a tint bound to
         // anything else — `@AppStorage`, a cousin's state, a plain box — is not.
         //
-        // The TINT is what is noted, not the `TintedPalette`: THAT type has no
-        // `Equatable` conformance, so noting it would answer `.incomparable`
-        // and refuse every memo store in the subtree — and the palette is a
-        // pure function of (base, tint) anyway, so whoever swaps the base
-        // palette notes that themselves.
+        // The TINT is what is noted, not the `TintedPalette` the two of them
+        // resolve to. The palette is a pure function of (base, tint), so the
+        // tint is the whole of what this modifier adds and whoever swapped the
+        // base noted that themselves.
         //
-        // Not because it is an existential, which is what this said until
+        // What that reason is NOT, whatever this said until `5819aed2` went
+        // over these sites: noting the derived palette would not "refuse every
+        // memo store in the subtree". That is `EnvironmentModifier`'s arm and
+        // this site has no counterpart to it — it matches `.changed` alone, so
+        // an `.incomparable` answer would fall through ignored and DEADEN the
+        // slot for good (`noteAppliedEnvironment` pins `isComparable = false`,
+        // RenderCache.swift ~1079), which is how `.theme(…)` went on serving a
+        // palette it could not compare.
+        //
+        // `TintedPalette` still has no `Equatable` conformance of its own, so
+        // the raw value would indeed answer `.incomparable`; `ComparablePalette`
+        // would compare one through its derivation, as `ThemeModifier` now
+        // compares the base. Noting it here would just be a second answer to
+        // the question the line above already answers.
+        //
+        // Nor is the existential the reason, which is what this said until
         // `ThemeModifier` needed the same answer and measured it: an `Any`
         // holding `any Palette` reports the CONCRETE type's conformance, so a
         // `SystemPalette` in that slot answers `is any Equatable` perfectly

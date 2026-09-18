@@ -95,16 +95,57 @@ public struct ThemeModifier<Content: View>: View {
     /// Not used during rendering — ``Renderable`` conformance takes priority.
     public var body: some View { content }
 
-    /// A comparable stand-in for a control style, whose protocols carry no
-    /// `Equatable` refinement — so an app's own style cannot be compared here
-    /// even though every built-in one now can.
+    /// A control style held so it can be compared with the next frame's — what
+    /// ``ComparablePalette`` is for a palette, and for the same reason: the slot
+    /// holds an existential the compiler cannot promise is `Equatable`, and
+    /// ``note(_:_:)`` takes a value it can.
     ///
-    /// Comparing the METATYPE tells apart a style of one type from a style of
-    /// another and nothing finer, which is a floor rather than the answer; it is
-    /// what lets these slots be noted at all, since ``note(_:_:)`` takes a value
-    /// the compiler knows is `Equatable`.
-    private func styleToken(_ style: Any?) -> ObjectIdentifier? {
-        style.map { ObjectIdentifier(type(of: $0)) }
+    /// The TYPE first, which is the cheap rejection and, for a style that cannot
+    /// answer by value, the whole of it; then by VALUE where the style can
+    /// answer. The style protocols are public and carry no `Equatable`
+    /// refinement — an app writes `struct MyStyle: ButtonStyle` and owes nothing
+    /// more — so both halves are live. Every style this package ships conforms,
+    /// which is what `3a7c1d27..bbac32c8` was for.
+    ///
+    /// The type alone used to be the whole answer, and that was the bug: two
+    /// styles of one type then compared equal however differently they draw, so
+    /// a style that HOLDS what it draws changed under a memoized subtree with
+    /// nothing to notice, and the buffer painted by the one before was served.
+    /// The justification for that read "the built-in styles are stateless
+    /// singletons distinguished only by their type, so the type IS the value",
+    /// which was never true of `_LinkButtonStyle` or `_ColorSwatchButtonStyle`
+    /// and says nothing at all about an app's own.
+    private struct ComparableStyle: Equatable {
+        /// `Any?` rather than a generic parameter bound to `any ButtonStyle`,
+        /// and that is load-bearing rather than laziness: inside a generic whose
+        /// parameter is an existential, `type(of:)` answers the EXISTENTIAL
+        /// metatype — `(any ButtonStyle).self` for every style alike — so the
+        /// comparison below would report two unrelated styles as the same type
+        /// and lose the floor entirely. Through `Any` it answers the dynamic
+        /// type, which is what `styleToken(_:)` took before it and why it took
+        /// it. (`ThemeStyleMemoTests` swaps two styles that cannot be compared
+        /// by value, which is the arm where only the type answers.)
+        let style: Any?
+
+        init(_ style: Any?) {
+            self.style = style
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            switch (lhs.style, rhs.style) {
+            case (nil, nil):
+                true
+            case (let lhs?, let rhs?):
+                // `isEqual(to:)` opens the first existential so `Self` is
+                // concrete and downcasts the second to it — the type check is
+                // therefore already inside it, and stands alone only for the
+                // style that cannot be compared at all.
+                type(of: lhs) == type(of: rhs)
+                    && ((lhs as? any Equatable).map { $0.isEqual(to: rhs) } ?? true)
+            default:
+                false
+            }
+        }
     }
 
     private func modifiedContext(_ context: RenderContext) -> RenderContext {
@@ -142,6 +183,10 @@ public struct ThemeModifier<Content: View>: View {
         // wrappers. That is the same comparison `EnvironmentSnapshot` already
         // makes at the root, and it keeps memoization alive under a custom
         // palette instead of switching it off.
+        //
+        // The three control styles are the same shape of question and get the
+        // same shape of answer — `ComparableStyle`, the type first and then by
+        // value where the style can answer.
         if let cache = context.renderCache {
             var changed = false
             func note(_ value: some Equatable, _ keyPath: PartialKeyPath<EnvironmentValues>) {
@@ -156,9 +201,9 @@ public struct ThemeModifier<Content: View>: View {
             note(ComparablePalette(theme.palette), \EnvironmentValues.palette)
             note(theme.tint, \EnvironmentValues.tint)
             note(theme.styles, \EnvironmentValues.styleCascade)
-            note(styleToken(theme.buttonStyle), \EnvironmentValues.buttonStyle)
-            note(styleToken(theme.listStyle), \EnvironmentValues.listStyle)
-            note(styleToken(theme.pickerStyle), \EnvironmentValues.pickerStyle)
+            note(ComparableStyle(theme.buttonStyle), \EnvironmentValues.buttonStyle)
+            note(ComparableStyle(theme.listStyle), \EnvironmentValues.listStyle)
+            note(ComparableStyle(theme.pickerStyle), \EnvironmentValues.pickerStyle)
             note(theme.indicatorAnimationSpeeds, \EnvironmentValues.indicatorAnimationSpeeds)
             if changed {
                 // A theme is ink; the sizes below it stay, as `TintModifier` and
