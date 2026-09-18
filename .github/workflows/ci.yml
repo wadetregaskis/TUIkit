@@ -609,6 +609,7 @@ jobs:
       - name: Install the WebAssembly SDK
         run: |
           set -eux
+          apt-get update && apt-get install -y curl
           url="https://download.swift.org/swift-6.3.3-release/wasm-sdk/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE_wasm.artifactbundle.tar.gz"
           curl -fsSL "$url" -o wasm-sdk.tar.gz
           echo "cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7  wasm-sdk.tar.gz" | sha256sum -c -
