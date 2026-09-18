@@ -117,6 +117,18 @@ enum TextWidthBenchmarks {
                 blackHole(emojiLine.strippedLength)
             }
         }
+
+        // `stripped` is the allocating sibling of `strippedLength`: it
+        // walks the same escape sequences but builds a new string out of
+        // the visible runs instead of counting them, so it pays a copy
+        // the counting path never does. Measured separately because a
+        // change to the shared scan can be free for one and dear for the
+        // other.
+        Benchmark("text/String.stripped — ANSI-heavy") { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(ansiLine.stripped)
+            }
+        }
     }
 
     // MARK: - ANSI-aware clipping / padding
@@ -137,6 +149,16 @@ enum TextWidthBenchmarks {
         Benchmark("text/padToVisibleWidth — pad plain to 160") { benchmark in
             for _ in benchmark.scaledIterations {
                 blackHole(plainLine.padToVisibleWidth(160))
+            }
+        }
+
+        // The plain case above pads a line whose visible width is its
+        // character count. This one cannot take that shortcut: the
+        // shortfall is only known once every escape sequence has been
+        // skipped, which is the shape every styled row arrives in.
+        Benchmark("text/padToVisibleWidth — pad ANSI to 160") { benchmark in
+            for _ in benchmark.scaledIterations {
+                blackHole(ansiLine.padToVisibleWidth(160))
             }
         }
     }
