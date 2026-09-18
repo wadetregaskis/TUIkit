@@ -62,13 +62,32 @@ private struct AccentLeaf: View, Equatable {
 /// force above it — the two halves are plain views, so neither depends on an
 /// SF Symbol resolving on the host.
 ///
-/// Unlike every other fixture here, what this draws is readable straight out of
-/// the buffer: `.titleOnly` shows `Inbox` and `.iconOnly` shows `*`, with no
-/// character in common. That is what lets the label's safety arm assert the
+/// Like ``CachePicker`` and unlike the rest of these fixtures, what this draws
+/// is readable straight out of the buffer: `.titleOnly` shows `Inbox` and
+/// `.iconOnly` shows `*`, with no character in common. That is what lets the label's safety arm assert the
 /// drawing rather than a hit count.
 private struct CacheLabel: View, Equatable {
     var body: some View {
         Label { Text(verbatim: "Inbox") } icon: { Text(verbatim: "*") }
+    }
+}
+
+/// A real ``Picker``, whose whole presentation comes from the ``PickerStyle`` in
+/// force above it.
+///
+/// Like ``CacheLabel``, what this draws is readable straight out of the buffer,
+/// and the two presentations share no line: `.radioGroup` draws a row per
+/// option, `.menu` one collapsed row. Unlike ``CacheLabel`` it is the shipped
+/// control rather than a stand-in for one — a picker memoizes, so the safety arm
+/// can swap the style under a buffer that is genuinely a picker's.
+private struct CachePicker: View, Equatable {
+    var body: some View {
+        Picker(selection: .constant(1)) {
+            Text(verbatim: "One").tag(1)
+            Text(verbatim: "Two").tag(2)
+        } label: {
+            Text(verbatim: "N")
+        }
     }
 }
 
@@ -726,6 +745,92 @@ struct RenderCacheContractTests {
         #expect(
             delta.hits == 0,
             "a capped field replaced by a plain one must not serve the capped buffer: \(delta)")
+    }
+
+    @Test("No built-in picker style stops the subtree below it caching")
+    func builtInPickerStyleKeepsCaching() {
+        // The same clause once more, on the key path with the most styles in
+        // it: `.pickerStyle(_:)` injects an `any PickerStyle`, and what decides
+        // whether a memo below it may store is the DYNAMIC type's `Equatable`
+        // conformance. Without one the refusal covered everything under the
+        // modifier, which in this repo's own app is whole configuration
+        // panels — Example writes `.pickerStyle(...)` at thirteen places, six
+        // of them on the Theme page.
+        //
+        // All four built-ins are asked, in their own contexts, because
+        // conforming only one would leave the others exactly as they were.
+        //
+        // The blast radius includes the picker itself: a `Picker` is memoizable,
+        // so what the missing conformance blocked first was the control its own
+        // style was applied to — see the swap test below, where the same picker
+        // stores and is served.
+        func styleStoresAndServes<S: PickerStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().pickerStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().pickerStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.automatic, ".pickerStyle(.automatic)")
+        styleStoresAndServes(.menu, ".pickerStyle(.menu)")
+        styleStoresAndServes(.inline, ".pickerStyle(.inline)")
+        styleStoresAndServes(.radioGroup, ".pickerStyle(.radioGroup)")
+    }
+
+    /// The safety half, and the one key path in this series that can be asked of
+    /// a REAL control's drawing rather than of a fixture's or of the statistics.
+    ///
+    /// None of the four styles holds anything, so there is no stored value to
+    /// change under a served buffer the way ``_ColorSwatchButtonStyle``'s colour
+    /// can. What varies is the TYPE, and ``PickerStyle/resolvesToMenu`` turns it
+    /// into two presentations that share no line: a menu picker is one collapsed
+    /// row, a radio group is a row per option. So a stale serve here would be
+    /// the wrong HEIGHT as well as the wrong glyphs, and the only thing standing
+    /// between that and the frame below is the downcast in
+    /// `Equatable.isEqual(to:)`.
+    ///
+    /// The picker is asked directly because, unlike a field or a toggle, it can
+    /// be: with the conformances in place a `Picker` memoizes and is served — it
+    /// was its OWN style that stopped it — so the buffer this swaps out is a
+    /// real picker's, not a stand-in's.
+    ///
+    /// Vacuous before the conformances — nothing stored, so nothing could be
+    /// served stale — and an assertion only after them, which is why it belongs
+    /// with them rather than on its own.
+    @Test("Swapping one built-in picker style for another redraws the picker below it")
+    func pickerStyleTypeChangeRedrawsThePicker() {
+        let shared = context(width: 40, height: 8)
+        let cache = shared.environment.renderCache!
+
+        func drawn(_ buffer: FrameBuffer) -> String {
+            buffer.lines
+                .map { $0.stripped.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+                .joined(separator: " / ")
+        }
+
+        let radio = frame(shared, CachePicker().equatable().pickerStyle(.radioGroup))
+        #expect(drawn(radio) == "N ● One / ◯ Two", "the radio group draws a row per option")
+        #expect(!cache.isEmpty, "a memo under a built-in picker style must store")
+
+        // The premise, without which the swap below would pass for a picker that
+        // is never served from cache at all: the SAME style twice is a hit, so
+        // there really is a stored buffer for the swap to have to invalidate.
+        let before = cache.stats
+        frame(shared, CachePicker().equatable().pickerStyle(.radioGroup))
+        let repeated = cache.stats.delta(since: before)
+        #expect(repeated.hits >= 1, "an unchanged picker style must serve the memo: \(repeated)")
+
+        let menu = frame(shared, CachePicker().equatable().pickerStyle(.menu))
+        #expect(
+            drawn(menu) == "N ▐ One ▾ ▌",
+            "a radio group was served under .menu: \(drawn(menu))")
     }
 
     /// The half the menu styles cannot pin, and the reason this is a safety
