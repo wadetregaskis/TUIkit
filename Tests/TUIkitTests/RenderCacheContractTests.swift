@@ -171,7 +171,12 @@ private struct ProbeEcho: View, Equatable {
 ///   environment in the key. `EnvironmentModifier` compares the value it applied
 ///   here last pass and clears the subtree when it differs, which costs one
 ///   comparison per modifier instead of a fingerprint per lookup. A value that
-///   is not `Equatable` cannot be compared, so it declines caching instead.
+///   is not `Equatable` cannot be compared, so it declines caching instead —
+///   true of this route, which is what `.environment(_:_:)` and every style
+///   modifier use. A slot whose owner notes it by hand instead (the two `Paint`
+///   slots, a tint, a theme) never reaches that arm: an uncomparable value there
+///   is ignored and deadens the slot, so the subtree keeps what it was painted
+///   with. Lost memoization on one route, stale ink on the other.
 @MainActor
 @Suite("RenderCache contracts", .serialized)
 struct RenderCacheContractTests {
