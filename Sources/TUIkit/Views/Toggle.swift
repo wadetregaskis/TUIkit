@@ -31,6 +31,32 @@
 /// toggle however you like (a different glyph, an `ON`/`OFF` word, …). The
 /// built-in styles above don't implement `makeBody` — they render procedurally
 /// (with the focus glow and ``ToggleCharacterSet`` glyphs); only custom styles use it.
+///
+/// ## Styles and the render cache
+///
+/// ``View/toggleStyle(_:)`` puts the style into the environment, and the render
+/// cache keeps memoized subtrees honest by comparing each injected value with
+/// the one applied there last frame. A value it cannot compare may have changed
+/// under a buffer it is about to serve with nothing able to notice, so every
+/// memo below one declines to cache at all.
+///
+/// All three built-in styles are therefore `Equatable`. Without that, a single
+/// `.toggleStyle(...)` turned the cache off for everything below it — the
+/// toggle's label, and whatever ``View/toggleContent(_:)`` puts under it. None
+/// of them holds anything, so `==` within a type is vacuously true and every
+/// instance of one styles a toggle identically. Between types it is the
+/// downcast in the comparison that answers, which is what a toggle needs: the
+/// style's dynamic type is the whole of what it contributes to the drawing, so
+/// a checkbox replaced by a switch must read as a change, and does.
+///
+/// A custom style need not conform: one that does not simply turns memoization
+/// off below itself, which costs render time rather than correctness.
+///
+/// - Note: SwiftUI's toggle styles declare no such conformance, and this is one
+///   of the places a terminal renderer has to differ. SwiftUI diffs the view
+///   graph the compiler builds for it and never has to ask whether an
+///   environment value changed; TUIkit re-runs `body` and compares values, so
+///   here the question must be answerable.
 public protocol ToggleStyle: Sendable {
     /// A view representing the toggle's appearance.
     associatedtype Body: View = EmptyView
@@ -94,7 +120,11 @@ public struct ToggleStyleConfiguration {
 ///
 /// In TUIkit this is a checkbox; its glyphs come from ``ToggleCharacterSet`` (■/□ by default; ⬛︎/⬜︎ under Terminal.app
 /// by default).
-public struct DefaultToggleStyle: ToggleStyle {
+///
+/// `Equatable` for the reason given under ``ToggleStyle``: a memo below a value
+/// the render cache cannot compare declines to cache. It holds nothing, so
+/// every instance styles a toggle identically.
+public struct DefaultToggleStyle: ToggleStyle, Equatable {
     public init() {}
 }
 
@@ -107,7 +137,11 @@ public struct DefaultToggleStyle: ToggleStyle {
 ///
 /// The checkbox glyphs are configurable via ``ToggleCharacterSet`` (e.g.
 /// `.toggleCharacterSet(.ascii)` for `[ ]` / `[x]`).
-public struct CheckboxToggleStyle: ToggleStyle {
+///
+/// `Equatable` on the same terms as ``DefaultToggleStyle``, and the two draw the
+/// same checkbox, so the worst a comparison between them can do is drop a cache
+/// entry that would have been good.
+public struct CheckboxToggleStyle: ToggleStyle, Equatable {
     public init() {}
 }
 
@@ -120,7 +154,12 @@ public struct CheckboxToggleStyle: ToggleStyle {
 /// Off, the track is the palette's tertiary foreground tone, moved as little as it
 /// takes to stand off both the page, which the knob is drawn in, and the accent. A
 /// disabled switch fades that track halfway toward the page.
-public struct SwitchToggleStyle: ToggleStyle {
+///
+/// `Equatable` on the same terms as ``DefaultToggleStyle``, and this is the one
+/// whose type changes what gets drawn: `_ToggleCore` picks the track over the
+/// checkbox on `is SwitchToggleStyle` alone. A frame that swaps a checkbox style
+/// for this one is a change, and the comparison's downcast is what says so.
+public struct SwitchToggleStyle: ToggleStyle, Equatable {
     public init() {}
 }
 
@@ -152,6 +191,10 @@ private struct ToggleStyleKey: EnvironmentKey {
 
 extension EnvironmentValues {
     /// The toggle style for this environment.
+    ///
+    /// The render cache compares this value between frames to decide whether
+    /// what it memoized below is still good, so a style that is not `Equatable`
+    /// turns memoization off in its subtree — see ``ToggleStyle``.
     public var toggleStyle: any ToggleStyle {
         get { self[ToggleStyleKey.self] }
         set { self[ToggleStyleKey.self] = newValue }

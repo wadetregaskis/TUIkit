@@ -528,6 +528,61 @@ struct RenderCacheContractTests {
         styleStoresAndServes(.insetGrouped, ".listStyle(.insetGrouped)")
     }
 
+    @Test("No built-in toggle style stops the subtree below it caching")
+    func builtInToggleStyleKeepsCaching() {
+        // The same clause again, on the control key path an app reaches for
+        // whenever it spells a toggle differently: `.toggleStyle(_:)` injects an
+        // `any ToggleStyle`, and what decides whether a memo below it may store
+        // is the DYNAMIC type's `Equatable` conformance. Without one, every memo
+        // under a `.toggleStyle(...)` declined — the toggle's own label, and
+        // whatever `View/toggleContent(_:)` puts under it.
+        //
+        // All three built-ins are asked, in their own contexts, because
+        // conforming only one would leave the others exactly as they were.
+        func styleStoresAndServes<S: ToggleStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().toggleStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().toggleStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.automatic, ".toggleStyle(.automatic)")
+        styleStoresAndServes(.checkbox, ".toggleStyle(.checkbox)")
+        styleStoresAndServes(.switch, ".toggleStyle(.switch)")
+    }
+
+    /// The safety half, in the shape this key path makes it take.
+    ///
+    /// None of the three toggle styles holds anything, so there is no stored
+    /// value to change under a served buffer the way ``_ColorSwatchButtonStyle``'s
+    /// colour can. What varies here is the TYPE: `_ToggleCore` picks its branch
+    /// with `toggleStyle is SwitchToggleStyle` and nothing else, so a switch and a
+    /// checkbox at the same slot really do draw differently. The only thing
+    /// standing between that and a stale serve is the downcast in
+    /// `Equatable.isEqual(to:)` — without it a comparison across the swap could
+    /// answer "equal" and hand the subtree the buffer drawn for the other style.
+    @Test("Swapping one built-in toggle style for another clears the subtree below it")
+    func toggleStyleTypeChangeClearsCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        frame(shared, CacheLeaf(text: "hi").equatable().toggleStyle(.checkbox))
+        #expect(!cache.isEmpty, "a memo under a built-in toggle style must store")
+
+        let before = cache.stats
+        frame(shared, CacheLeaf(text: "hi").equatable().toggleStyle(.switch))
+        let delta = cache.stats.delta(since: before)
+        #expect(
+            delta.hits == 0,
+            "a checkbox replaced by a switch must not serve the checkbox's buffer: \(delta)")
+    }
+
     /// The half the menu styles cannot pin, and the reason this is a safety
     /// question before it is a performance one.
     ///
