@@ -38,6 +38,34 @@
 /// requirement is underscored and effectively closed; this one is a plain
 /// readable property, so a caller *can* conform — the styles here are simply
 /// the two the framework draws.
+///
+/// ## Styles and the render cache
+///
+/// ``TUIkit/View/textFieldStyle(_:)`` puts the style into the environment, and
+/// the render cache keeps memoized subtrees honest by comparing each injected
+/// value with the one applied there last frame. A value it cannot compare may
+/// have changed under a buffer it is about to serve with nothing able to notice,
+/// so every memo below one declines to cache at all — not the fields alone, but
+/// everything under the modifier.
+///
+/// Both built-in styles are therefore `Equatable`. Neither holds anything, so
+/// `==` within a type is vacuously true and every instance of one draws a field
+/// identically. Between types it is the downcast in the comparison that answers,
+/// which is what a field needs in both directions at once: the caps a style does
+/// or does not draw are two cells of width as well as two glyphs, so a swap
+/// changes what the field measures as much as what it paints, and must read as a
+/// change.
+///
+/// A custom style need not conform — the paragraph above says a caller can write
+/// one, and that stays true. One that is not `Equatable` simply turns
+/// memoization off below itself, which costs render time rather than
+/// correctness.
+///
+/// - Note: SwiftUI's text field styles declare no such conformance, and this is
+///   one of the places a terminal renderer has to differ. SwiftUI diffs the view
+///   graph the compiler builds for it and never has to ask whether an
+///   environment value changed; TUIkit re-runs `body` and compares values, so
+///   here the question must be answerable.
 public protocol TextFieldStyle: Sendable {
     /// Whether the field paints its own surface: the field-background colour
     /// behind the text, and the half-block caps at either end.
@@ -55,7 +83,11 @@ public protocol TextFieldStyle: Sendable {
 ///
 /// Matches SwiftUI's `.automatic`, and is what a `TextField` or `SecureField`
 /// draws with no style applied.
-public struct DefaultTextFieldStyle: TextFieldStyle {
+///
+/// `Equatable` for the reason given under ``TextFieldStyle``: a memo below a
+/// value the render cache cannot compare declines to cache. It holds nothing, so
+/// every instance draws a field identically.
+public struct DefaultTextFieldStyle: TextFieldStyle, Equatable {
     /// Creates the default text field style.
     public init() {}
 
@@ -69,7 +101,13 @@ public struct DefaultTextFieldStyle: TextFieldStyle {
 /// A field with no surface and no caps — just its text, in place.
 ///
 /// Matches SwiftUI's `.plain`.
-public struct PlainTextFieldStyle: TextFieldStyle {
+///
+/// `Equatable` on the same terms as ``DefaultTextFieldStyle``, and this is the
+/// half that earns the cross-type comparison: a frame that swaps the two changes
+/// the field's width as well as its surface, so the downcast answering "changed"
+/// is what keeps a two-cell measurement from being served to a field that no
+/// longer has caps.
+public struct PlainTextFieldStyle: TextFieldStyle, Equatable {
     /// Creates the plain text field style.
     public init() {}
 
@@ -108,6 +146,10 @@ extension EnvironmentValues {
     /// The style text-entry fields in this subtree draw themselves with.
     ///
     /// Internal, like every other style key here: the modifier is the API.
+    ///
+    /// The render cache compares this value between frames to decide whether
+    /// what it memoized below is still good, so a style that is not `Equatable`
+    /// turns memoization off in its subtree — see ``TextFieldStyle``.
     var textFieldStyle: any TextFieldStyle {
         get { self[TextFieldStyleKey.self] }
         set { self[TextFieldStyleKey.self] = newValue }

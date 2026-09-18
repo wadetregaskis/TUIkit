@@ -667,6 +667,67 @@ struct RenderCacheContractTests {
             "a title-only label was served under .iconOnly: \(drawn(iconed))")
     }
 
+    @Test("Neither built-in text field style stops the subtree below it caching")
+    func builtInTextFieldStyleKeepsCaching() {
+        // The same clause once more, on the one key path in this series an app
+        // in this repo already writes: `.textFieldStyle(_:)` injects an
+        // `any TextFieldStyle`, and what decides whether a memo below it may
+        // store is the DYNAMIC type's `Equatable` conformance. Without one the
+        // refusal covered everything under the modifier — Example's Text Input
+        // page puts two fields and their surrounding rows under a
+        // `.textFieldStyle(.plain)`, and none of it could cache.
+        //
+        // Both built-ins are asked, in their own contexts, because conforming
+        // only one would leave the other's fields exactly as they were.
+        func styleStoresAndServes<S: TextFieldStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().textFieldStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().textFieldStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.automatic, ".textFieldStyle(.automatic)")
+        styleStoresAndServes(.plain, ".textFieldStyle(.plain)")
+    }
+
+    /// The safety half, in the shape this key path makes it take.
+    ///
+    /// Neither text field style holds anything, so there is no stored value to
+    /// change under a served buffer the way ``_ColorSwatchButtonStyle``'s colour
+    /// can. What varies here is the TYPE, and it varies in both directions at
+    /// once: `drawsFieldSurface` decides whether `FieldChrome` paints a surface
+    /// and caps, and whether it is two cells wide or none — so a swap changes
+    /// what a field DRAWS and what it MEASURES. The only thing standing between
+    /// that and a stale serve, of a buffer or of a size, is the downcast in
+    /// `Equatable.isEqual(to:)`.
+    ///
+    /// Asked of the statistics rather than of a drawing, because a text field
+    /// style contributes to a buffer `_TextFieldCore` assembles rather than
+    /// composing the view the way a ``LabelStyle`` does: a memo below the
+    /// modifier holds ordinary content, so `hits == 0` is as near as an
+    /// in-process test gets to "the wrong style was served".
+    @Test("Swapping one built-in text field style for another clears the subtree below it")
+    func textFieldStyleTypeChangeClearsCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        frame(shared, CacheLeaf(text: "hi").equatable().textFieldStyle(.automatic))
+        #expect(!cache.isEmpty, "a memo under a built-in text field style must store")
+
+        let before = cache.stats
+        frame(shared, CacheLeaf(text: "hi").equatable().textFieldStyle(.plain))
+        let delta = cache.stats.delta(since: before)
+        #expect(
+            delta.hits == 0,
+            "a capped field replaced by a plain one must not serve the capped buffer: \(delta)")
+    }
+
     /// The half the menu styles cannot pin, and the reason this is a safety
     /// question before it is a performance one.
     ///
