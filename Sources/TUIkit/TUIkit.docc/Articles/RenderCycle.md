@@ -448,7 +448,7 @@ Cache invalidation is **identity-scoped** where possible, with full clears as th
 | A focus move | A buffer draws the focus ring its control had while it rendered, and nothing in the key can see that the focus has moved since — the identity, the view value and the size are all unchanged by a move. So the focus manager keeps, per focus id, the identity the control last rendered at (recorded by `FocusRegistration.register`, the one registrar every interactive control goes through, and pruned to the controls that rendered this pass, like the `@FocusState` registry), and every write of the focused id calls `clearAffected(by: identity)` for the id the focus left and the id it arrived on. Unlike a `@State` write it is applied at once rather than queued, so a memo still rendering above a control that auto-focused mid-walk declines to store the buffer it drew unfocused; and it asks for no frame, because a focus move already announces itself through `FocusManager.onFocusChange`, which is what schedules the repaint. This is what lets an UNFOCUSED registration be replayed rather than decline (below): the buffers it drops are exactly the ones a memo would otherwise go on serving |
 | An `@AppStorage` / `@SceneStorage` write | Nothing can scope it: the wrapper is not `Equatable` so it cannot be in the memo's key, it is read as a plain field so `noteAppliedEnvironment` never sees it, and the write carries no view identity — so not even the ancestor `clearAffected` that rescues the equivalent `@State`. The setter calls `AppState.setNeedsRenderWithCacheClear()` → `clearAll()`. This is the framework's only per-user-action full clear (the `@Observable` row above scopes instead; the nearest neighbour is `LocalizationService.register`, at startup), affordable because a storage write is a user action and the flag coalesces a frame's writes into one clear — but a `Slider` bound straight to `$storage` writes per interaction tick and pays per tick |
 | A global environment change | `RenderLoop` compares an `EnvironmentSnapshot` each frame and clears on mismatch: the palette (by value where it is `Equatable`, by ID where it is not — a palette edited in place keeps its ID), the appearance ID, the resolved toggle glyphs, the locale and the scene phase |
-| A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)`, dropping the subtree below it. A paint or tint change passes `keepingSizes: true` — ink moves no cell, so the memoized sizes below survive and only the buffers go |
+| A **scoped** environment change | `EnvironmentModifier` compares the value it applied at its identity last pass; on a change it calls `clearAffected(by: identity)` — bare, always — dropping the subtree below it. A few slots do that comparison themselves instead of going through the modifier, because they write straight into the child context rather than injecting a value: the two paint slots (`ColorEnvironment`), `.tint`, the theme, and the focus publishers. The three that carry ink pass `keepingSizes: true` — ink moves no cell, so the memoized sizes below survive and only the buffers go — while a focus move clears the sizes too, since a control may lay itself out differently while focused |
 
 The scoped case is why the cache key carries no environment. A
 `.foregroundStyle(x)` applied *above* an `.equatable()` boundary leaves the view
@@ -466,9 +466,26 @@ wearing the three-row ramp's ink until the frame joined the key. It is an
 `Optional` that is `nil` unless a `.subtree` ramp is in force, so an ordinary
 lookup compares one `nil`.
 
-A value that is **not** `Equatable` cannot be compared, so the subtree below it
-declines to cache. Memoization is lost there, which is a performance cost rather
+A value that is **not** `Equatable` cannot be compared. What that costs depends
+on which of the two routes in the table applied it, and the two costs are
+opposites.
+
+Through `EnvironmentModifier` — every `.environment(\.slot, value)`, which is how
+the style modifiers publish — the `.incomparable` answer is acted on: the
+modifier carries it down as a flag on the environment, and every memo below
+declines to store. Memoization is lost there, which is a performance cost rather
 than a correctness one.
+
+At a slot that notes itself and acts on `.changed` alone, there is nothing to
+carry the answer, so it falls through ignored — and `noteAppliedEnvironment`
+deadens the slot for good on the way past, so it can never report a change
+again. The subtree then goes on wearing the ink it was painted with: stale
+pixels, not lost work. Those sites stay off that path by construction rather
+than by handling it — `.foregroundStyle` resolves the caller's `ShapeStyle` to
+a concrete, `Equatable` `Paint` before noting it, `ThemeModifier` takes
+`some Equatable`, and the focus publishers note a `Bool` — which makes the
+answer unreachable rather than unhandled. That is the property to preserve when
+adding another such slot.
 
 Between these events — for example during ``Spinner`` animation frames — the cache is fully active. Static subtrees are rendered once and reused for every subsequent frame (the run loop renders only when a frame is actually due, capped at `App.maxFrameRate`).
 
