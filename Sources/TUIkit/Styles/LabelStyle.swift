@@ -46,6 +46,32 @@ public struct LabelStyleConfiguration {
 /// The style applies to every label in the subtree, which is the point: a whole
 /// toolbar can drop to ``IconOnlyLabelStyle`` when the terminal is narrow
 /// without every call site changing.
+///
+/// ## Styles and the render cache
+///
+/// ``View/labelStyle(_:)`` puts the style into the environment, and the render
+/// cache keeps memoized subtrees honest by comparing each injected value with
+/// the one applied there last frame. A value it cannot compare may have changed
+/// under a buffer it is about to serve with nothing able to notice, so every
+/// memo below one declines to cache at all.
+///
+/// All four built-in styles are therefore `Equatable`. Without that, the very
+/// thing this protocol is for — a whole toolbar dropping to
+/// ``IconOnlyLabelStyle`` — turned memoization off for that entire subtree.
+/// None of them holds anything, so `==` within a type is vacuously true and
+/// every instance of one arranges a label identically. Between types it is the
+/// downcast in the comparison that answers, which is what a label needs: the
+/// style's dynamic type is the whole of the arrangement, so a title replaced by
+/// an icon must read as a change, and does.
+///
+/// A custom style need not conform: one that does not simply turns memoization
+/// off below itself, which costs render time rather than correctness.
+///
+/// - Note: SwiftUI's label styles declare no such conformance, and this is one
+///   of the places a terminal renderer has to differ. SwiftUI diffs the view
+///   graph the compiler builds for it and never has to ask whether an
+///   environment value changed; TUIkit re-runs `body` and compares values, so
+///   here the question must be answerable.
 public protocol LabelStyle: Sendable {
     /// A view that represents the body of a label.
     associatedtype Body: View
@@ -82,7 +108,11 @@ extension LabelStyle {
 /// The icon opts out of text decorations an enclosing view cascades — a
 /// ``Link`` underlining its label, say — because an underline clashes with a
 /// glyph's own strokes. The title still honours them.
-public struct DefaultLabelStyle: LabelStyle {
+///
+/// `Equatable` for the reason given under ``LabelStyle``: a memo below a value
+/// the render cache cannot compare declines to cache. It holds nothing, so
+/// every instance arranges a label identically.
+public struct DefaultLabelStyle: LabelStyle, Equatable {
     /// Creates the default label style.
     public init() {}
 
@@ -101,7 +131,12 @@ public struct DefaultLabelStyle: LabelStyle {
 }
 
 /// Shows the title and hides the icon.
-public struct TitleOnlyLabelStyle: LabelStyle {
+///
+/// `Equatable` on the same terms as ``DefaultLabelStyle``, and this is where the
+/// type earns it: a frame that swaps this for ``IconOnlyLabelStyle`` draws
+/// something with no character in common, and the comparison's downcast is what
+/// says so.
+public struct TitleOnlyLabelStyle: LabelStyle, Equatable {
     /// Creates a title-only label style.
     public init() {}
 
@@ -112,12 +147,18 @@ public struct TitleOnlyLabelStyle: LabelStyle {
 
 /// Shows the icon and hides the title.
 ///
+/// `Equatable` on the same terms as ``DefaultLabelStyle``. The fallback below
+/// does not weaken the conformance: `iconIsVisible` is the ``Label``'s own
+/// stored property, so it travels in the memoized view's value rather than in
+/// this environment value, and the style's equality neither answers for it nor
+/// has to.
+///
 /// - Important: When the icon cannot be drawn — an unresolved SF Symbol, or no
 ///   font carrying it — this shows the **title** instead. SwiftUI can rely on a
 ///   symbol always rendering; a terminal cannot, and a label that silently
 ///   disappears is a worse outcome than one that is wider than asked for. Both
 ///   ``Label`` and this style agree on that fallback.
-public struct IconOnlyLabelStyle: LabelStyle {
+public struct IconOnlyLabelStyle: LabelStyle, Equatable {
     /// Creates an icon-only label style.
     public init() {}
 
@@ -132,7 +173,12 @@ public struct IconOnlyLabelStyle: LabelStyle {
 
 /// Shows both the title and the icon, whatever the context would otherwise
 /// prefer.
-public struct TitleAndIconLabelStyle: LabelStyle {
+///
+/// `Equatable` on the same terms as ``DefaultLabelStyle``. It draws exactly what
+/// ``DefaultLabelStyle`` draws while being a different type, so a comparison
+/// across the two answers "changed" and drops a cache entry that would have been
+/// good — a missed hit, never a stale serve.
+public struct TitleAndIconLabelStyle: LabelStyle, Equatable {
     /// Creates a title-and-icon label style.
     public init() {}
 
@@ -175,6 +221,10 @@ private struct LabelStyleKey: EnvironmentKey {
 extension EnvironmentValues {
     /// The style ``Label`` views render with. Set via ``View/labelStyle(_:)``.
     /// Default: ``DefaultLabelStyle``.
+    ///
+    /// The render cache compares this value between frames to decide whether
+    /// what it memoized below is still good, so a style that is not `Equatable`
+    /// turns memoization off in its subtree — see ``LabelStyle``.
     public var labelStyle: any LabelStyle {
         get { self[LabelStyleKey.self] }
         set { self[LabelStyleKey.self] = newValue }

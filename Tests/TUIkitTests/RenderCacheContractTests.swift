@@ -58,6 +58,20 @@ private struct AccentLeaf: View, Equatable {
     }
 }
 
+/// A memoizable view whose whole appearance comes from the ``LabelStyle`` in
+/// force above it — the two halves are plain views, so neither depends on an
+/// SF Symbol resolving on the host.
+///
+/// Unlike every other fixture here, what this draws is readable straight out of
+/// the buffer: `.titleOnly` shows `Inbox` and `.iconOnly` shows `*`, with no
+/// character in common. That is what lets the label's safety arm assert the
+/// drawing rather than a hit count.
+private struct CacheLabel: View, Equatable {
+    var body: some View {
+        Label { Text(verbatim: "Inbox") } icon: { Text(verbatim: "*") }
+    }
+}
+
 /// A caller's own menu style with no `Equatable` conformance, so nothing can
 /// tell whether the value it injects has changed.
 private struct UncomparableMenuStyle: MenuStyle {
@@ -581,6 +595,76 @@ struct RenderCacheContractTests {
         #expect(
             delta.hits == 0,
             "a checkbox replaced by a switch must not serve the checkbox's buffer: \(delta)")
+    }
+
+    @Test("No built-in label style stops the subtree below it caching")
+    func builtInLabelStyleKeepsCaching() {
+        // The same clause once more, on the key path a whole screen reaches
+        // for at once: `.labelStyle(_:)` injects an `any LabelStyle`, and what
+        // decides whether a memo below it may store is the DYNAMIC type's
+        // `Equatable` conformance. Without one, a toolbar that drops to
+        // `.iconOnly` when the terminal narrows — the case the protocol's own
+        // documentation offers — turned the cache off for everything under it.
+        //
+        // All four built-ins are asked, in their own contexts, because
+        // conforming only one would leave the others exactly as they were.
+        func styleStoresAndServes<S: LabelStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().labelStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().labelStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.automatic, ".labelStyle(.automatic)")
+        styleStoresAndServes(.titleOnly, ".labelStyle(.titleOnly)")
+        styleStoresAndServes(.iconOnly, ".labelStyle(.iconOnly)")
+        styleStoresAndServes(.titleAndIcon, ".labelStyle(.titleAndIcon)")
+    }
+
+    /// The safety half, asked of the drawing instead of the statistics.
+    ///
+    /// Every other style in this series contributes to a buffer some `_*Core`
+    /// assembles, so the nearest an in-process test can get to "the wrong style
+    /// was served" is `hits == 0`. A label style contributes the composition
+    /// itself, and the two halves here share no character: if the downcast in
+    /// `Equatable.isEqual(to:)` ever answered "equal" across a type change, the
+    /// frame below would keep the buffer reading `Inbox` while the tree now says
+    /// `.iconOnly`. So this asks the buffer.
+    ///
+    /// Vacuous before the conformances — nothing stored, so nothing could be
+    /// served stale — and an assertion only after them, which is why it belongs
+    /// with them rather than on its own.
+    @Test("Swapping one built-in label style for another redraws the label below it")
+    func labelStyleTypeChangeRedrawsTheLabel() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        func drawn(_ buffer: FrameBuffer) -> String {
+            buffer.lines.map(\.stripped).joined().trimmingCharacters(in: .whitespaces)
+        }
+
+        let titled = frame(shared, CacheLabel().equatable().labelStyle(.titleOnly))
+        #expect(drawn(titled) == "Inbox", "the title-only style draws the title")
+        #expect(!cache.isEmpty, "a memo under a built-in label style must store")
+
+        // The premise, without which the swap below would pass for a label that
+        // is never served from cache at all: the SAME style twice is a hit, so
+        // there really is a stored buffer for the swap to have to invalidate.
+        let before = cache.stats
+        frame(shared, CacheLabel().equatable().labelStyle(.titleOnly))
+        let repeated = cache.stats.delta(since: before)
+        #expect(repeated.hits >= 1, "an unchanged label style must serve the memo: \(repeated)")
+
+        let iconed = frame(shared, CacheLabel().equatable().labelStyle(.iconOnly))
+        #expect(
+            drawn(iconed) == "*",
+            "a title-only label was served under .iconOnly: \(drawn(iconed))")
     }
 
     /// The half the menu styles cannot pin, and the reason this is a safety
