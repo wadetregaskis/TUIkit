@@ -22,7 +22,16 @@ import TUIkitCore
 /// chips. (The built-in `.plain` style would prepend its own 2-cell pulsing
 /// focus bullet — a second marker beside this one, and 2 cells of geometry that
 /// appear and disappear with focus.)
-struct _ColorSwatchButtonStyle: ButtonStyle {
+///
+/// `Equatable` for the reason given under ``ButtonStyle``, and this is the one
+/// built-in style where the comparison has to be exact rather than vacuous: a
+/// swatch is built fresh each frame from live binding data — ``ColorPicker``
+/// hands it the selection, the gradient and tone-curve editors a per-chip
+/// colour and whether that chip is the one in hand. `makeBody` forwards exactly
+/// `color` and `isSelected` into ``_ColorSwatchCells``, so equal values do draw
+/// the same swatch, and the synthesized `==` over them is what drops the cells
+/// painted in the previous colour.
+struct _ColorSwatchButtonStyle: ButtonStyle, Equatable {
     /// The colour on show — the swatch fill and the bullet's backdrop.
     let color: Color
 

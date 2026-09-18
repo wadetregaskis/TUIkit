@@ -295,9 +295,14 @@ public struct GradientEditorPanel: View {
         return VStack(alignment: .center, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 1) {
-                    ForEach(row, id: \.self) { index in
+                    ForEach(
+                        row.map {
+                            StopChip(
+                                index: $0, color: list[$0].color, isSelected: $0 == selection)
+                        }, id: \.index
+                    ) { chip in
                         stopChip(
-                            index: index, color: list[index].color, isSelected: index == selection)
+                            index: chip.index, color: chip.color, isSelected: chip.isSelected)
                     }
                 }
             }
@@ -598,6 +603,29 @@ extension GradientEditorPanel {
 // MARK: - Chip wrapping (pure; unit-tested)
 
 extension GradientEditorPanel {
+    /// One chip's whole drawn state, carried as the `ForEach` element rather
+    /// than read from outside the row.
+    ///
+    /// `ForEach` wraps every `Equatable` element in the element-keyed render
+    /// memo, so iterating bare indices keys each chip on the one thing about it
+    /// that never changes while the colour and the selection it actually draws
+    /// sit outside the row — the documented hole that froze
+    /// ``ColorPickerPanel``'s preview and both tone-curve strips, in the shape
+    /// their comments describe. Both chip strips had it too, and only escaped
+    /// it because the swatch style was uncomparable and so refused the memo
+    /// outright; the moment it could be compared, a reordered strip served the
+    /// chips it drew before the drag.
+    ///
+    /// `id` stays the index on purpose. That is the chip's IDENTITY — its focus
+    /// stop, its hit region, its drag capture — and moving it with the colour
+    /// would hand a chip a new identity mid-drag, which is the one moment it
+    /// must keep the one it has.
+    struct StopChip: Equatable {
+        let index: Int
+        let color: Color
+        let isSelected: Bool
+    }
+
     /// The stop strip's row layout for `count` chips — `wrappedRows` over
     /// uniform ``stopChipWidth`` items with 1-cell gaps in the preview-width
     /// budget. Shared by rendering and the live-drag geometry, so the two

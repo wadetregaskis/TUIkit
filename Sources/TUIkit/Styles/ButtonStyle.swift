@@ -128,6 +128,34 @@ public struct ButtonStyleConfiguration {
 /// }
 /// ```
 ///
+/// ## Styles and the render cache
+///
+/// ``View/buttonStyle(_:)`` puts the style into the environment, and the render
+/// cache keeps memoized subtrees honest by comparing each injected value with
+/// the one applied there last frame. A value it cannot compare may have changed
+/// under a buffer it is about to serve with nothing able to notice, so every
+/// memo below one declines to cache at all.
+///
+/// Every built-in style is therefore `Equatable`. Without that, nothing under a
+/// `.buttonStyle(...)` could be memoized — and because the modifier flows
+/// through the environment, one call on a container turns the cache off for
+/// everything inside it, buttons and their neighbours alike.
+///
+/// For the styles that hold nothing the conformance is a formality: every
+/// instance styles a button identically. For the two that hold something it is
+/// load-bearing, and it is what keeps this a performance fix rather than a
+/// stale serve: a swatch built from a changed colour must compare unequal to
+/// the one before it, or the cache would hand it the buffer painted in the old
+/// colour. A custom style need not conform: one that does not simply turns
+/// memoization off below itself, which costs render time rather than
+/// correctness.
+///
+/// - Note: SwiftUI's `DefaultButtonStyle` declares no such conformance, and
+///   this is one of the places a terminal renderer has to differ. SwiftUI diffs
+///   the view graph the compiler builds for it and never has to ask whether an
+///   environment value changed; TUIkit re-runs `body` and compares values, so
+///   here the question must be answerable.
+///
 /// - Note: The built-in styles draw terminal-specific flourishes (half-block
 ///   caps, a pulsing focus glow) that require procedural buffer rendering.
 ///   Custom styles compose ordinary TUIkit views and modifiers, which is
@@ -196,7 +224,7 @@ extension ButtonStyle {
 /// accent-tinted background.
 ///
 /// Access this style with the ``ButtonStyle/default`` static property.
-public struct DefaultButtonStyle: ButtonStyle {
+public struct DefaultButtonStyle: ButtonStyle, Equatable {
     /// Creates a default button style.
     public init() {}
 
@@ -208,7 +236,7 @@ public struct DefaultButtonStyle: ButtonStyle {
 /// A bold, emphasised button style that uses the palette's accent colour.
 ///
 /// Access this style with the ``ButtonStyle/primary`` static property.
-public struct PrimaryButtonStyle: ButtonStyle {
+public struct PrimaryButtonStyle: ButtonStyle, Equatable {
     /// Creates a primary button style.
     public init() {}
 
@@ -221,7 +249,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
 /// destructive action.
 ///
 /// Access this style with the ``ButtonStyle/destructive`` static property.
-public struct DestructiveButtonStyle: ButtonStyle {
+public struct DestructiveButtonStyle: ButtonStyle, Equatable {
     /// Creates a destructive button style.
     public init() {}
 
@@ -233,7 +261,7 @@ public struct DestructiveButtonStyle: ButtonStyle {
 /// A button style that uses the palette's success colour.
 ///
 /// Access this style with the ``ButtonStyle/success`` static property.
-public struct SuccessButtonStyle: ButtonStyle {
+public struct SuccessButtonStyle: ButtonStyle, Equatable {
     /// Creates a success button style.
     public init() {}
 
@@ -246,7 +274,7 @@ public struct SuccessButtonStyle: ButtonStyle {
 /// preceded by a focus indicator when focused.
 ///
 /// Access this style with the ``ButtonStyle/plain`` static property.
-public struct PlainButtonStyle: ButtonStyle {
+public struct PlainButtonStyle: ButtonStyle, Equatable {
     /// Creates a plain button style.
     public init() {}
 
@@ -290,7 +318,13 @@ extension ButtonStyle where Self == PlainButtonStyle {
 /// button style to be source-compatible with — adding one would be a public
 /// name this framework would then owe forever for the sake of an internal
 /// wiring detail.
-struct _LinkButtonStyle: ButtonStyle {
+///
+/// `Equatable` for the reason given under ``ButtonStyle``, and here the
+/// conformance does real work rather than none: `_Link` builds the style from
+/// whatever ``View/linkFocusIndicator(_:)`` is in force, so two frames can
+/// genuinely hand down different values, and the synthesized `==` is what tells
+/// the cache to drop the link it drew with the other affordance.
+struct _LinkButtonStyle: ButtonStyle, Equatable {
     /// Which affordance the app asked for. Carried as a value rather than read
     /// from the environment inside the style, so the choice is made once, in
     /// `_Link`'s body, where the environment is legitimately readable.
@@ -944,6 +978,10 @@ extension EnvironmentValues {
     ///
     /// Controls how ``Button`` views render. Set via the
     /// ``View/buttonStyle(_:)`` modifier. Default: ``DefaultButtonStyle``.
+    ///
+    /// The render cache compares this value between frames to decide whether
+    /// what it memoized below is still good, so a style that is not `Equatable`
+    /// turns memoization off in its subtree — see ``ButtonStyle``.
     public var buttonStyle: any ButtonStyle {
         get { self[ButtonStyleKey.self] }
         set { self[ButtonStyleKey.self] = newValue }

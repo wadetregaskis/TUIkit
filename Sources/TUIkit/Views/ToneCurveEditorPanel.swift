@@ -287,15 +287,26 @@ public struct ToneCurveEditorPanel: View {
         return VStack(alignment: .center, spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 1) {
-                    ForEach(row, id: \.self) { index in
-                        Button("") { selectedStop = index }
+                    // Over chips that CARRY their colour, not over bare indices —
+                    // see ``GradientEditorPanel/StopChip``. The strip three
+                    // functions up was rewritten for the same reason; this one
+                    // was only spared because the swatch style could not be
+                    // compared, so the row memo refused it either way.
+                    ForEach(
+                        row.map {
+                            GradientEditorPanel.StopChip(
+                                index: $0,
+                                // Opaque, like the editor below withholding the row:
+                                // the curve ignores a stop's alpha, so a chip drawn
+                                // translucent would show a picture that is not the one
+                                // it makes.
+                                color: list[$0].to.opaqueSpelling, isSelected: $0 == selection)
+                        }, id: \.index
+                    ) { chip in
+                        Button("") { selectedStop = chip.index }
                             .buttonStyle(
                                 _ColorSwatchButtonStyle(
-                                    // Opaque, like the editor below withholding the row:
-                                    // the curve ignores a stop's alpha, so a chip drawn
-                                    // translucent would show a picture that is not the one
-                                    // it makes.
-                                    color: list[index].to.opaqueSpelling, isSelected: index == selection))
+                                    color: chip.color, isSelected: chip.isSelected))
                     }
                 }
             }

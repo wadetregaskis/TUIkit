@@ -481,6 +481,60 @@ struct RenderCacheContractTests {
         #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
     }
 
+    @Test("A built-in button style does not stop the subtree below it caching")
+    func builtInButtonStyleKeepsCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        // The same clause as the menu case, on the key path a terminal app
+        // reaches for far more often: `.buttonStyle(_:)` injects an
+        // `any ButtonStyle`, and what decides whether a memo below it may store
+        // is the DYNAMIC type's `Equatable` conformance. Without one on the
+        // built-in styles, every memo under a styled button — or under a
+        // container that styles the buttons it holds — declined.
+        frame(shared, CacheLeaf(text: "hi").equatable().buttonStyle(.plain))
+        #expect(!cache.isEmpty, "a memo under a built-in button style must store")
+
+        let before = cache.stats
+        frame(shared, CacheLeaf(text: "hi").equatable().buttonStyle(.plain))
+        let delta = cache.stats.delta(since: before)
+        #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+    }
+
+    /// The half the menu styles cannot pin, and the reason this is a safety
+    /// question before it is a performance one.
+    ///
+    /// Neither built-in menu style holds anything, so `==` there is vacuous —
+    /// every instance really is every other. Two of the button styles DO hold
+    /// something (`_ColorSwatchButtonStyle` a `Color` and a `Bool`,
+    /// `_LinkButtonStyle` a ``LinkFocusIndicator``), and both are built fresh
+    /// from live binding data each frame. For those the conformance is
+    /// load-bearing: a comparison that answered "equal" across a colour change
+    /// would hand the swatch below it the buffer painted in the old colour, and
+    /// that would convert this commit from a performance fix into a stale
+    /// serve. So the store is only half of it — the invalidation is the rest.
+    @Test("A button style's stored value changing clears the subtree below it")
+    func buttonStyleStorageChangeClearsCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        frame(
+            shared,
+            CacheLeaf(text: "hi").equatable()
+                .buttonStyle(_ColorSwatchButtonStyle(color: .red)))
+        #expect(!cache.isEmpty, "a memo under a style that holds a value must still store")
+
+        let before = cache.stats
+        frame(
+            shared,
+            CacheLeaf(text: "hi").equatable()
+                .buttonStyle(_ColorSwatchButtonStyle(color: .blue)))
+        let delta = cache.stats.delta(since: before)
+        #expect(
+            delta.hits == 0,
+            "a style whose stored colour changed must not serve the old buffer: \(delta)")
+    }
+
     @Test("A menu style that cannot be compared still declines caching")
     func uncomparableMenuStyleDeclinesCaching() {
         let shared = context()

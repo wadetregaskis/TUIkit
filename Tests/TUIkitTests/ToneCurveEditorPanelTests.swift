@@ -192,6 +192,35 @@ struct ToneCurveEditorPanelTests {
         #expect(before != after, "the marker row did not follow the stops: \(before)")
     }
 
+    @Test("A recoloured stop reaches its chip, in the same render pass")
+    func chipsFollowTheStopColours() {
+        // The same trap as the marker row above, one strip further down, and
+        // this one was only ever spared by accident: `_ColorSwatchButtonStyle`
+        // could not be compared, so the render cache refused to memoize the
+        // chips at all. Now that it can be, the `ForEach` element has to carry
+        // the colour it draws, or a recoloured stop keeps the chip it drew
+        // first — and nothing here would have noticed, because a stripped line
+        // is the same glyphs either way. So this compares the row WITH its
+        // colour codes, in one shared context.
+        let context = makeRenderContext(width: 100, height: 60)
+        func chipRow(_ list: [Stop]) -> String {
+            let panel = ToneCurveEditorPanel(
+                "Tone curve", stops: .constant(list), isPresented: .constant(true))
+            let buffer = renderToBuffer(panel, context: context)
+            guard let row = buffer.lines.firstIndex(where: { $0.stripped.contains("█●█") })
+            else { return "" }
+            return buffer.lines[row]
+        }
+
+        var recoloured = stops
+        recoloured[1] = Stop(at: 0.3, to: .rgb(40, 200, 90))
+
+        let before = chipRow(stops)
+        let after = chipRow(recoloured)
+        #expect(!before.isEmpty, "the chip strip renders")
+        #expect(before != after, "a recoloured stop kept the chip it drew first: |\(after)|")
+    }
+
     @Test("The output strip shows the curve, not a gradient of the stop colours")
     func outputStripIsTheCurve() {
         // Two stops crowded into the first third: an evenly-spaced gradient of

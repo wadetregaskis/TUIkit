@@ -26,7 +26,13 @@ import TUIkitStyling
 /// Under a translucent palette or tint, a crumb at rest claims its colour's alpha
 /// over its own cells, and a focused one breathes between ends SPENT against the
 /// surface it sits on, so every frame is opaque (`Opacity as composition.md`, §47).
-struct _NavigationCrumbButtonStyle: ButtonStyle {
+///
+/// `Equatable` for the reason given under ``ButtonStyle``: every crumb of a
+/// navigation bar is styled through the environment, and the bar is on screen
+/// for as long as the screen is. It holds nothing — all of a crumb's state
+/// reaches `_NavigationCrumbLabel` through the configuration — so every
+/// instance styles a crumb identically.
+struct _NavigationCrumbButtonStyle: ButtonStyle, Equatable {
     func makeBody(configuration: Configuration) -> some View {
         _NavigationCrumbLabel(configuration: configuration)
     }
