@@ -705,13 +705,27 @@ struct RenderCacheContractTests {
 
     @Test("Neither built-in text field style stops the subtree below it caching")
     func builtInTextFieldStyleKeepsCaching() {
-        // The same clause once more, on the one key path in this series an app
-        // in this repo already writes: `.textFieldStyle(_:)` injects an
+        // The same clause once more: `.textFieldStyle(_:)` injects an
         // `any TextFieldStyle`, and what decides whether a memo below it may
         // store is the DYNAMIC type's `Equatable` conformance. Without one the
         // refusal covered everything under the modifier — Example's Text Input
         // page puts two fields and their surrounding rows under a
-        // `.textFieldStyle(.plain)`, and none of it could cache.
+        // `.textFieldStyle(.plain)` (TextInputPage.swift:130 and :139), and none
+        // of it could cache.
+        //
+        // What this is NOT, whatever this comment and `684785f1`'s message said
+        // until the count was taken: "the one key path in this series an app in
+        // this repo already writes". Example writes EIGHT of the nine key paths
+        // this clause has been fixed on, and only `.labelStyle(_:)` goes
+        // unwritten. Two of them are in the same position as this one — no
+        // framework-internal injection anywhere in `Sources/TUIkit`, so the
+        // refusal fires only where the app itself writes the modifier — and both
+        // were fixed BEFORE it: `.listStyle(_:)` (ListPage.swift:269 and :284,
+        // `d76f8d15`) and `.toggleStyle(_:)` (TogglePage.swift:90-92 and
+        // :127-128, `9feef329`). The picker test below says the same of its own
+        // key path, at thirteen sites. What is true of this one is narrower and
+        // is all the subject claims: `.plain` is the only text field style the
+        // app sets.
         //
         // Both built-ins are asked, in their own contexts, because conforming
         // only one would leave the other's fields exactly as they were.
