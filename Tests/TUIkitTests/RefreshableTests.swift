@@ -364,6 +364,58 @@ struct RefreshableTests {
         #expect(row.hasSuffix("ghij"), "row: \(row.debugDescription)")
     }
 
+    /// Content 1 or 2 cells wide has no room to spare for the badge — one
+    /// blank either side of the glyph needs three — so `renderToBuffer`'s
+    /// guard withholds it entirely rather than drawing a blank cell where the
+    /// indicator should be. Three cells is the boundary where it first fits.
+    /// Pins both sides: `indicatorAppearsAtThreeCellsMinimum` below is what
+    /// establishes that 3, rather than the boundary, is the right number.
+    @Test("The indicator is withheld below three cells, shown at three")
+    func indicatorBoundaryAtThreeCells() async {
+        for width in 1...2 {
+            let harness = Harness()
+            let gate = RefreshGate()
+            let content = String(repeating: "x", count: width)
+            let view = Text(content).refreshable { await gate.hold() }
+
+            let row = await busyTopRow(view, harness: harness, gate: gate)
+            #expect(
+                row == content,
+                "\(width)-cell content must draw no indicator at all: \(row.debugDescription)")
+        }
+
+        let harness = Harness()
+        let gate = RefreshGate()
+        let view = Text("xyz").refreshable { await gate.hold() }
+
+        let row = await busyTopRow(view, harness: harness, gate: gate)
+        let cells = Array(row)
+        #expect(cells.count == 3, "row: \(row.debugDescription)")
+        let at = cells.firstIndex { SpinnerStyle.dots.frames.contains(String($0)) }
+        #expect(at != nil, "a 3-cell-wide refreshable must draw the indicator: \(row.debugDescription)")
+    }
+
+    /// `RefreshableModifier`'s guard hard-codes `buffer.width >= 3`. That 3 is
+    /// not asserted here — it is DERIVED: the padded badge
+    /// (`Spinner(style:).padding(.horizontal, 1)`, exactly what the modifier
+    /// composites) is rendered for every named `SpinnerStyle` case, and the
+    /// narrowest of them must be 3 cells — one blank, one glyph, one blank.
+    /// If a style's glyph ever grew past one cell by mistake, or the padding
+    /// changed, this fails instead of a stale comment saying otherwise.
+    @Test("Three cells is the narrowest padded indicator across every named style")
+    func indicatorAppearsAtThreeCellsMinimum() {
+        let namedStyles: [SpinnerStyle] = [
+            .dots, .line, .dancingLine, .bouncing, .pie, .beachball, .box, .curve,
+            .column, .bar, .shade, .blockWedge, .spinningTriangle, .moon, .earth, .clock,
+        ]
+        let widths = namedStyles.map { style in
+            (style, renderToBuffer(Spinner(style: style).padding(.horizontal, 1), context: makeBareRenderContext()).width)
+        }
+        #expect(
+            widths.map(\.1).min() == 3,
+            "narrowest padded indicator across styles: \(widths.map { "\($0.0): \($0.1)" })")
+    }
+
     @Test("refreshIndicator chooses the spinner")
     func indicatorIsCustomisable() async {
         let harness = Harness()
