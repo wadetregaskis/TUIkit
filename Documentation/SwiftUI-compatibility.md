@@ -647,13 +647,26 @@ whose content type is its generic parameter and so cannot be bound to an
 wrapper and generic over the new content, which is what lets the caller's
 existential be opened rather than converted. A wrapper that conforms picks up
 child resolution and grid rows with an empty
-`extension X: ChildViewProvider where Content: ChildViewProvider {}`. **Four**
-wrappers conform so far: `_StyleEnvironmentView` (`.foregroundStyle`,
-`.backgroundStyle`), `_OpacityView` (`.opacity`), `FlexibleFrameView`
-(`.frame`) and `DisabledModifier` (`.disabled`).
+`extension X: ChildViewProvider where Content: ChildViewProvider {}`.
+**Eighteen** wrappers conform, in three families whose equivalence is provable
+or measured rather than assumed:
 
-**Every other wrapper is still opaque to child resolution** — `.offset` builds
-`OffsetView`, `.hidden` builds `_HiddenView`, `.badge` builds `BadgeModifier`,
+- *Environment publishers* — `EnvironmentModifier` (`.environment(_:_:)`),
+  `TransformEnvironmentModifier`, `ObjectEnvironmentModifier`,
+  `_StyleEnvironmentView` (`.foregroundStyle`, `.backgroundStyle`),
+  `ThemeModifier`, `TintModifier`, `StyleCascadeModifier`, `RedactionScope`,
+  `DisabledModifier`, `_AnimationValueModifier`, `_ValueScopedTransactionView`.
+  A value reaches a subtree whether it was set one level up or two, so
+  publishing around each member is the same value in the same places.
+- *Paint* — `_OpacityView` (`.opacity`), `DimmedModifier`, `_HiddenView`,
+  `_HitTestingView`, `AnimatedCellsModifier`. These rewrite cells the content
+  already drew, and members of a stack do not overlap.
+- *Geometry* — `FlexibleFrameView` (`.frame`), `OffsetView` (`.offset`).
+  Measured: `.frame(width: 80)` on a two-member `Group` gives frames
+  byte-identical to writing the frame on each member.
+
+**Every other wrapper is still opaque to child resolution** — `.badge` builds
+`BadgeModifier`, `.position` builds `PositionView`, `.tag` builds `_TaggedView`,
 and so on. The scale is dozens, not a handful — walking
 every `extension View` factory that returns `some View` and taking the first
 `View`-conforming type each body builds names 85 distinct types, which is an
@@ -666,7 +679,7 @@ stacked vertically with no spacing. So
 ```swift
 HStack { Group { Text("A"); Text("B") } }                       // "A B"
 HStack { Group { Text("A"); Text("B") }.foregroundStyle(.red) } // "A B"  (conforms)
-HStack { Group { Text("A"); Text("B") }.offset(x: 1) }          // A over B
+HStack { Group { Text("A"); Text("B") }.badge(2) }              // A over B
 ```
 
 — a purely cosmetic modifier rotates the row 90° — and a `GridRow` carrying one
@@ -906,9 +919,12 @@ theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
 bitmap. §3 holds one open divergence: a modifier reaches the members of
 multi-view content only when it builds a `ModifiedView` or a conforming
-`SingleContentWrapper`, so `.padding`, `.foregroundStyle`, `.opacity`,
-`.frame` and `.disabled` on a `Group` apply per member while `.offset` still
-hands the enclosing container one opaque child. (The divergence that used to stand there —
+`SingleContentWrapper`, which eighteen wrappers now do — so `.environment`,
+`.foregroundStyle`, `.opacity`, `.frame`, `.offset` and `.disabled` on a
+`Group` apply per member, while the wrappers that perform an EFFECT rather than
+an adjustment (`.onAppear`, `.focusable`, `.onHover`, …) are deliberately left
+opaque, because SwiftUI fires those once and distributing them would fire them
+per member. (The divergence that used to stand there —
 `foregroundStyle` taking `Color?` — is closed, and gradients ship.) §4a — additive SwiftUI features a terminal can express — is now
 **clear on the API side but for one item**: `pinnedViews:` on the lazy stacks.
 It reads like an init parameter and is not one — see §2.8 for what it actually

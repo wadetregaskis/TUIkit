@@ -69,3 +69,21 @@ extension ObjectEnvironmentModifier: Layoutable {
         return measureChild(content, proposal: proposal, context: modifiedContext)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: An environment value reaches a subtree whether it was set one level
+///   up or two, so publishing it around each member is the same thing as
+///   publishing it once around the pair. What changes is only that the members
+///   stay the enclosing container's own children.
+extension ObjectEnvironmentModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        ObjectEnvironmentModifier<V, T>(content: view, object: object)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension ObjectEnvironmentModifier: ChildViewProvider where Content: ChildViewProvider {}

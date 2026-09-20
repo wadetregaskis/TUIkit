@@ -283,6 +283,111 @@ struct GroupRenderTests {
         #expect(modified.lines.map { $0.stripped } == plain.lines.map { $0.stripped })
     }
 
+    // MARK: - The Environment and Paint Wrappers
+    //
+    // Fourteen more wrappers conform, and they fall into two families whose
+    // equivalence is provable rather than measured. An ENVIRONMENT publisher
+    // reaches a subtree whether it was set one level up or two, so publishing
+    // around each member is the same value in the same places. A PAINT or
+    // GEOMETRY wrapper rewrites or shifts cells the content already drew, and
+    // the members of a stack do not overlap, so per member and over the pair
+    // give the same cells. What changes in both families is only whether the
+    // members reach the enclosing container as its own children — which is the
+    // defect. One test per family plus the user-facing `.environment(_:_:)`,
+    // rather than fourteen copies of the same assertion.
+
+    /// The oracle every test in this section uses: the row axis. A `Group` of
+    /// two `Text`s in an `HStack` is one line; an opaque wrapper around it
+    /// makes two, because the `TupleView` beneath has already stacked them.
+    ///
+    /// Two `#expect`s rather than one returned `Bool`: a `Bool` helper reports
+    /// the failure as two whole `FrameBuffer` descriptions and names neither
+    /// defect, where these say "2 lines, expected 1" and show the two rows.
+    private func expectRowAxis(
+        _ modified: FrameBuffer, matches plain: FrameBuffer,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(
+            modified.lines.count == 1,
+            "a modified Group must not stack its members vertically",
+            sourceLocation: sourceLocation)
+        #expect(
+            modified.lines.map { $0.stripped } == plain.lines.map { $0.stripped },
+            sourceLocation: sourceLocation)
+    }
+
+    @Test("An .environment(_:_:) on a Group does not rotate the layout 90 degrees")
+    func environmentOnGroupKeepsTheRowAxis() {
+        let plain = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") } }, context: ctx())
+        let modified = renderToBuffer(
+            HStack(spacing: 1) {
+                Group { Text("A"); Text("B") }.environment(\.lineLimit, .lines(3))
+            },
+            context: ctx()
+        )
+        expectRowAxis(modified, matches: plain)
+    }
+
+    @Test("A tint on a Group does not rotate the layout 90 degrees")
+    func tintOnGroupKeepsTheRowAxis() {
+        let plain = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") } }, context: ctx())
+        let modified = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") }.tint(.blue) }, context: ctx())
+        expectRowAxis(modified, matches: plain)
+    }
+
+    @Test("A redaction on a Group does not rotate the layout 90 degrees")
+    func redactionOnGroupKeepsTheRowAxis() {
+        let plain = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") } }, context: ctx())
+        let modified = renderToBuffer(
+            HStack(spacing: 1) {
+                Group { Text("A"); Text("B") }.redacted(reason: .placeholder)
+            },
+            context: ctx()
+        )
+        // The characters are redacted in both spellings; what is asserted is the
+        // axis, so `plain` is redacted too and only the grouping differs.
+        let plainRedacted = renderToBuffer(
+            HStack(spacing: 1) {
+                Text("A").redacted(reason: .placeholder)
+                Text("B").redacted(reason: .placeholder)
+            },
+            context: ctx()
+        )
+        #expect(modified.lines.count == 1)
+        #expect(modified.lines.map { $0.stripped } == plainRedacted.lines.map { $0.stripped })
+        #expect(plain.lines.count == 1, "the control is a row to begin with")
+    }
+
+    @Test("An offset on a Group shifts each member, as writing it on each does")
+    func offsetOnGroupAppliesPerMember() {
+        let grouped = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") }.offset(x: 1, y: 0) },
+            context: ctx()
+        )
+        let written = renderToBuffer(
+            HStack(spacing: 1) {
+                Text("A").offset(x: 1, y: 0)
+                Text("B").offset(x: 1, y: 0)
+            },
+            context: ctx()
+        )
+        #expect(grouped.lines.map { $0.stripped } == written.lines.map { $0.stripped })
+    }
+
+    @Test("A hidden Group hides each member, as writing it on each does")
+    func hiddenOnGroupAppliesPerMember() {
+        let grouped = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") }.hidden() }, context: ctx())
+        let written = renderToBuffer(
+            HStack(spacing: 1) { Text("A").hidden(); Text("B").hidden() }, context: ctx())
+        #expect(grouped.lines.map { $0.stripped } == written.lines.map { $0.stripped })
+        #expect(grouped.lines.count == 1, "hiding does not change the geometry, including the axis")
+    }
+
     // MARK: - Transparent Child Resolution (the metadata channel)
     //
     // Everything above travels the two-pass `childViews` path, which is what

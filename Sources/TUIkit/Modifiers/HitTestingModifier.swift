@@ -186,3 +186,41 @@ private struct _HitTestingView<Content: View>: View, Renderable, Layoutable {
         return drawn
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: Blanking each member is blanking the pair, and the geometry each
+///   member reports is unchanged — which is the whole point of `.hidden()`.
+extension _HiddenView: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<V: View>(_ view: V) -> any View {
+        _HiddenView<V>(content: view)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _HiddenView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _HiddenView: GridRowProviding where Content: GridRowProviding {}
+
+/// - Note: Dropping each member's hit regions is dropping the pair's; there are
+///   no regions belonging to the group itself.
+extension _HitTestingView: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<V: View>(_ view: V) -> any View {
+        _HitTestingView<V>(content: view, enabled: enabled)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _HitTestingView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _HitTestingView: GridRowProviding where Content: GridRowProviding {}

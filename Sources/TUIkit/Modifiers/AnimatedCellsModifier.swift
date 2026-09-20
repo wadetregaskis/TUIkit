@@ -70,3 +70,24 @@ extension AnimatedCellsModifier: Layoutable {
         measureChild(content, proposal: proposal, context: context)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: The runs are attached to whatever buffer the content rendered to, and
+///   a member's buffer is its own — so each member animates its own cells,
+///   which is what the same runs over one combined buffer did.
+extension AnimatedCellsModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<V: View>(_ view: V) -> any View {
+        AnimatedCellsModifier<V>(content: view, runs: runs)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension AnimatedCellsModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension AnimatedCellsModifier: GridRowProviding where Content: GridRowProviding {}

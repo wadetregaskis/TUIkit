@@ -146,6 +146,25 @@ extension GridRowProviding where Self: SingleContentWrapper, WrappedContent: Gri
     }
 }
 
+// The three environment wrappers live in `TUIkitView`, which is below this
+// module and cannot see `GridRowProviding` — so their conformances are written
+// here rather than beside their `ChildViewProvider` ones. Nothing else differs:
+// a row carrying `.environment(_:_:)` is as much a row as one carrying
+// `.tint(_:)`, and leaving these three out was an artifact of where the files
+// sit, not a decision about rows.
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension EnvironmentModifier: GridRowProviding where Content: GridRowProviding {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension TransformEnvironmentModifier: GridRowProviding where Content: GridRowProviding {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension ObjectEnvironmentModifier: GridRowProviding where Content: GridRowProviding {}
+
 // MARK: - Grid
 
 /// A container that arranges its ``GridRow``s into aligned columns.

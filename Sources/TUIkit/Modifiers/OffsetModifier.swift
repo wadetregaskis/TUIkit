@@ -119,3 +119,24 @@ extension OffsetView: Animatable {
         }
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: Layout is unaffected either way (the content is measured at its
+///   natural place), so shifting each member by `(x, y)` puts the same cells
+///   in the same places as shifting the pair by `(x, y)`.
+extension OffsetView: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        OffsetView<V>(content: view, x: x, y: y)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension OffsetView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension OffsetView: GridRowProviding where Content: GridRowProviding {}

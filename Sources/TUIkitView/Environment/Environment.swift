@@ -258,3 +258,37 @@ extension EnvironmentValues {
         set { self[UncomparableEnvironmentKey.self] = newValue }
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: An environment value reaches a subtree whether it was set one level
+///   up or two, so publishing it around each member is the same thing as
+///   publishing it once around the pair. What changes is only that the members
+///   stay the enclosing container's own children.
+extension EnvironmentModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<Inner: View>(_ view: Inner) -> any View {
+        EnvironmentModifier<Inner, V>(content: view, keyPath: keyPath, value: value)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension EnvironmentModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// - Note: An environment value reaches a subtree whether it was set one level
+///   up or two, so publishing it around each member is the same thing as
+///   publishing it once around the pair. What changes is only that the members
+///   stay the enclosing container's own children.
+extension TransformEnvironmentModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<Inner: View>(_ view: Inner) -> any View {
+        TransformEnvironmentModifier<Inner, V>(content: view, keyPath: keyPath, transform: transform)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension TransformEnvironmentModifier: ChildViewProvider where Content: ChildViewProvider {}

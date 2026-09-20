@@ -260,3 +260,24 @@ extension DimmedModifier: Layoutable {
         measureChild(content, proposal: proposal, context: context)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: The dimming is a rewrite of what the content drew, so doing it per
+///   member and doing it once over the pair produce the same cells — the
+///   members do not overlap in a stack, and each carries its own styling in.
+extension DimmedModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        DimmedModifier<V>(content: view)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension DimmedModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension DimmedModifier: GridRowProviding where Content: GridRowProviding {}

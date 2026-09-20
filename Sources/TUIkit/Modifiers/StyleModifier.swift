@@ -111,3 +111,25 @@ extension View {
         style(.text, StyleAttributes(textCase: .some(textCase)))
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: An environment value reaches a subtree whether it was set one level
+///   up or two, so publishing it around each member is the same thing as
+///   publishing it once around the pair. What changes is only that the members
+///   stay the enclosing container's own children.
+extension StyleCascadeModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        StyleCascadeModifier<V>(content: view, scope: scope, attributes: attributes)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension StyleCascadeModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension StyleCascadeModifier: GridRowProviding where Content: GridRowProviding {}

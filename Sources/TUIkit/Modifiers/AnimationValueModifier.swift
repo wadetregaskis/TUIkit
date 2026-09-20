@@ -101,3 +101,25 @@ extension _AnimationValueModifier: Layoutable {
             context: childContext(context, isMeasuring: true))
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: An environment value reaches a subtree whether it was set one level
+///   up or two, so publishing it around each member is the same thing as
+///   publishing it once around the pair. What changes is only that the members
+///   stay the enclosing container's own children.
+extension _AnimationValueModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<Inner: View>(_ view: Inner) -> any View {
+        _AnimationValueModifier<Inner, V>(content: view, animation: animation, value: value)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _AnimationValueModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _AnimationValueModifier: GridRowProviding where Content: GridRowProviding {}

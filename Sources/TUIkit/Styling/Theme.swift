@@ -294,3 +294,25 @@ extension Scene {
         palette(theme.resolvedPalette)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: An environment value reaches a subtree whether it was set one level
+///   up or two, so publishing it around each member is the same thing as
+///   publishing it once around the pair. What changes is only that the members
+///   stay the enclosing container's own children.
+extension ThemeModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        ThemeModifier<V>(content: view, theme: theme)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension ThemeModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension ThemeModifier: GridRowProviding where Content: GridRowProviding {}
