@@ -279,6 +279,17 @@ extension ModifiedView: Renderable {
 /// own modifier is the padding, and SwiftUI finds that tag too. It costs
 /// nothing on any frame but the one a seek arrives on, because that is the
 /// only thing that asks.
+/// The READ direction through this wrapper: what a container asking for a
+/// z-index or an alignment guide walks. `.zIndex(1).padding(0)` kept neither
+/// before, because the static witness that gates the walk answered `false` here
+/// and the search never started.
+///
+/// Not ``ContentRewrapping`` — that is stated separately, below, and is a
+/// different question with a different answer per wrapper.
+extension ModifiedView: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+}
+
 extension ModifiedView: ExplicitIDProviding {
     public var explicitIDKey: String? {
         modifier._explicitIDKey ?? (content as? ExplicitIDProviding)?.explicitIDKey

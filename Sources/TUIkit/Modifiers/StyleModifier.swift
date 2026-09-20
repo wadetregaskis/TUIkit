@@ -118,7 +118,7 @@ extension View {
 ///   up or two, so publishing it around each member is the same thing as
 ///   publishing it once around the pair. What changes is only that the members
 ///   stay the enclosing container's own children.
-extension StyleCascadeModifier: SingleContentWrapper {
+extension StyleCascadeModifier: ContentRewrapping {
     public var wrappedContent: Content { content }
 
     public func rewrapping<V: View>(_ view: V) -> any View {

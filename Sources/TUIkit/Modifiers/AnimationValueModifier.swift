@@ -108,7 +108,7 @@ extension _AnimationValueModifier: Layoutable {
 ///   up or two, so publishing it around each member is the same thing as
 ///   publishing it once around the pair. What changes is only that the members
 ///   stay the enclosing container's own children.
-extension _AnimationValueModifier: SingleContentWrapper {
+extension _AnimationValueModifier: ContentRewrapping {
     var wrappedContent: Content { content }
 
     func rewrapping<Inner: View>(_ view: Inner) -> any View {

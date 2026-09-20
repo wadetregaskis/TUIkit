@@ -362,7 +362,7 @@ extension _ColorEffect {
 /// - Note: The arithmetic is per cell, and the members of a stack do not
 ///   overlap, so rewriting each member's colours and rewriting the pair's
 ///   buffer produce the same cells.
-extension _ColorEffectView: SingleContentWrapper {
+extension _ColorEffectView: ContentRewrapping {
     var wrappedContent: Content { content }
 
     func rewrapping<V: View>(_ view: V) -> any View {

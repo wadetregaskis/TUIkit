@@ -138,7 +138,7 @@ extension ModifiedView: GridRowProviding where Content: GridRowProviding {
 /// place of ``ChildView/modified(by:)``, for the reason
 /// ``SingleContentWrapper`` states: a wrapper has no modifier VALUE to carry
 /// to each cell, so it re-wraps them with its own initialiser instead.
-extension GridRowProviding where Self: SingleContentWrapper, WrappedContent: GridRowProviding {
+extension GridRowProviding where Self: ContentRewrapping, WrappedContent: GridRowProviding {
     var rowAlignment: VerticalAlignment? { wrappedContent.rowAlignment }
 
     func gridCells(context: RenderContext) -> [ChildView] {

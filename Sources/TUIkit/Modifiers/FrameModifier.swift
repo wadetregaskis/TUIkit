@@ -549,7 +549,7 @@ extension FlexibleFrameView: Animatable {
 ///   two texts out at exactly the frames writing `.frame(width: 80)` on each
 ///   member separately produces. A `.frame(maxWidth: .infinity)` on a `Group`
 ///   therefore gives every member the greed, and they share the slack.
-extension FlexibleFrameView: SingleContentWrapper {
+extension FlexibleFrameView: ContentRewrapping {
     public var wrappedContent: Content { content }
 
     public func rewrapping<V: View>(_ view: V) -> any View {

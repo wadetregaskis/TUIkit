@@ -84,6 +84,46 @@ struct ZStackRenderTests {
         #expect(buffer.lines[0].stripped == "111")
     }
 
+    @Test("A zIndex written under an outer modifier is still the child's zIndex")
+    func zIndexSurvivesAnOuterModifier() {
+        // Measured in the real framework rather than assumed:
+        // `ZStack { Color.red.zIndex(1).padding(0); Color.green }` renders RED on
+        // top, exactly as `.zIndex(1)` alone does, where with no zIndex at all
+        // green (written second) wins. So the tag belongs to the child however
+        // many wrappers are written outside it.
+        //
+        // `.padding` builds a `ModifiedView` and `.foregroundStyle` builds
+        // `_StyleEnvironmentView`, two different wrapper shapes, because the
+        // static witness that gates the search has to be forwarded by both.
+        let padded = renderToBuffer(
+            ZStack {
+                Text("BBB").zIndex(1).padding(0)
+                Text("AAA")
+            },
+            context: ctx()
+        )
+        let styled = renderToBuffer(
+            ZStack {
+                Text("BBB").zIndex(1).foregroundStyle(.red)
+                Text("AAA")
+            },
+            context: ctx()
+        )
+        #expect(padded.lines[0].stripped == "BBB", "the padding must not swallow the zIndex")
+        #expect(styled.lines[0].stripped == "BBB", "nor must a style wrapper")
+
+        // The control that makes those two mean something: with no zIndex the
+        // second child wins, so "BBB" above is the tag working and not tree order.
+        let control = renderToBuffer(
+            ZStack {
+                Text("BBB").padding(0)
+                Text("AAA")
+            },
+            context: ctx()
+        )
+        #expect(control.lines[0].stripped == "AAA", "without a zIndex, tree order decides")
+    }
+
     // MARK: - A child paints its full bounding box
 
     @Test("A full-width foreground (including its spaces) owns its row")

@@ -191,7 +191,7 @@ private struct _HitTestingView<Content: View>: View, Renderable, Layoutable {
 
 /// - Note: Blanking each member is blanking the pair, and the geometry each
 ///   member reports is unchanged — which is the whole point of `.hidden()`.
-extension _HiddenView: SingleContentWrapper {
+extension _HiddenView: ContentRewrapping {
     var wrappedContent: Content { content }
 
     func rewrapping<V: View>(_ view: V) -> any View {
@@ -209,7 +209,7 @@ extension _HiddenView: GridRowProviding where Content: GridRowProviding {}
 
 /// - Note: Dropping each member's hit regions is dropping the pair's; there are
 ///   no regions belonging to the group itself.
-extension _HitTestingView: SingleContentWrapper {
+extension _HitTestingView: ContentRewrapping {
     var wrappedContent: Content { content }
 
     func rewrapping<V: View>(_ view: V) -> any View {

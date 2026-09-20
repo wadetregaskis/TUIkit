@@ -88,7 +88,7 @@ extension View {
 ///   member is the same thing as applying it once around the pair — an
 ///   environment value reaches a subtree whether it was set one level up or
 ///   two.
-extension DisabledModifier: SingleContentWrapper {
+extension DisabledModifier: ContentRewrapping {
     public var wrappedContent: Content { content }
 
     public func rewrapping<V: View>(_ view: V) -> any View {

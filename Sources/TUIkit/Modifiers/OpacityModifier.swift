@@ -642,7 +642,7 @@ extension _OpacityView: Layoutable {
 ///   Group { Color.green; Color.red }.opacity(0.5) }` and the same with the
 ///   opacity written on each member — both give rgb(156,99,53) at the centre
 ///   pixel, against rgb(255,84,62) with no opacity at all.
-extension _OpacityView: SingleContentWrapper {
+extension _OpacityView: ContentRewrapping {
     var wrappedContent: Content { content }
 
     func rewrapping<V: View>(_ view: V) -> any View {

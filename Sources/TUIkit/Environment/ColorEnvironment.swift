@@ -244,7 +244,7 @@ extension _StyleEnvironmentView: Layoutable {
 ///   the pair, which is the same thing here: it publishes an environment value,
 ///   and an environment value reaches a subtree whether it was set one level up
 ///   or two.
-extension _StyleEnvironmentView: SingleContentWrapper {
+extension _StyleEnvironmentView: ContentRewrapping {
     var wrappedContent: Content { content }
 
     func rewrapping<V: View>(_ view: V) -> any View {

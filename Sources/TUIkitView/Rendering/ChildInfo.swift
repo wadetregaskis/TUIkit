@@ -129,7 +129,8 @@ public struct ChildView {
     /// cast on the common path — same shape as ``spacerInfo(of:)``, using the
     /// static witness ``View/_providesZIndex``.
     static func zIndexInfo<V: View>(of view: V) -> Double {
-        V._providesZIndex ? ((view as? ZIndexProviding)?.zIndexValue ?? 0) : 0
+        guard V._providesZIndex else { return 0 }
+        return throughWrappers(view, as: (any ZIndexProviding).self)?.zIndexValue ?? 0
     }
 
     /// Wraps `view` as a child that descends under its parent's identity.
@@ -304,7 +305,7 @@ public struct ChildView {
     ///
     /// The existential is opened by ``SingleContentWrapper/rewrapping(_:)``
     /// being generic, so no cast happens here and nothing is boxed twice.
-    package func rewrapped(by wrapper: some SingleContentWrapper) -> Self {
+    package func rewrapped(by wrapper: some ContentRewrapping) -> Self {
         Self(
             view: wrapper.rewrapping(view),
             identityType: identityType,
@@ -804,7 +805,78 @@ public protocol SingleContentWrapper {
 
     /// The content this wrapper was built around.
     var wrappedContent: WrappedContent { get }
+}
 
+/// The nearest thing at or inside `view` that conforms to `T`, looking through
+/// any number of single-content wrappers.
+///
+/// This is the READ direction: metadata travelling UP to a container that is
+/// asking, rather than an adjustment travelling DOWN to members. A wrapper
+/// swallowed it before, so `.zIndex(1).padding(0)` silently lost its place in
+/// the draw order — measured in the real framework, SwiftUI keeps it:
+/// `ZStack { Color.red.zIndex(1).padding(0); Color.green }` renders red on top,
+/// exactly as `.zIndex(1)` alone does, where without the z-index green wins.
+///
+/// - Important: NEVER call this without first checking the static witness that
+///   gates it (``View/_providesZIndex`` and friends). The witness is a
+///   compile-time constant chain and answers `false` for almost every child of
+///   almost every container; this walk is a sequence of runtime conformance
+///   casts on one of the hottest paths there is. The witness makes the walk
+///   unreachable for a child that has nothing to find, which is the only reason
+///   it is affordable.
+///
+/// The loop terminates because each step moves strictly inward through a
+/// statically nested generic type, which is finite by construction — no view
+/// can be its own content.
+@MainActor
+package func throughWrappers<T>(_ view: any View, as type: T.Type = T.self) -> T? {
+    var current: any View = view
+    while true {
+        if let found = current as? T { return found }
+        guard let wrapper = current as? any SingleContentWrapper else { return nil }
+        current = wrapper.wrappedContent
+    }
+}
+
+/// The static witnesses, forwarded through a wrapper so the walk above is
+/// reachable at all.
+///
+/// Each is a compile-time constant chain, so a wrapper around a `Text` still
+/// folds to `false` and costs nothing — which is what makes forwarding them
+/// affordable where a runtime probe of every child would not be.
+///
+/// - Note: ``View/_isSpacer`` is deliberately NOT forwarded. The other two are
+///   pure metadata — a z-index and an alignment guide mean the same thing
+///   wherever they sit — but being a spacer is a claim about LAYOUT
+///   participation, and a wrapper is entitled to change it:
+///   `Spacer().frame(width: 5)` is a fixed five-cell gap, not a flexible one,
+///   and forwarding the flag would make the stack treat it as flexible and
+///   ignore the frame. A spacer that must survive a wrapper reaches its
+///   container by the other route, `ChildView.rewrapped(by:)`, which carries
+///   the MEMBER's flag across rather than re-reading it off the wrapper.
+extension View where Self: SingleContentWrapper {
+    /// The content's answer: a z-index bound inside this wrapper is still a
+    /// z-index, so the gate that decides whether to look for one has to say so.
+    public static var _providesZIndex: Bool { WrappedContent._providesZIndex }
+
+    /// The content's answer, for the same reason as ``_providesZIndex``.
+    public static var _providesAlignmentGuide: Bool { WrappedContent._providesAlignmentGuide }
+}
+
+/// A ``SingleContentWrapper`` that can also put a copy of itself around some
+/// OTHER view — which is what a container needs to reach past it to the members
+/// of multi-view content and still apply the adjustment to each of them.
+///
+/// Split from ``SingleContentWrapper`` because the two directions cost very
+/// different things. Naming the content is one line and always safe; being
+/// re-wrapped around each member is a decision per wrapper (see the note on
+/// ``SingleContentWrapper``), and ``rewrapping(_:)`` is the only member of
+/// either protocol that cannot be written mechanically. Keeping them apart lets
+/// every single-content wrapper answer the READ question — where a wrapper
+/// currently swallows a z-index, an alignment guide or a spacer flag — without
+/// each one having to earn the right by answering the harder one.
+@MainActor
+public protocol ContentRewrapping: SingleContentWrapper {
     /// A copy of this wrapper around `view` instead of its own content.
     ///
     /// Generic over the new content, which is what makes it usable at all:
@@ -828,7 +900,7 @@ public protocol SingleContentWrapper {
 /// Conditional on the content having members, so nothing else changes: a
 /// wrapper around an ordinary single view stays exactly as opaque as it was,
 /// and the witness is a compile-time fact rather than a cast per child.
-extension ChildViewProvider where Self: SingleContentWrapper, WrappedContent: ChildViewProvider {
+extension ChildViewProvider where Self: ContentRewrapping, WrappedContent: ChildViewProvider {
     /// The content's members, each one back inside a copy of this wrapper.
     ///
     /// - Parameter context: The rendering context, passed to the content
@@ -866,7 +938,7 @@ public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> Child
     // Static witnesses gate the rare conformance casts: only a z-index wrapper
     // is cast to `ZIndexProviding`, only a spacer to `SpacerProtocol`. The common
     // child (neither) does no speculative cast at all.
-    let zIndex = V._providesZIndex ? ((view as? ZIndexProviding)?.zIndexValue ?? 0) : 0
+    let zIndex = ChildView.zIndexInfo(of: view)
     if V._isSpacer {
         return ChildInfo(
             buffer: nil,

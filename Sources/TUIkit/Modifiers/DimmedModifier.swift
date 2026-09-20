@@ -266,7 +266,7 @@ extension DimmedModifier: Layoutable {
 /// - Note: The dimming is a rewrite of what the content drew, so doing it per
 ///   member and doing it once over the pair produce the same cells — the
 ///   members do not overlap in a stack, and each carries its own styling in.
-extension DimmedModifier: SingleContentWrapper {
+extension DimmedModifier: ContentRewrapping {
     public var wrappedContent: Content { content }
 
     public func rewrapping<V: View>(_ view: V) -> any View {

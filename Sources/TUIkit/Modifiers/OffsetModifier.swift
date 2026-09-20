@@ -125,7 +125,7 @@ extension OffsetView: Animatable {
 /// - Note: Layout is unaffected either way (the content is measured at its
 ///   natural place), so shifting each member by `(x, y)` puts the same cells
 ///   in the same places as shifting the pair by `(x, y)`.
-extension OffsetView: SingleContentWrapper {
+extension OffsetView: ContentRewrapping {
     public var wrappedContent: Content { content }
 
     public func rewrapping<V: View>(_ view: V) -> any View {

@@ -353,7 +353,8 @@ func horizontalGuidePlacement<V: View>(
     of view: V, size: (width: Int, height: Int), alignment: HorizontalAlignment, in extent: Int
 ) -> Int? {
     guard V._providesAlignmentGuide,
-        let guide = (view as? AlignmentGuideProviding)?.explicitAlignmentGuide(
+        let guide = throughWrappers(view, as: (any AlignmentGuideProviding).self)?
+            .explicitAlignmentGuide(
             for: alignment.key,
             in: ViewDimensions(width: size.width, height: size.height))
     else { return nil }
@@ -368,7 +369,8 @@ func verticalGuidePlacement<V: View>(
     of view: V, size: (width: Int, height: Int), alignment: VerticalAlignment, in extent: Int
 ) -> Int? {
     guard V._providesAlignmentGuide,
-        let guide = (view as? AlignmentGuideProviding)?.explicitAlignmentGuide(
+        let guide = throughWrappers(view, as: (any AlignmentGuideProviding).self)?
+            .explicitAlignmentGuide(
             for: alignment.key,
             in: ViewDimensions(width: size.width, height: size.height))
     else { return nil }
