@@ -41,6 +41,9 @@ extension Scene {
 internal struct _MouseSupportScene<Content: Scene>: Scene {
     let content: Content
     let support: MouseSupport
+
+    /// A primitive scene: it renders through `SceneRenderable`.
+    var body: Never { fatalError("_MouseSupportScene renders via SceneRenderable") }
 }
 
 /// A scene that can report its requested ``MouseSupport``
@@ -64,7 +67,7 @@ extension _MouseSupportScene: MouseSupportProvidingScene {
     /// inside (one that reports `nil`) does not shadow: this scene's own
     /// `support` then applies.
     func resolvedMouseSupport() -> MouseSupport? {
-        if let inner = content as? MouseSupportProvidingScene,
+        if let inner = content.primitiveScene as? any MouseSupportProvidingScene,
             let innerSupport = inner.resolvedMouseSupport()
         {
             return innerSupport
@@ -81,10 +84,7 @@ extension _MouseSupportScene: SceneRenderable {
         // configuration is metadata that's extracted by the AppRunner
         // via ``resolvedMouseSupport()`` — it doesn't affect what
         // gets drawn.
-        if let renderable = content as? SceneRenderable {
-            return renderable.renderScene(context: context)
-        }
-        return FrameBuffer()
+        content.renderSceneTree(context: context)
     }
 }
 
@@ -95,7 +95,7 @@ extension _MouseSupportScene: RootPaletteOverrideProvidingScene {
     /// `.mouseSupport(...)` can be composed with `.palette(...)` in
     /// either order without losing either.
     func rootPaletteOverride() -> (any Palette)? {
-        if let inner = content as? any RootPaletteOverrideProvidingScene {
+        if let inner = content.primitiveScene as? any RootPaletteOverrideProvidingScene {
             return inner.rootPaletteOverride()
         }
         return nil
@@ -109,7 +109,7 @@ extension _MouseSupportScene: RootAppearanceOverrideProvidingScene {
     /// `.mouseSupport(...)` can be composed with `.appearance(...)` in either
     /// order without losing either.
     func rootAppearanceOverride() -> Appearance? {
-        (content as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
+        (content.primitiveScene as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
     }
 }
 
@@ -117,7 +117,7 @@ extension _MouseSupportScene: RootChromeStyleProvidingScene {
     /// Pass-through: forward the wrapped scene's chrome styles so
     /// `.chromeStyle(...)` composes with this modifier in either order.
     func rootChromeStyle() -> (appHeader: ChromeStyle?, statusBar: ChromeStyle?) {
-        (content as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
+        (content.primitiveScene as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
             ?? (appHeader: nil, statusBar: nil)
     }
 }

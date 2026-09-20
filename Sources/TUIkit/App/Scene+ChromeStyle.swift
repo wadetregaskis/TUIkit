@@ -71,6 +71,9 @@ internal struct _ChromeStyleScene<Content: Scene>: Scene {
     let content: Content
     let appHeaderStyle: ChromeStyle?
     let statusBarStyle: ChromeStyle?
+
+    /// A primitive scene: it renders through `SceneRenderable`.
+    var body: Never { fatalError("_ChromeStyleScene renders via SceneRenderable") }
 }
 
 extension _ChromeStyleScene: RootChromeStyleProvidingScene {
@@ -80,7 +83,7 @@ extension _ChromeStyleScene: RootChromeStyleProvidingScene {
     /// of them still lets an outer blanket `.chromeStyle(_:)` cover the other.
     func rootChromeStyle() -> (appHeader: ChromeStyle?, statusBar: ChromeStyle?) {
         let inner: (appHeader: ChromeStyle?, statusBar: ChromeStyle?) =
-            (content as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
+            (content.primitiveScene as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
             ?? (appHeader: nil, statusBar: nil)
         return (inner.appHeader ?? appHeaderStyle, inner.statusBar ?? statusBarStyle)
     }
@@ -90,7 +93,7 @@ extension _ChromeStyleScene: RootPaletteOverrideProvidingScene {
     /// Pass-through, so `.chromeStyle(...)` composes with `.palette(...)` in
     /// either order.
     func rootPaletteOverride() -> (any Palette)? {
-        (content as? any RootPaletteOverrideProvidingScene)?.rootPaletteOverride()
+        (content.primitiveScene as? any RootPaletteOverrideProvidingScene)?.rootPaletteOverride()
     }
 }
 
@@ -99,14 +102,14 @@ extension _ChromeStyleScene: RootAppearanceOverrideProvidingScene {
     /// either order — which matters here more than most, since both restyle the
     /// same two bars.
     func rootAppearanceOverride() -> Appearance? {
-        (content as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
+        (content.primitiveScene as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
     }
 }
 
 extension _ChromeStyleScene: MouseSupportProvidingScene {
     /// Pass-through, so `.chromeStyle(...)` composes with `.mouseSupport(...)`.
     func resolvedMouseSupport() -> MouseSupport? {
-        (content as? MouseSupportProvidingScene)?.resolvedMouseSupport()
+        (content.primitiveScene as? any MouseSupportProvidingScene)?.resolvedMouseSupport()
     }
 }
 
@@ -114,9 +117,6 @@ extension _ChromeStyleScene: SceneRenderable {
     /// The styles are applied by `RenderLoop` before the frame is laid out;
     /// rendering forwards to the wrapped scene.
     func renderScene(context: RenderContext) -> FrameBuffer {
-        if let renderable = content as? SceneRenderable {
-            return renderable.renderScene(context: context)
-        }
-        return FrameBuffer()
+        content.renderSceneTree(context: context)
     }
 }

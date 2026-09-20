@@ -75,6 +75,9 @@ extension Scene {
 internal struct _AppearanceScene<Content: Scene>: Scene {
     let content: Content
     let appearance: Appearance?
+
+    /// A primitive scene: it renders through `SceneRenderable`.
+    var body: Never { fatalError("_AppearanceScene renders via SceneRenderable") }
 }
 
 extension _AppearanceScene: RootAppearanceOverrideProvidingScene {
@@ -83,7 +86,7 @@ extension _AppearanceScene: RootAppearanceOverrideProvidingScene {
     /// environment modifiers resolve. A `nil` here means "no opinion", so an
     /// outer `.appearance(...)` still shows through.
     func rootAppearanceOverride() -> Appearance? {
-        if let inner = content as? any RootAppearanceOverrideProvidingScene,
+        if let inner = content.primitiveScene as? any RootAppearanceOverrideProvidingScene,
             let innerAppearance = inner.rootAppearanceOverride()
         {
             return innerAppearance
@@ -96,7 +99,7 @@ extension _AppearanceScene: RootPaletteOverrideProvidingScene {
     /// Pass-through: forward any wrapped scene's palette override so
     /// `.appearance(...)` composes with `.palette(...)` in either order.
     func rootPaletteOverride() -> (any Palette)? {
-        (content as? any RootPaletteOverrideProvidingScene)?.rootPaletteOverride()
+        (content.primitiveScene as? any RootPaletteOverrideProvidingScene)?.rootPaletteOverride()
     }
 }
 
@@ -105,10 +108,7 @@ extension _AppearanceScene: SceneRenderable {
     /// ``rootAppearanceOverride()``; rendering simply forwards to the wrapped
     /// scene.
     func renderScene(context: RenderContext) -> FrameBuffer {
-        if let renderable = content as? SceneRenderable {
-            return renderable.renderScene(context: context)
-        }
-        return FrameBuffer()
+        content.renderSceneTree(context: context)
     }
 }
 
@@ -118,7 +118,7 @@ extension _AppearanceScene: MouseSupportProvidingScene {
     /// Returns `nil` (no opinion) when nothing inside specifies one, so wrapping
     /// a `.mouseSupport(...)` scene in `.appearance(...)` does not shadow it.
     func resolvedMouseSupport() -> MouseSupport? {
-        (content as? MouseSupportProvidingScene)?.resolvedMouseSupport()
+        (content.primitiveScene as? any MouseSupportProvidingScene)?.resolvedMouseSupport()
     }
 }
 
@@ -126,7 +126,7 @@ extension _AppearanceScene: RootChromeStyleProvidingScene {
     /// Pass-through: forward the wrapped scene's chrome styles so
     /// `.chromeStyle(...)` composes with this modifier in either order.
     func rootChromeStyle() -> (appHeader: ChromeStyle?, statusBar: ChromeStyle?) {
-        (content as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
+        (content.primitiveScene as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
             ?? (appHeader: nil, statusBar: nil)
     }
 }

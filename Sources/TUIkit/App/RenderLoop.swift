@@ -496,7 +496,7 @@ extension RenderLoop {
         cursorTimer?.beginFrameReadTracking()
 
         let scene = evaluateAppBody(environment: environment)
-        if let paletteOverrideScene = scene as? any RootPaletteOverrideProvidingScene,
+        if let paletteOverrideScene = scene.primitiveScene as? any RootPaletteOverrideProvidingScene,
             let paletteOverride = paletteOverrideScene.rootPaletteOverride()
         {
             environment.palette = paletteOverride
@@ -506,7 +506,7 @@ extension RenderLoop {
         // out-of-tree app header / status bar alike. `nil` (no scene override)
         // leaves the manager-derived appearance from `buildEnvironment()` intact,
         // so F2/F3/the appearance picker keep working.
-        if let appearanceOverrideScene = scene as? any RootAppearanceOverrideProvidingScene,
+        if let appearanceOverrideScene = scene.primitiveScene as? any RootAppearanceOverrideProvidingScene,
             let appearanceOverride = appearanceOverrideScene.rootAppearanceOverride()
         {
             environment.appearance = appearanceOverride
@@ -516,10 +516,10 @@ extension RenderLoop {
         // any features requested by view modifiers during render. The
         // AppRunner consults `effectiveMouseSupport` after the render
         // pass completes to update the terminal tracking mode.
-        if let scene = scene as? MouseSupportProvidingScene {
+        if let mouseScene = scene.primitiveScene as? any MouseSupportProvidingScene {
             // `nil` means no `.mouseSupport(...)` was applied (only pass-through
             // scene wrappers like `.palette(...)`); fall back to `.standard`.
-            baseMouseSupport = scene.resolvedMouseSupport() ?? .standard
+            baseMouseSupport = mouseScene.resolvedMouseSupport() ?? .standard
         } else {
             baseMouseSupport = .standard
         }
@@ -1308,7 +1308,7 @@ extension RenderLoop {
     /// why the status bar's height is read straight after this call rather than
     /// alongside the terminal size, where it used to sit.
     fileprivate func applyChromeStyle(from scene: some Scene) {
-        guard let chromeScene = scene as? any RootChromeStyleProvidingScene else { return }
+        guard let chromeScene = scene.primitiveScene as? any RootChromeStyleProvidingScene else { return }
         let chrome = chromeScene.rootChromeStyle()
         if let style = chrome.appHeader { appHeader.style = style }
         if let style = chrome.statusBar { statusBar.style = style }
@@ -1342,7 +1342,7 @@ extension RenderLoop {
         lastEnvironmentSnapshot = currentSnapshot
     }
 
-    /// Renders a scene by delegating to `SceneRenderable`.
+    /// Renders a scene by descending to the primitive that draws it.
     ///
     /// The one funnel every walk of the scene passes through, which is why the
     /// per-walk registries are reset here — see ``beginSceneRender()``.
@@ -1356,10 +1356,7 @@ extension RenderLoop {
         let diagnostic = tuiContext.renderCache.bodyMutationDiagnostic
         diagnostic?.beginTraversal()
         defer { diagnostic?.endTraversal() }
-        if let renderable = scene as? SceneRenderable {
-            return renderable.renderScene(context: context)
-        }
-        return FrameBuffer()
+        return scene.renderSceneTree(context: context)
     }
 
     /// Composites every free-floating overlay layer onto the content buffer.

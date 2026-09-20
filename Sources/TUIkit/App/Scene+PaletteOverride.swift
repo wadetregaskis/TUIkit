@@ -93,6 +93,9 @@ extension Scene {
 internal struct _PaletteScene<Content: Scene>: Scene {
     let content: Content
     let palette: any Palette
+
+    /// A primitive scene: it renders through `SceneRenderable`.
+    var body: Never { fatalError("_PaletteScene renders via SceneRenderable") }
 }
 
 extension _PaletteScene: RootPaletteOverrideProvidingScene {
@@ -100,7 +103,7 @@ extension _PaletteScene: RootPaletteOverrideProvidingScene {
     /// to the root view inside `WindowGroup` — mirroring how `.mouseSupport`
     /// composes (innermost wins) and how SwiftUI environment modifiers resolve.
     func rootPaletteOverride() -> (any Palette)? {
-        if let inner = content as? any RootPaletteOverrideProvidingScene,
+        if let inner = content.primitiveScene as? any RootPaletteOverrideProvidingScene,
             let innerPalette = inner.rootPaletteOverride()
         {
             return innerPalette
@@ -113,7 +116,7 @@ extension _PaletteScene: RootAppearanceOverrideProvidingScene {
     /// Pass-through: forward any wrapped scene's appearance override so
     /// `.palette(...)` composes with `.appearance(...)` in either order.
     func rootAppearanceOverride() -> Appearance? {
-        (content as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
+        (content.primitiveScene as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
     }
 }
 
@@ -121,10 +124,7 @@ extension _PaletteScene: SceneRenderable {
     /// The palette is applied by `RenderLoop` through ``rootPaletteOverride()``;
     /// rendering simply forwards to the wrapped scene.
     func renderScene(context: RenderContext) -> FrameBuffer {
-        if let renderable = content as? SceneRenderable {
-            return renderable.renderScene(context: context)
-        }
-        return FrameBuffer()
+        content.renderSceneTree(context: context)
     }
 }
 
@@ -135,7 +135,7 @@ extension _PaletteScene: MouseSupportProvidingScene {
     /// `.mouseSupport(...)` scene in `.palette(...)` does not shadow it with a
     /// default.
     func resolvedMouseSupport() -> MouseSupport? {
-        (content as? MouseSupportProvidingScene)?.resolvedMouseSupport()
+        (content.primitiveScene as? any MouseSupportProvidingScene)?.resolvedMouseSupport()
     }
 }
 
@@ -143,7 +143,7 @@ extension _PaletteScene: RootChromeStyleProvidingScene {
     /// Pass-through: forward the wrapped scene's chrome styles so
     /// `.chromeStyle(...)` composes with this modifier in either order.
     func rootChromeStyle() -> (appHeader: ChromeStyle?, statusBar: ChromeStyle?) {
-        (content as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
+        (content.primitiveScene as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
             ?? (appHeader: nil, statusBar: nil)
     }
 }
