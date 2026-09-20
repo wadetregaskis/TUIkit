@@ -117,24 +117,6 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - Selection Disabled Environment Key
-
-/// Environment key for selection disabled state.
-private struct SelectionDisabledKey: EnvironmentKey {
-    static let defaultValue: Bool = false
-}
-
-extension EnvironmentValues {
-    /// Whether selection is disabled for this view.
-    ///
-    /// When true, the view cannot be selected in a List.
-    /// Set via `.selectionDisabled()` modifier.
-    var isSelectionDisabled: Bool {
-        get { self[SelectionDisabledKey.self] }
-        set { self[SelectionDisabledKey.self] = newValue }
-    }
-}
-
 // MARK: - Row Selection Indicator Environment Key
 
 /// Environment key for the selected row's `●` marker.

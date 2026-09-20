@@ -1,7 +1,7 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  RowEditRestrictionModifiers.swift
 //
-//  Rows that refuse to be deleted or moved.
+//  Rows that refuse to be deleted, moved, or selected.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -9,7 +9,8 @@
 import TUIkitCore
 import TUIkitView
 
-/// Which edits a row has refused, gathered as the rows render.
+/// Which edits — and whether selection — a row has refused, gathered as the
+/// rows render.
 ///
 /// A collector rather than a value on the row because the flag is stated INSIDE
 /// the row's subtree — `Text(…).deleteDisabled(true).padding()` puts the
@@ -17,9 +18,13 @@ import TUIkitView
 /// order. Reporting on render does not.
 ///
 /// One per `List` per frame. Absence means allowed, which is what makes a row
-/// that never rendered (off the window) harmless: the only rows a user can
-/// delete or move are the focused one and the grabbed one, and both are on
-/// screen by construction.
+/// that never rendered (off the window) harmless for delete/move: the only
+/// rows a user can delete or move are the focused one and the grabbed one,
+/// and both are on screen by construction. Selection is the one restriction
+/// here that is not so contained — Up/Down can land the cursor on a row that
+/// has never rendered — so a `.selectionDisabled()` row is only skipped by
+/// navigation once a frame has drawn it and reported it here; see
+/// ``ItemListHandler/selectionDisabledRows``.
 @MainActor
 final class RowEditRestrictions {
     /// Data offsets whose rows refused deletion this frame.
@@ -27,6 +32,9 @@ final class RowEditRestrictions {
 
     /// Data offsets whose rows refused to be moved this frame.
     private(set) var moveDisabled: Set<Int> = []
+
+    /// Data offsets whose rows refused to be selected this frame.
+    private(set) var selectionDisabled: Set<Int> = []
 
     /// The data offset of the row currently rendering, stamped by the List's
     /// row materialisation just before each row renders — the only code that
@@ -47,10 +55,12 @@ final class RowEditRestrictions {
 
     func disableDelete(row: Int) { deleteDisabled.insert(row) }
     func disableMove(row: Int) { moveDisabled.insert(row) }
+    func disableSelection(row: Int) { selectionDisabled.insert(row) }
 }
 
 extension EnvironmentValues {
-    /// Where a row states the edits it refuses. Installed by `_ListCore`.
+    /// Where a row states the edits (and selection) it refuses. Installed by
+    /// `_ListCore`.
     var listRowEditRestrictions: RowEditRestrictions? {
         get { self[RowEditRestrictionsKey.self] }
         set { self[RowEditRestrictionsKey.self] = newValue }

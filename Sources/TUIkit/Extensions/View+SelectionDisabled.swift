@@ -9,9 +9,15 @@
 extension View {
     /// Disables selection for this view within a List.
     ///
-    /// When applied to a list row, focus navigation will skip over this row
-    /// and it cannot be selected. The row renders with dimmed styling to
-    /// indicate it is not selectable.
+    /// Applied to a list row, this row cannot become the `List`'s selection —
+    /// Enter/Space and a click on it do nothing — and it renders with a
+    /// dimmed foreground to show it. Up/Down and Page Up/Page Down also route
+    /// around it, once it has rendered at least once: like
+    /// ``View/deleteDisabled(_:)`` / ``View/moveDisabled(_:)``, the refusal is
+    /// reported to the enclosing `List` as the row draws, so a row that has
+    /// never been on screen has not yet had the chance to report and cannot
+    /// yet be routed around. Home and End jump straight to a boundary and do
+    /// not consult it.
     ///
     /// # Example
     ///

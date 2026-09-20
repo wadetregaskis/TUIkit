@@ -487,6 +487,16 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// row it can point at.
     var moveDisabledRows: Set<Int> = []
 
+    /// Data offsets whose rows carry `.selectionDisabled()`. Same publication
+    /// as ``deleteDisabledRows`` — reported by the row as it renders, absent
+    /// means allowed, and a row that has never been on screen has never had
+    /// the chance to report. Unlike the other two, this restriction also
+    /// governs navigation: ``moveFocus(by:wrap:)`` will not land the cursor on
+    /// a row named here, so a `.selectionDisabled()` row that has rendered at
+    /// least once is skipped by Up/Down/Page Up/Page Down, in addition to
+    /// refusing Enter/Space and a click (``toggleSelectionAtFocusedIndex()``).
+    var selectionDisabledRows: Set<Int> = []
+
     /// The `.onDelete(perform:)` action from an editable `ForEach`, if any:
     /// pressing Delete / Backspace on the focused row invokes it with that
     /// row's data offset (its focus index, in the all-content list this is only

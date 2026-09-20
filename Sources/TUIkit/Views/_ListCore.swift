@@ -736,6 +736,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // grabbed one, and both are on screen.
         handler.deleteDisabledRows = editRestrictions.deleteDisabled
         handler.moveDisabledRows = editRestrictions.moveDisabled
+        // Selection is the one restriction here `moveFocus(by:wrap:)` also
+        // consults (see `ItemListHandler.isLandable(_:)`), so a row that
+        // reports `.selectionDisabled()` is routed around once it has drawn —
+        // not only refused as a commit target.
+        handler.selectionDisabledRows = editRestrictions.selectionDisabled
         visibleRows = decorateForReorder(
             visibleRows, handler: handler, context: context, palette: palette)
 

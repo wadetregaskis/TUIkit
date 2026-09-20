@@ -158,7 +158,7 @@ extension ItemListHandler {
             toggleSelectionAtFocusedIndex()
             return
         }
-        guard let clickedID = id(at: index) else { return }
+        guard let clickedID = id(at: index), !selectionDisabledRows.contains(index) else { return }
 
         if event.shift, selectionAnchor != nil {
             // The anchor stays put, so successive shift-clicks re-pivot the
@@ -178,8 +178,15 @@ extension ItemListHandler {
     }
 
     /// Toggles the selection state at the focused index.
+    ///
+    /// Refuses on a row that reported `.selectionDisabled()` this frame — the
+    /// choke point for both keyboard selection (Enter/Space, via
+    /// ``handleSelectionKey(_:)``) and a single-selection click, and for the
+    /// ctrl-/option-click toggle in multi-selection mode. The row keeps its
+    /// FOCUS; only the commit is refused, matching `.deleteDisabled()`'s
+    /// "still takes focus" precedent.
     func toggleSelectionAtFocusedIndex() {
-        guard let itemID = id(at: focusedIndex) else { return }
+        guard let itemID = id(at: focusedIndex), !selectionDisabledRows.contains(focusedIndex) else { return }
 
         switch selectionMode {
         case .single:

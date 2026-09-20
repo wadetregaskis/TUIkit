@@ -262,13 +262,14 @@ extension ItemListHandler {
 
         var newIndex = focusedIndex + delta
 
-        // If selectableIndices is populated, skip non-selectable rows
-        if !selectableIndices.isEmpty {
+        // If selectableIndices is populated, or a row has reported
+        // `.selectionDisabled()` this frame, skip past whichever this lands on.
+        if !selectableIndices.isEmpty || !selectionDisabledRows.isEmpty {
             let step = delta > 0 ? 1 : -1
             let maxAttempts = itemCount + 1
             var attempts = 0
 
-            // Keep moving until we find a selectable index or hit max attempts
+            // Keep moving until we find a landable index or hit max attempts
             while attempts < maxAttempts {
                 if wrap {
                     // Wrap around: -1 becomes last, count becomes 0
@@ -281,6 +282,13 @@ extension ItemListHandler {
                     // Page Up/Down "stop short" — it did nothing whenever the
                     // jump would pass the first/last item instead of clamping
                     // to it.
+                    //
+                    // Not re-checked against `selectionDisabledRows`: the same
+                    // simplification the boundary already made for
+                    // `selectableIndices` (a boundary index is landable by
+                    // definition of `.min()`/`.max()`, but a `.selectionDisabled()`
+                    // row sitting exactly at the boundary is a corner case this
+                    // clamp does not chase further).
                     if newIndex < 0 {
                         newIndex = selectableIndices.min() ?? 0
                         break
@@ -291,8 +299,8 @@ extension ItemListHandler {
                     }
                 }
 
-                // Check if this index is selectable
-                if selectableIndices.contains(newIndex) {
+                // Check if this index can be landed on
+                if isLandable(newIndex) {
                     break
                 }
 
@@ -300,7 +308,7 @@ extension ItemListHandler {
                 attempts += 1
             }
 
-            // If we couldn't find a selectable index, don't move
+            // If we couldn't find a landable index, don't move
             if attempts >= maxAttempts {
                 return
             }
@@ -317,6 +325,18 @@ extension ItemListHandler {
 
         focusedIndex = newIndex
         ensureFocusedItemVisible()
+    }
+
+    /// Whether `index` is a valid landing spot for the cursor: within
+    /// ``ItemListHandler/selectableIndices`` when that whitelist is non-empty
+    /// (the header/footer exclusion `List`'s `Section` path builds), AND not a
+    /// row a `.selectionDisabled()` reported this frame (see
+    /// ``ItemListHandler/selectionDisabledRows``). Only `moveFocus(by:wrap:)`
+    /// consults this — Home/End jump straight to a boundary and do not yet
+    /// route around a disabled row sitting there.
+    private func isLandable(_ index: Int) -> Bool {
+        (selectableIndices.isEmpty || selectableIndices.contains(index))
+            && !selectionDisabledRows.contains(index)
     }
 
     /// The extent that ``ScrollableOffsetState`` measures
