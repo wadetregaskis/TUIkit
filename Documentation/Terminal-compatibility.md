@@ -726,7 +726,10 @@ before the render loop is built.
   (`ColorDepth` quantises). **A `38;2;r;g;b` that reaches it anyway is not
   skipped but read as five ordinary SGR parameters** (observed 2026-09-05,
   macOS 15.7, via an adaptive image palette that derived RGB triples after
-  the depth fit): 38 and 2 do little, then a channel value of 5 is *blink*,
+  the depth fit): 38 does little, the **2 is SGR 2 and dims the text** (measured
+  2026-09-19; it persists through a colour set after it — see "Reverse
+  video (SGR 7)" below, where this was first recorded as "38 and 2 do
+  little", which understated it), then a channel value of 5 is *blink*,
   30–37 and 40–47 are the named foregrounds and backgrounds, 90–97 their
   bright twins — a picture came out as blinking primaries in horizontal
   streaks. Anything that changes a colour after `effective(for:)` has fitted
@@ -1911,7 +1914,7 @@ does not report its palette: it left OSC 4 unanswered on 2026-09-14. How each
 host answers the queries themselves, and what tmux and GNU screen do to them,
 was measured on 2026-09-14; see "Asking the terminal for its colours" below.
 So was whether reverse video (SGR 7) prints or moves the cursor. What a reversed
-cell paints is UNMEASURED; see "Reverse video (SGR 7)" below. Hyper was not
+cell paints was measured on 2026-09-19; see "Reverse video (SGR 7)" below. Hyper was not
 measured.**
 `Tools/TerminalProbes/palette_probe.py` asks a terminal directly (OSC 4 /
 OSC 10 / OSC 11) and writes the answer as JSON; run it in each host and record
@@ -2493,16 +2496,55 @@ is not bold, and on the hosts that treat bold as a weight the twin is a step
 wherever the profile paints it differently from its slot. Inferred from the
 table above; not measured on a hovered control.
 
-### Reverse video (SGR 7) — cursor behaviour measured 2026-09-14; paint UNMEASURED
+### Reverse video (SGR 7) — cursor behaviour measured 2026-09-14; paint measured 2026-09-19
 
 **Status:**
 - **Measured:** SGR 7 printed nothing, and text under it advanced exactly as
   plain text. The hosts were Apple Terminal 455.1, iTerm2 3.7.1, Warp
   v0.2026.09.02.08.27.stable_01, and GNU screen 4.00.03 and tmux 3.7c, both
   inside Apple Terminal.
-- **UNMEASURED on every host:** what a reversed cell PAINTS. That waits for
-  someone to read `Tools/TerminalProbes/reverse_video_card.py` by eye.
-- **Ghostty:** unmeasured for both.
+- **Measured 2026-09-19** — what a reversed cell PAINTS, read by eye off
+  `Tools/TerminalProbes/reverse_video_card.py` by the owner, in six hosts.
+  **iTerm2, Ghostty and Warp render the card correctly** on every row.
+  **Apple Terminal does not, raw or under GNU screen** — and the fault is in the
+  card's REFERENCE column, not in SGR 7. Under tmux the same card is correct.
+- **Ghostty:** now measured for paint (correct); still unmeasured for the cursor
+  half, which was the 2026-09-14 run.
+
+**What Apple Terminal actually showed** (owner's reading): row A's reference is
+missing its background colour, row C's reference is neither reversed nor bold,
+and row D's reference is missing its background colour. Those are exactly the
+three rows whose reference is spelled in **24-bit colour** — A and C from the
+host's own OSC 10/11 answer, D swapping two `48;2;…` values — which is why the
+reversed half of every row is fine and only the comparison is broken.
+
+**Why, measured the same day** with `scratchpad/faint-probe.command`, four
+readings from one screen:
+
+| spelling | Apple Terminal paints |
+|---|---|
+| `ESC[2m` (faint) | faint text |
+| `ESC[38;2;200;30;30m` | **identical to `ESC[2m`** — faint, no colour |
+| `ESC[48;2;200;30;30m` | **identical to `ESC[2m`** — faint, no background |
+| `ESC[38;9;99m` (non-`2` sub-parameter) | normal text — so it is the `2`, specifically |
+| `ESC[38;5;160m`, `ESC[48;5;160m`, `ESC[41m` | correct colour |
+| `ESC[38;2;…m` then `ESC[31m` | **washed-out** red, not red — the faint PERSISTS |
+
+So the `2` of a truecolor introducer lands as **SGR 2 (faint)** and stays latched
+until something resets it. That is a stronger statement than "the sequence is
+ignored": it actively dims, and it contaminates the colours set after it.
+
+**SGR 7 itself is not implicated on Apple Terminal.** In the same probe
+`ESC[7;1m` reversed and emboldened correctly. What the card cannot do there is
+build a reference to compare against. Under tmux it can, because tmux converts
+24-bit for the host it is drawing through (see the tmux section); GNU screen does
+not, which is why screen reads the same as raw.
+
+**Consequence for the card, not for the framework.** `ColorDepth.detect()` reads
+`COLORTERM` then `TERM`; Apple Terminal sets `TERM=xterm-256color` and no
+`COLORTERM`, so TUIkit resolves `.palette256` there and never emits a truecolor
+introducer to it. The card does, deliberately, to build an exact reference — and
+that is the one thing this host cannot be asked for.
 
 **Why it is recorded.** Today the framework emits SGR 7 only for
 `Text.inverted()`, and for a cell composited over or under one where the
