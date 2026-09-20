@@ -368,6 +368,29 @@ enum PaintRenderer {
         // Reserved for the worst case, which is what THIS path is: a run per
         // cell, each an SGR introducer (up to ~19 bytes for truecolor) plus a
         // reset. The row above it emits one run and reserves nothing.
+        //
+        // `Table`'s row loops call this per CELL, onto an accumulator they
+        // already reserved, so the request repeats and climbs. That is NOT the
+        // shape 26ebf26f fixed. That finding is about `Array`, which sizes to
+        // exactly what is asked for, so reserving the final length on each of
+        // N appends reallocates on each of them. `String` rounds up instead.
+        // Measured on 6.2.4 `-O` with a storage-ADDRESS oracle, because the
+        // `capacity` that would answer it directly is not public on `String`
+        // — which is also why a "reserve only when short" form cannot be
+        // written here. Appending 384 bytes a cell onto a 192-byte reserve,
+        // the buffer moves at the same byte counts whether or not the per-cell
+        // reserve runs: 384, 768, 1152, 2304, 4224, 8448, 16512, 33024, 65664
+        // — ~2x geometric, 9 moves across 200 cells either way, byte for byte
+        // identical to the no-reserve control. `reserveCapacity(1000)` then
+        // took 1496 bytes before moving.
+        //
+        // So the repeat buys no copy and costs only the call: 422.6 vs 409.4
+        // ns for a 6-cell row in isolation (+3.2%, against a 0.65% null), ~2
+        // ns a cell next to a cell that also walks a grapheme, looks up a
+        // width and appends three times. Reserving in the callers cannot
+        // recover that — the call still happens — and deleting it would hand
+        // back the ~7% a559b2ef measured on the two callers above, where
+        // `painted` starts as `""` in small-string form.
         painted.reserveCapacity(painted.utf8.count + text.utf8.count * 25 + 16)
 
         // One SGR introducer per ramp entry, built once. `ANSIRenderer.render`
