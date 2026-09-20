@@ -226,6 +226,33 @@ struct NavigationSplitViewRenderingTests {
         #expect(content.contains("Detail"))
     }
 
+    @Test("navigationTitle on a column's content draws that column's own title, above its body")
+    func navigationTitleRendersPerColumn() {
+        // The bug: NavigationSplitView never read NavigationTitleKey at all —
+        // `.navigationTitle` on a sidebar or detail column published a
+        // preference nothing ever collected, so nothing drew.
+        let splitView = NavigationSplitView {
+            Text("Sidebar body").navigationTitle("Planets")
+        } detail: {
+            Text("Detail body").navigationTitle("Mars")
+        }
+
+        let context = testContext(width: 60, height: 10)
+        let buffer = renderToBuffer(splitView, context: context)
+        let lines = buffer.lines.map(\.stripped)
+
+        #expect(lines.contains { $0.contains("Planets") }, "sidebar's navigationTitle never drew: \(lines)")
+        #expect(lines.contains { $0.contains("Mars") }, "detail's navigationTitle never drew: \(lines)")
+        // Structural: the title is a row of its own, above the column's body —
+        // not glued onto it or drawn in place of it.
+        let planetsRow = lines.firstIndex { $0.contains("Planets") }
+        let sidebarBodyRow = lines.firstIndex { $0.contains("Sidebar body") }
+        let marsRow = lines.firstIndex { $0.contains("Mars") }
+        let detailBodyRow = lines.firstIndex { $0.contains("Detail body") }
+        #expect(planetsRow != nil && sidebarBodyRow != nil && planetsRow! < sidebarBodyRow!)
+        #expect(marsRow != nil && detailBodyRow != nil && marsRow! < detailBodyRow!)
+    }
+
     @Test("sizeToFitFromLeft hugs a naturally-narrow column; the split still fills")
     func sizeToFitHugsSidebar() {
         // The detail's start column = the sidebar's width plus the divider.

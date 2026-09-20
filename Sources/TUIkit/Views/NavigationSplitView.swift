@@ -536,17 +536,28 @@ extension _NavigationSplitViewCore {
     }
 
     /// Renders a single column, noting whether it removed the toggle with
-    /// `.toolbar(removing:)` (see ``SplitViewToggleState/removedByColumn``).
+    /// `.toolbar(removing:)` (see ``SplitViewToggleState/removedByColumn``),
+    /// and drawing whatever `.navigationTitle` it published (see
+    /// ``prependTitleRow(_:to:context:)``).
+    ///
+    /// The toggle-removal check and the title both read the same
+    /// `preferences.pop()`, so a column carrying both costs one push/pop, not
+    /// two. Decoupled from `toggleState`: unlike the toggle removal (which is
+    /// only meaningful once the divider machinery exists to remove), a title
+    /// is collected whenever there is a `preferenceStorage` to collect it
+    /// from, including in tests that never wire up `stateStorage`.
     fileprivate func renderColumn(
         _ column: NavigationSplitViewColumn, context: RenderContext, toggleState: SplitViewToggleState?
     ) -> FrameBuffer {
-        guard let toggleState, !context.isMeasuring, let preferences = context.environment.preferenceStorage
+        guard !context.isMeasuring, let preferences = context.environment.preferenceStorage
         else { return renderColumnContent(column, context: context) }
         preferences.push()
         let buffer = renderColumnContent(column, context: context)
-        recordToggleRemoval(
-            of: column, from: preferences.pop(), toggleState: toggleState, context: context)
-        return buffer
+        let published = preferences.pop()
+        if let toggleState {
+            recordToggleRemoval(of: column, from: published, toggleState: toggleState, context: context)
+        }
+        return prependTitleRow(published[NavigationTitleKey.self], to: buffer, context: context)
     }
 
     /// Renders a single column's content.
@@ -561,6 +572,53 @@ extension _NavigationSplitViewCore {
         default:
             return FrameBuffer()
         }
+    }
+
+    /// Prepends a one-row title header — styled like a plain (borderless)
+    /// `List`'s own title row (`ContainerViewCore.renderBorderless`) — when
+    /// `title` is non-empty: the column's own
+    /// ``View/navigationTitle(_:)-(LocalizedStringKey)`` preference, read back
+    /// out the same way `NavigationStack` reads a pushed screen's (push before
+    /// the column renders, pop after — see the caller, ``renderColumn``).
+    ///
+    /// **Additive, not reserved.** A column with no title renders exactly as
+    /// it did before this existed: no extra row, and no change to anything
+    /// `sizeThatFits` or `columnWidths` measures — this split's own
+    /// `sizeThatFits` was never a promise of an exact height (`isHeightFlexible:
+    /// true`; it fills whatever the page hands it, like the content area
+    /// between `AppHeader` and `StatusBar`), and a column's WIDTH — the one
+    /// number `columnWidths` actually negotiates, from an unrelated unbounded-width
+    /// measurement pass — never depends on this row. That sidesteps the trap a
+    /// RESERVED row would walk into: chrome whose height depends on content it
+    /// has not rendered yet cannot be laid out in one pass (`NavigationStack`'s
+    /// own bar is fixed-height for exactly this reason). A column that DOES
+    /// carry a title simply grows by one row, and `combineColumns`'s own
+    /// height-normalising pad brings the others up to match, precisely as it
+    /// already does for columns whose content heights differ.
+    ///
+    /// TUI-SPECIFIC PLACEMENT DECISION: SwiftUI shows a column's title in that
+    /// column's own navigation bar — scene chrome this project has nothing
+    /// below `NavigationStack`'s own bar to match. A split view's columns are
+    /// terminal panes divided by dividers, not separately-chromed scenes, so
+    /// the title draws as a single accent-coloured text row at the top of the
+    /// pane — reusing the convention a plain-style `List`'s own `title:`
+    /// already draws — rather than inventing a second per-column bar.
+    fileprivate func prependTitleRow(
+        _ title: String?, to buffer: FrameBuffer, context: RenderContext
+    ) -> FrameBuffer {
+        guard let title, !title.isEmpty else { return buffer }
+        let palette = context.environment.palette
+        var drawn = ClaimingRow()
+        drawn.append(title, cells: title.strippedLength, ink: palette.accent)
+        let width = max(buffer.width, drawn.cells)
+        let padded =
+            drawn.cells < width
+            ? drawn.text + String(repeating: " ", count: width - drawn.cells)
+            : drawn.text
+        var titleBuffer = FrameBuffer(lines: [padded])
+        titleBuffer.opacityRegions = drawn.claims
+        titleBuffer.appendVertically(buffer)
+        return titleBuffer
     }
 
     /// Combines column buffers horizontally, inserting a one-column divider
