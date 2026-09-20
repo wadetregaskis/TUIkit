@@ -325,7 +325,7 @@ overlap, bin packing, both weight paths, all eight shapes of the summary line
 in both their singular and plural wordings, the malformed-xunit recovery, and
 the event-stream duration join.
 
-Four of those are a negative control on the summary parser and are the reason
+Two of those are a negative control on the summary parser and are the reason
 to run it after touching `SUMMARY_RE`: a log with no run summary in it — empty,
 build-lock-starved, per-test lines only, or cut off mid-line — must keep
 returning `None`. A parse there would cost the gate its only sight of trap 1,
