@@ -105,24 +105,60 @@ Speed is worthless if a process quietly runs nothing, so every run is gated on:
 * the union of test IDs equals the enumerated suite exactly — no missing, no
   extra, nothing run twice;
 * every process ran exactly the number of tests the static proof predicted;
-* every process produced a parseable summary line and exited 0.
+* every process produced a parseable summary line, and any process that
+  reports a failure is accounted for by a named failing test.
 
 All 21 full-suite harness runs in the session that built this, at `-j 3`
 through `-j 8`, reconciled to 7,573 tests / 1,081 suites / 21 known issues. A
 later 25-run pass at `-j 1` through `-j 12` reconciled to 7,591 / 1,082 / 21,
 every run, including the four runs that had a failing test.
 
-One gap in that gate, worth knowing before it is believed: `parse_summary_text`
-handles three shapes of the final line, and there is a fourth. A group that
-fails with issues but has **no known issues of its own** ends with `failed
-after N seconds with 1 issue.` — neither `N known issues` nor `N issues
-(including M known issues)` — so it does not parse, and the gate reports
-"produced no summary line" for a group that in fact ran and simply failed. It
-degrades safe (it raises a problem rather than hiding one) and it cannot
-corrupt the known-issue total, because the count it fails to read is zero by
-construction. What it does cost is the trap-2 guard: the per-group
-`tests ran == tests predicted` check is skipped for exactly that group, leaving
-only the union check to cover it. Seen twice, both at `-j 6`.
+### Reading the summary line
+
+`parse_summary_text` used to match the final line shape by shape, and knew
+three of the eight shapes the clause after `seconds` takes. A group that fails
+with **no known issues of its own** ends `failed after N seconds with 1 issue.`
+— neither `N known issues` nor `N issues (including M known issues)` — so it
+matched nothing, and the gate reported "produced no summary line" for a group
+that had in fact run and simply failed. That is the wording trap 1 gives a
+process that died having run nothing, printed against the one group holding the
+real failure. Seen twice, both at `-j 6`.
+
+The clause is now captured whole and the known-issue count read out of it by
+name, so all eight parse. The eight below are the literal output of a probe
+package run against the toolchains, not transcribed from upstream source:
+6.2.4 for the four without a warning, 6.3.3 for the four with one, because
+6.2.4 ships no `Issue.Severity` and cannot record a warning-severity issue at
+all. Five of the eight did not parse before; the four reachable on 6.2.4 are
+marked.
+
+| errors | warnings | known | verdict | clause after `seconds` | 6.2.4 |
+|---|---|---|---|---|---|
+| – | – | – | passed | *(none)* | yes |
+| – | – | 3 | passed | ` with 3 known issues` | yes |
+| – | 2 | – | passed | ` with 2 warnings` | – |
+| – | 2 | 3 | passed | ` with 2 warnings and 3 known issues` | – |
+| 1 | – | – | failed | ` with 1 issue` | yes |
+| 2 | – | 3 | failed | ` with 5 issues (including 3 known issues)` | yes |
+| 2 | 3 | – | failed | ` with 5 issues (including 3 warnings)` | – |
+| 2 | 3 | 4 | failed | ` with 9 issues (including 3 warnings and 4 known issues)` | – |
+
+Capturing the clause rather than enumerating it trades one failure mode for a
+smaller one: a future rewording costs the known-issue count, which silently
+reads 0, instead of costing the whole line. `--expect-known-issues` is the
+cross-check for that, and the count this suite should report is 21. What the
+fix restores is the trap-2 guard — the per-group `tests ran == tests predicted`
+check, which was being skipped for exactly the group that failed.
+
+One thing the unparseable line was doing by accident had to be replaced. An
+issue recorded with no test in the task-local context is attributed to
+`«unknown»` and produces no `<failure>` element, so a run can genuinely fail
+with nothing in the xunit file to name; measured with a probe recording from a
+detached `Task`, that run exits 1, writes zero `<failure>` elements, and ends
+`failed after 0.001 seconds with 1 issue.` — the shape that did not parse. The
+exit code catches it, and catches every failing shape reproduced so far, but
+the gate now also reads the verdict it parses rather than resting on the helper
+always exiting non-zero.
 
 ## Four traps this is built around
 
@@ -283,7 +319,14 @@ keeps running plain `swift test`.
 python3 Tools/ParallelTest/test_parallel_test.py
 ```
 
-31 tests covering the parts that can be tested without running the suite: ID
+36 tests covering the parts that can be tested without running the suite: ID
 escaping and pattern anchoring, the partition proof rejecting a gap or an
-overlap, bin packing, both weight paths, all four shapes of the summary line,
-the malformed-xunit recovery, and the event-stream duration join.
+overlap, bin packing, both weight paths, all eight shapes of the summary line
+in both their singular and plural wordings, the malformed-xunit recovery, and
+the event-stream duration join.
+
+Four of those are a negative control on the summary parser and are the reason
+to run it after touching `SUMMARY_RE`: a log with no run summary in it — empty,
+build-lock-starved, per-test lines only, or cut off mid-line — must keep
+returning `None`. A parse there would cost the gate its only sight of trap 1,
+which is worse than the misreporting the parser was widened to fix.

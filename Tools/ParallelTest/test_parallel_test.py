@@ -185,6 +185,87 @@ class TestSummaryParsing(unittest.TestCase):
     def test_no_summary_at_all(self):
         self.assertIsNone(pt.parse_summary_text("error: database is locked\n"))
 
+    # The clause after "seconds" comes from a three-way switch on (any error,
+    # any warning, any known issue). These eight are the literal output of a
+    # probe package run against the toolchains — 6.2.4 for the four without a
+    # warning, 6.3.3 for the four with one (6.2.4 has no Issue.Severity) — not
+    # transcribed from upstream source. Five of the eight did not parse before.
+    SHAPES = [
+        ("passed", "", 0),
+        ("passed", " with 3 known issues", 3),
+        ("passed", " with 2 warnings", 0),
+        ("passed", " with 2 warnings and 3 known issues", 3),
+        ("failed", " with 1 issue", 0),
+        ("failed", " with 5 issues (including 3 known issues)", 3),
+        ("failed", " with 5 issues (including 3 warnings)", 0),
+        ("failed", " with 9 issues (including 3 warnings and 4 known issues)", 4),
+    ]
+
+    def test_every_clause_shape_parses(self):
+        for verdict, clause, known in self.SHAPES:
+            # The \U0010105b prefix is the status glyph a real harness log
+            # carries, kept so the match stays unanchored.
+            line = ("\U0010105b Test run with 3 tests in 0 suites %s after "
+                    "0.001 seconds%s." % (verdict, clause))
+            got = pt.parse_summary_text(line)
+            self.assertIsNotNone(got, "did not parse: %r" % clause)
+            self.assertEqual(
+                (got["tests"], got["suites"], got["passed"], got["known"]),
+                (3, 0, verdict == "passed", known), "clause %r" % clause)
+
+    def test_singular_clause_wordings_parse(self):
+        # Every count in SHAPES is plural; the singular spellings differ.
+        for clause, known in ((" with 1 known issue", 1),
+                              (" with 1 warning", 0),
+                              (" with 1 warning and 1 known issue", 1),
+                              (" with 1 issue", 0),
+                              (" with 2 issues (including 1 known issue)", 1),
+                              (" with 2 issues (including 1 warning)", 0),
+                              (" with 3 issues (including 1 warning and 1 known issue)", 1)):
+            got = pt.parse_summary_text(
+                "Test run with 1 test in 1 suite failed after 0.1 seconds%s." % clause)
+            self.assertIsNotNone(got, "did not parse: %r" % clause)
+            self.assertEqual(got["known"], known, "clause %r" % clause)
+
+    def test_a_failing_group_is_not_mistaken_for_a_dead_one(self):
+        # The regression this pins: a group that fails with no known issues of
+        # its own. Reported as "produced no summary line" — indistinguishable
+        # from a hung or build-lock-starved process — on exactly the group
+        # holding the real failure.
+        got = pt.parse_summary_text(
+            "Test run with 631 tests in 90 suites failed after 12.5 seconds "
+            "with 1 issue.")
+        self.assertIsNotNone(got)
+        self.assertEqual((got["tests"], got["passed"], got["known"]),
+                         (631, False, 0))
+
+    def test_a_dead_group_still_reads_as_dead(self):
+        # The permissive clause must not turn absence of a summary into one.
+        # A parse here would cost the gate its only sight of a process that
+        # died having run nothing (trap 1) — worse than the bug above.
+        for text in ("",
+                     "error: database is locked\n",
+                     "\U0010105b Test run started.\n",
+                     # per-test lines only: same verbs and clauses, no total
+                     "Test knownIssues() passed after 0.001 seconds with 1 known issue.\n"
+                     "Test errorIssues() failed after 0.001 seconds with 2 issues.\n",
+                     # killed mid-line, before the seconds and before the period
+                     "Test run with 100 tests in 10 suites failed after 1.2 seco",
+                     "Test run with 100 tests in 10 suites failed after 1.2 seconds "
+                     "with 1 issue"):
+            self.assertIsNone(pt.parse_summary_text(text), repr(text))
+
+    def test_an_unrecognised_clause_costs_the_count_not_the_line(self):
+        # If upstream ever rewords the clause, the line must still parse (so a
+        # failing group is not reported as dead); the known count silently
+        # reads 0, and --expect-known-issues is the cross-check for that.
+        got = pt.parse_summary_text(
+            "Test run with 7591 tests in 1082 suites failed after 51.6 seconds "
+            "with 4 problems (21 of them anticipated).")
+        self.assertIsNotNone(got)
+        self.assertEqual((got["tests"], got["passed"], got["known"]),
+                         (7591, False, 0))
+
 
 class TestXunit(unittest.TestCase):
     XML = """<?xml version="1.0" encoding="UTF-8"?>

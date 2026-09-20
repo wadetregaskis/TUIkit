@@ -249,8 +249,8 @@ suite exactly, so a process that quietly ran nothing cannot be mistaken for a
 pass. That identity check held in all 25 full-suite runs behind this section:
 7,591 tests, 1,082 suites, 21 known issues, nothing missing, extra or
 duplicated. Two of the 25 did print a reconciliation problem, but it was a gap
-in how the harness parses a summary line — documented in its README — and not a
-test that failed to run.
+in how the harness parsed a summary line — since closed, and recorded in its
+README — and not a test that failed to run.
 
 Because the tests are spread differently, anything depending on the
 interleaving one process happens to give it can behave differently — that is a

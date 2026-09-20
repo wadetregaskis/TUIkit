@@ -60,7 +60,8 @@ Speed is worthless if a process quietly runs nothing. Every run is gated on:
   * the union of test IDs equals the enumerated suite exactly (no missing, no
     extra), and no test ran twice;
   * each process ran exactly the count the static proof predicted;
-  * every process produced a parseable summary line and exited 0.
+  * every process produced a parseable summary line, and any process that
+    reports a failure is accounted for by a named failing test.
 Any of those failing is a hard failure, whatever the exit codes said.
 
 Usage:
@@ -85,15 +86,32 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 WORK = os.path.join(REPO, ".build", "parallel-test")
 WEIGHTS = os.path.join(WORK, "weights.json")
 
-# swift-testing's final line, in all three shapes it takes. A run with no known
-# issues omits the clause; a FAILING run re-words it, which is the trap that
-# made an earlier analysis read "13 known issues" out of runs that had 21:
-#   passed after 50.107 seconds with 21 known issues.
-#   failed after 55.050 seconds with 22 issues (including 21 known issues).
+# swift-testing's final line. Everything after "seconds" is one clause built
+# from a three-way switch on (any error, any warning, any known issue), and it
+# is captured WHOLE rather than matched shape by shape. An earlier version
+# enumerated the shapes, knew three of the eight, and so reported "produced no
+# summary line" — which reads like a dead or hung process — for a group that
+# had simply failed. All eight, transcribed from a probe package run against
+# the toolchains themselves (the warning shapes need 6.3: 6.2.4 ships no
+# Issue.Severity, so there a run can only take the four without one):
+#   passed after 0.001 seconds.
+#   passed after 0.001 seconds with 3 known issues.
+#   passed after 0.001 seconds with 2 warnings.
+#   passed after 0.001 seconds with 2 warnings and 3 known issues.
+#   failed after 0.001 seconds with 1 issue.
+#   failed after 0.001 seconds with 5 issues (including 3 known issues).
+#   failed after 0.001 seconds with 5 issues (including 3 warnings).
+#   failed after 0.001 seconds with 9 issues (including 3 warnings and 4 known issues).
+# The known count is then read out of that clause BY NAME, so a reworded or
+# newly added clause costs the count and not the whole line; --expect-known-
+# issues is the cross-check that a silent rewording has not zeroed it. `\n` is
+# in the character class because Python's `[^.]` DOES match a newline, and
+# without it a summary line that lost its period would swallow the lines after
+# it — including, on a killed process, lines that are not a summary at all.
 SUMMARY_RE = re.compile(
     r"Test run with (\d+) tests? in (\d+) suites? (passed|failed) after "
-    r"([\d.]+) seconds"
-    r"(?: with (?:(\d+) known issues?|(\d+) issues? \(including (\d+) known issues?\)))?\.")
+    r"([\d.]+) seconds( with [^.\n]*)?\.")
+KNOWN_ISSUES_RE = re.compile(r"(\d+) known issues?")
 
 # The event stream spells a test's ID with its declaration site appended:
 #   TUIkitViewTests.BindableTests/projectedValueRoundTrip()/BindableTests.swift:41:6
@@ -147,13 +165,14 @@ def parse_summary_text(text):
     ms = SUMMARY_RE.findall(text)
     if not ms:
         return None
-    tests, suites, verdict, secs, known_only, _issues, known_incl = ms[-1]
+    tests, suites, verdict, secs, clause = ms[-1]
+    m = KNOWN_ISSUES_RE.search(clause)
     return {
         "tests": int(tests),
         "suites": int(suites),
         "passed": verdict == "passed",
         "seconds": float(secs),
-        "known": int(known_only or known_incl or 0),
+        "known": int(m.group(1)) if m else 0,
     }
 
 
@@ -627,9 +646,20 @@ def main():
                 problems.append(
                     "group %s ran %d tests, the partition predicted %d"
                     % (r["tag"], summary["tests"], r["selected"]))
-        if r["rc"] != 0 and not gfailed:
-            problems.append("group %s exited %d with no recorded failure (see %s)"
-                            % (r["tag"], r["rc"], r["log"]))
+        # A group can report a failure that xunit never names. An issue
+        # recorded with no test in the task-local context is attributed to
+        # «unknown» and produces no <failure> element, so `gfailed` is empty
+        # for a run that genuinely failed. Measured here with a probe that
+        # records from a detached Task: rc 1, zero <failure> elements, and
+        # `failed after 0.001 seconds with 1 issue.` — the summary shape that
+        # until now did not parse, which is how this case used to be caught,
+        # by accident, as a missing summary line. The exit code covers every
+        # failing shape reproduced so far; the parsed verdict is read as well
+        # so the gate does not rest on the helper always exiting non-zero.
+        if not gfailed and (r["rc"] != 0
+                            or (summary is not None and not summary["passed"])):
+            problems.append("group %s reported a failure (exit %d) that no test "
+                            "accounts for (see %s)" % (r["tag"], r["rc"], r["log"]))
 
     missing, extra = sorted(set(ids) - union), sorted(union - set(ids))
     if missing or extra or counted != len(union):
