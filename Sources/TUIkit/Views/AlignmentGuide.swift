@@ -110,9 +110,13 @@ extension View {
     /// widest child, which is the whole point of the mechanism.
     ///
     /// - Important: Apply this as the **outermost** modifier on a child the
-    ///   container should read, exactly as with ``View/zIndex(_:)``. A modifier
-    ///   applied after it (`.padding()`, `.border()`, a `.frame`) wraps the
-    ///   guide where the container cannot see it, and the guide has no effect.
+    ///   container should read. A modifier applied after it (`.padding()`,
+    ///   `.border()`, a `.frame`) wraps the guide where the container cannot
+    ///   see it, and the guide has no effect. This is NO LONGER "exactly as
+    ///   with ``View/zIndex(_:)``", which it said until 2026-09-20: a z-index
+    ///   survives a wrapper now, because it is dimension-independent. A guide
+    ///   is a closure evaluated against the dimensions the view laid out at, so
+    ///   reading it through a wrapper would hand it the OUTER, wrapped size.
     ///   TUIkit's buffers carry no guide metadata for such a wrapper to
     ///   translate, so the alternative would be a guide that silently reports a
     ///   position from the wrong coordinate space.

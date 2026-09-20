@@ -130,12 +130,15 @@ Two consequences worth knowing before you reach for it:
   its *trailing* edge, so every sibling shifts right to meet it and the column
   ends up wider than the widest line in it. Both passes account for this — the
   measure reports the grown extent, or the parent would reserve too little.
-- **Apply it as the outermost modifier** on the child, exactly as with
-  ``View/zIndex(_:)``. A modifier applied *after* it (`.padding()`, a `.frame`)
-  wraps the guide where the container cannot see it, and the guide has no
-  effect. TUIkit's buffers carry no guide metadata for such a wrapper to
-  translate, so the alternative would be a guide reported from the wrong
-  coordinate space — silently wrong instead of visibly absent.
+- **Apply it as the outermost modifier** on the child. A modifier applied
+  *after* it (`.padding()`, a `.frame`) wraps the guide where the container
+  cannot see it, and the guide has no effect. TUIkit's buffers carry no guide
+  metadata for such a wrapper to translate, so the alternative would be a guide
+  reported from the wrong coordinate space — silently wrong instead of visibly
+  absent. This is **not** the rule for ``View/zIndex(_:)`` any more: a z-index
+  is dimension-independent, so it survives any number of wrappers, while a
+  guide is a closure evaluated against the dimensions the view laid out at and
+  cannot.
 
 Guides are read by ``VStack``, ``HStack``, ``ZStack`` and their lazy twins, and
 by the single-child regions `.frame(alignment:)`, `.overlay(alignment:)` and

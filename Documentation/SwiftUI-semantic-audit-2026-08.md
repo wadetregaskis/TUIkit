@@ -105,8 +105,9 @@ about whether every future wrapper must remember. **Recommendation:** adopt a
 `MetadataForwarding` protocol with a default implementation, conform every
 single-content wrapper, and add a test that fails when a new wrapper forgets.
 
-*Still open 2026-09-20, but the protocol the recommendation asks for now exists
-and is not this.* `SingleContentWrapper` (finding 2) is the same shape — a
+*Partly resolved 2026-09-20 — z-index yes, alignment guides and layout values
+no. The paragraph below was written before that and describes the state between
+`c901c8b2` and `5c2a906b`; the one after it is what happened.* `SingleContentWrapper` (finding 2) is the same shape — a
 protocol with default implementations, conformed by single-content wrappers —
 but it carries the REBUILD direction (a container reaching DOWN to the members)
 and this finding is the READ direction (metadata travelling UP to the
@@ -117,6 +118,22 @@ distribution judgement that makes the rebuild half a per-type decision does NOT
 apply here — forwarding a static witness through `.onAppear` multiplies
 nothing, so the read half really can be conformed by every single-content
 wrapper, effect ones included, exactly as this finding recommends.
+
+*What then happened.* `5c2a906b` and `b4900f8e` did exactly that for
+**z-index**: 66 wrappers conform, `.zIndex(1)` survives `.padding()`,
+`.onAppear {}` and any chain of them, and it costs nothing measurable (finding
+37). They did NOT do it for the other two, and that turns on the one thing this
+finding gets wrong — "the same hole swallows alignment guides and layout values"
+is not the same hole. A z-index is dimension-INDEPENDENT, so reading it through
+a wrapper is always right. An alignment guide is a CLOSURE EVALUATED AGAINST the
+dimensions the view laid out at, so the walk would hand the inner closure the
+OUTER, wrapped size and report a position from the wrong coordinate space —
+silently wrong rather than visibly absent, which is worse than the limitation.
+`5c2a906b` forwarded it anyway; `b4900f8e` took that back and PINNED the no-op
+(`AlignmentGuideModifierTests.guideUnderAWrapperIsInert`). Lifting it needs a
+witness for size-neutrality that does not exist yet — and that, rather than the
+per-wrapper cost this finding worried about, is what the remainder is blocked
+on.
 
 **2. A modifier makes a view opaque to child resolution.** `resolveChildViews`
 unwraps `ChildViewProvider`s, and `ModifiedView` is not one — so
@@ -537,6 +554,8 @@ verifier corrected the analyst, both are shown.
 - *TUIkit:* `zIndex` wraps the view in `_ZIndexView`, and containers detect it through a static TYPE witness rather than a value: `static func zIndexInfo<V: View>(of view: V) -> Double { V._providesZIndex ? ((view as? ZIndexProviding)?.zIndexValue ?? 0) : 0 }` (Sources/TUIkitView/Rendering/ChildInfo.swift:98, duplicated at :394). Any modifier applied after `.zIndex` changes `V`, so `_providesZIndex` becomes false and the z-index is discarded with no diagnostic. — `Sources/TUIkit/Extensions/View+ZIndex.swift:70-72 (witness at Sources/TUIkitView/Rendering/ChildInfo.swift:98)`
 - *Divergence:* Executed: `ZStack { Text("AAAAA").zIndex(1); Text("BB") }` renders ["AAAAA"] (correct); `ZStack { Text("AAAAA").zIndex(1).padding(0); Text("BB") }` renders ["ABBAA"] — the z-index is lost and tree order wins; `ZStack { Text("AAAAA").padding(0).zIndex(1); Text("BB") }` renders ["AAAAA"] again. SwiftUI renders AAAAA on top in all three. `.padding(0)` is a deliberately inert stand-in — any wrapper (.opacity, .foregroundColor, .frame, .border) does the same. Tests/TUIkitTests/ZStackRenderTests.swift:61-79 and :181-183 all apply .zIndex outermost, so none catch it.
 - *Recommendation:* Fix or document prominently. A fix that keeps the fast path: have the transparent wrappers (ModifiedView, _LayoutValueView, _ZIndexView) forward `_providesZIndex` from their content, so the witness stays a compile-time constant while surviving a wrapper. At minimum, promote the caveat from the doc comment aside ("Apply it as the outermost modifier") to a §2 entry in SwiftUI-compatibility.md — a porter cannot guess this ordering rule.
+
+- *Resolved 2026-09-20, as recommended and by the recommended mechanism.* The transparent single-content wrappers forward `_providesZIndex` from their content, in ONE constrained extension (`extension View where Self: SingleContentWrapper`) rather than a line per type, so the witness stays the compile-time constant chain the recommendation asked for — measured, not assumed: `ab_bench.py --quick` reads all six scenarios indistinguishable against the parent, with the null test run first and `deep` shown to be unable to resolve below about 1% that day. Sixty-six wrapper types conform, over two commits. `5c2a906b` split `SingleContentWrapper` (naming your content: one line, no judgement) from `ContentRewrapping` (being re-wrapped around each member: a decision per wrapper), which is what made conforming the EFFECT wrappers safe — forwarding a static witness through `.onAppear` multiplies nothing, where distributing the effect itself would fire it per member. `b4900f8e` conformed the remaining 46. The search is `throughWrappers(_:as:)`, whose doc comment carries the rule that keeps it affordable: never call it without first checking the witness that gates it. `ZStackRenderTests.zIndexSurvivesAnOuterModifier` and `.zIndexSurvivesEffectWrappers` pin it, each with a no-zIndex control so that a pass is the tag working rather than tree order. SwiftUI's behaviour was measured rather than inferred: `ZStack { Color.red.zIndex(1).padding(0); Color.green }` renders red on top, identical to `.zIndex(1)` alone, where with no z-index green — written second — wins. The caveat this finding wanted promoted to a §2 entry is instead DELETED from `zIndex(_:)`'s doc comment, because it stopped being true; the same caveat on `alignmentGuide(_:computeValue:)` stays, and root cause 1 says why the two are not alike.
 
 ### Navigation and presentation
 

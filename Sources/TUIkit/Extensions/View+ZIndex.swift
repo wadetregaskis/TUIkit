@@ -62,8 +62,18 @@ extension View {
     /// ```
     ///
     /// Outside an overlapping container the modifier has no visible effect.
-    /// Apply it as the outermost modifier on a `ZStack` child so the
-    /// container can detect it.
+    ///
+    /// It need NOT be the outermost modifier, which it did until 2026-09-20:
+    /// `.zIndex(1).padding(0)` lost its place in the draw order, because the
+    /// static witness that gates the container's search answered `false` for
+    /// every wrapper type and the search never started. Single-content wrappers
+    /// forward that witness now, so a z-index survives any number of them —
+    /// `.padding()`, `.foregroundStyle()`, `.onAppear {}` and the rest. A
+    /// z-index is the one piece of metadata safe to read through a wrapper
+    /// unconditionally, because it is dimension-independent: the number means
+    /// the same thing whatever size the view ends up at. An alignment guide is
+    /// not, and still has to be outermost — see
+    /// ``View/alignmentGuide(_:computeValue:)``.
     ///
     /// - Parameter value: The relative drawing order. Higher draws later.
     /// - Returns: A view with the given z-index.

@@ -687,10 +687,14 @@ HStack { Group { Text("A"); Text("B") }.badge(2) }              // A over B
 stops being a row, leaving the grid's columns to be laid out by `GridRow`'s own
 fallback `HStack`.
 
-It is the same forwarding decision `.zIndex(_:)`,
-`.alignmentGuide(_:computeValue:)` and `layoutValue(key:value:)` are waiting on
-— they are read off the outermost view, which is why each is documented as
-"apply it as the outermost modifier" — and the judgement per wrapper is not
+It is the same forwarding decision `.alignmentGuide(_:computeValue:)` and
+`layoutValue(key:value:)` are still waiting on — they are read off the outermost
+view, which is why each is documented as "apply it as the outermost modifier".
+`.zIndex(_:)` is no longer among them: single-content wrappers forward its
+static witness, so a z-index survives any number of them. The difference is that
+a z-index is dimension-INDEPENDENT while a guide is a closure evaluated against
+the dimensions the view laid out at, so reading a guide through a wrapper would
+resolve it against the outer, wrapped size. The judgement per wrapper is not
 only about effects: `presentationDetents(_:)` and the other presentation traits
 are deliberately read through a wrapper list of their own, and a trait must not
 be handed to each member of a group.
