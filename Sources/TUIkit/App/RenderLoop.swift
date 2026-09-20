@@ -563,14 +563,6 @@ extension RenderLoop {
             terminalHeight: terminalHeight, statusBarHeight: statusBarHeight,
             headerHeight: appHeader.height)
 
-        // Composite any free-floating overlay layers (Picker drop-downs,
-        // popovers, …) emitted during rendering onto the content buffer.
-        if !buffer.overlays.isEmpty {
-            buffer = compositeOverlays(
-                buffer, maxWidth: terminalWidth, maxHeight: contentHeight,
-                palette: environment.palette)
-        }
-
         // Build the app-header and status-bar buffers up front
         // so we can merge their hit-test regions into the
         // dispatcher's region set before writing.
@@ -589,9 +581,14 @@ extension RenderLoop {
         //     terminal-space, so its events arrive with
         //     y >= contentHeight. Status-bar regions need
         //     offsetY shifted by +contentHeight.
-        let appHeaderBuffer: FrameBuffer? =
-            appHeader.hasContent
-            ? buildAppHeaderBuffer(terminalWidth: terminalWidth, environment: environment) : nil
+        //   - A layer anchored in the header — a Menu's drop-down, a popover —
+        //     belongs over the PAGE, not clipped to the header's one to three
+        //     rows, so the build moves it onto the content buffer. Which is
+        //     why the header is built here, before the composite below rather
+        //     than after it.
+        let appHeaderBuffer = buildAppHeaderBuffer(
+            terminalWidth: terminalWidth, environment: environment,
+            liftingOverlaysOnto: &buffer)
 
         // `hasContent`, not `hasItems`: the question `statusBar.height` answered
         // when it took the rows, so a tooltip on a bar with no items is built into
@@ -604,6 +601,14 @@ extension RenderLoop {
         // `noteStatusBarPlacement(startRow:)`.
         noteStatusBarPlacement(
             startRow: statusBarBuffer == nil ? nil : terminalHeight - statusBarHeight + 1)
+
+        // Composite any free-floating overlay layers (Picker drop-downs,
+        // popovers, …) emitted during rendering onto the content buffer.
+        if !buffer.overlays.isEmpty {
+            buffer = compositeOverlays(
+                buffer, maxWidth: terminalWidth, maxHeight: contentHeight,
+                palette: environment.palette)
+        }
 
         var mergedRegions = buffer.hitTestRegions
         // The app header is drawn OUTSIDE the composited content area, so
@@ -1384,11 +1389,17 @@ extension RenderLoop {
     /// split as the status-bar build / write pair below, for
     /// the same reason (regions emitted at render time would
     /// otherwise be discarded before reaching the dispatcher).
+    ///
+    /// Its overlay layers are not returned with it: they go onto `buffer`, the
+    /// page, which is where a header-anchored drop-down belongs and where the
+    /// compositor will find them. See
+    /// `FrameBuffer.liftingOverlays(shiftingBy:onto:)`.
     fileprivate func buildAppHeaderBuffer(
         terminalWidth: Int,
-        environment: EnvironmentValues
+        environment: EnvironmentValues,
+        liftingOverlaysOnto buffer: inout FrameBuffer
     ) -> FrameBuffer? {
-        guard let contentBuffer = appHeader.contentBuffer else { return nil }
+        guard appHeader.hasContent, let contentBuffer = appHeader.contentBuffer else { return nil }
 
         let headerView = AppHeader(contentBuffer: contentBuffer, style: appHeader.style)
 
@@ -1399,11 +1410,12 @@ extension RenderLoop {
         )
 
         return renderToBuffer(headerView, context: context)
+            .liftingOverlays(shiftingBy: -appHeader.height, onto: &buffer)
     }
 
     /// Writes a previously-built app-header buffer to the
     /// terminal at the specified row. Companion to
-    /// ``buildAppHeaderBuffer(terminalWidth:environment:)``.
+    /// ``buildAppHeaderBuffer(terminalWidth:environment:liftingOverlaysOnto:)``.
     fileprivate func writeAppHeaderBuffer(
         _ buffer: FrameBuffer,
         atRow row: Int,

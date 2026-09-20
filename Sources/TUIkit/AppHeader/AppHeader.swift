@@ -117,3 +117,53 @@ extension AppHeader: Renderable {
         return framed
     }
 }
+
+// MARK: - Lifting the header's layers onto the page
+
+extension FrameBuffer {
+    /// This buffer with its overlay layers moved onto `buffer` and shifted
+    /// `rows` down, and nothing else changed.
+    ///
+    /// A `Menu`, `.popover`, `.sheet` or `.alert` declared inside
+    /// `.appHeader { … }` emits a layer like any other, and `AppHeader`
+    /// carries it through the rebuild above. That was a prerequisite and not
+    /// the fix: the header buffer is written straight to the terminal and
+    /// never goes through `compositingOverlays`, so the layer reached the
+    /// screen and was thrown away there. A drop-down opened from a header
+    /// button took the focus and drew nothing at all.
+    ///
+    /// Moved to the page rather than composited into the header, because a
+    /// drop-down anchored on the bottom row of a three-row header is taller
+    /// than the header it hangs out of: compositing it there would clip it to
+    /// the chrome it escaped. The page is where it belongs and where the
+    /// page's own drop-downs already are.
+    ///
+    /// `rows` is the same translation the header's hit regions take, and for
+    /// the same reason — the header sits `appHeader.height` rows above the
+    /// content area, so header row `h` is content row `h - appHeader.height`.
+    /// That is negative for a layer still inside the header, which is fine:
+    /// the compositor cuts a layer overhanging the top edge exactly as it cuts
+    /// one overhanging the left.
+    ///
+    /// A CENTRED layer is the exception, and it divides on the same line
+    /// `.zIndex` and `.alignmentGuide` do: an anchored layer's offset is a
+    /// POSITION, which means something different in a different coordinate
+    /// space, while a centred one's is a post-centre DELTA — zero until the
+    /// user drags the dialog — which means the same thing in both. Shifting it
+    /// would slide a header-presented dialog up by the height of the header.
+    ///
+    /// The status bar needs no twin of this. Its content is ``StatusBarItem``s
+    /// — a shortcut, a label and an action — rather than views, so nothing
+    /// down there can present anything.
+    func liftingOverlays(shiftingBy rows: Int, onto buffer: inout FrameBuffer) -> FrameBuffer {
+        guard !overlays.isEmpty else { return self }
+        var lifted = self
+        for layer in overlays {
+            var moved = layer
+            if !moved.centered { moved.offsetY += rows }
+            buffer.overlays.append(moved)
+        }
+        lifted.overlays = []
+        return lifted
+    }
+}
