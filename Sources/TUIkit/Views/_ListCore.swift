@@ -1227,12 +1227,32 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         rows.filter { owner.rows.contains($0) }
                             .map { $0 - owner.rows.lowerBound }))
             } : nil
-        // `.onMove` is still the homogeneous all-content list only: the reorder
-        // machinery numbers everything it touches — the grab, the drop slot,
-        // the live shuffle — in list rows, and a row's list number is its data
-        // offset only there.
+        handler.movableRowSpan = { row in
+            guard let owner = editOwners.first(where: { $0.rows.contains(row) }),
+                owner.actions.moveAction != nil
+            else { return nil }
+            return owner.rows
+        }
         handler.onMove =
-            source.allContent ? (content as? DynamicViewContentActions)?.moveAction : nil
+            editOwners.contains(where: { $0.actions.moveAction != nil })
+            ? { rows, destination in
+                // The rows in hand are one `ForEach`'s — `heldRows(grabbing:)`
+                // gathers only from the grabbed row's span — so the first names
+                // whose collection this addresses.
+                guard let first = rows.first,
+                    let owner = editOwners.first(where: { $0.rows.contains(first) }),
+                    let move = owner.actions.moveAction
+                else { return }
+                let base = owner.rows.lowerBound
+                // `toOffset` is measured against the collection BEFORE the
+                // move, so one past the last element is the legal "append"
+                // answer and anything beyond it is not: `reorderInsertionOffset`
+                // answers with the list's row count when a slot runs off the
+                // end, which for a section is well past its own last element.
+                move(
+                    IndexSet(rows.filter { owner.rows.contains($0) }.map { $0 - base }),
+                    min(max(0, destination - base), owner.rows.count))
+            } : nil
     }
 
     /// Stitches together the row content with top / bottom

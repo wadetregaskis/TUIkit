@@ -547,9 +547,20 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
 
     /// The `.onMove(perform:)` reorder action from an editable `ForEach`, if
     /// any: dragging a row with the mouse commits through it on release with
-    /// `(source offset, destination offset)`. `nil` makes rows non-draggable.
+    /// `(source rows, destination row)`. `nil` makes rows non-draggable.
     /// See ``RowReorder`` and `_ListCore`'s mouse handler.
+    ///
+    /// List rows rather than collection offsets, for the same reason as
+    /// ``onDelete``: a list can hold several editable `ForEach`es, one per
+    /// `Section`, and only the installer knows which collection a row belongs
+    /// to. It does the subtraction; see ``movableSpan(of:)``.
     var onMove: ((IndexSet, Int) -> Void)?
+
+    /// Which rows a given row can be moved among, and so which collection a
+    /// reorder's offsets address. Installed by `_ListCore` every frame; `nil`
+    /// means the whole list, which is a `Table`'s and a flat `List`'s shape.
+    /// See ``movableSpan(of:)``.
+    var movableRowSpan: ((Int) -> Range<Int>?)?
 
     /// A `Table`'s keyboard sort gestures, if it has a `sortOrder` binding:
     /// invoked with ``RowAction/sortNextColumn`` or
@@ -613,7 +624,7 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// measured from the first content line (i.e. below the border and padding,
     /// and below the "N more above" indicator when one is drawn).
     struct RowBand: Equatable, Sendable {
-        /// The row's data offset.
+        /// Which of the list's rows this is.
         var rowIndex: Int
         /// The row's first line.
         var yStart: Int
@@ -623,7 +634,11 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
         /// headers and the reorder drop slot are not.
         var isContent: Bool
         /// Where a reorder drop on this line would put the dragged row, or `nil`
-        /// for a line that is not a drop target (a section header).
+        /// for a line that is not a drop target: a section header, or — while a
+        /// reorder is in flight — any row outside the span the rows in hand may
+        /// land in (see ``ItemListHandler/reorderSpan``). That second case is
+        /// what keeps a drag inside its own `ForEach`: one `nil` here confines
+        /// the pointer clamp, the landing slot and the `.live` shuffle at once.
         ///
         /// A line's position in the order currently DRAWN, which is a
         /// prospective final index — see ``dropTarget(atContentY:)``. Outside a

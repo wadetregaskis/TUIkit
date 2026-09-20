@@ -23,6 +23,46 @@ extension ItemListHandler: RowReorderHosting {}
 
 extension ItemListHandler {
 
+    // MARK: - Where a row may land
+
+    /// The list rows the row at `index` may be moved among — the rows of the
+    /// `ForEach` that produced it — or `nil` when no movable `ForEach` did.
+    ///
+    /// A reorder cannot cross that boundary. `onMove`'s offsets index ONE
+    /// collection, and the rows on the far side of a section header belong to
+    /// another, so a drag that crossed would hand an offset to an array that
+    /// never held the row. SwiftUI keeps a row inside its section for exactly
+    /// this reason.
+    ///
+    /// With no resolver installed the whole list is one span — a `Table`, and a
+    /// flat `List { ForEach … }`, where a row's index IS its offset and every
+    /// answer would be `0..<itemCount` anyway.
+    func movableSpan(of index: Int) -> Range<Int>? {
+        guard let movableRowSpan else { return 0..<itemCount }
+        return movableRowSpan(index)
+    }
+
+    /// The rows the gesture in flight may land among: the span of whatever it
+    /// has hold of.
+    ///
+    /// The whole list when nothing is in hand — a drop from ELSEWHERE lands
+    /// wherever the list's own `dropDestination` says, and is not an `onMove`
+    /// at all — and when no resolver is installed.
+    var reorderSpan: Range<Int> {
+        guard let grabbed = reorder?.grabbedOffset, let span = movableSpan(of: grabbed)
+        else { return 0..<itemCount }
+        return span
+    }
+
+    /// `slot` clamped to the closed-up positions a row of `span` can land at.
+    ///
+    /// The same arithmetic the flat list has always applied — `0` through
+    /// `itemCount - 1` — expressed against the span instead of the list, so it
+    /// reduces to exactly that when the span IS the list.
+    func clampedSlot(_ slot: Int, in span: Range<Int>) -> Int {
+        min(max(span.lowerBound, slot), max(span.lowerBound, span.upperBound - 1))
+    }
+
     // MARK: - Geometry
 
     /// The data offset of the **content** row covering `contentY`, or `nil` for
@@ -254,7 +294,11 @@ extension ItemListHandler {
     /// and one `onMove` fires at the drop.
     func moveHeldRow(to slot: Int) {
         guard var reorder, reorder.active else { return }
-        let target = min(max(0, slot), max(0, itemCount - 1))
+        // Clamped to the rows in hand may land among — the whole list for a
+        // flat one, and this section's rows inside a Section. That is what
+        // makes Home / End / a page step mean "this section's end" rather than
+        // an offset in a collection the row never belonged to.
+        let target = clampedSlot(slot, in: reorderSpan)
         if effectiveReorderFeedback == .live {
             let landed = move(from: reorder.currentOffset, to: target)
             reorder.currentOffset = landed
@@ -419,6 +463,10 @@ extension ItemListHandler {
     @discardableResult
     func moveFocusedRow(to destination: Int) -> Bool {
         guard onMove != nil, itemCount > 1,
+            // The rows this one can be moved among — `nil` for a row no movable
+            // `ForEach` produced, which refuses the chord exactly as the
+            // `.moveDisabled()` check below does.
+            let span = movableSpan(of: clampedRowIndex(focusedIndex)),
             // `.moveDisabled()` on the row: a refused row leaves the chord
             // alone entirely, falling through exactly as in a list that is
             // not reorderable at all — the same reasoning, and the same
@@ -426,7 +474,7 @@ extension ItemListHandler {
             !moveDisabledRows.contains(clampedRowIndex(focusedIndex))
         else { return false }
         let from = clampedRowIndex(focusedIndex)
-        let target = min(max(0, destination), itemCount - 1)
+        let target = clampedSlot(destination, in: span)
         guard target != from else { return false }
         focusedIndex = move(from: from, to: target)
         ensureFocusedItemVisible()
@@ -436,10 +484,11 @@ extension ItemListHandler {
     @discardableResult
     func nudgeFocusedRow(by delta: Int) -> Bool {
         guard onMove != nil, itemCount > 0,
-            // See `moveFocusedRow(to:)` — the same refusal, the same FALSE.
+            // See `moveFocusedRow(to:)` — the same two refusals, the same FALSE.
+            let span = movableSpan(of: clampedRowIndex(focusedIndex)),
             !moveDisabledRows.contains(clampedRowIndex(focusedIndex))
         else { return false }
-        let target = min(max(0, focusedIndex + delta), itemCount - 1)
+        let target = clampedSlot(focusedIndex + delta, in: span)
         guard target != focusedIndex else { return true }
         focusedIndex = clampedRowIndex(move(from: focusedIndex, to: target))
         ensureFocusedItemVisible()
@@ -748,7 +797,10 @@ extension ItemListHandler {
         else { return }
         let delta = scrollOffset - visibleRowBandsOffset
         guard delta != 0 else { return }
-        reorder.targetOffset = max(0, min(itemCount, target + delta))
+        // Within the span the drag may land in — the whole list for a flat one,
+        // so this is the old `max(0, min(itemCount, …))` wherever it always was.
+        let span = reorderSpan
+        reorder.targetOffset = max(span.lowerBound, min(span.upperBound, target + delta))
         self.reorder = reorder
         visibleRowBandsOffset = scrollOffset
     }
@@ -859,8 +911,21 @@ extension ItemListHandler {
         /// The drawn position of the last ROW seen so far — what a slot drawn
         /// after it can honestly name. See the `.slot` case.
         var lastRowDrop: Int?
+        // The rows the gesture in flight may land among. Everything outside it
+        // publishes NO drop index: a reorder's offsets index one collection,
+        // and a row past a section header belongs to another, so a landing
+        // there would hand an offset to an array the row never came from.
+        // Refusing it here is what confines the pointer clamp
+        // (``clampedToDroppableRows``), the landing slot and the `.live`
+        // shuffle at one stroke, instead of at three places that can disagree.
+        // The whole list when nothing is in hand, which is every ordinary frame.
+        let span = reorderSpan
         visibleRowBands = bands.enumerated().map { index, band in
             switch band.entry {
+            case .row(let rowIndex) where !span.contains(rowIndex):
+                return RowBand(
+                    rowIndex: rowIndex, yStart: band.yStart, height: band.height,
+                    isContent: true, dropIndex: nil)
             case .row(let rowIndex):
                 // A real row means "put it where this row is" — as the row is
                 // DRAWN, not as its data is numbered. Mid-drag the list has
@@ -998,7 +1063,10 @@ extension ItemListHandler {
         // instead of moving the cursor.
         reorder = nil
         isKeyboardMove = false
-        guard !moveDisabledRows.contains(offset) else {
+        // …and a row no movable `ForEach` produced declines it the same way: a
+        // static row, a header, a row of the one Section in this list whose
+        // `ForEach` carries no `.onMove`.
+        guard !moveDisabledRows.contains(offset), movableSpan(of: offset) != nil else {
             focusedIndex = offset
             return
         }
@@ -1031,8 +1099,15 @@ extension ItemListHandler {
         // enforced for the grabbed row alone, and a selection containing a
         // pinned row carried it to the drop. The grabbed offset itself has
         // already passed the check in `beginReorder`.
-        let selected = IndexSet((0..<itemCount).filter { isSelected(at: $0) })
-            .subtracting(IndexSet(moveDisabledRows))
+        //
+        // Gathered from the grabbed row's OWN span, not the whole list: a
+        // selection can reach across a section boundary, and one `onMove` moves
+        // rows within one collection. The rows on the far side stay where they
+        // are rather than being handed to the wrong array.
+        let selected = IndexSet(
+            (movableSpan(of: offset) ?? 0..<itemCount).filter { isSelected(at: $0) }
+        )
+        .subtracting(IndexSet(moveDisabledRows))
         return selected.contains(offset) ? selected : IndexSet(integer: offset)
     }
 
