@@ -286,6 +286,14 @@ struct MyApp: App {
 - ``DefaultMenuStyle``
 - ``InlineMenuStyle``
 - ``GaugeStyle``
+- ``GaugeStyleConfiguration``
+- ``DefaultGaugeStyle``
+- ``LinearCapacityGaugeStyle``
+- ``AccessoryLinearGaugeStyle``
+- ``AccessoryLinearCapacityGaugeStyle``
+- ``AccessoryCircularGaugeStyle``
+- ``AccessoryCircularCapacityGaugeStyle``
+- ``AccessoryCircularTinyGaugeStyle``
 - ``FormStyle``
 - ``FormStyleConfiguration``
 - ``TrackStyle``

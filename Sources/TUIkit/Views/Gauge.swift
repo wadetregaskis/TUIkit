@@ -222,38 +222,79 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     /// and value. Either way the height is the label line (when present) plus
     /// the indicator row. Reporting this directly (rather than rendering to
     /// measure) keeps `sizeThatFits` and `renderToBuffer` in agreement.
+    ///
+    /// A custom ``GaugeStyle`` draws an ordinary view, so it is measured as one.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        if context.environment.gaugeStyle.isCircular {
-            let size = circularSize(context: context)
-            return ViewSize(
-                width: size.width, height: size.height, isWidthFlexible: false, isHeightFlexible: false)
+        let style = context.environment.gaugeStyle
+        guard let shape = style.builtInShape else {
+            return style.makeSize(
+                configuration: configuration(), proposal: proposal, context: context)
         }
-        let width = proposal.width ?? context.availableWidth
-        let height = visibleLabelLine(width: width, context: context) != nil ? 2 : 1
-        return ViewSize(width: width, height: height, isWidthFlexible: true, isHeightFlexible: false)
+        if case .linear = shape {
+            let width = proposal.width ?? context.availableWidth
+            let height = visibleLabelLine(width: width, context: context) != nil ? 2 : 1
+            return ViewSize(width: width, height: height, isWidthFlexible: true, isHeightFlexible: false)
+        }
+        let size = circularSize(shape: shape, context: context)
+        return ViewSize(
+            width: size.width, height: size.height, isWidthFlexible: false, isHeightFlexible: false)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let palette = context.environment.palette
         let style = context.environment.gaugeStyle
-        if style.isCircular {
-            if style == .accessoryCircularTiny {
-                return renderCircularTiny(palette: palette, context: context)
+        // The built-in styles render procedurally (a `TrackRenderer` bar, or the
+        // ring dial); a custom `GaugeStyle` renders through its `makeBody`.
+        guard let shape = style.builtInShape else {
+            return style.makeBuffer(configuration: configuration(), context: context)
+        }
+        switch shape {
+        case .tinyDial:
+            return renderCircularTiny(palette: palette, context: context)
+        case .ring(let capacity):
+            return renderCircularDial(capacity: capacity, palette: palette, context: context)
+        case .linear(let trackStyle):
+            let width = context.availableWidth
+            var lines: [String] = []
+            if let labelLine = visibleLabelLine(width: width, context: context) {
+                lines.append(labelLine)
             }
-            return renderCircularDial(
-                capacity: style == .accessoryCircularCapacity, palette: palette, context: context)
+            let barRow = lines.count
+            let bar = renderBarLine(
+                width: width, trackStyle: trackStyle, palette: palette, context: context)
+            lines.append(bar.line)
+            var buffer = FrameBuffer(lines: lines)
+            buffer.opacityRegions += bar.claims.map { $0.shifted(byX: 0, y: barRow) }
+            return buffer
         }
-        let width = context.availableWidth
-        var lines: [String] = []
-        if let labelLine = visibleLabelLine(width: width, context: context) {
-            lines.append(labelLine)
+    }
+
+    /// The gauge's properties, for a custom ``GaugeStyle``'s
+    /// ``GaugeStyle/makeBody(configuration:)``.
+    ///
+    /// Absent labels arrive as `nil` rather than as an `EmptyView`, matching
+    /// SwiftUI: a gauge built without a current-value label has
+    /// `configuration.currentValueLabel == nil`, which is what lets a style lay
+    /// out around the labels it actually has instead of reserving a row for one
+    /// that draws nothing. `label` is not optional in SwiftUI either, so a
+    /// label-less gauge passes an empty one.
+    ///
+    /// Unlike the built-in renderings, the labels are not drawn under
+    /// ``GaugeLabelSlot`` child identities here — a custom body places them
+    /// itself, so they take their identity from where it puts them, as any other
+    /// view does. Nothing collides: `_GaugeCore` keeps no `@State` of its own at
+    /// its identity, so the style's body may use index 0 there.
+    private func configuration() -> GaugeStyleConfiguration {
+        func erase<V: View>(_ view: V?) -> AnyView? {
+            guard let view, !(view is EmptyView) else { return nil }
+            return AnyView(view)
         }
-        let barRow = lines.count
-        let bar = renderBarLine(width: width, style: style, palette: palette, context: context)
-        lines.append(bar.line)
-        var buffer = FrameBuffer(lines: lines)
-        buffer.opacityRegions += bar.claims.map { $0.shifted(byX: 0, y: barRow) }
-        return buffer
+        return GaugeStyleConfiguration(
+            value: fraction,
+            label: erase(label) ?? AnyView(EmptyView()),
+            currentValueLabel: erase(currentValueLabel),
+            minimumValueLabel: erase(minimumValueLabel),
+            maximumValueLabel: erase(maximumValueLabel))
     }
 
     // MARK: - Rendering
@@ -281,17 +322,6 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         return TUIkit.renderToBuffer(view, context: slotContext).lines.first ?? ""
     }
 
-    /// The bar glyph a linear gauge style draws with. The default (a shaded
-    /// meter) is deliberately distinct from ``ProgressView`` (solid blocks) and
-    /// ``Slider`` (a knob on a rail) so the three read differently at a glance.
-    private func trackStyle(for style: GaugeStyle) -> TrackStyle {
-        switch style {
-        case .accessoryLinear: return .marker  // position only, no fill
-        case .accessoryLinearCapacity: return .blockFine  // fills min→value, sub-cell precise
-        default: return .shade  // linearCapacity / automatic — a shaded meter
-        }
-    }
-
     /// The label line (label left, current-value right) if it has visible
     /// content, else `nil` — so a blank label doesn't push the bar down.
     private func visibleLabelLine(width: Int, context: RenderContext) -> String? {
@@ -313,7 +343,7 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     ///   label — the offset is known only here, and re-deriving `minPart` in the
     ///   caller is exactly the divergence one function per rule exists to prevent.
     private func renderBarLine(
-        width: Int, style: GaugeStyle, palette: any Palette, context: RenderContext
+        width: Int, trackStyle: TrackStyle, palette: any Palette, context: RenderContext
     ) -> (line: String, claims: [OpacityRegion]) {
         let minText = inlineText(minimumValueLabel, slot: .minimumValue, context: context)
         let maxText = inlineText(maximumValueLabel, slot: .maximumValue, context: context)
@@ -323,7 +353,7 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         let bar = TrackRenderer.render(
             fraction: fraction,
             width: barWidth,
-            style: trackStyle(for: style),
+            style: trackStyle,
             fillColor: palette.foregroundSecondary,
             backgroundColor: palette.foregroundTertiary,
             accentColor: palette.accent,
@@ -470,10 +500,10 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
     }
 
     /// The natural size of a circular gauge (kept in step with the renderers).
-    private func circularSize(context: RenderContext) -> (width: Int, height: Int) {
+    private func circularSize(shape: GaugeShape, context: RenderContext) -> (width: Int, height: Int) {
         let valueWidth = inlineText(currentValueLabel, slot: .currentValue, context: context).strippedLength
         let labelWidth = inlineText(label, slot: .label, context: context).strippedLength
-        if context.environment.gaugeStyle == .accessoryCircularTiny {
+        if shape == .tinyDial {
             let rowWidth = valueWidth > 0 ? 1 + 1 + valueWidth : 1  // dial + space + value
             return (max(1, max(rowWidth, labelWidth)), labelWidth > 0 ? 2 : 1)
         }
@@ -482,16 +512,6 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         let inner = max(gaugeCircularInnerWidth, valueWidth)
         let width = max(inner + 2, labelWidth)
         return (width, labelWidth > 0 ? 4 : 3)
-    }
-}
-
-// MARK: - GaugeStyle helpers
-
-extension GaugeStyle {
-    /// Whether this style renders as a circular dial rather than a bar.
-    fileprivate var isCircular: Bool {
-        self == .accessoryCircular || self == .accessoryCircularCapacity
-            || self == .accessoryCircularTiny
     }
 }
 

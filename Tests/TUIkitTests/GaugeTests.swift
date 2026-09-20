@@ -231,3 +231,133 @@ struct GaugeSpeedometerOriginTests {
             "the bottom row carries the accent at low fill; top: \(top.debugDescription) bottom: \(bottom.debugDescription)")
     }
 }
+
+// MARK: - Custom styles
+
+/// A custom gauge style — five blocks and the gauge's own label.
+///
+/// This is `GaugeStyle`'s documentation example, kept here rather than only in
+/// the doc comment so the shape a reader is taught is a shape the suite
+/// compiles. Before `GaugeStyle` became a protocol this file could not build:
+/// "inheritance from non-protocol type 'GaugeStyle'".
+private struct BlocksGaugeStyle: GaugeStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let filled = Int((configuration.value * 5).rounded())
+        return HStack(spacing: 1) {
+            configuration.label
+            Text(String(repeating: "▰", count: filled) + String(repeating: "▱", count: 5 - filled))
+        }
+    }
+}
+
+/// A custom style that places every label the configuration carries, so a test
+/// can see which of the five reached it.
+private struct EveryLabelGaugeStyle: GaugeStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            configuration.label
+            configuration.currentValueLabel
+            configuration.minimumValueLabel
+            configuration.maximumValueLabel
+        }
+    }
+}
+
+@MainActor
+@Suite("Custom GaugeStyle")
+struct CustomGaugeStyleTests {
+
+    @Test("A custom style draws the gauge through makeBody(configuration:)")
+    func customStyleRenders() {
+        let text = renderToBuffer(
+            Gauge(value: 0.6) { Text("CPU") }.gaugeStyle(BlocksGaugeStyle()),
+            context: makeRenderContext(width: 30, height: 4)
+        ).lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(text.contains("CPU"))
+        #expect(text.contains("▰▰▰▱▱"))  // 0.6 × 5, rounded
+        // And nothing of the built-in meter survives underneath it.
+        #expect(!text.contains("▓"))
+        #expect(!text.contains("░"))
+    }
+
+    @Test("A built-in style still renders procedurally, not through makeBody")
+    func builtInStyleUnaffected() {
+        let text = renderToBuffer(
+            Gauge(value: 0.6) { Text("CPU") }.gaugeStyle(.linearCapacity),
+            context: makeRenderContext(width: 30, height: 4)
+        ).lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(text.contains("▓"))
+        #expect(!text.contains("▰"))
+    }
+
+    @Test("`.automatic` resolves to the same shaded meter as `.linearCapacity`")
+    func automaticResolvesToLinearCapacity() {
+        func lines(_ style: some GaugeStyle) -> [String] {
+            renderToBuffer(
+                Gauge(value: 0.42) { Text("CPU") }.gaugeStyle(style),
+                context: makeRenderContext(width: 30, height: 4)
+            ).lines.map { $0.stripped }
+        }
+        #expect(lines(.automatic) == lines(.linearCapacity))
+    }
+
+    @Test("The configuration carries the normalized value, not the raw one")
+    func configurationValueIsNormalized() {
+        // 90 in 60...180 is 0.25 → one block of five.
+        let text = renderToBuffer(
+            Gauge(value: 90.0, in: 60.0...180.0) { EmptyView() }.gaugeStyle(BlocksGaugeStyle()),
+            context: makeRenderContext(width: 30, height: 4)
+        ).lines.map { $0.stripped }.joined()
+        #expect(text.contains("▰▱▱▱▱"))
+    }
+
+    @Test("Labels the gauge was not given arrive as nil, not as empty views")
+    func absentLabelsAreNil() {
+        // Built with a label and a current-value label only: a style that places
+        // all four must draw two rows, not four.
+        let twoLabels = renderToBuffer(
+            Gauge(value: 0.5) {
+                Text("L")
+            } currentValueLabel: {
+                Text("50%")
+            }
+            .gaugeStyle(EveryLabelGaugeStyle()),
+            context: makeRenderContext(width: 30, height: 8))
+        #expect(twoLabels.height == 2)
+        let joined = twoLabels.lines.map { $0.stripped }.joined(separator: "\n")
+        #expect(joined.contains("L"))
+        #expect(joined.contains("50%"))
+
+        // All four supplied: four rows.
+        let fourLabels = renderToBuffer(
+            Gauge(value: 0.5, in: 0...100) {
+                Text("L")
+            } currentValueLabel: {
+                Text("50%")
+            } minimumValueLabel: {
+                Text("0")
+            } maximumValueLabel: {
+                Text("100")
+            }
+            .gaugeStyle(EveryLabelGaugeStyle()),
+            context: makeRenderContext(width: 30, height: 8))
+        #expect(fourLabels.height == 4)
+    }
+
+    @Test("measure == render: a custom style reports the size its body draws")
+    func customStyleSizeMatchesRender() {
+        let gauge = Gauge(value: 0.6) { Text("CPU") }.gaugeStyle(BlocksGaugeStyle())
+        let context = makeRenderContext(width: 40, height: 4)
+        let measured = measureChild(gauge, proposal: ProposedSize(width: 40, height: nil), context: context)
+        let rendered = renderToBuffer(gauge, context: context)
+        #expect(measured.height == rendered.height)
+        #expect(measured.width == rendered.width)
+        // And it is the BODY's size, not the linear meter's. Without this the
+        // test passes against a `_GaugeCore` that ignores custom styles
+        // altogether: the built-in bar measures and renders at the full
+        // proposal, so the two agree there too and the assertions above are
+        // vacuous. `CPU` + a space + five blocks is nine cells, well under 40.
+        #expect(rendered.width < 40, "a custom body hugs its content: \(rendered.width)")
+        #expect(measured.width < 40)
+    }
+}

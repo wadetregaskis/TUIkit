@@ -5,9 +5,8 @@
 //  terminal, which of the two it shows at all.
 //
 //  Modelled on ``ButtonStyle``: an open protocol with `makeBody(configuration:)`,
-//  because unlike ``GaugeStyle`` (whose shapes a terminal cannot draw) this is
-//  pure recomposition of two views the caller already supplied. Anything a
-//  custom style wants to do here, a terminal can do.
+//  because this is pure recomposition of two views the caller already supplied.
+//  Anything a custom style wants to do here, a terminal can do.
 //
 //  Created by Wade Tregaskis
 //  License: MIT

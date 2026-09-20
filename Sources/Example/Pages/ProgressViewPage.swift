@@ -462,8 +462,8 @@ struct ProgressViewPage: View {
     /// A `[style name | linear gauge]` row, echoing the ProgressView catalogue.
     /// `text` overrides the read-out (default: the fraction as a percentage).
     @ViewBuilder
-    private func gaugeRow(
-        label: String, fraction: Double, text: String? = nil, style: GaugeStyle
+    private func gaugeRow<S: GaugeStyle>(
+        label: String, fraction: Double, text: String? = nil, style: S
     ) -> some View {
         HStack(spacing: 1) {
             Text(label).dim()
@@ -480,8 +480,8 @@ struct ProgressViewPage: View {
     /// `text` is required rather than defaulted: a ring has four cells for its
     /// read-out, so what goes in one is always a decision.
     @ViewBuilder
-    private func circularGauge(
-        label: String, fraction: Double, text: String, style: GaugeStyle
+    private func circularGauge<S: GaugeStyle>(
+        label: String, fraction: Double, text: String, style: S
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Gauge(value: fraction) { EmptyView() } currentValueLabel: {

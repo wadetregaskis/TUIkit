@@ -97,7 +97,8 @@ private struct UncomparableMenuStyle: MenuStyle {
 /// Split out of `RenderCacheContractTests` when the file passed the project's
 /// 600-line ceiling: the series had grown to eight style families (menu,
 /// button, list, toggle, label, text field, picker, form) and is the half that
-/// grows again whenever a style family is added.
+/// grows again whenever a style family is added — gauge, the ninth, arrived in
+/// the commit after the split.
 @MainActor
 @Suite("RenderCache style contracts", .serialized)
 struct RenderCacheStyleContractTests: RenderCacheHarness {
@@ -220,6 +221,61 @@ struct RenderCacheStyleContractTests: RenderCacheHarness {
         #expect(
             delta.hits == 0,
             "a checkbox replaced by a switch must not serve the checkbox's buffer: \(delta)")
+    }
+
+    @Test("No built-in gauge style stops the subtree below it caching")
+    func builtInGaugeStyleKeepsCaching() {
+        // The same clause on the key path `.gaugeStyle(_:)` opened up: it used to
+        // inject a closed `enum` the compiler made `Equatable` for free, and now
+        // injects an `any GaugeStyle` whose dynamic type has to declare it. A
+        // built-in that forgot to would turn the cache off for everything under
+        // the modifier — the gauge's own four labels, and whatever else a
+        // dashboard puts inside the container that carries the style.
+        //
+        // All seven are asked, in their own contexts, because conforming only
+        // some would leave the rest exactly as they were.
+        func styleStoresAndServes<S: GaugeStyle>(_ style: S, _ spelling: String) {
+            let shared = context()
+            let cache = shared.environment.renderCache!
+
+            frame(shared, CacheLeaf(text: "hi").equatable().gaugeStyle(style))
+            #expect(!cache.isEmpty, "a memo under \(spelling) must store")
+
+            let before = cache.stats
+            frame(shared, CacheLeaf(text: "hi").equatable().gaugeStyle(style))
+            let delta = cache.stats.delta(since: before)
+            #expect(delta.hits >= 1, "and must be served on the next frame: \(delta)")
+        }
+
+        styleStoresAndServes(.automatic, ".gaugeStyle(.automatic)")
+        styleStoresAndServes(.linearCapacity, ".gaugeStyle(.linearCapacity)")
+        styleStoresAndServes(.accessoryLinear, ".gaugeStyle(.accessoryLinear)")
+        styleStoresAndServes(.accessoryLinearCapacity, ".gaugeStyle(.accessoryLinearCapacity)")
+        styleStoresAndServes(.accessoryCircular, ".gaugeStyle(.accessoryCircular)")
+        styleStoresAndServes(.accessoryCircularCapacity, ".gaugeStyle(.accessoryCircularCapacity)")
+        styleStoresAndServes(.accessoryCircularTiny, ".gaugeStyle(.accessoryCircularTiny)")
+    }
+
+    /// The safety half. None of the seven gauge styles holds anything, so what
+    /// varies is the TYPE — and it varies loudly: `builtInShape` reads the
+    /// dynamic type and nothing else, so a bar at one slot and a ring at the
+    /// same slot differ in height as well as in glyphs. The only thing standing
+    /// between that and a stale serve is the downcast in
+    /// `Equatable.isEqual(to:)`.
+    @Test("Swapping one built-in gauge style for another clears the subtree below it")
+    func gaugeStyleTypeChangeClearsCaching() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+
+        frame(shared, CacheLeaf(text: "hi").equatable().gaugeStyle(.linearCapacity))
+        #expect(!cache.isEmpty, "a memo under a built-in gauge style must store")
+
+        let before = cache.stats
+        frame(shared, CacheLeaf(text: "hi").equatable().gaugeStyle(.accessoryCircular))
+        let delta = cache.stats.delta(since: before)
+        #expect(
+            delta.hits == 0,
+            "a bar replaced by a ring must not serve the bar's buffer: \(delta)")
     }
 
     @Test("No built-in label style stops the subtree below it caching")

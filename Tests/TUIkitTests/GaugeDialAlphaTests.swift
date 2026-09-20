@@ -79,10 +79,17 @@ struct GaugeDialAlphaTests {
 
     @Test("An opaque tint claims nothing on either dial")
     func opaqueDialsClaimNothing() {
-        for style in [GaugeStyle.accessoryCircularTiny, .accessoryCircular, .accessoryCircularCapacity] {
+        // Each style in its own generic call rather than one loop over an array:
+        // `.gaugeStyle(_:)` is generic over the conformer (as SwiftUI's is), so
+        // the three dial styles have three different types and no array holds
+        // them without erasing what the modifier needs.
+        func claimsNothing<S: GaugeStyle>(_ style: S) {
             let drawn = buffer(
                 Gauge(value: 0.6) { Text("load") }.gaugeStyle(style).tint(.red))
             #expect(drawn.opacityRegions.isEmpty, "\(style): \(drawn.opacityRegions)")
         }
+        claimsNothing(.accessoryCircularTiny)
+        claimsNothing(.accessoryCircular)
+        claimsNothing(.accessoryCircularCapacity)
     }
 }
