@@ -55,6 +55,16 @@ private func isFlexibleAcross(
 /// Spacing is in **rows**, and defaults to none, matching `VStack`'s own
 /// default rather than SwiftUI's font-derived one — a terminal has no font
 /// metric to derive it from.
+///
+/// **Deliberate divergence — `alignment` defaults to `.leading`, not
+/// `.center`.** SwiftUI's `VStackLayout` defaults to `.center`, the same as
+/// `VStack` itself; TUIkit's `VStack` keeps that `.center` default too (see
+/// its own doc comment) — only this `Layout`-value spelling does not. Owner's
+/// decision, 2026-09-20: deliberate, to fit more naturally into the terminal
+/// environment, the same top-left-reading reasoning
+/// `Documentation/SwiftUI-compatibility.md` §2.7 gives for a fixed `.frame`'s
+/// default; §2.10 states it for this type. Pass an explicit
+/// `alignment: .center` for the SwiftUI default.
 public struct VStackLayout: Layout, Sendable, Equatable {
     /// How subviews line up across the stack's width.
     public var alignment: HorizontalAlignment
@@ -65,7 +75,9 @@ public struct VStackLayout: Layout, Sendable, Equatable {
     /// Creates a vertical stack layout.
     ///
     /// - Parameters:
-    ///   - alignment: The horizontal alignment (default: `.leading`).
+    ///   - alignment: The horizontal alignment (default: `.leading` — a
+    ///     deliberate divergence from SwiftUI's `.center`; see the type's own
+    ///     doc comment).
     ///   - spacing: Blank rows between subviews (default: none).
     public init(alignment: HorizontalAlignment = .leading, spacing: Int = 0) {
         self.alignment = alignment
@@ -153,6 +165,14 @@ public struct VStackLayout: Layout, Sendable, Equatable {
 ///
 /// Spacing is in **columns**, and defaults to one — the same default `HStack`
 /// uses, because two words with no cell between them read as one word.
+///
+/// **Deliberate divergence — `alignment` defaults to `.top`, not `.center`.**
+/// See ``VStackLayout``'s doc comment: the same divergence, the same owner
+/// decision (2026-09-20), and the same reasoning — `.center` is SwiftUI's
+/// default (matching `HStack`, which TUIkit's own `HStack` keeps), but this
+/// `Layout`-value spelling defaults to `.top` instead, to fit more naturally
+/// into the terminal environment. See
+/// `Documentation/SwiftUI-compatibility.md` §2.10.
 public struct HStackLayout: Layout, Sendable, Equatable {
     /// How subviews line up across the stack's height.
     public var alignment: VerticalAlignment
@@ -163,7 +183,9 @@ public struct HStackLayout: Layout, Sendable, Equatable {
     /// Creates a horizontal stack layout.
     ///
     /// - Parameters:
-    ///   - alignment: The vertical alignment (default: `.top`).
+    ///   - alignment: The vertical alignment (default: `.top` — a deliberate
+    ///     divergence from SwiftUI's `.center`; see the type's own doc
+    ///     comment).
     ///   - spacing: Blank columns between subviews (default: 1).
     public init(alignment: VerticalAlignment = .top, spacing: Int = 1) {
         self.alignment = alignment
@@ -250,14 +272,23 @@ extension HStackLayout: AxisPublishingLayout {
 /// Every subview is placed at the same origin, in declaration order — which is
 /// draw order, so the last one written is on top. ``Layout`` permits that
 /// deliberately: a layout may place its subviews overlapping.
+///
+/// **Deliberate divergence — `alignment` defaults to `.topLeading`, not
+/// `.center`.** SwiftUI's `ZStackLayout` defaults to `.center`, matching
+/// `ZStack`; TUIkit's `ZStack` keeps that `.center` default too — only this
+/// `Layout`-value spelling does not. Owner's decision, 2026-09-20: deliberate,
+/// to fit more naturally into the terminal environment (the same reasoning as
+/// ``VStackLayout``'s and ``HStackLayout``'s alignment defaults — see
+/// `Documentation/SwiftUI-compatibility.md` §2.10).
 public struct ZStackLayout: Layout, Sendable, Equatable {
     /// Where subviews sit within the stack's own frame.
     public var alignment: Alignment
 
     /// Creates an overlay layout.
     ///
-    /// - Parameter alignment: Where subviews sit (default: `.topLeading`,
-    ///   matching `ZStack` — a terminal reads from the top-left).
+    /// - Parameter alignment: Where subviews sit (default: `.topLeading` — a
+    ///   deliberate divergence from SwiftUI's `.center`, which is what
+    ///   `ZStack` itself still defaults to; see the type's own doc comment).
     public init(alignment: Alignment = .topLeading) {
         self.alignment = alignment
     }
