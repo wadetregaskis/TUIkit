@@ -220,6 +220,49 @@ type_name:
     - ID
 
 custom_rules:
+  # `ColorDepth.processCurrent` is a lazy static whose initializer is
+  # `ColorDepth.detect()`, so the first read of `ColorDepth.current` ANYWHERE in
+  # the process fixes the colour depth for the rest of the run — and `current`
+  # is the default argument of `Color.foregroundCodes(depth:)`,
+  # `backgroundCodes(depth:)` and `backgroundEscape(depth:)`, so that reader is
+  # simply the first code to spell any colour. swift-testing runs suites
+  # concurrently inside one process, so a test that put a fake `TERM` in the
+  # real environment — even briefly, even restoring it — could latch every
+  # other test's colours at `dumb` or `basic16`; 70 test files assert on
+  # `38;2;` / `38;5;` byte sequences that would then silently change.
+  #
+  # The decision table is posed on a dictionary instead
+  # (`ColorDepth.detect(environment:)`, the shape the TerminalHost,
+  # LocalizationService and TerminalColorQuery environment readers already
+  # use), which leaves no fake value for the latch to catch. This rule is what
+  # makes that structural rather than a convention: before it, the only thing
+  # standing between the suite and the hazard was one hand-written
+  # `_ = ColorDepth.current` in one test file.
+  #
+  # Scoped by the config's own `included:` (Sources and Tests) rather than a
+  # narrower list — the framework must not rewrite a user's TERM either.
+  # `match_kinds` must name BOTH `identifier` and `string`: the matched range
+  # spans the `setenv` identifier and the `"TERM"` literal, and listing only
+  # one rejects every match. Comments are excluded by their absence from the
+  # list, so the prose that explains the rule does not trip it.
+  #
+  # What it cannot see: an indirected name, `let name = "TERM"` followed by
+  # `setenv(name, …)`. The two suites that mutate the environment through a
+  # local like that (TerminalGraphicsSupportTests, TerminalURLOpeningTests) use
+  # TUIKIT_* variables, which are nobody's latch. The runtime backstop for the
+  # indirected case is `ColorDepthDetectionTests`'s last test.
+  process_terminal_environment_mutation:
+    name: "Process TERM/COLORTERM mutation"
+    message: >-
+      Writing TERM or COLORTERM process-wide can latch the process colour depth
+      at a fake value for every concurrently-rendering test. Pose the question
+      on a dictionary instead: ColorDepth.detect(environment:).
+    regex: '\b(un)?setenv\(\s*"(TERM|COLORTERM)"'
+    match_kinds:
+      - identifier
+      - string
+    severity: error
+
   # Every built-in view draws with the palette's roles, so a theme restyles all
   # of them; the ThemingGuide article's "What built-in controls draw with" lists
   # which role each control uses and the few colours that stay literal. This

@@ -70,6 +70,12 @@ extension ColorDepth {
     /// initialization (from environment variables that don't change) and
     /// read from the render path. Any override is expected before rendering
     /// starts.
+    ///
+    /// Being a `static var` with an initializer, this is LAZY: `detect()` runs
+    /// on the first read of ``current`` from anywhere in the process, and the
+    /// answer it gives then is the one the whole process keeps. That is the
+    /// designed behaviour; see ``detect(environment:)`` for why it means no
+    /// test may put a fake `TERM` in the real environment.
     nonisolated(unsafe) private static var processCurrent: ColorDepth = detect()
 
     /// A task-scoped pin of ``current``, bound by ``withCurrent(_:operation:)-8j0jn``.
@@ -196,9 +202,35 @@ extension ColorDepth {
     /// This method inspects `COLORTERM` and `TERM` in the order
     /// described in ``ColorDepth``. It is called once to initialize
     /// ``current`` and can be called again if the environment changes.
-    public static func detect() -> ColorDepth {
-        let environment = ProcessInfo.processInfo.environment
-
+    ///
+    /// # Why the environment is a parameter
+    ///
+    /// It defaults to what the running process actually has, so every existing
+    /// caller is unaffected — the shape the package's other environment readers
+    /// already use (`TerminalHost.detectAppleTerminal(environment:)` and its
+    /// four siblings, `LocalizationService.systemPreferredLanguage(environment:)`,
+    /// `TerminalColorQuery.resolve(_:environment:)`). Here it is not merely for
+    /// tidiness, because this is the one detector whose answer LATCHES.
+    ///
+    /// `processCurrent` is a lazy static whose initializer is this function, so
+    /// whoever first reads ``current`` anywhere in the process fixes the
+    /// process-wide depth for the rest of the run — and ``current`` is in turn
+    /// the DEFAULT ARGUMENT of `Color.foregroundCodes(depth:)`,
+    /// `backgroundCodes(depth:)` and `backgroundEscape(depth:)`, so that reader
+    /// is simply the first code to spell any colour. Posing the decision table
+    /// by putting a fake `TERM` in the real environment therefore risks
+    /// freezing a *parallel* test's colours at, say, `dumb` for the remainder
+    /// of the process. Posing it on a dictionary cannot: the process
+    /// environment is never written, so no fake value exists for the latch to
+    /// catch. `.swiftlint.yml`'s `process_terminal_environment_mutation` rule
+    /// keeps it that way.
+    ///
+    /// Latching once per process is the intended behaviour and is unchanged:
+    /// the default argument is evaluated per call, so the lazy initializer
+    /// still reads the live environment exactly once.
+    public static func detect(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> ColorDepth {
         // COLORTERM is the most reliable indicator of truecolor support.
         // Modern terminals (iTerm2, GNOME Terminal, Alacritty, WezTerm,
         // Ghostty, etc.) set this to "truecolor" or "24bit".

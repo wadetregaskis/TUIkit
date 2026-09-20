@@ -13,6 +13,15 @@
 //  termtype — and the depth gates the WCAG contrast floor, the SGR encoding
 //  and the pulse ramp.
 //
+//  The table is posed on a DICTIONARY, never on the real environment. The
+//  first version of this file set `TERM` process-wide and restored it, which
+//  left a window in which a parallel test could be the one to trigger the
+//  lazy `processCurrent` initializer and latch the process at a fake value;
+//  the guard against that was a single hand-written `_ = ColorDepth.current`
+//  nobody was obliged to remember. `detect(environment:)` removes the window
+//  rather than guarding it, and `.swiftlint.yml`'s
+//  `process_terminal_environment_mutation` rule keeps it removed.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -23,39 +32,11 @@ import Testing
 
 /// The documented detection order, one test per rung.
 ///
-/// `.serialized`, and every test restores what it changed: `TERM` and
-/// `COLORTERM` are process-wide.
-@Suite("Colour depth detection", .serialized)
+/// Every case is a dictionary handed to ``ColorDepth/detect(environment:)``,
+/// so nothing here touches the process environment, nothing has to be
+/// restored, and the suite needs no serialization.
+@Suite("Colour depth detection")
 struct ColorDepthDetectionTests {
-
-    /// Runs `body` with `TERM` and `COLORTERM` set as given (or unset),
-    /// restoring both afterwards.
-    private func withTerminalEnvironment(
-        term: String?, colorterm: String? = nil, _ body: () -> Void
-    ) {
-        // `processCurrent` is a LAZY static whose initializer is `detect()`.
-        // Reading it first means a parallel suite cannot be the one to trigger
-        // that initializer inside the window below and freeze the process-wide
-        // depth at one of these fake values for the rest of the run.
-        _ = ColorDepth.current
-
-        let saved = (
-            term: ProcessInfo.processInfo.environment["TERM"],
-            colorterm: ProcessInfo.processInfo.environment["COLORTERM"]
-        )
-        defer {
-            if let value = saved.term { setenv("TERM", value, 1) } else { unsetenv("TERM") }
-            if let value = saved.colorterm {
-                setenv("COLORTERM", value, 1)
-            } else {
-                unsetenv("COLORTERM")
-            }
-        }
-
-        if let term { setenv("TERM", term, 1) } else { unsetenv("TERM") }
-        if let colorterm { setenv("COLORTERM", colorterm, 1) } else { unsetenv("COLORTERM") }
-        body()
-    }
 
     @Test(
         "Every documented TERM rung answers as documented",
@@ -78,19 +59,13 @@ struct ColorDepthDetectionTests {
             ("xterm", .basic16),
         ])
     func termTable(term: String, expected: ColorDepth) {
-        withTerminalEnvironment(term: term) {
-            #expect(ColorDepth.detect() == expected, "TERM=\(term)")
-        }
+        #expect(ColorDepth.detect(environment: ["TERM": term]) == expected, "TERM=\(term)")
     }
 
     @Test("TERM is matched case-insensitively")
     func termIsLowercased() {
-        withTerminalEnvironment(term: "XTERM-256COLOR") {
-            #expect(ColorDepth.detect() == .palette256)
-        }
-        withTerminalEnvironment(term: "DUMB") {
-            #expect(ColorDepth.detect() == .noColor)
-        }
+        #expect(ColorDepth.detect(environment: ["TERM": "XTERM-256COLOR"]) == .palette256)
+        #expect(ColorDepth.detect(environment: ["TERM": "DUMB"]) == .noColor)
     }
 
     @Test("An unset TERM means truecolor, not no colour")
@@ -98,9 +73,7 @@ struct ColorDepthDetectionTests {
         // The deliberate asymmetry: an absent TERM is an IDE, a redirect or an
         // environment that was not propagated — no positive evidence of a
         // limited terminal — and the rule is to downgrade only on evidence.
-        withTerminalEnvironment(term: nil) {
-            #expect(ColorDepth.detect() == .truecolor)
-        }
+        #expect(ColorDepth.detect(environment: [:]) == .truecolor)
     }
 
     @Test(
@@ -110,35 +83,60 @@ struct ColorDepthDetectionTests {
         // Rung 1, and it must beat rung 3: a terminal that sets COLORTERM and
         // an unhelpful TERM is common, and `dumb` is the strongest thing the
         // table can say.
-        withTerminalEnvironment(term: "dumb", colorterm: colorterm) {
-            #expect(ColorDepth.detect() == .truecolor)
-        }
-        withTerminalEnvironment(term: "vt100", colorterm: colorterm) {
-            #expect(ColorDepth.detect() == .truecolor)
-        }
+        #expect(
+            ColorDepth.detect(environment: ["TERM": "dumb", "COLORTERM": colorterm])
+                == .truecolor)
+        #expect(
+            ColorDepth.detect(environment: ["TERM": "vt100", "COLORTERM": colorterm])
+                == .truecolor)
     }
 
     @Test("A COLORTERM that claims nothing falls through to TERM")
     func unhelpfulColortermIsIgnored() {
         // Only "truecolor" and "24bit" are claims. Anything else — and some
         // terminals set COLORTERM to their own name — must not upgrade.
-        withTerminalEnvironment(term: "xterm-16color", colorterm: "gnome-terminal") {
-            #expect(ColorDepth.detect() == .basic16)
-        }
-        withTerminalEnvironment(term: "dumb", colorterm: "") {
-            #expect(ColorDepth.detect() == .noColor)
-        }
+        #expect(
+            ColorDepth.detect(environment: ["TERM": "xterm-16color", "COLORTERM": "gnome-terminal"])
+                == .basic16)
+        #expect(ColorDepth.detect(environment: ["TERM": "dumb", "COLORTERM": ""]) == .noColor)
     }
 
-    @Test("Detection re-reads the environment on every call")
+    @Test("Detection memoizes nothing")
     func detectionIsNotCached() {
-        // What makes `detect()` usable after a terminal change, and what the
-        // cached `current` deliberately is not.
-        withTerminalEnvironment(term: "xterm-256color") {
-            #expect(ColorDepth.detect() == .palette256)
-        }
-        withTerminalEnvironment(term: "dumb") {
-            #expect(ColorDepth.detect() == .noColor)
-        }
+        // What makes `detect(environment:)` usable after a terminal change, and
+        // what the latched `current` deliberately is not: two calls, two
+        // environments, two answers — no first answer is kept.
+        #expect(ColorDepth.detect(environment: ["TERM": "xterm-256color"]) == .palette256)
+        #expect(ColorDepth.detect(environment: ["TERM": "dumb"]) == .noColor)
+        #expect(ColorDepth.detect(environment: ["TERM": "xterm-256color"]) == .palette256)
+    }
+
+    @Test("The default environment is the live one, read per call")
+    func defaultArgumentIsTheProcessEnvironment() {
+        // `detect()` must keep answering for the process that calls it, since
+        // that is the call the lazy `processCurrent` initializer makes. A
+        // default argument is evaluated at each call site, so this reads the
+        // environment now rather than a snapshot taken at type-initialization.
+        #expect(
+            ColorDepth.detect()
+                == ColorDepth.detect(environment: ProcessInfo.processInfo.environment))
+    }
+
+    @Test("The process-wide depth still says what this process's environment says")
+    func processDepthIsNotLatchedToAFakeValue() {
+        // The runtime backstop to the lint rule, and the only check that also
+        // covers the OTHER route to the same defect: `ColorDepth.current` has a
+        // setter, and a test assigning it process-wide would poison every
+        // concurrently-rendering test exactly as a fake `TERM` would. Both pins
+        // (`withCurrent`/`withCap`) are task-local and invisible here, and
+        // `cap` defaults to `.truecolor`, so `current` should be precisely what
+        // detection says about this process.
+        //
+        // It is a BACKSTOP, not the mechanism: it can only fire if the
+        // poisoning happened earlier in this same process, which under the
+        // parallel runner means the same shard. What makes forgetting
+        // impossible is the lint rule; this catches the case the regex cannot
+        // see (`let name = "TERM"; setenv(name, …)`) when luck cooperates.
+        #expect(ColorDepth.current == ColorDepth.detect())
     }
 }
