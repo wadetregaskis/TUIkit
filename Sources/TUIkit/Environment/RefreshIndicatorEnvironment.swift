@@ -67,10 +67,11 @@ extension View {
     /// The indicator is drawn with one blank cell either side, so it reads as a
     /// badge over the content rather than colliding with the character next to
     /// it — bear that in mind when picking a wide style. It OVERLAYS the top row
-    /// rather than insetting it, and `.overlay` sizes to the larger of the two,
-    /// so a multi-cell style (`.bouncing`) can widen content narrower
-    /// than the indicator for as long as a refresh is in flight. One-cell styles
-    /// (`.dots`, `.line`, `.pie`, …) never can.
+    /// rather than insetting it, and an `.overlay` is laid out in its base's
+    /// frame and cut to it, so a multi-cell style (`.bouncing`) is CLIPPED over
+    /// content narrower than the indicator rather than widening it. One-cell
+    /// styles (`.dots`, `.line`, `.pie`, …) fit anything three cells or wider,
+    /// which is the narrowest content the badge is drawn on at all.
     ///
     /// ```swift
     /// List(items) { … }

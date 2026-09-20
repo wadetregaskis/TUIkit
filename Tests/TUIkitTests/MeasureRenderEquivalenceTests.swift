@@ -292,7 +292,8 @@ struct MeasureRenderEquivalenceTests {
         check(Text("dimmed").selectionDisabled(), "Text.selectionDisabled")
         check(Text("badged").badge(3), "Text.badge")
         check(VStack { Text("a"); Text("bb") }.focusSection("sec"), "VStack.focusSection")
-        // Overlay sizes to max(base, overlay): base wider, then overlay wider.
+        // An overlay is sized by its BASE either way — the second case is the
+        // one that pins it, the overlay being wider than the view it is on.
         check(Text("wide base text").overlay { Text("o") }, "overlay(baseWider)")
         check(Text("b").overlay { Text("wide overlay text") }, "overlay(overlayWider)")
         // Optional view: .some forwards, .none is empty.

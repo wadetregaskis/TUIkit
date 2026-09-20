@@ -162,6 +162,65 @@ struct OverlayModifierTests {
         #expect(sized.overlays.first?.offsetY == 1, "height is rows")
     }
 
+    // MARK: - An overlay is laid out IN the base's frame
+
+    /// The whole distinction between `.overlay` and a `ZStack`: a `ZStack` is
+    /// sized by its largest child, an overlay is sized by its BASE and never
+    /// changes it. `OverlayModifier.sizeThatFits` answered `max(base, overlay)`
+    /// on each axis, so a badge wider than the thing it badges silently pushed
+    /// every sibling in the enclosing stack around.
+    @Test("A wide overlay does not change the size of the view it is laid over")
+    func wideOverlayDoesNotResizeItsBase() {
+        let context = testContext()
+        let proposal = ProposedSize(width: 80, height: 24)
+        let bare = measureChild(Text("Hi"), proposal: proposal, context: context)
+        let overlaid = measureChild(
+            Text("Hi").overlay { Text("a very much wider overlay") },
+            proposal: proposal, context: context)
+        #expect(
+            overlaid.width == bare.width,
+            "an overlay must not widen its base: \(overlaid.width) vs \(bare.width)")
+        #expect(overlaid.height == bare.height)
+    }
+
+    /// …and the consequence that is actually visible: the stack around it. The
+    /// sibling is measured on its own — a stack pads its rows to the widest of
+    /// them, so the stack's own width is what decides where the sibling's text
+    /// sits and how far the column reaches.
+    @Test("A wide overlay does not widen its siblings or the stack holding them")
+    func wideOverlayDoesNotWidenTheStack() {
+        let context = testContext()
+        let proposal = ProposedSize(width: 80, height: 24)
+        let plain = measureChild(
+            VStack {
+                Text("Hi")
+                Text("Sibling")
+            }, proposal: proposal, context: context)
+        let badged = measureChild(
+            VStack {
+                Text("Hi").overlay(alignment: .topTrailing) {
+                    Text("a very much wider overlay")
+                }
+                Text("Sibling")
+            }, proposal: proposal, context: context)
+        #expect(
+            badged.width == plain.width,
+            "the overlay widened the stack: \(badged.width) vs \(plain.width)")
+    }
+
+    /// The render half of the same claim, so the two passes cannot drift: a
+    /// buffer wider than the size reported for it is the requested-vs-drawn
+    /// split every container downstream then has to guess at.
+    @Test("The rendered buffer is the base's size, not the overlay's")
+    func renderedBufferKeepsTheBasesSize() {
+        let base = render(Text("Hi"))
+        let overlaid = render(Text("Hi").overlay { Text("a very much wider overlay") })
+        #expect(
+            overlaid.width == base.width,
+            "the composite grew: \(overlaid.width) vs \(base.width)")
+        #expect(overlaid.height == base.height)
+    }
+
     /// A layer that really is empty — no lines, no layers, no regions — still
     /// short-circuits, so nothing about the ordinary case changed.
     @Test("A genuinely empty layer still short-circuits")

@@ -276,12 +276,19 @@ extension RefreshableModifier: Renderable {
         }
 
         let buffer = TUIkitView.renderToBuffer(content, context: childContext)
-        // The spinner carries no label. `.overlay` sizes to the LARGER of the
-        // two, so a labelled one would widen narrow content the moment a
-        // refresh started — the reflow this is trying to avoid. One animated
-        // glyph fits over anything at all, and one cell of content is enough
-        // to put it on.
-        guard action.isRunning, buffer.width >= 1 else { return buffer }
+        // The spinner carries no label. `.overlay` is laid out IN its base's
+        // frame and cut to it, so a labelled one would not widen the content —
+        // it would be clipped BY it, and a caption sheared off mid-word is a
+        // worse answer than no caption. (It would have widened the content
+        // until 2026-09-20, when an overlay still sized to the larger of the
+        // two; either way the label has no room it can call its own.)
+        //
+        // Three cells is the least that can carry the badge below — one glyph
+        // between two blanks — and anything narrower would draw a blank cell
+        // where the indicator should be. A multi-cell style over content
+        // barely wider than that is clipped like any other overlay content,
+        // and still visibly animates.
+        guard action.isRunning, buffer.width >= 3 else { return buffer }
         let indicator = context.environment.refreshIndicator
         // Composed, not hand-composited: `.overlay` already lays a view over
         // another without disturbing what is underneath it — placement,

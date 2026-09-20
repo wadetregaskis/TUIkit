@@ -344,7 +344,7 @@ More complex modifiers are full `View + Renderable` implementations that control
 
 - **`ContainerView` / `_ContainerViewCore`**: Reduces `availableWidth` by 2, renders content, adds border characters via `BorderRenderer`
 - **`FlexibleFrameView`**: Modifies `availableWidth`/`availableHeight` before rendering, applies min/max constraints and alignment after
-- **`OverlayModifier`**: Renders base and overlay separately, composites via `FrameBuffer.composited(with:at:)`
+- **`OverlayModifier`**: Renders the base, offers the overlay the size the base came back at, composites via `FrameBuffer.composited(with:at:)` and cuts the result back to the base's box with `clamped(toWidth:height:)` — an overlay never resizes what it is laid over
 - **`DimmedModifier`**: Renders content, then applies ANSI dim code to every line
 - **`EnvironmentModifier`**: Creates modified context, renders content with it
 - **``EquatableView``**: Checks `RenderCache` before rendering; returns cached buffer on hit, renders and stores on miss (see <doc:RenderCycle#Subtree-Memoization>)
