@@ -706,7 +706,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var childContext = context
         childContext.environment.scrollContentWindow = nil
         let slots = naturalRowSlots(width: context.availableWidth, context: childContext)
-        guard let index = slots.firstIndex(where: { $0.child.identityChildKey == seek.key })
+        guard let index = slots.firstIndex(where: { $0.child.matchesSeekKey(seek.key) })
         else { return }
         let total = slots.last.map { $0.y + $0.height } ?? 0
         reply.seekResolvedOffset = seek.windowOffset(
@@ -764,7 +764,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var window = window
         if let seek = window.seek {
             window.seek = nil
-            if let index = slots.firstIndex(where: { $0.child.identityChildKey == seek.key }) {
+            if let index = slots.firstIndex(where: { $0.child.matchesSeekKey(seek.key) }) {
                 let total = slots.last.map { $0.y + $0.height } ?? 0
                 let newOffset = seek.windowOffset(
                     targetY: slots[index].y, rowHeight: slots[index].height,

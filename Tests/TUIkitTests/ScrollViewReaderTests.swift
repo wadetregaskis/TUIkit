@@ -349,6 +349,189 @@ struct ScrollViewReaderTests {
         #expect(clearsAppliedByNextPass() == 0, "a dead scroll view asks for nothing")
     }
 
+    // MARK: - .id(_:)-tagged targets
+
+    /// The live scroll handler of the frame just rendered — the viewport's own
+    /// offset, rather than the text it painted.
+    private func liveHandler(_ focusManager: FocusManager) -> ScrollViewHandler? {
+        focusManager.activeSection?.focusables.compactMap { $0 as? ScrollViewHandler }.first
+    }
+
+    /// Fifty rows, the tagged target, fifty more. The target's content y is 50
+    /// in a viewport of 6, so it is off-screen at rest and nowhere near the
+    /// bottom clamp (max offset 95): the only way to reach it is to find it.
+    /// A `.top` anchor charges the "N more above" indicator a line, landing the
+    /// target on the first CONTENT line at offset 49 — the same offset and the
+    /// same line the identical geometry addressed by a `ForEach` identity gets.
+    private static let taggedTargetOffset = 49
+
+    @Test("scrollTo reaches a target tagged with .id(_:) — eager VStack content")
+    func idTaggedTargetInEagerStack() {
+        // Apple's own ScrollViewReader documentation builds its example out of
+        // `.id(_:)` tags rather than ForEach identities, so this is the shape
+        // ported code arrives in. `ScrollView { VStack { … } }` takes the exact
+        // eager seek (`_VStackCore.resolveEagerSeek`).
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<50, id: \.self) { i in Text("row \(i)") }
+                    Text("marker").id("MARK")
+                    ForEach(50..<100, id: \.self) { i in Text("row \(i)") }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        let resting = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(liveHandler(focusManager)?.scrollOffset == 0, "starts at the top")
+        #expect(!resting.contains { $0.contains("marker") }, "the target starts off-screen: \(resting)")
+
+        box.proxy?.scrollTo("MARK", anchor: .top)
+        let jumped = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            liveHandler(focusManager)?.scrollOffset == Self.taggedTargetOffset,
+            "the viewport moved onto the tag: \(jumped)")
+        #expect(jumped[1].contains("marker"), "…on the first content line: \(jumped)")
+        #expect(jumped[2].contains("row 50"), "…with its neighbour below it: \(jumped)")
+    }
+
+    @Test("scrollTo reaches a target tagged with .id(_:) — windowed LazyVStack content")
+    func idTaggedTargetInWindowedStack() {
+        // The other exact seek path: a lazy stack that is the scroll view's
+        // direct content renders only the rows meeting the viewport
+        // (`_VStackCore.renderViewportWindow`) and re-aims the window itself.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<50, id: \.self) { i in Text("row \(i)") }
+                    Text("marker").id("MARK")
+                    ForEach(50..<100, id: \.self) { i in Text("row \(i)") }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(liveHandler(focusManager)?.scrollOffset == 0, "starts at the top")
+
+        box.proxy?.scrollTo("MARK", anchor: .top)
+        let jumped = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            liveHandler(focusManager)?.scrollOffset == Self.taggedTargetOffset,
+            "the viewport moved onto the tag: \(jumped)")
+        #expect(jumped[1].contains("marker"), "…on the first content line: \(jumped)")
+    }
+
+    @Test("A .id(_:) under further modifiers is still found")
+    func idTaggedTargetUnderOuterModifier() {
+        // `.id(k)` is rarely the outermost modifier in ported code, and SwiftUI
+        // finds the tag wherever it sits in the chain. Horizontal padding keeps
+        // the row one line tall, so the target's y — and therefore the expected
+        // offset — is the same as the plain case above.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<50, id: \.self) { i in Text("row \(i)") }
+                    Text("marker").id("MARK").padding(.horizontal, 1)
+                    ForEach(50..<100, id: \.self) { i in Text("row \(i)") }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        box.proxy?.scrollTo("MARK", anchor: .top)
+        let jumped = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(
+            liveHandler(focusManager)?.scrollOffset == Self.taggedTargetOffset,
+            "the tag is read through the chain above it: \(jumped)")
+        #expect(jumped[1].contains("marker"), "…and lands the same row: \(jumped)")
+    }
+
+    @Test("A tag nobody planted is still a no-op")
+    func unknownTagIsNoOp() {
+        // The matcher now consults two spellings, so the miss case is worth
+        // re-pinning: a key neither a ForEach row nor a tag answers to must
+        // leave the viewport exactly where it was, and not linger.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<50, id: \.self) { i in Text("row \(i)") }
+                    Text("marker").id("MARK")
+                    ForEach(50..<100, id: \.self) { i in Text("row \(i)") }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        box.proxy?.scrollTo("MARK", anchor: .top)
+        let landed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+
+        box.proxy?.scrollTo("NO SUCH TAG", anchor: .top)
+        let after = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(liveHandler(focusManager)?.scrollOffset == Self.taggedTargetOffset)
+        #expect(after == landed, "an unmatched key moves nothing: \(after)")
+        let settled = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(settled == landed, "…and is not a standing intent: \(settled)")
+    }
+
+    @Test("A .id(_:) inside a ForEach row is not a second address for it")
+    func idInsideForEachRowIsNotAnAddress() {
+        // Deliberate, and the reason the matcher asks a keyed child for its
+        // key and nothing else: a row is identified by its element's `id`
+        // (the rule `.tag(_:)` follows too), and the seek paths that serve a
+        // whole-ForEach stack resolve from the data's keys without building a
+        // row view — so a tag written inside one could only ever work on some
+        // paths. Pinned at both sizes: 50 rows takes the exact walk, 5,000
+        // the uniform/anchored ladder.
+        for rows in [50, 5_000] {
+            let tuiContext = TUIContext()
+            let focusManager = FocusManager()
+            let box = ProxyBox()
+            let view = ScrollViewReader { proxy in
+                let _ = box.proxy = proxy
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<rows, id: \.self) { i in Text("row \(i)").id("tag\(i)") }
+                    }
+                }
+                .frame(height: Self.viewport)
+            }
+            renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+
+            box.proxy?.scrollTo("tag30", anchor: .top)
+            let tagged = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+            #expect(
+                liveHandler(focusManager)?.scrollOffset == 0,
+                "\(rows) rows: the inner tag is no address: \(tagged)")
+
+            // …and the element id it IS addressed by still works, so the
+            // no-op above is the rule and not a broken seek.
+            box.proxy?.scrollTo(30, anchor: .top)
+            let byElement = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+            #expect(
+                liveHandler(focusManager)?.scrollOffset == 29,
+                "\(rows) rows: the row's own id reaches it: \(byElement)")
+        }
+    }
+
     @Test("Seeded storm: seeks and data mutations interleave, invariants hold")
     func scrollToMutationStorm() {
         // 150 iterations of random scrollTo (any anchor, both directions,

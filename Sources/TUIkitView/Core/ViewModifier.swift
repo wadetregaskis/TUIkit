@@ -82,6 +82,25 @@ public protocol ViewModifier {
         _ modifier: Self, owner: Any.Type, context: RenderContext, isMeasuring: Bool
     ) -> Self?
 
+    /// The explicit identity key this modifier binds to its content, or `nil`
+    /// — the key `View.id(_:)` plants, and nothing else.
+    ///
+    /// Surfaced because that key is otherwise invisible from OUTSIDE the
+    /// modified view: `.id(_:)` splices its step into the identity of the
+    /// subtree BELOW it, so the tagged child keeps whatever identity its
+    /// position gave it and a container looking for the tag has nowhere to
+    /// read it. A scroll seek is the container that needs it —
+    /// `ScrollViewProxy.scrollTo(_:anchor:)` addresses `.id(_:)` tags in
+    /// SwiftUI's own `ScrollViewReader` example.
+    ///
+    /// A requirement on the MODIFIER, forwarded by ``ModifiedView``, for the
+    /// reason ``ViewModifier/_isAnimatable`` is one: a *conditional*
+    /// conformance cannot supply a witness for `ModifiedView`, so the answer
+    /// has to come from the modifier itself.
+    ///
+    /// Not to be implemented by hand outside `View.id(_:)`.
+    var _explicitIDKey: String? { get }
+
     /// Adjusts the rendering context before the wrapped content is rendered.
     ///
     /// Override this method in modifiers that consume space (like padding)
@@ -117,6 +136,10 @@ extension ViewModifier {
     ) -> FrameBuffer {
         modify(buffer: buffer, context: context)
     }
+
+    /// A modifier binds no identity key unless it is `View.id(_:)`'s.
+    @inlinable
+    public var _explicitIDKey: String? { nil }
 
     /// A modifier says nothing continuous about itself unless it is
     /// ``Animatable``.
@@ -222,6 +245,21 @@ extension ModifiedView: Renderable {
             result.overlays = childBuffer.overlays
         }
         return result
+    }
+}
+
+// MARK: - Explicit identity
+
+extension ModifiedView: ExplicitIDProviding {
+    /// This view's `View.id(_:)` tag: the key this modifier binds, else the
+    /// one a modifier further in bound.
+    ///
+    /// The walk inward is the point — `.id(k).padding()` is a `ModifiedView`
+    /// whose own modifier is the padding, and SwiftUI finds that tag too. It
+    /// costs nothing on any frame but the one a seek arrives on, because that
+    /// is the only thing that asks.
+    public var explicitIDKey: String? {
+        modifier._explicitIDKey ?? (content as? ExplicitIDProviding)?.explicitIDKey
     }
 }
 

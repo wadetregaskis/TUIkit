@@ -3,10 +3,11 @@
 //
 //  SwiftUI-parity programmatic scrolling: ScrollViewReader hands its content
 //  a ScrollViewProxy whose scrollTo(_:anchor:) scrolls the scroll views
-//  inside to the row with the matching ForEach identity — same-frame, and in
-//  O(window) via the seek machinery of "Locating things without drawing
-//  them" (the request rides the ScrollContentWindow handshake; the windowed
-//  stack that finds the key renders its band AT the resolved offset).
+//  inside to the row with the matching identity — a ForEach element's, or a
+//  View.id(_:) tag — same-frame, and in O(window) via the seek machinery of
+//  "Locating things without drawing them" (the request rides the
+//  ScrollContentWindow handshake; the windowed stack that finds the key
+//  renders its band AT the resolved offset).
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -26,10 +27,12 @@ public struct ScrollViewProxy {
     /// Scrolls the reader's scroll views so the row identified by `id`
     /// is visible. Matches SwiftUI's signature exactly.
     ///
-    /// `id` is a `ForEach` element identity within the scroll view's
-    /// content — `proxy.scrollTo(item.id)` for a data-driven list, or the
-    /// element value itself for `ForEach(0..<n, id: \.self)`. An unknown
-    /// id is a no-op, as in SwiftUI.
+    /// `id` is an identity within the scroll view's content: a `ForEach`
+    /// element's — `proxy.scrollTo(item.id)` for a data-driven list, or the
+    /// element value itself for `ForEach(0..<n, id: \.self)` — or the tag a
+    /// ``View/id(_:)`` bound to one of the content stack's own children, the
+    /// spelling SwiftUI's own `ScrollViewReader` example is built out of. An
+    /// unknown id is a no-op, as in SwiftUI.
     ///
     /// - Parameters:
     ///   - id: The identity of the row to scroll to.
@@ -39,10 +42,14 @@ public struct ScrollViewProxy {
     ///     all if it already is.
     ///
     /// > Note: Deviations from SwiftUI, both from the terminal scroll
-    ///   model: the target must be a `ForEach` row (there is no `.id(_:)`
-    ///   view tagging yet), and horizontal-capable scroll views (`axes`
-    ///   containing `.horizontal`) don't participate — the seek rides the
-    ///   vertical row-windowing handshake.
+    ///   model. Horizontal-capable scroll views (`axes` containing
+    ///   `.horizontal`) don't participate — the seek rides the vertical
+    ///   row-windowing handshake. And a `.id(_:)` tag is read off the
+    ///   content stack's own children, never from inside a `ForEach` row: a
+    ///   row's identity is its element's `id`, which is the rule `.tag(_:)`
+    ///   follows too. Decided in one place, so every seek path gives the same
+    ///   answer — the ones serving a whole-`ForEach` stack resolve from the
+    ///   data's keys and never build a row view to look inside.
     public func scrollTo<ID: Hashable>(_ id: ID, anchor: UnitPoint? = nil) {
         // The SAME stringification ForEach derives its identity keys with,
         // so the key comparison in the seek paths is exact.

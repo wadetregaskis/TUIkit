@@ -13,6 +13,12 @@
 private struct _IDModifier: ViewModifier {
     let key: String
 
+    /// The witness that makes this key readable from outside the modified
+    /// view, where `adjustContext` alone leaves no trace of it: a container
+    /// sees only the child's positional step, since the re-keyed step is the
+    /// one BELOW. `ScrollViewProxy.scrollTo(_:anchor:)` is what reads it.
+    var _explicitIDKey: String? { key }
+
     func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         buffer
     }
@@ -43,6 +49,11 @@ extension View {
     ///   `Hashable` id is collapsed to `String(describing:)` for the key (as
     ///   `ForEach` does), so two distinct values with identical descriptions
     ///   would alias one identity.
+    ///
+    /// - Note: The key is also the tag
+    ///   ``ScrollViewProxy/scrollTo(_:anchor:)`` seeks by, so tagging a row of
+    ///   a scroll view's content stack makes it a scroll target — the shape
+    ///   SwiftUI's own `ScrollViewReader` example is written in.
     ///
     /// - Parameter id: A value that identifies this view.
     /// - Returns: A view with the given identity bound to it.

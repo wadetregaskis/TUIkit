@@ -157,10 +157,12 @@ identifier_name:
     # proper nouns, so the leading-capital convention is intentional.
     - L
     - Lf
-    # Framework-private static View witnesses, `_`-prefixed following the
-    # SwiftUI convention (as the `_`-prefixed types in `type_name.excluded`
-    # are). They let the child-layout path detect Spacer / z-index wrappers
-    # per type instead of with a speculative runtime conformance cast.
+    # Framework-private View / ViewModifier witnesses, `_`-prefixed following
+    # the SwiftUI convention (as the `_`-prefixed types in
+    # `type_name.excluded` are). They let the child-layout path detect Spacer
+    # / z-index wrappers per type instead of with a speculative runtime
+    # conformance cast, and let a modifier answer for the ModifiedView around
+    # it, which a conditional conformance cannot witness.
     - _isSpacer
     - _providesZIndex
     - _providesAlignmentGuide
@@ -169,6 +171,7 @@ identifier_name:
     - _modify
     - _renderSelf
     - _measureSelf
+    - _explicitIDKey
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.

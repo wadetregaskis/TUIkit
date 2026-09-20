@@ -477,6 +477,40 @@ public struct ChildView {
     /// or `nil` for positionally-identified children.
     public var identityChildKey: String? { identityKey }
 
+    /// The key an explicit `View.id(_:)` bound to this child, or `nil` when
+    /// nothing in its modifier chain bound one.
+    ///
+    /// Deliberately NOT folded into ``identityChildKey``: `.id(_:)` is a
+    /// modifier, so the step it splices sits *below* this child's own and the
+    /// child stays positionally identified. Reporting the tag as the child's
+    /// identity key would tell every positional lookup — `LayoutPlacing`'s
+    /// `ordinal(of:)` above all — that this child has no index to match.
+    ///
+    /// A cast rather than a stored field: this struct's size is load-bearing
+    /// (see ``providerSlot``), and the only caller is a scroll seek, which
+    /// asks on the frames a `scrollTo` request arrives on and on no others.
+    public var explicitIDKey: String? {
+        (view as? ExplicitIDProviding)?.explicitIDKey
+    }
+
+    /// Whether this child is the seek target named by `key` — the one place
+    /// the two spellings SwiftUI's `ScrollViewProxy.scrollTo(_:anchor:)`
+    /// accepts are decided between.
+    ///
+    /// A child that HAS a stable identity answers by it and by nothing else:
+    /// a `ForEach` row is identified by its element's `id`, the same rule
+    /// `.tag(_:)` follows, so a `.id(_:)` written inside a row is not a
+    /// second address for it. That is also what keeps the answer the same on
+    /// every seek path — the uniform and anchored windows resolve a whole-
+    /// `ForEach` stack from the data's keys and never build a row view, so a
+    /// tag inside one is not theirs to see. Only an unkeyed child — a stack's
+    /// own tuple children, which is where the tag is written — is asked for
+    /// its tag, and only then is the cast behind ``explicitIDKey`` paid.
+    public func matchesSeekKey(_ key: String) -> Bool {
+        if let identityKey { return identityKey == key }
+        return explicitIDKey == key
+    }
+
     /// The positional index this child's identity is disambiguated by, or
     /// `nil` when the child is keyed or descends transparently under the
     /// parent identity.
@@ -524,6 +558,21 @@ public struct ChildView {
         }
         return context.withChildIdentity(erasedType: identityType, index: childIndex)
     }
+}
+
+/// A view that can report the explicit identity key `View.id(_:)` bound
+/// somewhere in its modifier chain.
+///
+/// `ModifiedView` is the sole conformer and it conforms UNCONDITIONALLY —
+/// hence the optional answer, `nil` for the overwhelming majority that wrap
+/// some other modifier. Unconditional because the tag has to be found through
+/// the chain above it: `.id(k).padding()` is a `ModifiedView` whose own
+/// modifier is the padding, and only a conformer can be asked for what is
+/// inside it.
+@MainActor
+public protocol ExplicitIDProviding {
+    /// The key `View.id(_:)` bound to this view, or `nil` if it bound none.
+    var explicitIDKey: String? { get }
 }
 
 /// A view that carries an explicit z-index for sibling draw ordering.
