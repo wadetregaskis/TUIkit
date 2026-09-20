@@ -392,7 +392,11 @@ extension Section: ListRowExtractor {
                 // row draws and is simply not selectable. See `ListRow.id`.
                 let rowID = staticListRowID(
                     of: child.wrappedView, ordinal: rows.count, as: RowID.self)
-                let badge = extractBadgeValue(from: child.wrappedView)
+                // See `extractRowBadgeValue(from:)`: a `ForEach` row inside
+                // this Section arrives wrapped in `_MemoizedRow`, which the
+                // plain cast cannot see through, and its badge was dropped
+                // while the static row beside it kept its own.
+                let badge = extractRowBadgeValue(from: child.wrappedView)
                 let buffer = child.render(
                     width: context.availableWidth, height: context.availableHeight,
                     context: context)

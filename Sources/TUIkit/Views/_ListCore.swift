@@ -2918,7 +2918,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let type: ListRowType<SelectionValue> =
                 staticListRowID(of: child.wrappedView, ordinal: result.count, as: SelectionValue.self)
                 .map { .content(id: $0) } ?? .unselectable
-            let badge = extractBadgeValue(from: child.wrappedView)
+            // Through the row-level extractor, not `extractBadgeValue` directly:
+            // a `ForEach` row arrives wrapped in `_MemoizedRow`, which is
+            // `Renderable` and so opaque to the plain cast — the same opacity
+            // `sectionRow(of:)` above goes through `_ValueMemoWrapping` for.
+            let badge = extractRowBadgeValue(from: child.wrappedView)
             let buffer = child.render(
                 width: context.availableWidth, height: context.availableHeight,
                 context: childContext)

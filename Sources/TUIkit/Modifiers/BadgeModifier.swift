@@ -116,6 +116,42 @@ public func viewTypeCarriesBadge<V: View>(_ type: V.Type) -> Bool {
     type is any BadgeCarrying.Type
 }
 
+/// The badge a `List` ROW carries — ``extractBadgeValue(from:)``, but seeing
+/// past `ForEach`'s value memo.
+///
+/// The two walks that read a row's badge off its view value — `_ListCore`'s
+/// child walk (a `ForEach` with a static row beside it) and `Section`'s — are
+/// handed the child as it comes out of `ForEach.makeChild`, which wraps an
+/// `Equatable`-element row in `_MemoizedRow`. That wrapper is `Renderable` and
+/// therefore *opaque* to the cast above, so the badge on every such row was
+/// simply not there: `List { Text("Inbox").badge(7); ForEach(names) {
+/// Text($0).badge(9) } }` drew the 7 and none of the 9s. This is the same
+/// wrapper-eats-metadata shape `_ListCore.sectionRow(of:)` goes through
+/// ``_ValueMemoWrapping`` for, and it goes through it the same way.
+///
+/// The memo's TYPE is asked before its content, which is what keeps this free:
+/// ``_ValueMemoWrapping/memoizedContent`` BUILDS the row, and the whole point
+/// of the memo is that in steady state most rows are never built. A row whose
+/// static type cannot carry a badge — all but a `.badge(_:)`-outermost row —
+/// is answered by the type check alone, exactly as the windowed path's
+/// ``viewTypeCarriesBadge(_:)`` gate answers it there.
+///
+/// Only a row that really IS badged is built here. Where the memo then misses,
+/// it builds that row a second time for its buffer — which is precisely what
+/// the windowed path already pays for a badged row
+/// (`extractBadgeValue(from: content(element))` beside the memoized render);
+/// where the memo hits, it builds nothing and this is the only build. So the
+/// two arrangements are priced alike, instead of the badge being cheap in one
+/// and absent in the other.
+@MainActor
+func extractRowBadgeValue(from view: any View) -> BadgeValue? {
+    if let badge = extractBadgeValue(from: view) { return badge }
+    guard let memo = view as? any _ValueMemoWrapping,
+        viewTypeCarriesBadge(memo.memoizedContentType)
+    else { return nil }
+    return extractBadgeValue(from: memo.memoizedContent)
+}
+
 // MARK: - Renderable
 
 extension BadgeModifier: Renderable {
