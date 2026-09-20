@@ -8,8 +8,8 @@ import TUIkitCore
 
 /// A control for presenting a menu of actions — mirrors SwiftUI's `Menu`.
 ///
-/// The items are ordinary `Button`s (and `Divider`s), exactly as in SwiftUI, so
-/// they carry their own actions, roles and keyboard shortcuts:
+/// The items are ordinary `Button`s (and `Divider`s and `Toggle`s), exactly as
+/// in SwiftUI, so they carry their own actions, roles and keyboard shortcuts:
 ///
 /// ```swift
 /// Menu("Actions") {
@@ -41,6 +41,17 @@ import TUIkitCore
 /// menu item's is drawn on every desktop platform — see
 /// ``KeyboardShortcut/displayString``.
 ///
+/// A ``Toggle`` is a row too, drawn as a menu item carrying its own on/off mark
+/// rather than as a checkbox sitting in a menu — SwiftUI's shape, and the one a
+/// pop-up's row model can hold. Pair it with
+/// ``View/menuActionDismissBehavior(_:)`` set to `.disabled` for a menu of
+/// SETTINGS, which stays up to be flipped again. See ``Toggle``.
+///
+/// > Note: A `Picker` is NOT a row. SwiftUI turns one into a SUBMENU, and TUIkit
+/// > has no submenu yet, so a `Picker` written here draws its own collapsed
+/// > drop-down on a line of the menu and the menu's arrows walk straight past
+/// > it. Put the choice on the page, or give each option its own `Button`.
+///
 /// > Note: SwiftUI's `primaryAction:` initialisers are not offered. They split
 /// > a menu into "click does one thing, a long press or a separate chevron
 /// > opens the rest", and a terminal has neither a long press nor a reliable
@@ -52,7 +63,7 @@ public struct Menu<Label: View, Content: View>: View {
     /// Creates a menu with a custom label.
     ///
     /// - Parameters:
-    ///   - content: The menu's items — `Button`s and `Divider`s.
+    ///   - content: The menu's items — `Button`s, `Toggle`s and `Divider`s.
     ///   - label: A view describing the menu.
     public init(
         @ViewBuilder content: () -> Content,
@@ -83,7 +94,7 @@ extension Menu where Label == Text {
     ///
     /// - Parameters:
     ///   - titleKey: The key for the menu's title.
-    ///   - content: The menu's items — `Button`s and `Divider`s.
+    ///   - content: The menu's items — `Button`s, `Toggle`s and `Divider`s.
     public init(_ titleKey: LocalizedStringKey, @ViewBuilder content: () -> Content) {
         self.init(titleKey.localized, content: content)
     }
@@ -96,7 +107,7 @@ extension Menu where Label == Text {
     ///
     /// - Parameters:
     ///   - title: The menu's title.
-    ///   - content: The menu's items — `Button`s and `Divider`s.
+    ///   - content: The menu's items — `Button`s, `Toggle`s and `Divider`s.
     @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S, @ViewBuilder content: () -> Content) {
         self.init(content: content) { Text(String(title)) }

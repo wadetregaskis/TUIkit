@@ -36,6 +36,15 @@ import TUIkitCore
 /// contain two Buttons: the first takes the row, and the second falls back to
 /// ordinary focus-ring behaviour rather than silently stealing it. Only a render
 /// pass claims — see `_ButtonCore`.
+///
+/// `_ButtonCore` is the ONLY claimer, and that is the design rather than a
+/// limitation: a row is not just an action and an enabled flag, it is also the
+/// menu-row LOOK — the bar spanning the menu's interior, the key-equivalent
+/// column, the hover wash — and all of that lives in `_MenuItemButtonStyle`,
+/// which reaches Buttons. So another control joins the column by BEING one for
+/// the frame: `_ToggleCore` renders a row `Button` carrying its own on/off mark
+/// when this is non-nil. A control that cannot be expressed that way (a `Picker`,
+/// which SwiftUI turns into a submenu) has no row here at all.
 @MainActor
 final class MenuRowSink {
     /// What one row told the column about itself.
@@ -120,9 +129,11 @@ extension EnvironmentValues {
     /// The open pop-up menu a row is rendering into, or `nil` on the page.
     ///
     /// Non-nil is what puts a `Button` into menu-row mode: it claims an ordinal
-    /// here instead of registering with the focus manager. Deliberately absent
-    /// for an inline `Menu`, whose rows ARE page focus stops — see
-    /// `Documentation/Unifying the menu implementations.md`.
+    /// here instead of registering with the focus manager. It is also what makes
+    /// a `Toggle` render AS such a row rather than as a checkbox — read on both
+    /// the measure and the render, so the column hugs the width it will draw.
+    /// Deliberately absent for an inline `Menu`, whose rows ARE page focus stops
+    /// — see `Documentation/Unifying the menu implementations.md`.
     var menuRowSink: MenuRowSink? {
         get { self[MenuRowSinkKey.self] }
         set { self[MenuRowSinkKey.self] = newValue }

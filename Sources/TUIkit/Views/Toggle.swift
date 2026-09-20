@@ -276,6 +276,25 @@ extension View {
 ///
 /// > Note: In TUIkit `.automatic` and `.checkbox` draw a checkbox; `.switch`
 /// > draws a two-position switch.
+///
+/// ## Inside a pop-up menu
+///
+/// A toggle written inside a pop-up ``Menu`` or a `.contextMenu` is a menu ROW,
+/// not a checkbox drawn in a column of rows: it takes the row's own look — the
+/// highlight bar spanning the menu's interior, the key-equivalent column at the
+/// trailing edge, the hover wash — with its on/off mark where a `Button` row has
+/// nothing. That is SwiftUI's shape as well, and it is what makes it reachable:
+/// a pop-up's rows are not focus stops, they are ordinals claimed from the menu,
+/// and a control that does not claim one draws on a line the arrows and the
+/// click map both walk past. Choosing the row flips the binding and closes the
+/// menu; ``View/menuActionDismissBehavior(_:)`` set to `.disabled` is what makes
+/// it a sticky toggle instead.
+///
+/// Two things have no row to draw into and so do not apply there: a custom
+/// ``ToggleStyle`` (a menu draws menu items, as SwiftUI's does) and
+/// ``Toggle/toggleContent(_:)`` (a menu row is one row; put the controls it
+/// governs on the page). An INLINE menu is unaffected — its rows really are page
+/// focus stops, so a toggle in one is the ordinary control.
 public struct Toggle<Label: View>: View {
     /// The binding to the toggle's boolean state.
     let isOn: Binding<Bool>

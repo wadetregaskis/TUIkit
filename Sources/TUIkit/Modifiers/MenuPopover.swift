@@ -2,9 +2,10 @@
 //  MenuPopover.swift
 //
 //  The floating menu presentation shared by `.contextMenu` and a pop-up `Menu`.
-//  Both put the same thing on screen — a bordered column of `Button`s that owns
-//  the focus and the keyboard until it is dismissed — and differ only in what
-//  opens it and where it is anchored.
+//  Both put the same thing on screen — a bordered column of rows that owns the
+//  focus and the keyboard until it is dismissed — and differ only in what opens
+//  it and where it is anchored. Every row is a `Button`, including the one a
+//  `Toggle` becomes: that is what claims an ordinal from the column.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -19,8 +20,8 @@ import TUIkitCore
 /// to the same width arithmetic.
 ///
 /// - Parameters:
-///   - items: The menu's rows: `Button`s and `Divider`s, plus whatever heading
-///     the caller puts above them.
+///   - items: The menu's rows: `Button`s, `Toggle`s and `Divider`s, plus
+///     whatever heading the caller puts above them.
 ///   - context: The context to lay out in; its `availableWidth` is the ceiling.
 ///   - capHeight: The height the menu must fit into, or 0 for no cap. A taller
 ///     menu scrolls inside it.
@@ -86,7 +87,9 @@ func measureMenuColumn(
 ///
 /// The items are `Button`s (SwiftUI's API, which TUIkit matches), but a menu's
 /// rows must not LOOK like buttons — `_MenuItemButtonStyle` draws them as menu
-/// rows, the same idiom as the Picker drop-down.
+/// rows, the same idiom as the Picker drop-down. A `Toggle` in a POP-UP menu is
+/// one of those buttons too (`_ToggleCore`); in an inline menu, whose rows are
+/// page focus stops, it stays the ordinary control.
 @MainActor
 private func menuColumnBody(_ items: some View) -> some View {
     VStack(alignment: .leading, spacing: 0) { items }
@@ -293,6 +296,18 @@ func renderMenuPopup(
     let rowsOnly = VStack(alignment: .leading, spacing: 0) { items }
         .buttonStyle(_MenuItemButtonStyle())
 
+    // The channel goes in BEFORE anything is measured, not just before the
+    // render. Only a render pass claims an ordinal (`_ButtonCore` guards on
+    // `isMeasuring`), so a measure still cannot shift the numbering — but a row
+    // that DRAWS differently as a menu row has to be measured that way too, or
+    // the hug below is the width of a picture the render never draws. A
+    // `Toggle` is exactly that row: a checkbox on the page, a menu item with a
+    // state mark here.
+    controller.sink.beginPass()
+    var rowContext = context
+    rowContext.environment.menuRowSink = controller.sink
+    rowContext.environment.menuHighlightedOrdinal = controller.highlightedOrdinal
+
     // Size to the content first, exactly as the inline assembly does and for
     // the same reason: a `Divider` MEASURES as one cell but RENDERS at whatever
     // width it is offered, so laying out against the screen would inflate the
@@ -301,7 +316,7 @@ func renderMenuPopup(
     let inset = 1
     let widthCap = max(1, context.availableWidth - 2 - 2 * inset)
     let natural = measureChild(
-        rowsOnly, proposal: ProposedSize(width: widthCap, height: nil), context: context)
+        rowsOnly, proposal: ProposedSize(width: widthCap, height: nil), context: rowContext)
     let rowWidth = max(1, min(natural.width, widthCap)) + 2 * inset
 
     // Rendered against a canvas as tall as the column actually is, on purpose:
@@ -317,7 +332,7 @@ func renderMenuPopup(
     // `measureNaturalExtent`'s ladder starts at the same generous budget — one
     // measure for every menu anybody will ever build by hand — and, unlike the
     // constant, keeps going when the content is taller.
-    var sized = context.withAvailableWidth(rowWidth)
+    var sized = rowContext.withAvailableWidth(rowWidth)
     sized.environment.menuRowInset = inset
     // Set before the extent is measured, not after: a row that hugs is measured
     // against the menu's whole interior and a row that is drawn gets that
@@ -336,11 +351,6 @@ func renderMenuPopup(
             proposal: ProposedSize(width: rowWidth, height: nil), context: sized,
             startingBudget: naturalExtentStartingBudget(forVisible: context.availableHeight)
         ).height))
-    // Rows report to the column, not to the focus ring. Only a render pass
-    // claims an ordinal, so the measure above cannot shift the numbering.
-    controller.sink.beginPass()
-    sized.environment.menuRowSink = controller.sink
-    sized.environment.menuHighlightedOrdinal = controller.highlightedOrdinal
     let column = TUIkit.renderToBuffer(rowsOnly, context: sized)
     controller.adoptRenderedRows()
 
@@ -432,7 +442,7 @@ struct MenuAnchor {
 /// by rendering must not register a phantom section.
 ///
 /// - Parameters:
-///   - items: The menu's content: `Button`s and `Divider`s.
+///   - items: The menu's content: `Button`s, `Toggle`s and `Divider`s.
 ///   - base: The buffer to float the menu over; the overlay is appended to it.
 ///   - controller: The menu's highlight, persisted by the caller across frames.
 ///     The caller tells it how the menu was opened (``MenuPopupController/opened(withSelection:)``)

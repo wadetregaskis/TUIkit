@@ -17,6 +17,15 @@ private enum ToggleStateIndex {
     static let isHovered = -51
 }
 
+/// Child-identity indices for ``_ToggleCore``'s own subviews, so their `@State`
+/// and focus slots stay distinct from each other and from the label's.
+private enum ToggleChildIndex {
+    /// The controls ``Toggle/toggleContent(_:)`` governs.
+    static let governedContent = 0
+    /// The row a toggle becomes inside an open pop-up menu.
+    static let menuRow = 1
+}
+
 /// The switch style's knob glyphs, selected by the ambient ``ToggleCharacterSet``'s
 /// glyph repertoire (lifted out of the generic core for testability).
 enum SwitchIndicatorGlyphs {
@@ -65,12 +74,21 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
     /// fallback would size it the same, but always reports fixed — this adds the
     /// structural label probe so a flexible label still makes the toggle flexible.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        // Inside an open pop-up menu this toggle IS a menu row — see
+        // ``menuRow(context:)`` — so it is the row that gets measured, not a
+        // checkbox the menu would then not draw.
+        if context.environment.menuRowSink != nil {
+            return measureChild(
+                menuRow(context: context), proposal: proposal,
+                context: menuRowContext(context))
+        }
         let size = measureFixedByRendering(self, proposal: proposal, context: context)
         let labelFlexible = measureChild(label, proposal: proposal, context: context).isWidthFlexible
         return ViewSize(width: size.width, height: size.height, isWidthFlexible: labelFlexible)
     }
 
     private typealias StateIndex = ToggleStateIndex
+    private typealias ChildIndex = ToggleChildIndex
 
     /// One coloured piece of an indicator: the cells, the ink, and the field
     /// beneath them when the style paints one.
@@ -557,7 +575,64 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
         return part.render(width: maxWidth ?? size.width, height: size.height, context: context)
     }
 
+    /// This toggle as a row of an open pop-up menu: a ``Button`` whose label is
+    /// the toggle's own state mark followed by the toggle's own label.
+    ///
+    /// A `Button`, and not a toggle drawn inside a menu, because a pop-up menu's
+    /// row is not a control that happens to sit in a column — it is a
+    /// *participant*. It claims an ordinal from the menu's ``MenuRowSink`` so
+    /// the arrows have somewhere to land, publishes its action so Return and a
+    /// click reach it, and names its hit-test region by that ordinal so the
+    /// column can slice the menu's lines back into rows. Every one of those is
+    /// `_ButtonCore`'s, and lifting them into a channel a `_ToggleCore` could
+    /// call too would have left the SECOND half — the row's look — still
+    /// reachable only from a `ButtonStyle`: the bar that spans the menu's
+    /// interior and breathes, the key-equivalent column at the trailing edge,
+    /// the hover wash, all of them `_MenuItemButtonStyle`'s and none of them
+    /// something a toggle drawing its own focus glow would pick up. Composing
+    /// the row out of the view that already has both is the whole fix.
+    ///
+    /// It is SwiftUI's shape as well: a `Toggle` in a menu is a menu item with a
+    /// state mark, not a switch drawn in one. What it costs is stated on
+    /// ``Toggle`` — a custom ``ToggleStyle`` and ``Toggle/toggleContent(_:)``
+    /// have no menu row to draw into, and neither reaches this branch.
+    ///
+    /// Dismissal comes free and correct: a `Button` in a menu runs its action
+    /// and then the menu's dismiss, which ``View/menuActionDismissBehavior(_:)``
+    /// is what suppresses — so a sticky toggle is `.disabled` on that modifier
+    /// and nothing here.
+    @MainActor
+    private func menuRow(context: RenderContext) -> some View {
+        let binding = isOn
+        let marks = context.environment.effectiveToggleCharacterSet
+        let mark = binding.wrappedValue ? marks.onMark : marks.offMark
+        return Button {
+            binding.wrappedValue.toggle()
+        } label: {
+            HStack(spacing: 1) {
+                // Verbatim: these are glyphs, not display text, and a
+                // `LocalizedStringKey` lookup on "■" would be a dictionary miss
+                // on every frame of every menu.
+                Text(verbatim: marks.openBracket + mark + marks.closeBracket)
+                label
+            }
+        }
+        .disabled(isDisabled)
+    }
+
+    /// The identity ``menuRow(context:)`` renders at — a step off this core's,
+    /// because indices `0...` at the core's own identity belong to a composite
+    /// label's `@State`, and the row's `Button` keeps its focus id, hover and
+    /// press boxes there.
+    private func menuRowContext(_ context: RenderContext) -> RenderContext {
+        context.withChildIdentity(erasedType: Label.self, index: ChildIndex.menuRow)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        if context.environment.menuRowSink != nil {
+            return TUIkitView.renderToBuffer(
+                menuRow(context: context), context: menuRowContext(context))
+        }
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
         let stateStorage = context.stateStorage!
@@ -675,7 +750,8 @@ struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
             buffer.appendVertically(
                 TUIkitView.renderToBuffer(
                     governed,
-                    context: context.withChildIdentity(erasedType: AnyView.self, index: 0)))
+                    context: context.withChildIdentity(
+                        erasedType: AnyView.self, index: ChildIndex.governedContent)))
         }
 
         registerPointer(

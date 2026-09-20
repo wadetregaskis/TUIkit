@@ -27,11 +27,6 @@ struct MenusPage: View {
     @State private var showsSizes = true
     @State private var showsPreviews = false
 
-    /// The on/off marks the terminal can actually draw, so the sticky menu's
-    /// rows are ticked with the same glyphs a `Toggle` would use rather than a
-    /// hard-coded ✓ that some fonts lack.
-    @Environment(\.toggleCharacterSet) private var marks
-
     /// Suggestions for the combo box. Editor names are proper nouns, so the
     /// menu reads the same in every language — the point on show is the
     /// control, not the words.
@@ -60,21 +55,18 @@ struct MenusPage: View {
         }
     }
 
-    /// One row of the sticky menu: a `Button` whose label carries the flag's
-    /// current mark, and which leaves the menu up when it fires.
+    /// One row of the sticky menu: a `Toggle`, which inside a pop-up menu draws
+    /// as a menu row carrying its own mark and leaves the menu up when it fires.
     ///
-    /// The mark comes from ``ToggleCharacterSet`` so it degrades with the
-    /// terminal exactly as a `Toggle`'s does — and both marks of a set are the
-    /// same cell width, so the labels stay in one column as the flags change.
+    /// This used to hand-roll the row as a `Button` whose label was a
+    /// ``ToggleCharacterSet`` mark glued to the localized title, because a
+    /// `Toggle` written here drew a checkbox the menu could not reach. The
+    /// hand-rolled version also read the RAW `\.toggleCharacterSet`, so
+    /// `.automatic` never resolved against the terminal the way a real toggle's
+    /// mark does.
     private func stickyItem(_ titleKey: LocalizedStringKey, _ flag: Binding<Bool>) -> some View {
-        Button(
-            marks.openBracket
-                + (flag.wrappedValue ? marks.onMark : marks.offMark)
-                + marks.closeBracket + " " + titleKey.localized
-        ) {
-            flag.wrappedValue.toggle()
-        }
-        .menuActionDismissBehavior(.disabled)
+        Toggle(titleKey, isOn: flag)
+            .menuActionDismissBehavior(.disabled)
     }
 
     /// The flags that are on, in menu order — or a dash when none are.
