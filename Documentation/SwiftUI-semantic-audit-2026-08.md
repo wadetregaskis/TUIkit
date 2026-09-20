@@ -105,6 +105,19 @@ about whether every future wrapper must remember. **Recommendation:** adopt a
 `MetadataForwarding` protocol with a default implementation, conform every
 single-content wrapper, and add a test that fails when a new wrapper forgets.
 
+*Still open 2026-09-20, but the protocol the recommendation asks for now exists
+and is not this.* `SingleContentWrapper` (finding 2) is the same shape — a
+protocol with default implementations, conformed by single-content wrappers —
+but it carries the REBUILD direction (a container reaching DOWN to the members)
+and this finding is the READ direction (metadata travelling UP to the
+container). The two are not the same fix and only one is done. What the last
+six commits change about this one is the cost of doing it: 19 wrappers already
+name their content through `SingleContentWrapper.wrappedContent`, and the
+distribution judgement that makes the rebuild half a per-type decision does NOT
+apply here — forwarding a static witness through `.onAppear` multiplies
+nothing, so the read half really can be conformed by every single-content
+wrapper, effect ones included, exactly as this finding recommends.
+
 **2. A modifier makes a view opaque to child resolution.** `resolveChildViews`
 unwraps `ChildViewProvider`s, and `ModifiedView` is not one — so
 `Group { A; B }.foregroundStyle(.red)` inside an `HStack` **rotates the layout
@@ -116,6 +129,43 @@ this is fixed (`38b07ced`); the axis is not. **Recommendation:** conform
 resolved child in the same modifier. Note the one exception to get right:
 `onDelete`/`onMove` are declared on `DynamicViewContent`, not `View`, and must
 keep applying to the collection.
+
+*Resolved 2026-09-20, in six commits, and the recommendation's "one exception to
+get right" held: `onDelete`/`onMove` return a `ForEach`, never build a wrapper,
+and needed no exception written anywhere.* `bdc119cc` did the `ModifiedView`
+half as recommended, which reaches the **four** `ViewModifier` types in the
+framework and left the reported symptom — `.foregroundStyle` — open, because it
+is not one of them. `6deb5624` added `SingleContentWrapper` for the wrappers
+that are not `ViewModifier`s: a `ViewModifier` is a VALUE that can be carried to
+each member, while a bare wrapper must call its own initialiser, whose content
+type is a TYPE's generic parameter and cannot bind to an `any View` — so the
+protocol's one real requirement is that call, generic over the new content, and
+`ChildViewProvider` and `GridRowProviding` both get constrained defaults on top
+of it. `547efd94`, `c927bed0` and `c901c8b2` conformed **19** wrappers;
+`bd717624` is the pure refactor one of them needed (a nested enum hoisted so a
+value could cross specialisations).
+
+What the finding did not anticipate, and what stops this being a sweep: the
+rule is NOT uniform across wrappers. Measured against the real framework rather
+than reasoned about, layout and paint distribute — `.frame(width: 80)` on a
+two-member `Group` gives frames byte-identical to writing it on each member, and
+`.opacity(0.5)` agrees even for two FULLY overlapping members — but a lifecycle
+effect fires ONCE: `.onAppear` 1 on a two-member `Group`, 1 on a
+`ForEach(0..<3)`, `.task` 1. So the effect wrappers (`.onAppear`, `.focusable`,
+`.onHover`, `.draggable`, `.navigationDestination`, …) are deliberately left
+opaque; conforming them would keep every layout test green while turning one
+`.onAppear` on a fifty-row `ForEach` into fifty calls. Three further wrappers
+are held back for reasons of their own rather than by that rule: `_TaggedView`
+(a tag is a SELECTION value, and distributing gives N views one tag),
+`_ZIndexView` (`ChildView.rewrapped` carries the MEMBER's z-index across, so the
+wrapper's own would be read as 0) and the preference publishers (preferences
+COLLECT upward, so distributing pushes N).
+
+Measured for cost as well: no regression on `ab_bench.py --quick` with a null
+test first and equal-length binary paths; `anyview` read +0.5% "slower" at 12
+reps and is indistinguishable at 40 (its null band is +/-0.4%), and `menus` is
+-3.4% [-3.9, -2.8] FASTER with the rendered checksum identical on both binaries
+and the measure memo going 41 hits / 12,517 lookups -> 97 / 12,438.
 
 **3. `\.isEnabled` has no readers in the big containers — FIXED (`291b8754`, `f1d467d2`), kept here for the shape.** `List`, `_ListCore`,
 `Table` and `ScrollView` never consulted it, and each type's concrete
