@@ -17,11 +17,13 @@
 /// |-------|-------------|
 /// | `.automatic` | Platform default (checkbox in TUI) |
 /// | `.checkbox` | Classic checkbox |
-/// | `.switch` | Switch style (renders same as checkbox in TUI) |
+/// | `.switch` | A two-position switch — a coloured track with a knob |
 ///
-/// > Note: The built-in `ToggleStyle`s render identically — a checkbox — due to
-/// > terminal constraints; the API matches SwiftUI for compatibility. The
-/// > *glyphs* of that checkbox (■/□ or ⬛︎/⬜︎ or `[x]`/`[ ]` — see `ToggleCharacterSet`) are a separate,
+/// > Note: `.automatic` and `.checkbox` both draw a checkbox. `.switch` does
+/// > NOT — it draws a two-position switch: a coloured track with a two-cell
+/// > knob on the side it points to, over a distinct background. `_ToggleCore`
+/// > branches on `is SwitchToggleStyle` to pick it. The *glyphs* of the
+/// > checkbox (■/□ or ⬛︎/⬜︎ or `[x]`/`[ ]` — see `ToggleCharacterSet`) are a separate,
 /// > TUI-specific choice — see ``ToggleCharacterSet`` and
 /// > ``View/toggleCharacterSet(_:)``.
 ///
@@ -178,7 +180,8 @@ extension ToggleStyle where Self == CheckboxToggleStyle {
 extension ToggleStyle where Self == SwitchToggleStyle {
     /// A toggle style that displays a leading label and a trailing switch.
     ///
-    /// > Note: In TUIkit, this renders identically to checkbox style.
+    /// > Note: In TUIkit this draws a coloured track with a two-cell knob, not
+    /// > a checkbox.
     public static var `switch`: SwitchToggleStyle { SwitchToggleStyle() }
 }
 
@@ -271,8 +274,8 @@ extension View {
 ///
 /// Available styles: `.automatic`, `.checkbox`, `.switch`
 ///
-/// > Note: In TUIkit, all styles currently render identically as checkbox
-/// > due to terminal constraints.
+/// > Note: In TUIkit `.automatic` and `.checkbox` draw a checkbox; `.switch`
+/// > draws a two-position switch.
 public struct Toggle<Label: View>: View {
     /// The binding to the toggle's boolean state.
     let isOn: Binding<Bool>
