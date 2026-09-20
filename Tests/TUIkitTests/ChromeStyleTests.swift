@@ -261,6 +261,6 @@ private struct AnySceneProbe {
         chrome = (scene as? any RootChromeStyleProvidingScene)?.rootChromeStyle()
         palette = (scene as? any RootPaletteOverrideProvidingScene)?.rootPaletteOverride()
         appearance = (scene as? any RootAppearanceOverrideProvidingScene)?.rootAppearanceOverride()
-        mouse = (scene as? MouseSupportProvidingScene)?.resolvedMouseSupport()
+        mouse = (scene as? any MouseSupportProvidingScene)?.resolvedMouseSupport()
     }
 }
