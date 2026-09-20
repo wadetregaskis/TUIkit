@@ -31,12 +31,27 @@ extension View {
     /// via `.focused(_:)` / `.focused(_:equals:)` — which is what makes those
     /// modifiers work on an otherwise non-interactive view like `Text`.
     ///
+    /// `false` is the other half of the parameter and not merely the absence of
+    /// the first: it takes the content OUT of the ring, so a control that
+    /// registers a stop of its own — a `Button`, a `TextField` — stops being a
+    /// Tab stop and stops answering Return. See the `.focusable` entry in
+    /// `Documentation/SwiftUI-compatibility.md` for the two ways that differs
+    /// from SwiftUI, both of which follow from a terminal modifier addressing a
+    /// SUBTREE where SwiftUI addresses one node: it reaches every control
+    /// inside, and it is ADDITIVE — an inner `.focusable(true)` does not re-open
+    /// a subtree an ancestor closed, exactly as `.disabled(false)` cannot
+    /// re-enable one.
+    ///
     /// - Parameter isFocusable: Whether the view can receive focus.
     public func focusable(_ isFocusable: Bool = true) -> some View {
         FocusableModifier(content: self, isFocusable: isFocusable, interactions: .automatic)
     }
 
     /// Marks this view as able to receive focus, with the given interactions.
+    ///
+    /// `false` suppresses the content's own focus stops as it does on
+    /// ``View/focusable(_:)``; `interactions` then names nothing, there being no
+    /// stop to interact with.
     ///
     /// - Parameters:
     ///   - isFocusable: Whether the view can receive focus.
@@ -77,6 +92,25 @@ extension FocusableModifier: Renderable {
         // label). Returns the id only when a stop was actually registered.
         let focusID = registerFocusStop(context: context)
 
+        var contentContext = context
+
+        // `.focusable(false)` is not "add no stop of my own" — SwiftUI's
+        // parameter is documented as "`false` otherwise", the view not taking
+        // part in focus at all — so the content's OWN registrations have to stop
+        // too, or a `Button` told it is not focusable goes on taking Tab and
+        // Return. `isFocusSuppressed` is that, and centrally: every control
+        // reaches the ring through `FocusRegistrar.register`, which consults it,
+        // and a replay out of a value memo consults the serving frame's copy.
+        //
+        // One-way, and deliberately so. This is the same flag `.hidden()` sets,
+        // and a `.focusable()` inside a hidden subtree must STAY out of the ring
+        // — there is no picture for Tab to land on — so the `true` case must not
+        // write `false` here. An inner `.focusable(true)` therefore does not
+        // re-open a subtree an ancestor closed, which is how `.disabled(_:)`
+        // composes two files over, and is recorded as a deviation in
+        // `Documentation/SwiftUI-compatibility.md`.
+        if !isFocusable { contentContext.environment.isFocusSuppressed = true }
+
         // Tell the content whether it holds the focus, the way SwiftUI's
         // `.focusable()` does. Without this the modifier makes a view reachable
         // by Tab and gives it no way to SAY so: `\.isFocused` stayed false
@@ -87,14 +121,20 @@ extension FocusableModifier: Renderable {
         // Published, not assigned: a bare assignment is invisible to a memo
         // inside the content, which then served the unfocused frame after Tab
         // arrived (see `FocusRegistration.publishIsFocused`).
-        var contentContext = context
         let isFocused = focusID.map { FocusRegistration.isFocused(context: context, focusID: $0) }
         FocusRegistration.publishIsFocused(isFocused, context: context, into: &contentContext)
 
         var buffer = TUIkit.renderToBuffer(content, context: contentContext)
 
-        // `.activate` → click anywhere in the content to focus it.
+        // `.activate` → click anywhere in the content to focus it. Not while an
+        // ancestor suppresses focus: `registerFocusStop` still hands back an id
+        // there (it must — the id's `StateStorage` slot has to stay marked
+        // active, and the ring's own guard lives one call further in), but
+        // nothing filed it, so the click would land on `FocusManager.focus(id:)`
+        // with an id no section holds — a pending intent, re-rendering for a
+        // couple of passes to look for a control that is not coming.
         if let focusID, interactions.contains(.activate),
+            !context.environment.isFocusSuppressed,
             let mouseDispatcher = context.environment.mouseEventDispatcher
         {
             let focusManager = context.environment.focusManager

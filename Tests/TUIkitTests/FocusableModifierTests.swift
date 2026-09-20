@@ -24,6 +24,15 @@ struct FocusableModifierTests {
     /// Renders one frame with a real focus manager + storage.
     @discardableResult
     private func render(_ view: some View, _ tui: TUIContext, _ manager: FocusManager) -> FocusManager {
+        _ = renderBuffer(view, tui, manager)
+        return manager
+    }
+
+    /// ``render(_:_:_:)``, keeping the frame it drew — for the cases that ask
+    /// what the buffer carries rather than what the ring holds.
+    private func renderBuffer(
+        _ view: some View, _ tui: TUIContext, _ manager: FocusManager
+    ) -> FrameBuffer {
         var environment = EnvironmentValues()
         environment.focusManager = manager
         environment.applyRuntimeServices(from: tui)
@@ -32,10 +41,10 @@ struct FocusableModifierTests {
             environment: environment, tuiContext: tui)
         tui.stateStorage.beginRenderPass()
         manager.beginRenderPass()
-        _ = renderToBuffer(view, context: context)
+        let buffer = renderToBuffer(view, context: context)
         manager.endRenderPass()
         tui.stateStorage.endRenderPass()
-        return manager
+        return buffer
     }
 
     @Test("focusable() registers a focus stop, and a lone one auto-focuses")
@@ -52,6 +61,65 @@ struct FocusableModifierTests {
     func falseFlagRegistersNothing() {
         let manager = render(Text("x").focusable(false), TUIContext(), FocusManager())
         #expect(manager.registeredFocusIDsInActiveSection().isEmpty)
+    }
+
+    @Test("focusable(false) takes its content out of the Tab ring")
+    func falseFlagSuppressesContentStops() {
+        // `Text` was never focusable, so the test above passes whatever the
+        // modifier does with its content. The case the parameter is FOR is a
+        // control that registers a stop of its own: SwiftUI's `isFocusable`
+        // says "`false` otherwise", and a button told that must not be
+        // somewhere Tab can land.
+        let manager = render(
+            VStack {
+                Button("Alpha") {}
+                Button("Beta") {}.focusable(false)
+            }, TUIContext(), FocusManager())
+        let ids = manager.registeredFocusIDsInActiveSection()
+        #expect(ids.count == 1, "only Alpha is a focus stop, but the ring holds \(ids)")
+
+        // The ring is one stop long, so Tab cycles back onto Alpha rather than
+        // landing on Beta.
+        let before = manager.currentFocusedID
+        manager.focusNext()
+        #expect(
+            manager.currentFocusedID == before,
+            "Tab moved off Alpha onto \(manager.currentFocusedID ?? "nil")")
+    }
+
+    @Test("An inner focusable(true) does not re-open a focusable(false) subtree")
+    func innerTrueDoesNotReopen() {
+        // The suppression is ADDITIVE, like `.disabled(_:)` and unlike SwiftUI,
+        // where the modifier speaks for one node and a descendant declares its
+        // own focusability. It has to be: it is the same flag `.hidden()` sets,
+        // so a `true` that cleared it would put a hidden view back in the ring.
+        let manager = render(
+            VStack {
+                Text("Alpha").focusable()
+                Text("Beta").focusable()
+            }.focusable(false), TUIContext(), FocusManager())
+        #expect(manager.registeredFocusIDsInActiveSection().isEmpty)
+    }
+
+    @Test("focusable() inside .hidden() stays out of the ring")
+    func hiddenSuppressesAnInnerFocusable() {
+        // The reason the `true` case writes nothing rather than writing `false`.
+        // A hidden view is no Tab stop — there is no picture for the ring to
+        // land on — and an explicit `.focusable()` inside one must not undo that.
+        let manager = render(Text("x").focusable().hidden(), TUIContext(), FocusManager())
+        #expect(manager.registeredFocusIDsInActiveSection().isEmpty)
+    }
+
+    @Test("A suppressed focusable offers no click-to-focus region")
+    func suppressedFocusableTakesNoClicks() {
+        // `.activate` (in `.automatic`) makes the content clickable to focus it.
+        // Nothing filed the stop, so the click would reach
+        // `FocusManager.focus(id:)` with an id no section holds — a pending
+        // intent that repaints for a couple of passes looking for it.
+        let buffer = renderBuffer(
+            VStack { Text("x").focusable() }.focusable(false),
+            TUIContext(), FocusManager())
+        #expect(buffer.hitTestRegions.isEmpty)
     }
 
     @Test("A disabled focusable does not register")
