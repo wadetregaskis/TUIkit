@@ -475,14 +475,64 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
         else { return false }
         let row = focusedIndex
         onDelete(IndexSet(integer: row))
-        // The row below slides up into this slot; keep focus on it, clamped to
-        // the about-to-shrink data (itemCount refreshes next render). Clamped
-        // to the SPAN's end as well as the list's: deleting a section's last
-        // row leaves the cursor on that section's new last row rather than on
-        // whatever chrome follows it.
-        focusedIndex = max(0, min(row, min(span.upperBound, itemCount) - 2))
+        focusedIndex = cursorRow(afterDeleting: row, from: span)
         ensureFocusedItemVisible()
         return true
+    }
+
+    /// Where the cursor stands once the row at `deleted` has left `span`.
+    ///
+    /// The row below slides up into the slot, so the cursor keeps THAT row —
+    /// clamped to the span's new end as well as the list's, because deleting
+    /// a section's last row must leave the cursor on that section's new last
+    /// row rather than on whatever chrome follows it. Both bounds are one less
+    /// than they look because the delete has not reached the numbers yet:
+    /// ``itemCount`` refreshes next render, and `span` is this frame's.
+    ///
+    /// The case that clamp alone gets wrong is a span of ONE row, which has no
+    /// new last row: `span.upperBound - 2` is then `span.lowerBound - 1`, the
+    /// row ABOVE the span — a section's HEADER, which carries no selection
+    /// value, answers nothing to Return or Space, and would wear the focus
+    /// ring. (In a flat `List`, where the span is the whole list, that row
+    /// does not exist and the `max(0,)` hid it; inside a `Section` it is
+    /// always chrome.) So an emptied span falls through to the nearest row the
+    /// cursor can actually stand on.
+    private func cursorRow(afterDeleting deleted: Int, from span: Range<Int>) -> Int {
+        let lastRowOfSpan = min(span.upperBound, itemCount) - 2
+        guard lastRowOfSpan < span.lowerBound else {
+            return max(0, min(deleted, lastRowOfSpan))
+        }
+        return nearestLandableRow(afterDeleting: deleted)
+    }
+
+    /// The nearest row the cursor can stand on once the row at `deleted` is
+    /// gone — looking down from the emptied slot first, then up — numbered the
+    /// way the list will be numbered AFTER the delete, which is this way with
+    /// every row from `deleted` on slid up by one.
+    ///
+    /// That shift is the whole subtlety: ``selectableIndices`` and
+    /// ``selectionDisabledRows`` were published by the render that drew the
+    /// row being deleted, so they still answer in the OLD numbering, and the
+    /// question about the row that will be at `index` has to be asked at
+    /// `index + 1` from `deleted` on.
+    ///
+    /// Answers the emptied slot itself when nothing can be landed on at all —
+    /// a list whose every remaining row is chrome — because there is nowhere
+    /// better, and the next Up/Down finds a row if one appears.
+    private func nearestLandableRow(afterDeleting deleted: Int) -> Int {
+        let lastRow = itemCount - 2
+        guard lastRow >= 0 else { return 0 }
+        func willBeLandable(_ index: Int) -> Bool {
+            isLandable(index < deleted ? index : index + 1)
+        }
+        if deleted <= lastRow, let below = (deleted...lastRow).first(where: willBeLandable) {
+            return below
+        }
+        let highestAbove = min(deleted, lastRow + 1) - 1
+        if highestAbove >= 0, let above = (0...highestAbove).last(where: willBeLandable) {
+            return above
+        }
+        return max(0, min(deleted, lastRow))
     }
 
     /// The list rows the row at `index` may be deleted among — the rows of the

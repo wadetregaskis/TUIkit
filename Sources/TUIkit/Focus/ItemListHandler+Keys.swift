@@ -331,10 +331,11 @@ extension ItemListHandler {
     /// ``ItemListHandler/selectableIndices`` when that whitelist is non-empty
     /// (the header/footer exclusion `List`'s `Section` path builds), AND not a
     /// row a `.selectionDisabled()` reported this frame (see
-    /// ``ItemListHandler/selectionDisabledRows``). Only `moveFocus(by:wrap:)`
-    /// consults this — Home/End jump straight to a boundary and do not yet
-    /// route around a disabled row sitting there.
-    private func isLandable(_ index: Int) -> Bool {
+    /// ``ItemListHandler/selectionDisabledRows``). Consulted by
+    /// `moveFocus(by:wrap:)` and by the cursor's landing after a delete
+    /// (``ItemListHandler/deleteFocusedRow()``) — Home/End jump straight to a
+    /// boundary and do not yet route around a disabled row sitting there.
+    func isLandable(_ index: Int) -> Bool {
         (selectableIndices.isEmpty || selectableIndices.contains(index))
             && !selectionDisabledRows.contains(index)
     }

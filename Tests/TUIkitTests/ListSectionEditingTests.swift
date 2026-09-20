@@ -90,6 +90,13 @@ struct ListSectionEditingTests {
             return true
         }
 
+        /// The id of the row the cursor stands on, or `nil` when it stands on
+        /// chrome — a header or a footer, which carry no selection value and
+        /// so are the answer this suite is watching for.
+        var focusedRowID: String? {
+            handler.flatMap { $0.id(at: $0.focusedIndex) }
+        }
+
         /// The published band for a list row, from the last render.
         func band(row: Int) -> ItemListHandler<String>.RowBand? {
             handler?.visibleRowBands.first { $0.rowIndex == row && $0.isContent }
@@ -543,5 +550,117 @@ struct ListSectionEditingTests {
                 "row \(row) claimed Delete")
         }
         #expect(items.value == ["alpha", "beta", "gamma"], "nothing was deleted: \(items.value)")
+    }
+
+    // MARK: - Where the cursor stands afterwards
+
+    /// The row below slides up into the deleted row's slot and the cursor
+    /// keeps it, clamped to the section's own end so it never lands on the
+    /// chrome that follows. A section holding ONE row has no row below and no
+    /// new end, and the clamp then points one row ABOVE the section's first:
+    /// at its HEADER, which carries no selection value, answers nothing to
+    /// Return or Space, and would wear the focus ring.
+    @Test("Emptying a Section puts the cursor on a row, not on the chrome around it")
+    func emptyingASectionLeavesTheCursorOnARow() {
+        let alpha = MainActorBox(["only"])
+        let beta = MainActorBox(["x", "y"])
+        let fixture = Fixture()
+        func render() {
+            fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
+        }
+        render()
+
+        // header, only, header, x, y — "only" is row 1, data offset 0.
+        #expect(fixture.pressDelete(onRow: 1, named: "only") == true)
+        #expect(alpha.value.isEmpty, "got \(alpha.value)")
+        #expect(beta.value == ["x", "y"], "the other section is untouched: \(beta.value)")
+
+        // header, header, x, y — the next row a cursor can stand on is "x",
+        // two rows of chrome below where it was.
+        render()
+        #expect(
+            fixture.focusedRowID == "x",
+            "the cursor stands on \(String(describing: fixture.focusedRowID))")
+    }
+
+    /// The same emptying with nothing BELOW: the cursor goes back up rather
+    /// than sitting on the header of the section it just emptied.
+    @Test("Emptying the LAST Section walks the cursor back to the row above it")
+    func emptyingTheLastSectionWalksTheCursorBack() {
+        let alpha = MainActorBox(["x", "y"])
+        let beta = MainActorBox(["only"])
+        let fixture = Fixture()
+        func render() {
+            fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
+        }
+        render()
+
+        // header, x, y, header, only — "only" is row 4, data offset 0.
+        #expect(fixture.pressDelete(onRow: 4, named: "only") == true)
+        #expect(beta.value.isEmpty, "got \(beta.value)")
+        #expect(alpha.value == ["x", "y"], "the other section is untouched: \(alpha.value)")
+
+        render()
+        #expect(
+            fixture.focusedRowID == "y",
+            "the cursor stands on \(String(describing: fixture.focusedRowID))")
+    }
+
+    /// The clamp's own job, pinned beside the case it gets wrong: while the
+    /// section still HAS a row, deleting its last one leaves the cursor on the
+    /// section's new last row rather than on the header that follows it.
+    @Test("Deleting a Section's last row leaves the cursor on that section's new last row")
+    func deletingASectionsLastRowKeepsTheCursorInTheSection() {
+        let alpha = MainActorBox(["a1", "a2"])
+        let beta = MainActorBox(["x"])
+        let fixture = Fixture()
+        func render() {
+            fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
+        }
+        render()
+
+        // header, a1, a2, header, x — "a2" is row 2, data offset 1.
+        #expect(fixture.pressDelete(onRow: 2, named: "a2") == true)
+        #expect(alpha.value == ["a1"], "got \(alpha.value)")
+
+        render()
+        #expect(
+            fixture.focusedRowID == "a1",
+            "the cursor stands on \(String(describing: fixture.focusedRowID))")
+    }
+
+    /// The shape the arithmetic is easiest to get wrong on, and the one that
+    /// HIDES the error: one Section, one row, so the list is two rows and
+    /// `min(span.upperBound, itemCount) - 2` is 0 — the header, which is also
+    /// the only row left. Pinned so nobody re-derives it and concludes the
+    /// clamp was fine: there is no row to stand on here, and standing on the
+    /// chrome is refused the moment Delete is pressed again.
+    @Test("A one-row Section that empties leaves nothing to stand on, and refuses Delete there")
+    func emptyingTheOnlySectionLeavesNoRowToStandOn() {
+        let items = MainActorBox(["only"])
+        let fixture = Fixture()
+        func render() {
+            fixture.render(
+                List(selection: .constant(String?.none)) {
+                    Section("Items") {
+                        ForEach(items.value, id: \.self) { Text($0) }
+                            .onDelete { items.value.remove(atOffsets: $0) }
+                    }
+                }
+                .frame(height: 10))
+        }
+        render()
+
+        #expect(fixture.pressDelete(onRow: 1, named: "only") == true)
+        #expect(items.value.isEmpty, "got \(items.value)")
+
+        render()
+        #expect(
+            fixture.focusedRowID == nil,
+            "no row is left: \(String(describing: fixture.focusedRowID))")
+        #expect(
+            fixture.handler?.handleKeyEvent(KeyEvent(key: .delete)) == false,
+            "Delete on chrome belongs to no collection and must fall through")
+        #expect(items.value.isEmpty, "and nothing else was deleted: \(items.value)")
     }
 }
