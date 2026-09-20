@@ -95,8 +95,15 @@ extension ScrollPosition {
     /// The id of the row at the scroll view's anchor, if it is of type `T`.
     ///
     /// `nil` when nothing has been reported yet (the first frame), when the
-    /// content has no ids to report (a plain `VStack` rather than a `ForEach`),
-    /// or when the id is not a `T`.
+    /// content has no ids to report, or when the id is not a `T`.
+    ///
+    /// "No ids to report" is narrower than it sounds, and was measured rather
+    /// than assumed: the sample travels through the content's keyed
+    /// collection, so it answers only where a WINDOWED stack's content is a
+    /// SINGLE `ForEach`. An eager `VStack` reports nothing; so does a stack
+    /// holding two `ForEach`es; and a `.id(_:)`-tagged child is never reported
+    /// even though ``scrollTo(id:anchor:)`` seeks to one perfectly well.
+    /// Seeking is per-child, reading is per-collection.
     public func viewID<T: Hashable>(type: T.Type) -> T? {
         guard case .id(let value, _) = target else { return nil }
         return value.base as? T
@@ -116,7 +123,10 @@ extension ScrollPosition {
     /// Asks the scroll view to bring the row identified by `id` into view.
     ///
     /// - Parameters:
-    ///   - id: The row's identity, as `ForEach` derives it.
+    ///   - id: The row's identity, as `ForEach` derives it — or a `.id(_:)`
+    ///     tag on one of the content stack's own children, which seeks the
+    ///     same way. (Not a `.id(_:)` written INSIDE a `ForEach` row, whose
+    ///     identity is its element's `id`; see `ChildView.matchesSeekKey`.)
     ///   - anchor: Where the row lands — `nil` (the default) moves as little
     ///     as possible, and not at all if the row is already visible.
     public mutating func scrollTo<ID: Hashable>(id: ID, anchor: UnitPoint? = nil) {
