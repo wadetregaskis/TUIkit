@@ -369,6 +369,54 @@ struct ButtonTests {
         )
     }
 
+    // MARK: - Press
+
+    /// A style that renders differently while `configuration.isPressed` is
+    /// true, so a real mouse press can be observed through it rather than
+    /// through the built-in styles' chrome (which doesn't visibly change for
+    /// press today).
+    private struct PressRevealingStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            Text(configuration.isPressed ? "PRESSED" : "idle")
+        }
+    }
+
+    @Test("A custom ButtonStyle sees isPressed flip while the mouse button is held down")
+    func customStyleSeesRealPressState() {
+        let context = createTestContext()
+        let dispatcher = context.environment.mouseEventDispatcher!
+        dispatcher.setActiveSupport(.full)
+        context.environment.focusManager!.register(FocusSentinel())
+
+        let view = Button("Save") { /* no-op */ }.buttonStyle(PressRevealingStyle())
+
+        // First render: idle, not pressed.
+        let before = ansiRendered(view, context: context)
+        #expect(before.contains("idle"), "expected the idle rendering before any press: \(before)")
+
+        let regions = renderToBuffer(view, context: context).hitTestRegions
+        dispatcher.setRegions(regions)
+        guard let region = regions.first else {
+            Issue.record("expected at least one hit-test region from Button")
+            return
+        }
+
+        // Press down (and do NOT release yet) — a real press-and-hold, the
+        // same gesture `MouseEventDispatcher.endsHeldGesture` tracks.
+        _ = dispatcher.dispatch(
+            MouseEvent(
+                button: .left, phase: .pressed,
+                x: region.offsetX, y: region.offsetY
+            )
+        )
+
+        let duringPress = ansiRendered(view, context: context)
+        #expect(
+            duringPress.contains("PRESSED"),
+            "Button should render its pressed appearance while the mouse button is held down; got: \(duringPress)"
+        )
+    }
+
     @Test("Disabled Buttons do not register a hit-test region (no hover)")
     func disabledButtonNoHover() {
         let context = createTestContext()

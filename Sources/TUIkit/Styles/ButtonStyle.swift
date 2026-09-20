@@ -39,9 +39,14 @@ public struct ButtonStyleConfiguration {
 
     /// Whether the button is currently being pressed.
     ///
-    /// - Note: Terminals have no press-and-hold gesture — a key press
-    ///   triggers the action instantly — so this is always `false`. It is
-    ///   kept for source compatibility with SwiftUI button styles.
+    /// - Note: True for a real mouse press-and-hold — the button is down over
+    ///   the button and has not yet been released or dragged off it — the same
+    ///   gesture `MouseEventDispatcher.endsHeldGesture` already distinguishes
+    ///   from a plain click elsewhere. A **keyboard** activation (Enter,
+    ///   Space) has no such gesture — a terminal reports a key press, not a
+    ///   down-then-up pair — so this stays `false` for those, as does a
+    ///   `.menuTrigger()` button's opening press, which fires its action and
+    ///   hands the gesture off in the same instant rather than holding.
     public let isPressed: Bool
 
     /// Whether the button currently holds keyboard focus.

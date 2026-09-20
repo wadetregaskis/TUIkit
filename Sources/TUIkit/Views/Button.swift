@@ -273,6 +273,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
     private enum StateIndex {
         static let focusID = 0
         static let isHovered = 1
+        static let isPressed = 2
     }
 
     /// A button hugs its label (it never grows to fill), so this is its exact,
@@ -393,6 +394,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         let persistedFocusID: String
         let menuOrdinal: Int?
         let hoverBox: StateBox<Bool>
+        let pressBox: StateBox<Bool>
         let effectiveAction: () -> Void
         let isDisabled: Bool
     }
@@ -463,6 +465,19 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         let hoverBox: StateBox<Bool> = stateStorage.storage(for: hoverKey, default: false)
         let isHovered = !isDisabled && hoverBox.value
 
+        // Press state persists across renders the same way hover does: the
+        // mouse handler below flips this box on `.pressed` / `.released` for
+        // an ordinary (non-menu-trigger) button, which is a real press-and-hold
+        // — down over the button, up to activate, or drag off to cancel — the
+        // same gesture `MouseEventDispatcher.endsHeldGesture` already tracks.
+        // Disabled buttons never show it, same clamp as hover.
+        let pressKey = StateStorage.StateKey(
+            identity: context.identity,
+            propertyIndex: StateIndex.isPressed
+        )
+        let pressBox: StateBox<Bool> = stateStorage.storage(for: pressKey, default: false)
+        let isPressed = !isDisabled && pressBox.value
+
         // A `.keyboardShortcut(.defaultAction / .cancelAction)` wrapper plants a
         // claimable assignment in the environment; the wrapped button claims it
         // and registers its action for the frame.
@@ -502,7 +517,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             label: label,
             labelView: labelView,
             role: role,
-            isPressed: false,
+            isPressed: isPressed,
             isFocused: isFocused && !isDisabled,
             isHovered: isHovered,
             isEnabled: !isDisabled,
@@ -513,6 +528,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             persistedFocusID: persistedFocusID,
             menuOrdinal: menuOrdinal,
             hoverBox: hoverBox,
+            pressBox: pressBox,
             effectiveAction: effectiveAction,
             isDisabled: isDisabled)
     }
@@ -523,6 +539,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
         let persistedFocusID = resolved.persistedFocusID
         let menuOrdinal = resolved.menuOrdinal
         let hoverBox = resolved.hoverBox
+        let pressBox = resolved.pressBox
         let effectiveAction = resolved.effectiveAction
         let style = context.environment.buttonStyle
         var buffer = style.makeBuffer(
@@ -549,13 +566,18 @@ private struct _ButtonCore: View, Renderable, Layoutable {
             let captureFocusID = persistedFocusID
             let captureAction = effectiveAction
             let captureHoverBox = hoverBox
+            let capturePressBox = pressBox
             let handlerID = mouseDispatcher.register(in: context, hoverBox: captureHoverBox) { event in
                 switch event.phase {
                 case .pressed where event.button == .left:
                     guard isMenuTrigger else {
                         // Claim the press so the dispatcher routes the
                         // matching release back here even if the cursor
-                        // drifts off the button before it lifts.
+                        // drifts off the button before it lifts — which is
+                        // also what guarantees the `.released` below always
+                        // arrives to clear this again. A REAL press-and-hold:
+                        // set it and let the render this unblocks show it.
+                        capturePressBox.value = true
                         return true
                     }
                     // A menu trigger fires on the press and then gets out of
@@ -563,6 +585,11 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                     // release belong to, so the press hands the rest of the
                     // gesture back to live hit-testing. That is what makes
                     // press-drag-release pick a row, the way a Mac menu does.
+                    // There is no held moment to show here — the action (and
+                    // usually the menu covering this button) both land on the
+                    // same frame as the press — and hand-off means no release
+                    // is guaranteed back to this handler to clear a flag it
+                    // set, so this path leaves `capturePressBox` alone.
                     focusManager?.focus(id: captureFocusID)
                     captureAction()
                     mouseDispatcher.handOffGesture()
@@ -575,6 +602,7 @@ private struct _ButtonCore: View, Renderable, Layoutable {
                     // batch both land here) — consumed, but never a second
                     // activation, which would toggle the menu straight shut.
                     guard !isMenuTrigger else { return true }
+                    capturePressBox.value = false
                     focusManager?.focus(id: captureFocusID)
                     captureAction()
                     return true
