@@ -384,14 +384,19 @@ extension Section: ListRowExtractor {
             // list's identity and shared their `@State`.
             var rows: [ListRow<RowID>] = []
             for child in resolveChildViews(from: content, context: context) where !child.isSpacer {
-                // `nil` when an index cannot be cast into the selection type:
-                // the row draws and is simply not selectable. See `ListRow.id`.
-                let indexID = rows.count as? RowID
+                // The row's own `.tag(_:)`, else its index — through the same
+                // `staticListRowID(of:ordinal:as:)` the flat `List` keys its
+                // static rows by, because a row inside a Section is a row of
+                // the enclosing List and must not answer to a different rule.
+                // `nil` when neither can be cast into the selection type: the
+                // row draws and is simply not selectable. See `ListRow.id`.
+                let rowID = staticListRowID(
+                    of: child.wrappedView, ordinal: rows.count, as: RowID.self)
                 let badge = extractBadgeValue(from: child.wrappedView)
                 let buffer = child.render(
                     width: context.availableWidth, height: context.availableHeight,
                     context: context)
-                rows.append(ListRow(id: indexID, buffer: buffer, badge: badge))
+                rows.append(ListRow(id: rowID, buffer: buffer, badge: badge))
             }
             return rows
         }
@@ -400,6 +405,10 @@ extension Section: ListRowExtractor {
         let badge = extractBadgeValue(from: content)
         let buffer = TUIkit.renderToBuffer(content, context: context)
         guard !buffer.lines.isEmpty else { return [] }
-        return [ListRow(id: 0 as? RowID, buffer: buffer, badge: badge)]
+        return [
+            ListRow(
+                id: staticListRowID(of: content, ordinal: 0, as: RowID.self), buffer: buffer,
+                badge: badge)
+        ]
     }
 }

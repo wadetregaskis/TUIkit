@@ -2833,14 +2833,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // `EmptyView` was empty with a `String?` selection and a blank row
         // with an `Int?` one.
         guard !buffer.lines.isEmpty else { return .eager([]) }
-        // A static row's only possible id is its index, which cannot be
-        // expressed when the selection is a String, a UUID or a Set of
-        // either. It is still a row: it draws, it just cannot be selected —
-        // SwiftUI's own treatment of a row carrying no `tag(_:)`. This used
-        // to return NO rows, so such a list rendered as the empty placeholder.
+        // A static row's own `.tag(_:)` names it; failing that its index, which
+        // cannot be expressed when the selection is a String, a UUID or a Set
+        // of either. It is still a row either way: it draws, it just cannot be
+        // selected — SwiftUI's own treatment of a row carrying no `tag(_:)`.
+        // This used to return NO rows, so such a list rendered as the empty
+        // placeholder.
         return .eager([
             SelectableListRow(
-                type: (0 as? SelectionValue).map { .content(id: $0) } ?? .unselectable,
+                type: staticListRowID(of: content, ordinal: 0, as: SelectionValue.self)
+                    .map { .content(id: $0) } ?? .unselectable,
                 content: LazyListRowContent(buffer: buffer, badge: badge))
         ])
     }
@@ -2908,12 +2910,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 continue
             }
 
-            // See `extractRows`: an index-identified row is unselectable rather
-            // than absent when the selection type cannot hold an index. The
-            // count advances only over rows that took an id, so the ids stay
+            // See `extractRows`: the row's own `.tag(_:)` first, then its
+            // index — and an index-identified row is unselectable rather than
+            // absent when the selection type cannot hold an index. The count
+            // advances over every row, tagged or not, so the ordinals stay
             // 0, 1, 2 … for the Int case they exist for.
             let type: ListRowType<SelectionValue> =
-                (result.count as? SelectionValue).map { .content(id: $0) } ?? .unselectable
+                staticListRowID(of: child.wrappedView, ordinal: result.count, as: SelectionValue.self)
+                .map { .content(id: $0) } ?? .unselectable
             let badge = extractBadgeValue(from: child.wrappedView)
             let buffer = child.render(
                 width: context.availableWidth, height: context.availableHeight,

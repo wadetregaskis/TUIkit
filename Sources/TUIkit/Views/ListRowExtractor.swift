@@ -18,11 +18,12 @@ struct ListRow<ID: Hashable> {
     /// The identifier the selection knows this row by, or `nil` when it has
     /// none it can express.
     ///
-    /// A static row's only possible id is its index, and an index cannot be
-    /// cast into a `String`, a `UUID` or a `Set` of either. Such a row draws
-    /// and simply does not participate in selection — SwiftUI's treatment of a
-    /// row carrying no `tag(_:)`. It used to be DROPPED, which made a whole
-    /// list of static rows render as the empty placeholder.
+    /// A static row's id is its own `.tag(_:)`, or failing that its index —
+    /// and an index cannot be cast into a `String`, a `UUID` or a `Set` of
+    /// either. A row with neither draws and simply does not participate in
+    /// selection, which is SwiftUI's treatment of a row carrying no `tag(_:)`.
+    /// It used to be DROPPED, which made a whole list of static rows render as
+    /// the empty placeholder. See ``staticListRowID(of:ordinal:as:)``.
     let id: ID?
 
     /// The lazily-rendered buffer + badge for this row.
@@ -48,6 +49,29 @@ struct ListRow<ID: Hashable> {
         self.id = id
         self.content = LazyListRowContent(buffer: buffer, badge: badge)
     }
+}
+
+// MARK: - Identifying a statically-built row
+
+/// The selection value a statically-built row takes: its own `.tag(_:)` where
+/// it has one, else its ordinal among the rows.
+///
+/// The tag comes first because it is the only way SwiftUI gives a static row a
+/// selection value at all — View/tag(_:): "Sets the unique tag value of this
+/// view. Use this modifier to differentiate among certain selectable views" —
+/// while the ordinal is a fallback this framework invented, and a row that can
+/// say what it is should not be answered with where it sits.
+///
+/// `nil` means the row draws but cannot be selected: no tag, and an ordinal
+/// that will not cast into a `String`, a `UUID` or a `Set` of either.
+///
+/// One function because both the flat `List` (`_ListCore.extractFromChildren`
+/// and its single-row fallback) and `Section.extractListRows` key static rows,
+/// and a row inside a Section is a row of the enclosing List — the two must not
+/// drift into different rules.
+@MainActor
+func staticListRowID<ID: Hashable>(of view: some View, ordinal: Int, as idType: ID.Type) -> ID? {
+    extractTagValue(from: view, as: idType) ?? (ordinal as? ID)
 }
 
 // MARK: - List Row Extractor Protocol

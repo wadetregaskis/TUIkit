@@ -273,19 +273,14 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         let entries = provider.pickerOptions().compactMap { raw -> _PickerEntry<SelectionValue>? in
             switch raw {
             case .option(let tagValue, let includeOptional, let label):
-                // Cast the TAG into the selection's type, never compare two
-                // `AnyHashable`s: `as?` promotes a value to its Optional as a
-                // language rule, so `.tag(Speed.slow)` matches a `Speed?`
-                // selection on every platform. (`AnyHashable` equality does the
-                // same thing only for types carrying an ObjC bridge, which is
-                // how `TabView` came to draw the wrong tab on Linux-shaped
-                // input — see its `index(matching:)`.)
-                //
-                // `includeOptional: false` withholds exactly that promotion, by
-                // requiring the tag's DYNAMIC type to be the selection type
-                // rather than something assignable to it.
-                guard includeOptional || type(of: tagValue.base) == SelectionValue.self,
-                    let value = tagValue.base as? SelectionValue
+                // The cast rule — into the selection's type, never an
+                // `AnyHashable` comparison — lives on `resolveTag`, beside
+                // `.tag(_:)` itself, because a `List`'s rows match tags by the
+                // same rule and the reasoning is the whole of why the obvious
+                // alternative is wrong.
+                guard
+                    let value = resolveTag(
+                        tagValue, includeOptional: includeOptional, as: SelectionValue.self)
                 else { return nil }
                 return .option(tag: value, label: label)
             case .divider:
