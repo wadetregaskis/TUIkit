@@ -532,6 +532,61 @@ struct FocusEffectDisabledTests {
         expectIndistinguishable(list, "List with unfocused selection hidden")
     }
 
+    /// Nesting: an inner `.focusEffectDisabled(false)` does NOT put back what
+    /// an ancestor turned off.
+    ///
+    /// Apple states the rule on the modifier itself — "The higher views in a
+    /// view hierarchy can override the value you set on this view" — and works
+    /// this exact arrangement: a `Button` carrying `.focusEffectDisabled(false)`
+    /// inside an `HStack` carrying `.focusEffectDisabled(true)` draws no focus
+    /// effect. `rendered(suppression:)` wraps the subject in that ancestor, so
+    /// the sweep's own pair IS Apple's example once the subject carries the
+    /// inner `false`.
+    ///
+    /// Both halves matter here rather than one. `expectDistinguishable` is what
+    /// says the inner `false` is being applied at all — a `false` that somehow
+    /// suppressed the effect by itself would satisfy the nesting case while
+    /// meaning the opposite — and `expectIndistinguishable` is the rule.
+    @Test("An inner focusEffectDisabled(false) does not restore what an ancestor disabled")
+    func anInnerFalseDoesNotRestoreTheEffect() {
+        let button = Button("press") {}.focusEffectDisabled(false)
+        expectDistinguishable(button, "a Button under .focusEffectDisabled(false)")
+        expectIndistinguishable(button, "a Button under .focusEffectDisabled(false)")
+    }
+
+    /// The other nesting, which Apple's sentence does not reach: an inner
+    /// `true` under an ancestor's `false`.
+    ///
+    /// Apple demonstrates only the outer-`true` case, so this half is decided
+    /// by `.disabled(_:)` — the modifier whose documentation carries the same
+    /// sentence, and which this project already resolved additively
+    /// (`DisabledModifier.swift`, "a descendant cannot re-enable what an
+    /// ancestor disabled"). Additive answers both nestings with one rule:
+    /// whoever says `true` wins, wherever they are.
+    ///
+    /// `suppression: nil` is what supplies the ancestor's `false` — it applies
+    /// both modifiers with the values that suppress nothing — so this is the
+    /// sweep's own comparison with the suppression moved off the ancestor and
+    /// onto the subject: focused-and-self-suppressed must still be what
+    /// genuinely unfocused looks like.
+    ///
+    /// Unlike the case above, this one held under the plain environment write
+    /// too (the inner writer won outright). It is here because the ORing makes
+    /// it a decision rather than a side effect, and a decision wants a pin.
+    @Test("An inner focusEffectDisabled(true) disables under an ancestor's false")
+    func anInnerTrueDisablesUnderAnAncestorsFalse() {
+        let button = Button("press") {}.focusEffectDisabled(true)
+        let unfocused = rendered(button, focusOnSubject: false, suppression: nil)
+        let focused = rendered(button, focusOnSubject: true, suppression: nil)
+        #expect(
+            focused == unfocused,
+            """
+            an ancestor's .focusEffectDisabled(false) put back a Button's own suppression:
+              unfocused  \(unfocused.map(\.debugDescription).joined(separator: "\n             "))
+              focused    \(focused.map(\.debugDescription).joined(separator: "\n             "))
+            """)
+    }
+
     /// Only the LOOK goes. `\.isFocused` drives behaviour, and a focused view
     /// in an inactive window still holds the focus.
     @Test("\\.isFocused is unchanged while a view does not appear active")

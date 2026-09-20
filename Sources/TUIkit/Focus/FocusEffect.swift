@@ -9,6 +9,13 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+/// Environment key for the cascading focus-effect suppression (SwiftUI's
+/// `\.focusEffectDisabled`).
+///
+/// `.focusEffectDisabled(true)` flips it for a whole subtree. It is
+/// **additive** — a descendant cannot restore an indication an ancestor
+/// suppressed — exactly as ``EnvironmentValues/isEnabled`` is, and for the
+/// same reason: both modifiers speak for a subtree rather than for a node.
 private struct FocusEffectDisabledKey: EnvironmentKey {
     static let defaultValue = false
 }
@@ -19,6 +26,10 @@ extension EnvironmentValues {
     /// Read it through ``RenderContext/indicatesFocus(_:)`` rather than
     /// directly: every control has to combine it with its own focus state the
     /// same way, and one place to do that is one fewer place to forget.
+    ///
+    /// What is read here is the COMBINED answer — ``View/focusEffectDisabled(_:)``
+    /// ORs into it rather than overwriting it — so a control never has to ask
+    /// what any ancestor said.
     public var focusEffectDisabled: Bool {
         get { self[FocusEffectDisabledKey.self] }
         set { self[FocusEffectDisabledKey.self] = newValue }
@@ -104,10 +115,29 @@ extension View {
     /// problem (a dashboard that should not breathe, a control whose own
     /// content already says where you are).
     ///
-    /// - Parameter disabled: `true` (the default) suppresses the indication;
-    ///   `false` restores it for this subtree, which is how a nested control
-    ///   opts back in.
+    /// It is **additive**: `true` anywhere above a control suppresses that
+    /// control's indication, and a nested `.focusEffectDisabled(false)` does
+    /// not put it back. SwiftUI says so outright — "the higher views in a view
+    /// hierarchy can override the value you set on this view" — and works this
+    /// very example, an inner `false` inside an outer `true` drawing nothing.
+    /// It is also how the parallel ``View/disabled(_:)`` composes here, which
+    /// is no coincidence: Apple's two modifiers carry the same sentence, and a
+    /// modifier that speaks for a subtree cannot let one view in that subtree
+    /// speak back.
+    ///
+    /// So `false` is the *absence* of a suppression rather than a suppression
+    /// of one, and `.focusEffectDisabled(isQuiet)` on a leaf is the spelling
+    /// that works: the flag decides whether this subtree adds its own, and
+    /// whatever an ancestor decided stands either way.
+    ///
+    /// - Parameter disabled: `true` (the default) suppresses the indication for
+    ///   this subtree; `false` adds no suppression of its own, and does not
+    ///   lift one an ancestor added.
     public func focusEffectDisabled(_ disabled: Bool = true) -> some View {
-        environment(\.focusEffectDisabled, disabled)
+        // `transformEnvironment`, not `environment`: the value is derived from
+        // what is inherited (OR), which is what makes the modifier additive.
+        // The closure is a pure function of the inherited value, as that helper
+        // requires — it runs on the measure walk and the render walk alike.
+        transformEnvironment(\.focusEffectDisabled) { $0 = $0 || disabled }
     }
 }

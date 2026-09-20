@@ -248,6 +248,17 @@ That is the one question every built-in control asks, and it is what stops the
 modifier being honoured by six controls and forgotten by two — a partial
 suppression reads as a bug in whichever control kept shouting.
 
+**It is additive.** A `true` anywhere above a control suppresses that control's
+indication, and a nested ``View/focusEffectDisabled(_:)`` with `false` does not
+put it back — SwiftUI's own rule ("the higher views in a view hierarchy can
+override the value you set on this view"), and the rule ``View/disabled(_:)``
+already follows here. So `false` adds no suppression rather than lifting one,
+which is what makes `.focusEffectDisabled(isQuiet)` on a leaf behave: the flag
+decides whether this subtree adds its own, and an ancestor's decision stands
+either way. ``EnvironmentValues/appearsActive`` is a plain value rather than a
+suppression, so it is not additive: a subtree that sets it back to `true` does
+get its indication back.
+
 **Know what it costs.** A terminal has no pointer to fall back on, so a subtree
 with its focus effects off can be genuinely impossible to navigate by keyboard.
 That is the same trade SwiftUI's modifier makes, and it is the caller's to make.
