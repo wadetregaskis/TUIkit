@@ -225,6 +225,64 @@ struct GroupRenderTests {
             "Expected A, blank, B — the members are the VStack's own children")
     }
 
+    // MARK: - The Rule Through Wrappers That Are Not `ViewModifier`s
+    //
+    // `.foregroundStyle` above goes through `_StyleEnvironmentView`. These are
+    // the other three wrappers `SwiftUI-compatibility.md` section 3 named as
+    // opaque, each one its own type with its own initialiser: `.opacity` builds
+    // `_OpacityView`, `.frame` builds `FlexibleFrameView`, `.disabled` builds
+    // `DisabledModifier`. The oracle is the same one SwiftUI's sentence gives —
+    // the modifier written on each member instead — so each test compares the
+    // two spellings rather than asserting a literal the fix could be tuned to.
+
+    @Test("An opacity on a Group does not rotate the layout 90 degrees")
+    func opacityOnGroupKeepsTheRowAxis() {
+        // Measured in the real framework with `ImageRenderer`: distributing the
+        // fade and compositing the pair as one layer agree even for two FULLY
+        // overlapping members, both giving rgb(156,99,53) where the unfaded
+        // control gives rgb(255,84,62).
+        let plain = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") } }, context: ctx())
+        let modified = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") }.opacity(0.5) }, context: ctx())
+        #expect(modified.lines.count == 1, "a faded Group must not stack its members vertically")
+        #expect(modified.lines.map { $0.stripped } == plain.lines.map { $0.stripped })
+    }
+
+    @Test("A frame on a Group gives each member its own frame")
+    func frameOnGroupAppliesPerMember() {
+        // The case that distinguishes the two readings: one shared 5-wide box
+        // would hold both letters, while a box EACH lays them out 5 apart.
+        let grouped = renderToBuffer(
+            HStack(spacing: 0) {
+                Group { Text("A"); Text("B") }.frame(width: 5)
+            },
+            context: ctx()
+        )
+        let written = renderToBuffer(
+            HStack(spacing: 0) {
+                Text("A").frame(width: 5)
+                Text("B").frame(width: 5)
+            },
+            context: ctx()
+        )
+        #expect(grouped.lines.map { $0.stripped } == written.lines.map { $0.stripped })
+        #expect(grouped.lines.count == 1, "the members stay the HStack's own children")
+    }
+
+    @Test("A disabled Group does not rotate the layout 90 degrees")
+    func disabledGroupKeepsTheRowAxis() {
+        // `.disabled` publishes `\.isEnabled`, so distributing it changes no
+        // pixel — what it changes is whether the members are the stack's own
+        // children, which is the whole defect.
+        let plain = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") } }, context: ctx())
+        let modified = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") }.disabled(true) }, context: ctx())
+        #expect(modified.lines.count == 1)
+        #expect(modified.lines.map { $0.stripped } == plain.lines.map { $0.stripped })
+    }
+
     // MARK: - Transparent Child Resolution (the metadata channel)
     //
     // Everything above travels the two-pass `childViews` path, which is what

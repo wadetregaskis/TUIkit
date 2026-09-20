@@ -540,3 +540,31 @@ extension FlexibleFrameView: Animatable {
         max = .fixed(cells)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: Each member gets its OWN frame, which is the measured SwiftUI
+///   result rather than the convenient reading:
+///   `HStack { Group { Text("AA"); Text("BB") }.frame(width: 80) }` lays the
+///   two texts out at exactly the frames writing `.frame(width: 80)` on each
+///   member separately produces. A `.frame(maxWidth: .infinity)` on a `Group`
+///   therefore gives every member the greed, and they share the slack.
+extension FlexibleFrameView: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        FlexibleFrameView<V>(
+            content: view,
+            minWidth: minWidth, idealWidth: idealWidth, maxWidth: maxWidth,
+            minHeight: minHeight, idealHeight: idealHeight, maxHeight: maxHeight,
+            alignment: alignment)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension FlexibleFrameView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension FlexibleFrameView: GridRowProviding where Content: GridRowProviding {}

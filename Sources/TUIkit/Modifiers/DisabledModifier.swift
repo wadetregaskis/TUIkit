@@ -81,3 +81,25 @@ extension View {
         DisabledModifier(content: self, disabled: disabled)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: The flag is published into `\.isEnabled`, so distributing it to each
+///   member is the same thing as applying it once around the pair — an
+///   environment value reaches a subtree whether it was set one level up or
+///   two.
+extension DisabledModifier: SingleContentWrapper {
+    public var wrappedContent: Content { content }
+
+    public func rewrapping<V: View>(_ view: V) -> any View {
+        DisabledModifier<V>(content: view, disabled: disabled)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension DisabledModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension DisabledModifier: GridRowProviding where Content: GridRowProviding {}

@@ -784,6 +784,12 @@ extension ChildViewProvider {
 /// to spell: it is generic over the new content, so passing an existential to
 /// it opens the existential instead of failing to convert.
 ///
+/// Public because two of the wrappers that must conform are — `FlexibleFrameView`
+/// (`.frame`) and `DisabledModifier` (`.disabled`) — and a public type's
+/// conformance needs public witnesses. It joins ``ChildViewProvider``,
+/// ``ChildInfoProvider``, ``ExplicitIDProviding`` and ``ZIndexProviding`` as
+/// view-resolution infrastructure this module already publishes.
+///
 /// - Important: Conform a wrapper to ``ChildViewProvider`` only when its effect
 ///   is one every member should get. That is true of anything cosmetic, spatial
 ///   or environmental, and NOT true of a wrapper that performs an effect or
@@ -792,7 +798,7 @@ extension ChildViewProvider {
 ///   SwiftUI — also measured — so a blanket conformance would turn one call
 ///   into fifty while leaving every layout test green.
 @MainActor
-package protocol SingleContentWrapper {
+public protocol SingleContentWrapper {
     /// The type of the content this wrapper was built around.
     associatedtype WrappedContent: View
 
@@ -823,20 +829,26 @@ package protocol SingleContentWrapper {
 /// wrapper around an ordinary single view stays exactly as opaque as it was,
 /// and the witness is a compile-time fact rather than a cast per child.
 extension ChildViewProvider where Self: SingleContentWrapper, WrappedContent: ChildViewProvider {
-    package func childViews(context: RenderContext) -> [ChildView] {
+    /// The content's members, each one back inside a copy of this wrapper.
+    ///
+    /// - Parameter context: The rendering context, passed to the content
+    ///   unchanged — the wrapper adjusts what it wraps, not where its content
+    ///   resolves its children.
+    /// - Returns: One ``ChildView`` per member of the content.
+    public func childViews(context: RenderContext) -> [ChildView] {
         wrappedContent.childViews(context: context).map { $0.rewrapped(by: self) }
     }
 
     /// The content's answer: whether the resolution is worth remembering is a
     /// property of how many children it produces, which the wrapper does not
     /// change.
-    package var childViewsAreWorthMemoising: Bool { wrappedContent.childViewsAreWorthMemoising }
+    public var childViewsAreWorthMemoising: Bool { wrappedContent.childViewsAreWorthMemoising }
 
     /// Forwarded, or a wrapped `if`/`else` would resolve both of its branches
     /// against one identity and the two arms would share a `@State` box — the
     /// defect ``ChildViewProvider/identityBranchLabel`` exists to prevent, one
     /// wrapper further out.
-    package var identityBranchLabel: String? { wrappedContent.identityBranchLabel }
+    public var identityBranchLabel: String? { wrappedContent.identityBranchLabel }
 }
 
 /// Creates a ChildInfo for a single view.

@@ -633,3 +633,27 @@ extension _OpacityView: Layoutable {
         measureChild(content, proposal: proposal, context: context)
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: Distributing the fade rather than compositing the pair as one layer
+///   is what SwiftUI does even where the two differ. Measured with
+///   `ImageRenderer` on two FULLY overlapping members — `ZStack { Color.black;
+///   Group { Color.green; Color.red }.opacity(0.5) }` and the same with the
+///   opacity written on each member — both give rgb(156,99,53) at the centre
+///   pixel, against rgb(255,84,62) with no opacity at all.
+extension _OpacityView: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<V: View>(_ view: V) -> any View {
+        _OpacityView<V>(content: view, opacity: opacity)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _OpacityView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _OpacityView: GridRowProviding where Content: GridRowProviding {}

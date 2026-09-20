@@ -647,13 +647,14 @@ whose content type is its generic parameter and so cannot be bound to an
 wrapper and generic over the new content, which is what lets the caller's
 existential be opened rather than converted. A wrapper that conforms picks up
 child resolution and grid rows with an empty
-`extension X: ChildViewProvider where Content: ChildViewProvider {}`. So far
-**one** wrapper conforms: `_StyleEnvironmentView`, which is what
-`.foregroundStyle` and `.backgroundStyle` build.
+`extension X: ChildViewProvider where Content: ChildViewProvider {}`. **Four**
+wrappers conform so far: `_StyleEnvironmentView` (`.foregroundStyle`,
+`.backgroundStyle`), `_OpacityView` (`.opacity`), `FlexibleFrameView`
+(`.frame`) and `DisabledModifier` (`.disabled`).
 
-**Every other wrapper is still opaque to child resolution.** `.opacity` builds
-`_OpacityView`, `.frame` builds `FlexibleFrameView`, `.disabled` builds
-`DisabledModifier`, and so on. The scale is dozens, not a handful — walking
+**Every other wrapper is still opaque to child resolution** — `.offset` builds
+`OffsetView`, `.hidden` builds `_HiddenView`, `.badge` builds `BadgeModifier`,
+and so on. The scale is dozens, not a handful — walking
 every `extension View` factory that returns `some View` and taking the first
 `View`-conforming type each body builds names 85 distinct types, which is an
 upper bound rather than a total: a few of those (`Text`, `Image`, `ForEach`,
@@ -665,7 +666,7 @@ stacked vertically with no spacing. So
 ```swift
 HStack { Group { Text("A"); Text("B") } }                       // "A B"
 HStack { Group { Text("A"); Text("B") }.foregroundStyle(.red) } // "A B"  (conforms)
-HStack { Group { Text("A"); Text("B") }.opacity(0.5) }          // A over B
+HStack { Group { Text("A"); Text("B") }.offset(x: 1) }          // A over B
 ```
 
 — a purely cosmetic modifier rotates the row 90° — and a `GridRow` carrying one
@@ -905,9 +906,9 @@ theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
 bitmap. §3 holds one open divergence: a modifier reaches the members of
 multi-view content only when it builds a `ModifiedView` or a conforming
-`SingleContentWrapper`, so `.padding` and `.foregroundStyle` on a `Group` apply
-per member while `.opacity` still hands the enclosing container one opaque
-child. (The divergence that used to stand there —
+`SingleContentWrapper`, so `.padding`, `.foregroundStyle`, `.opacity`,
+`.frame` and `.disabled` on a `Group` apply per member while `.offset` still
+hands the enclosing container one opaque child. (The divergence that used to stand there —
 `foregroundStyle` taking `Color?` — is closed, and gradients ship.) §4a — additive SwiftUI features a terminal can express — is now
 **clear on the API side but for one item**: `pinnedViews:` on the lazy stacks.
 It reads like an init parameter and is not one — see §2.8 for what it actually
