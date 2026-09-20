@@ -194,3 +194,34 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
         }
     }
 }
+
+// MARK: - Seeing past the wrapper
+
+/// A value memo, asked what it wraps.
+///
+/// ``_MemoizedRow`` is `Renderable` and therefore *opaque*: a container that
+/// reads a child's view VALUE — `List` asking whether a row is a `Section`, so
+/// it can splice that section's own rows in — finds the wrapper, not the row.
+/// This is the way through. It is the same class of problem the `memoisable`
+/// gate in `ForEach.makeChild` already solves for alignment guides, z-index and
+/// spacers; those are answered by a static witness on the row type, while this
+/// question belongs to a framework layer above `TUIkitView` and cannot be.
+///
+/// The two members are deliberately separate. ``memoizedContentType`` answers
+/// *what the row is* without building it, so an ordinary row keeps the memo's
+/// whole saving (94% of rows hit in the `fanout` scenario, and building them
+/// eagerly was 21% of that frame). ``memoizedContent`` builds — for the caller
+/// that has already learned from the type that it must.
+@MainActor
+public protocol _ValueMemoWrapping {
+    /// The wrapped row's type, without building the row.
+    var memoizedContentType: any View.Type { get }
+
+    /// The wrapped row itself. **Builds it** — see the type's note above.
+    var memoizedContent: any View { get }
+}
+
+extension _MemoizedRow: _ValueMemoWrapping {
+    public var memoizedContentType: any View.Type { Content.self }
+    public var memoizedContent: any View { content }
+}

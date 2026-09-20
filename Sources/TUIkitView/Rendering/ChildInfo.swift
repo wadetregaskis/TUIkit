@@ -458,7 +458,19 @@ public struct ChildView {
     /// building or rendering anything. Identical to the identity the child
     /// receives on the real measure/render paths (same `childContext`).
     public func identity(under context: RenderContext) -> ViewIdentity {
-        childContext(context).identity
+        renderContext(under: context).identity
+    }
+
+    /// The context this child measures and renders under: `context` with this
+    /// child's identity step applied, and nothing else changed.
+    ///
+    /// For a container that hands the child to something *other than*
+    /// ``measure(proposal:context:)`` / ``render(width:height:context:)`` and
+    /// so cannot let those apply the step for it — `List` asking a `Section`
+    /// child for its rows rather than for a buffer. This is not a variant of
+    /// the render context: it is exactly the one those two methods use.
+    public func renderContext(under context: RenderContext) -> RenderContext {
+        childContext(context)
     }
 
     /// The stable `ForEach` key this child's identity is disambiguated by,

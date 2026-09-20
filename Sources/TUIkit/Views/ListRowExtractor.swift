@@ -96,6 +96,23 @@ protocol WindowedListRowExtractor {
     /// the hug memo checks the widest-row answer against (see
     /// `_ListCore.widestRowWidth`). `nil` means the answer cannot be kept.
     var listRowsSignature: AnyEquatableBox? { get }
+
+    /// Whether each "row" here is itself a `Section`, and so contributes a
+    /// header, its own items and a footer rather than one row.
+    ///
+    /// `List` asks before taking the windowed path, because that path's whole
+    /// premise — one row per element, keyed by the element's id — is the wrong
+    /// shape for `ForEach(regions) { Section { ForEach($0.seas) … } }`: it made
+    /// each region ONE row and wrote a region's id into a binding the app looks
+    /// up among seas. Both ids being `UUID`, that compiled and was silently
+    /// wrong.
+    ///
+    /// Answered from the row TYPE, never by building a row, so a 50,000-row
+    /// flat `List` pays one `is` check and keeps its windowed path — the same
+    /// trick `viewTypeCarriesBadge(_:)` plays for `.badge(_:)`. A `Section`
+    /// reached only through a `Group` or an `if`/`else` is therefore not seen,
+    /// exactly as a badge under one is not.
+    var listRowsAreSections: Bool { get }
 }
 
 // MARK: - ForEach Conformance
@@ -129,6 +146,9 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
     var listRowsSignature: AnyEquatableBox? {
         (data as? any Equatable).map { AnyEquatableBox($0) }
     }
+
+    // A static property of the row type — no element is built to answer it.
+    var listRowsAreSections: Bool { Content.self is any SectionRowExtractor.Type }
 
     func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent {
         let element = self.element(at: index)

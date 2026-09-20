@@ -2754,6 +2754,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             return .eager(extractSectionRows(from: section, context: context))
         }
 
+        // A `ForEach` whose rows are themselves `Section`s — Apple's own
+        // multidimensional-list example — is not a flat row set, so neither the
+        // windowed path below nor the eager `ListRowExtractor` one can describe
+        // it: both key one row per ELEMENT. Routed instead to the child walk,
+        // where each Section splices in its header, items and footer. Decided
+        // from the row type (``WindowedListRowExtractor/listRowsAreSections``),
+        // so a large flat `ForEach` pays one `is` check and nothing else.
+        // `ForEach` is the only conformer and is also a `ChildViewProvider`, so
+        // `extractFromChildren` sees the per-element children it needs.
+        if let windowed = content as? WindowedListRowExtractor, windowed.listRowsAreSections {
+            return .eager(extractFromChildren(of: content, context: context))
+        }
+
         // Windowed path (ForEach): the row count is known in O(1) and each row's
         // id is resolved lazily, so the handler/window touch only ~viewport ids
         // (plus the focused row) instead of all N. A row's content box is still
@@ -2833,7 +2846,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     }
 
     /// Extracts one row per flattened child (TupleView content), each carrying
-    /// the badge of its `.badge(_:)` wrapper, if any.
+    /// the badge of its `.badge(_:)` wrapper, if any — except a `Section`
+    /// child, which splices in the rows of its own header, items and footer.
     ///
     /// Takes the content rather than the provider cast out of it, so the
     /// children come from `resolveChildViews` — the one place a lone
@@ -2866,7 +2880,34 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 width: context.availableWidth, height: max(1, top))
         }
 
-        for child in children {
+        // The ramp index is the CHILD's, not `result.count`: a `Section` child
+        // contributes several rows, so the two stopped being the same number
+        // the moment sections could be spliced.
+        for (childIndex, child) in children.enumerated() {
+            let childContext = context.placingGradientChild(
+                gradientFrame, x: 0,
+                y: childIndex < gradientTops.count ? gradientTops[childIndex] : 0)
+
+            // A `Section` beside other children is not one row: its header, its
+            // items and its footer are rows of THIS list, each item keyed by
+            // its own id — exactly the array `extractSectionRows` already
+            // produces for a list whose entire content is one Section. Two
+            // Sections make a `TupleView`, and `TupleView` is the only provider
+            // in play here (`Section` is deliberately a `ChildInfoProvider`
+            // only, so a stack draws it as one unit), so without this splice
+            // each whole Section collapsed into a single ordinal-keyed row: the
+            // header was selectable, Down jumped a section at a time, and a
+            // selection binding got an ordinal rather than an item's id.
+            // Asked under the CHILD's context — the identity step is the whole
+            // reason this method resolves children instead of asking the
+            // provider — so two Sections keep their `@State` and focus apart.
+            if let section = sectionRow(of: child) {
+                result.append(
+                    contentsOf: extractSectionRows(
+                        from: section, context: child.renderContext(under: childContext)))
+                continue
+            }
+
             // See `extractRows`: an index-identified row is unselectable rather
             // than absent when the selection type cannot hold an index. The
             // count advances only over rows that took an id, so the ids stay
@@ -2876,13 +2917,27 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let badge = extractBadgeValue(from: child.wrappedView)
             let buffer = child.render(
                 width: context.availableWidth, height: context.availableHeight,
-                context: context.placingGradientChild(
-                    gradientFrame, x: 0,
-                    y: result.count < gradientTops.count ? gradientTops[result.count] : 0))
+                context: childContext)
             result.append(SelectableListRow(type: type, content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 
         return result
+    }
+
+    /// The `Section` this child is, or `nil` — seeing past `ForEach`'s value
+    /// memo, which wraps each row in a `Renderable` (and therefore opaque)
+    /// `_MemoizedRow` and so hides from a plain cast what the row IS.
+    ///
+    /// The memo is asked for its row TYPE before it is asked for the row, so
+    /// an ordinary row is never built here and keeps the memo's saving; only a
+    /// `Section` is built, and only because its own rows are about to be read
+    /// out of it.
+    private func sectionRow(of child: ChildView) -> SectionRowExtractor? {
+        if let section = child.wrappedView as? SectionRowExtractor { return section }
+        guard let memo = child.wrappedView as? any _ValueMemoWrapping,
+            memo.memoizedContentType is any SectionRowExtractor.Type
+        else { return nil }
+        return memo.memoizedContent as? SectionRowExtractor
     }
 
     /// Extracts typed rows from a Section (header + content + footer).
