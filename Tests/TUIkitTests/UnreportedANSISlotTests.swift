@@ -198,7 +198,7 @@ struct UnreportedANSISlotTests {
 
     @Test("A colour effect leaves an unreported slot as it is, and multiplying by one changes nothing")
     func colourEffects() {
-        typealias Effect = _ColorEffectView<Text>.Effect
+        typealias Effect = _ColorEffect
         let orange = Color.rgb(200, 100, 50)
         TerminalColors.withCurrent(.unknown) {
             #expect(Effect.hueRotation.applied(to: .ansi(.red), amount: 90) == .ansi(.red))

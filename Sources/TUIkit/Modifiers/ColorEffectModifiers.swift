@@ -99,6 +99,61 @@ extension View {
     }
 }
 
+/// Which arithmetic one of the colour-effect modifiers applies.
+///
+/// At file scope rather than nested in ``_ColorEffectView``, which is what it
+/// reads like and was until 2026-09-20. A type nested in a generic one is
+/// parameterised by that generic even when it never mentions it, so
+/// `_ColorEffectView<A>.Effect` and `_ColorEffectView<B>.Effect` are different
+/// types and a value cannot cross between them. Nothing here depends on the
+/// content type, so the nesting bought nothing and cost that —
+/// `UnreportedANSISlotTests` already carried a
+/// `typealias Effect = _ColorEffectView<Text>.Effect` to pick one
+/// specialisation and name its cases.
+enum _ColorEffect: Equatable {
+    case brightness
+    case contrast
+    case saturation
+    case grayscale
+    case hueRotation
+    case invert
+    case multiply(Color)
+
+    /// Whether `amount` leaves every colour alone, so the line rewrite can be
+    /// skipped.
+    ///
+    /// About the COLOURS only — a translucent multiply tint also fades the layer,
+    /// and that is not a rewrite of anything (see `renderToBuffer`). Hence
+    /// `opaqueSpelling`: `.white.opacity(0.5)` leaves every hue exactly where it
+    /// was and is answered `true` here, with its alpha handled apart.
+    ///
+    /// `.white` is the multiply identity by SPELLING, not only by arithmetic,
+    /// which is worth knowing before touching this. Multiplying by RGB white
+    /// leaves every channel alone, but running a line through the arithmetic
+    /// re-spells a terminal slot such as `.ansi(.red)` as the RGB it measures
+    /// as, so the shortcut is what keeps `.colorMultiply(.white)` from changing
+    /// anything at all. `.ansi(.white)` is not the identity: it is the
+    /// terminal's white slot, which measures as 229, and multiplies as that.
+    /// Before `opaqueSpelling` was here a faded white slipped past the shortcut
+    /// and changed the subtree as a side effect of fading it.
+    ///
+    /// A tint the terminal decides and has not reported (a slot, `Color.default`,
+    /// the terminal's foreground or page) is the identity too. It has no RGB, so
+    /// `applied(to:amount:)` returns every colour as it was, but walking the line
+    /// still re-spells a 39 as the palette's ink. Reported, it multiplies by the
+    /// reported colour. A semantic tint is not one of these: it is a colour
+    /// waiting to be resolved, not one that cannot be measured.
+    func isIdentity(at amount: Double) -> Bool {
+        switch self {
+        case .brightness, .grayscale, .hueRotation: amount == 0
+        case .contrast, .saturation: amount == 1
+        case .invert: false
+        case .multiply(let color):
+            color.opaqueSpelling == .white || (color.isTerminalDefined && color.rgbComponents == nil)
+        }
+    }
+}
+
 /// Rewrites the colours of everything its content drew. See ``View/brightness(_:)``
 /// and friends.
 ///
@@ -108,53 +163,8 @@ extension View {
 /// nothing is re-measured, and the cells are exactly the ones the content drew
 /// — which is what makes these affordable enough to animate.
 struct _ColorEffectView<Content: View>: View {
-    /// Which arithmetic.
-    enum Effect: Equatable {
-        case brightness
-        case contrast
-        case saturation
-        case grayscale
-        case hueRotation
-        case invert
-        case multiply(Color)
-
-        /// Whether `amount` leaves every colour alone, so the line rewrite can be
-        /// skipped.
-        ///
-        /// About the COLOURS only — a translucent multiply tint also fades the layer,
-        /// and that is not a rewrite of anything (see `renderToBuffer`). Hence
-        /// `opaqueSpelling`: `.white.opacity(0.5)` leaves every hue exactly where it
-        /// was and is answered `true` here, with its alpha handled apart.
-        ///
-        /// `.white` is the multiply identity by SPELLING, not only by arithmetic,
-        /// which is worth knowing before touching this. Multiplying by RGB white
-        /// leaves every channel alone, but running a line through the arithmetic
-        /// re-spells a terminal slot such as `.ansi(.red)` as the RGB it measures
-        /// as, so the shortcut is what keeps `.colorMultiply(.white)` from changing
-        /// anything at all. `.ansi(.white)` is not the identity: it is the
-        /// terminal's white slot, which measures as 229, and multiplies as that.
-        /// Before `opaqueSpelling` was here a faded white slipped past the shortcut
-        /// and changed the subtree as a side effect of fading it.
-        ///
-        /// A tint the terminal decides and has not reported (a slot, `Color.default`,
-        /// the terminal's foreground or page) is the identity too. It has no RGB, so
-        /// `applied(to:amount:)` returns every colour as it was, but walking the line
-        /// still re-spells a 39 as the palette's ink. Reported, it multiplies by the
-        /// reported colour. A semantic tint is not one of these: it is a colour
-        /// waiting to be resolved, not one that cannot be measured.
-        func isIdentity(at amount: Double) -> Bool {
-            switch self {
-            case .brightness, .grayscale, .hueRotation: amount == 0
-            case .contrast, .saturation: amount == 1
-            case .invert: false
-            case .multiply(let color):
-                color.opaqueSpelling == .white || (color.isTerminalDefined && color.rgbComponents == nil)
-            }
-        }
-    }
-
     let content: Content
-    let effect: Effect
+    let effect: _ColorEffect
     var amount: Double
 
     var body: Never {
@@ -289,7 +299,7 @@ extension _ColorEffectView: Layoutable {
 
 // MARK: - The arithmetic
 
-extension _ColorEffectView.Effect {
+extension _ColorEffect {
     /// `color` with this effect applied.
     func applied(to color: Color, amount: Double) -> Color {
         guard let rgb = color.rgbComponents else { return color }
