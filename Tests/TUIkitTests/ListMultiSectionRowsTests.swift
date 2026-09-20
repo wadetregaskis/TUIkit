@@ -161,7 +161,15 @@ struct ListMultiSectionRowsTests {
         #expect(chosen == Self.seas[1].id, "expected Sargasso's id, got \(chosen)")
     }
 
-    @Test("A section header is not selectable")
+    /// The second half is what makes the first falsifiable, and is the reason
+    /// this test names the row BELOW the header at all. "Enter on row 0 writes
+    /// nothing" is true of the broken tree too, for a reason that has nothing
+    /// to do with headers: there row 0 was not a header but the whole first
+    /// `Section` rendered as one ordinal-keyed row, and an ordinal cannot cast
+    /// into this suite's `UUID` selection, so it was unselectable by accident.
+    /// Pinning that row 1 is that section's first ITEM, and selects as itself,
+    /// is what says row 0 is a header rather than a section.
+    @Test("A section header is chrome, and the row below it is the section's first item")
     func headersAreChrome() {
         let fixture = Fixture()
         var selection: UUID?
@@ -172,9 +180,20 @@ struct ListMultiSectionRowsTests {
             Issue.record("the list took focus")
             return
         }
+        #expect(
+            handler.id(at: 0) == nil,
+            "the 'Regions' header carries no id: \(String(describing: handler.id(at: 0)))")
         handler.focusedIndex = 0
         _ = handler.handleKeyEvent(KeyEvent(key: .enter))
-        #expect(selection == nil, "the 'Regions' header is chrome, not a row")
+        #expect(
+            selection == nil,
+            "the 'Regions' header is chrome, not a row: \(String(describing: selection))")
+
+        handler.focusedIndex = 1
+        _ = handler.handleKeyEvent(KeyEvent(key: .enter))
+        #expect(
+            selection == Self.regions[0].id,
+            "the row under the header is that section's first item: \(String(describing: selection))")
     }
 
     /// Apple's worked example for a multidimensional list. This is the case

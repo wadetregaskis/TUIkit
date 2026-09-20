@@ -67,9 +67,19 @@ struct ListRowTagTests {
             Issue.record("the list took focus")
             return
         }
+        // The id each row is keyed by — asked through `id(at:)`, which is the
+        // accessor that answers on both of the handler's id paths.
+        //
+        // NOT `selectableIndices`: it is empty when EVERY row is selectable
+        // (the all-content shortcut documented on the property) and equally
+        // empty when NONE is, which is precisely the broken state, so it
+        // cannot tell the two apart here.
         #expect(
-            handler.selectableIndices.isEmpty || handler.selectableIndices == [0, 1],
-            "both tagged rows are selectable: \(handler.selectableIndices.sorted())")
+            handler.id(at: 0) == "a",
+            "the first row is keyed by its tag: \(String(describing: handler.id(at: 0)))")
+        #expect(
+            handler.id(at: 1) == "b",
+            "the second row is keyed by its tag: \(String(describing: handler.id(at: 1)))")
 
         _ = handler.handleKeyEvent(KeyEvent(key: .down))
         #expect(handler.handleKeyEvent(KeyEvent(key: .enter)) == true)
@@ -119,21 +129,50 @@ struct ListRowTagTests {
         #expect(selection == 1, "no tag, so the ordinal — got \(String(describing: selection))")
     }
 
-    @Test("A tag of the wrong type leaves the row unselectable, not absent")
+    /// The well-typed neighbour is what makes this falsifiable, and it is here
+    /// deliberately. A list of ONLY mistyped rows behaves identically with and
+    /// without the fix — no row can be keyed either way — so a test watching
+    /// just the mistyped row asserts nothing about `.tag(_:)` being read at
+    /// all. With a sibling the selection CAN hold, the two states differ: the
+    /// mistyped row is skipped and its neighbour is keyed by its tag.
+    @Test("A tag of the wrong type leaves that row unselectable, not absent, and does not cost its neighbour")
     func mistypedTagIsUnselectable() {
         let fixture = Fixture<String>()
         var selection: String?
         let list = List(
             selection: Binding(get: { selection }, set: { selection = $0 })
         ) {
-            Text("alpha").tag(1)
-            Text("beta").tag(2)
+            Text("alpha").tag(1)  // an `Int` a `String` selection cannot hold
+            Text("beta").tag("b")
         }
         .frame(height: 8)
 
         let lines = fixture.render(list).lines.map(\.stripped)
         #expect(lines.contains { $0.contains("alpha") }, "the rows still draw: \(lines)")
         #expect(!lines.contains { $0.contains("No items") }, "not the empty placeholder: \(lines)")
+
+        guard let handler = fixture.handler else {
+            Issue.record("the list took focus")
+            return
+        }
+        #expect(handler.itemCount == 2, "both rows are still rows: \(handler.itemCount)")
+        #expect(
+            handler.id(at: 0) == nil,
+            "an Int tag names nothing a String selection can hold: \(String(describing: handler.id(at: 0)))")
+        #expect(
+            handler.id(at: 1) == "b",
+            "the sibling's tag still keys it: \(String(describing: handler.id(at: 1)))")
+        #expect(
+            handler.selectableIndices == [1],
+            "only the row the selection can name: \(handler.selectableIndices.sorted())")
+
+        // And the unselectable row selects nothing when driven, rather than
+        // falling back to something the app never named.
+        handler.focusedIndex = 0
+        _ = handler.handleKeyEvent(KeyEvent(key: .enter))
+        #expect(
+            selection == nil,
+            "the mistyped row writes nothing: \(String(describing: selection))")
     }
 
     /// A lone row is not a `TupleView`, so it reaches neither child walk — it
