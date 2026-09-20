@@ -318,13 +318,16 @@ protocol SectionRowExtractor {
     /// indices into the `ForEach`'s own collection; the list needs both, and
     /// the only thing that can pair them is the section that holds them.
     ///
-    /// `nil` for a section of statically-written rows, and also for a MIXED
-    /// section (a `ForEach` beside a hand-written row): there the children
-    /// arrive already flattened, so a row cannot say which of them produced
-    /// it, and a guess would put an offset into the wrong collection — one
-    /// measured from the HEADER, so a press on the second looped row deletes
-    /// the third element. The refusal is pinned by `ListUnownedEditActionTests`,
-    /// against that exact guess.
+    /// `nil` for a section of statically-written rows, and also whenever the
+    /// `ForEach` is not the section's WHOLE content — beside a hand-written
+    /// row, or beside a second `ForEach`: there the children arrive already
+    /// flattened, so a row cannot say which of them produced it, and a guess
+    /// would put an offset into the wrong collection — one measured from the
+    /// HEADER, so a press on the second looped row deletes the third element.
+    /// With two loops it is worse: there are two sets of actions and nothing
+    /// to choose between them, so a press on a row of the second edits the
+    /// FIRST one's collection. The refusal is pinned by
+    /// `ListUnownedEditActionTests`, against that exact guess.
     var sectionRowActions: (any DynamicViewContentActions)? { get }
 }
 
