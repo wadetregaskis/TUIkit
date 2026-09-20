@@ -11,6 +11,35 @@
 //  reads the badge off the built row, and was never affected; it is pinned
 //  here so a future change cannot quietly trade one arrangement for the other.
 //
+//  Two cases assert on the extracted `ListRow.badge` / `BadgeValue?` rather
+//  than on rendered text — identity and presence of data is a structural
+//  question, and a string search can pass for the wrong reason (a stray
+//  digit, a coincidental substring):
+//
+//  - `badgeOnForEachRowInsideSection` calls `Section.extractListRows(context:)`
+//    directly, the same call `SectionListRowExtractorTests` already makes on
+//    a bare `Section`, reading `.badge` where that suite reads `.id`.
+//  - `badgeOnForEachAsWholeContent` calls `extractListRows(context:)` on a
+//    bare `ForEach`, which conforms to the same `ListRowExtractor` protocol
+//    `Section` does.
+//
+//  Both call the actual production method whose BODY is what `95798a0b`
+//  changed (a plain `extractBadgeValue` to the row-unwrapping
+//  `extractRowBadgeValue`), so which one runs depends on whichever `Sources`
+//  are checked out — the same way a full render would, but without one.
+//
+//  The other three stay rendered, because the arrangement they exercise —
+//  a static row beside a `ForEach`, *without* a `Section` — is walked by
+//  `_ListCore.extractFromChildren`, which is private and has no equivalent to
+//  `Section`/`ForEach`'s `extractListRows`. The only way to reach it at all is
+//  a full render, so for these three "does it appear on screen" is not a
+//  looser stand-in for the structural question — it is the only question this
+//  suite can ask them. (`extractRowBadgeValue` itself is `internal` and
+//  reachable from a test, but calling it BY NAME would couple the test to a
+//  symbol `95798a0b` introduces — a test that cannot even compile against the
+//  tree before the fix cannot pin the regression at that boundary; verified
+//  empirically in the scratch worktree below.)
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -73,6 +102,8 @@ struct ListMixedRowBadgeTests {
 
     @Test("A ForEach row's badge survives a static row beside it")
     func badgeOnForEachRowBesideStaticRow() {
+        // `_ListCore.extractFromChildren` is private, so this is the only
+        // route in — see the file header.
         let lines = strippedLines(
             List {
                 Text("Inbox").badge(7)
@@ -89,24 +120,26 @@ struct ListMixedRowBadgeTests {
 
     @Test("A ForEach row's badge survives inside a Section beside a static row")
     func badgeOnForEachRowInsideSection() {
-        let lines = strippedLines(
-            List {
-                Section("Mail") {
-                    Text("Inbox").badge(7)
-                    ForEach(["Drafts", "Sent"], id: \.self) { name in
-                        Text(name).badge(9)
-                    }
-                }
-            },
-            context: listContext())
+        let section = Section("Mail") {
+            Text("Inbox").badge(7)
+            ForEach(["Drafts", "Sent"], id: \.self) { name in
+                Text(name).badge(9)
+            }
+        }
 
-        expectBadge("7", after: "Inbox", in: lines)
-        expectBadge("9", after: "Drafts", in: lines)
-        expectBadge("9", after: "Sent", in: lines)
+        // Same call `SectionListRowExtractorTests.sectionExtractsRowsFromForEach`
+        // makes on a bare `Section` — only the header/footer wrapping differs,
+        // and `extractListRows` never sees those; it walks `content` alone,
+        // which is exactly the static-row-beside-`ForEach` shape this suite is
+        // about.
+        let rows: [ListRow<String>] = section.extractListRows(context: listContext())
+
+        #expect(rows.map(\.badge) == [.int(7), .int(9), .int(9)])
     }
 
     @Test("A string badge on a ForEach row beside a static row survives too")
     func stringBadgeOnForEachRow() {
+        // `_ListCore.extractFromChildren` again — see the file header.
         let lines = strippedLines(
             List {
                 Text("Inbox").badge("new")
@@ -126,22 +159,32 @@ struct ListMixedRowBadgeTests {
         // was never broken — pinned so the fix above cannot be mistaken for
         // the whole story, and so a later change cannot silently swap which
         // arrangement works.
-        let lines = strippedLines(
-            List {
-                ForEach(["Drafts", "Sent"], id: \.self) { name in
-                    Text(name).badge(9)
-                }
-            },
-            context: listContext())
+        //
+        // `ForEach` conforms to `ListRowExtractor` itself (the same protocol
+        // `Section` does), so this calls `extractListRows` directly on it —
+        // the same pattern as `badgeOnForEachRowInsideSection` above, applied
+        // to the other conformer. `_ListCore`'s actual windowed dispatch calls
+        // `listRowID`/`makeListRowContent` rather than `extractListRows`
+        // itself, but `extractListRows`'s own implementation calls those same
+        // two functions per element, so the badge computation exercised here
+        // is identical to what a real `List` would run.
+        let each = ForEach(["Drafts", "Sent"], id: \.self) { name in
+            Text(name).badge(9)
+        }
+        let rows: [ListRow<String>] = each.extractListRows(context: listContext())
 
-        expectBadge("9", after: "Drafts", in: lines)
-        expectBadge("9", after: "Sent", in: lines)
+        #expect(rows.map(\.badge) == [.int(9), .int(9)])
     }
 
     @Test("A badge-less ForEach row beside a badged static row is not given one")
     func badgeIsNotInvented() {
         // The unwrap must answer for the row it is asked about, not leak the
-        // neighbour's badge or the enclosing environment's.
+        // neighbour's badge or the enclosing environment's. `_ListCore
+        // .extractFromChildren` again — see the file header — and, as the
+        // original commit's own RED run recorded, this arrangement carries no
+        // badge on the `ForEach` row at all, so it cannot distinguish the fix
+        // from its absence; it is a pin of the no-leak invariant, not a
+        // regression catcher.
         let lines = strippedLines(
             List {
                 Text("Inbox").badge(7)
