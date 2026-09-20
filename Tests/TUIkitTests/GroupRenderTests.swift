@@ -121,6 +121,120 @@ struct GroupRenderTests {
         #expect(buffer.lines.map { $0.stripped } == ["x", "y"])
     }
 
+    @Test("A modifier on a Group applies to each member, not to the group")
+    func modifiedGroupAppliesToEachMember() {
+        // SwiftUI's Group documentation: "The modifier applies to all members
+        // of the group --- and not to the group itself." The oracle is
+        // therefore the same views with the modifier written on each of them:
+        // a Group carrying a modifier must render identically.
+        //
+        // `.padding` is the spelling that goes through `ModifiedView`; the
+        // `.foregroundStyle` twin below is the one the audit reported, and it
+        // goes through a wrapper of its own.
+        let grouped = renderToBuffer(
+            HStack(spacing: 1) {
+                Group {
+                    Text("A")
+                    Text("B")
+                }
+                .padding(.horizontal, 1)
+            },
+            context: ctx()
+        )
+        let written = renderToBuffer(
+            HStack(spacing: 1) {
+                Text("A").padding(.horizontal, 1)
+                Text("B").padding(.horizontal, 1)
+            },
+            context: ctx()
+        )
+        #expect(grouped.lines.map { $0.stripped } == written.lines.map { $0.stripped })
+    }
+
+    /// The half the ``ModifiedView`` conformance does NOT reach, pinned so it
+    /// cannot be believed closed.
+    ///
+    /// `.foregroundStyle` does not build a `ModifiedView`: it builds
+    /// `_StyleEnvironmentView`, one of the dozens of single-content wrapper
+    /// types a `View` modifier can return (§3 of
+    /// `Documentation/SwiftUI-compatibility.md` bounds the scan), and every one
+    /// of them is as opaque to child resolution as `ModifiedView` was. Closing
+    /// this for every spelling is the
+    /// forwarding-protocol decision the audit's root cause 1 raised and the
+    /// owner deferred, not this change — so these two fail with the modifier
+    /// the audit's own examples used, and pass with `.padding` above.
+    ///
+    /// `withKnownIssue` fails if the issue does NOT occur, so this flips to a
+    /// plain failure the day the wrappers forward, which is when it should be
+    /// deleted.
+    @Test("A Spacer inside a modified Group is still a spacer to the stack")
+    func modifiedGroupKeepsSpacerMetadata() {
+        // The member's spacer flag is read from the static `View` witness, and
+        // no wrapper forwards that witness — so re-reading it off the wrapper
+        // the distribution puts around each member would answer `false` and the
+        // spacer would render as a zero-width buffer instead of eating slack.
+        let buffer = renderToBuffer(
+            HStack(spacing: 0) {
+                Group {
+                    Text("A")
+                    Spacer()
+                    Text("B")
+                }
+                .padding(.vertical, 0)
+            },
+            context: ctx(width: 10)
+        )
+        #expect(buffer.lines.count == 1)
+        #expect(buffer.lines[0].stripped == "A        B", "the spacer pushed B to the far edge")
+    }
+
+    @Test("A cosmetic modifier on a Group does not rotate the layout 90°")
+    func modifiedGroupKeepsTheRowAxis() {
+        let plain = renderToBuffer(
+            HStack(spacing: 1) {
+                Group {
+                    Text("A")
+                    Text("B")
+                }
+            },
+            context: ctx()
+        )
+        let modified = renderToBuffer(
+            HStack(spacing: 1) {
+                Group {
+                    Text("A")
+                    Text("B")
+                }
+                .foregroundStyle(.red)
+            },
+            context: ctx()
+        )
+        withKnownIssue("_StyleEnvironmentView is not a ChildViewProvider, so the members are one opaque child") {
+            #expect(modified.lines.count == 1, "a modified Group must not stack its members vertically")
+            #expect(modified.lines.map { $0.stripped } == plain.lines.map { $0.stripped })
+        }
+    }
+
+    @Test("A modifier on a Group leaves the enclosing stack's spacing intact")
+    func modifiedGroupKeepsStackSpacing() {
+        let buffer = renderToBuffer(
+            VStack(spacing: 1) {
+                Group {
+                    Text("A")
+                    Text("B")
+                }
+                .foregroundStyle(.red)
+            },
+            context: ctx()
+        )
+        withKnownIssue("as above: the spacing is lost because the pair arrives as one child") {
+            // Written as one comparison so a wrong height reports rather than traps.
+            #expect(
+                buffer.lines.map { $0.stripped.trimmingCharacters(in: .whitespaces) } == ["A", "", "B"],
+                "Expected A, blank, B — the members are the VStack's own children")
+        }
+    }
+
     // MARK: - Transparent Child Resolution (the metadata channel)
     //
     // Everything above travels the two-pass `childViews` path, which is what

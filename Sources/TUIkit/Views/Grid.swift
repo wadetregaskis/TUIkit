@@ -107,6 +107,28 @@ extension GridRow: GridRowProviding {
     }
 }
 
+/// A modified row is still a row, and the modifier belongs to its CELLS.
+///
+/// SwiftUI: "If you apply a view modifier to a row, the row applies the
+/// modifier to all of the cells, similar to how a `Group` behaves. For example,
+/// if you apply the `border(_:width:)` modifier to a row, SwiftUI draws a
+/// border on each cell in the row rather than around the row." Without this the
+/// cast in ``_GridCore/rows(context:)`` missed a wrapped row and fell into the
+/// "not a `GridRow`, therefore spans every column" branch that exists for a
+/// `Divider` between rows — so the row was laid out by ``GridRow``'s fallback
+/// `HStack` body and its cells left the grid's columns.
+///
+/// The companion to `ModifiedView`'s ``ChildViewProvider`` conformance, and the
+/// same shape: resolve through the wrapper, then put the wrapper back around
+/// each thing that came out.
+extension ModifiedView: GridRowProviding where Content: GridRowProviding {
+    var rowAlignment: VerticalAlignment? { content.rowAlignment }
+
+    func gridCells(context: RenderContext) -> [ChildView] {
+        content.gridCells(context: context).map { $0.modified(by: modifier) }
+    }
+}
+
 // MARK: - Grid
 
 /// A container that arranges its ``GridRow``s into aligned columns.

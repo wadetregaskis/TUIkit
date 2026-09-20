@@ -607,10 +607,61 @@ if it did.
 
 ## 3. Open divergence
 
-**None.** The one that stood here is closed, and how it fell is the fifth
-instance of the pattern §4b warns about, so it stays on the record.
+### A modifier on multi-view content reaches the members only through `ModifiedView`
+
+SwiftUI states this rule for the two types whose whole purpose is to carry a
+modifier for several views. `Group`: "The modifier applies to all members of the
+group --- and not to the group itself." `GridRow`: "If you apply a view modifier
+to a row, the row applies the modifier to all of the cells... if you apply the
+`border(_:width:)` modifier to a row, SwiftUI draws a border on each cell in the
+row rather than around the row."
+
+TUIkit does that for the modifiers that build a `ModifiedView`: it forwards
+`ChildViewProvider` (and `GridRowProviding`) when its content is one, re-wrapping
+each resolved member in the same modifier. In the framework that is **four**
+`ViewModifier` types — `.padding(_:)`, `.background(_:)`, `.id(_:)` and `Link`'s
+internal hyperlink modifier — plus everything an app writes with
+`.modifier(_:)`, which is the whole point of that spelling.
+
+**Every other modifier is still opaque to child resolution.** A `View` modifier
+here returns a wrapper view of its own rather than a `ModifiedView`:
+`.foregroundStyle` builds `_StyleEnvironmentView`, `.opacity` builds
+`_OpacityView`, `.frame` builds `FlexibleFrameView`, `.disabled` builds
+`DisabledModifier`, and so on. The scale is dozens, not a handful — walking
+every `extension View` factory that returns `some View` and taking the first
+`View`-conforming type each body builds names 85 distinct types, which is an
+upper bound rather than a total: a few of those (`Text`, `Image`, `ForEach`,
+`AnyView`) are the content a factory builds rather than a wrapper it puts
+around `self`. Through any of them the members arrive at the enclosing
+container as ONE opaque child, which the `TupleView` beneath has already
+stacked vertically with no spacing. So
+
+```swift
+HStack { Group { Text("A"); Text("B") } }                       // "A B"
+HStack { Group { Text("A"); Text("B") }.foregroundStyle(.red) } // A over B
+```
+
+— a purely cosmetic modifier rotates the row 90° — and a `GridRow` carrying one
+stops being a row, leaving the grid's columns to be laid out by `GridRow`'s own
+fallback `HStack`.
+
+Closing it for every spelling is the same forwarding decision `.zIndex(_:)`,
+`.alignmentGuide(_:computeValue:)` and `layoutValue(key:value:)` are waiting on
+— they are read off the outermost view, which is why each is documented as
+"apply it as the outermost modifier" — and it is a judgement per wrapper, not a
+blanket rule: `presentationDetents(_:)` and the other presentation traits are
+deliberately read through a wrapper list of their own, and a trait must not be
+handed to each member of a group.
+
+Pinned by `GroupRenderTests.modifiedGroupKeepsTheRowAxis`,
+`GroupRenderTests.modifiedGroupKeepsStackSpacing` and
+`GridTests.modifiedRowKeepsTheLattice`, all three `withKnownIssue` so they fail
+the day the gap closes.
 
 ### Closed: `foregroundStyle` takes `some ShapeStyle`
+
+How this one fell is the fifth instance of the pattern §4b warns about, so it
+stays on the record.
 
 The claim was that the only thing a `Color?` parameter lost was "non-colour
 `ShapeStyle`s — gradients, materials — which are bitmap concepts that don't
@@ -825,8 +876,11 @@ fixed-`frame` alignment, `@Observable`-only state (and with it `.onReceive`,
 whose parameter type is a Combine protocol — §2.3), the `palette`/`appearance`
 theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
-bitmap. §3 is now empty: the one divergence that stood there —
-`foregroundStyle` taking `Color?` — is closed, and gradients ship. §4a — additive SwiftUI features a terminal can express — is now
+bitmap. §3 holds one open divergence: a modifier reaches the members of
+multi-view content only when it builds a `ModifiedView`, so `.padding` on a
+`Group` applies per member while `.foregroundStyle` still hands the enclosing
+container one opaque child. (The divergence that used to stand there —
+`foregroundStyle` taking `Color?` — is closed, and gradients ship.) §4a — additive SwiftUI features a terminal can express — is now
 **clear on the API side but for one item**: `pinnedViews:` on the lazy stacks.
 It reads like an init parameter and is not one — see §2.8 for what it actually
 costs.

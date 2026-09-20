@@ -48,6 +48,30 @@ struct ViewIDModifierTests {
         return plain(renderToBuffer(view, context: context))
     }
 
+    /// A modifier written on a `Group` is re-applied to each member, so the
+    /// members now reach the container as siblings with the modifier around
+    /// each of them. `.id` re-keys by the MODIFIER's type and the key, which is
+    /// the same pair for every member — so the members' own identity steps have
+    /// to survive the re-wrapping, or both boxes are one box.
+    ///
+    /// They do: `ChildView.modified(by:)` carries the member's identity fields
+    /// across untouched, and the child's identity is derived from those before
+    /// the wrapper's `adjustContext` splices anything below it.
+    @Test(".id on a Group re-keys each member without merging their identities")
+    func idOnAGroupKeepsMembersApart() {
+        let context = makeRenderContext()
+        let out = frame(
+            HStack(spacing: 1) {
+                Group {
+                    SeededState(seed: "A")
+                    SeededState(seed: "B")
+                }
+                .id(1)
+            },
+            context)
+        #expect(out.contains("t=A") && out.contains("t=B"), "saw: \(out)")
+    }
+
     @Test("The same .id keeps @State; a new .id resets it; returning to an id is fresh")
     func idControlsStateIdentity() {
         let context = makeRenderContext()

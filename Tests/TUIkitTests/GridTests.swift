@@ -326,6 +326,81 @@ struct GridTests {
         #expect(buffer.width >= 0)
     }
 
+    @Test("A modifier on one row leaves the grid's columns alone")
+    func modifiedRowKeepsTheLattice() {
+        // SwiftUI's GridRow documentation: "If you apply a view modifier to a
+        // row, the row applies the modifier to all of the cells, similar to how
+        // a Group behaves." The row is therefore still a row, and its cells
+        // still belong to the grid's columns.
+        //
+        // `.foregroundStyle` is the spelling the audit reported; the `.padding`
+        // twin below is the one that goes through `ModifiedView`.
+        let plain = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("aaa")
+                    Text("b")
+                }
+                GridRow {
+                    Text("cc")
+                    Text("dd")
+                }
+            })
+        let modified = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("aaa")
+                    Text("b")
+                }
+                GridRow {
+                    Text("cc")
+                    Text("dd")
+                }
+                .foregroundStyle(.red)
+            })
+        // Pinned, not fixed: `.foregroundStyle` builds `_StyleEnvironmentView`
+        // rather than `ModifiedView`, and only `ModifiedView` forwards
+        // `GridRowProviding` — see the twin below, and GroupRenderTests.
+        withKnownIssue("_StyleEnvironmentView is not a GridRowProviding, so the row spans every column") {
+            #expect(
+                modified.map { $0.trimmingCharacters(in: .whitespaces) }
+                    == plain.map { $0.trimmingCharacters(in: .whitespaces) })
+            #expect(
+                modified.last?.hasPrefix("cc  dd") == true,
+                "the modified row's cells belong to the grid's columns, so dd starts at x=4")
+        }
+    }
+
+    @Test("A padded row is still a row, and the padding lands on its cells")
+    func paddedRowIsStillARow() {
+        // The same rule through `ModifiedView`, checked against the oracle
+        // SwiftUI's sentence gives: the modifier written on each cell instead.
+        let rowModified = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("aaa")
+                    Text("b")
+                }
+                GridRow {
+                    Text("cc")
+                    Text("dd")
+                }
+                .padding(.horizontal, 1)
+            })
+        let cellModified = lines(
+            Grid(alignment: .leading) {
+                GridRow {
+                    Text("aaa")
+                    Text("b")
+                }
+                GridRow {
+                    Text("cc").padding(.horizontal, 1)
+                    Text("dd").padding(.horizontal, 1)
+                }
+            })
+        #expect(rowModified == cellModified)
+    }
+
     @Test("A GridRow outside a Grid still lays its cells out in a row")
     func rowWithoutGrid() {
         let rendered = lines(GridRow { Text("a"); Text("b") })

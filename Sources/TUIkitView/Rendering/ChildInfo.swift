@@ -278,6 +278,40 @@ public struct ChildView {
             resolvedIdentity: resolvedIdentity ?? branch.child(erasedType: identityType, key: identityKey))
     }
 
+    /// This child with `modifier` wrapped around it — what a provider hands
+    /// back when the modifier was written on the PROVIDER rather than on each
+    /// of the members it resolves to.
+    ///
+    /// Everything but the view is carried across unchanged, which is the point:
+    /// the identity a member already resolved to, its spacer flag, its z-index
+    /// and its alignment-guide flag are properties of the MEMBER, and a wrapper
+    /// now standing in front of it does not change any of them. Re-reading them
+    /// off the wrapper would answer `false` / `0` to all three, because no
+    /// single-content wrapper forwards the static `View` witnesses — so
+    /// `HStack { Group { Text("A"); Spacer() }.padding() }` would quietly lose
+    /// its spacer.
+    package func modified<M: ViewModifier>(by modifier: M) -> Self {
+        // Implicit existential opening, not a cast: passing the `any View` to a
+        // generic parameter binds `V` to its dynamic type, so what is stored is
+        // the concrete `ModifiedView<V, M>` the render path measures and
+        // renders. It is NOT `ModifiedView<any View, M>`, which would not even
+        // compile — an existential does not conform to the protocol it erases.
+        func wrapped<V: View>(_ view: V) -> any View {
+            ModifiedView(content: view, modifier: modifier)
+        }
+        return Self(
+            view: wrapped(view),
+            identityType: identityType,
+            childIndex: childIndex,
+            identityKey: identityKey,
+            providerSlot: providerSlot,
+            isSpacer: isSpacer,
+            spacerMinLength: spacerMinLength,
+            zIndex: zIndex,
+            providesAlignmentGuide: providesAlignmentGuide,
+            resolvedIdentity: resolvedIdentity)
+    }
+
     /// A copy whose positional identity is rebased to `index`, and whose
     /// keyed identity is namespaced by the provider's static slot.
     ///

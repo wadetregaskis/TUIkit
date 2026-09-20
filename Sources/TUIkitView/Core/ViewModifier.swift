@@ -248,19 +248,78 @@ extension ModifiedView: Renderable {
     }
 }
 
-// MARK: - Explicit identity
+// MARK: - Seeing Through the Wrapper
+//
+// A `ModifiedView` stands between a container and the content it was handed,
+// and there are two things the container must still be able to reach past it:
+// the `.id(_:)` tag bound somewhere inside, and — when the content is several
+// views rather than one — the members themselves. Both are the same idea from
+// opposite ends of the wrapper, so they are stated together.
+//
+// They differ in ONE respect, and deliberately. `ExplicitIDProviding` is
+// unconditional, because the tag it looks for can sit under any number of
+// further `ModifiedView`s of any content type, so the answer has to be
+// optional and the walk inward has to be a cast. `ChildViewProvider` is
+// conditional, because a modifier on an ordinary single view genuinely has no
+// members to offer and must stay as opaque as it ever was — which makes the
+// witness a compile-time fact rather than a cast per child.
+//
+// The two compose, and the composition is load-bearing: `modified(by:)` puts a
+// `ModifiedView` around each member it hands back, and that wrapper is
+// unconditionally `ExplicitIDProviding`, so a `.id(_:)` written on a member of
+// a `Group { … }.padding()` is still found by a seek — through the padding the
+// re-wrapping added. Before the members were resolved at all, that tag was
+// invisible: the pair arrived as one child wrapping a `Group`, which is not an
+// `ExplicitIDProviding`.
 
+/// This view's `View.id(_:)` tag: the key this modifier binds, else the one a
+/// modifier further in bound.
+///
+/// The walk inward is the point — `.id(k).padding()` is a `ModifiedView` whose
+/// own modifier is the padding, and SwiftUI finds that tag too. It costs
+/// nothing on any frame but the one a seek arrives on, because that is the
+/// only thing that asks.
 extension ModifiedView: ExplicitIDProviding {
-    /// This view's `View.id(_:)` tag: the key this modifier binds, else the
-    /// one a modifier further in bound.
-    ///
-    /// The walk inward is the point — `.id(k).padding()` is a `ModifiedView`
-    /// whose own modifier is the padding, and SwiftUI finds that tag too. It
-    /// costs nothing on any frame but the one a seek arrives on, because that
-    /// is the only thing that asks.
     public var explicitIDKey: String? {
         modifier._explicitIDKey ?? (content as? ExplicitIDProviding)?.explicitIDKey
     }
+}
+
+/// A modifier written on multi-view content applies to each MEMBER of it, not
+/// to the content as a unit — SwiftUI states the rule for `Group` in so many
+/// words ("The modifier applies to all members of the group — and not to the
+/// group itself") and repeats it for `GridRow`.
+///
+/// Without this a modifier made its content opaque to child resolution, and the
+/// enclosing container stopped seeing the members as its own children: a
+/// `Group` of two `Text`s in an `HStack` drew as a row, and the same `Group`
+/// carrying `.padding()` drew as a COLUMN, because the fallback in
+/// ``resolveChildViews(from:context:)`` handed the stack one opaque child whose
+/// buffer `TupleView` had already stacked vertically.
+///
+/// Conditional on the content, so nothing else changes: a modifier on an
+/// ordinary single view is as opaque as it ever was, and the witness is a
+/// compile-time fact rather than a cast per child.
+///
+/// - Note: `onDelete`/`onMove` need no exception here. They are declared on
+///   `ForEach` and return a `ForEach`, so they never build a `ModifiedView` and
+///   stay scoped to the collection, which is SwiftUI's `DynamicViewContent`
+///   rule.
+extension ModifiedView: ChildViewProvider where Content: ChildViewProvider {
+    public func childViews(context: RenderContext) -> [ChildView] {
+        content.childViews(context: context).map { $0.modified(by: modifier) }
+    }
+
+    /// The content's answer: whether the resolution is worth remembering is a
+    /// property of how many children it produces, which the wrapper does not
+    /// change.
+    public var childViewsAreWorthMemoising: Bool { content.childViewsAreWorthMemoising }
+
+    /// Forwarded, or a modified `if`/`else` would resolve both of its branches
+    /// against one identity and the two arms would share a `@State` box — the
+    /// defect ``ChildViewProvider/identityBranchLabel`` exists to prevent, one
+    /// wrapper further out.
+    public var identityBranchLabel: String? { content.identityBranchLabel }
 }
 
 // MARK: - Layoutable
