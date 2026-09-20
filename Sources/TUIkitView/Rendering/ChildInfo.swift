@@ -532,14 +532,20 @@ public struct ChildView {
     /// accepts are decided between.
     ///
     /// A child that HAS a stable identity answers by it and by nothing else:
-    /// a `ForEach` row is identified by its element's `id`, the same rule
-    /// `.tag(_:)` follows, so a `.id(_:)` written inside a row is not a
-    /// second address for it. That is also what keeps the answer the same on
-    /// every seek path — the uniform and anchored windows resolve a whole-
-    /// `ForEach` stack from the data's keys and never build a row view, so a
-    /// tag inside one is not theirs to see. Only an unkeyed child — a stack's
-    /// own tuple children, which is where the tag is written — is asked for
-    /// its tag, and only then is the cast behind ``explicitIDKey`` paid.
+    /// a `ForEach` row is identified by its element's `id`, so a `.id(_:)`
+    /// written inside a row is not a second address for it. That is also what
+    /// keeps the answer the same on every seek path — the uniform and anchored
+    /// windows resolve a whole-`ForEach` stack from the data's keys and never
+    /// build a row view, so a tag inside one is not theirs to see. Only an
+    /// unkeyed child — a stack's own tuple children, which is where the tag is
+    /// written — is asked for its tag, and only then is the cast behind
+    /// ``explicitIDKey`` paid.
+    ///
+    /// `.tag(_:)` no longer follows that rule, and the difference is what the
+    /// two modifiers are for: since 2026-09-20 a `.tag(_:)` on a `ForEach` row
+    /// gives the row its `List` SELECTION value, overriding the element's
+    /// `id`. It does not give the row an address — identity is still the `id`,
+    /// which is what this matcher and every window resolve from.
     public func matchesSeekKey(_ key: String) -> Bool {
         if let identityKey { return identityKey == key }
         return explicitIDKey == key

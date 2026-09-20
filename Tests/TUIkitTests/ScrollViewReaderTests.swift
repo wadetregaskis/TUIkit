@@ -495,12 +495,15 @@ struct ScrollViewReaderTests {
     @Test("A .id(_:) inside a ForEach row is not a second address for it")
     func idInsideForEachRowIsNotAnAddress() {
         // Deliberate, and the reason the matcher asks a keyed child for its
-        // key and nothing else: a row is identified by its element's `id`
-        // (the rule `.tag(_:)` follows too), and the seek paths that serve a
-        // whole-ForEach stack resolve from the data's keys without building a
-        // row view — so a tag written inside one could only ever work on some
-        // paths. Pinned at both sizes: 50 rows takes the exact walk, 5,000
-        // the uniform/anchored ladder.
+        // key and nothing else: a row is identified by its element's `id`, and
+        // the seek paths that serve a whole-ForEach stack resolve from the
+        // data's keys without building a row view — so a tag written inside
+        // one could only ever work on some paths. `.tag(_:)` parted from this
+        // rule on 2026-09-20 and is the contrast worth keeping in view: it now
+        // gives a `ForEach` row its `List` SELECTION value, overriding the
+        // element's `id`. Identity is untouched, which is why that is not an
+        // address and this test still holds. Pinned at both sizes: 50 rows
+        // takes the exact walk, 5,000 the uniform/anchored ladder.
         for rows in [50, 5_000] {
             let tuiContext = TUIContext()
             let focusManager = FocusManager()

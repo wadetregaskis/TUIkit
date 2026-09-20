@@ -107,9 +107,10 @@ protocol WindowedListRowExtractor {
     /// The id of the row at `index`, resolved cheaply (a key-path read or the
     /// index) without building content. Returns `nil` if the element's id can't
     /// be expressed as `ID` (the same rows the eager path would drop) — the
-    /// caller then falls back to eager extraction. Element-natural ids are
-    /// preferred, with the row index as the fallback (matching
-    /// ``ListRowExtractor/extractListRows``).
+    /// caller then falls back to eager extraction. A row's own `.tag(_:)` is
+    /// preferred, then element-natural ids, with the row index as the fallback
+    /// (matching ``ListRowExtractor/extractListRows``). Only a row type that
+    /// can be carrying a tag is built to be asked for one.
     func listRowID<ID: Hashable>(at index: Int) -> ID?
 
     /// Builds the deferred content for the row at `index` (0-based over the
@@ -282,11 +283,40 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
         data[data.index(data.startIndex, offsetBy: index)]
     }
 
-    /// Resolves the row ID for the element at `index`: its natural ID when that
-    /// matches the requested type, else the index (see ``extractListRows`` for
-    /// why the index fallback matters), else `nil`.
+    /// Resolves the row ID for the element at `index`: the row's own
+    /// `.tag(_:)` first, then the element's natural ID when that matches the
+    /// requested type, then the index (see ``extractListRows`` for why the
+    /// index fallback matters), else `nil`.
+    ///
+    /// The tag comes first because SwiftUI calls the id-tag a *default*:
+    /// `ForEach` "automatically assigns a tag to the selection views using
+    /// each option's `id`", and `tag(_:)`'s own documentation offers that as
+    /// the reason you may "omit the explicit tag modifier". Apple works the
+    /// example end to end for a `Picker` — a row of `ForEach(Flavor.allCases)`
+    /// carrying `.tag(flavor.suggestedTopping)` binds the TOPPING — and that
+    /// is the same precedence ``staticListRowID(of:ordinal:as:)`` already
+    /// applies against a static row's ordinal, and the same one
+    /// `ForEach.pickerOptions()` already applies on the `Picker` side by
+    /// asking the row for its own options before synthesising an id-tag. One
+    /// rule for both containers, in both of their row shapes.
+    ///
+    /// This is the SELECTION value only. The row's identity is still the
+    /// element's `id` — the `@State`, focus and render-cache key in
+    /// ``makeListRowContent(at:context:)``, and the key a
+    /// `ScrollViewProxy.scrollTo(_:)` seeks by — so a tag moves what the
+    /// binding receives and moves nothing else.
+    ///
+    /// ``viewTypeCarriesTag(_:)`` gates the build: the tag can only be read
+    /// off a BUILT row, and this is asked for every row of the visible window
+    /// on every frame, so a row type that cannot carry one pays a cached `is`
+    /// check and keeps its bare key-path read.
     private func rowID<RowID: Hashable>(at index: Int) -> RowID? {
-        let elementID = element(at: index)[keyPath: idKeyPath]
+        let element = element(at: index)
+        if viewTypeCarriesTag(Content.self),
+            let tagged: RowID = extractTagValue(from: content(element), as: RowID.self) {
+            return tagged
+        }
+        let elementID = element[keyPath: idKeyPath]
         if let id = elementID as? RowID { return id }
         if let id = index as? RowID { return id }
         return nil

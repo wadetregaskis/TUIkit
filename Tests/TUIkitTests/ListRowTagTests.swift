@@ -250,4 +250,98 @@ struct ListRowTagTests {
         #expect(handler.handleKeyEvent(KeyEvent(key: .enter)) == true)
         #expect(selection == "b", "the last row's tag, got \(String(describing: selection))")
     }
+
+    // MARK: - A ForEach row's own tag
+
+    /// Apple's worked `Picker` example, which is where the rule is stated: a
+    /// `Flavor` names a *suggested topping*, and the row carrying it is what
+    /// the selection binds to. The tag's type is deliberately NOT the
+    /// element's id type, so the two answers cannot be confused.
+    private enum Flavor: String, CaseIterable, Identifiable {
+        case chocolate, vanilla, strawberry
+
+        var id: String { rawValue }
+
+        var suggestedTopping: Topping {
+            switch self {
+            case .chocolate: .nuts
+            case .vanilla: .cookies
+            case .strawberry: .blueberries
+            }
+        }
+    }
+
+    private enum Topping: String, Hashable {
+        case nuts, cookies, blueberries
+    }
+
+    @Test("A ForEach row's explicit tag is what a List selection receives")
+    func foreachRowTagOfADifferentTypeWins() {
+        let fixture = Fixture<Topping>()
+        var selection: Topping?
+        let list = List(
+            selection: Binding(get: { selection }, set: { selection = $0 })
+        ) {
+            ForEach(Flavor.allCases) { flavor in
+                Text(flavor.rawValue).tag(flavor.suggestedTopping)
+            }
+        }
+        .frame(height: 8)
+
+        let lines = fixture.render(list).lines.map(\.stripped)
+        #expect(lines.contains { $0.contains("chocolate") }, "the rows must draw: \(lines)")
+        #expect(!lines.contains { $0.contains("No items") }, "not the empty placeholder: \(lines)")
+
+        guard let handler = fixture.handler else {
+            Issue.record("the list took focus")
+            return
+        }
+        // `id(at:)`, not `itemIDs`: a flat windowed `List` resolves ids
+        // lazily and leaves that array empty (see `ItemListHandler.idAt`), and
+        // this is the accessor that answers on both of the handler's id paths.
+        let ids = (0..<handler.itemCount).map { handler.id(at: $0) }
+        #expect(
+            ids == [.nuts, .cookies, .blueberries],
+            "every row is keyed by its own tag: \(ids)")
+
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        #expect(handler.handleKeyEvent(KeyEvent(key: .enter)) == true)
+        #expect(
+            selection == .cookies,
+            "vanilla's suggested topping, not the Flavor: \(String(describing: selection))")
+    }
+
+    /// The case Apple's documentation does not work: a tag whose type EQUALS
+    /// the element id's. Nothing can distinguish the two by type here, so the
+    /// only evidence that the tag still wins is `tag(_:)`'s own word for the
+    /// id-tag — a "default", which you "omit the explicit tag modifier"
+    /// against. Implemented on that reading; it is likelier than settled.
+    @Test("A ForEach row's explicit tag wins even when it is the id's own type")
+    func foreachRowTagOfTheSameTypeWins() {
+        let fixture = Fixture<String>()
+        var selection: String?
+        let list = List(
+            selection: Binding(get: { selection }, set: { selection = $0 })
+        ) {
+            ForEach(Flavor.allCases) { flavor in
+                Text(flavor.rawValue).tag("topping-\(flavor.suggestedTopping.rawValue)")
+            }
+        }
+        .frame(height: 8)
+
+        fixture.render(list)
+        guard let handler = fixture.handler else {
+            Issue.record("the list took focus")
+            return
+        }
+        let ids = (0..<handler.itemCount).map { handler.id(at: $0) }
+        #expect(
+            ids == ["topping-nuts", "topping-cookies", "topping-blueberries"],
+            "the tags, not the Flavor ids (chocolate, vanilla, strawberry): \(ids)")
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .enter)) == true)
+        #expect(
+            selection == "topping-nuts",
+            "the first row's tag, not its id \"chocolate\": \(String(describing: selection))")
+    }
 }

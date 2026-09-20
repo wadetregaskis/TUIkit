@@ -11,9 +11,9 @@
 /// `_TaggedView` is produced by the ``View/tag(_:includeOptional:)`` modifier.
 /// It renders transparently as its wrapped content; the tag is metadata
 /// consumed by container views — ``Picker``, through ``PickerOptionProvider``,
-/// and a ``List``'s statically-built rows, through
-/// `staticListRowID(of:ordinal:as:)` — to associate a view with a selection
-/// value.
+/// and a ``List``'s rows, through `staticListRowID(of:ordinal:as:)` for a
+/// statically-built one and `ForEach`'s own `rowID(at:)` for a looped one —
+/// to associate a view with a selection value.
 ///
 /// - Important: Framework infrastructure. Created by
 ///   ``View/tag(_:includeOptional:)``; do not instantiate directly.
@@ -62,9 +62,32 @@ extension View {
     ///
     /// A tag is what makes a *statically-built* row selectable, exactly as in
     /// SwiftUI: a row that carries none falls back to its ordinal, which can be
-    /// expressed only when the selection is an `Int`. Rows produced by a
-    /// ``ForEach`` are identified by the element's own `id` instead, and a
-    /// `.tag(_:)` written on one of those rows is not consulted.
+    /// expressed only when the selection is an `Int`.
+    ///
+    /// On a row produced by a ``ForEach`` the tag is a *default* the element's
+    /// `id` supplies, and writing one explicitly replaces it — SwiftUI's rule,
+    /// worked end to end in Apple's own `Picker` documentation, where a row of
+    /// `ForEach(Flavor.allCases)` carrying `.tag(flavor.suggestedTopping)`
+    /// binds the topping rather than the flavour:
+    ///
+    /// ```swift
+    /// List(selection: $topping) {
+    ///     ForEach(Flavor.allCases) { flavor in
+    ///         Text(flavor.name).tag(flavor.suggestedTopping)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// The tag is the row's SELECTION value and nothing else. The row's
+    /// *identity* is still its element's `id` — what its `@State`, its focus
+    /// and its cached buffer are keyed by, and the key a
+    /// ``ScrollViewProxy/scrollTo(_:anchor:)`` seeks — so a tag changes what
+    /// the binding receives and does not make the row a second scroll target.
+    /// An untagged loop row is unchanged: its `id` is its selection value.
+    ///
+    /// A `ForEach` that is the `List`'s content or a `Section`'s is reached; a
+    /// `ForEach` flattened in beside hand-written rows is not, that path keying
+    /// every flattened row by ordinal (it answers to no `id` there either).
     ///
     /// The tag must be the row's OWN wrapper — `Text("a").tag("a")`, not
     /// `Text("a").tag("a").padding()`, which is `.badge(_:)`'s rule as well.
@@ -120,12 +143,25 @@ extension _TaggedView: TagCarrying {
 /// The selection value `view`'s own `.tag(_:)` names — `nil` when it carries no
 /// tag, or one that cannot be expressed as `Value`.
 ///
-/// Used by `List` to key a statically-built row, which in SwiftUI is the only
-/// thing `.tag(_:)` is for outside a `Picker`.
+/// Used by `List` to key a row: a statically-built one, where the fallback is
+/// the row's ordinal, and a `ForEach` row, where it is the element's own `id`.
 @MainActor
 func extractTagValue<V: View, Value: Hashable>(from view: V, as valueType: Value.Type) -> Value? {
     guard let tag = (view as? any TagCarrying)?.carriedTag else { return nil }
     return resolveTag(tag.value, includeOptional: tag.includeOptional, as: valueType)
+}
+
+/// Whether ``extractTagValue(from:as:)`` could ever answer for a view of
+/// `type` — a static property of the row TYPE, no instance needed.
+///
+/// ``viewTypeCarriesBadge(_:)``'s gate, for the same reason it exists: a
+/// `ForEach` row's tag can only be read off the BUILT row, and a `List` asks
+/// for a row's id on every frame, for the whole visible window. A row type
+/// that cannot be carrying a tag — anything but a `.tag(_:)`-outermost row —
+/// skips that build and keeps the key-path read it had.
+@MainActor
+func viewTypeCarriesTag<V: View>(_ type: V.Type) -> Bool {
+    type is any TagCarrying.Type
 }
 
 /// Resolves a type-erased tag against a container's selection-value type.
