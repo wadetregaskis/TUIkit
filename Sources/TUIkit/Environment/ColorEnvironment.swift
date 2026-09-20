@@ -237,3 +237,33 @@ extension _StyleEnvironmentView: Layoutable {
         measureChild(content, proposal: proposal, context: childContext(context))
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: The style is re-applied around each member rather than once around
+///   the pair, which is the same thing here: it publishes an environment value,
+///   and an environment value reaches a subtree whether it was set one level up
+///   or two.
+extension _StyleEnvironmentView: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<V: View>(_ view: V) -> any View {
+        _StyleEnvironmentView<V, S>(content: view, style: style, slot: slot, fades: fades)
+    }
+}
+
+/// A `.foregroundStyle` on multi-view content applies to each MEMBER of it, not
+/// to the content as a unit — so the members stay the enclosing container's own
+/// children and it goes on laying them out as it would have unstyled.
+///
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _StyleEnvironmentView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// A `.foregroundStyle` on a `GridRow` belongs to the row's CELLS, and without
+/// this the grid did not recognise the wrapped row as a row at all — it fell
+/// into the "spans every column" branch and the cells left the lattice.
+///
+/// Body deliberately empty, as above: ``GridRowProviding`` has the whole
+/// implementation for a ``SingleContentWrapper``.
+extension _StyleEnvironmentView: GridRowProviding where Content: GridRowProviding {}

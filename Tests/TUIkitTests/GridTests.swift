@@ -333,8 +333,10 @@ struct GridTests {
         // a Group behaves." The row is therefore still a row, and its cells
         // still belong to the grid's columns.
         //
-        // `.foregroundStyle` is the spelling the audit reported; the `.padding`
-        // twin below is the one that goes through `ModifiedView`.
+        // `.foregroundStyle` is the spelling the audit reported, and it builds
+        // `_StyleEnvironmentView`; the `.padding` twin below is the one that
+        // goes through `ModifiedView`. Both reach `GridRowProviding` now, by
+        // two different routes, so both spellings are checked.
         let plain = lines(
             Grid(alignment: .leading) {
                 GridRow {
@@ -358,17 +360,12 @@ struct GridTests {
                 }
                 .foregroundStyle(.red)
             })
-        // Pinned, not fixed: `.foregroundStyle` builds `_StyleEnvironmentView`
-        // rather than `ModifiedView`, and only `ModifiedView` forwards
-        // `GridRowProviding` — see the twin below, and GroupRenderTests.
-        withKnownIssue("_StyleEnvironmentView is not a GridRowProviding, so the row spans every column") {
-            #expect(
-                modified.map { $0.trimmingCharacters(in: .whitespaces) }
-                    == plain.map { $0.trimmingCharacters(in: .whitespaces) })
-            #expect(
-                modified.last?.hasPrefix("cc  dd") == true,
-                "the modified row's cells belong to the grid's columns, so dd starts at x=4")
-        }
+        #expect(
+            modified.map { $0.trimmingCharacters(in: .whitespaces) }
+                == plain.map { $0.trimmingCharacters(in: .whitespaces) })
+        #expect(
+            modified.last?.hasPrefix("cc  dd") == true,
+            "the modified row's cells belong to the grid's columns, so dd starts at x=4")
     }
 
     @Test("A padded row is still a row, and the padding lands on its cells")

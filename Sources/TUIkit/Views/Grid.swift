@@ -129,6 +129,23 @@ extension ModifiedView: GridRowProviding where Content: GridRowProviding {
     }
 }
 
+/// The same rule for a row wrapped in something that is not a `ViewModifier`
+/// — `.foregroundStyle` and most other modifier factories return a bare
+/// wrapper type, not a ``ModifiedView``.
+///
+/// A ``SingleContentWrapper`` conformance is all a wrapper needs to pick this
+/// up; the body here is the one above with ``ChildView/rewrapped(by:)`` in
+/// place of ``ChildView/modified(by:)``, for the reason
+/// ``SingleContentWrapper`` states: a wrapper has no modifier VALUE to carry
+/// to each cell, so it re-wraps them with its own initialiser instead.
+extension GridRowProviding where Self: SingleContentWrapper, WrappedContent: GridRowProviding {
+    var rowAlignment: VerticalAlignment? { wrappedContent.rowAlignment }
+
+    func gridCells(context: RenderContext) -> [ChildView] {
+        wrappedContent.gridCells(context: context).map { $0.rewrapped(by: self) }
+    }
+}
+
 // MARK: - Grid
 
 /// A container that arranges its ``GridRow``s into aligned columns.

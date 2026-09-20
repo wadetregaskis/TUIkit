@@ -290,6 +290,34 @@ public struct ChildView {
     /// single-content wrapper forwards the static `View` witnesses — so
     /// `HStack { Group { Text("A"); Spacer() }.padding() }` would quietly lose
     /// its spacer.
+    /// This child inside a copy of `wrapper` — ``modified(by:)`` for the
+    /// wrappers that are not `ViewModifier`s.
+    ///
+    /// Everything but the view is carried across unchanged, for the reason
+    /// ``modified(by:)`` spells out: the identity a member already resolved to,
+    /// its spacer flag, its z-index and its alignment-guide flag are properties
+    /// of the MEMBER, and a wrapper now standing in front of it does not change
+    /// any of them. The spacer flag is the one with teeth — measured in the
+    /// real framework, a `Spacer` inside a MODIFIED `Group` still reaches the
+    /// enclosing stack as a spacer, and re-reading the flag off the wrapper
+    /// would answer `false`.
+    ///
+    /// The existential is opened by ``SingleContentWrapper/rewrapping(_:)``
+    /// being generic, so no cast happens here and nothing is boxed twice.
+    package func rewrapped(by wrapper: some SingleContentWrapper) -> Self {
+        Self(
+            view: wrapper.rewrapping(view),
+            identityType: identityType,
+            childIndex: childIndex,
+            identityKey: identityKey,
+            providerSlot: providerSlot,
+            isSpacer: isSpacer,
+            spacerMinLength: spacerMinLength,
+            zIndex: zIndex,
+            providesAlignmentGuide: providesAlignmentGuide,
+            resolvedIdentity: resolvedIdentity)
+    }
+
     package func modified<M: ViewModifier>(by modifier: M) -> Self {
         // Implicit existential opening, not a cast: passing the `any View` to a
         // generic parameter binds `V` to its dynamic type, so what is stored is
@@ -730,6 +758,85 @@ extension ChildViewProvider {
 
     /// Nothing to distinguish, unless a provider says otherwise.
     public var identityBranchLabel: String? { nil }
+}
+
+// MARK: - Single-Content Wrappers
+
+/// A view whose whole job is to wrap exactly ONE content view and adjust
+/// something about how it renders — the shape `.foregroundStyle`, `.opacity`,
+/// `.frame` and dozens of other modifier factories return.
+///
+/// It exists for one reason: a wrapper stands between a container and the
+/// content it was handed, and when that content is SEVERAL views rather than
+/// one, the container must still see the members. SwiftUI states the rule for
+/// `Group` ("The modifier applies to all members of the group — and not to the
+/// group itself") and it holds for layout as well as for paint — measured, not
+/// assumed: `HStack { Group { Text("AA"); Text("BB") }.frame(width: 80) }` in
+/// the real framework lays the two texts out at exactly the frames writing
+/// `.frame(width: 80)` on each member separately produces.
+///
+/// ``ModifiedView`` reaches its members without this, because a `ViewModifier`
+/// is a VALUE it can carry to each of them (see `ChildView.modified(by:)`). A
+/// bare wrapper has no such value — re-wrapping means calling its own
+/// initialiser, whose content type is the wrapper's generic parameter and so
+/// cannot be bound to an `any View`. ``rewrapping(_:)`` is that initialiser
+/// call, written once per wrapper, and it is the ONLY member a conformance has
+/// to spell: it is generic over the new content, so passing an existential to
+/// it opens the existential instead of failing to convert.
+///
+/// - Important: Conform a wrapper to ``ChildViewProvider`` only when its effect
+///   is one every member should get. That is true of anything cosmetic, spatial
+///   or environmental, and NOT true of a wrapper that performs an effect or
+///   registers something: distributing it would multiply the effect by the
+///   member count. `.onAppear` on a `ForEach` of fifty rows fires ONCE in
+///   SwiftUI — also measured — so a blanket conformance would turn one call
+///   into fifty while leaving every layout test green.
+@MainActor
+package protocol SingleContentWrapper {
+    /// The type of the content this wrapper was built around.
+    associatedtype WrappedContent: View
+
+    /// The content this wrapper was built around.
+    var wrappedContent: WrappedContent { get }
+
+    /// A copy of this wrapper around `view` instead of its own content.
+    ///
+    /// Generic over the new content, which is what makes it usable at all:
+    /// the caller holds an `any View`, and passing an existential to a generic
+    /// parameter opens it to its dynamic type (SE-0352). The result is the
+    /// concrete wrapper the render path measures and renders, never a wrapper
+    /// around an existential — which would not compile, since an existential
+    /// does not conform to the protocol it erases.
+    func rewrapping<V: View>(_ view: V) -> any View
+}
+
+/// Child resolution straight through a single-content wrapper, for any wrapper
+/// whose content has members of its own.
+///
+/// Every member comes back wrapped in a copy of the wrapper, so the adjustment
+/// still applies — to each member, which is the rule. Conforming is therefore
+/// a one-line `extension X: ChildViewProvider where Content: ChildViewProvider {}`
+/// on top of the ``SingleContentWrapper`` conformance: there is no body to
+/// write, and no per-wrapper chance to get the identity bookkeeping wrong.
+///
+/// Conditional on the content having members, so nothing else changes: a
+/// wrapper around an ordinary single view stays exactly as opaque as it was,
+/// and the witness is a compile-time fact rather than a cast per child.
+extension ChildViewProvider where Self: SingleContentWrapper, WrappedContent: ChildViewProvider {
+    package func childViews(context: RenderContext) -> [ChildView] {
+        wrappedContent.childViews(context: context).map { $0.rewrapped(by: self) }
+    }
+
+    /// The content's answer: whether the resolution is worth remembering is a
+    /// property of how many children it produces, which the wrapper does not
+    /// change.
+    package var childViewsAreWorthMemoising: Bool { wrappedContent.childViewsAreWorthMemoising }
+
+    /// Forwarded, or a wrapped `if`/`else` would resolve both of its branches
+    /// against one identity and the two arms would share a `@State` box — the
+    /// defect ``ChildViewProvider/identityBranchLabel`` exists to prevent, one
+    /// wrapper further out.
+    package var identityBranchLabel: String? { wrappedContent.identityBranchLabel }
 }
 
 /// Creates a ChildInfo for a single view.
