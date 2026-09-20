@@ -28,6 +28,12 @@ and the tool audits it back: an entry naming a symbol that no longer exists, or
 claiming something is unimplemented when it now is, is reported as STALE. A map
 that is never wrong is a map nobody is reading.
 
+Two kinds of drift are treated differently, on purpose. A recorded GAP that has
+closed FAILS `--check`: it is a claim about TUIkit's own API, and leaving it
+unrecorded is how the baseline goes quietly out of date. A recorded argument-label
+DEVIATION that no longer reproduces only WARNS, because those track the SDK rather
+than this package.
+
 Requires macOS with Xcode: SwiftUI's symbol graph comes out of the SDK.
 """
 import argparse
@@ -484,6 +490,23 @@ def report(swiftui, tuikit, gaps, explained, stale, deviations, baseline, compat
                 print(f"       TUIkit  {candidate}")
         if len(fresh or deviations) > LIST_LIMIT:
             print(f"  … and {len(fresh or deviations) - LIST_LIMIT} more")
+
+    # A recorded deviation that no longer reproduces WARNS; it does not fail.
+    # The asymmetry with `fixed` below is deliberate: a closed GAP is a claim
+    # about TUIkit's own API and leaving it unrecorded is how the baseline goes
+    # quietly out of date, whereas a label deviation tracks the SDK, which moves
+    # under us — failing on one would turn every toolchain bump into a red build
+    # with nothing for anyone to fix. Computed outside the `if deviations:`
+    # block above because the interesting case is deviations going to zero.
+    gone = sorted(set(baseline.get("labelDeviations", [])) - set(deviations))
+    if gone:
+        print(f"\nWARNING: {len(gone)} recorded label deviation(s) no longer "
+              f"reproduce — run --accept to tidy the baseline. This does not "
+              f"fail the check.")
+        for key in gone[:LIST_LIMIT]:
+            print(f"  ~ {key}")
+        if len(gone) > LIST_LIMIT:
+            print(f"  … and {len(gone) - LIST_LIMIT} more")
 
     if stale:
         print(f"\nSTALE map entries ({len(stale)}) — the map disagrees with reality:")
