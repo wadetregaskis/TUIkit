@@ -11,6 +11,12 @@
 //  HOLDS the focus, a control registering against the throwaway manager a dimmed
 //  backdrop renders under, and a control an offered declaration named.
 //
+//  A `.defaultFocus` declaration is the same kind of per-frame presence and is
+//  replayed the same way. Its failure was the reverse of a dropped registration:
+//  the declaration is pruned when a pass does not renew it, and the prune takes
+//  the store's applied-once flag with it, so a served frame RE-ARMED a default
+//  the user had already moved away from.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -29,11 +35,40 @@ import Testing
 /// focus ring. The mark here is the same width focused or not, so a served
 /// buffer reads as the wrong mark rather than as a different layout.
 private struct FocusProbe: View, Renderable {
-    let focusID: String
+    private enum StateIndex {
+        static let focusID = 0
+    }
+
+    /// The id this stop declares, or `nil` to take the one a
+    /// `.focused(_:equals:)` above offers — the route a real control's id takes
+    /// when a `@FocusState` names it, since an explicit id outranks an offer.
+    let declaredID: String?
+
+    /// What the stop draws, so two of them are still tellable apart when
+    /// neither declares an id.
+    let label: String
+
+    /// A stop that declares its own id, which is also what it draws.
+    init(focusID: String) {
+        declaredID = focusID
+        label = focusID
+    }
+
+    /// A stop that takes the id offered to it, drawn as `label`.
+    init(bound label: String) {
+        declaredID = nil
+        self.label = label
+    }
 
     var body: Never { fatalError("FocusProbe renders via Renderable") }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        // Through `persistFocusID` rather than straight to `register`, because
+        // that is where an offered id is claimed — a declared one comes back
+        // unchanged.
+        let focusID = FocusRegistration.persistFocusID(
+            context: context, explicitFocusID: declaredID, defaultPrefix: "probe",
+            propertyIndex: StateIndex.focusID)
         FocusRegistration.register(
             context: context,
             // Honours `.disabled(_:)` as a real control does, so a test can put
@@ -42,7 +77,7 @@ private struct FocusProbe: View, Renderable {
                 focusID: focusID, action: {}, canBeFocused: context.environment.isEnabled),
             focusID: focusID)
         let isFocused = FocusRegistration.isFocused(context: context, focusID: focusID)
-        return FrameBuffer(text: (isFocused ? "*" : "-") + focusID)
+        return FrameBuffer(text: (isFocused ? "*" : "-") + label)
     }
 }
 
@@ -56,6 +91,56 @@ private struct ProbeCard: View, @MainActor Equatable {
 
     var body: some View {
         FocusProbe(focusID: title)
+    }
+}
+
+/// Which of the bound stops a `@FocusState` names.
+private enum ProbeField: Hashable {
+    case first, second
+}
+
+/// The card's title, held apart from the view so one page instance — and so one
+/// `@FocusState` store — can be rendered frame after frame while the test
+/// changes what the memoized card is worth.
+@MainActor
+private final class CardTitle {
+    var value = "card"
+}
+
+/// A memoizable card whose only per-frame write is a `.defaultFocus`
+/// declaration. Equality is by title alone, so nothing in the VALUE moves when
+/// the focus does — which is what lets the memo hit while the declaration is
+/// live.
+private struct DefaultFocusCard: View, @MainActor Equatable {
+    let title: String
+    let focus: FocusState<ProbeField?>.Binding
+    let priority: DefaultFocusEvaluationPriority
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.title == rhs.title }
+
+    var body: some View {
+        Text(title).defaultFocus(focus, .second, priority: priority)
+    }
+}
+
+/// Two stops named by a `@FocusState`, and a memoized card declaring the second
+/// of them as the default focus.
+///
+/// The `@FocusState` is deliberately reachable from the test: a test that
+/// asserted on the ids the modifier generates would be asserting on a string
+/// built from the identity path, and the question here is which value the app
+/// sees focused.
+private struct DefaultFocusPage: View {
+    @FocusState var focus: ProbeField?
+    let title: CardTitle
+    var priority: DefaultFocusEvaluationPriority = .automatic
+
+    var body: some View {
+        VStack {
+            FocusProbe(bound: "first").focused($focus, equals: .first)
+            FocusProbe(bound: "second").focused($focus, equals: .second)
+            DefaultFocusCard(title: title.value, focus: $focus, priority: priority).equatable()
+        }
     }
 }
 
@@ -274,6 +359,122 @@ struct FocusRegistrationMemoTests {
             #expect(
                 harness.focusManager.sectionIDs == ["first", "second"],
                 "frame \(number) lost a section: \(harness.focusManager.sectionIDs)")
+        }
+    }
+
+    @Test("A served frame does not re-arm a spent default focus")
+    func defaultFocusStaysSpentAcrossServedFrames() {
+        let harness = LoopHarness()
+        let title = CardTitle()
+        let page = DefaultFocusPage(title: title)
+
+        // Frame 1 declares the default, and `endRenderPass` applies it: the
+        // SECOND stop takes the initial focus, rather than the first one the
+        // automatic first-focusable choice would have picked.
+        harness.frame(page)
+        #expect(
+            page.focus == .second,
+            "the default focus never landed: \(String(describing: page.focus))")
+
+        // Frame 2 serves the card's buffer, so the declaration is not made
+        // again by a render.
+        #expect(harness.misses(page) == 0, "frame 2 rendered the card again")
+
+        // The user moves the focus. An `.automatic` default is a one-shot: it
+        // is spent, and this is where the user takes over for good.
+        page.focus = .first
+        #expect(page.focus == .first, "the move off the default did not take")
+
+        // One more served frame, and then one the card is rendered on again —
+        // a rename is any ordinary content change.
+        #expect(harness.misses(page) == 0, "frame 3 rendered the card again")
+        title.value = "card renamed"
+        #expect(harness.misses(page) > 0, "frame 4 served the card that the rename changed")
+
+        #expect(
+            page.focus == .first,
+            """
+            the default focus was applied a second time and took the focus back \
+            from the user: \(String(describing: page.focus))
+            """)
+    }
+
+    @Test("A default focus rendered behind a sheet is not stored from that render")
+    func backdropDefaultFocusIsNotStored() {
+        let harness = LoopHarness()
+        let title = CardTitle()
+        let page = DefaultFocusPage(title: title)
+        func frame(sheet: Bool) {
+            harness.frame(
+                page.sheet(isPresented: .constant(sheet)) { Text("no focus stops here") }
+            ) { environment in
+                environment.terminalWidth = 40
+                environment.overlayContentHeight = 20
+            }
+        }
+
+        frame(sheet: false)
+        #expect(
+            page.focus == .second,
+            "the default focus never landed: \(String(describing: page.focus))")
+        // Off the default, so that what the page focuses after the sheet says
+        // WHICH mechanism put it there: the focus the manager remembers across
+        // a modal would restore this stop, and only a re-applied default moves
+        // to the other one.
+        page.focus = .first
+
+        // The page renders as a BACKDROP while the sheet is up: a picture drawn
+        // against a throwaway manager, which is told the default and then
+        // thrown away with it. The rename is what makes the card render THERE,
+        // rather than go on serving the buffer it stored in front of the sheet.
+        frame(sheet: true)
+        title.value = "card renamed"
+        frame(sheet: true)
+
+        // The live manager heard nothing for those frames, so its declaration
+        // was pruned and the default re-armed — a re-presented scope focuses
+        // its default again. Stored, the backdrop's render would be served
+        // here, declaring the default to nobody at all.
+        frame(sheet: false)
+        #expect(
+            page.focus == .second,
+            """
+            the card was served the render it made behind the sheet, so the \
+            re-presented scope never re-applied its default: \
+            \(String(describing: page.focus))
+            """)
+    }
+
+    @Test("A userInitiated default focus still re-asserts itself on served frames")
+    func userInitiatedDefaultFocusReassertsOnServedFrames() {
+        let harness = LoopHarness()
+        let page = DefaultFocusPage(title: CardTitle(), priority: .userInitiated)
+
+        harness.frame(page)
+        #expect(
+            page.focus == .second,
+            "the default focus never landed: \(String(describing: page.focus))")
+
+        // `.userInitiated` is the priority that overrides the user's moves on
+        // every render — so a served frame has to take the focus back, which is
+        // the opposite of what the automatic default must do, and the half a
+        // replay that dropped the priority would get wrong.
+        //
+        // TWICE, because once does not tell the two priorities apart: a replay
+        // that downgraded this declaration to `.automatic` would still take the
+        // focus back the first time (the automatic shot is unspent, the first
+        // render having been `.userInitiated` and never having spent one) and
+        // only then stop.
+        for round in 1...2 {
+            page.focus = .first
+            #expect(harness.misses(page) == 0, "round \(round) rendered the card again")
+            #expect(
+                page.focus == .second,
+                """
+                round \(round) let the move stand, so the declaration the served \
+                frame replayed was not the userInitiated one: \
+                \(String(describing: page.focus))
+                """)
         }
     }
 }

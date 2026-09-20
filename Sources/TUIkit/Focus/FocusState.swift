@@ -324,23 +324,98 @@ struct _DefaultFocusModifier<Content: View, Value: Hashable>: View {
 
 extension _DefaultFocusModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        // Backdrop-excluded for the same reason as `_FocusedModifier`: the
-        // throwaway manager must not become the store's, and a default-focus
-        // declaration made against it is discarded with it anyway.
-        if !context.isMeasuring, let manager = context.environment.focusManager,
-            !manager.isBackdrop
-        {
-            store.focusManager = manager
-            manager.setDefaultFocusValue(
-                AnyHashable(value), priority: priority, forStore: store.storeID)
-        }
+        declareDefaultFocus(context: context)
         return TUIkitView.renderToBuffer(content, context: context)
+    }
+
+    /// Declares this frame's default focus, and says what a value-memoizing
+    /// ancestor may do about it.
+    private func declareDefaultFocus(context: RenderContext) {
+        guard !context.isMeasuring, let manager = context.environment.focusManager else { return }
+        // Backdrop- and probe-excluded for the same reasons as
+        // `_FocusedModifier` and `FocusRegistration.declareRegistration`: the
+        // throwaway manager must not become the store's, and a declaration made
+        // against it is discarded with it. Declining the cache there as well,
+        // because a subtree stored while it drew against a throwaway would be
+        // served later against the LIVE manager — which would then never be
+        // told the default at all, where an unmemoized page re-declares it on
+        // the frame after the modal goes.
+        guard !manager.isBackdrop, !manager.suppressesAutoFocus else {
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
+            return
+        }
+        store.focusManager = manager
+        DefaultFocusRegistrar.declare(
+            value: AnyHashable(value), priority: priority, store: store.storeID, context: context)
+        declareReplay(context: context)
+    }
+
+    /// Tells a value-memoizing ancestor that the declaration is one a hit can
+    /// simply make again, and records it while one is listening.
+    ///
+    /// A declaration is per-frame presence, exactly as a focus registration is:
+    /// it carries the render generation, and `FocusManager.pruneFocusRegistry`
+    /// drops one that was not renewed this pass — taking the store's
+    /// applied-once flag with it. So a served frame that did not declare again
+    /// silently *un-applied* the default, and the next frame the subtree
+    /// actually rendered on applied it a second time, moving the focus out from
+    /// under the user. Renewing it on a hit keeps the flag, which is what makes
+    /// "apply once" mean once whether the subtree rendered or was served.
+    private func declareReplay(context: RenderContext) {
+        context.environment.volatileReadTracker?.recordReplayableEffect()
+        guard let journal = context.recordingEffectJournal else { return }
+        // Built only while a memo records, so the live path allocates no second
+        // closure. Everything captured is a value, and the store's ID rather
+        // than the store: a `@FocusState`'s backing is rebuilt with the view
+        // struct holding it, while the id is what the manager keys by and is
+        // derived from render identity, so it is the same string next frame.
+        // Nothing re-wires `store.focusManager` on a hit either, and nothing
+        // needs to — the owner's body runs above the boundary, or, for a
+        // `@FocusState` inside the subtree, the store an event closure captured
+        // is the one the render wired.
+        let declaredValue = AnyHashable(value)
+        let declaredPriority = priority
+        let storeID = store.storeID
+        journal.append(
+            EffectJournal.Entry(
+                kind: DefaultFocusRegistrar.kind, channelToken: context.environment.keyChannelToken
+            ) { replay in
+                DefaultFocusRegistrar.declare(
+                    value: declaredValue, priority: declaredPriority, store: storeID,
+                    context: replay)
+            })
     }
 }
 
 extension _DefaultFocusModifier: Layoutable {
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         measureChild(content, proposal: proposal, context: context)
+    }
+}
+
+// MARK: - Registration
+
+/// The one declaration `.defaultFocus(_:_:priority:)` makes, shared by the live
+/// render and by a value memo replaying it — see `EffectJournal`.
+enum DefaultFocusRegistrar {
+    /// The journal kind of a default-focus declaration.
+    static let kind = EffectJournal.Kind("defaultFocus")
+
+    /// Declares `value` as the default focus of `store` on `context`'s manager.
+    ///
+    /// It looks the manager up in `context` rather than taking one, so a replay
+    /// declares into the manager of the frame that serves it — and refuses the
+    /// same two throwaway managers the render refuses, so a replay is the call
+    /// the render made rather than merely a similar one.
+    @MainActor
+    static func declare(
+        value: AnyHashable, priority: DefaultFocusEvaluationPriority, store: String,
+        context: RenderContext
+    ) {
+        guard let manager = context.environment.focusManager,
+            !manager.isBackdrop, !manager.suppressesAutoFocus
+        else { return }
+        manager.setDefaultFocusValue(value, priority: priority, forStore: store)
     }
 }
 
