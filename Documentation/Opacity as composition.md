@@ -3741,7 +3741,7 @@ case). A colour whose alpha moves with its frames is not that.
 - **§36.7's indeterminate bar, and `Spinner` for a cycle whose frames differ in width.**
   They decline their runs through `requestAnimation`. The freeze was real and is fixed in
   §66; the other problem, a request that outlives a render whose buffer is thrown away,
-  still applies to them by reading.
+  is measured in §92 and still open.
 
 
 ## 60. A caret on a selected character carried its text's alpha (2026-09-10)
@@ -5692,3 +5692,68 @@ pair, each reversed, leave blanks carrying no 7, and a wide glyph leaves two; at
 the cell keeps its 7 with its colours; a reversed cell with nothing stated, and one stating
 only a field, are unchanged at every phase; and with the terminal's pair reported the cell
 dissolves in place, still reversed.
+
+
+## 92. A request to be rendered outlives the buffer it was made in (2026-09-20)
+
+The open half of §59's last bullet, now measured rather than read, and left open
+deliberately: the shape of the fix is the owner's call.
+
+**What was measured.** `OffScreenAnimationDemandTests` drives `RenderLoop` with a probe
+whose only trait is that it reads the pulse phase while rendering — the shape a multi-row
+`Button`'s caps already have. On screen it reports `usesPulse`, which is right. Under a
+`.hidden()` that draws none of it, it reports `usesPulse` too. As the root of a
+`NavigationStack` with a screen pushed over it, likewise; and the control beside that one
+— the same stack with an ordinary root — reports nothing, so the flag is the covered
+root's and not the pushed screen's navigation bar. Both are `withKnownIssue`: the suite
+passes, and the day a fix lands is the day they fail for the right reason.
+
+So an animation nobody can see costs a full render twenty times a second. Three renders a
+pass makes and throws away carry the demand out with them: `_HiddenView`, which renders its
+content and returns an empty buffer; `NavigationStack`'s covered root, rendered to keep its
+`@State` from being pruned; and `ScrollView.windowedBuffer`, which drops the runs outside
+the viewport after rendering the whole canvas.
+
+**Where it comes from.** Both channels are pass-wide. `recordVolatileRead()` is a counter
+on the frame's `VolatileReadTracker`, read once at the end as `usesPulse`.
+`requestAnimation` re-declares a token on the `AnimationScheduler`, which drops tokens that
+stop re-declaring — an excellent rule that measures the wrong thing, because a hidden view
+goes on re-declaring exactly as a visible one does. Neither channel is attached to the
+buffer that the work was done for, so neither can be dropped when that buffer is.
+
+`isolatedForBackground()` is the near miss worth naming. It gives a covered root a
+throwaway key dispatcher, shortcut registry, status bar and focus manager — every channel
+by which an invisible root could reach the USER — and leaves it the live volatile-read
+tracker, the channel by which it reaches the CLOCK.
+
+**The shape a fix would take.** A request that rides on the `FrameBuffer`, the way an
+`AnimatedCellRun` already does: a flag meaning *render, do not replay*, counted by
+`RenderLoop.recordActivity` only when it reaches the final buffer, and excluded from the
+replay set. Memoisation is defeated the way `requestAnimation` already defeats it, through
+`recordRenderSideEffect()`, which counts toward `cacheUnsafeCount` without keeping a clock
+alive.
+
+The cost of carrying it is smaller than it first reads. There are 21 `AnimatedCellRun(`
+constructions in `Sources`, but `offsetX` and `offsetY` are `var` and `shifted(byX:y:)`
+copies, so every clip, splice and re-base carries a new field for free. What must carry it
+by hand is the nine sites that build a run out of another run's parts — `DimmedModifier`,
+`OpacityResolution`, `BreathingLabel`, `AnimatedColor`, `TextFieldContentRenderer`,
+`TextEditor`, `Table`, `_ListCore`, `Link`, and `AnimatedBufferCycle` where it assembles
+one. A dropped flag there turns a render request silently into a replay, which is the one
+failure mode worth a test apiece.
+
+**What is NOT here.** No fix, and no decision about one. Two questions decide it and
+neither is mine: whether a view that cannot be replayed should be able to say so on its
+buffer at all — it is a per-frame claim on a structure otherwise describing pictures — and
+whether the volatile-read channel should be attached to a buffer the same way or simply
+denied to the three discarding renders, which is a far smaller change and covers the
+measured cases. The narrow version is one line in `isolatedForBackground()` plus its twin
+in `_HiddenView`; the general version is the flag above.
+
+**And what is not a defect.** §66's freeze is fixed and stays fixed. A scheduler-driven
+animation leaves all three inputs to `App.renderFrame`'s `clockLive` clear, so the loop
+stops the cursor timer — the standing condition that froze the translucent bar and the
+mixed-width `Spinner` until §66 moved a declined run's frame onto `frameNowNanos`. The
+last test in the file asserts that condition plainly, so the next animation to ask the
+scheduler for its frames meets the rule before it meets the symptom: asking the scheduler
+keeps no clock running, so nothing that asks may read one.
