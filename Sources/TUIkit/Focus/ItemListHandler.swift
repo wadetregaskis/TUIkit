@@ -448,16 +448,24 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
         return true
     }
 
-    /// Deletes the focused row when the enclosing `ForEach` is deletable.
+    /// Deletes the focused row when the `ForEach` that produced it is
+    /// deletable.
     ///
-    /// The focus index IS the data offset here — `onDelete` is wired only for
-    /// the homogeneous all-content list (see `_ListCore`), so no header/footer
-    /// rows shift it.
+    /// ``onDelete`` is called with the row's LIST index, which the installer
+    /// translates into an offset in whichever collection that row came from —
+    /// the same number in a flat `List { ForEach … }`, and not the same number
+    /// inside a `Section`, whose header and preceding sections lie in between.
     ///
     /// - Returns: Whether a row was deleted. `false` leaves Delete / Backspace
     ///   to fall through, so a plain list never swallows either.
     func deleteFocusedRow() -> Bool {
         guard let onDelete, focusedIndex >= 0, focusedIndex < itemCount,
+            // Which rows this one can be deleted among — `nil` for a row no
+            // deletable `ForEach` produced (a header, a hand-written row, a row
+            // of a list whose OTHER section is the editable one). Refusing here
+            // is the point: the alternative is an offset that lands in a
+            // collection the user was not pointing at.
+            let span = deletableSpan(of: focusedIndex),
             // `.deleteDisabled()` on the row. Returning FALSE rather than true:
             // a refused row must leave Delete alone entirely, so it falls
             // through to whatever else wants the key — exactly as it does in a
@@ -465,29 +473,52 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
             // locked row silently eat a shortcut.
             !deleteDisabledRows.contains(focusedIndex)
         else { return false }
-        let offset = focusedIndex
-        onDelete(IndexSet(integer: offset))
+        let row = focusedIndex
+        onDelete(IndexSet(integer: row))
         // The row below slides up into this slot; keep focus on it, clamped to
-        // the about-to-shrink data (itemCount refreshes next render).
-        focusedIndex = max(0, min(offset, itemCount - 2))
+        // the about-to-shrink data (itemCount refreshes next render). Clamped
+        // to the SPAN's end as well as the list's: deleting a section's last
+        // row leaves the cursor on that section's new last row rather than on
+        // whatever chrome follows it.
+        focusedIndex = max(0, min(row, min(span.upperBound, itemCount) - 2))
         ensureFocusedItemVisible()
         return true
     }
 
-    /// Data offsets whose rows carry `.deleteDisabled()`, republished each
-    /// frame by the `List` from what the drawn rows reported.
+    /// The list rows the row at `index` may be deleted among — the rows of the
+    /// `ForEach` that produced it — or `nil` when no deletable `ForEach` did.
+    ///
+    /// `lowerBound` is the row its collection's element 0 draws at, so
+    /// `row - lowerBound` is the offset ``onDelete`` wants.
+    ///
+    /// With no resolver installed the whole list is one span, which is exactly
+    /// what a `Table` and a flat `List { ForEach … }` are: there a row's index
+    /// IS its offset, and a resolver would answer `0..<itemCount` for every row.
+    func deletableSpan(of index: Int) -> Range<Int>? {
+        guard let deletableRowSpan else { return 0..<itemCount }
+        return deletableRowSpan(index)
+    }
+
+    /// LIST ROWS carrying `.deleteDisabled()`, republished each frame by the
+    /// `List` from what the drawn rows reported.
+    ///
+    /// List rows, not offsets into the row's own collection: this is compared
+    /// against ``focusedIndex``, which is a list row. The two are the same
+    /// number in a flat list and are not inside a `Section` — and with two
+    /// Sections the per-collection offsets collide outright, which is why
+    /// `RowEditRestrictions` stamps the list row.
     ///
     /// Absence means allowed. A row that never rendered cannot appear here, and
     /// does not need to: the only row Delete can name is the focused one, and
     /// the focus machinery keeps that on screen.
     var deleteDisabledRows: Set<Int> = []
 
-    /// Data offsets whose rows carry `.moveDisabled()`. Same publication and
-    /// the same reasoning as ``deleteDisabledRows`` — a drag can only grab a
-    /// row it can point at.
+    /// List rows carrying `.moveDisabled()`. Same publication and the same
+    /// reasoning as ``deleteDisabledRows`` — a drag can only grab a row it can
+    /// point at.
     var moveDisabledRows: Set<Int> = []
 
-    /// Data offsets whose rows carry `.selectionDisabled()`. Same publication
+    /// List rows carrying `.selectionDisabled()`. Same publication
     /// as ``deleteDisabledRows`` — reported by the row as it renders, absent
     /// means allowed, and a row that has never been on screen has never had
     /// the chance to report. Unlike the other two, this restriction also
@@ -499,10 +530,20 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
 
     /// The `.onDelete(perform:)` action from an editable `ForEach`, if any:
     /// pressing Delete / Backspace on the focused row invokes it with that
-    /// row's data offset (its focus index, in the all-content list this is only
-    /// wired for). `nil` keeps Delete inert so it falls through to page
+    /// row's LIST index. `nil` keeps Delete inert so it falls through to page
     /// navigation. See ``handleKeyEvent(_:)`` and ``DynamicViewContentActions``.
+    ///
+    /// A list row rather than a collection offset because a list can hold
+    /// several editable `ForEach`es — one per `Section` — and only the
+    /// installer knows which collection a given row belongs to. It does the
+    /// subtraction; see ``deletableSpan(of:)``.
     var onDelete: ((IndexSet) -> Void)?
+
+    /// Which rows a given row can be deleted among, and so which collection its
+    /// offset addresses. Installed by `_ListCore` every frame; `nil` means the
+    /// whole list, which is a `Table`'s and a flat `List`'s shape. See
+    /// ``deletableSpan(of:)``.
+    var deletableRowSpan: ((Int) -> Range<Int>?)?
 
     /// The `.onMove(perform:)` reorder action from an editable `ForEach`, if
     /// any: dragging a row with the mouse commits through it on release with

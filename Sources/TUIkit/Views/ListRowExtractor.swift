@@ -176,6 +176,15 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
 
     func makeListRowContent(at index: Int, context: RenderContext) -> LazyListRowContent {
         let element = self.element(at: index)
+        // Which row of the enclosing LIST this element draws — the element's
+        // own offset plus wherever this `ForEach`'s first element sits. The two
+        // are the same number in a flat `List { ForEach … }` and differ inside
+        // a `Section` by its header and every earlier section's rows. Read here
+        // rather than in the thunk below because a Section's boxes are built
+        // during that Section's extraction, which is the only moment the base
+        // names THIS ForEach (see ``RowEditRestrictions/rowIndexBase``).
+        let listRowIndex =
+            (context.environment.listRowEditRestrictions?.rowIndexBase ?? 0) + index
         // A per-row child identity (matching ForEach.childViews) so each row's
         // @State / focus / cache entry is distinct — and keyed by the element's
         // ID, not its position, so the row's state follows the element across
@@ -226,15 +235,16 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
                 // run.
                 var rowContext = rowContext
                 rowContext.gradientFrame = placement ?? rowContext.gradientFrame
-                // Which row this is, for anything inside it that needs to name
-                // itself to the enclosing `List` — `deleteDisabled` /
-                // `moveDisabled`. Stamped on the (per-List, per-frame) collector
+                // Which row of the LIST this is, for anything inside it that
+                // needs to name itself to that list — `deleteDisabled` /
+                // `moveDisabled` / `selectionDisabled`, all of which the
+                // handler looks up by list row. Stamped on the (per-List, per-frame) collector
                 // rather than into the environment: an environment write is a
                 // copy of its whole storage dictionary, and it ran once per
                 // visible row per frame (see `RowEditRestrictions.currentRowIndex`
                 // for the full reasoning). Stamped INSIDE the thunk, immediately
                 // before the render that might report against it.
-                context.environment.listRowEditRestrictions?.currentRowIndex = index
+                context.environment.listRowEditRestrictions?.currentRowIndex = listRowIndex
                 // When the element is Equatable, wrap the row in a value-memo keyed
                 // by the element, so an unchanged row is served from the render cache
                 // instead of re-rendered. The wrapper is Renderable (adds no child

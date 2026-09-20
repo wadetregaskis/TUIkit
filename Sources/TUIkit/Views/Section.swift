@@ -309,6 +309,20 @@ protocol SectionRowExtractor {
     /// - Parameter context: The rendering context.
     /// - Returns: Section metadata including header, content rows, and footer.
     func extractSectionInfo(context: RenderContext) -> SectionInfo
+
+    /// The row-mutation actions this section's content carries, when the
+    /// content IS an editable `ForEach` — `nil` otherwise.
+    ///
+    /// Asked separately from the rows because a `Section`'s rows are rows of
+    /// the enclosing `List` while its `.onDelete` / `.onMove` offsets are
+    /// indices into the `ForEach`'s own collection; the list needs both, and
+    /// the only thing that can pair them is the section that holds them.
+    ///
+    /// `nil` for a section of statically-written rows, and also for a MIXED
+    /// section (a `ForEach` beside a hand-written row): there the children
+    /// arrive already flattened, so a row cannot say which of them produced
+    /// it, and a guess would put an offset into the wrong collection.
+    var sectionRowActions: (any DynamicViewContentActions)? { get }
 }
 
 /// Metadata about a section for List rendering.
@@ -324,6 +338,13 @@ struct SectionInfo {
 }
 
 extension Section: SectionRowExtractor {
+    // Only when the content IS the `ForEach`: `resolveChildViews` flattens a
+    // `ForEach` sitting among static rows, so in that arrangement no row can be
+    // attributed to it and this stays `nil` (see the protocol's doc comment).
+    var sectionRowActions: (any DynamicViewContentActions)? {
+        content as? any DynamicViewContentActions
+    }
+
     func extractSectionInfo(context: RenderContext) -> SectionInfo {
         // Header/footer render under a chrome role so their text styles through
         // the cascade (see ``ChromeRole`` / ``Text``). The styling is per-line

@@ -30,6 +30,31 @@ protocol DynamicViewContentActions {
     var dropInsertionAction: (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)? { get }
 }
 
+/// The `ForEach` that owns a run of a `List`'s rows, and where that run sits
+/// in the list's own row numbering.
+///
+/// A row's `.onDelete` / `.onMove` belong to the `ForEach` that produced the
+/// row — SwiftUI's rule, and the only one under which an offset names a real
+/// element — and the offsets those actions take are indices into THAT
+/// `ForEach`'s data. In a flat `List { ForEach … }` the two numberings are the
+/// same number and the distinction never shows. Inside a `Section` they differ
+/// by everything drawn before the section's first item: the section's header,
+/// and every row of every earlier section. ``rows``'s `lowerBound` IS that
+/// difference — the list row at which the collection's element 0 is drawn.
+///
+/// One owner per editable `ForEach`, and its rows are contiguous by
+/// construction (a `ForEach` draws its elements in order, one row each), which
+/// is what lets a span stand in for the whole mapping.
+struct ListRowEditOwner {
+    /// The actions the owning `ForEach` carries.
+    let actions: any DynamicViewContentActions
+
+    /// The list rows its elements occupy — `rows.lowerBound + offset` is the
+    /// row drawing element `offset`, and `row - rows.lowerBound` the offset of
+    /// a row.
+    let rows: Range<Int>
+}
+
 extension ForEach: DynamicViewContentActions {
     var moveAction: ((IndexSet, Int) -> Void)? { onMoveAction }
     var deleteAction: ((IndexSet) -> Void)? { onDeleteAction }

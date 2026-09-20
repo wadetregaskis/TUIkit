@@ -60,6 +60,16 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// `nil` for the eager sources, whose rows are already built.
     let signature: AnyEquatableBox?
 
+    /// The editable `ForEach`es behind these rows, each with the span of rows
+    /// its elements occupy — what turns a row number back into an offset into
+    /// the collection that row actually came from.
+    ///
+    /// Empty when nothing here is editable, which is the overwhelmingly common
+    /// list. One entry for a flat `List { ForEach … }` spanning every row, so
+    /// the lookup below is O(1) there however long the list; one per Section
+    /// otherwise, and sections are few.
+    let editOwners: [ListRowEditOwner]
+
     /// Per-frame memo so a row touched by both the overflow check and the visible
     /// window (or re-read by the compose pass) is built — and rendered — once.
     private var materialized: [Int: SelectableListRow<SelectionValue>] = [:]
@@ -77,23 +87,35 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
         count: Int,
         allContent: Bool,
         signature: AnyEquatableBox? = nil,
+        editOwners: [ListRowEditOwner] = [],
         typeAt: @escaping (Int) -> ListRowType<SelectionValue>,
         make: @escaping (Int) -> LazyListRowContent
     ) {
         self.count = count
         self.allContent = allContent
         self.signature = signature
+        self.editOwners = editOwners
         self.typeAt = typeAt
         self.make = make
+    }
+
+    /// The `ForEach` that produced the row at `index`, or `nil` for a row no
+    /// editable one did — a section header, a hand-written row, a row of a
+    /// `ForEach` carrying neither action.
+    func editOwner(at index: Int) -> ListRowEditOwner? {
+        editOwners.first { $0.rows.contains(index) }
     }
 
     /// Wraps an already-built, materialised row array (the eager Section /
     /// fallback paths). The set is small, so indexing it for `typeAt` and
     /// scanning it for `allContent` are both cheap.
-    static func eager(_ rows: [SelectableListRow<SelectionValue>]) -> RowSource {
+    static func eager(
+        _ rows: [SelectableListRow<SelectionValue>], editOwners: [ListRowEditOwner] = []
+    ) -> RowSource {
         RowSource(
             count: rows.count,
             allContent: rows.allSatisfy(\.isSelectable),
+            editOwners: editOwners,
             typeAt: { rows[$0].type },
             make: { rows[$0].content })
     }
@@ -1164,15 +1186,53 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         AnyHashable(id), to: nil, includingDescendants: false)
                 }
             }
-        // An editable `ForEach` (`.onDelete` / `.onMove`) makes the focused row
-        // deletable via the Delete / Backspace key and draggable to reorder.
-        // Wired ONLY for the homogeneous all-content list, where a row's focus
-        // index equals its data offset — a Section's header / footer rows would
-        // shift that mapping, so a Section-nested ForEach isn't exposed here.
-        let dynamicActions = source.allContent ? content as? DynamicViewContentActions : nil
-        handler.onDelete = dynamicActions?.deleteAction
-        handler.onMove = dynamicActions?.moveAction
+        wireRowEditing(handler: handler, source: source)
         return (handler, showsScrollbar)
+    }
+
+    /// Hands the handler this frame's row-mutation actions.
+    ///
+    /// An editable `ForEach` (`.onDelete`) makes the focused row deletable via
+    /// the Delete / Backspace key; `.onMove` makes a row draggable to reorder.
+    ///
+    /// A delete belongs to the `ForEach` that produced the ROW — SwiftUI's rule
+    /// — and the offsets it takes are indices into THAT `ForEach`'s collection,
+    /// which inside a `Section` is not the row's number: the header and every
+    /// earlier section's rows sit in between. ``RowSource/editOwners`` is that
+    /// mapping, and the subtraction happens at the one moment an action is
+    /// called.
+    private func wireRowEditing(
+        handler: ItemListHandler<SelectionValue>, source: RowSource<SelectionValue>
+    ) {
+        let editOwners = source.editOwners
+        handler.deletableRowSpan = { row in
+            guard let owner = editOwners.first(where: { $0.rows.contains(row) }),
+                owner.actions.deleteAction != nil
+            else { return nil }
+            return owner.rows
+        }
+        handler.onDelete =
+            editOwners.contains(where: { $0.actions.deleteAction != nil })
+            ? { rows in
+                // One row per press, and a span is one `ForEach`'s rows, so the
+                // first row names whose collection this addresses; anything
+                // outside that span would be an offset into the wrong array and
+                // is dropped rather than translated.
+                guard let first = rows.first,
+                    let owner = editOwners.first(where: { $0.rows.contains(first) }),
+                    let delete = owner.actions.deleteAction
+                else { return }
+                delete(
+                    IndexSet(
+                        rows.filter { owner.rows.contains($0) }
+                            .map { $0 - owner.rows.lowerBound }))
+            } : nil
+        // `.onMove` is still the homogeneous all-content list only: the reorder
+        // machinery numbers everything it touches — the grab, the drop slot,
+        // the live shuffle — in list rows, and a row's list number is its data
+        // offset only there.
+        handler.onMove =
+            source.allContent ? (content as? DynamicViewContentActions)?.moveAction : nil
     }
 
     /// Stitches together the row content with top / bottom
@@ -2751,7 +2811,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // Section first (it conforms to both Section- and List-RowExtractor, and
         // its row set — header/content/footer — is small and built eagerly).
         if let section = content as? SectionRowExtractor {
-            return .eager(extractSectionRows(from: section, context: context))
+            let extracted = extractSectionRows(from: section, context: context, firstRowIndex: 0)
+            return .eager(extracted.rows, editOwners: extracted.editOwners)
         }
 
         // A `ForEach` whose rows are themselves `Section`s — Apple's own
@@ -2764,7 +2825,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // `ForEach` is the only conformer and is also a `ChildViewProvider`, so
         // `extractFromChildren` sees the per-element children it needs.
         if let windowed = content as? WindowedListRowExtractor, windowed.listRowsAreSections {
-            return .eager(extractFromChildren(of: content, context: context))
+            let extracted = extractFromChildren(of: content, context: context)
+            return .eager(extracted.rows, editOwners: extracted.editOwners)
         }
 
         // Windowed path (ForEach): the row count is known in O(1) and each row's
@@ -2784,6 +2846,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     count: count,
                     allContent: true,
                     signature: windowed.listRowsSignature,
+                    editOwners: Self.editOwner(of: content, rows: 0..<count).map { [$0] } ?? [],
                     typeAt: { index in
                         // Force-unwrap is safe: row 0 resolved and the data is
                         // id-homogeneous, so every index resolves as SelectionValue.
@@ -2801,7 +2864,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 rows.map {
                     SelectableListRow(
                         type: $0.id.map { .content(id: $0) } ?? .unselectable, content: $0.content)
-                })
+                },
+                // One row per element here too — `extractListRows` drops only
+                // rows whose id will not cast, and this path is reached exactly
+                // when row 0's did not, so in practice it is all or nothing.
+                editOwners: Self.editOwner(of: content, rows: 0..<rows.count).map { [$0] } ?? [])
         }
 
         // ChildViewProvider (TupleView with multiple children). The *view*
@@ -2809,7 +2876,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // view is needed to peel off its `.badge(_:)`, and a `ForEach` spliced
         // between static rows only flattens on this path.
         if content is ChildViewProvider {
-            return .eager(extractFromChildren(of: content, context: context))
+            let extracted = extractFromChildren(of: content, context: context)
+            return .eager(extracted.rows, editOwners: extracted.editOwners)
         }
 
         // Fallback: render as a single content row, carrying its badge
@@ -2859,8 +2927,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     private func extractFromChildren(
         of content: Content,
         context: RenderContext
-    ) -> [SelectableListRow<SelectionValue>] {
+    ) -> ExtractedRows {
         var result: [SelectableListRow<SelectionValue>] = []
+        var editOwners: [ListRowEditOwner] = []
         // These rows render HERE rather than through a deferred box, so this is
         // where a ramp spanning the list has to place them. There are only ever
         // a handful and none is deferred, so unlike the windowed path this can
@@ -2904,9 +2973,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // reason this method resolves children instead of asking the
             // provider — so two Sections keep their `@State` and focus apart.
             if let section = sectionRow(of: child) {
-                result.append(
-                    contentsOf: extractSectionRows(
-                        from: section, context: child.renderContext(under: childContext)))
+                let extracted = extractSectionRows(
+                    from: section, context: child.renderContext(under: childContext),
+                    firstRowIndex: result.count)
+                result.append(contentsOf: extracted.rows)
+                editOwners.append(contentsOf: extracted.editOwners)
                 continue
             }
 
@@ -2929,7 +3000,32 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             result.append(SelectableListRow(type: type, content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 
-        return result
+        return ExtractedRows(rows: result, editOwners: editOwners)
+    }
+
+    /// A list's eagerly-extracted rows together with the editable `ForEach`es
+    /// behind them.
+    ///
+    /// The two are produced by one walk and are meaningless apart: a span is
+    /// only a span of THESE rows, so returning the rows alone and deriving the
+    /// spans afterwards would mean walking the content twice and agreeing about
+    /// it twice.
+    private struct ExtractedRows {
+        var rows: [SelectableListRow<SelectionValue>] = []
+        var editOwners: [ListRowEditOwner] = []
+    }
+
+    /// The owner record for a `ForEach` that IS a list's whole content, or
+    /// `nil` when it carries neither action.
+    ///
+    /// `nil` rather than an owner with two `nil` actions so the common list —
+    /// which is not editable at all — carries an empty array and every lookup
+    /// against it answers immediately.
+    private static func editOwner(of content: Content, rows: Range<Int>) -> ListRowEditOwner? {
+        guard let actions = content as? any DynamicViewContentActions,
+            actions.deleteAction != nil || actions.moveAction != nil
+        else { return nil }
+        return ListRowEditOwner(actions: actions, rows: rows)
     }
 
     /// The `Section` this child is, or `nil` — seeing past `ForEach`'s value
@@ -2949,11 +3045,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     }
 
     /// Extracts typed rows from a Section (header + content + footer).
+    ///
+    /// - Parameter firstRowIndex: Where this section's first row sits in the
+    ///   enclosing list's own row numbering — 0 when the Section IS the whole
+    ///   content, and the rows already emitted when it is one child among
+    ///   several. It is what the returned ``ListRowEditOwner`` span is measured
+    ///   from, and what a row inside the section stamps its `.deleteDisabled()`
+    ///   / `.moveDisabled()` refusals against: both of those questions are
+    ///   asked by list row, while the section's own `ForEach` counts from 0.
     private func extractSectionRows(
         from section: SectionRowExtractor,
-        context: RenderContext
-    ) -> [SelectableListRow<SelectionValue>] {
+        context: RenderContext,
+        firstRowIndex: Int
+    ) -> ExtractedRows {
         var rows: [SelectableListRow<SelectionValue>] = []
+        var editOwners: [ListRowEditOwner] = []
         let info = section.extractSectionInfo(context: context)
 
         // Header (non-selectable)
@@ -2963,13 +3069,33 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         // Content rows (selectable)
         if let extractor = section as? ListRowExtractor {
+            // The list row this section's first ITEM draws at — the header is
+            // already counted. Set before the rows are extracted because their
+            // content boxes are built during that call and each captures the
+            // base as it is built; cleared after, so the next child (or the
+            // windowed path, which never sets it) counts from zero again.
+            let restrictions = context.environment.listRowEditRestrictions
+            restrictions?.rowIndexBase = firstRowIndex + rows.count
             let contentRows: [ListRow<SelectionValue>] = extractor.extractListRows(context: context)
+            restrictions?.rowIndexBase = 0
+            let firstItemRow = firstRowIndex + rows.count
             for row in contentRows {
                 // Thread the lazy box through — don't force `.buffer` / `.badge`.
                 rows.append(
                     SelectableListRow(
                         type: row.id.map { .content(id: $0) } ?? .unselectable,
                         content: row.content))
+            }
+            // The section's own `ForEach` owns exactly the rows it just
+            // produced, and its `.onDelete` / `.onMove` offsets are indices
+            // into ITS collection — element 0 is the row at `firstItemRow`.
+            if let actions = section.sectionRowActions,
+                actions.deleteAction != nil || actions.moveAction != nil
+            {
+                editOwners.append(
+                    ListRowEditOwner(
+                        actions: actions,
+                        rows: firstItemRow..<(firstRowIndex + rows.count)))
             }
         } else {
             // Fallback: render content as single row (if Section content is not ForEach)
@@ -2988,7 +3114,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             rows.append(SelectableListRow(type: .footer, buffer: footerBuffer))
         }
 
-        return rows
+        return ExtractedRows(rows: rows, editOwners: editOwners)
     }
 
     // MARK: - Visible Row Calculation
