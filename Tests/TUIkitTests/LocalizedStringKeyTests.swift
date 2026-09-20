@@ -122,6 +122,21 @@ struct LocalizedStringKeyTests {
         #expect(key.resolved(with: service) == "Moved 3 rows to Backlog")
     }
 
+    @Test("Interpolating a Text contributes its own content, not its debug description")
+    func interpolatingATextContributesItsContent() {
+        // SwiftUI lets a `Text` interpolate another `Text` (and an `Image`)
+        // straight into a `LocalizedStringKey`. Without a dedicated overload
+        // here, the unconstrained `appendInterpolation(_ value: some Any)`
+        // catch-all takes it instead and `String(describing:)`s the whole
+        // struct — style and all — rather than reading its text.
+        let service = isolatedService()
+        let nameText = Text("Alice")
+        let key: LocalizedStringKey = "Hello, \(nameText)"
+        let resolved = key.resolved(with: service)
+        #expect(resolved.contains("Hello, Alice"))
+        #expect(!resolved.contains("Text("))
+    }
+
     @Test("A translation can reorder the values")
     func positionalArguments() {
         // Word order differs between languages; without positions a

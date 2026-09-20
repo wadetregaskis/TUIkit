@@ -314,6 +314,43 @@ extension LocalizedStringKey: ExpressibleByStringInterpolation {
             arguments.append(String(describing: value))
         }
 
+        /// Interpolates a `Text`, contributing its own text — mirroring
+        /// SwiftUI, which lets a `Text` interpolate another `Text`.
+        ///
+        /// Without this overload the catch-all above took `Text` too, and
+        /// `String(describing:)`'d the whole struct — `Text(content: "Alice",
+        /// style: …)` — into the sentence rather than reading its text. This
+        /// overload is concrete where that one is generic, so it wins for a
+        /// `Text` argument the same way any concrete overload beats a generic
+        /// one it also matches.
+        ///
+        /// Every argument here is stored as a plain `String`, substituted into
+        /// the key's `%@` placeholders — see `arguments` above and
+        /// ``LocalizedStringKey/localized``, which resolves eagerly to a
+        /// `String` a control can keep storing. So only the *text* carries
+        /// over: `content` is always the fully concatenated plain string, even
+        /// for a `Text` built from `+` (see `Text.Run`), but any per-run
+        /// styling is not representable here and is dropped, same as
+        /// interpolating a formatted value already discards its format style
+        /// once converted to text.
+        public mutating func appendInterpolation(_ text: Text) {
+            key += "%@"
+            arguments.append(text.content)
+        }
+
+        // `Image` is deliberately NOT given an overload here. SwiftUI can
+        // interpolate an `Image` because its `Text` composites the resolved
+        // glyph/bitmap at render time; this type's argument list is a plain
+        // `[String]` substituted eagerly, at interpolation time, with no
+        // `RenderContext` and no environment (colour mode, character set,
+        // size) to render an `Image` against. A raster `Image` also loads
+        // asynchronously (`ImageLoadingPhase`), which an eager, synchronous
+        // interpolation cannot wait on. Even the synchronous `.symbol` case
+        // has no plain-text form: an SF Symbol is a rendered glyph, not
+        // characters. So there is nothing sound to append, and the catch-all
+        // above — which at least does not crash — is what an `Image` still
+        // binds to.
+
         /// Interpolates a value through a format style — the same eager
         /// formatting ``Text/init(_:format:)`` does.
         public mutating func appendInterpolation<F: FormatStyle>(
