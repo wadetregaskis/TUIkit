@@ -648,7 +648,7 @@ wrapper and generic over the new content, which is what lets the caller's
 existential be opened rather than converted. A wrapper that conforms picks up
 child resolution and grid rows with an empty
 `extension X: ChildViewProvider where Content: ChildViewProvider {}`.
-**Eighteen** wrappers conform, in three families whose equivalence is provable
+**Nineteen** wrappers conform, in three families whose equivalence is provable
 or measured rather than assumed:
 
 - *Environment publishers* — `EnvironmentModifier` (`.environment(_:_:)`),
@@ -658,7 +658,8 @@ or measured rather than assumed:
   `DisabledModifier`, `_AnimationValueModifier`, `_ValueScopedTransactionView`.
   A value reaches a subtree whether it was set one level up or two, so
   publishing around each member is the same value in the same places.
-- *Paint* — `_OpacityView` (`.opacity`), `DimmedModifier`, `_HiddenView`,
+- *Paint* — `_OpacityView` (`.opacity`), `_ColorEffectView` (`.brightness`,
+  `.grayscale` and friends), `DimmedModifier`, `_HiddenView`,
   `_HitTestingView`, `AnimatedCellsModifier`. These rewrite cells the content
   already drew, and members of a stack do not overlap.
 - *Geometry* — `FlexibleFrameView` (`.frame`), `OffsetView` (`.offset`).

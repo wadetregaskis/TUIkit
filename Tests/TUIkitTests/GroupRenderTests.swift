@@ -388,6 +388,19 @@ struct GroupRenderTests {
         #expect(grouped.lines.count == 1, "hiding does not change the geometry, including the axis")
     }
 
+    @Test("A colour effect on a Group recolours each member, as writing it on each does")
+    func colorEffectOnGroupAppliesPerMember() {
+        // `_ColorEffectView` could not join the tranche until its `Effect` enum
+        // was hoisted out of the generic type (`bd717624`), so it gets its own
+        // test rather than riding on the family's.
+        let grouped = renderToBuffer(
+            HStack(spacing: 1) { Group { Text("A"); Text("B") }.grayscale(1) }, context: ctx())
+        let written = renderToBuffer(
+            HStack(spacing: 1) { Text("A").grayscale(1); Text("B").grayscale(1) }, context: ctx())
+        #expect(grouped.lines == written.lines, "including the escapes, not only the characters")
+        #expect(grouped.lines.count == 1)
+    }
+
     // MARK: - Transparent Child Resolution (the metadata channel)
     //
     // Everything above travels the two-pass `childViews` path, which is what

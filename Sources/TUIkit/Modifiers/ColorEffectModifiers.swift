@@ -356,3 +356,24 @@ extension _ColorEffect {
         UInt8(min(255, max(0, value.rounded())))
     }
 }
+
+// MARK: - Seeing Through the Wrapper
+
+/// - Note: The arithmetic is per cell, and the members of a stack do not
+///   overlap, so rewriting each member's colours and rewriting the pair's
+///   buffer produce the same cells.
+extension _ColorEffectView: SingleContentWrapper {
+    var wrappedContent: Content { content }
+
+    func rewrapping<V: View>(_ view: V) -> any View {
+        _ColorEffectView<V>(content: view, effect: effect, amount: amount)
+    }
+}
+
+/// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _ColorEffectView: ChildViewProvider where Content: ChildViewProvider {}
+
+/// Body deliberately empty: ``GridRowProviding`` has the whole implementation
+/// for a ``SingleContentWrapper``.
+extension _ColorEffectView: GridRowProviding where Content: GridRowProviding {}
