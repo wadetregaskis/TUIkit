@@ -9,6 +9,11 @@
 //  a reorder cannot leave the section, because the rows on the other side of a
 //  header belong to a different collection entirely.
 //
+//  The arrangements whose action no row owns — and which the `List`
+//  therefore refuses — are in `ListUnownedEditActionTests`, and where a
+//  delete leaves the cursor is in `ListEditingCursorLandingTests`; the
+//  harness all three share is `ListSectionEditingFixture`.
+//
 //  Every assertion here is on the collection afterwards, never on a count of
 //  callbacks: an offset-based oracle passes just as happily when the action
 //  deletes the right index of the wrong array.
@@ -26,104 +31,12 @@ import Testing
 @Suite("Editing a ForEach inside a Section", .rendersEnglishUI)
 struct ListSectionEditingTests {
 
-    /// Apple's multidimensional-list shape: a region owns its rows, and the
-    /// outer `ForEach` iterates the regions while the `List`'s rows are seas.
-    private struct Region: Identifiable, Hashable {
-        let id: String
-        var seas: [String]
-    }
-
-    @MainActor
-    private final class Fixture {
-        let tui = TUIContext()
-        var env = EnvironmentValues()
-
-        init() {
-            env.focusManager = FocusManager()
-            env.applyRuntimeServices(from: tui)
-        }
-
-        var handler: ItemListHandler<String>? {
-            env.focusManager?.currentFocused as? ItemListHandler<String>
-        }
-
-        /// The focused list's handler for a selection type other than `String`
-        /// — an `Int`-selected list, whose rows take their ORDINALS as ids and
-        /// so can be reached by the cursor where a `String`-selected list's
-        /// same rows cannot. Same lookup as ``handler``, which stays for the
-        /// `String` lists the rest of this suite builds.
-        func handler<Value: Hashable>(_ valueType: Value.Type) -> ItemListHandler<Value>? {
-            env.focusManager?.currentFocused as? ItemListHandler<Value>
-        }
-
-        @discardableResult
-        func render(_ view: some View) -> FrameBuffer {
-            tui.stateStorage.beginRenderPass()
-            env.focusManager?.beginRenderPass()
-            let context = RenderContext(
-                availableWidth: 30, availableHeight: 16, environment: env, tuiContext: tui)
-            let buffer = renderToBuffer(view, context: context)
-            env.focusManager?.endRenderPass()
-            tui.stateStorage.endRenderPass()
-            return buffer
-        }
-
-        /// Presses Delete on the row at `row`, having first checked that the
-        /// row really is the one named — a delete aimed at the wrong row is
-        /// the very failure these tests exist to catch.
-        func pressDelete(onRow row: Int, named id: String) -> Bool {
-            guard let handler = focusedRow(row, named: id) else { return false }
-            return handler.handleKeyEvent(KeyEvent(key: .delete))
-        }
-
-        /// The keyboard reorder, end to end: Ctrl-R picks `row` up, Down moves
-        /// its landing slot `steps` times, Return places it. Reports whether
-        /// the pick-up was accepted — `false` is a row nothing can move, which
-        /// must leave the chord to whatever else wants it.
-        func pickUpMoveAndPlace(row: Int, named id: String, by steps: Int) -> Bool {
-            guard let handler = focusedRow(row, named: id) else { return false }
-            guard handler.handleKeyEvent(KeyEvent(key: .character("r"), ctrl: true)) else {
-                return false
-            }
-            for _ in 0..<steps { _ = handler.handleKeyEvent(KeyEvent(key: .down)) }
-            _ = handler.handleKeyEvent(KeyEvent(key: .enter))
-            return true
-        }
-
-        /// The id of the row the cursor stands on, or `nil` when it stands on
-        /// chrome — a header or a footer, which carry no selection value and
-        /// so are the answer this suite is watching for.
-        var focusedRowID: String? {
-            handler.flatMap { $0.id(at: $0.focusedIndex) }
-        }
-
-        /// The published band for a list row, from the last render.
-        func band(row: Int) -> ItemListHandler<String>.RowBand? {
-            handler?.visibleRowBands.first { $0.rowIndex == row && $0.isContent }
-        }
-
-        /// Puts the cursor on `row`, having first checked the row really is the
-        /// one named: a gesture aimed at the wrong row would pass these tests
-        /// for the wrong reason.
-        private func focusedRow(_ row: Int, named id: String) -> ItemListHandler<String>? {
-            guard let handler else {
-                Issue.record("the list took focus")
-                return nil
-            }
-            #expect(
-                handler.id(at: row) == id,
-                "row \(row) is \(String(describing: handler.id(at: row))), not \(id)")
-            handler.focusedIndex = row
-            return handler
-        }
-    }
-
     // MARK: - One Section
 
     @Test("A Section's ForEach deletes from its own collection, not by row number")
     func singleSectionDeletesByDataOffset() {
         let items = MainActorBox(["alpha", "beta", "gamma"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         func render() {
             fixture.render(
                 List(selection: .constant(String?.none)) {
@@ -143,27 +56,11 @@ struct ListSectionEditingTests {
 
     // MARK: - Several Sections
 
-    private func twoSections(
-        alpha: MainActorBox<[String]>, beta: MainActorBox<[String]>, betaEditable: Bool
-    ) -> some View {
-        List(selection: .constant(String?.none)) {
-            Section("Alpha") {
-                ForEach(alpha.value, id: \.self) { Text($0) }
-                    .onDelete { alpha.value.remove(atOffsets: $0) }
-            }
-            Section("Beta") {
-                ForEach(beta.value, id: \.self) { Text($0) }
-                    .onDelete(perform: betaEditable ? { beta.value.remove(atOffsets: $0) } : nil)
-            }
-        }
-        .frame(height: 12)
-    }
-
     @Test("The second row of the second Section deletes from the SECOND Section's collection")
     func secondSectionDeletesFromItsOwnCollection() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
 
         // header, a1, a2, a3, header, b1, b2, b3 — "b2" is row 6, data offset 1.
@@ -176,7 +73,7 @@ struct ListSectionEditingTests {
     func nonDeletableSectionFallsThrough() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: false))
 
         #expect(
@@ -191,10 +88,10 @@ struct ListSectionEditingTests {
     @Test("A Section a ForEach produced deletes from THAT section's own collection")
     func foreachOfSectionsDeletesTheInnerRow() {
         let regions = MainActorBox([
-            Region(id: "North", seas: ["coral", "philippine"]),
-            Region(id: "South", seas: ["sargasso", "weddell"]),
+            EditableRegion(id: "North", seas: ["coral", "philippine"]),
+            EditableRegion(id: "South", seas: ["sargasso", "weddell"]),
         ])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(
             List(selection: .constant(String?.none)) {
                 ForEach(regions.value) { region in
@@ -221,43 +118,13 @@ struct ListSectionEditingTests {
             "the other region is untouched: \(regions.value[0].seas)")
     }
 
-    /// The gap, pinned so nobody closes it by accident. `.onDelete` on the
-    /// OUTER `ForEach` addresses the regions, and a `List` shows no affordance
-    /// for deleting a whole section — SwiftUI shows none either. Delete on a
-    /// row belongs to the row's own `ForEach`; if it ever reached the outer one
-    /// it would delete a REGION while the user was pointing at a sea.
-    @Test("Delete on a row never reaches the outer ForEach that made the Sections")
-    func outerForEachOfSectionsIsNotTheRowsDeleter() {
-        let regions = MainActorBox([
-            Region(id: "North", seas: ["coral", "philippine"]),
-            Region(id: "South", seas: ["sargasso", "weddell"]),
-        ])
-        let fixture = Fixture()
-        fixture.render(
-            List(selection: .constant(String?.none)) {
-                ForEach(regions.value) { region in
-                    Section(region.id) {
-                        ForEach(region.seas, id: \.self) { Text($0) }
-                    }
-                }
-                .onDelete { regions.value.remove(atOffsets: $0) }
-            }
-            .frame(height: 12))
-
-        #expect(
-            fixture.pressDelete(onRow: 5, named: "weddell") == false,
-            "no row of a section is the section itself")
-        #expect(regions.value.count == 2, "no region was deleted: \(regions.value.map(\.id))")
-        #expect(regions.value[1].seas == ["sargasso", "weddell"], "got \(regions.value[1].seas)")
-    }
-
     // MARK: - .deleteDisabled inside a Section
 
     @Test("deleteDisabled names the row that wrote it, not the row that many places into the list")
     func deleteDisabledIsRelativeToTheSectionsOwnRows() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         func render() {
             fixture.render(
                 List(selection: .constant(String?.none)) {
@@ -309,7 +176,7 @@ struct ListSectionEditingTests {
     @Test("A Section's ForEach reorders its own collection, by data offset not row number")
     func singleSectionReordersByDataOffset() {
         let items = MainActorBox(["alpha", "beta", "gamma"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(
             List(selection: .constant(String?.none)) {
                 Section("Items") {
@@ -328,7 +195,7 @@ struct ListSectionEditingTests {
     func secondSectionReordersItsOwnCollection() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(twoReorderableSections(alpha: alpha, beta: beta, betaMovable: true))
 
         // header, a1, a2, a3, header, b1, b2, b3 — "b1" is row 5, data offset 0.
@@ -343,7 +210,7 @@ struct ListSectionEditingTests {
     func aHeldRowCannotLeaveItsSection() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(twoReorderableSections(alpha: alpha, beta: beta, betaMovable: true))
 
         #expect(fixture.pickUpMoveAndPlace(row: 1, named: "a1", by: 5))
@@ -354,10 +221,10 @@ struct ListSectionEditingTests {
     @Test("A Section a ForEach produced reorders within that section's own collection")
     func foreachOfSectionsReordersTheInnerRows() {
         let regions = MainActorBox([
-            Region(id: "North", seas: ["coral", "philippine"]),
-            Region(id: "South", seas: ["sargasso", "weddell"]),
+            EditableRegion(id: "North", seas: ["coral", "philippine"]),
+            EditableRegion(id: "South", seas: ["sargasso", "weddell"]),
         ])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(
             List(selection: .constant(String?.none)) {
                 ForEach(regions.value) { region in
@@ -389,7 +256,7 @@ struct ListSectionEditingTests {
     func nonMovableSectionRefusesThePickUp() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         fixture.render(twoReorderableSections(alpha: alpha, beta: beta, betaMovable: false))
 
         #expect(
@@ -406,7 +273,7 @@ struct ListSectionEditingTests {
     func liveDragStaysInsideTheSection() {
         let alpha = MainActorBox(["a1", "a2", "a3"])
         let beta = MainActorBox(["b1", "b2", "b3"])
-        let fixture = Fixture()
+        let fixture = ListSectionEditingFixture()
         func render() {
             fixture.render(twoReorderableSections(alpha: alpha, beta: beta, betaMovable: true))
         }
@@ -441,226 +308,5 @@ struct ListSectionEditingTests {
         handler.dragReorder(toContentY: alphaRow.yStart)
         #expect(alpha.value == ["a1", "a2", "a3"], "Alpha is never written to: \(alpha.value)")
         #expect(beta.value == ["b1", "b2", "b3"], "the row went to Beta's top: \(beta.value)")
-    }
-
-    // MARK: - A ForEach that shares its container with hand-written rows
-
-    /// The one arrangement that still refuses, pinned so the refusal is a
-    /// decision somebody can read rather than a silent no-op somebody
-    /// "fixes".
-    ///
-    /// `resolveChildViews` flattens the `ForEach` in among the hand-written
-    /// rows beside it, and a row arrives with nothing left on it to say which
-    /// of the two produced it. Wiring the section's actions anyway — the
-    /// obvious repair — hands `onDelete` an offset measured from the HEADER,
-    /// so a press on the second looped row deletes the third element; the
-    /// assertions below are on the collection for exactly that reason.
-    ///
-    /// Every row is tried, not one: this says no row of such a section is
-    /// deletable, which needs no claim about which row is which.
-    @Test("A Section mixing a ForEach with a hand-written row refuses Delete on every row")
-    func mixedSectionRefusesEveryDelete() {
-        let items = MainActorBox(["alpha", "beta", "gamma"])
-        let fixture = Fixture()
-        let buffer = fixture.render(
-            List(selection: .constant(Int?.none)) {
-                Section("Items") {
-                    Text("All items")
-                    ForEach(items.value, id: \.self) { Text($0) }
-                        .onDelete { items.value.remove(atOffsets: $0) }
-                }
-            }
-            .frame(height: 10))
-        guard let handler = fixture.handler(Int.self) else {
-            Issue.record("the list took focus")
-            return
-        }
-        // The arrangement really is the mixed one — the hand-written row and
-        // all three looped rows drew, under one header.
-        let drawn = buffer.lines.joined(separator: "\n")
-        for line in ["Items", "All items", "alpha", "beta", "gamma"] {
-            #expect(drawn.contains(line), "\(line) drew:\n\(drawn)")
-        }
-        #expect(handler.itemCount == 5, "header + four rows, got \(handler.itemCount)")
-
-        for row in 0..<handler.itemCount {
-            handler.focusedIndex = row
-            #expect(
-                handler.handleKeyEvent(KeyEvent(key: .delete)) == false,
-                "row \(row) claimed Delete")
-        }
-        #expect(items.value == ["alpha", "beta", "gamma"], "nothing was deleted: \(items.value)")
-    }
-
-    /// `.onMove` refuses the same arrangement for the same reason, and refuses
-    /// it at the pick-up — before a drag can start and before `.live` feedback
-    /// can write anything.
-    @Test("A Section mixing a ForEach with a hand-written row refuses the pick-up on every row")
-    func mixedSectionRefusesEveryPickUp() {
-        let items = MainActorBox(["alpha", "beta", "gamma"])
-        let fixture = Fixture()
-        fixture.render(
-            List(selection: .constant(Int?.none)) {
-                Section("Items") {
-                    Text("All items")
-                    ForEach(items.value, id: \.self) { Text($0) }
-                        .onMove { items.value.move(fromOffsets: $0, toOffset: $1) }
-                }
-            }
-            .frame(height: 10))
-        guard let handler = fixture.handler(Int.self) else {
-            Issue.record("the list took focus")
-            return
-        }
-        for row in 0..<handler.itemCount {
-            handler.focusedIndex = row
-            #expect(
-                handler.handleKeyEvent(KeyEvent(key: .character("r"), ctrl: true)) == false,
-                "row \(row) claimed the pick-up chord")
-        }
-        #expect(items.value == ["alpha", "beta", "gamma"], "nothing moved: \(items.value)")
-    }
-
-    /// The same refusal without a `Section` in sight: it is the FLATTENING
-    /// that loses the attribution, and a `List` mixing a `ForEach` with a
-    /// hand-written row flattens through the same call. Pinned beside its
-    /// twin because a shared cause is not a shared rule until both are
-    /// asserted — the flat list reaches it through `_ListCore`'s own child
-    /// walk, not through `Section.sectionRowActions`.
-    @Test("A List mixing a ForEach with a hand-written row refuses Delete on every row")
-    func mixedFlatListRefusesEveryDelete() {
-        let items = MainActorBox(["alpha", "beta", "gamma"])
-        let fixture = Fixture()
-        fixture.render(
-            List(selection: .constant(Int?.none)) {
-                Text("All items")
-                ForEach(items.value, id: \.self) { Text($0) }
-                    .onDelete { items.value.remove(atOffsets: $0) }
-            }
-            .frame(height: 10))
-        guard let handler = fixture.handler(Int.self) else {
-            Issue.record("the list took focus")
-            return
-        }
-        #expect(handler.itemCount == 4, "four rows, got \(handler.itemCount)")
-        for row in 0..<handler.itemCount {
-            handler.focusedIndex = row
-            #expect(
-                handler.handleKeyEvent(KeyEvent(key: .delete)) == false,
-                "row \(row) claimed Delete")
-        }
-        #expect(items.value == ["alpha", "beta", "gamma"], "nothing was deleted: \(items.value)")
-    }
-
-    // MARK: - Where the cursor stands afterwards
-
-    /// The row below slides up into the deleted row's slot and the cursor
-    /// keeps it, clamped to the section's own end so it never lands on the
-    /// chrome that follows. A section holding ONE row has no row below and no
-    /// new end, and the clamp then points one row ABOVE the section's first:
-    /// at its HEADER, which carries no selection value, answers nothing to
-    /// Return or Space, and would wear the focus ring.
-    @Test("Emptying a Section puts the cursor on a row, not on the chrome around it")
-    func emptyingASectionLeavesTheCursorOnARow() {
-        let alpha = MainActorBox(["only"])
-        let beta = MainActorBox(["x", "y"])
-        let fixture = Fixture()
-        func render() {
-            fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
-        }
-        render()
-
-        // header, only, header, x, y — "only" is row 1, data offset 0.
-        #expect(fixture.pressDelete(onRow: 1, named: "only") == true)
-        #expect(alpha.value.isEmpty, "got \(alpha.value)")
-        #expect(beta.value == ["x", "y"], "the other section is untouched: \(beta.value)")
-
-        // header, header, x, y — the next row a cursor can stand on is "x",
-        // two rows of chrome below where it was.
-        render()
-        #expect(
-            fixture.focusedRowID == "x",
-            "the cursor stands on \(String(describing: fixture.focusedRowID))")
-    }
-
-    /// The same emptying with nothing BELOW: the cursor goes back up rather
-    /// than sitting on the header of the section it just emptied.
-    @Test("Emptying the LAST Section walks the cursor back to the row above it")
-    func emptyingTheLastSectionWalksTheCursorBack() {
-        let alpha = MainActorBox(["x", "y"])
-        let beta = MainActorBox(["only"])
-        let fixture = Fixture()
-        func render() {
-            fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
-        }
-        render()
-
-        // header, x, y, header, only — "only" is row 4, data offset 0.
-        #expect(fixture.pressDelete(onRow: 4, named: "only") == true)
-        #expect(beta.value.isEmpty, "got \(beta.value)")
-        #expect(alpha.value == ["x", "y"], "the other section is untouched: \(alpha.value)")
-
-        render()
-        #expect(
-            fixture.focusedRowID == "y",
-            "the cursor stands on \(String(describing: fixture.focusedRowID))")
-    }
-
-    /// The clamp's own job, pinned beside the case it gets wrong: while the
-    /// section still HAS a row, deleting its last one leaves the cursor on the
-    /// section's new last row rather than on the header that follows it.
-    @Test("Deleting a Section's last row leaves the cursor on that section's new last row")
-    func deletingASectionsLastRowKeepsTheCursorInTheSection() {
-        let alpha = MainActorBox(["a1", "a2"])
-        let beta = MainActorBox(["x"])
-        let fixture = Fixture()
-        func render() {
-            fixture.render(twoSections(alpha: alpha, beta: beta, betaEditable: true))
-        }
-        render()
-
-        // header, a1, a2, header, x — "a2" is row 2, data offset 1.
-        #expect(fixture.pressDelete(onRow: 2, named: "a2") == true)
-        #expect(alpha.value == ["a1"], "got \(alpha.value)")
-
-        render()
-        #expect(
-            fixture.focusedRowID == "a1",
-            "the cursor stands on \(String(describing: fixture.focusedRowID))")
-    }
-
-    /// The shape the arithmetic is easiest to get wrong on, and the one that
-    /// HIDES the error: one Section, one row, so the list is two rows and
-    /// `min(span.upperBound, itemCount) - 2` is 0 — the header, which is also
-    /// the only row left. Pinned so nobody re-derives it and concludes the
-    /// clamp was fine: there is no row to stand on here, and standing on the
-    /// chrome is refused the moment Delete is pressed again.
-    @Test("A one-row Section that empties leaves nothing to stand on, and refuses Delete there")
-    func emptyingTheOnlySectionLeavesNoRowToStandOn() {
-        let items = MainActorBox(["only"])
-        let fixture = Fixture()
-        func render() {
-            fixture.render(
-                List(selection: .constant(String?.none)) {
-                    Section("Items") {
-                        ForEach(items.value, id: \.self) { Text($0) }
-                            .onDelete { items.value.remove(atOffsets: $0) }
-                    }
-                }
-                .frame(height: 10))
-        }
-        render()
-
-        #expect(fixture.pressDelete(onRow: 1, named: "only") == true)
-        #expect(items.value.isEmpty, "got \(items.value)")
-
-        render()
-        #expect(
-            fixture.focusedRowID == nil,
-            "no row is left: \(String(describing: fixture.focusedRowID))")
-        #expect(
-            fixture.handler?.handleKeyEvent(KeyEvent(key: .delete)) == false,
-            "Delete on chrome belongs to no collection and must fall through")
-        #expect(items.value.isEmpty, "and nothing else was deleted: \(items.value)")
     }
 }

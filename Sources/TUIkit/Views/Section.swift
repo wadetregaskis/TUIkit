@@ -323,7 +323,7 @@ protocol SectionRowExtractor {
     /// arrive already flattened, so a row cannot say which of them produced
     /// it, and a guess would put an offset into the wrong collection — one
     /// measured from the HEADER, so a press on the second looped row deletes
-    /// the third element. The refusal is pinned by `ListSectionEditingTests`,
+    /// the third element. The refusal is pinned by `ListUnownedEditActionTests`,
     /// against that exact guess.
     var sectionRowActions: (any DynamicViewContentActions)? { get }
 }
