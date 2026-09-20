@@ -353,8 +353,7 @@ func horizontalGuidePlacement<V: View>(
     of view: V, size: (width: Int, height: Int), alignment: HorizontalAlignment, in extent: Int
 ) -> Int? {
     guard V._providesAlignmentGuide,
-        let guide = throughWrappers(view, as: (any AlignmentGuideProviding).self)?
-            .explicitAlignmentGuide(
+        let guide = (view as? AlignmentGuideProviding)?.explicitAlignmentGuide(
             for: alignment.key,
             in: ViewDimensions(width: size.width, height: size.height))
     else { return nil }
@@ -369,8 +368,7 @@ func verticalGuidePlacement<V: View>(
     of view: V, size: (width: Int, height: Int), alignment: VerticalAlignment, in extent: Int
 ) -> Int? {
     guard V._providesAlignmentGuide,
-        let guide = throughWrappers(view, as: (any AlignmentGuideProviding).self)?
-            .explicitAlignmentGuide(
+        let guide = (view as? AlignmentGuideProviding)?.explicitAlignmentGuide(
             for: alignment.key,
             in: ViewDimensions(width: size.width, height: size.height))
     else { return nil }
@@ -404,4 +402,14 @@ func verticalGuideRun(
     ) { extent in
         alignment[dimensions: ViewDimensions(width: 0, height: extent)]
     }
+}
+
+// MARK: - Seeing Through the Wrapper (the READ direction)
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension _AlignmentGuideView: SingleContentWrapper {
+    public var wrappedContent: Content { content }
 }

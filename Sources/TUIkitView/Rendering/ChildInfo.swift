@@ -845,22 +845,42 @@ package func throughWrappers<T>(_ view: any View, as type: T.Type = T.self) -> T
 /// folds to `false` and costs nothing — which is what makes forwarding them
 /// affordable where a runtime probe of every child would not be.
 ///
-/// - Note: ``View/_isSpacer`` is deliberately NOT forwarded. The other two are
-///   pure metadata — a z-index and an alignment guide mean the same thing
-///   wherever they sit — but being a spacer is a claim about LAYOUT
-///   participation, and a wrapper is entitled to change it:
-///   `Spacer().frame(width: 5)` is a fixed five-cell gap, not a flexible one,
-///   and forwarding the flag would make the stack treat it as flexible and
-///   ignore the frame. A spacer that must survive a wrapper reaches its
-///   container by the other route, `ChildView.rewrapped(by:)`, which carries
-///   the MEMBER's flag across rather than re-reading it off the wrapper.
+/// Only ``View/_providesZIndex`` is forwarded. The other two witnesses are NOT,
+/// and neither omission is an oversight:
+///
+/// - ``View/_isSpacer`` is a claim about LAYOUT PARTICIPATION, and a wrapper is
+///   entitled to change it. `Spacer().frame(width: 5)` is a fixed five-cell gap,
+///   not a flexible one, and forwarding the flag would make the stack treat it
+///   as flexible and ignore the frame. A spacer that must survive a wrapper
+///   reaches its container by the other route, `ChildView.rewrapped(by:)`,
+///   which carries the MEMBER's flag across rather than re-reading it off the
+///   wrapper.
+/// - ``View/_providesAlignmentGuide`` is worse than either, because it would
+///   look like it worked. A guide is a closure EVALUATED AGAINST the dimensions
+///   the view laid out at (`explicitAlignmentGuide(for:in:)`), and the walk
+///   would hand the inner view's closure the OUTER, wrapped size — so
+///   `.alignmentGuide(.leading) { $0.width }.padding(1)` would resolve against
+///   a width two cells larger than the one the closure was written for, and
+///   report a position from the wrong coordinate space. SwiftUI gets this right
+///   by TRANSLATING the guide as each wrapper changes the geometry; TUIkit's
+///   buffers carry no guide metadata for a wrapper to translate, which is the
+///   reason `alignmentGuide(_:computeValue:)`'s own doc comment gives for the
+///   "apply it as the outermost modifier" rule. A guide that silently reports
+///   the wrong position is worse than one that documentedly does nothing, so
+///   the rule stands for guides and is lifted only for z-indices. Forwarding it
+///   through the wrappers that demonstrably do NOT change size would be sound
+///   and is the obvious next step; it needs a witness for size-neutrality that
+///   does not exist yet, and guessing per type is exactly how the wrong
+///   coordinate space gets shipped.
 extension View where Self: SingleContentWrapper {
     /// The content's answer: a z-index bound inside this wrapper is still a
     /// z-index, so the gate that decides whether to look for one has to say so.
+    ///
+    /// A z-index is the only one of the three witnesses that is safe to forward
+    /// unconditionally, and the reason is that it is **dimension-independent**:
+    /// `.zIndex(1)` means the same number whatever size the view ends up, so a
+    /// wrapper cannot invalidate it. See the type-level note for the other two.
     public static var _providesZIndex: Bool { WrappedContent._providesZIndex }
-
-    /// The content's answer, for the same reason as ``_providesZIndex``.
-    public static var _providesAlignmentGuide: Bool { WrappedContent._providesAlignmentGuide }
 }
 
 /// A ``SingleContentWrapper`` that can also put a copy of itself around some

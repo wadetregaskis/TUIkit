@@ -124,6 +124,25 @@ struct ZStackRenderTests {
         #expect(control.lines[0].stripped == "AAA", "without a zIndex, tree order decides")
     }
 
+    @Test("A zIndex survives the effect wrappers too, not only the cosmetic ones")
+    func zIndexSurvivesEffectWrappers() {
+        // The read direction applies to EVERY single-content wrapper, including
+        // the ones deliberately left opaque to child resolution: forwarding a
+        // static witness through `.onAppear` multiplies nothing, where
+        // distributing the effect itself would fire it per member.
+        func top(_ build: () -> some View) -> String {
+            renderToBuffer(ZStack { build(); Text("AAA") }, context: ctx()).lines[0].stripped
+        }
+        #expect(top { Text("BBB").zIndex(1).onAppear {} } == "BBB")
+        #expect(top { Text("BBB").zIndex(1).focusable() } == "BBB")
+        #expect(top { Text("BBB").zIndex(1).help("h") } == "BBB")
+        #expect(top { Text("BBB").zIndex(1).onHover { _ in } } == "BBB")
+        // Several deep, mixing the two families.
+        #expect(top { Text("BBB").zIndex(1).onAppear {}.padding(0).opacity(1) } == "BBB")
+        // The control: no zIndex, so tree order decides and the second child wins.
+        #expect(top { Text("BBB").onAppear {} } == "AAA")
+    }
+
     // MARK: - A child paints its full bounding box
 
     @Test("A full-width foreground (including its spaces) owns its row")

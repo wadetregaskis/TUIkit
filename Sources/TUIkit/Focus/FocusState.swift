@@ -434,3 +434,21 @@ extension FocusState: EnvironmentResolvable {
         store.environmentManager = environment.focusManager
     }
 }
+
+// MARK: - Seeing Through the Wrapper (the READ direction)
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension _FocusedModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+}
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension _DefaultFocusModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+}

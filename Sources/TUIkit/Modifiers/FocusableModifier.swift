@@ -203,3 +203,13 @@ extension FocusableModifier: Layoutable {
         return measureChild(content, proposal: proposal, context: contentContext)
     }
 }
+
+// MARK: - Seeing Through the Wrapper (the READ direction)
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension FocusableModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+}

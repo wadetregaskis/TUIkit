@@ -260,3 +260,29 @@ private enum TaskStateIndex {
     /// Range -60, claimed in ``StateStorage/StateKey``'s table.
     static let idGeneration = -60
 }
+
+// MARK: - Seeing Through the Wrapper (the READ direction)
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension OnAppearModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+}
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension OnDisappearModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+}
+
+/// Names its content so a container asking for a z-index or an alignment guide
+/// can look through this wrapper instead of stopping at it. Read-only: it does
+/// NOT conform to ``ContentRewrapping``, so nothing about it is distributed to
+/// the members of multi-view content.
+extension TaskModifier: SingleContentWrapper {
+    var wrappedContent: Content { content }
+}

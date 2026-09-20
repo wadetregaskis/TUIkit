@@ -56,6 +56,46 @@ struct AlignmentGuideModifierTests {
 
     // MARK: - The basic shape
 
+    @Test("A guide under a size-changing wrapper is a documented no-op, deliberately")
+    func guideUnderAWrapperIsInert() {
+        // PINS A LIMITATION, not a feature. `.zIndex(_:)` now survives any
+        // number of wrappers, because a z-index is dimension-INDEPENDENT: the
+        // number means the same thing whatever size the view ends up. A guide
+        // is not — it is a closure evaluated against the dimensions the view
+        // laid out at — so walking through a wrapper would hand the inner
+        // closure the OUTER, wrapped size and resolve `$0.width` against a
+        // width two cells larger than the one it was written for. SwiftUI gets
+        // this right by TRANSLATING the guide as each wrapper changes the
+        // geometry; TUIkit's buffers carry no guide metadata to translate, so
+        // the honest answer is the one `alignmentGuide(_:computeValue:)`'s own
+        // doc comment gives: apply it outermost.
+        //
+        // A wrong position is worse than a documented no-op, which is why this
+        // asserts the no-op. Lifting it needs a size-neutrality witness, and
+        // the test to change alongside it is this one.
+        let outermost = indents(renderToBuffer(
+            VStack(alignment: .leading) {
+                Text("aaaa").alignmentGuide(.leading) { Double($0.width) }
+                Text("bb")
+            },
+            context: makeBareRenderContext(width: 20, height: 4)))
+        let wrapped = indents(renderToBuffer(
+            VStack(alignment: .leading) {
+                Text("aaaa").alignmentGuide(.leading) { Double($0.width) }.padding(.horizontal, 1)
+                Text("bb")
+            },
+            context: makeBareRenderContext(width: 20, height: 4)))
+        let plain = indents(renderToBuffer(
+            VStack(alignment: .leading) {
+                Text("aaaa").padding(.horizontal, 1)
+                Text("bb")
+            },
+            context: makeBareRenderContext(width: 20, height: 4)))
+
+        #expect(outermost != plain, "outermost, the guide moves the stack")
+        #expect(wrapped == plain, "wrapped, it is inert — and inert is the deliberate answer")
+    }
+
     @Test("A hanging guide widens the column and indents its siblings")
     func hangingGuideWidensTheColumn() {
         // "•" declares its guide at its own TRAILING edge, so the leading
