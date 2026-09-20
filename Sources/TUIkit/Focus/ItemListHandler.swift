@@ -519,6 +519,12 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// Answers the emptied slot itself when nothing can be landed on at all —
     /// a list whose every remaining row is chrome — because there is nowhere
     /// better, and the next Up/Down finds a row if one appears.
+    ///
+    /// Through ``ItemListHandler/isLandable(_:)``, deliberately, so this asks
+    /// exactly what `moveFocus(by:wrap:)` asks: a `.selectionDisabled()` row is
+    /// walked past here too, not merely a header or a footer. Narrowing it to
+    /// ``selectableIndices`` alone is the plausible simplification, and
+    /// `ListEditingCursorLandingTests` pins it against precisely that.
     private func nearestLandableRow(afterDeleting deleted: Int) -> Int {
         let lastRow = itemCount - 2
         guard lastRow >= 0 else { return 0 }

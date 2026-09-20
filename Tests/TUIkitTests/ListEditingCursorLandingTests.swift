@@ -57,6 +57,56 @@ struct ListEditingCursorLandingTests {
             "the cursor stands on \(String(describing: fixture.focusedRowID))")
     }
 
+    /// The same shape as the test above with one modifier added, which is the
+    /// point: the search for somewhere to stand asks the same question the
+    /// cursor's own movement asks, not merely "is this row content". A
+    /// `.selectionDisabled()` row is one Up/Down will not stop on and that
+    /// refuses Return and Space, so leaving a cursor there — on the one
+    /// occasion the cursor had nowhere it chose to go — would strand it on a
+    /// row that answers nothing.
+    ///
+    /// It is also the arrangement that asks `nearestLandableRow`'s
+    /// OLD-numbering shift a second, independent question. `selectableIndices`
+    /// and `selectionDisabledRows` were both published by the render that drew
+    /// the row now being deleted, so the question about the row that will be
+    /// at `index` has to be asked at `index + 1` from the deleted row on; every
+    /// other test here exercises that through the header exclusion alone.
+    @Test("A delete with nowhere obvious to go walks past a selection-disabled row")
+    func theLandingSkipsASelectionDisabledRow() {
+        let alpha = MainActorBox(["only"])
+        let beta = MainActorBox(["x", "y"])
+        let fixture = ListSectionEditingFixture()
+        func render() {
+            fixture.render(
+                List(selection: .constant(String?.none)) {
+                    Section("Alpha") {
+                        ForEach(alpha.value, id: \.self) { Text($0) }
+                            .onDelete { alpha.value.remove(atOffsets: $0) }
+                    }
+                    Section("Beta") {
+                        ForEach(beta.value, id: \.self) { item in
+                            Text(item).selectionDisabled(item == "x")
+                        }
+                    }
+                }
+                .frame(height: 12))
+        }
+        render()
+
+        // header, only, header, x, y — "only" is row 1 and its section's only
+        // row, so the clamp has no new end to offer and the search runs.
+        #expect(fixture.pressDelete(onRow: 1, named: "only") == true)
+        #expect(alpha.value.isEmpty, "got \(alpha.value)")
+        #expect(beta.value == ["x", "y"], "the other section is untouched: \(beta.value)")
+
+        // header, header, x, y — "x" is the first content row below the
+        // emptied slot and is exactly the row the cursor must not take.
+        render()
+        #expect(
+            fixture.focusedRowID == "y",
+            "the cursor stands on \(String(describing: fixture.focusedRowID))")
+    }
+
     /// The same emptying with nothing BELOW: the cursor goes back up rather
     /// than sitting on the header of the section it just emptied.
     @Test("Emptying the LAST Section walks the cursor back to the row above it")
