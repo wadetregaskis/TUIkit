@@ -84,7 +84,7 @@ new test actually fails without it.
 | `34c09bcb` | **A literal `%` immediately before an interpolation ate the following argument** in a localization key. |
 | `2eca551b` | `Text.Case` and `Text.TruncationMode` were not spellable — both types exist, top-level, so the symbol diff saw nothing missing. |
 | `eb623b89` | SwiftUI's parameterless `focusSection()` did not compile; the identifier now derives from the view's identity path. |
-| `291b8754` | **An ancestor's `.disabled(true)` did not reach `List`, `Table` or `ScrollView`.** None of the three read `\.isEnabled`, and each type's concrete `disabled(_:)` overload wins overload resolution — so their own call worked and hid that an ancestor's did nothing. Root cause 3 below, now closed. |
+| `291b8754` | **An ancestor's `.disabled(true)` did not reach `List`, `Table` or `ScrollView`.** None of the three read `\.isEnabled`, and each type's concrete `disabled(_:)` overload wins overload resolution — so their own call worked and hid that an ancestor's did nothing. Root cause 3 below, closed by this commit plus the outbound-direction follow-up `f1d467d2`. |
 
 ## Root causes worth deciding once
 
@@ -117,15 +117,30 @@ resolved child in the same modifier. Note the one exception to get right:
 `onDelete`/`onMove` are declared on `DynamicViewContent`, not `View`, and must
 keep applying to the collection.
 
-**3. `\.isEnabled` has no readers in the big containers — FIXED (`291b8754`), kept here for the shape.** `List`, `_ListCore`,
-`Table` and `ScrollView` never consult it, and each type's concrete
+**3. `\.isEnabled` has no readers in the big containers — FIXED (`291b8754`, `f1d467d2`), kept here for the shape.** `List`, `_ListCore`,
+`Table` and `ScrollView` never consulted it, and each type's concrete
 `disabled(_:) -> Self` overload wins overload resolution over the `View`
-extension — so `List { … }.disabled(true)` never even builds a
-`DisabledModifier`. An ancestor's `.disabled(true)` therefore leaves the three
+extension — so `List { … }.disabled(true)` never even built a
+`DisabledModifier`. An ancestor's `.disabled(true)` therefore left the three
 biggest containers fully interactive, and a `Button` inside a disabled `List`
-still fires. **Recommendation:** have each core compute
-`self.isDisabled || !context.environment.isEnabled`, as `Button` already does,
-and publish `\.isEnabled = false` into the content it renders.
+still fired. **Recommendation, done in two commits:** `291b8754` made each
+core compute `self.isDisabled || !context.environment.isEnabled`, as `Button`
+already did, closing the inbound direction — an ancestor's `.disabled(true)`
+now reaches the container itself (Tab, scroll, selection, sort). `f1d467d2`
+closed the outbound direction the first commit left open: each container's
+own `.disabled(_:) -> Self` overload still only set the stored flag governing
+its OWN focusability and never published `\.isEnabled` to what it renders, so
+`List { Button("Save") {} }.disabled(true)` still drew a live button inside a
+disabled list. Each container's `body` now also wraps its `_*Core` in
+`.disabled(isDisabled)` alongside passing the flag through, so both questions
+— "is the container itself a Tab stop" and "is the container's content
+enabled" — are answered. Verified against the tree just now:
+`Tests/TUIkitTests/ContainerDisabledCascadeTests.swift`'s
+`containerDisablesItsOwnContent` renders `List { Button("Save") {} }
+.disabled(true)`, `Table(people, …) { … }.disabled(true)` and
+`ScrollView { Button("Save") {} }.disabled(true)` and asserts none of them
+registers any focus; `swift test --filter ContainerDisabledCascadeTests`
+passes all 5 tests in the suite.
 
 **4. The Optional third state, for the fourth and fifth time.** `Font??`,
 `UnitPoint??` and `Transaction?` were each needed so "nobody said" and "said
@@ -174,7 +189,7 @@ verifier corrected the analyst, both are shown.
 
 **2. `View.disabled(_:)`**
 
-- *Status:* **FIXED** (291b8754): `Table`, `_ListCore` and `ScrollView` read `isDisabled || !context.environment.isEnabled`.
+- *Status:* **FIXED** (`291b8754`, `f1d467d2`): `Table`, `_ListCore` and `ScrollView` read `isDisabled || !context.environment.isEnabled` for their own focus/scroll/selection/sort gating (so an ancestor's `.disabled(true)` now reaches the container, and the "escape hatch" of an inner `.disabled(false)` no longer re-enables one), and each container's `body` also wraps its `_*Core` in `.disabled(isDisabled)` so the container's OWN `.disabled(true)` reaches the content it renders too — see root cause 3 above for both commits and the test that pins it.
 
 - *SwiftUI:* swiftui-docs/View.md, View.disabled(_:): "Adds a condition that controls whether users can interact with this view. The higher views in a view hierarchy can override the value you set on this view. In the following example, the button isn't interactive because the outer `disabled(_:)` modifier overrides the inner one" — followed by `HStack { Button(Text("Press")) {}.disabled(false) }.disabled(true)`. TUIkit's own DisabledModifier.swift:33-50 implements that cascade (`let enabled = context.environment.isEnabled && !disabled`) and documents that "controls combine it with their own disabled state".
 - *TUIkit:* `grep -n 'isEnabled' Sources/TUIkit/Views/Table.swift` returns no matches. The only gates are the view's own stored flag: Table.swift:1053 `ItemListHandler(… canBeFocused: !isDisabled)`, :1069 and :1691 `handler.canBeFocused = !isDisabled`, and :2403 `guard !isDisabled, !context.isMeasuring, let mouseDispatcher = context.environment.mouseEventDispatcher else { return }` — the sole gate on all mouse wiring, header-sort handlers included. `isDisabled` is written only by the member `Table.disabled(_:)` at :370-374 (`copy.isDisabled = disabled`). Every other control in the framework does combine the two — Button.swift:325, TextField.swift:358, _ToggleCore.swift:420, Slider.swift:422, Stepper.swift:434, RadioButton.swift:297/554, DatePicker.swift:291, SecureField.swift:302, TextEditor.swift:139, _PickerMenuCore.swift (x5) all read `self.isDisabled || !context.environment.isEnabled`. … — `Sources/TUIkit/Views/Table.swift:2403`
@@ -252,6 +267,7 @@ verifier corrected the analyst, both are shown.
 - *TUIkit:* Button.swift:417-426 constructs the configuration with a literal: `let configuration = ButtonStyleConfiguration(label: label, labelView: labelView, role: role, isPressed: false, ...)`. `grep -rn isPressed Sources/` returns exactly two hits — the property declaration at ButtonStyle.swift:45 and this construction site. Nothing ever sets it true. The doc comment at ButtonStyle.swift:42-44 justifies it as "Terminals have no press-and-hold gesture — a key press triggers the action instantly — so this is always `false`." That is a true statement about the KEYBOARD applied to an API that never depended on the keyboard: (1) _ButtonCore's own mouse handler already separates press from release and claims the press — Button.swift:451-458, `case .pressed where event.button == .left: ... return true` with the comment "Claim the press so the dispatcher routes the matching release back here"; (2) a … — `Sources/TUIkit/Views/Button.swift:421`
 - *Divergence:* A ported style that flags the press — `Text(configuration.label).foregroundStyle(configuration.isPressed ? .palette.accent : .palette.foreground)` — compiles and never changes appearance under any interaction. Testable: dispatch a `.pressed` left-button MouseEvent over the button, render, and assert the configuration handed to the style has isPressed == true. No test pins the current value (`grep isPressed Tests/` returns nothing).
 - *Recommendation:* Fix: store a pressed flag beside the hover box, set on .pressed and cleared on .released / gesture hand-off. Failing that, at minimum correct the doc comment — it names a limitation the codebase demonstrably does not have, and as written it will be cited as settled.
+- *Resolved 2026-09-20, as recommended:* A pressed flag now rides the same `StateBox` pattern as `hoverBox` (`StateIndex.isPressed = 2`), set `true` on `.pressed` and cleared on the `.released` that always follows for an ordinary button, clamped `false` while disabled; `.menuTrigger()`'s opening press fires and hands off in the same instant, so it has no press-and-hold moment and is left alone. The doc comment on `isPressed` was rewritten to describe only the keyboard limitation it is actually true of. `Tests/TUIkitTests/ButtonTests.swift` gained "A custom ButtonStyle sees isPressed flip while the mouse button is held down".
 
 **12. `Menu / View.contextMenu(menuItems:) — non-Button menu items`**
 
@@ -270,6 +286,8 @@ verifier corrected the analyst, both are shown.
 ### List, ForEach and outline content
 
 **14. `List.init(selection:content:)`**
+
+- *Status:* **FIXED** (`d081a355`, already in the "Fixed in this pass" table above — the body entry below was never updated to match): a row whose ordinal cannot be expressed as `SelectionValue` is now emitted as `.unselectable` instead of being `continue`d past, so `List(selection: $stringSelection) { Text("alpha"); Text("beta") }` renders both rows (unselectable, but present) rather than falling back to "No items". `Sources/TUIkit/Views/_ListCore.swift:2875` (`extractFromChildren`) reads `(result.count as? SelectionValue).map { .content(id: $0) } ?? .unselectable`.
 
 - *SwiftUI:* swiftui-docs/List.md, the List type doc comment: "In its simplest form, a `List` creates its contents statically, as shown in the following example: List { Text(\"A List Item\") … }", and under *Supporting selection in lists*: "To make members of a list selectable, provide a binding to a selection variable. Binding to a single instance of the list data's `Identifiable.ID` type creates a single-selection list." Nothing ties whether rows appear to the selection type.
 - *TUIkit:* `_ListCore.extractFromChildren(provider:context:)` keys every static child by its ordinal and drops any child whose ordinal cannot be expressed as the selection type: `for child in provider.childViews(context: context) where !child.isSpacer { guard let indexID = result.count as? SelectionValue else { continue }`. When SelectionValue is not Int the cast always fails, every child is skipped, and the List falls back to its empty placeholder. The same shape recurs at _ListCore.swift:2209 (`if let zeroID = 0 as? SelectionValue`), _ListCore.swift:2265, and Section.swift:379. — `Sources/TUIkit/Views/_ListCore.swift:2228`
@@ -302,6 +320,8 @@ verifier corrected the analyst, both are shown.
 
 **18. `Color.opacity(_:)`** · *not independently verified*
 
+- *Status:* **FIXED**, superseded by a bigger change (`0c416a3f`, `6d561375`): `Color` now stores a real `alpha: UInt8` component, and `opacity(_:)` multiplies it — `guard let (red, green, blue) = rgbComponents` is gone from the implementation, so a `.semantic` colour's alpha is carried and survives `resolve(with:)` instead of being returned untouched. `Color.primary.opacity(0.5) != Color.primary` now holds.
+
 - *SwiftUI:* swiftui-docs/Color.md, `## Color.opacity(_:)`: "Multiplies the opacity of the color by the given amount." No exemption for any category of colour.
 - *TUIkit:* Sources/TUIkitStyling/Color/Color.swift:378-388 opens with `guard let (red, green, blue) = rgbComponents else { return self }`. `rgbComponents` returns nil for `.semantic` (Color.swift:249-250), and `Color.primary`, `.secondary`, `.accentColor`, `.warning`, `.error`, `.success` and everything under `Color.palette` are all `.semantic` values (Color.swift:160-183, 196-220). The guard fires and the colour comes back untouched. — `Sources/TUIkitStyling/Color/Color.swift:378`
 - *Divergence:* `Text("x").foregroundStyle(.primary.opacity(0.5))` COMPILES (verified by type-checking against the built modules) and renders at full strength — the opacity is accepted and silently discarded. Failing test: `#expect(Color.primary.opacity(0.5) != Color.primary)`. No test pins this; ColorTests.swift:65-69 pins the semantic pass-through of the *two-argument* `opacity(_:over:)`, a different method.
@@ -309,12 +329,16 @@ verifier corrected the analyst, both are shown.
 
 **19. `Color.opacity(_:)`** · *not independently verified*
 
+- *Status:* **FIXED** (`0c416a3f`, `6d561375`): the rewritten `opacity(_:)` clamps its factor before use — `let factor = min(1, max(0, opacity))` — so `Color.red.opacity(1.5)` no longer traps; a NaN or negative argument reads as 0 by the same clamp, per the current doc comment on `opacity(_:)`.
+
 - *SwiftUI:* swiftui-docs/Color.md, `## Color.opacity(_:)`: "Multiplies the opacity of the color by the given amount." SwiftUI returns a colour for any Double; it does not abort.
 - *TUIkit:* Sources/TUIkitStyling/Color/Color.swift:383-385: `let newRed = UInt8(Double(red) * opacity)` (and green, blue) — unclamped. Every sibling in the module clamps: `clampedByte` (Color+ColorSpaces.swift:271-273), whose own comment says it exists "guarding against out-of-range user input … that would otherwise trap the `UInt8` conversion"; `lerp` clamps `phase` (Color.swift:428); `opacity(_:over:)` routes through `lerp` and is safe (Color.swift:404-406); `_ColorEffectView.Effect.byte` clamps (ColorEffectModifiers.swift:225-227). — `Sources/TUIkitStyling/Color/Color.swift:383`
 - *Divergence:* `Color.red.opacity(1.5)` evaluates `UInt8(307.5)` and aborts the process — reproduced standalone: `Fatal error: Double value cannot be converted to UInt8 because the result would be greater than UInt8.max`, exit 133. A negative argument traps identically. Note `.opacity(1.5, over: .black)` returns a colour while `.opacity(1.5)` crashes, even though ColorTests.swift:39-45 pins the two as equivalent over black — that test only samples 0.0...1.0.
 - *Recommendation:* Fix — route the three conversions through the existing `clampedByte`. One-line change, no behaviour change inside 0...1.
 
 **20. `Color.opacity(_:)`** · *not independently verified*
+
+- *Status:* **FIXED**, by deferral rather than the earlier `opacity(_:over:)` migration (`0c416a3f`, `6d561375`, `0bbeb919`): `opacity(_:)` no longer mixes RGB toward black at all — it stores the factor as alpha and leaves compositing to whenever the colour is actually drawn over a known surface, exactly the "carry the alpha and resolve it against `palette.background` at render" fix this finding asked for. `Color.blue.opacity(0.2)` no longer darkens toward navy under a light palette; the current doc comment on `opacity(_:)` states the old black-mix behaviour and this fix side by side.
 
 - *SwiftUI:* swiftui-docs/Color.md, `## Color.opacity(_:)`: "Multiplies the opacity of the color by the given amount." Alpha resolves against whatever the colour is drawn over.
 - *TUIkit:* Sources/TUIkitStyling/Color/Color.swift:383-387 multiplies each RGB channel by the factor — interpolating toward #000000 immediately and unconditionally, regardless of the surface. The framework knows this is wrong: the sibling `opacity(_:over:)`'s doc comment (Color.swift:390-397) says the mix-toward-black shorthand "over light surfaces … turns every 'dim' into a near-black smudge (the dark-on-dark controls seen under light palettes)", and every internal caller has already migrated to `opacity(_:over:)` (Theme.swift:163, NotificationHostModifier.swift:81,83, ButtonStyle.swift:399, NavigationCrumbButtonStyle.swift:63, TextFieldContentRenderer.swift:259, ColorSwatchButtonStyle.swift:95). The SwiftUI-spelled one-argument form is the only caller left on the old arithmetic. — `Sources/TUIkitStyling/Color/Color.swift:383`
@@ -492,6 +516,7 @@ verifier corrected the analyst, both are shown.
 - *TUIkit:* The item binding is collapsed to a Boolean that never passes through false on an A→B change — Sources/TUIkit/Extensions/View+Presentation.swift:366: `let isPresented = Binding<Bool>(get: { item.wrappedValue != nil }, set: { presented in if !presented { item.wrappedValue = nil } })` — and the presented content is rendered at a purely structural identity: ModalPresentationModifier.swift:237, `.withChildIdentity(type: Modal.self, index: 1)`. Nothing in that identity mentions the item, so the same @State boxes are reused and no lifecycle event fires. — `Sources/TUIkit/Modifiers/ModalPresentationModifier.swift:237`
 - *Divergence:* Executed over two render passes with the real StateStorage/FocusManager pass bracketing (scratchpad/navprobe/main3.swift). Sheet content is `Editor(item:)` with `@State private var stamp = 0` and `.onAppear { stamp = item.id }`. Frame 1 (item 1) prints `item=1 onAppearStamp=0`; after setting the binding to item 2, frame 2 prints `item=2 onAppearStamp=1`. onAppear never re-fired and the state written for item 1 is still live in a sheet about item 2 — so a draft, scroll position or selection belonging to one row shows up in another row's editor. SwiftUI would print `item=2 onAppearStamp=2`. onDismiss likewise does not run for the swap.
 - *Recommendation:* Fix by folding the item's id into the modal's child identity — RenderContext already offers withChildIdentity(erasedType:key:) (Sources/TUIkitView/Rendering/RenderContext.swift:179) for exactly this. Failing that, document it: the leak is invisible until a user notices one row's text in another row's sheet.
+- *Resolved 2026-09-20, as recommended:* All three `item:` spellings now assemble the presenter themselves (rather than routing through the `isPresented:` form, which has no way to name the item) and fold the item's id into the presented content's identity through the same `.keyed` step `ForEach` uses to key its rows by element id. The key is stored as `itemKey` on the two presenters and consulted at `context.withChildIdentity(erasedType:key:)` when present, falling back to the old positional index when there is no item (the `isPresented:` forms). `Tests/TUIkitTests/PresentationItemIdentityTests.swift` (new, 4 tests) covers `sheet(item:)`, `fullScreenCover(item:)` and `popover(item:)` swapping items mid-presentation, plus the opposite case — an unchanged item must keep its state across frames.
 
 ### Scrolling
 
@@ -574,6 +599,8 @@ verifier corrected the analyst, both are shown.
 
 **53. `AppStorage`**
 
+- *Status:* **FIXED** (`3b4d779f`): `AppStorage`'s setter now calls `AppState.shared.setNeedsRenderWithCacheClear()` instead of `setNeedsRender()` — `Sources/TUIkit/State/AppStorage.swift:492`. `SceneStorage.swift:108` got the identical fix in the same commit, for the same reason.
+
 - *SwiftUI:* swiftui-docs/AppStorage.md: "A property wrapper type that reflects a value from `UserDefaults` and invalidates a view on a change in value in that user default."
 - *TUIkit:* Sources/TUIkit/State/AppStorage.swift:433-436: `nonmutating set { storage.setValue(newValue, forKey: key); AppState.shared.setNeedsRender() }` — and nothing else. `AppState.setNeedsRender()` (Sources/TUIkitView/State/State.swift:71-81) sets only `needsRender`; it does not set `needsCacheClear` and does not call `invalidateRender`. Contrast @State (StateStorage.swift:402-406, `didSet { invalidationSink?.invalidateRender(for: identity) }`) and @Observable (State.swift:142-152 → RenderLoop.swift:391-393 `renderCache.clearAll()`). @AppStorage also records no volatile read — there is no volatileReadTracker reference anywhere in Sources/TUIkit/State/. SceneStorage.swift:89-92 is the identical shape. — `Sources/TUIkit/State/AppStorage.swift:433`
 - *Divergence:* ForEach wraps rows in _MemoizedRow automatically when the element is Equatable (ForEach.swift:235-241, ListRowExtractor.swift:148-162) — no .equatable() opt-in required. Given `struct SettingsList: View { @AppStorage("compact") var compact = false; var body: some View { VStack { Toggle("Compact", isOn: $compact); ForEach(rows) { row in Text(compact ? row.short : row.long) } } } }`, toggling Compact re-renders the tree but every row is a cache hit on an unchanged element, so the rows keep the previous setting's text indefinitely. The same code with @State works, because StateBox.didSet clears the ancestor path. MemoizedRow.swift:69-92 documents this as the "captured data" hole and says an ancestor write saves you — with @AppStorage even that is untrue, because nothing is cleared at all. No test in AppStorageTests.swift (32 tests) or SceneStorageTests.swift touches invalidation.
@@ -588,6 +615,8 @@ verifier corrected the analyst, both are shown.
 - *Recommendation:* Fix, low priority — only reachable today through a nested onPreferenceChange on an accumulating key. merge cannot call reduce (it is type-erased over Any), so have pop() re-apply each popped entry through the key's own reduce, which means PreferenceValues storing a per-key reducer thunk alongside the value — the same shape PreferenceStorage.onPreferenceChange already uses for its type-erased callbacks. This becomes load-bearing the moment backgroundPreferenceValue/overlayPreferenceValue land, since those push scopes too.
 
 **55. `View.disabled(_:)`**
+
+- *Status:* **FIXED** (`291b8754`, `f1d467d2`): divergence (a) below — an ancestor's `.disabled(true)` not reaching `List`/`Table`/`ScrollView` — was closed by `291b8754`'s `isDisabled(in:)` on all three. Divergence (b) — the container's OWN `.disabled(true)` not reaching a `Button` inside it, `List` "publishes nothing into `\.isEnabled` for its content" — was closed separately by `f1d467d2`, which wraps each container's `body` in `.disabled(isDisabled)` alongside the stored flag. Verified just now: `Tests/TUIkitTests/ContainerDisabledCascadeTests.swift`'s `containerDisablesItsOwnContent` renders exactly `List { Button("Save") {} }.disabled(true)` (plus the `Table`/`ScrollView` equivalents) and confirms the embedded button registers no focus stop and no hit-test region; the whole 5-test suite passes.
 
 - *SwiftUI:* swiftui-docs/View.md, View.disabled(_:): "Adds a condition that controls whether users can interact with this view. The higher views in a view hierarchy can override the value you set on this view. In the following example, the button isn't interactive because the outer `disabled(_:)` modifier overrides the inner one" — i.e. it applies to the whole subtree.
 - *TUIkit:* The generic modifier is correct (DisabledModifier.swift:49-50 ANDs `context.environment.isEnabled && !disabled` into the environment) and is the only writer of \.isEnabled. Controls that honour the cascade OR it in themselves, e.g. Button.swift:325 `let isDisabled = self.isDisabled || !context.environment.isEnabled`. List, _ListCore, Table and ScrollView never do: `grep -c isEnabled` returns 0 for all four files. _ListCore.swift:755 and :794 use `canBeFocused: !isDisabled` / `handler.canBeFocused = !isDisabled`, where isDisabled comes only from List's own concrete overload (List.swift:833 `copy.isDisabled = disabled`, threaded at List.swift:141). Table.swift:1053/1069/1664/1691 and ScrollView.swift:260/264 are the same shape. The concrete per-type `disabled(_:) -> Self` overloads also win resolution over the View extension, so `List { … }.disabled(x)` never builds a DisabledModifier at … — `Sources/TUIkit/Views/_ListCore.swift:755`
@@ -619,8 +648,11 @@ verifier corrected the analyst, both are shown.
 - *TUIkit:* There is no Text or Image overload; the only catch-all is unconstrained and reflects: `public mutating func appendInterpolation(_ value: some Any) { key += "%@"; arguments.append(String(describing: value)) }`. `grep appendInterpolation Sources/` returns exactly the two declarations in this file, so `some Any` swallows Text and Image. — `Sources/TUIkit/Localization/LocalizedStringKey.swift:269`
 - *Divergence:* Compiled and executed against .build/debug: `let name = Text("Alice").bold(); Text("Hello, \(name)")` renders `Hello, Text(content: "Alice", style: TUIkit.TextStyle(foregroundColor: nil, backgroundColor: nil, isBold: Optional(true), isItalic: nil, …), runs: nil)` instead of `Hello, Alice`. `Text("Icon \(Image(systemName: "star")) here")` also type-checks (swiftc -typecheck, exit 0) and produces the same garbage. No test in Tests/TUIkitTests/LocalizedStringKeyTests.swift pins this.
 - *Recommendation:* Fix. Add `appendInterpolation(_ text: Text)` (append the text's `content`, or its concatenated run texts) and `appendInterpolation(_ image: Image)`, and consider narrowing the catch-all so a type with no sensible textual form fails to compile rather than being reflected. Preserving the fragment's own styling, as SwiftUI does, is a worthwhile second step but appending the displayed string alone already turns a garbage render into a correct one.
+- *Resolved 2026-09-20, partially, and the rest by reasoned decision:* A dedicated `appendInterpolation(_ text: Text)` overload now wins over the `String(describing:)` catch-all for a `Text` argument, contributing `text.content` (the fully concatenated plain string, even for a `+`-built `Text`) — per-run styling has nowhere to go in a `[String]` argument list and is dropped, the same eager-to-`String` contract `Text(_:format:)` already has. `Image` deliberately gets **no** such overload and still falls to the catch-all: unlike `Text`'s eager, synchronous `content`, an `Image` composites against a `RenderContext` (colour mode, character set, size) this call site does not have, a raster `Image` loads asynchronously, and even the synchronous `.symbol` case is a rendered glyph with no plain-text form to contribute — so this half of the finding is a documented, reasoned divergence rather than an open defect. Both halves are recorded in Documentation/SwiftUI-compatibility.md's Text-richness row. `Tests/TUIkitTests/LocalizedStringKeyTests.swift` gained coverage for the `Text` case.
 
 **59. `LocalizedStringKey.StringInterpolation.appendLiteral(_:)`**
+
+- *Status:* **FIXED** (`34c09bcb`, already in the "Fixed in this pass" table above — the body entry below was never updated to match): `appendLiteral` now escapes a literal `%` to `%%` before appending — `key += literal.contains("%") ? literal.replacingOccurrences(of: "%", with: "%%") : literal` (`Sources/TUIkit/Localization/LocalizedStringKey.swift:308`) — so `Text("\(a)%\(b)")` substitutes both arguments instead of dropping the second one behind a stray `@`.
 
 - *SwiftUI:* swiftui-docs/Text.md ("Localizing strings"): "Using string interpolation ensures that the text in your app can be localized correctly in all locales, especially in right-to-left languages." SwiftUI's LocalizedStringKey builds a printf-shaped key from literal segments plus placeholders, so a literal percent cannot consume a placeholder.
 - *TUIkit:* `appendLiteral` inserts the literal into the key unescaped — `public mutating func appendLiteral(_ literal: String) { key += literal }` (LocalizedStringKey.swift:264) — while the substituter DOES interpret `%%` as an escaped percent: `// `%%` is an escaped percent. if template[cursor] == "%" { result.append("%"); index = template.index(after: cursor); continue }` (LocalizedStringKey.swift:170). A literal `%` written directly before an interpolation therefore yields the key `…%` + `%@` = `…%%@`, read as escaped-percent followed by a literal `@`, and the argument is never consumed. — `Sources/TUIkit/Localization/LocalizedStringKey.swift:264`
@@ -1022,7 +1054,7 @@ verifier corrected the analyst, both are shown.
 
 **108. `Color (as View) / Color.clear`**
 
-- *Status:* **HALF FIXED**: `Color: View` shipped with the gradients work (`ColorAsView.swift`; the symbol-graph evidence below predates it). `Color.clear` is still absent.
+- *Status:* **FIXED**: `Color: View` shipped with the gradients work (`ColorAsView.swift`; the symbol-graph evidence below predates it). `Color.clear` — the other half, then still absent — shipped in `6d561375`: `public static let clear = Self(value: .rgb(red: 0, green: 0, blue: 0), alpha: 0)` (`Sources/TUIkitStyling/Color/Color.swift:194`), riding the same real-alpha storage that fixed findings 18-20. `Text("x").background(.clear)` and `ZStack { Color.blue; Text("hi") }` both compile and render now.
 
 - *SwiftUI:* swiftui-docs/Color.md, `## Color`: "Because SwiftUI treats colors as ``View`` instances, you can also directly add them to a view hierarchy." and "A color used as a view expands to fill all the space it's given, as defined by the frame of the enclosing ``ZStack``". `## Color.clear`: `static let clear: Color` — "A clear color suitable for use in UI elements."
 - *TUIkit:* `Color` (Sources/TUIkitStyling/Color/Color.swift:25) is declared `public struct Color: Sendable, Hashable` — no View conformance. Confirmed against the symbol graph (tuikit/TUIkitStyling.symbols.json: conformsTo Sendable, SH, SendableMetatype, SQ only). There is no `clear` member anywhere in Sources/. — `Sources/TUIkitStyling/Color/Color.swift:25`
