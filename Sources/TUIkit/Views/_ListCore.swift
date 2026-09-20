@@ -2440,13 +2440,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // the same defect a Table's header caused at the top.
                     topInset: title != nil ? 1 : 0,
                     bottomInset: footer != nil ? 2 : 0,
-                    shiftStep: context.environment.shiftStepMultiplier))
+                    shiftStep: context.environment.shiftStepMultiplier),
+                in: context)
         }
         if handler.onMove != nil {
             context.environment.dragAndDropSession?.registerReorderHost(
                 DragAndDropSession.ReorderHost(
                     focusID: state.focusID, handlerID: zoneID, topInset: topInset,
-                    contentColumns: contentColumns, handler: handler))
+                    contentColumns: contentColumns, handler: handler),
+                in: context)
         }
         guard let insertion, let session = context.environment.dragAndDropSession else {
             handler.externalDropSlot = nil
@@ -2469,7 +2471,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     // so the line is remembered — an auto-scroll tick has to ask
                     // the same question again with no pointer event to go on.
                     handler.hoverExternalDrop(atContentY: y - topInset)
-                }))
+                }),
+            in: context)
     }
     /// What a click on a row DOES: activate it, disclose it, or select it.
     ///

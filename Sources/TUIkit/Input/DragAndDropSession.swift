@@ -313,6 +313,11 @@ final class DragAndDropSession: @unchecked Sendable {
 
     /// Clears the per-frame target registrations. Called by the root scene
     /// render before the view tree renders (and re-registers).
+    ///
+    /// "Renders" includes a subtree the render cache SERVES: a memo replays the
+    /// registrations its stored subtree made, which is what keeps a memoized
+    /// drop destination, auto-scroll zone or reorder host in these three lists
+    /// on a frame that ran none of their bodies.
     func beginFrame() {
         targets.removeAll(keepingCapacity: true)
         autoScrollZones.removeAll(keepingCapacity: true)
@@ -320,6 +325,11 @@ final class DragAndDropSession: @unchecked Sendable {
     }
 
     /// Registers a drop destination for this frame.
+    ///
+    /// The bare form, for the session's own machinery and the tests that drive
+    /// it directly. A render walk registers through ``registerTarget(_:in:)``,
+    /// which also records the registration for the value memo that may serve
+    /// the subtree — see `DragAndDropSession+Replay.swift`.
     func registerTarget(_ target: Target) {
         targets.append(target)
     }
@@ -327,6 +337,9 @@ final class DragAndDropSession: @unchecked Sendable {
     /// Registers a scrollable's auto-scroll zone for this frame. Cleared and
     /// re-registered every render, exactly like a drop target — the driver
     /// only ever reads THIS frame's zones against THIS frame's geometry.
+    ///
+    /// The bare form; a render walk registers through
+    /// ``registerAutoScrollZone(_:in:)``, for the same reason as above.
     func registerAutoScrollZone(_ zone: AutoScrollZone) {
         autoScrollZones.append(zone)
     }

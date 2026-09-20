@@ -90,6 +90,11 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// - a mouse feature request, once per `.motion` / `.drag` / `.clicks` /
     ///   `.scrolling` a control asks for, which is per-frame state in the same
     ///   way and would otherwise lapse the first time the control was served;
+    /// - each of the drag session's three per-frame registrations — a drop
+    ///   destination, a drag auto-scroll zone, a row-reorder host — which
+    ///   `DragAndDropSession.beginFrame()` empties exactly as the handler table
+    ///   is emptied, and which nothing in the buffer reveals: a served
+    ///   destination kept its region and its handler and accepted nothing;
     /// - the buffer memo itself, once per hit that replays a stored subtree's
     ///   registrations, so an enclosing gate sees the same delta whether the
     ///   subtree rendered or was served.

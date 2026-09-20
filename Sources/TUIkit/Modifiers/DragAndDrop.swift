@@ -346,6 +346,12 @@ extension DropDestinationModifier: Renderable, Layoutable {
 
         let action = self.action
         let isTargeted = self.isTargeted
+        // The THIRD per-frame write this modifier makes. The handler above is
+        // replayed and the region travels in the buffer, but the session's
+        // target registry is emptied every frame exactly as the handler table
+        // is — so a served frame that did not register here left hit-testing
+        // finding the id and `resolveTarget` finding nothing behind it. Hence
+        // the journalled form.
         session.registerTarget(
             DragAndDropSession.Target(
                 handlerID: id,
@@ -368,7 +374,8 @@ extension DropDestinationModifier: Renderable, Layoutable {
                             previewWidth: frame.width, previewHeight: frame.height))
                 },
                 setTargeted: isTargeted
-            )
+            ),
+            in: context
         )
         return buffer
     }

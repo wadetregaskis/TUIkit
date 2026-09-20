@@ -828,7 +828,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
                 vertical: handler,
                 horizontal: wantsHorizontal ? handler.horizontal : nil,
                 delayNanos: context.environment.dragAutoScrollDelay.clampedNanoseconds,
-                    shiftStep: context.environment.shiftStepMultiplier))
+                shiftStep: context.environment.shiftStepMultiplier),
+            in: context)
     }
 
     /// Resolves which scrollbars to reserve this frame, from the CURRENT content's

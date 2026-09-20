@@ -52,6 +52,10 @@ extension DragAndDropSession {
     /// the old one — which draws nothing and whose `onMove` writes into state
     /// nothing reads. Handing them over here, before the events that follow,
     /// makes the drop land in the list actually on screen.
+    ///
+    /// The bare form; a render walk registers through
+    /// ``registerReorderHost(_:in:)``, which also records the registration for
+    /// the value memo that may serve the subtree.
     func registerReorderHost(_ host: ReorderHost) {
         reorderHosts.append(host)
         guard host.focusID == reorderFocusID,

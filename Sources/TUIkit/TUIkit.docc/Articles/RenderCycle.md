@@ -516,8 +516,10 @@ subtree declines the cache.
 A key handler (`onKeyPress`, or the <kbd>Ctrl</kbd>-<kbd>R</kbd> binding of
 `.refreshable`), a status-bar item (`.statusBarItems`), an unfocused control's
 place in the focus ring (`FocusRegistration.register`), an inactive
-`.focusSection`, a `Button`'s `.keyboardShortcut`, and a hit-test handler with
-the mouse features its control asks for, do not decline the cache. While a memoized subtree renders on a
+`.focusSection`, a `Button`'s `.keyboardShortcut`, a hit-test handler with
+the mouse features its control asks for, and the drag session's three
+registrations (a drop destination, a drag auto-scroll zone, a row-reorder
+host), do not decline the cache. While a memoized subtree renders on a
 miss, each such registration is also recorded, and the recording is stored with
 the buffer. Every hit then makes those registrations again, in the order they
 were made, at the point in the walk where the subtree would have rendered. So
@@ -591,6 +593,25 @@ and they part the right way. `.dimmed()` flattens its content to an inert
 picture and drops the regions with the rest of it, while the throwaway key
 channels it renders under keep everything it registered out of the memo above
 it — so nothing is left for a click to reach, which is what dimming means.
+
+The drag session's registries go with the mouse, and they are the half that
+enumeration missed. `.dropDestination` makes THREE per-frame writes, not two:
+the handler, the feature request, and the drop target it files with
+`DragAndDropSession`, whose `beginFrame()` empties `targets`, `autoScrollZones`
+and `reorderHosts` before every walk exactly as the handler table is emptied. A
+served frame that replayed the first two and not the third left hit-testing
+finding the region's id and `resolveTarget` finding nothing behind it: the row
+looked alive and accepted nothing. `List`, `Table` and `ScrollView` write to the
+same three registries — a row drop target, a reorder host, an auto-scroll zone —
+and lost them the same way, the moment a memoized container could be stored at
+all. All three registrations are recorded and replayed now, through
+`DragAndDropRegistrar`.
+
+`TUIKIT_VERIFY_RENDER_MEMO` could not have found this. It re-renders a served
+subtree and compares the buffer, plus the kinds and number of registrations that
+render *records* — and a write journalled nowhere is recorded by neither side,
+while the buffer is identical whether the target was filed or not. A test for
+this class has to assert on the registry, or on the gesture the registry serves.
 
 ### Keeping Nested Entries Alive
 

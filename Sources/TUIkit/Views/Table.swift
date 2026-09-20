@@ -2447,7 +2447,8 @@ where Value.ID: Hashable {
                     // handler so the line is remembered for an auto-scroll tick,
                     // which has no pointer event to go on.
                     handler.hoverExternalDrop(atContentY: y - interiorTopY)
-                }))
+                }),
+            in: context)
     }
 
     /// Appends a rendered row's lines to `lines`, and its pulse frames to
@@ -2963,7 +2964,8 @@ where Value.ID: Hashable {
                     // `topInset` here for exactly that reason.
                     topInset: interiorTopY,
                     contentColumns: contentColumns,
-                    handler: state.handler))
+                    handler: state.handler),
+                in: context)
         }
 
         // The external drop destination is registered unconditionally too, for
@@ -2993,7 +2995,8 @@ where Value.ID: Hashable {
                     // header were the two hot rows, so the "▲ N more above" line
                     // — the one place a user aims to scroll up — was inert.
                     topInset: 1,
-                    shiftStep: context.environment.shiftStepMultiplier))
+                    shiftStep: context.environment.shiftStepMultiplier),
+                in: context)
         }
 
         // A one-row region at the keyboard cursor's on-screen line, ahead of
