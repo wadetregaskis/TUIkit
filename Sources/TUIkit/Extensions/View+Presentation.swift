@@ -331,15 +331,50 @@ extension View {
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Modal
     ) -> some View {
+        modalPresentation(
+            isPresented: isPresented, style: .sheet, itemKey: nil, onDismiss: onDismiss,
+            modal: content())
+    }
+
+    /// The one place a modal presentation is assembled — panel or cover, about
+    /// an item or about nothing.
+    ///
+    /// Four call sites: ``modal(isPresented:onDismiss:content:)`` (which
+    /// ``sheet(isPresented:onDismiss:content:)`` forwards to),
+    /// ``sheet(item:onDismiss:content:)``, and the two `fullScreenCover`
+    /// spellings. What they share is not just the modifier but the `onDismiss`
+    /// wiring: it fires on the presented → dismissed transition, which covers
+    /// every route that clears the binding — a Close button, Escape,
+    /// `@Environment(\.dismiss)`, or a programmatic change. Written
+    /// per-spelling it was already duplicated once.
+    ///
+    /// Not the always-on `modal { … }` in `View+Convenience.swift`, which
+    /// builds the modifier itself: it has no binding to watch and so nothing
+    /// for this wiring to do.
+    ///
+    /// - Parameters:
+    ///   - isPresented: The binding that presents and dismisses.
+    ///   - style: Panel over a dimmed page, or the whole content area.
+    ///   - itemKey: The presented item's identity key, or `nil` when the
+    ///     presentation is about nothing in particular. See
+    ///     ``ModalPresentationModifier/itemKey``.
+    ///   - onDismiss: Run on the presented → dismissed transition.
+    ///   - modal: The content to present.
+    private func modalPresentation<Modal: View>(
+        isPresented: Binding<Bool>,
+        style: ModalPresentationModifier<Self, Modal>.Style,
+        itemKey: String?,
+        onDismiss: (() -> Void)?,
+        modal: Modal
+    ) -> some View {
         ModalPresentationModifier(
             content: self,
             isPresented: isPresented,
-            modal: content()
+            modal: modal,
+            style: style,
+            itemKey: itemKey
         )
         .onChange(of: isPresented.wrappedValue) { wasPresented, isPresentedNow in
-            // Fire onDismiss on the presented → dismissed transition, covering
-            // every route that clears the binding: a Close button, a key, or a
-            // programmatic change.
             if wasPresented, !isPresentedNow { onDismiss?() }
         }
     }
@@ -372,6 +407,15 @@ extension View {
     /// runs `onDismiss`. As with the `isPresented:` form, the terminal presents a
     /// centred, background-dimming overlay rather than a sliding sheet.
     ///
+    /// The item's **id is the content's identity**, which is what this form has
+    /// over closing over a value and presenting on a flag: change the item and
+    /// the sheet is a different view — `@State` back at its initial values,
+    /// `onAppear`/`task` firing again — rather than the same view handed a new
+    /// row to describe. Moving a selection from one row to another while the
+    /// sheet is up used to leave the first row's half-typed draft, scroll
+    /// position and selection sitting in the second row's editor. Keep the ids
+    /// distinct: two items whose ids are equal are one view, as in SwiftUI.
+    ///
     /// ```swift
     /// @State var editing: Row?
     /// List(rows, selection: $sel) { … }
@@ -392,11 +436,15 @@ extension View {
             get: { item.wrappedValue != nil },
             set: { presented in if !presented { item.wrappedValue = nil } }
         )
-        return modal(isPresented: isPresented, onDismiss: onDismiss) {
-            if let value = item.wrappedValue {
-                content(value)
-            }
-        }
+        // Assembled here rather than through the `isPresented:` spelling, which
+        // has no way to name the item: the identity key has to be read from the
+        // same binding, at the same moment, as the content built from it.
+        return modalPresentation(
+            isPresented: isPresented,
+            style: .sheet,
+            itemKey: item.wrappedValue.map { identityKey($0.id) },
+            onDismiss: onDismiss,
+            modal: item.wrappedValue.map(content))
     }
 }
 
@@ -428,19 +476,17 @@ extension View {
         onDismiss: (() -> Void)? = nil,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        ModalPresentationModifier(
-            content: self,
-            isPresented: isPresented,
-            modal: content(),
-            style: .fullScreen
-        )
-        .onChange(of: isPresented.wrappedValue) { wasPresented, isPresentedNow in
-            if wasPresented, !isPresentedNow { onDismiss?() }
-        }
+        modalPresentation(
+            isPresented: isPresented, style: .fullScreen, itemKey: nil, onDismiss: onDismiss,
+            modal: content())
     }
 
     /// Presents a full-screen cover for a currently-selected item. Matches
     /// SwiftUI's `fullScreenCover(item:onDismiss:content:)`.
+    ///
+    /// The item's id is the content's identity, exactly as in
+    /// ``sheet(item:onDismiss:content:)`` — a cover shown for a different item
+    /// starts with fresh state.
     ///
     /// - Parameters:
     ///   - item: A binding to an optional, identifiable item; non-`nil` presents.
@@ -455,11 +501,14 @@ extension View {
             get: { item.wrappedValue != nil },
             set: { presented in if !presented { item.wrappedValue = nil } }
         )
-        return fullScreenCover(isPresented: isPresented, onDismiss: onDismiss) {
-            if let value = item.wrappedValue {
-                content(value)
-            }
-        }
+        // Keyed by the item, for the reason ``sheet(item:onDismiss:content:)``
+        // states: a cover reopened for a different item is a different view.
+        return modalPresentation(
+            isPresented: isPresented,
+            style: .fullScreen,
+            itemKey: item.wrappedValue.map { identityKey($0.id) },
+            onDismiss: onDismiss,
+            modal: item.wrappedValue.map(content))
     }
 }
 

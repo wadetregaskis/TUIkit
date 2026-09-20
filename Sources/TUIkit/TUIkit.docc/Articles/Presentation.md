@@ -201,6 +201,14 @@ List(rows, selection: $selection) { ... }
     }
 ```
 
+The item's **id is the sheet content's identity**, which is the whole reason to
+reach for this form: move the selection to another row while the sheet is up and
+the editor is a *different view* — its `@State` back at its initial values, its
+`onAppear`/`task` firing again — rather than the same editor handed a new row to
+describe, still holding the previous row's half-typed draft. The same is true of
+`fullScreenCover(item:onDismiss:content:)` and
+`popover(item:attachmentAnchor:arrowEdge:content:)`.
+
 There is also an always-on `modal { … }` overload (bound to a constant `true`)
 for content that should always be presented while its host is on screen.
 

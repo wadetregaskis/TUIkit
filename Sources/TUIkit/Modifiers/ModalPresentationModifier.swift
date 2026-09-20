@@ -50,6 +50,17 @@ public struct ModalPresentationModifier<Content: View, Modal: View>: View {
     /// Whether this presents as a panel or takes the whole screen.
     var style: Style = .sheet
 
+    /// The identity key of the item this presentation is ABOUT, or `nil` for
+    /// the `isPresented:` forms, which are about nothing in particular.
+    ///
+    /// The `item:` forms fold it into the presented content's identity below,
+    /// which is what makes a different item a different view — fresh `@State`,
+    /// fresh lifecycle — as SwiftUI's `item:` contract requires. Read at
+    /// construction, from the same binding read the same moment the content is
+    /// built from it, so the key and the content can never describe different
+    /// items.
+    var itemKey: String?
+
     public var body: Never {
         fatalError("ModalPresentationModifier renders via Renderable")
     }
@@ -252,8 +263,18 @@ extension ModalPresentationModifier: Renderable {
         // the container reserve its footer within the visible area instead. Width
         // is still the full terminal width (the horizontal clamp already works).
         let overlayHeight = context.environment.overlayContentHeight
-        var modalContext = context
-            .withChildIdentity(type: Modal.self, index: 1)
+        // The item's id IS the identity, for the `item:` forms. Presenting for
+        // one row and then another handed the second row's content the first
+        // row's `@State` — a half-typed draft, a scroll position, a selection —
+        // because index 1 is the same slot whatever the sheet is about. That is
+        // exactly what `ForEach` keys its rows by their element's id to avoid,
+        // so this is the same `.keyed` step, for the same reason. The
+        // `isPresented:` forms keep the positional slot: nothing about them
+        // varies, and re-keying a presentation that is about nothing would only
+        // throw its state away.
+        var modalContext =
+            (itemKey.map { context.withChildIdentity(erasedType: Modal.self, key: $0) }
+            ?? context.withChildIdentity(type: Modal.self, index: 1))
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(overlayHeight)
         modalContext.environment.activeFocusSectionID = sectionID

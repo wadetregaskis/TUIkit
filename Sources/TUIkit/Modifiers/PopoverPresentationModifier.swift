@@ -79,6 +79,10 @@ extension View {
     /// Presents a popover for a currently-selected item. Matches SwiftUI's
     /// `popover(item:attachmentAnchor:arrowEdge:content:)`.
     ///
+    /// The item's id is the content's identity, exactly as in
+    /// ``View/sheet(item:onDismiss:content:)`` — a popover reopened for a
+    /// different item starts with fresh state.
+    ///
     /// - Parameters:
     ///   - item: A binding to an optional, identifiable item; non-`nil` presents.
     ///   - attachmentAnchor: Where on this view the popover attaches.
@@ -94,13 +98,16 @@ extension View {
             get: { item.wrappedValue != nil },
             set: { presented in if !presented { item.wrappedValue = nil } }
         )
-        return popover(
-            isPresented: isPresented, attachmentAnchor: attachmentAnchor, arrowEdge: arrowEdge
-        ) {
-            if let value = item.wrappedValue {
-                content(value)
-            }
-        }
+        // Built here rather than through the `isPresented:` spelling, which has
+        // no way to name the item: the key has to be read from the same binding,
+        // at the same moment, as the content built from it.
+        return PopoverPresentationModifier(
+            content: self,
+            isPresented: isPresented,
+            popover: item.wrappedValue.map(content),
+            attachmentAnchor: attachmentAnchor,
+            arrowEdge: arrowEdge ?? .bottom,
+            itemKey: item.wrappedValue.map { identityKey($0.id) })
     }
 }
 
@@ -113,6 +120,11 @@ struct PopoverPresentationModifier<Content: View, Popover: View>: View {
     let popover: Popover
     let attachmentAnchor: PopoverAttachmentAnchor
     let arrowEdge: Edge
+
+    /// The identity key of the item this popover is ABOUT, or `nil` for the
+    /// `isPresented:` form. See ``ModalPresentationModifier/itemKey``: the two
+    /// presenters key their presented content on exactly the same terms.
+    var itemKey: String?
 
     var body: Never {
         fatalError("PopoverPresentationModifier renders via Renderable")
@@ -182,8 +194,12 @@ extension PopoverPresentationModifier: Renderable {
             }
         }
 
-        var popoverContext = context
-            .withChildIdentity(type: Popover.self, index: 1)
+        // Keyed by the item, for the `item:` form — so a popover reopened for a
+        // different row is a different view, with its own `@State`. See
+        // ``ModalPresentationModifier``'s own keying for the whole reasoning.
+        var popoverContext =
+            (itemKey.map { context.withChildIdentity(erasedType: Popover.self, key: $0) }
+            ?? context.withChildIdentity(type: Popover.self, index: 1))
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.overlayContentHeight)
         popoverContext.environment.activeFocusSectionID = sectionID
