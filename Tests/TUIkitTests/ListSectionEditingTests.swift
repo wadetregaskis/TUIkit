@@ -47,6 +47,15 @@ struct ListSectionEditingTests {
             env.focusManager?.currentFocused as? ItemListHandler<String>
         }
 
+        /// The focused list's handler for a selection type other than `String`
+        /// — an `Int`-selected list, whose rows take their ORDINALS as ids and
+        /// so can be reached by the cursor where a `String`-selected list's
+        /// same rows cannot. Same lookup as ``handler``, which stays for the
+        /// `String` lists the rest of this suite builds.
+        func handler<Value: Hashable>(_ valueType: Value.Type) -> ItemListHandler<Value>? {
+            env.focusManager?.currentFocused as? ItemListHandler<Value>
+        }
+
         @discardableResult
         func render(_ view: some View) -> FrameBuffer {
             tui.stateStorage.beginRenderPass()
@@ -425,5 +434,114 @@ struct ListSectionEditingTests {
         handler.dragReorder(toContentY: alphaRow.yStart)
         #expect(alpha.value == ["a1", "a2", "a3"], "Alpha is never written to: \(alpha.value)")
         #expect(beta.value == ["b1", "b2", "b3"], "the row went to Beta's top: \(beta.value)")
+    }
+
+    // MARK: - A ForEach that shares its container with hand-written rows
+
+    /// The one arrangement that still refuses, pinned so the refusal is a
+    /// decision somebody can read rather than a silent no-op somebody
+    /// "fixes".
+    ///
+    /// `resolveChildViews` flattens the `ForEach` in among the hand-written
+    /// rows beside it, and a row arrives with nothing left on it to say which
+    /// of the two produced it. Wiring the section's actions anyway — the
+    /// obvious repair — hands `onDelete` an offset measured from the HEADER,
+    /// so a press on the second looped row deletes the third element; the
+    /// assertions below are on the collection for exactly that reason.
+    ///
+    /// Every row is tried, not one: this says no row of such a section is
+    /// deletable, which needs no claim about which row is which.
+    @Test("A Section mixing a ForEach with a hand-written row refuses Delete on every row")
+    func mixedSectionRefusesEveryDelete() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = Fixture()
+        let buffer = fixture.render(
+            List(selection: .constant(Int?.none)) {
+                Section("Items") {
+                    Text("All items")
+                    ForEach(items.value, id: \.self) { Text($0) }
+                        .onDelete { items.value.remove(atOffsets: $0) }
+                }
+            }
+            .frame(height: 10))
+        guard let handler = fixture.handler(Int.self) else {
+            Issue.record("the list took focus")
+            return
+        }
+        // The arrangement really is the mixed one — the hand-written row and
+        // all three looped rows drew, under one header.
+        let drawn = buffer.lines.joined(separator: "\n")
+        for line in ["Items", "All items", "alpha", "beta", "gamma"] {
+            #expect(drawn.contains(line), "\(line) drew:\n\(drawn)")
+        }
+        #expect(handler.itemCount == 5, "header + four rows, got \(handler.itemCount)")
+
+        for row in 0..<handler.itemCount {
+            handler.focusedIndex = row
+            #expect(
+                handler.handleKeyEvent(KeyEvent(key: .delete)) == false,
+                "row \(row) claimed Delete")
+        }
+        #expect(items.value == ["alpha", "beta", "gamma"], "nothing was deleted: \(items.value)")
+    }
+
+    /// `.onMove` refuses the same arrangement for the same reason, and refuses
+    /// it at the pick-up — before a drag can start and before `.live` feedback
+    /// can write anything.
+    @Test("A Section mixing a ForEach with a hand-written row refuses the pick-up on every row")
+    func mixedSectionRefusesEveryPickUp() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = Fixture()
+        fixture.render(
+            List(selection: .constant(Int?.none)) {
+                Section("Items") {
+                    Text("All items")
+                    ForEach(items.value, id: \.self) { Text($0) }
+                        .onMove { items.value.move(fromOffsets: $0, toOffset: $1) }
+                }
+            }
+            .frame(height: 10))
+        guard let handler = fixture.handler(Int.self) else {
+            Issue.record("the list took focus")
+            return
+        }
+        for row in 0..<handler.itemCount {
+            handler.focusedIndex = row
+            #expect(
+                handler.handleKeyEvent(KeyEvent(key: .character("r"), ctrl: true)) == false,
+                "row \(row) claimed the pick-up chord")
+        }
+        #expect(items.value == ["alpha", "beta", "gamma"], "nothing moved: \(items.value)")
+    }
+
+    /// The same refusal without a `Section` in sight: it is the FLATTENING
+    /// that loses the attribution, and a `List` mixing a `ForEach` with a
+    /// hand-written row flattens through the same call. Pinned beside its
+    /// twin because a shared cause is not a shared rule until both are
+    /// asserted — the flat list reaches it through `_ListCore`'s own child
+    /// walk, not through `Section.sectionRowActions`.
+    @Test("A List mixing a ForEach with a hand-written row refuses Delete on every row")
+    func mixedFlatListRefusesEveryDelete() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = Fixture()
+        fixture.render(
+            List(selection: .constant(Int?.none)) {
+                Text("All items")
+                ForEach(items.value, id: \.self) { Text($0) }
+                    .onDelete { items.value.remove(atOffsets: $0) }
+            }
+            .frame(height: 10))
+        guard let handler = fixture.handler(Int.self) else {
+            Issue.record("the list took focus")
+            return
+        }
+        #expect(handler.itemCount == 4, "four rows, got \(handler.itemCount)")
+        for row in 0..<handler.itemCount {
+            handler.focusedIndex = row
+            #expect(
+                handler.handleKeyEvent(KeyEvent(key: .delete)) == false,
+                "row \(row) claimed Delete")
+        }
+        #expect(items.value == ["alpha", "beta", "gamma"], "nothing was deleted: \(items.value)")
     }
 }

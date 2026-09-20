@@ -321,7 +321,10 @@ protocol SectionRowExtractor {
     /// `nil` for a section of statically-written rows, and also for a MIXED
     /// section (a `ForEach` beside a hand-written row): there the children
     /// arrive already flattened, so a row cannot say which of them produced
-    /// it, and a guess would put an offset into the wrong collection.
+    /// it, and a guess would put an offset into the wrong collection — one
+    /// measured from the HEADER, so a press on the second looped row deletes
+    /// the third element. The refusal is pinned by `ListSectionEditingTests`,
+    /// against that exact guess.
     var sectionRowActions: (any DynamicViewContentActions)? { get }
 }
 
