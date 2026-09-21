@@ -17,7 +17,30 @@ import Testing
 @Suite("TabView idle renders")
 struct TabViewIdleRenderTests {
 
-    private func frame(_ view: some View, tui: TUIContext, width: Int) {
+    /// Renders one frame the way the loop does — the cache's pass boundary
+    /// first — and answers how many subtree clears that boundary applied.
+    ///
+    /// That count is the oracle, in place of `AppState.shared.needsRender`.
+    /// Two reasons, and the second is why it is the DRAIN rather than the
+    /// total:
+    ///
+    /// - `needsRender` is process-wide. A `@State` write in any test running
+    ///   beside this one sets it, so a NEGATIVE assertion on it fails for
+    ///   someone else's reason — which is what happened here under a parallel
+    ///   run. (A positive assertion is merely weakened by the same pollution,
+    ///   which is why the other readers in this directory are left alone.)
+    ///   `StatePropertyTests` says the same thing about the same flag.
+    /// - The total number of subtree clears grows by one every frame for
+    ///   reasons that are not this bug: a tint, a focus registration, a theme
+    ///   and an environment write all clear DURING a render, by design.
+    ///   A `@State` write does not — it enqueues, and `beginRenderPass` applies
+    ///   it at the next boundary. So measuring across that boundary with no
+    ///   render in between isolates exactly the writes a frame made.
+    @discardableResult
+    private func frame(_ view: some View, tui: TUIContext, width: Int) -> Int {
+        let before = tui.renderCache.stats.subtreeClears
+        tui.renderCache.beginRenderPass()
+        let drained = tui.renderCache.stats.subtreeClears - before
         var env = EnvironmentValues()
         env.focusManager = FocusManager()
         env.applyRuntimeServices(from: tui)
@@ -26,6 +49,7 @@ struct TabViewIdleRenderTests {
         tui.stateStorage.beginRenderPass()
         _ = renderToBuffer(view, context: context)
         tui.stateStorage.endRenderPass()
+        return drained
     }
 
     @Test("A settled TabView asks for no further frames")
@@ -56,14 +80,18 @@ struct TabViewIdleRenderTests {
             }
         }
 
-        // Two frames to settle (the first fills the memo).
+        // Two frames to settle: the first fills the memo and builds the
+        // TabView's own `@State`, and the second is where that write is
+        // applied. Each later frame's boundary reports what the frame BEFORE
+        // it wrote, so the two assertions below are about frames two and three.
         frame(view, tui: tui, width: 60)
         frame(view, tui: tui, width: 60)
 
-        AppState.shared.didRender()
-        frame(view, tui: tui, width: 60)
         #expect(
-            !AppState.shared.needsRender,
+            frame(view, tui: tui, width: 60) == 0,
             "a settled TabView dirtied state, so the loop would render again")
+        #expect(
+            frame(view, tui: tui, width: 60) == 0,
+            "...and it is still doing it on the frame after that")
     }
 }
