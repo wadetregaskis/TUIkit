@@ -791,8 +791,14 @@ enum DropdownMenu {
     /// scrollbar cell and right border shift a column left; same pattern as
     /// `_ListCore`'s row clipping).
     static func fit(_ text: String, to width: Int) -> String {
-        text.strippedLength > width
-            ? text.ansiAwarePrefix(visibleCount: width).padToVisibleWidth(width)
-            : text.padToVisibleWidth(width)
+        // One measure, and it is bounded. This asked three times: a full
+        // `strippedLength` to decide, the clip's own (which it then threw
+        // away), and `padToVisibleWidth`'s. The clip cannot come back wider
+        // than `width`, so what it kept is what the pad needs to know.
+        guard let visible = text.strippedLength(atMost: width) else {
+            let clipped = text.ansiAwarePrefixWithWidth(visibleCount: width)
+            return clipped.prefix.padToVisibleWidth(width, knownVisibleWidth: clipped.visibleWidth)
+        }
+        return text.padToVisibleWidth(width, knownVisibleWidth: visible)
     }
 }

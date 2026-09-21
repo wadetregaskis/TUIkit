@@ -344,8 +344,10 @@ extension BorderRenderer {
         // the title display adds two spaces of padding. Truncate the title so the
         // whole top border fits exactly within `innerWidth`.
         let maxTitleWidth = max(0, max(0, innerWidth) - titleUsedLeftWidth - 2)
+        // Bounded: all this decides is whether the title is wider than the
+        // room for it, and the clip returns the title untouched when it is not.
         let fitted =
-            title.strippedLength > maxTitleWidth
+            title.strippedLength(atMost: maxTitleWidth) == nil
             ? title.ansiAwarePrefix(visibleCount: maxTitleWidth)
             : title
         return fitted.stripped.allSatisfy(\.isWhitespace) ? nil : fitted
@@ -614,9 +616,12 @@ extension BorderRenderer {
                 // the prefix up to a cell short — pad the shortfall so the
                 // right border stays aligned (same pattern as _ListCore's row
                 // clipping). Rare enough to keep the simple spelling.
-                let clipped = content.ansiAwarePrefix(
-                    visibleCount: innerWidth, knownVisibleWidth: width
-                ).padToVisibleWidth(innerWidth)
+                let cut = content.ansiAwarePrefixWithWidth(
+                    visibleCount: innerWidth, knownVisibleWidth: width)
+                // The clip counted the cells it kept; the pad would count them
+                // again to learn the same number.
+                let clipped = cut.prefix.padToVisibleWidth(
+                    innerWidth, knownVisibleWidth: cut.visibleWidth)
                 line.reserveCapacity(
                     vertical.utf8.count * 2 + clipped.utf8.count + ANSIRenderer.reset.utf8.count)
                 line += vertical
@@ -635,9 +640,10 @@ extension BorderRenderer {
         }
         let fittedLine: String
         if width > innerWidth {
-            fittedLine = content.ansiAwarePrefix(
-                visibleCount: innerWidth, knownVisibleWidth: width
-            ).padToVisibleWidth(innerWidth)
+            let cut = content.ansiAwarePrefixWithWidth(
+                visibleCount: innerWidth, knownVisibleWidth: width)
+            fittedLine = cut.prefix.padToVisibleWidth(
+                innerWidth, knownVisibleWidth: cut.visibleWidth)
         } else if width == innerWidth {
             fittedLine = content
         } else {
