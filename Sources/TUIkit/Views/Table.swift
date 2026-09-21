@@ -582,7 +582,8 @@ where Value.ID: Hashable {
             ).bar
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
-            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
+            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter,
+            context: context)
         var headerLine = renderHeader(
             columnWidths: columnWidths, gutter: gutter, palette: palette
         ).text
@@ -688,13 +689,15 @@ where Value.ID: Hashable {
         let rowArea = max(1, context.availableHeight - 3)
         // Decide the bar exactly as `renderToBuffer` does — at the width a bar
         // WOULD leave, where rows wrap taller and so overflow soonest.
-        let overflows = multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1, gutter: gutter)
+        let overflows = multiLineOverflows(
+                rowArea: rowArea, innerWidth: innerWidth - 1, gutter: gutter, context: context)
         let wantsScrollbar = context.environment.verticalScrollIndicators(
             overflowing: overflows
         ).bar
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
         let columnWidths = calculateColumnWidths(
-            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
+            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter,
+            context: context)
         let contentWidth = tableContentWidth(columnWidths, within: innerWidth, gutter: gutter)
 
         let content: (width: Int, height: Int)
@@ -826,13 +829,15 @@ where Value.ID: Hashable {
             !data.isEmpty
             && context.environment.verticalScrollIndicators(
                 overflowing: isMultiLine
-                    ? multiLineOverflows(rowArea: rowArea, innerWidth: innerWidth - 1, gutter: gutter)
+                    ? multiLineOverflows(
+                rowArea: rowArea, innerWidth: innerWidth - 1, gutter: gutter, context: context)
                     : data.count > rowArea
             ).bar
         let contentInnerWidth = max(1, innerWidth - (wantsScrollbar ? 1 : 0))
 
         let columnWidths = calculateColumnWidths(
-            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter)
+            availableWidth: contentInnerWidth, spacing: columnSpacing, gutter: gutter,
+            context: context)
         let header = renderHeader(columnWidths: columnWidths, gutter: gutter, palette: palette)
         var headerLine = header.text
         if wantsScrollbar {
@@ -1602,9 +1607,12 @@ where Value.ID: Hashable {
     /// overflow soonest: if they don't overflow even there they cannot overflow
     /// at the full width either, so answering "no bar" is final and the real
     /// column widths are then computed without the reservation.
-    private func multiLineOverflows(rowArea: Int, innerWidth: Int, gutter: Int) -> Bool {
+    private func multiLineOverflows(
+        rowArea: Int, innerWidth: Int, gutter: Int, context: RenderContext
+    ) -> Bool {
         let widths = calculateColumnWidths(
-            availableWidth: max(1, innerWidth), spacing: columnSpacing, gutter: gutter)
+            availableWidth: max(1, innerWidth), spacing: columnSpacing, gutter: gutter,
+            context: context)
         var lines = 0
         for item in data {
             lines += rowHeight(of: item, columnWidths: widths)
@@ -3211,7 +3219,9 @@ where Value.ID: Hashable {
 
     // MARK: - Column Width Calculation
 
-    private func calculateColumnWidths(availableWidth: Int, spacing: Int, gutter: Int) -> [Int] {
+    private func calculateColumnWidths(
+        availableWidth: Int, spacing: Int, gutter: Int, context: RenderContext
+    ) -> [Int] {
         guard !columns.isEmpty else { return [] }
 
         let totalSpacing = spacing * (columns.count - 1)
@@ -3251,18 +3261,8 @@ where Value.ID: Hashable {
                 widths[index] = ratioWidth
                 usedWidth += ratioWidth
             case .fit:
-                // Fit to the widest of the header and every cell value in this
-                // column. O(rows) per column, but stable as the table scrolls
-                // (all rows are considered, not just the visible ones) — with
-                // the early-out above once the interior is saturated.
-                // The header measured here is the one that will be DRAWN, sort
-                // indicator and all: measuring the bare title instead fitted the
-                // column two cells short and truncated its own header ("Track…").
-                var fitted = headerTitle(for: column).strippedLength
-                for item in data {
-                    fitted = max(fitted, column.value(for: item).strippedLength)
-                    if let cap = fitScanCap, fitted >= cap { break }
-                }
+                let fitted = fitWidth(
+                    of: column, at: index, cappedAt: fitScanCap, context: context)
                 widths[index] = fitted
                 usedWidth += fitted
             case .flexible:
@@ -3281,6 +3281,108 @@ where Value.ID: Hashable {
         }
 
         return widths.map { max(1, $0) }
+    }
+
+    /// The rows boxed for comparison, when the row type can be compared —
+    /// `nil` when it cannot, which is what makes the memo below decline rather
+    /// than guess. The same question, and the same answer, as
+    /// `ForEach.listRowsSignature`.
+    ///
+    /// Takes the rows as ONE opaque generic parameter rather than reading
+    /// `data` — or taking `[Row]` — because of a compiler bug, not a design
+    /// choice. Wherever `Foundation` is imported, 6.2.4 warns "conditional cast
+    /// from `[T]` to `any Equatable` always succeeds" for any array type; it
+    /// does not always succeed, and at runtime it correctly fails for an
+    /// element type that is not `Equatable`. Reduced and pinned in
+    /// `Tools/CompilerBugs/ArrayEquatableCastWarning`, and the behaviour the
+    /// memo depends on is pinned again by `TableFitColumnMemoTests`, which
+    /// renders a table of un-comparable rows and counts the scans.
+    private static func rowsSignature<Rows>(of rows: Rows) -> AnyEquatableBox? {
+        (rows as? any Equatable).map { AnyEquatableBox($0) }
+    }
+
+    /// The width a `.fit` column needs: the widest of its header and every one
+    /// of its cell values, kept across frames for as long as the rows have not
+    /// changed.
+    ///
+    /// The scan is O(rows) — all of them, not just the visible ones, so the
+    /// column does not change width as the table scrolls — and it runs more
+    /// than once a frame, because the analytic size and the render each ask.
+    /// On five thousand rows that is 338 µs a frame for ONE column, whether or
+    /// not anything about the table moved.
+    ///
+    /// This is the question `_ListCore.widestRowWidth` asks of a `List`, so it
+    /// is answered the same way and with the same four guards, rather than with
+    /// a second set of rules: a size entry under the table's own identity,
+    /// compared against the rows' DATA; the table marks itself active or the
+    /// entry dies at the end of the pass it was stored in; a value read from a
+    /// per-frame source declines the store; and so does an environment carrying
+    /// something that cannot be compared.
+    ///
+    /// Invalidation comes from the cache's own rules, which is why there is
+    /// none here: a `@State` write clears the identity that owns it together
+    /// with everything above and below it, so a write anywhere between the app
+    /// root and a cell's closure takes this entry with it — including the
+    /// `sortOrder` a click on a header writes, which changes the header text
+    /// this measures.
+    ///
+    /// It inherits the row memo's captured-data hole too (see
+    /// `foreach-memo-captured-data-hole`): a cell closure whose answer changes
+    /// without the data changing and without any write the cache sees is not
+    /// noticed. Unchanged data whose *rendering* silently changed is the same
+    /// bargain a `ForEach` row already makes.
+    ///
+    /// Data that cannot be compared — a row type that is not `Equatable` — has
+    /// no signature, so it scans every frame exactly as before.
+    private func fitWidth(
+        of column: TableColumn<Value>, at index: Int, cappedAt cap: Int?,
+        context: RenderContext
+    ) -> Int {
+        // The cap is in the key: a scan that stopped early answers for the
+        // interior it stopped against, and a wider table wants the real width.
+        // The height fields carry the column INDEX rather than a height — a fit
+        // width has no height to depend on, and one entry per column has to be
+        // told from the next.
+        let key = RenderCache.SizeKey(
+            identityHash: context.identity.structuralHash,
+            proposalWidth: cap, proposalHeight: nil,
+            availableWidth: cap ?? -1, availableHeight: index,
+            hasExplicitWidth: false, hasExplicitHeight: false,
+            measureGeneration: context.measureGeneration)
+        let memo: (cache: RenderCache, signature: AnyEquatableBox)? =
+            if let cache = context.renderCache, let signature = Self.rowsSignature(of: data) {
+                (cache, signature)
+            } else {
+                nil
+            }
+        if let memo {
+            // The table is not a memoising view, so nothing else marks it.
+            memo.cache.markActive(context.identity)
+            if let cached = memo.cache.lookupSize(key: key, view: memo.signature) {
+                return cached.width
+            }
+        }
+
+        let existingTracker = context.environment.volatileReadTracker
+        let tracker = existingTracker ?? VolatileReadTracker()
+        let unsafeBefore = tracker.cacheUnsafeCount
+        // The header measured here is the one that will be DRAWN, sort
+        // indicator and all: measuring the bare title instead fitted the
+        // column two cells short and truncated its own header ("Track…").
+        var fitted = headerTitle(for: column).strippedLength
+        for item in data {
+            fitted = max(fitted, column.value(for: item).strippedLength)
+            if let cap, fitted >= cap { break }
+        }
+
+        if let memo, tracker.cacheUnsafeCount == unsafeBefore,
+            !context.environment.hasUncomparableEnvironmentValue
+        {
+            memo.cache.storeSize(
+                key: key, identity: context.identity, view: memo.signature,
+                size: ViewSize.fixed(fitted, 0))
+        }
+        return fitted
     }
 
     // MARK: - Header Rendering
