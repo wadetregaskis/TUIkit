@@ -5750,6 +5750,55 @@ denied to the three discarding renders, which is a far smaller change and covers
 measured cases. The narrow version is one line in `isolatedForBackground()` plus its twin
 in `_HiddenView`; the general version is the flag above.
 
+### 92.1 The decision, and two things the paragraph above got wrong (2026-09-21)
+
+Decided: **the narrow denial, at the one site where the discard is total**, and the flag
+left unbought until something measures that needs it. Taking it turned up two errors in
+the pricing above, both in the narrow version's favour on one count and against it on the
+other.
+
+**`isolatedForBackground()` is the wrong home, and putting the line there would have been
+a regression.** Six callers, and most of them are VISIBLE: `ModalPresentationModifier` and
+`AlertPresentationModifier` isolate the page and then draw it under the dialog,
+`DimmedModifier` returns `contentBuffer.dimmedAsBackdrop(…)`, `ContextMenuModifier`
+isolates the backdrop it draws. A dimmed page is *inert, not invisible* — isolation is
+about what a render may REACH, and this is about whether its picture survives, which only
+the caller knows. `DimmedProbeApp` in `OffScreenAnimationDemandTests` is the guard: a
+`.dimmed()` probe is on screen and must keep its clock, and it passes with and without the
+fix, which is the point of it.
+
+**There were two leaking channels at that site, not one.** The volatile-read tracker is
+the one §92 names; `requestAnimation` re-declares its lattice on
+`environment.animationScheduler`, which is equally pass-wide, and a covered root went on
+holding the scheduler awake at its own rate. Both are swappable the way
+`withThrowawayKeyChannels()` swaps the four input channels, so the fix is one helper —
+`RenderContext.withThrowawayFrameDemand()` — and one call site, `NavigationStack`'s
+covered root. The third channel needs nothing, and that is worth saying plainly because
+§92 above implies otherwise: `recordActivity` already builds `animatedClocks` from the
+runs that reached the FINAL buffer, so an `AnimatedCellRun` discarded with its buffer
+already keeps no clock alive. The buffer-carried design is not a new idea to be judged —
+it is the one that already works, applied by hand to the two channels that could not carry
+themselves.
+
+**Why the other two sites are not one line each.** Neither discards its output whole.
+`_HiddenView` keeps `drawn.overlays.filter { $0.isScreenLevel }`, so a `.sheet` presented
+from inside a hidden subtree still presents — and that is a parity decision worth pinning
+rather than recalling, so it was measured: a SwiftUI probe on macOS 15, one arrangement
+per launch, reports a real sheet window (`NSApp.windows.filter(\.isSheet)`, count 1,
+visible 1) for `.hidden()` applied outside the presentation modifier, inside it, and for
+`.opacity(0)` — TUIkit matches. `ScrollView.windowedBuffer` slices one canvas render into
+the rows inside the viewport and the rows outside. In both, the surviving picture renders
+in the SAME pass as the discarded one, so a throwaway tracker would blind the half that is
+on screen. Only a demand carried on the buffer can tell the halves apart, and those two
+stay `withKnownIssue`.
+
+**What would buy the flag.** A measurement of `windowedBuffer`, which is the only one of
+the three where the waste is unbounded — a long canvas with an animation anywhere off
+screen — and also the only one that reasoning alone put on the list; `_HiddenView` and the
+covered root were driven through `RenderLoop` and watched. If a long scrolled canvas
+measures, the flag has earned its nine hand-carry sites and their nine tests. If it does
+not, `_HiddenView` alone almost certainly has not.
+
 **And what is not a defect.** §66's freeze is fixed and stays fixed. A scheduler-driven
 animation leaves all three inputs to `App.renderFrame`'s `clockLive` clear, so the loop
 stops the cursor timer — the standing condition that froze the translucent bar and the

@@ -147,4 +147,44 @@ extension RenderContext {
         copy.environment.statusBar = StatusBarState()
         return copy
     }
+
+    /// A copy whose two channels for asking that the loop keep rendering are
+    /// throwaways — for a render whose buffer is discarded ENTIRELY.
+    ///
+    /// Both channels are pass-wide, and a pass does not know which of its
+    /// renders reached the screen. The volatile-read tracker's `reads` is read
+    /// once at the end of the frame as `RenderActivity.usesPulse`, and the
+    /// animation scheduler drops a token that stops re-declaring — an
+    /// excellent rule that measures the wrong thing, because a view nobody can
+    /// see re-declares exactly as a visible one does. So a discarded render
+    /// went on costing a full render twenty times a second while showing
+    /// nobody anything. See `Documentation/Opacity as composition.md` §92.
+    ///
+    /// The third demand channel needs nothing here: an `AnimatedCellRun` rides
+    /// on the buffer, and `RenderLoop.recordActivity` builds `animatedClocks`
+    /// from the runs that reached the FINAL buffer, so a run discarded with its
+    /// buffer already keeps no clock alive. This is that rule, applied by hand
+    /// to the two channels that could not carry themselves.
+    ///
+    /// ## Why this is not folded into `isolatedForBackground()`
+    ///
+    /// Because most of that method's callers are VISIBLE. A modal's or an
+    /// alert's page, a `.dimmed()` subtree and a context menu's backdrop are
+    /// all isolated from input and then DRAWN — dimmed, but on screen and
+    /// animating. Blinding them here would freeze the page behind a dialog.
+    /// Isolation is about what a render may REACH; this is about whether its
+    /// picture survives, and only the caller knows that.
+    ///
+    /// A render that keeps PART of its output — `.hidden()`, which keeps
+    /// screen-level overlays so a `.sheet` presented from inside still
+    /// presents (as it does in SwiftUI), or `ScrollView`'s window, which keeps
+    /// the rows inside the viewport — must NOT use this: the surviving part
+    /// renders in the same pass, so its demand would be denied along with the
+    /// rest. Those need a demand that rides on the buffer; §92 prices it.
+    func withThrowawayFrameDemand() -> Self {
+        var copy = self
+        copy.environment.volatileReadTracker = VolatileReadTracker()
+        copy.environment.animationScheduler = AnimationScheduler()
+        return copy
+    }
 }

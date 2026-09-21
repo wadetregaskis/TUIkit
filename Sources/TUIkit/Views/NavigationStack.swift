@@ -254,14 +254,26 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // prune the moment it stopped rendering, and its
         // `.navigationDestination(for:)` registrations, which stay current
         // because the closures are re-captured each frame.
+        //
+        // `withThrowawayFrameDemand` because the buffer is dropped WHOLE. A
+        // root that read the pulse phase, or asked the scheduler for a
+        // lattice, went on driving the loop at its own rate from behind the
+        // screen covering it — the isolation above covers every channel by
+        // which the invisible root could reach the USER, and left it the two
+        // by which it reached the CLOCK.
         if !context.isMeasuring {
-            let backdrop = base.isolatedForBackground()
+            let backdrop = base.isolatedForBackground().withThrowawayFrameDemand()
             // Collect the root's title while it renders, because this is the
             // only place it is ever published — the bar draws for pushed
             // screens, so nothing else sees depth 0's name, and the crumb trail
             // would start with an anonymous "…" no matter how wide the terminal.
             let preferences = backdrop.environment.preferenceStorage
-            // Declared like the screen's collection in `renderScreen`.
+            // Declared like the screen's collection in `renderScreen`, and on
+            // the LIVE tracker rather than the backdrop's throwaway: this one
+            // is not a demand for a frame but a refusal to be cached, and it
+            // is load-bearing. Served from a memo this whole branch is skipped,
+            // the root does not render, and `endRenderPass` prunes the `@State`
+            // the render exists to keep.
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             preferences?.push()
             _ = TUIkit.renderToBuffer(
