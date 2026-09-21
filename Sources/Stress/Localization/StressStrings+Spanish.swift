@@ -40,6 +40,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "Ajuste de celda multilínea · dimensionado de fila lazy (solo ventana + cola) · ventaneo de altura variable",
         "stress.scenario.table-multiline.heading": "Tabla multilínea — {0} filas, Detalles se ajusta a ≤3 líneas",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "Tabla truncada",
+        "stress.scenario.truncate.blurb": "N filas × 6 columnas de frases largas; cada celda se recorta a una columna estrecha.",
+        "stress.scenario.truncate.stresses": "Recorte compatible con ANSI · los tres modos de truncamiento · medida/relleno por celda",
+        "stress.scenario.truncate.heading": "Tabla truncada — {0} filas × 6 columnas recortadas",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tablas en una vista de desplazamiento",
         "stress.scenario.tables-scroll.blurb": "N tablas apiladas en una vista de desplazamiento; cada una materializa sus filas y calcula sus propios anchos de columna.",

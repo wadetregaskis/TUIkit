@@ -40,6 +40,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "Mehrzeiliger Zellumbruch · Lazy-Zeilengröße (nur Fenster + Schluss) · Fensterung mit variabler Höhe",
         "stress.scenario.table-multiline.heading": "Mehrzeilige Tabelle — {0} Zeilen, Details bricht auf ≤3 Zeilen um",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "Kürzende Tabelle",
+        "stress.scenario.truncate.blurb": "N Zeilen × 6 Spalten mit langen Sätzen; jede Zelle wird auf eine schmale Spalte beschnitten.",
+        "stress.scenario.truncate.stresses": "ANSI-bewusstes Beschneiden · alle drei Kürzungsmodi · Messen/Auffüllen je Zelle",
+        "stress.scenario.truncate.heading": "Kürzende Tabelle — {0} Zeilen × 6 beschnittene Spalten",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabellen in einer Scrollansicht",
         "stress.scenario.tables-scroll.blurb": "N Tabellen in einer Scrollansicht gestapelt; jede materialisiert ihre Zeilen und berechnet eigene Spaltenbreiten.",

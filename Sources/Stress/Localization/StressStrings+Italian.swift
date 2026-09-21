@@ -40,6 +40,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "A capo cella multiriga · dimensionamento riga lazy (solo finestra + coda) · windowing ad altezza variabile",
         "stress.scenario.table-multiline.heading": "Tabella multiriga — {0} righe, Dettagli va a capo su ≤3 righe",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "Tabella troncata",
+        "stress.scenario.truncate.blurb": "N righe × 6 colonne di frasi lunghe; ogni cella viene ritagliata a una colonna stretta.",
+        "stress.scenario.truncate.stresses": "Ritaglio compatibile ANSI · tutte e tre le modalità di troncamento · misura/riempimento per cella",
+        "stress.scenario.truncate.heading": "Tabella troncata — {0} righe × 6 colonne ritagliate",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabelle in una vista a scorrimento",
         "stress.scenario.tables-scroll.blurb": "N tabelle impilate in una vista a scorrimento; ognuna materializza le sue righe e calcola le proprie larghezze di colonna.",

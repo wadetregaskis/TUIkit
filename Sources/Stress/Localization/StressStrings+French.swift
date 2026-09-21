@@ -40,6 +40,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "Repli de cellule multiligne · dimensionnement de ligne lazy (fenêtre + fin seulement) · fenêtrage à hauteur variable",
         "stress.scenario.table-multiline.heading": "Tableau multiligne — {0} lignes, Détails se replie sur ≤3 lignes",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "Tableau tronqué",
+        "stress.scenario.truncate.blurb": "N lignes × 6 colonnes de longues phrases ; chaque cellule est rognée à une colonne étroite.",
+        "stress.scenario.truncate.stresses": "Rognage compatible ANSI · les trois modes de troncature · mesure/remplissage par cellule",
+        "stress.scenario.truncate.heading": "Tableau tronqué — {0} lignes × 6 colonnes rognées",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tableaux dans une vue défilante",
         "stress.scenario.tables-scroll.blurb": "N tableaux empilés dans une vue défilante ; chacun matérialise ses lignes et calcule ses propres largeurs de colonne.",

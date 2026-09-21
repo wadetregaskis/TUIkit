@@ -51,6 +51,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "Multi-line cell wrapping · lazy row sizing (window + suffix only) · variable-height windowing",
         "stress.scenario.table-multiline.heading": "Multi-line Table — {0} rows, Details wraps to ≤3 lines",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "Truncating Table",
+        "stress.scenario.truncate.blurb": "N rows × 6 columns of long sentences, every cell clipped to a narrow column.",
+        "stress.scenario.truncate.stresses": "ANSI-aware clipping · all three truncation modes · per-cell measure/pad",
+        "stress.scenario.truncate.heading": "Truncating Table — {0} rows × 6 clipped columns",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tables in a ScrollView",
         "stress.scenario.tables-scroll.blurb": "N tables stacked in a ScrollView; each materialises its rows and computes its own column widths.",

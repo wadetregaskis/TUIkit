@@ -38,6 +38,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "多行单元格换行 · 惰性行尺寸（仅窗口 + 末尾）· 可变行高窗口化",
         "stress.scenario.table-multiline.heading": "多行表格 — {0} 行，详情换行至 ≤3 行",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "截断表格",
+        "stress.scenario.truncate.blurb": "N 行 × 6 列长句；每个单元格都被裁剪到狭窄的列宽。",
+        "stress.scenario.truncate.stresses": "ANSI 感知裁剪 · 三种截断模式 · 逐单元格测量与填充",
+        "stress.scenario.truncate.heading": "截断表格 — {0} 行 × 6 个被裁剪的列",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "滚动视图中的多个表格",
         "stress.scenario.tables-scroll.blurb": "N 个表格堆叠在滚动视图中；每个都物化自己的行并计算各自的列宽。",

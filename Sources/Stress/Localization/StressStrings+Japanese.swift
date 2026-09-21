@@ -38,6 +38,12 @@ extension StressStrings {
         "stress.scenario.table-multiline.stresses": "複数行セルの折り返し · 遅延行サイズ計算（ウィンドウ + 末尾のみ）· 可変高ウィンドウ化",
         "stress.scenario.table-multiline.heading": "複数行テーブル — {0} 行、詳細は ≤3 行に折り返し",
 
+        // MARK: truncate
+        "stress.scenario.truncate.title": "切り詰めテーブル",
+        "stress.scenario.truncate.blurb": "N 行 × 6 列の長い文。各セルは狭い列に合わせて切り詰められます。",
+        "stress.scenario.truncate.stresses": "ANSI 対応のクリップ · 3 つの切り詰めモードすべて · セルごとの計測とパディング",
+        "stress.scenario.truncate.heading": "切り詰めテーブル — {0} 行 × 6 列（切り詰め）",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "スクロールビュー内のテーブル群",
         "stress.scenario.tables-scroll.blurb": "N 個のテーブルをスクロールビューに積み重ね。各テーブルが自分の行を実体化し、独自の列幅を計算します。",
