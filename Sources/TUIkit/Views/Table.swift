@@ -3599,7 +3599,16 @@ where Value.ID: Hashable {
             return stated
         }
         guard case .none = visualState.background else {
-            content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
+            // `cellColumn` IS this line's visible width, so nothing rescans it:
+            // the loop above walked it from `gutter` through every spacing and
+            // every column, `appendAligned` puts exactly `cellWidth` cells in
+            // each, and the mark is one cell by ``RowSelectionIndicator``'s
+            // documented invariant (a mark of another width would move the
+            // row's content, which is why it has one). A `strippedLength` here
+            // was a second walk of the whole assembled row — escapes and all,
+            // so the general path rather than the byte one — for every
+            // selected or focused row of every frame.
+            content.append(contentsOf: asciiSpaces(rowWidth - cellColumn))
             let fill = visualState.background.claimableFill
             guard let colors = visualState.background.pulseColors else {
                 return (visualState.background.painting(content), nil, nil, claims(fill: fill))

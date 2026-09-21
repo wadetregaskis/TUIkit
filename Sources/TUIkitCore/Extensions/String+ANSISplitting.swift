@@ -134,20 +134,20 @@ extension String {
         // the value.
         if let clipped = asciiPrefixWithWidth(visibleCount: visibleCount) { return clipped }
 
-        // Otherwise: the commonest remaining case on the emission path is that
-        // the line already fits, so the walk would yield a segment per
-        // character only to hand back the string it was given. `strippedLength`
-        // answers "does it fit" without allocating.
+        // Otherwise: measure once, then hand the width to the twin, which is
+        // the one place that knows what a width is worth — the "it already
+        // fits" answer (the commonest case on the emission path: the walk would
+        // yield a segment per character only to hand back the string it was
+        // given), and the O(excess) trailing-spaces drop, which this entry
+        // point used to have no way to reach.
         //
         // Equivalent by construction: the walk emits every segment in order
         // and only stops early at a cut, so with no cut it reassembles the
         // original and reports `strippedLength`. `ANSIPrefixKnownWidthTests`
         // pins that against ``exactAnsiAwarePrefixWithWidth(visibleCount:)``
         // rather than leaving it as an argument.
-        let width = strippedLength
-        if width <= visibleCount { return (self, width) }
-
-        return exactAnsiAwarePrefixWithWidth(visibleCount: visibleCount)
+        return ansiAwarePrefixWithWidth(
+            visibleCount: visibleCount, knownVisibleWidth: strippedLength)
     }
 
     /// The clip done on UTF-8 bytes, for the lines whose bytes are enough to

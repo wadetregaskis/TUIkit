@@ -946,7 +946,36 @@ extension String {
         // line during render, every frame, so this is the single most-executed
         // width path in the framework.
         if let ascii = asciiStrippedLength() { return ascii }
+        return nonASCIIStrippedLength
+    }
 
+    /// This line's visible width, or `nil` if it is wider than `limit` cells.
+    ///
+    /// The question a truncation actually asks. `truncatedToWidth` measured the
+    /// whole value to decide whether it was longer than a column — 90 cells of
+    /// scan to learn that 18 of them would be kept — and for the `.tail` mode
+    /// nothing downstream wanted the real width afterwards. This stops as soon
+    /// as the answer is settled, which for the byte-wise path is at `limit`
+    /// cells.
+    ///
+    /// The early stop is the ASCII path's alone: the other two measure runs,
+    /// and a run is measured whole. They still answer the question, just not
+    /// faster than ``strippedLength`` does.
+    ///
+    /// - Parameter limit: The width to compare against. Non-positive limits are
+    ///   answered by the measure itself (an empty line is 0 cells and so fits a
+    ///   limit of 0).
+    public func strippedLength(atMost limit: Int) -> Int? {
+        if let ascii = asciiStrippedLength(stoppingAbove: limit) {
+            return ascii <= limit ? ascii : nil
+        }
+        let width = nonASCIIStrippedLength
+        return width <= limit ? width : nil
+    }
+
+    /// ``strippedLength``'s two slower paths, for a line the byte-wise one
+    /// declined. Shared so the bounded measure above is the same measure.
+    private var nonASCIIStrippedLength: Int {
         // Non-ASCII, no escapes: one visible run — the whole string.
         // (ESC is a standalone byte, never part of a multi-byte scalar, so a
         // direct byte search settles it without decoding.)
@@ -977,19 +1006,46 @@ extension String {
     ///
     /// Not `private`: the tests call it directly, so that "the fast path and
     /// the general path agree" is asserted rather than assumed.
-    func asciiStrippedLength() -> Int? {
+    ///
+    func asciiStrippedLength() -> Int? { asciiStrippedLength(bounded: false, limit: 0) }
+
+    /// ``asciiStrippedLength()`` that stops once the width has passed `limit`.
+    /// The result is then merely *some* value greater than `limit` rather than
+    /// the true width — which is all a caller that passed a limit asked to be
+    /// told apart.
+    func asciiStrippedLength(stoppingAbove limit: Int) -> Int? {
+        asciiStrippedLength(bounded: true, limit: limit)
+    }
+
+    /// The one loop behind both, `@inline(__always)` so that `bounded` is a
+    /// constant at every call and the unbounded caller keeps the loop it had.
+    ///
+    /// Not a default argument of `.max`: this is the most-executed width path
+    /// in the framework, and a compare-and-branch per BYTE that can never fire
+    /// still costs — around +0.8% across the scenarios that do no truncating at
+    /// all, which is most of them, measured before it was taken back out.
+    @inline(__always)
+    private func asciiStrippedLength(bounded: Bool, limit: Int) -> Int? {
         var state = EscapeScanState.normal
         var width = 0
         for byte in utf8 {
             if byte >= 0x80 { return nil }
             switch state {
             case .normal:
-                if byte == 0x1B { state = .sawESC } else { width += 1 }
+                if byte == 0x1B {
+                    state = .sawESC
+                } else {
+                    width += 1
+                    if bounded, width > limit { return width }
+                }
 
             case .sawESC:
                 let seen = Self.escapeIntroducerScan(on: UInt32(byte))
                 state = seen.state
-                if seen.visible { width += 1 }
+                if seen.visible {
+                    width += 1
+                    if bounded, width > limit { return width }
+                }
 
             case .csi:
                 let value = UInt32(byte)
@@ -1001,6 +1057,7 @@ extension String {
                 } else {  // not a CSI byte where a terminator was expected
                     width += 1
                     state = .normal
+                    if bounded, width > limit { return width }
                 }
 
             case .escIntermediate, .string, .stringSawESC:

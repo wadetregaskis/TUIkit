@@ -56,8 +56,21 @@ extension String {
         atWordBoundary: Bool = false,
         forceEllipsis: Bool = false
     ) -> String {
-        let visible = strippedLength
-        if visible <= width && !forceEllipsis { return self }
+        // A BOUNDED measure: all this has to settle is whether the value is
+        // wider than the space for it, and for the commonest answer — `.tail`,
+        // the default — nothing below wants the true width afterwards. Asking
+        // for it cost the whole value: 90 cells of scan to learn that 18 of
+        // them would be kept, once per cell of every row of every frame. `nil`
+        // is "wider than `width`", and the two modes that DO need the number
+        // ask for it where they need it.
+        //
+        // A line with no more BYTES than the width has cannot be wider than it
+        // — every visible cell costs at least one byte, and escapes cost bytes
+        // and no cells — so a short line is measured the plain way, and only a
+        // line long enough for the question to be open pays for the bound.
+        let measured =
+            utf8.count <= width ? strippedLength : strippedLength(atMost: width)
+        if let visible = measured, visible <= width, !forceEllipsis { return self }
         guard width >= 1 else { return "" }
 
         let ellipsis = String.truncationEllipsis
@@ -65,21 +78,19 @@ extension String {
         // Already fits, but a continuation marker is required: append the
         // ellipsis if there is a spare cell, otherwise fall through and
         // give up one cell of content to make room for it.
-        if visible < width && forceEllipsis { return self + ellipsis }
+        if let visible = measured, visible < width, forceEllipsis { return self + ellipsis }
         if width == 1 { return ellipsis }
 
         let keep = width - 1
         switch mode {
         case .tail:
-            // `visible` IS this string's `strippedLength`, and the clip's own
-            // first act is to compute that again (see
-            // `ansiAwarePrefixWithWidth(visibleCount:)`). Carry it in instead —
-            // the same "pass the width you already know" shape as
-            // `padToVisibleWidth(_:knownVisibleWidth:)`, and it additionally
-            // unlocks the clip's O(excess) trailing-spaces path. Byte-identical
-            // by construction, and pinned that way by
-            // `ANSIPrefixKnownWidthTests`.
-            let prefix = ansiAwarePrefix(visibleCount: keep, knownVisibleWidth: visible)
+            // No width carried: the clip's own byte-wise path settles an ASCII
+            // line in O(cells kept) without one, and for a line it declines the
+            // clip measures — once — and hands the answer to the same
+            // known-width entry point this used to call directly. Carrying a
+            // width from here would mean computing one this mode has no other
+            // use for.
+            let prefix = ansiAwarePrefix(visibleCount: keep)
             let body =
                 atWordBoundary
                 ? (Self.keepingLeadingWords(of: prefix) ?? Self.droppingTrailingSpaces(prefix))
@@ -95,6 +106,10 @@ extension String {
             // cut past an already-closed run gain nothing.
             return body + ellipsis + (body.leavesSGROpen ? ANSIRenderer.reset : "")
         case .head:
+            // `.head` and `.middle` measure from the END, so they need the true
+            // width and ask for it here — `measured` is `nil` exactly when the
+            // bounded scan stopped early, which is when it has nothing to give.
+            let visible = measured ?? strippedLength
             let suffix = ansiAwareSuffix(droppingVisible: max(0, visible - keep))
             if atWordBoundary, let trimmed = Self.keepingTrailingWords(of: suffix) {
                 return ellipsis + trimmed
@@ -105,7 +120,7 @@ extension String {
             // always cuts by character.
             let leftKeep = keep / 2
             let rightKeep = keep - leftKeep
-            // Same carried width as `.tail` above.
+            let visible = measured ?? strippedLength
             return ansiAwarePrefix(visibleCount: leftKeep, knownVisibleWidth: visible)
                 + ellipsis
                 + ansiAwareSuffix(droppingVisible: max(0, visible - rightKeep))

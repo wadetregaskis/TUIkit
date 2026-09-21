@@ -165,6 +165,30 @@ struct StrippedLengthFastPathTests {
         }
     }
 
+    /// The bounded measure has to answer exactly what the unbounded one would,
+    /// or `nil` — and `nil` only when the line really is wider. Its early stop
+    /// makes the ASCII path return a number that is NOT the true width once it
+    /// has passed the limit, so what is pinned is the public wrapper, over
+    /// every limit from below zero to past the end of each line.
+    @Test("a bounded measure agrees with the unbounded one at every limit")
+    func boundedMeasureAgrees() {
+        let inputs = [
+            "", "x", "hello world  ", "\u{1B}[31mred\u{1B}[0m",
+            "\u{1B}[1;38;5;42mstyled\u{1B}[0m tail", "\u{1B}[?25lhidden",
+            "tab\there\u{07}bell", "日本語テキスト", "🤙🏽 waves", "👨‍👩‍👧‍👦 family",
+            "\u{1B}[32m日本語\u{1B}[0m ascii", "\u{1B}]8;;u\u{9C}abc", "\u{1B}(Bhello",
+            "e\u{0301}cole", "┌──────┐", "\u{1B}[31m\u{1F3FB}\u{1B}[0m",
+        ]
+        for text in inputs {
+            let width = text.strippedLength
+            for limit in -2...(width + 2) {
+                #expect(
+                    text.strippedLength(atMost: limit) == (width <= limit ? width : nil),
+                    "limit \(limit) of \(text.debugDescription) (width \(width))")
+            }
+        }
+    }
+
     @Test("stripped still returns the visible text")
     func strippedKeepsVisibleText() {
         #expect("\u{1B}[31mred\u{1B}[0m".stripped == "red")
