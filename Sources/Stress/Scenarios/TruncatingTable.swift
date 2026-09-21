@@ -45,7 +45,7 @@ enum TruncatingTableScenario {
 /// Row model. The strings are synthesised ONCE, in `init` — a scenario that
 /// rebuilds them per frame measures the harness's RNG and string joins rather
 /// than TUIkit's clip (the mistake `TextWall`'s comment records).
-struct TruncatingItem: Identifiable, Sendable {
+struct TruncatingItem: Identifiable, Sendable, Equatable {
     let id: Int
     let plain: String
     let styled: String
@@ -85,6 +85,7 @@ private struct TruncatingTableView: View {
             Divider()
             Table(rows, selection: Binding<Int?>.constant(nil)) {
                 TableColumn("ID") { (row: TruncatingItem) in "\(row.id)" }
+                    .width(.fit)
                 TableColumn("Summary") { (row: TruncatingItem) in row.plain }
                 TableColumn("Path") { (row: TruncatingItem) in row.path }
                     .truncationMode(.head)
