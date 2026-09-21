@@ -116,6 +116,60 @@ struct ANSIPrefixKnownWidthTests {
         }
     }
 
+    /// A hand-written corpus proves the shapes someone thought of. This one
+    /// proves the shapes nobody did: 4,000 lines assembled from the alphabet
+    /// the byte-wise clip has to make decisions about — ASCII text and
+    /// controls, SGR sequences of every parameter form, private-marker and
+    /// malformed CSIs, hyperlinks, `ESC ( B`, a bare `ESC`, wide glyphs,
+    /// combining marks and over-advancers — cut at every point.
+    ///
+    /// Deterministic: a fixed seed and a hand-rolled generator, so a failure
+    /// names an input that can be pasted straight into the corpus above and a
+    /// passing run means the same thing tomorrow.
+    @Test("A seeded fuzz of mixed lines is byte-identical to the walk")
+    func fuzzMatchesExactWalk() {
+        let pieces = [
+            "a", "bc", "def ", "  ", "\t", "\u{07}", "\u{7F}", "x",
+            "\u{1B}[0m", "\u{1B}[m", "\u{1B}[31m", "\u{1B}[38;5;200m",
+            "\u{1B}[38;2;10;20;30m", "\u{1B}[1;4;7m", "\u{1B}[0 q", "\u{1B}[?25l",
+            "\u{1B}[2J", "\u{1B}[31", "\u{1B}", "\u{1B}(B",
+            "\u{1B}]8;;https://e.co\u{1B}\\", "\u{1B}]8;;\u{1B}\\",
+            "日", "本語", "🤙🏽", "👨‍👩‍👧‍👦", "❤️", "A\u{0308}", "\u{1F3FD}",
+        ]
+        var seed: UInt64 = 0x5715_2025
+        func next(_ bound: Int) -> Int {
+            // xorshift64*, so the sequence is fixed and independent of the
+            // platform's `SystemRandomNumberGenerator`.
+            seed ^= seed >> 12
+            seed ^= seed << 25
+            seed ^= seed >> 27
+            return Int((seed &* 0x2545_F491_4F6C_DD1D) >> 33) % bound
+        }
+        for _ in 0..<4_000 {
+            var line = ""
+            for _ in 0..<next(8) { line += pieces[next(pieces.count)] }
+            let width = line.strippedLength
+            for cut in 0...(width + 2) {
+                let walk = line.exactAnsiAwarePrefixWithWidth(visibleCount: cut)
+                let plain = line.ansiAwarePrefixWithWidth(visibleCount: cut)
+                let known = line.ansiAwarePrefixWithWidth(
+                    visibleCount: cut, knownVisibleWidth: width)
+                #expect(
+                    walk.prefix == plain.prefix && walk.visibleWidth == plain.visibleWidth,
+                    "cut \(cut) of \(line.debugDescription): plain path diverged")
+                #expect(
+                    walk.prefix == known.prefix && walk.visibleWidth == known.visibleWidth,
+                    "cut \(cut) of \(line.debugDescription): known-width path diverged")
+                let appWalk = line.exactAnsiAwarePrefixForTerminalAppWithWidth(visibleCount: cut)
+                let appFast = line.ansiAwarePrefixForTerminalAppWithWidth(visibleCount: cut)
+                #expect(
+                    appWalk.prefix == appFast.prefix
+                        && appWalk.visibleWidth == appFast.visibleWidth,
+                    "cut \(cut) of \(line.debugDescription): Terminal.app path diverged")
+            }
+        }
+    }
+
     @Test("A cut past the width returns the string unchanged")
     func noCutNeeded() {
         let line = "\u{1B}[32mok\u{1B}[0m  "

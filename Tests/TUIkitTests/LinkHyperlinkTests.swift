@@ -192,6 +192,28 @@ struct LinkHyperlinkTests {
         }
     }
 
+    /// The clips above cut a link TUIkit itself emitted, which is balanced
+    /// before anything pads it — so the cut lands outside the link and nothing
+    /// is left open. The route that does leave one open is content the app
+    /// hands in: `Text`, a `Table` cell and a `List` row all pass a raw OSC 8
+    /// through unchanged, and `truncatedToWidth` then clips it.
+    ///
+    /// That clip took the byte-drop fast path in
+    /// `ansiAwarePrefix(visibleCount:knownVisibleWidth:)`, which returned the
+    /// line minus its trailing space bytes — byte-identical to the walk for
+    /// everything EXCEPT the one thing the walk adds at a cut: the closing
+    /// sequence of a link still open. The width re-scan guarding that path
+    /// cannot see the difference, because a closing sequence is zero cells.
+    /// The link then ran on over the ellipsis and over whatever the caller
+    /// appended next — a row's fill and badge, the scrollbar column, the diff
+    /// writer's padding — and a click anywhere along that opened the URL.
+    @Test("A truncated line closes a hyperlink the content left open", arguments: 1...6)
+    func truncatingClosesAnOpenHyperlink(excess: Int) {
+        let raw = "\u{1B}]8;;https://example.com/docs\u{1B}\\click here      "
+        let clipped = raw.truncatedToWidth(raw.strippedLength - excess)
+        #expect(!leavesLinkOpen(clipped), "excess \(excess): \(clipped.debugDescription)")
+    }
+
     /// A hyperlink is not styling, so it must not be mistaken for any: the
     /// label keeps its accent and its underline, and the row still measures
     /// what it paints.

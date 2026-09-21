@@ -49,6 +49,12 @@ extension String {
     /// ``strippedLength`` re-scan and anything surprising falls back to the
     /// exact walk.
     ///
+    /// "By construction" holds only where the walk emits nothing of its OWN at
+    /// the cut, and there is exactly one thing it does emit: the closing
+    /// sequence of a hyperlink the cut leaves open. The width re-scan cannot
+    /// see that — a closing sequence is zero cells — so a line carrying any
+    /// string-terminated escape is handed to the walk instead.
+    ///
     /// - Parameters:
     ///   - visibleCount: The number of terminal cells to include.
     ///   - knownVisibleWidth: This string's ``strippedLength``, which the
@@ -72,7 +78,7 @@ extension String {
         guard excess > 0 else { return (self, knownVisibleWidth) }
 
         let bytes = utf8
-        if excess <= bytes.count {
+        if excess <= bytes.count, !containsStringFamilyEscape {
             var tailIsPlainSpaces = true
             var cutIndex = bytes.endIndex
             for _ in 0..<excess {
@@ -92,6 +98,23 @@ extension String {
             }
         }
         return exactAnsiAwarePrefixWithWidth(visibleCount: visibleCount)
+    }
+
+    /// Whether this string contains a string-terminated escape family — `ESC ]`
+    /// (OSC) and its siblings, of which TUIkit emits one: the OSC 8 hyperlink.
+    ///
+    /// The question the trailing-spaces clip has to ask before it may skip the
+    /// walk, and cheap enough to ask: one byte scan, no decoding, and it stops
+    /// at the first one. A CSI — the escape a styled line is actually made of —
+    /// is not one of these, so an ordinary coloured row answers `false` after
+    /// looking at its bytes once.
+    private var containsStringFamilyEscape: Bool {
+        var sawESC = false
+        for byte in utf8 {
+            if sawESC, Self.isStringFamilyIntroducer(UInt32(byte)) { return true }
+            sawESC = byte == 0x1B
+        }
+        return false
     }
 
     /// Like ``ansiAwarePrefix(visibleCount:)`` but also returns the visible cell
