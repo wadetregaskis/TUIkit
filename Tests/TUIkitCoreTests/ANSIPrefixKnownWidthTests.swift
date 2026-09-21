@@ -44,6 +44,27 @@ struct ANSIPrefixKnownWidthTests {
         "",
         "x",
         " ",
+        // ── The byte-wise clip's own boundaries ──────────────────────────
+        // It runs the CSI state machine over UTF-8 and stops at the cut, so
+        // what has to be pinned is every shape that decides whether it may.
+        //
+        // Plain and styled ASCII: the shapes it is FOR.
+        "the quick brown fox jumps over the lazy dog, twice over",
+        "\u{1B}[31mr\u{1B}[32me\u{1B}[33md\u{1B}[0m \u{1B}[1mbold\u{1B}[22m tail",
+        // A hyperlink: ASCII, and it must still decline — the walk carries the
+        // link across the cut and closes it, which a byte prefix cannot.
+        "\u{1B}]8;;https://example.com\u{1B}\\link text\u{1B}]8;;\u{1B}\\ after",
+        // An nF escape: also ASCII, also outside what the byte walk decides.
+        "\u{1B}(Bhello there",
+        // A private-marker CSI, which paints nothing and is not SGR.
+        "\u{1B}[?25lhidden cursor",
+        // ASCII controls: one cell each to the measurers, so the clip must
+        // agree with them rather than with what a terminal would do.
+        "tab\there\u{07}bell\u{7F}del",
+        // Malformed: a CSI interrupted by ESC, and one truncated at the end.
+        "\u{1B}[31\u{1B}[32mrecovered",
+        "ends mid-sequence\u{1B}[",
+        "lone escape \u{1B} here",
     ]
 
     @Test("Byte-identical to the exact walk at every cut point")
