@@ -133,8 +133,11 @@ extension ItemListHandler {
     ///   command-click (terminals never report the command key, so both
     ///   reportable modifiers stand in for it).
     ///
-    /// Single-selection mode keeps its existing click-to-toggle behaviour;
-    /// the keyboard path (Space toggles at the focus cursor) is unchanged.
+    /// Single-selection mode toggles instead — a DELIBERATE divergence from
+    /// macOS, for the same reason the line above gives: no terminal reports the
+    /// command key, so the platform's own way of clearing a selection is not
+    /// available to reproduce. See `SwiftUI-compatibility.md` §2.11. The
+    /// keyboard path (Space toggles at the focus cursor) is unchanged.
     /// Whether a release stamped `clickCount` on `row` completes a
     /// multi-click ON THAT ROW.
     ///
@@ -190,7 +193,20 @@ extension ItemListHandler {
 
         switch selectionMode {
         case .single:
-            // Single selection: set to this item (or nil if already selected to deselect)
+            // Clicking the selected row again CLEARS the selection, where
+            // macOS (and so SwiftUI) leaves it alone and reserves deselection
+            // for command-click. Deliberate, and documented in
+            // `SwiftUI-compatibility.md` §2.11: command-click does not survive
+            // most terminal clients, so a port that copied the platform rule
+            // here would ship a single-selection list with no way at all to get
+            // back to "nothing selected". An obvious way to clear it is worth
+            // more than the convention, given the convention's other half is
+            // unreachable.
+            //
+            // Multi-selection does NOT toggle on a plain click — see
+            // `handleClickSelection`, which assigns `[clickedID]` — because
+            // there the standing-in modifiers (ctrl, option) do reach us, so
+            // the macOS rule is reproducible in full and is what we follow.
             if singleSelection?.wrappedValue == itemID {
                 singleSelection?.wrappedValue = nil
             } else {

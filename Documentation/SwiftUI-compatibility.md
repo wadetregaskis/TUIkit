@@ -605,6 +605,51 @@ silent drop-in for switching between `HStack` and `VStack` themselves if the
 call site relied on the centring they default to; add an explicit `alignment:`
 if it did.
 
+### 2.11 A plain click on the selected row CLEARS a single selection, where macOS keeps it
+
+```swift
+// Both compile; result differs:
+Table(people, selection: $selected) { TableColumn("Name", value: \.name) }
+// click "Mei", then click "Mei" again —
+//   SwiftUI: selected == mei.id   (a plain click never deselects)
+//   TUIkit:  selected == nil
+```
+
+`List(selection:)` with a `Binding<SelectionValue?>` is the same code path
+(`ItemListHandler.toggleSelectionAtFocusedIndex`, `.single`), so this applies
+to both containers.
+
+**Why it's intentional / should NOT change:** SwiftUI inherits the
+`NSTableView` convention, where a plain click always selects the row it lands
+on and never deselects — clearing a selection is command-click's job. **Owner's
+decision (2026-09-21):** the second half of that convention is unavailable
+here. Command-click does not come through in many terminal clients, so a port
+that copied only the reachable half would ship a single-selection list with no
+easy, obvious way to get back to "nothing selected" at all. Toggling on a
+re-click is worth more than the convention when the convention's escape hatch
+cannot be reproduced.
+
+**Multi-selection does not diverge**, and that asymmetry is deliberate rather
+than an oversight: with a `Binding<Set<…>>`, a plain click assigns
+`[clickedID]` — it ensures the clicked row is selected and clears every other
+row, exactly as macOS does — because there the standing-in modifiers do reach
+us. Ctrl-click and option-click both toggle a single row, the terminal-visible
+stand-ins for command-click (no terminal reports the command key; see
+`Terminal-compatibility.md`), and shift-click selects the span from the anchor,
+re-pivoting around it like Finder. So the macOS rule is followed in full
+wherever it is reproducible in full.
+
+The keyboard path is unaffected in both modes: Space toggles at the focus
+cursor, which is a good terminal affordance and is also what makes the
+single-selection divergence a small one — the mouse is simply being given the
+same way out that the keyboard already has.
+
+Pinned by `MultiSelectionClickTests.plainClickReplaces` (the macOS rule,
+including a click on an already-selected row),
+`MultiSelectionClickTests.singleModeTogglesByDesign` (the divergence itself,
+on the mouse path where it lives) and `ItemListHandlerTests.singleDeselect`
+(the keyboard toggle it borrows its behaviour from).
+
 ## 3. Open divergence
 
 ### A modifier on multi-view content reaches the members through some wrappers, not yet all

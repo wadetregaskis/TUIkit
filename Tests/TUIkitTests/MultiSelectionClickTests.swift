@@ -45,6 +45,13 @@ struct MultiSelectionClickTests {
                 shift: shift, ctrl: ctrl, meta: meta))
     }
 
+    /// The macOS rule in full, and multi-selection follows it in full: a plain
+    /// click ENSURES the clicked row is selected and clears every other row —
+    /// whichever of those two the click happens to need. The second half is the
+    /// one a toggle would get wrong, and the one single-selection deliberately
+    /// does get wrong for want of a command key (`SwiftUI-compatibility.md`
+    /// §2.11), so it is asserted here rather than left to read like a special
+    /// case of the first.
     @Test("A plain click makes the clicked row the sole selection")
     func plainClickReplaces() {
         let box = SelectionBox()
@@ -54,6 +61,13 @@ struct MultiSelectionClickTests {
         click(handler, at: 1)
         #expect(box.selection == ["b"], "plain click replaces the whole selection")
         #expect(handler.focusedIndex == 1)
+
+        // The row clicked is ALREADY selected, alongside another. It stays
+        // selected and the other goes: no toggling off here, unlike the single
+        // case below.
+        box.selection = ["a", "d"]
+        click(handler, at: 0)
+        #expect(box.selection == ["a"], "an already-selected row stays selected, others clear")
     }
 
     @Test("Shift-click selects the range from the anchor")
@@ -186,8 +200,15 @@ struct MultiSelectionClickTests {
             "the release inherits the press's modifier and toggles Row-5 in: \(selection.sorted())")
     }
 
-    @Test("Single-selection mode keeps its click-to-toggle behaviour")
-    func singleModeUnchanged() {
+    /// The divergence, decided rather than inherited: see
+    /// `SwiftUI-compatibility.md` §2.11. macOS never deselects on a plain click
+    /// — that is command-click's job — but command-click does not survive most
+    /// terminal clients, so copying the rule here would leave a
+    /// single-selection list with no way to return to "nothing selected" at
+    /// all. Multi-selection keeps the macOS rule exactly, because there ctrl
+    /// and option stand in for command and the rule is reproducible in full.
+    @Test("Single-selection mode toggles on a re-click, where macOS would not")
+    func singleModeTogglesByDesign() {
         final class SingleBox {
             var selection: String?
         }
@@ -200,6 +221,8 @@ struct MultiSelectionClickTests {
         click(handler, at: 1)
         #expect(box.selection == "b")
         click(handler, at: 1)
-        #expect(box.selection == nil, "clicking the selected row again deselects (existing behaviour)")
+        #expect(
+            box.selection == nil,
+            "clicking the selected row again clears it — the deliberate divergence, §2.11")
     }
 }

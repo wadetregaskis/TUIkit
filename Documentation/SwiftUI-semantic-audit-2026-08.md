@@ -249,6 +249,20 @@ verifier corrected the analyst, both are shown.
 
 **1. `Table.init(_:selection:columns:) with Binding<Value.ID?>`**
 
+- *Status:* **CLOSED — deliberate, now documented** (2026-09-21). The owner
+  confirms the deviation was decided, and for a reason the audit could not see
+  from the code: command-click does not come through in many terminal clients,
+  so the macOS convention's own way of clearing a selection is unavailable, and
+  copying only its reachable half would leave a single-selection list with no
+  easy way back to "nothing selected". Recorded in `SwiftUI-compatibility.md`
+  §2.11, which is what this finding actually asked for — the divergence was
+  never absent, only unwritten. The recommendation's "fix" half is declined;
+  its "record it" half is done. The multi-selection behaviour the note below
+  calls macOS-correct is confirmed correct and is now asserted for the case
+  that would expose a toggle bug (a plain click on an ALREADY-selected row
+  keeps it and clears the others). The test wording the audit flagged as
+  reading "inherited rather than chosen" has been rewritten to state the
+  decision and its reason.
 - *SwiftUI:* swiftui-docs/Table.md, "Supporting selection in tables": "Binding to a single instance of the table data's id type creates a single-selection table." Apple's prose stops there — it does not state the click rule — so the SwiftUI side rests on the macOS/NSTableView convention it inherits, where a plain click always selects the row it lands on and never deselects (deselection being Command-click's job). That unquotability is why this is medium rather than high confidence.
 - *TUIkit:* Sources/TUIkit/Focus/ItemListHandler+Selection.swift:151-160 — `func handleClickSelection(at index: Int, event: MouseEvent) { … guard selectionMode == .multi else { toggleSelectionAtFocusedIndex(); return } …` — and toggleSelectionAtFocusedIndex at :181-192: `case .single: if singleSelection?.wrappedValue == itemID { singleSelection?.wrappedValue = nil } else { singleSelection?.wrappedValue = itemID }`. Table routes its row clicks straight there (Table.swift:2739, `captureHandler.handleClickSelection(at: index, event: event)`); _ListCore.swift:2141 is the twin. Note the asymmetry: in multi mode a plain click is macOS-correct (`multiSelection?.wrappedValue = [clickedID]`, :176) — only single-selection toggles. — `Sources/TUIkit/Focus/ItemListHandler+Selection.swift:188`
 - *Divergence:* `Table(people, selection: $selected)`; click "Mei", then click "Mei" again. SwiftUI leaves `selected == mei.id` both times; TUIkit leaves `selected == nil` after the second click. A detail pane driven by `if let selected { … }` blanks itself on a second click the SwiftUI author expects to be a no-op — and with .onRowActivate a second click is a routine part of an open gesture. This IS pinned deliberately: Tests/TUIkitTests/MultiSelectionClickTests.swift:189-204, @Test("Single-selection mode keeps its click-to-toggle behaviour"), asserts `box.selection == nil` with the comment "clicking the selected row again deselects (existing behaviour)"; ItemListHandlerTests.swift:250 pins the keyboard half. So it is a conscious choice — though the test's own wording reads as inherited rather than chosen for parity.
