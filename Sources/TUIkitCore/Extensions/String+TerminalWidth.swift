@@ -861,10 +861,21 @@ extension String {
         // legal CSI parameter byte and not a legal SGR one, so it is a sequence
         // this cannot prove is a reset — which the doc comment above says
         // counts as open.
-        for byte in sequence.utf8.dropFirst(2).dropLast() where byte != 0x30 && byte != 0x3B {
-            return false
+        //
+        // `dropFirst(2).dropLast()` walked a `Slice` of the view through its
+        // Collection witness; the bytes are read directly instead, for the
+        // reason ``asciiStrippedLength(bounded:limit:)`` gives.
+        func allZero(_ bytes: UnsafeBufferPointer<UInt8>) -> Bool {
+            guard bytes.count > 3 else { return true }  // `ESC [ m` or shorter
+            for index in 2..<(bytes.count - 1) where bytes[index] != 0x30 && bytes[index] != 0x3B {
+                return false
+            }
+            return true
         }
-        return true
+        if let contiguous = sequence.utf8.withContiguousStorageIfAvailable(allZero) {
+            return contiguous
+        }
+        return Array(sequence.utf8).withUnsafeBufferPointer(allZero)
     }
 
     /// How many parameters after `index` are the arguments of a `;`-form
@@ -1024,11 +1035,32 @@ extension String {
     /// in the framework, and a compare-and-branch per BYTE that can never fire
     /// still costs — around +0.8% across the scenarios that do no truncating at
     /// all, which is most of them, measured before it was taken back out.
-    @inline(__always)
     private func asciiStrippedLength(bounded: Bool, limit: Int) -> Int? {
+        // Over RAW BYTES, not over `utf8`'s element machinery: the same nine-fold
+        // difference `utf8ContainsNonASCII` documents, and for the same reason —
+        // a `UTF8View` walk goes through its index validation per byte, which
+        // showed as `_StringGuts.validateScalarIndex` and the view's own
+        // `Collection.subscript` witness in a `truncate` profile. The `Array`
+        // fallback is for the rare string with no contiguous storage (a lazily
+        // bridged `NSString`), which is not a string this framework produces.
+        if let contiguous = utf8.withContiguousStorageIfAvailable({ buffer in
+            Self.asciiWidth(buffer, bounded: bounded, limit: limit)
+        }) {
+            return contiguous
+        }
+        return Array(utf8).withUnsafeBufferPointer {
+            Self.asciiWidth($0, bounded: bounded, limit: limit)
+        }
+    }
+
+    /// The loop itself, over bytes that are already contiguous.
+    @inline(__always)
+    private static func asciiWidth(
+        _ bytes: UnsafeBufferPointer<UInt8>, bounded: Bool, limit: Int
+    ) -> Int? {
         var state = EscapeScanState.normal
         var width = 0
-        for byte in utf8 {
+        for byte in bytes {
             if byte >= 0x80 { return nil }
             switch state {
             case .normal:
@@ -1040,7 +1072,7 @@ extension String {
                 }
 
             case .sawESC:
-                let seen = Self.escapeIntroducerScan(on: UInt32(byte))
+                let seen = escapeIntroducerScan(on: UInt32(byte))
                 state = seen.state
                 if seen.visible {
                     width += 1
@@ -1049,8 +1081,8 @@ extension String {
 
             case .csi:
                 let value = UInt32(byte)
-                if Self.isCSIBodyByte(value) { continue }  // parameter or intermediate
-                if Self.isCSIFinalByte(value) {
+                if isCSIBodyByte(value) { continue }  // parameter or intermediate
+                if isCSIFinalByte(value) {
                     state = .normal  // introducer complete, terminator consumed
                 } else if byte == 0x1B {
                     state = .sawESC  // ESC interrupts a malformed CSI
@@ -1066,7 +1098,7 @@ extension String {
                 // reaches this path rather than falling to the general one —
                 // which is why the fast path has to know the family too, not
                 // merely tolerate it.
-                state = Self.escapeBodyScan(state, on: UInt32(byte))
+                state = escapeBodyScan(state, on: UInt32(byte))
             }
         }
         return width

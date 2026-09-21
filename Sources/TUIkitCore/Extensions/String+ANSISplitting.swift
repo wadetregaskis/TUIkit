@@ -110,12 +110,18 @@ extension String {
     /// is not one of these, so an ordinary coloured row answers `false` after
     /// looking at its bytes once.
     private var containsStringFamilyEscape: Bool {
-        var sawESC = false
-        for byte in utf8 {
-            if sawESC, Self.isStringFamilyIntroducer(UInt32(byte)) { return true }
-            sawESC = byte == 0x1B
+        func scan(_ bytes: UnsafeBufferPointer<UInt8>) -> Bool {
+            var sawESC = false
+            for byte in bytes {
+                if sawESC, String.isStringFamilyIntroducer(UInt32(byte)) { return true }
+                sawESC = byte == 0x1B
+            }
+            return false
         }
-        return false
+        // Raw bytes rather than the `UTF8View`'s element machinery — see
+        // ``asciiStrippedLength(bounded:limit:)``.
+        if let contiguous = utf8.withContiguousStorageIfAvailable(scan) { return contiguous }
+        return Array(utf8).withUnsafeBufferPointer(scan)
     }
 
     /// Like ``ansiAwarePrefix(visibleCount:)`` but also returns the visible cell
@@ -182,10 +188,34 @@ extension String {
     /// - Parameter visibleCount: Cells to keep; must be positive.
     /// - Returns: The clipped prefix and its visible width, or `nil` to decline.
     private func asciiPrefixWithWidth(visibleCount: Int) -> (prefix: String, visibleWidth: Int)? {
+        // Raw bytes rather than the `UTF8View`'s element machinery — see
+        // ``asciiStrippedLength(bounded:limit:)``, whose loop this mirrors.
+        if let contiguous = utf8.withContiguousStorageIfAvailable({ scan($0, visibleCount) }) {
+            return contiguous
+        }
+        return Array(utf8).withUnsafeBufferPointer { scan($0, visibleCount) }
+    }
+
+    /// ``asciiPrefixWithWidth(visibleCount:)``'s loop, over bytes that are
+    /// already contiguous.
+    private func scan(
+        _ bytes: UnsafeBufferPointer<UInt8>, _ visibleCount: Int
+    ) -> (prefix: String, visibleWidth: Int)? {
+        /// The first `count` bytes, as a `String`. Every one of them has been
+        /// proven ASCII by the time this is reached, so the boundary is a
+        /// scalar AND a character boundary and the decode cannot fail. Not
+        /// `String(self[..<index])`: a cut may land between a CR and its LF,
+        /// which is one `Character`, and a `String` subscript may not split one.
+        func prefixBytes(_ count: Int) -> String {
+            // The lint rule is about `Data`, and there is none.
+            // swiftlint:disable:next optional_data_string_conversion
+            String(decoding: UnsafeBufferPointer(rebasing: bytes[..<count]), as: UTF8.self)
+        }
+
         var state = EscapeScanState.normal
         var width = 0
         var offset = 0
-        for byte in utf8 {
+        for byte in bytes {
             if byte >= 0x80 { return nil }
             let value = UInt32(byte)
             switch state {
@@ -200,10 +230,10 @@ extension String {
             case .sawESC:
                 // A string-family payload, or an nF escape, ends the byte
                 // walk's competence — see the note above.
-                if Self.isStringFamilyIntroducer(value) || (0x20...0x2F).contains(value) {
+                if String.isStringFamilyIntroducer(value) || (0x20...0x2F).contains(value) {
                     return nil
                 }
-                let seen = Self.escapeIntroducerScan(on: value)
+                let seen = String.escapeIntroducerScan(on: value)
                 state = seen.state
                 if seen.visible {
                     if width == visibleCount { return (prefixBytes(offset), width) }
@@ -211,8 +241,8 @@ extension String {
                 }
 
             case .csi:
-                if Self.isCSIBodyByte(value) { break }  // parameter or intermediate
-                if Self.isCSIFinalByte(value) {
+                if String.isCSIBodyByte(value) { break }  // parameter or intermediate
+                if String.isCSIFinalByte(value) {
                     state = .normal  // introducer complete, terminator consumed
                 } else if byte == 0x1B {
                     state = .sawESC  // ESC interrupts a malformed CSI
@@ -228,21 +258,6 @@ extension String {
             offset += 1
         }
         return (self, width)  // the line fits; it is its own prefix
-    }
-
-    /// The first `count` UTF-8 bytes of this string, as a `String`.
-    ///
-    /// Only called from ``asciiPrefixWithWidth(visibleCount:)``, which has
-    /// already proven every one of those bytes is ASCII — so the boundary is a
-    /// scalar AND a character boundary, and the decode cannot fail.
-    private func prefixBytes(_ count: Int) -> String {
-        // The lint rule is about `Data`, and there is none: these are this
-        // string's own UTF-8 bytes, every one of them already proven ASCII, so
-        // the decode cannot fail. Not `String(self[..<index])` either — a cut
-        // may land between a CR and its LF, which is one `Character`, and a
-        // `String` subscript is not allowed to split one.
-        // swiftlint:disable:next optional_data_string_conversion
-        String(decoding: utf8.prefix(count), as: UTF8.self)
     }
 
     /// The clip with no fast path at all — the segment walk itself.
