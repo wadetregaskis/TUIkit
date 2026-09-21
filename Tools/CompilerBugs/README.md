@@ -1,6 +1,6 @@
 # Compiler bugs TUIkit has hit
 
-Six Swift bugs the framework works around. Each has a self-contained repro here
+Seven Swift bugs the framework works around. Each has a self-contained repro here
 so the workaround can be checked against a new toolchain and deleted the moment
 it stops being needed — and so they can be reported upstream without anyone
 having to build TUIkit.
@@ -13,7 +13,9 @@ The third, fourth and fifth were found in September 2026, on swift.org's **Swift
 swiftly installs). The sixth was found in September 2026 too, by the lane that
 builds the tests with **Swift 6.4** (`swift-6.4-RELEASE`). It is the only one
 here that swift.org's 6.2.4 — the local default, and so the compiler every other
-entry was found with — does not show at all.
+entry was found with — does not show at all. The seventh was found in September
+2026 and is the only one that is not a crash or wrong code: it is a false
+diagnostic, and every toolchain here reports it.
 
 ---
 
@@ -625,3 +627,79 @@ regardless of how many closures the scope holds. Reordering the statements also
 happens to work, but it depends on the closure counts in the scope and so is not
 a rule anyone can apply by eye. After the fix, 6.4 builds the test target clean
 and 6.3.3's full suite is back to 21 known issues.
+
+
+---
+
+## 7. `ArrayEquatableCastWarning` — a cast that is called redundant and is not
+
+```
+cd ArrayEquatableCastWarning && ./variants.sh
+```
+
+Wherever `Foundation` is imported, a conditional cast of an **array** (or a
+dictionary) to a protocol existential its element does not conform to is
+reported as one that always succeeds:
+
+```swift
+import Foundation
+
+struct Plain { let x: Int }
+
+func isComparable(_ rows: [Plain]) -> Bool {
+    (rows as? any Equatable) != nil
+    // warning: conditional cast from '[Plain]' to 'any Equatable' always succeeds
+}
+```
+
+`Plain` has no conformances at all, so there is nothing conditional left to
+reason about: `[Plain]` cannot be `Equatable` under any substitution. And it is
+not — the cast fails at runtime, which is what the `as?` is for.
+
+| | 6.2.4 +a | Xcode 6.2.4 | 6.3.3 | 6.4 |
+|---|---|---|---|---|
+| `Warning.swift`: `[Plain]` and `[Row]` to `Equatable` | WARNS | WARNS | WARNS | WARNS |
+| the same, with no import | quiet | quiet | quiet | quiet |
+| `[Row]` to `Hashable`, Foundation | WARNS | WARNS | WARNS | WARNS |
+| `Plain` itself, not an array, Foundation | quiet | quiet | quiet | quiet |
+| a `Dictionary`, Foundation | WARNS | WARNS | WARNS | WARNS |
+| `Set<Row>` to `Equatable`, Foundation | WARNS | WARNS | WARNS | WARNS |
+| `Set<Row>` to `Equatable`, no import | WARNS | WARNS | WARNS | WARNS |
+| `[Row]` to `CustomStringConvertible`, no import | WARNS | WARNS | WARNS | WARNS |
+| the collection as ONE generic, Foundation | quiet | quiet | quiet | quiet |
+| run: `[Plain] as? any Equatable` | fails | fails | fails | fails |
+| run: `[Equatable] as? any Equatable` | succeeds | succeeds | succeeds | succeeds |
+| run: empty `[Plain] as? any Equatable` | fails | fails | fails | fails |
+
+The last three rows are the answer the diagnostic denies, and the first two rows
+are the trigger: **the import**. Two rows in the middle are the CORRECT warning,
+kept so the table says which claims are sound — `Set<Element>` requires
+`Element: Hashable` and so is unconditionally `Equatable`, and `Array` conforms
+to `CustomStringConvertible` unconditionally; both warn with no import at all.
+`Plain` on its own stays quiet with Foundation imported, so it is not "anything
+in a Foundation file" — it is the bridgeable COLLECTION types, whose
+`_ObjectiveCBridgeable` path reaches `NSArray`/`NSDictionary` and so `NSObject`,
+which does conform. The runtime cast does not bridge, so it does not follow.
+
+What it costs is a false report that a check is redundant, in the one place it is
+load-bearing. Deleting the `?` does not compile, so a reader who believes the
+compiler reaches for `as!` instead — and gets a trap.
+
+### Affected versions
+
+Observed on macOS (arm64) on 2026-09-21. Every toolchain to hand reports it,
+including 6.4, so there is nothing to wait for.
+
+**Upstream.** No issue was found for it. The reduction is four lines and needs
+only `import Foundation`.
+
+**Where TUIkit hit it:** `_TableCore.rowsSignature(of:)`
+(`Sources/TUIkit/Views/Table.swift`), which asks whether a table's rows can be
+compared so that a `.fit` column's width can be kept across frames. Written
+against the concrete `[Value]` — or against `[Row]` in a generic helper — it
+drew the warning, and the zero-warnings rule made it a build failure in
+practice. **Workaround:** take the collection as ONE opaque generic parameter
+(`rowsSignature<Rows>(of rows: Rows)`), which is also how
+`ForEach.listRowsSignature` is spelled and why that one never warned. The
+behaviour is unchanged either way, and `TableFitColumnMemoTests` renders a table
+of un-comparable rows and counts the scans to prove the cast really does fail.
