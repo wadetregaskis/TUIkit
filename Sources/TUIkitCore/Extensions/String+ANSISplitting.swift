@@ -135,13 +135,19 @@ extension String {
         var visible = 0
         var link = HyperlinkScan()
 
-        for segment in ansiSegments() {
+        // Streaming, so the walk STOPS at the cut. Materialising the segments
+        // first made a clip cost the whole line however little of it was
+        // wanted: 71 µs to take 12 cells off a 2,048-cell line, 69 µs of it
+        // spent on segments this loop returns before reading.
+        var cut = false
+        forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, let isSGR):
                 result += sequence
                 // SGR is the escape a styled line is made of and can never be
                 // a hyperlink, so the scan is asked only about the rest.
                 if !isSGR { link.note(sequence) }
+                return true
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 // A cut, and the only place one happens here — so the only
@@ -151,14 +157,16 @@ extension String {
                 // did not contain would break the identity the fast path in
                 // front of this relies on (it returns `self` untouched).
                 if visible + charWidth > visibleCount {
-                    return (result + link.closingIfOpen, visible)
+                    cut = true
+                    return false
                 }
                 result.append(character)
                 visible += charWidth
+                return true
             }
         }
 
-        return (result, visible)
+        return (cut ? result + link.closingIfOpen : result, visible)
     }
 
     /// A horizontal slice: the visible columns in
@@ -219,12 +227,17 @@ extension String {
             body += link.reopening
         }
 
-        for segment in ansiSegments() {
+        // Streaming, and it stops at the right edge: past `end` every arm below
+        // is a no-op — an escape is neither carried nor kept, a character can
+        // no longer straddle — and `link` is only ever noted inside the window,
+        // so the columns after it cannot change the answer.
+        forEachANSISegment { segment in
+            guard visible < end else { return false }
             switch segment {
             case .ansi(let sequence, let isSGR):
                 if visible < visibleStart {
                     if isSGR { carriedStyle += sequence } else { link.note(sequence) }
-                } else if visible < end {
+                } else {
                     enterWindow()
                     body += sequence
                     if !isSGR { link.note(sequence) }
@@ -235,7 +248,7 @@ extension String {
                 if visible >= visibleStart && charEnd <= end {
                     enterWindow()
                     body.append(character)
-                } else if charEnd > visibleStart && visible < end {
+                } else if charEnd > visibleStart {
                     // Straddles an edge: blank its in-window cells.
                     enterWindow()
                     body += String(
@@ -244,6 +257,7 @@ extension String {
                 }
                 visible = charEnd
             }
+            return true
         }
         return carriedStyle + body + link.closingIfOpen
     }
@@ -307,17 +321,20 @@ extension String {
         var visible = 0
         var link = HyperlinkScan()
 
-        for segment in ansiSegments() {
+        var cut = false
+        forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, let isSGR):
                 result += sequence
                 if !isSGR { link.note(sequence) }
+                return true
             case .visible(let character):
                 let charWidth = character.terminalWidth
                 // The cut, and the only one: see the twin walk's note on why
                 // the natural end of the string does not close.
                 if visible + charWidth > visibleCount {
-                    return (result + link.closingIfOpen, visible)
+                    cut = true
+                    return false
                 }
                 // The walk nets every emitted cluster back to its claim (the
                 // conservation law: under-advancers are CUF'd up, over-
@@ -355,10 +372,11 @@ extension String {
                     result.append(character)
                 }
                 visible += charWidth
+                return true
             }
         }
 
-        return (result, visible)
+        return (cut ? result + link.closingIfOpen : result, visible)
     }
 
     /// Returns the accumulated SGR (colour/style) state as of `visibleOffset` visible cells,
@@ -395,7 +413,7 @@ extension String {
         // sequences alongside the `ECH`.
         var link = HyperlinkScan()
 
-        for segment in ansiSegments() {
+        forEachANSISegment { segment in
             // Before the offset is reached we're accumulating the entry
             // colour state; at or after it, content belongs in the suffix.
             let inSuffix = visible >= visibleOffset
@@ -409,13 +427,13 @@ extension String {
                     let isECH = sequence.last == "X" && sequence.hasPrefix("\u{1B}[")
                         && sequence.dropFirst(2).dropLast().allSatisfy(\.isNumber)
                     guard isSGR || isECH || TerminalHyperlink.isHyperlink(sequence) else {
-                        continue
+                        return true
                     }
                     suffix += sequence
                 } else {
                     guard isSGR else {
                         link.note(sequence)
-                        continue
+                        return true
                     }
                     sgrContext += sequence
                 }
@@ -441,6 +459,7 @@ extension String {
                     visible += width
                 }
             }
+            return true
         }
 
         guard visible >= visibleOffset else { return nil }
@@ -459,7 +478,7 @@ extension String {
         var result = ""
         var link = HyperlinkScan()
 
-        for segment in ansiSegments() {
+        forEachANSISegment { segment in
             // Everything at or after the drop boundary is kept verbatim
             // (ANSI included); everything before it is discarded.
             let keeping = visible >= dropCount
@@ -477,6 +496,7 @@ extension String {
                     visible += character.terminalWidth
                 }
             }
+            return true
         }
 
         // The dropped columns may have opened a hyperlink these cells are
@@ -601,14 +621,18 @@ extension String {
     private func sgrState(throughColumn column: Int, includingBoundary: Bool) -> SGRState {
         var visible = 0
         var state = SGRState()
-        for segment in ansiSegments() {
+        forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, let isSGR):
                 let reached = includingBoundary ? visible <= column : visible < column
-                if isSGR && reached { state.apply(sequence) }
+                // Past the column nothing further can apply, and the visible
+                // arm only ever grows `visible` — so the walk is finished.
+                guard reached else { return false }
+                if isSGR { state.apply(sequence) }
             case .visible(let character):
                 visible += character.terminalWidth
             }
+            return true
         }
         return state
     }

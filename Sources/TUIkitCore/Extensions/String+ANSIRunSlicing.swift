@@ -100,9 +100,12 @@ extension String {
             scratch += link.reopening
         }
 
-        for segment in ansiSegments() {
+        forEachANSISegment { segment in
             finishPieces(passing: visible)
-            guard index < runCount else { return }
+            // Every piece is done: the two loops after the walk are then no-ops
+            // (both are `while index < runCount`), so stopping here and falling
+            // out are the same thing.
+            guard index < runCount else { return false }
             switch segment {
             case .ansi(let sequence, let isSGR):
                 if start <= visible, visible < end {
@@ -134,6 +137,7 @@ extension String {
                 }
                 visible = charEnd
             }
+            return true
         }
         finishPieces(passing: visible)
         // Whatever is left starts past the end of the row: all style, no cells.

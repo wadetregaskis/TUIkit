@@ -780,7 +780,7 @@ extension String {
         var width = 0
         var keep = 0
         var background = false
-        for segment in ansiSegments() {
+        forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, let isSGR):
                 if isSGR { background = Self.background(after: sequence, wasSet: background) }
@@ -788,6 +788,7 @@ extension String {
                 width += character.terminalWidth
                 if character != " " || background { keep = width }
             }
+            return true
         }
         return keep
     }
@@ -844,20 +845,39 @@ extension String {
     public var leavesSGROpen: Bool {
         guard utf8.contains(0x1B) else { return false }  // plain text: no scan
         var open = false
-        for segment in ansiSegments() {
+        forEachANSISegment { segment in
             if case .ansi(let sequence, isSGR: true) = segment {
                 open = !Self.isSGRReset(sequence)
             }
+            return true
         }
         return open
     }
 
     /// Whether an SGR sequence turns everything off.
+    ///
+    /// Byte-wise, because this runs once per SGR sequence of every clipped
+    /// line: the `split(separator:)` it replaces built an array of `Substring`
+    /// — and `Int(_:)` per element — for every sequence, which made asking a
+    /// 100-cell styled line whether it left anything open cost 16.6 µs, more
+    /// than twice what segmenting the line cost in the first place.
     private static func isSGRReset(_ sequence: String) -> Bool {
-        let body = sequence.dropFirst(2).dropLast()  // strip "ESC[" and the 'm'
-        if body.isEmpty { return true }  // a bare ESC[m is a reset
-        return body.split(separator: ";", omittingEmptySubsequences: false)
-            .allSatisfy { $0.isEmpty || Int($0) == 0 }
+        // `ESC [ <params> m`: skip the two-byte introducer and the terminator.
+        // Every parameter has to be zero, and a parameter is zero exactly when
+        // every digit of it is `0` — so the whole test is "nothing but `0` and
+        // `;`". An empty parameter is ECMA-48's default of 0, and an empty body
+        // (a bare `ESC[m`) is a reset, which both fall out of the loop running
+        // no iterations that fail.
+        //
+        // Stricter than the `Int(_:)` parse it replaces in exactly one place:
+        // that read `ESC[-0m` as a reset, because `Int("-0")` is 0. `-` is a
+        // legal CSI parameter byte and not a legal SGR one, so it is a sequence
+        // this cannot prove is a reset — which the doc comment above says
+        // counts as open.
+        for byte in sequence.utf8.dropFirst(2).dropLast() where byte != 0x30 && byte != 0x3B {
+            return false
+        }
+        return true
     }
 
     /// How many parameters after `index` are the arguments of a `;`-form
@@ -1311,31 +1331,99 @@ extension String {
     /// that follows. Visible runs between escapes are grapheme-clustered
     /// on their own (escapes always break clusters anyway), so widths come
     /// out the same as for un-styled text.
+    ///
+    /// Prefer ``forEachANSISegment(_:)`` on a render path: this builds — and a
+    /// moment later throws away — one array element per CHARACTER of the line,
+    /// and it cannot stop early for a caller that only wants the first few
+    /// cells. The array form stays for the tests that use it as an oracle and
+    /// for callers that genuinely want a collection.
     public func ansiSegments() -> [ANSISegment] {
         var segments: [ANSISegment] = []
+        segments.reserveCapacity(utf8.count)
+        forEachANSISegment { segment in
+            segments.append(segment)
+            return true
+        }
+        return segments
+    }
+
+    /// ``ansiSegments()`` without the array: yields the same segments, in the
+    /// same order, and stops the moment `body` returns `false`.
+    ///
+    /// Both halves of that matter, and the second one more. A clip to N cells
+    /// wants the first N cells and nothing else, and the array form gave it the
+    /// whole line — so clipping a 2,048-cell line to 12 cells cost 71 µs, of
+    /// which 69 µs was materialising 2,036 segments the caller returned before
+    /// reading. Every walk in `String+ANSISplitting.swift` had that shape.
+    ///
+    /// Visible runs are yielded character by character without copying the run
+    /// out into a `String` first, whenever the characters are plain ASCII. Two
+    /// consecutive ASCII scalars always have a grapheme break between them —
+    /// the only ASCII pair that does not is CR LF, and nothing that extends a
+    /// cluster (`Extend`, ZWJ, `SpacingMark`, a regional indicator) is ASCII —
+    /// so such a scalar is a whole `Character` on its own and can be handed
+    /// over as one. The moment that stops holding, the rest of the run is
+    /// copied out and grapheme-clustered as before, which is what the doc
+    /// comment above is about: a run is clustered on its own, never across an
+    /// escape.
+    ///
+    /// - Parameter body: Receives each segment; returns `false` to stop.
+    /// - Returns: `true` if the walk reached the end of the string, `false` if
+    ///   `body` stopped it.
+    @discardableResult
+    public func forEachANSISegment(_ body: (ANSISegment) -> Bool) -> Bool {
         let scalars = unicodeScalars
         var index = scalars.startIndex
-        var visible = Self.UnicodeScalarView()
+        var runStart = index
+        var hasRun = false
 
-        func flushVisible() {
-            guard !visible.isEmpty else { return }
-            for character in String(visible) { segments.append(.visible(character)) }
-            visible = Self.UnicodeScalarView()
+        /// Yields the visible run `[runStart, end)`; `false` if `body` stopped.
+        func flushVisible(before end: UnicodeScalarView.Index) -> Bool {
+            guard hasRun else { return true }
+            hasRun = false
+            var cursor = runStart
+            while cursor < end {
+                let value = scalars[cursor].value
+                let next = scalars.index(after: cursor)
+                guard value < 0x80, next == end || scalars[next].value < 0x80,
+                    !(value == 0x0D && next < end && scalars[next].value == 0x0A)
+                else {
+                    // Not provably a standalone cluster: cluster the remainder
+                    // the general way. Safe to split here because the previous
+                    // iteration proved a break at `cursor` (or `cursor` is the
+                    // start of the run, which is a break by construction).
+                    //
+                    // `body` is called in the `where` — once per character, as
+                    // it would be in the loop body — and the loop body is
+                    // reached only when it asked to stop.
+                    for character in String(scalars[cursor..<end])
+                    where !body(.visible(character)) {
+                        return false
+                    }
+                    return true
+                }
+                let scalar = Unicode.Scalar(UInt8(truncatingIfNeeded: value))
+                if !body(.visible(Character(scalar))) { return false }
+                cursor = next
+            }
+            return true
         }
 
         while index < scalars.endIndex {
             guard scalars[index].value == 0x1B else {  // not ESC → visible
-                visible.append(scalars[index])
+                if !hasRun {
+                    runStart = index
+                    hasRun = true
+                }
                 index = scalars.index(after: index)
                 continue
             }
-            flushVisible()
+            guard flushVisible(before: index) else { return false }
             let (end, isSGR) = Self.escapeSequenceEnd(startingAt: index, in: scalars)
-            segments.append(.ansi(String(scalars[index..<end]), isSGR: isSGR))
+            guard body(.ansi(String(scalars[index..<end]), isSGR: isSGR)) else { return false }
             index = end
         }
-        flushVisible()
-        return segments
+        return flushVisible(before: index)
     }
     /// The string with all ANSI escape codes removed — CSI and the
     /// string-terminated families alike.

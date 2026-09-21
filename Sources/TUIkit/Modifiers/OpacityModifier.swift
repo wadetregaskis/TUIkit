@@ -323,7 +323,7 @@ enum OpacityFade {
         // instead, to be put back before anything else is drawn.
         var state = SGRState()
         var cleared: SGRState?
-        for segment in line.ansiSegments() {
+        line.forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, let isSGR):
                 if let off = cleared {
@@ -355,7 +355,7 @@ enum OpacityFade {
                         cleared = nil
                     }
                     result.append(character)
-                    continue
+                    return true
                 }
                 if cleared == nil, state.paintsInkOnBlankCell || state.reversesVideo {
                     var off = state
@@ -365,6 +365,7 @@ enum OpacityFade {
                 }
                 result += String(repeating: " ", count: character.terminalWidth)
             }
+            return true
         }
         if let off = cleared { result += state.rendered(changingFrom: off) }
         return result
@@ -396,7 +397,8 @@ enum SGRColorRewrite {
         transform: (Color) -> Color
     ) -> String {
         var result = ""
-        for segment in line.ansiSegments() {
+        result.reserveCapacity(line.utf8.count)
+        line.forEachANSISegment { segment in
             switch segment {
             case .visible(let character):
                 result.append(character)
@@ -405,6 +407,7 @@ enum SGRColorRewrite {
                     sequence, defaultForeground: defaultForeground,
                     defaultBackground: defaultBackground, transform: transform)
             }
+            return true
         }
         return result
     }

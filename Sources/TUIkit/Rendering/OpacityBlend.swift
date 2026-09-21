@@ -549,11 +549,11 @@ extension FrameBuffer {
         var foreground: Color?
         var background: Color?
         var column = 0
-        for segment in line.ansiSegments() {
+        line.forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, let isSGR):
                 state.apply(sequence)
-                guard isSGR else { continue }
+                guard isSGR else { return true }
                 SGRColorRewrite.readingColors(sequence) { which, color in
                     switch which {
                     case .foreground: foreground = color
@@ -562,7 +562,9 @@ extension FrameBuffer {
                     }
                 }
             case .visible(let character):
-                guard column < width else { return result }
+                // Past the last cell of the row nothing further can be
+                // recorded, so the walk is finished.
+                guard column < width else { return false }
                 if character.terminalWidth == 0 {
                     // A zero-width scalar — a combining mark separated from
                     // its base by an escape. It has no cell of its own; it
@@ -579,7 +581,7 @@ extension FrameBuffer {
                             result[owner] = cell
                         }
                     }
-                    continue
+                    return true
                 }
                 var cell = RowCell(
                     character: character, style: state,
@@ -604,6 +606,7 @@ extension FrameBuffer {
                 result[column] = cell
                 column += max(1, character.terminalWidth)
             }
+            return true
         }
         return result
     }
