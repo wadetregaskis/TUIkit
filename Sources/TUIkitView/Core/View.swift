@@ -96,6 +96,21 @@ public protocol View {
     /// `zIndexValue`.
     static var _providesZIndex: Bool { get }
 
+    /// Static witness: whether this view's own bytes are an ADDRESS of its
+    /// value rather than the value. `false` for every view but ``AnyView``,
+    /// which overrides it to `true`.
+    ///
+    /// The per-pass memos key a view by the raw bytes of its struct, which is
+    /// what makes them affordable. A pointer names a value only for as long as
+    /// that value is alive: free the box and ask for another, and the allocator
+    /// hands back the address it has just taken, doing exactly its job. Two
+    /// different views then have identical bytes within one pass, and the memo
+    /// answers the second question with the first one's answer.
+    ///
+    /// `viewValueHash` reads this and asks such a view for a hash of what it
+    /// points AT.
+    static var _valueIsBoxed: Bool { get }
+
     /// Static witness: whether this view type carries an explicit alignment
     /// guide (the wrapper `View.alignmentGuide(_:computeValue:)` produces).
     /// `false` for every view but `_AlignmentGuideView`, which overrides it to
@@ -178,6 +193,9 @@ public extension View {
 
     /// Default: a view carries no explicit z-index. `_ZIndexView` overrides this.
     static var _providesZIndex: Bool { false }
+
+    /// Default: a view's bytes are its value. ``AnyView`` overrides this.
+    static var _valueIsBoxed: Bool { false }
 
     /// Default: a view sets no alignment guide. `_AlignmentGuideView` overrides
     /// this.

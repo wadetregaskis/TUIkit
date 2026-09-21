@@ -172,6 +172,7 @@ identifier_name:
     - _renderSelf
     - _measureSelf
     - _explicitIDKey
+    - _valueIsBoxed
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.

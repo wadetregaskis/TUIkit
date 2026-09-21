@@ -4503,3 +4503,81 @@ second before and 9.9 after, and 8.8 and 8.5 idle wakeups.
   may read the tick before.
 - Example and Stress timers still sleep relative durations, among them the
   Mouse page's 90 ms poof, an Example animation off the grid.
+
+
+## 60. A memo key that named an address it did not own (2026-09-20)
+
+§53 moved the vertical budget out of `MeasureKey` and left five fields: the identity's
+structural hash, the view's type, two widths, and the raw bytes of the view struct. The
+bytes are the only field that tells two siblings apart, and for an `AnyView` the bytes are
+a pointer to a heap box.
+
+**A pointer names a value only while that value is alive.** Free the box and ask for
+another, and the allocator hands back the address it has just taken — doing exactly its
+job. The two views are then one key, and the memo answers the second question with the
+first one's answer.
+
+Five lines reproduce it, against a context shaped like the render loop's:
+
+```swift
+for label in ["aaaa", "bbbbbbbbbbbb"] {
+    widths.append(measureChild(AnyView(Text(label)), proposal: .init(width: nil, height: nil),
+                               context: context).width)
+}
+// widths == [4, 4]
+```
+
+With both views alive at once it reads `[4, 12]`, which is the control and the whole
+mechanism: nothing is wrong with either measurement, only with the address one of them was
+filed under.
+
+**The live instance.** `_FormLayout.pillarWidth` measures every field LABEL to find the
+column they align to, and measures them all at the form's OWN identity — so identity, type
+and both widths are equal across the rows and the bytes decide. `TUIKIT_VERIFY_MEASURE_MEMO`
+over `tui_walk`'s 35-page sweep of the Example reported 9 mismatches on one run and 19 on
+the next, every one of them an `AnyView`, every one on the natural arm, all under the Form
+page's `Section`. Sizes of 4, 5, 6, 7, 8 and 15 cells served for one another.
+
+**The fix.** `viewValueHash` asks an `AnyView` for a hash of its CONTENT, opened back to
+its concrete type, with that type's `ObjectIdentifier` mixed in — the key's own `viewType`
+field says `AnyView` for every erased view, so without the type a `Text` and a `Divider`
+whose structs happened to hold the same bytes would still be one key. Nested erasure
+recurses through the same gate.
+
+After: **0 mismatches** over the same sweep.
+
+**What it cost, and the shape of the measurement.** `ab_bench.py`, cpu-per-frame, 120x40,
+25 reps, paired ratio with 95% CI, null-tested first at ±0.5%:
+
+    scenario      old µs     new µs   change           95% CI
+    deep         13743.3    13867.0    +0.9%    +0.5% … +1.3%   slower
+    modifiers     1899.9     1873.3    -1.2%    -1.7% … -1.0%   faster
+    anyview       1378.0     1362.5    -1.0%    -1.5% … -0.8%   faster
+    fanout        4257.2     4157.6    -2.0%    -2.3% … -1.7%   faster
+
+Moves in both directions, so the interesting number is not in that table. The memo's own
+counters over 200 frames say it is doing the SAME work: `fanout` 804,002 hits of 1,636,211
+lookups before and after, `anyview` 151,123 of 412,086, `modifiers` 794 of 347,811 — bit
+for bit. `deep` is the only one that changes, 162,823 hits to 162,423 of 1,971,810, and
+those 400 are exactly the wrong ones. A fix that removes 400 false hits in 1.97 million
+lookups does not make three scenarios 1–2% faster, so the spread is code layout and the
+verdicts should be read as "no mechanism found", not as a win and a regression.
+
+**Two shapes that did not survive measurement**, both of which read cheaper than the one
+that shipped:
+
+- `V.self == AnyView.self` in place of the static witness: `deep` +2.7%, `modifiers` +4.6%.
+- Hoisting the byte loop into a second generic function so the gate could `return` it: a
+  further point on top of the witness version.
+
+`measureChild` is generic and public, so a caller in another module does not specialise it;
+what it reads off `V` there is a witness-table access, and the cheapest-reading shapes are
+not the cheapest-running ones.
+
+**The residual.** A view that STORES an `AnyView` — `Toggle.label`, `Button.labelView`,
+`TabContent.content`, the style configurations — holds that address in its own bytes, and
+nothing about the outer type says so. `MeasureMemoErasedIdentityTests` carries a guard for
+it; I could not make it alias, and the mechanism is unchanged, so it is a guard and not a
+regression test. What the whole finding retires is the `valueHash` doc comment's old claim
+that a value collision "cannot serve a wrong answer" because the key also carries identity,
+type and widths. Siblings measured at one identity have all three in common.

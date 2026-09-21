@@ -1115,7 +1115,11 @@ private func measureIdentityHash(_ context: RenderContext) -> Int {
 /// keyed, randomised per process, and built to resist an adversary choosing
 /// collisions. Nothing here has an adversary: this is a discriminator inside a
 /// per-pass memo whose key ALSO carries the identity's hash, the view's type
-/// and two widths, so a value collision on its own cannot serve a wrong answer.
+/// and two widths, so a value collision on its own is unlikely to serve a wrong
+/// answer. Unlikely, and not impossible, which is what the `AnyView` arm below
+/// is about: siblings measured at ONE identity — a `Form` sizing its label
+/// column, say — have all four of those fields in common, and the bytes are the
+/// only thing telling them apart.
 /// What it is, is hot — a whole-struct hash on every measured child, **3.4% of
 /// a `menus` frame between this and the `withUnsafeBytes` around it**.
 ///
@@ -1125,7 +1129,19 @@ private func measureIdentityHash(_ context: RenderContext) -> Int {
 /// the memo's key stream (and any bug that depends on it) differed run to run.
 @MainActor
 private func viewValueHash<V: View>(_ view: V) -> Int {
-    withUnsafeBytes(of: view) { bytes in
+    // The gate is a static witness and the arm is a cast to the ONE concrete
+    // type, and both of those were arrived at by measurement. `measureChild` is
+    // generic and public, so a caller in another module does not specialise it;
+    // what it reads off `V` there is a witness-table access, and the cheapest
+    // shapes are not the ones that read cheapest. `V.self == AnyView.self` in
+    // place of the witness cost `deep` +2.7% and `modifiers` +4.6%, and hoisting
+    // the loop below into a second function so this one could `return` it cost
+    // another point on top. So: one witness, one branch, and the loop stays
+    // where it was.
+    if V._valueIsBoxed, let boxed = view as? AnyView {
+        return boxed.erasedValueHash
+    }
+    return withUnsafeBytes(of: view) { bytes in
         var hash = hashFoldSeed
         let count = bytes.count
         var index = 0
@@ -1147,6 +1163,24 @@ private func viewValueHash<V: View>(_ view: V) -> Int {
         }
         return finalizeHashWord(hash)
     }
+}
+
+/// The value hash of an existential's payload: what it holds, opened back to
+/// its concrete type, and the type beside it.
+///
+/// The type is hashed beside the bytes because the bytes alone do not carry it
+/// here: the key's own `viewType` field says `AnyView` for every erased view,
+/// whatever is inside. Without this, a `Text` and a `Divider` whose structs
+/// happen to hold the same bytes would be one key.
+///
+/// Recursive by construction, through the gate rather than around it: the
+/// payload of an `AnyView(AnyView(x))` is itself boxed, its dynamic type says
+/// so, and it is asked the same question.
+@MainActor
+func erasedViewValueHash(_ view: any View) -> Int {
+    var folded = mixHashWord(hashFoldSeed, UInt64(bitPattern: Int64(viewValueHash(view))))
+    folded = mixHashWord(folded, UInt64(UInt(bitPattern: ObjectIdentifier(type(of: view)))))
+    return finalizeHashWord(folded)
 }
 
 /// ``measureChild`` without the per-pass memo — the measurement itself.
