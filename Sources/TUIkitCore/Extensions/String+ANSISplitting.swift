@@ -165,8 +165,10 @@ extension String {
     /// ``asciiStrippedLength()`` over the bytes and stopping where the cells run
     /// out. The result is a byte prefix: one scan bounded by `visibleCount`,
     /// one allocation, and no per-character work at all. That is the difference
-    /// between a clip costing the COLUMN and costing the VALUE — 30 ns rather
-    /// than 8.3 µs for twelve cells of a 2,048-cell line.
+    /// between a clip costing the COLUMN and costing the VALUE: twelve cells of
+    /// a 2,048-cell line cost 8.3 µs through the segment walk and 21 ns here
+    /// (2026-09-21), and the second number does not move with the line's
+    /// length while the first is proportional to it.
     ///
     /// Byte-identical to the segment walk by construction: that walk emits
     /// every segment before the cut character — escape sequences included,

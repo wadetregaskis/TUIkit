@@ -4581,3 +4581,192 @@ it; I could not make it alias, and the mechanism is unchanged, so it is a guard 
 regression test. What the whole finding retires is the `valueHash` doc comment's old claim
 that a value collision "cannot serve a wrong answer" because the key also carries identity,
 type and widths. Siblings measured at one identity have all three in common.
+
+## 61. A clip that read the whole line to write a fifth of it (2026-09-21)
+
+A user of an older checkout profiled a wide table of long values and reported that
+`ansiAwarePrefixWithWidth` renders the entire line — it calls `ansiSegments`, which
+materialises one enum case per grapheme cluster and builds each visible run by appending
+scalars into a `UnicodeScalarView`, copying that into a `String`, and re-clustering it.
+They noted that `strippedLength` had grown a no-ESC byte fast path and `ansiSegments` had
+not; that `truncatedToWidth` measures a whole value to learn it is wider than a column;
+and that `alignText` and `renderRow` then measure the result again.
+
+All of it was still true. The catalogue could not see any of it, because **no scenario in
+it truncated anything** — `table`'s synthetic cells fit their columns and
+`table-multiline` wraps rather than clipping. `truncate` is the missing shape: 5,000 rows
+× 6 columns of ~90-cell sentences against columns of roughly 18, all three truncation
+modes (they take different paths), one column carrying ANSI, one `.fit`, and every row's
+content distinct so the row memo cannot collapse them.
+
+### What each change was worth
+
+Eight commits, each measured on its own, `ab_bench.py` at 15–20 reps (paired ratios,
+order randomised per rep, CPU time):
+
+| | truncate | elsewhere |
+|---|---|---|
+| `forEachANSISegment` — streaming, early exit | **−44.5%** | table −5.2% |
+| the byte-wise ASCII clip | **−11.1%** | table −2.6% |
+| the bounded measure, and three duplicate ones removed | −2.3% | — |
+| the `.fit` column memo | **−33.1%** | — |
+| the byte walks onto contiguous storage | −2.5% | megalist −2.8%, table −2.2%, kitchensink −1.7% |
+| the clip's width carried into the pad | — | deep −0.3% |
+
+The scenario itself grew a `.fit` column partway down that table — the first three rows
+measured six `.flexible` columns, the rest measured five plus one `.fit` — so the
+percentages compose only loosely. The number that does not is the end to end one: the code
+as it stood before any of this, rendering the scenario as it stands now, against the code
+as it stands now, with a **byte-identical checksum at every step**:
+
+    truncate   1621.3 → 608.2 µs/frame   −62.5%
+
+And the whole catalogue across the series, same pairing, 15 reps:
+
+    truncate        1585.9 →  593.3 µs   -62.6%   [-62.8, -62.3]
+    table            481.3 →  432.5 µs    -9.9%   [-10.3,  -9.4]
+    deep           13815.1 → 12682.0 µs   -8.3%   [ -8.9,  -7.8]
+    megalist         451.1 →  440.9 µs    -2.2%   [ -2.9,  -1.5]
+    kitchensink      521.1 →  510.4 µs    -2.1%   [ -2.5,  -1.1]
+    table-multiline  372.4 →  365.4 µs    -1.9%   [ -2.3,  -1.2]
+    keyrows          188.2 →  186.5 µs    -0.9%   [ -1.4,  -0.2]
+    fanout          4131.9 → 4097.9 µs    -0.9%   [ -1.5,  -0.2]
+    customlayout     236.5 →  238.5 µs    +0.9%   [ +0.3,  +1.9]
+    thirteen others  indistinguishable
+
+`deep` is the surprise in that list, and it is the byte clip: a deeply nested stack of
+borders clips a line at every level, and `BorderRenderer` is the second-heaviest caller of
+the clip after a table cell. `customlayout` is the one reading against the series and it
+has no attributable path; it is recorded rather than rounded away.
+
+### 1. The array was built to the end so the walk could stop at the cut
+
+`ansiSegments()` returns `[ANSISegment]`, and every walk in
+`String+ANSISplitting.swift` opened by calling it. The walks did stop early — but only
+after the array they were iterating had been built to the last character. Clipping a
+2,048-cell line to 12 cells cost **71.4 µs**, of which 69 µs was materialising 2,036
+segments the loop returned before reading.
+
+`forEachANSISegment(_:)` yields the same segments in the same order with no array and
+stops the moment its body returns `false`. Visible runs are handed over character by
+character without copying the run out into a `String` first whenever the characters are
+plain ASCII, which rests on a Unicode claim worth stating: **two consecutive ASCII scalars
+always have a grapheme break between them** — the only ASCII pair that does not is CR LF,
+and nothing that extends a cluster (`Extend`, ZWJ, `SpacingMark`, a regional indicator) is
+ASCII. Where that stops holding the rest of the run is clustered the old way.
+
+Same clip: **8.3 µs**.
+
+### 2. A byte is a cell, so the clip need not decide it one character at a time
+
+An ASCII byte outside an escape is exactly one terminal cell, so the whole clip reduces to
+running the CSI state machine of `asciiStrippedLength()` over the bytes and stopping where
+the cells run out. One bounded scan, one allocation, no per-character work.
+
+Same clip: **35 ns**, and — the property worth having — **flat in the length of the line**.
+A column twelve cells wide costs twelve cells whatever is in the cell.
+
+It declines two shapes rather than guessing: any byte ≥ 0x80 (width is a property of a
+cluster, which can be two cells or none), and any string-terminated escape (the walk
+carries a hyperlink open at the cut and closes it; a byte prefix cannot).
+
+### 3. The fuzz found the bug the reasoning had twice missed
+
+`ansiAwarePrefix(visibleCount:knownVisibleWidth:)` short-cuts the commonest clip in the
+framework — a line assembled a cell or two wider than its slot, the excess being trailing
+plain spaces — by returning the line minus those bytes, and its doc comment argued the
+result is byte-identical to the walk "by construction".
+
+It is not. At a cut, and only at a cut, the walk emits one thing of its own: the closing
+sequence of a hyperlink still open. The guard in front of the fast path is a
+`strippedLength` re-scan, which cannot see the difference, **because a closing sequence is
+zero cells wide**.
+
+`Link` balances its own output before anything pads it, which is why every existing
+balance test passed. But `Text`, a `Table` cell and a `List` row pass a raw OSC 8 through
+unchanged, so truncating one produced a line whose link ran over the ellipsis and over
+everything the caller appended next — the row's fill and badge, the scrollbar column, the
+diff writer's padding to the terminal width. A click anywhere along that opens the URL.
+
+The finder was a 4,000-line seeded fuzz added in the same commit, over the alphabet these
+clips have to make decisions about, cut at every point and compared to the exact walk for
+all three entry points. **It found this on its first run, in a path whose own comments had
+reasoned about the question twice.** A hand-written corpus proves the shapes someone
+thought of.
+
+### 4. Measuring a value to learn it was too wide
+
+`truncatedToWidth` opened with `strippedLength` — 90 cells of scan to establish that 18
+would be kept — and for `.tail`, the default, nothing below wanted the number afterwards.
+`strippedLength(atMost:)` stops as soon as the comparison is settled; `.head` and
+`.middle` measure from the END and still ask.
+
+Two further measures went with it: the clip now hands its own count to the pad at three
+call sites that re-derived it, and `renderRow` pads a selected row with
+`rowWidth - cellColumn` rather than walking the assembled line again — `cellColumn` IS
+that width, because the loop walked it.
+
+### 5. A `.fit` column re-measured every row, every frame
+
+`.fit` fits the widest of the header and EVERY cell value — all the rows, so the column
+does not change width as the table scrolls — and `calculateColumnWidths` runs more than
+once a frame. **One `.fit` column over 5,000 rows was 324 µs a frame**, scaling with the
+row count rather than with what is on screen.
+
+Answered the way `_ListCore.widestRowWidth` answers it for a `List`, with the same four
+guards and the scan cap in the key. Invalidation is the cache's own: `clearAffected(by:)`
+takes the identity, its ancestors AND its descendants, so a `@State` write anywhere
+between the app root and a cell closure takes the entry — including the `sortOrder` a
+header click writes, which changes the header text the scan measures.
+
+**Three frames, not two, before it can serve.** The table builds its own `@State` while
+rendering frame 1; that write invalidates its subtree and is applied at the start of frame
+2, so frame 2 scans and stores and frame 3 is the first that can be served. The tests
+count scans rather than microseconds — a closure that increments a counter is a far better
+oracle than a clock.
+
+### 6. Reading bytes, not walking a view
+
+`utf8ContainsNonASCII` had already measured this and written it down in the same
+directory: a `UTF8View` walk goes through per-element index validation and is about nine
+times the cost of the raw byte loop behind `withContiguousStorageIfAvailable`. Every scan
+added above was spelled `for byte in utf8`, and a profile showed them as
+`_StringGuts.validateScalarIndex` and the view's own `Collection` subscript witness,
+together ~2.6% of the frame.
+
+`strippedLength` — the most-executed width path in the framework — came down 38% on a
+126-cell line and 50% on a 2,048-cell one, which is why this is the one change in the
+series whose effect is not confined to tables.
+
+**And `@inline(__always)` on the shared loop cost more than the loop saved.** Marking the
+wrapper inline-always so the `bounded` flag would fold at both call sites inlines a whole
+state machine four times over, and the two scenarios with the largest working sets paid
+for it: `modifiers` **+3.0%** [+2.6, +3.2] and `deep` **+0.9%** [+0.5, +1.4], against a
+null test resolving ±0.4% on both. Dropping it from the wrapper — the inner loop keeps it,
+so `bounded` is still constant where it is read — took `modifiers` to −0.2% and `deep` to
+−0.8% with every table win intact.
+
+### What was measured and declined
+
+- **`appendAligned`'s `clipped.strippedLength`.** A real duplicate, and the user named it.
+  But the clipped value is at most the column's width, so the scan is ~15 ns against the
+  ~200 ns the cell costs — 0.4% of the frame at 150 cells. Removing it exactly means
+  returning the width through three truncation modes and two space-droppers, and a width
+  that comes back wrong shifts every column to its right. Declined on the numbers.
+- **Padding "defeating" the row assembly.** No padding-specific bypass survives:
+  `PaddingModifier` carries both the width and the uniformity flag through and costs one
+  string copy per line, which measures as noise. The two callers that build a cell as a
+  value rather than appending it are the header (one line a frame) and a banded row, and
+  the latter is documented — splitting a banded cell into pad/text/pad would restart the
+  gradient run at each piece and change the bytes.
+
+### Still open
+
+**`Table` rows are not memoised across frames at all.** `--bench`'s counters, warm:
+`megalist` takes **10,800 value-memo hits**; `table` and `truncate` take **0 hits / 0
+lookups / 0 stores** — the subtree is never even looked up. `List` rows reach
+`_MemoizedRow` through `ForEach`; `Table` renders its rows procedurally and has no per-row
+memo. Giving it one needs `Value: Equatable` (`Table` requires only `Identifiable`) and
+takes the captured-data hole on a row's whole LINE rather than on a width, where a stale
+answer is a visibly wrong cell. That is a design decision, not an oversight to fix in
+passing.

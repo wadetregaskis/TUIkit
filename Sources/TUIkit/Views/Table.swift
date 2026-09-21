@@ -3308,8 +3308,8 @@ where Value.ID: Hashable {
     /// The scan is O(rows) — all of them, not just the visible ones, so the
     /// column does not change width as the table scrolls — and it runs more
     /// than once a frame, because the analytic size and the render each ask.
-    /// On five thousand rows that is 338 µs a frame for ONE column, whether or
-    /// not anything about the table moved.
+    /// On five thousand rows that is 324 µs a frame for ONE column (2026-09-21),
+    /// whether or not anything about the table moved.
     ///
     /// This is the question `_ListCore.widestRowWidth` asks of a `List`, so it
     /// is answered the same way and with the same four guards, rather than with
