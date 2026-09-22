@@ -172,6 +172,14 @@ struct TableMatrixShape: Sendable {
     var selection: TableMatrixSelection = .unbound
     var width: Int = 48
     var height: Int = 14
+    /// Whether the fixture's row type conforms to `Equatable`.
+    ///
+    /// `Table` requires only `Identifiable`, so a row type nobody thought to
+    /// make comparable is not an edge case — and since the memo compares what a
+    /// row's columns PRODUCED rather than the row itself, such a table is kept
+    /// all the same. This is the axis that says so.
+    var comparableRows: Bool = true
+
     /// Which scroll-extent mode the table renders under. `.exact` is never
     /// cached by the estimator, so it is the control for the below-the-limit
     /// path that now is.
@@ -476,7 +484,29 @@ final class TableMatrixHarness {
         }
     }
 
+    /// The same columns over the row type that cannot be compared. Closures
+    /// only: a key path here would name a property of the WRONG row type, and
+    /// the point of this arm is the row type rather than the column kind.
+    private func opaqueColumns() -> [TableColumn<TableMatrixOpaqueRow>] {
+        shape.columns.map { spec in
+            let calls = self.calls
+            return TableColumn<TableMatrixOpaqueRow>(spec.title) { (row: TableMatrixOpaqueRow) -> String in
+                calls.note(row: row.id)
+                return spec.cost.text(id: row.id, generation: row.generation)
+            }
+            .width(spec.width)
+            .lineLimit(spec.lineLimit)
+            .truncationMode(spec.truncation)
+            .alignment(spec.alignment)
+        }
+    }
+
     private func view() -> AnyView {
+        guard shape.comparableRows else {
+            let opaque = rows.map { TableMatrixOpaqueRow(id: $0.id, generation: $0.generation) }
+            let columns = opaqueColumns()
+            return AnyView(Table(opaque) { columns })
+        }
         let columns = self.columns()
         switch shape.selection {
         case .unbound:

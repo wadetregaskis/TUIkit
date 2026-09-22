@@ -214,6 +214,8 @@ struct TableFrameContractTests {
     /// twice is the app's cost doubled and not running it is the app's cost
     /// removed. Both halves are asserted against the frame's own counters
     /// rather than inferred from a clock.
+    /// A row a `Table` COMPOSES asks each column for its value exactly once —
+    /// which `renderRow` states in its own comment and nothing checked.
     @Test("A composed row asks each column once")
     func composedRowAsksEachColumnOnce() {
         let columns = [
@@ -222,7 +224,6 @@ struct TableFrameContractTests {
             TableMatrixColumn(title: "C", cost: .styled),
         ]
         let harness = TableMatrixHarness(TableMatrixShape(rows: 300, columns: columns))
-        harness.settle()
         harness.frame()
 
         #expect(
@@ -231,16 +232,19 @@ struct TableFrameContractTests {
         #expect(harness.rowWork.cellValues == harness.rowWork.rendered * columns.count)
     }
 
-    /// A table whose every column NAMES its value keeps its rows across frames;
-    /// one with a single closure column keeps none of them.
+    /// Both kinds of table keep their rows, and the difference between them is
+    /// exactly what each has to do to earn a hit.
     ///
-    /// That is the whole of the memo's soundness argument, asserted rather than
-    /// argued. A key path has no closure context, so it cannot capture the
-    /// search term or the formatter that a closure column captures and that no
-    /// row value would ever show — so where every column is a key path, an
-    /// equal row draws equal text, and where any column is not, it does not.
-    @Test("Rows are kept only when every column names its value")
-    func rowsAreKeptOnlyForKeyPathColumns() {
+    /// A CLOSURE column may capture a search term, a formatter, a units
+    /// toggle — none of which the row carries — so an equal row proves nothing
+    /// about its text and the closures have to run. But once they have run,
+    /// what they produced IS the text, so the line can still be kept: the app
+    /// pays for its own closures and nothing else.
+    ///
+    /// A KEY-PATH column names its value, so the cells are a pure function of
+    /// the row and an equal row is enough — not one property is read.
+    @Test("A key-path table serves without reading its rows; a closure table reads and still serves")
+    func bothKindsServeAndOnlyOneReadsItsRows() {
         func work(namesAProperty: Bool) -> RenderCache.RowWork {
             let harness = TableMatrixHarness(
                 TableMatrixShape(
@@ -256,14 +260,43 @@ struct TableFrameContractTests {
             harness.frame()
             return harness.rowWork
         }
-        let kept = work(namesAProperty: true)
-        #expect(kept.rendered == 0, "a settled key-path table composed \(kept.rendered) rows")
-        #expect(kept.served > 4, "a settled key-path table served only \(kept.served)")
-        #expect(kept.cellValues == 0, "a served frame still read \(kept.cellValues) values")
+        let named = work(namesAProperty: true)
+        #expect(named.rendered == 0, "a settled key-path table composed \(named.rendered) rows")
+        #expect(named.served > 4, "a settled key-path table served only \(named.served)")
+        #expect(named.cellValues == 0, "a key-path serve still read \(named.cellValues) values")
 
         let computed = work(namesAProperty: false)
-        #expect(computed.served == 0, "a closure column's table kept \(computed.served) rows")
-        #expect(computed.rendered > 4)
+        #expect(computed.rendered == 0, "a settled closure table composed \(computed.rendered)")
+        #expect(computed.served > 4, "a settled closure table served only \(computed.served)")
+        #expect(
+            computed.cellValues == computed.served * 2,
+            "a closure serve read \(computed.cellValues) values for \(computed.served) rows")
+    }
+
+    /// A row type that cannot be compared is kept all the same, because what is
+    /// compared is what its columns PRODUCED rather than the row itself.
+    ///
+    /// `Table` requires only `Identifiable`, so this is not an edge case — it is
+    /// every table whose row type nobody thought to make `Equatable`. An
+    /// earlier design of this memo keyed on the row and so stood aside for all
+    /// of them.
+    @Test("A row type that is not Equatable is kept anyway")
+    func uncomparableRowsAreKeptToo() {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 200,
+                columns: [
+                    TableMatrixColumn(title: "A", width: .fixed(8), cost: .cheap),
+                    TableMatrixColumn(title: "B", cost: .formatted),
+                ],
+                comparableRows: false))
+        harness.settle()
+        let warm = harness.frame()
+
+        #expect(
+            harness.rowWork.served > 4,
+            "an uncomparable table served \(harness.rowWork.served) rows")
+        #expect(warm.lines == harness.frame(coldCache: true).lines)
     }
 
     /// And a kept row still follows its data, its selection and the window.

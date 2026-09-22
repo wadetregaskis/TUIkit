@@ -19,12 +19,17 @@
 //  already keeps the scroll extent's profile this way — and earns that by
 //  keying on the INPUTS themselves rather than on a proxy for them:
 //
-//  * every column must NAME a property rather than compute one
-//    (``TableColumn/namesAProperty``). A key path has no closure context, so it
-//    cannot capture the search term, the formatter or the units toggle that a
-//    closure column captures and that no row value would ever show. This is the
-//    whole soundness argument, and it is why a table with one closure column
-//    memoises nothing.
+//  * a row's CELLS are compared, not the row. A closure column may capture a
+//    search term, a formatter, a units toggle — none of which the row carries —
+//    so an equal row proves nothing about its text. But once the closure has
+//    RUN, what it produced is not a proxy for the text: it IS the text, and a
+//    line built from equal cells under an equal frame key is the same line.
+//    That costs the app's own closures, which is the part nobody can skip, and
+//    saves everything downstream of them.
+//  * unless every column NAMES its value (``TableColumn/namesAProperty``), in
+//    which case the cells are a pure function of the row and an equal row is
+//    enough — so a key-path table skips even the property reads. That is an
+//    optimisation on top of the rule above, not the rule itself.
 //  * everything the FRAME settles that reaches a row's bytes is compared once
 //    per frame in ``TableRowFrameKey`` — the widths, the geometry, the resolved
 //    ink, each column's alignment and truncation and limit, the colour depth,
@@ -78,15 +83,34 @@ struct TableRowFrameKey: Equatable {
 
 /// One row's composed line, and the row state it was composed for.
 struct TableRowMemoLine {
-    let row: AnyEquatableBox
+    /// The row, when its type could be compared at all. `nil` for a row type
+    /// that is not `Equatable`, which `Table` does not require — those rows are
+    /// answered by their CELLS alone.
+    let row: AnyEquatableBox?
+    /// What every column produced for this row, in column order.
+    ///
+    /// The soundness of a closure column rests entirely on this. A closure may
+    /// capture a search term, a formatter, a units toggle — none of which the
+    /// row carries — so an equal row proves nothing about its text. But once
+    /// the closure has RUN, what it produced is not a proxy for the text: it IS
+    /// the text, and a line built from equal cells under an equal frame key is
+    /// the same line.
+    let cells: [String]
     let isFocused: Bool
     let isSelected: Bool
     let line: String
     let claims: [OpacityRegion]
 
-    /// Whether this entry answers for `row` in the state given.
+    /// Whether this entry answers for a row whose cells are `cells`.
+    func answers(cells other: [String], isFocused: Bool, isSelected: Bool) -> Bool {
+        self.isFocused == isFocused && self.isSelected == isSelected && cells == other
+    }
+
+    /// Whether this entry answers for `row` WITHOUT computing its cells — only
+    /// for a table whose every column names its value, where the cells are a
+    /// pure function of the row.
     func answers(row other: AnyEquatableBox, isFocused: Bool, isSelected: Bool) -> Bool {
-        self.isFocused == isFocused && self.isSelected == isSelected && row == other
+        self.isFocused == isFocused && self.isSelected == isSelected && self.row == other
     }
 }
 
@@ -108,6 +132,10 @@ struct TableRowMemoStore<ID: Hashable> {
     /// when 98% of its rows were being served. The answer cannot change within
     /// a frame; asking it once is the whole fix.
     private(set) var isOpen = false
+    /// Whether every column names its value, settled once by `begin` for the
+    /// same reason `isOpen` is: asking it reads a `TableColumn` per column, and
+    /// a `TableColumn` holds closures and strings.
+    private(set) var namesItsValues = false
     private(set) var frameKey: TableRowFrameKey?
     private var lines: [ID: TableRowMemoLine] = [:]
 
@@ -116,8 +144,9 @@ struct TableRowMemoStore<ID: Hashable> {
 
     /// Prepares the store for a frame, dropping everything if the frame's own
     /// inputs moved.
-    mutating func begin(frame key: TableRowFrameKey, viewportHeight: Int) {
+    mutating func begin(frame key: TableRowFrameKey, viewportHeight: Int, namesItsValues: Bool) {
         isOpen = true
+        self.namesItsValues = namesItsValues
         if frameKey != key {
             frameKey = key
             lines.removeAll(keepingCapacity: true)
@@ -128,14 +157,9 @@ struct TableRowMemoStore<ID: Hashable> {
         }
     }
 
-    func line(
-        for id: ID, row: AnyEquatableBox, isFocused: Bool, isSelected: Bool
-    ) -> TableRowMemoLine? {
-        guard let kept = lines[id],
-            kept.answers(row: row, isFocused: isFocused, isSelected: isSelected)
-        else { return nil }
-        return kept
-    }
+    /// The kept entry for `id`, whatever it holds — the caller decides how to
+    /// challenge it.
+    func entry(for id: ID) -> TableRowMemoLine? { lines[id] }
 
     mutating func keep(_ entry: TableRowMemoLine, for id: ID) {
         lines[id] = entry
@@ -143,6 +167,7 @@ struct TableRowMemoStore<ID: Hashable> {
 
     mutating func removeAll() {
         isOpen = false
+        namesItsValues = false
         lines.removeAll(keepingCapacity: true)
         frameKey = nil
     }

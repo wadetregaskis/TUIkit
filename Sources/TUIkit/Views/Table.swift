@@ -3627,7 +3627,7 @@ where Value.ID: Hashable {
     /// every column is a key path, an equal row draws equal text, and where any
     /// column is a closure it does not and the memo stands aside. See
     /// `TableRowMemo.swift`; this is the whole of the soundness argument.
-    private var rowsMayBeKept: Bool {
+    private var columnsNameTheirValues: Bool {
         !columns.isEmpty && columns.allSatisfy(\.namesAProperty)
     }
 
@@ -3637,7 +3637,7 @@ where Value.ID: Hashable {
         handler: ItemListHandler<Value.ID>, columnWidths: [Int], gutter: Int, rowWidth: Int,
         context: RenderContext, palette: any Palette
     ) {
-        guard rowsMayBeKept, !context.isMeasuring else {
+        guard !context.isMeasuring else {
             handler.tableRowMemo.removeAll()
             return
         }
@@ -3645,7 +3645,8 @@ where Value.ID: Hashable {
             frame: rowFrameKey(
                 columnWidths: columnWidths, gutter: gutter, rowWidth: rowWidth,
                 context: context, palette: palette),
-            viewportHeight: handler.viewportHeight)
+            viewportHeight: handler.viewportHeight,
+            namesItsValues: columnsNameTheirValues)
     }
 
     private func renderRow(
@@ -3662,37 +3663,46 @@ where Value.ID: Hashable {
         line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
         claims: [OpacityRegion]
     ) {
-        func compose() -> (
+        let cellCount = min(columns.count, columnWidths.count)
+        func compose(_ cells: [String]) -> (
             line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
             claims: [OpacityRegion]
         ) {
             renderRowUncached(
-                item: item, paint: paint, columnWidths: columnWidths, isFocused: isFocused,
-                isSelected: isSelected, isReturningHome: isReturningHome, context: context,
-                palette: palette)
+                cells: cells, item: item, paint: paint, columnWidths: columnWidths,
+                isFocused: isFocused, isSelected: isSelected, isReturningHome: isReturningHome,
+                context: context, palette: palette)
         }
         // A ramp colours a row by its ORDINAL, which moves when the table
         // scrolls while the row does not, so a ramped table keeps nothing.
-        guard let handler, handler.tableRowMemo.isOpen, !isReturningHome,
-            paint.ramp == nil, let rowBox = Self.rowsSignature(of: item)
-        else { return compose() }
+        guard let handler, handler.tableRowMemo.isOpen, !isReturningHome, paint.ramp == nil else {
+            return compose(rowCells(for: item, count: cellCount, context: context))
+        }
+        let kept = handler.tableRowMemo.entry(for: item.id)
+        let rowBox = Self.rowsSignature(of: item)
 
-        if let kept = handler.tableRowMemo.line(
-            for: item.id, row: rowBox, isFocused: isFocused, isSelected: isSelected)
+        // The cheapest hit there is: every column names its value, so the cells
+        // are a pure function of the row, and an equal row needs no cells built
+        // at all. Only available to a comparable row type.
+        if let kept, let rowBox, handler.tableRowMemo.namesItsValues,
+            kept.answers(row: rowBox, isFocused: isFocused, isSelected: isSelected)
         {
-            context.renderCache?.rowWork.served += 1
-            let served = (
-                line: kept.line, pulseFrames: [String]?.none,
-                pulseTiming: IndicatorCycleTiming?.none, claims: kept.claims)
-            verifyRowServe(
-                served, item: item, paint: paint, columnWidths: columnWidths,
+            return serve(kept, item: item, paint: paint, columnWidths: columnWidths,
                 isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
-            return served
+        }
+
+        // Otherwise the closures have to run — that is the app's own cost and
+        // nothing can skip it — but what they produced settles the question
+        // outright, for any row type and any column.
+        let cells = rowCells(for: item, count: cellCount, context: context)
+        if let kept, kept.answers(cells: cells, isFocused: isFocused, isSelected: isSelected) {
+            return serve(kept, item: item, paint: paint, columnWidths: columnWidths,
+                isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
         }
 
         let tracker = context.environment.volatileReadTracker
         let unsafeBefore = tracker?.cacheUnsafeCount ?? 0
-        let result = compose()
+        let result = compose(cells)
         // A row that BREATHES is one frame of a cycle, and a row that consulted
         // a per-frame value said so — neither may be kept, by the rule every
         // other memo in the framework states as "never a time-varying subtree".
@@ -3701,10 +3711,28 @@ where Value.ID: Hashable {
         }
         handler.tableRowMemo.keep(
             TableRowMemoLine(
-                row: rowBox, isFocused: isFocused, isSelected: isSelected, line: result.line,
-                claims: result.claims),
+                row: rowBox, cells: cells, isFocused: isFocused, isSelected: isSelected,
+                line: result.line, claims: result.claims),
             for: item.id)
         return result
+    }
+
+    /// Hands back a kept row, counted and — under the verifier — checked.
+    private func serve(
+        _ kept: TableRowMemoLine, item: Value, paint: RowPaint, columnWidths: [Int],
+        isFocused: Bool, isSelected: Bool, context: RenderContext, palette: any Palette
+    ) -> (
+        line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
+        claims: [OpacityRegion]
+    ) {
+        context.renderCache?.rowWork.served += 1
+        let served = (
+            line: kept.line, pulseFrames: [String]?.none,
+            pulseTiming: IndicatorCycleTiming?.none, claims: kept.claims)
+        verifyRowServe(
+            served, item: item, paint: paint, columnWidths: columnWidths, isFocused: isFocused,
+            isSelected: isSelected, context: context, palette: palette)
+        return served
     }
 
     /// Re-composes a served row and reports a disagreement, under
@@ -3725,6 +3753,8 @@ where Value.ID: Hashable {
     ) {
         guard RenderCache.verifiesRenderMemo, let cache = context.renderCache else { return }
         let fresh = renderRowUncached(
+            cells: rowCells(
+                for: item, count: min(columns.count, columnWidths.count), context: context),
             item: item, paint: paint, columnWidths: columnWidths, isFocused: isFocused,
             isSelected: isSelected, isReturningHome: false, context: context, palette: palette)
         guard fresh.line != served.line else { return }
@@ -3733,7 +3763,25 @@ where Value.ID: Hashable {
             fresh: FrameBuffer(lines: [fresh.line]), identity: identityKey(item.id))
     }
 
+    /// The display string of every column for one row, in column order, asked
+    /// exactly once each.
+    ///
+    /// Split out of the compose loop so that a row's cells can be compared with
+    /// the ones a kept line was built from. That comparison is the whole of the
+    /// memo's soundness for a closure column: the closure may capture anything,
+    /// but once it has RUN, what it produced is not a proxy for the row's text
+    /// — it is the row's text.
+    private func rowCells(for item: Value, count: Int, context: RenderContext) -> [String] {
+        var cells: [String] = []
+        cells.reserveCapacity(count)
+        for index in 0..<count {
+            cells.append(cellValue(columns[index], for: item, context: context))
+        }
+        return cells
+    }
+
     private func renderRowUncached(
+        cells: [String],
         item: Value,
         paint: RowPaint,
         columnWidths: [Int],
@@ -3816,9 +3864,10 @@ where Value.ID: Hashable {
             }
             let column = columns[index]
             let cellWidth = columnWidths[index]
-            // Hoisted, so the column's value closure still runs exactly once and
+            // Asked for once, by `rowCells(for:count:context:)`, before this
+            // loop — so the column's value closure still runs exactly once and
             // in the same order whichever branch below draws it.
-            let cellText = cellValue(column, for: item, context: context)
+            let cellText = cells[index]
             if let ramp, bandsAcrossRow {
                 var walked = cellColumn
                 PaintRenderer.band(
