@@ -68,6 +68,12 @@ extension StressStrings {
         "stress.scenario.table-api.stresses": "列値の種類 · 幅モード · 切り詰め · 選択 · ソート · 更新パターン",
         "stress.scenario.table-api.heading": "テーブル API — {0}、{1} 行",
 
+        // MARK: app-shapes
+        "stress.scenario.app-shapes.title": "アプリケーションの形",
+        "stress.scenario.app-shapes.blurb": "まるごとのアプリ — ファイルブラウザ、ログビューア、プロセスモニタ、メール、フォーム、エディタ、チャット。",
+        "stress.scenario.app-shapes.stresses": "API 全体の組み合わせ · 分割ビュー · 生きたソート済みテーブル · 折り返す詳細ペイン · コントロールのフォーム",
+        "stress.scenario.app-shapes.heading": "{0} — {1} 行",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "スクロールビュー内のテーブル群",
         "stress.scenario.tables-scroll.blurb": "N 個のテーブルをスクロールビューに積み重ね。各テーブルが自分の行を実体化し、独自の列幅を計算します。",

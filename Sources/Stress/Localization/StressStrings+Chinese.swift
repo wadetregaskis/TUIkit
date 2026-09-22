@@ -68,6 +68,12 @@ extension StressStrings {
         "stress.scenario.table-api.stresses": "列取值方式 · 宽度模式 · 截断 · 选择 · 排序 · 更新模式",
         "stress.scenario.table-api.heading": "表格 API — {0}，{1} 行",
 
+        // MARK: app-shapes
+        "stress.scenario.app-shapes.title": "应用形态",
+        "stress.scenario.app-shapes.blurb": "完整的应用——文件浏览器、日志查看器、进程监视器、邮件、表单、编辑器、聊天。",
+        "stress.scenario.app-shapes.stresses": "整套 API 的组合 · 分栏视图 · 实时排序的表格 · 自动换行的详情面板 · 控件表单",
+        "stress.scenario.app-shapes.heading": "{0} — {1} 行",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "滚动视图中的多个表格",
         "stress.scenario.tables-scroll.blurb": "N 个表格堆叠在滚动视图中；每个都物化自己的行并计算各自的列宽。",

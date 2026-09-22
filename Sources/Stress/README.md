@@ -64,6 +64,7 @@ scale live · `a` toggle autopilot.
 | `table-churn-wrapped` | the same, 250 rows wrapped: below the extent estimator's row limit, where every row is measured |
 | `table-tail` | a window over a growing sequence — rows keep their content and change position |
 | `table-api` | **a matrix**: one `Table` built every way the API allows, one variant per point (see below) |
+| `app-shapes` | **a matrix**: whole applications — file browser, log viewer, process monitor, mail client, settings form, code editor, chat |
 | `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
 | `tables-vstack` | **multiple** `Table`s in a `VStack` (no scroll) — N per-table column-width computations, VStack measure/layout over many table children |
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
@@ -100,6 +101,16 @@ swift run Stress -- --bench --scenario table-api --variant width-fit
 `--selfcheck` renders every variant of every matrix scenario, not just the one a
 config selects, so the whole space is smoke-tested (and, with
 `TUIKIT_VERIFY_RENDER_MEMO=1`, memo-verified) on every run.
+
+`app-shapes` is the other kind of matrix: not one API's space but whole
+applications, because the costs worth finding live in the COMBINATIONS. A file
+browser is a split view over a sortable table of formatter-built cells; a
+process monitor re-sorts four hundred rows whose every number moved; a chat is
+bottom-anchored bubbles of wildly unequal height. Nothing assembled from single
+-purpose fixtures puts those together, and each of them has already priced
+something the parts could not — `chat` against `chat-eager` is 1.4 ms against
+189 ms for the same application, the only difference being `LazyVStack` where an
+app would write `VStack`.
 
 `table-api` is the first: 43 variants over seven axes — how a column gets its
 value (key path, closure, sort-by-one-display-another, non-`Equatable` rows,

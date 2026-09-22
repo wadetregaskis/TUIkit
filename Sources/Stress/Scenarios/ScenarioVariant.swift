@@ -39,7 +39,8 @@ struct ScenarioVariant: Sendable {
 @MainActor
 enum ScenarioVariants {
     static let byScenario: [String: [ScenarioVariant]] = [
-        TableAPIMatrix.scenarioID: TableAPIMatrix.variants
+        TableAPIMatrix.scenarioID: TableAPIMatrix.variants,
+        AppShapeMatrix.scenarioID: AppShapeMatrix.variants,
     ]
 
     /// The variants of `scenario`, or an empty array for an ordinary scenario.

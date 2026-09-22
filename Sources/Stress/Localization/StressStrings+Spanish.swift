@@ -70,6 +70,12 @@ extension StressStrings {
         "stress.scenario.table-api.stresses": "tipos de valor de columna · modos de ancho · truncamiento · selección · ordenación · patrones de actualización",
         "stress.scenario.table-api.heading": "API Table — {0}, {1} filas",
 
+        // MARK: app-shapes
+        "stress.scenario.app-shapes.title": "Formas de aplicación",
+        "stress.scenario.app-shapes.blurb": "Aplicaciones completas: explorador de archivos, visor de registros, monitor de procesos, correo, formulario, editor, chat.",
+        "stress.scenario.app-shapes.stresses": "toda la API en combinación · vistas divididas · tablas ordenadas en vivo · paneles de detalle con ajuste de línea · formularios de controles",
+        "stress.scenario.app-shapes.heading": "{0} — {1} filas",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tablas en una vista de desplazamiento",
         "stress.scenario.tables-scroll.blurb": "N tablas apiladas en una vista de desplazamiento; cada una materializa sus filas y calcula sus propios anchos de columna.",

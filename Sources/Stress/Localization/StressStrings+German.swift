@@ -70,6 +70,12 @@ extension StressStrings {
         "stress.scenario.table-api.stresses": "Spaltenwertarten · Breitenmodi · Kürzung · Auswahl · Sortierung · Aktualisierungsmuster",
         "stress.scenario.table-api.heading": "Tabellen-API — {0}, {1} Zeilen",
 
+        // MARK: app-shapes
+        "stress.scenario.app-shapes.title": "Anwendungsformen",
+        "stress.scenario.app-shapes.blurb": "Ganze Anwendungen — Dateibrowser, Log-Viewer, Prozessmonitor, Mail, Formular, Editor, Chat.",
+        "stress.scenario.app-shapes.stresses": "das gesamte API im Zusammenspiel · Split Views · live sortierte Tabellen · umbrechende Detailbereiche · Formulare voller Steuerelemente",
+        "stress.scenario.app-shapes.heading": "{0} — {1} Zeilen",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabellen in einer Scrollansicht",
         "stress.scenario.tables-scroll.blurb": "N Tabellen in einer Scrollansicht gestapelt; jede materialisiert ihre Zeilen und berechnet eigene Spaltenbreiten.",

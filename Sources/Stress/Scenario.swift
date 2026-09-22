@@ -60,6 +60,7 @@ enum Scenarios {
         ChurningWrappedTableScenario.descriptor,
         TailingTableScenario.descriptor,
         TableAPIMatrix.descriptor,
+        AppShapeMatrix.descriptor,
         TablesInScrollViewScenario.descriptor,
         TablesInVStackScenario.descriptor,
         DeepRecursionScenario.descriptor,

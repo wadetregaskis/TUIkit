@@ -70,6 +70,12 @@ extension StressStrings {
         "stress.scenario.table-api.stresses": "types de valeur de colonne · modes de largeur · troncature · sélection · tri · schémas de mise à jour",
         "stress.scenario.table-api.heading": "API Table — {0}, {1} lignes",
 
+        // MARK: app-shapes
+        "stress.scenario.app-shapes.title": "Formes d'applications",
+        "stress.scenario.app-shapes.blurb": "Des applications entières — explorateur de fichiers, visionneuse de journaux, moniteur de processus, courrier, formulaire, éditeur, messagerie.",
+        "stress.scenario.app-shapes.stresses": "toute l'API en combinaison · vues divisées · tableaux triés en direct · volets de détail avec retour à la ligne · formulaires de contrôles",
+        "stress.scenario.app-shapes.heading": "{0} — {1} lignes",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tableaux dans une vue défilante",
         "stress.scenario.tables-scroll.blurb": "N tableaux empilés dans une vue défilante ; chacun matérialise ses lignes et calcule ses propres largeurs de colonne.",

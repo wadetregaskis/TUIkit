@@ -81,6 +81,12 @@ extension StressStrings {
         "stress.scenario.table-api.stresses": "column value kinds · width modes · truncation · selection · sorting · update patterns",
         "stress.scenario.table-api.heading": "Table API — {0}, {1} rows",
 
+        // MARK: app-shapes
+        "stress.scenario.app-shapes.title": "Application Shapes",
+        "stress.scenario.app-shapes.blurb": "Whole applications — file browser, log viewer, process monitor, mail, form, editor, chat.",
+        "stress.scenario.app-shapes.stresses": "the full API in combination · split views · live sorted tables · wrapped detail panes · forms of controls",
+        "stress.scenario.app-shapes.heading": "{0} — {1} rows",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tables in a ScrollView",
         "stress.scenario.tables-scroll.blurb": "N tables stacked in a ScrollView; each materialises its rows and computes its own column widths.",
