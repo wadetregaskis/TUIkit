@@ -58,6 +58,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "maquetación de filas multilínea · medición de altura de todas las filas · closures de valor de celda",
         "stress.scenario.table-churn-wrapped.heading": "Tabla ajustada cambiante — {0} filas, una de cada {1} cambia por fotograma",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "Tabla de seguimiento",
+        "stress.scenario.table-tail.blurb": "Una ventana sobre una secuencia creciente: cada fila conserva su contenido y sube una línea por fotograma.",
+        "stress.scenario.table-tail.stresses": "identidad de fila entre posiciones · redibujado de filas desplazadas · closures de valor de celda",
+        "stress.scenario.table-tail.heading": "Tabla de seguimiento — ventana de {0} filas sobre una secuencia creciente",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tablas en una vista de desplazamiento",
         "stress.scenario.tables-scroll.blurb": "N tablas apiladas en una vista de desplazamiento; cada una materializa sus filas y calcula sus propios anchos de columna.",

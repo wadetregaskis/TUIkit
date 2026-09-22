@@ -56,6 +56,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "多行布局 · 全部行的高度测量 · 单元格取值闭包",
         "stress.scenario.table-churn-wrapped.heading": "变动折行表格 — {0} 行，每帧每 {1} 行变动 1 行",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "追踪表格",
+        "stress.scenario.table-tail.blurb": "在不断增长的序列上的一个窗口：每行保持内容不变，每帧上移一行。",
+        "stress.scenario.table-tail.stresses": "跨位置的行标识 · 移动行的重新绘制 · 单元格取值闭包",
+        "stress.scenario.table-tail.heading": "追踪表格 — 在不断增长的序列上的 {0} 行窗口",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "滚动视图中的多个表格",
         "stress.scenario.tables-scroll.blurb": "N 个表格堆叠在滚动视图中；每个都物化自己的行并计算各自的列宽。",

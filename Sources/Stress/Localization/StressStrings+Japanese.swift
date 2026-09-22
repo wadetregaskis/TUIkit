@@ -56,6 +56,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "複数行のレイアウト · 全行の高さ計測 · セル値クロージャ",
         "stress.scenario.table-churn-wrapped.heading": "更新折り返しテーブル — {0} 行、{1} 行に 1 行がフレームごとに変化",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "追従テーブル",
+        "stress.scenario.table-tail.blurb": "増え続けるシーケンスへのウィンドウ。各行は内容を保ったままフレームごとに 1 行上がります。",
+        "stress.scenario.table-tail.stresses": "位置をまたぐ行のアイデンティティ · 移動した行の再描画 · セル値クロージャ",
+        "stress.scenario.table-tail.heading": "追従テーブル — 増え続けるシーケンスへの {0} 行のウィンドウ",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "スクロールビュー内のテーブル群",
         "stress.scenario.tables-scroll.blurb": "N 個のテーブルをスクロールビューに積み重ね。各テーブルが自分の行を実体化し、独自の列幅を計算します。",

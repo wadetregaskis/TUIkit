@@ -58,6 +58,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "mise en page multiligne · mesure de hauteur de toutes les lignes · closures de valeur de cellule",
         "stress.scenario.table-churn-wrapped.heading": "Tableau enroulé en mouvement — {0} lignes, une sur {1} change par image",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "Tableau suiveur",
+        "stress.scenario.table-tail.blurb": "Une fenêtre sur une séquence croissante : chaque ligne garde son contenu et remonte d'une ligne par image.",
+        "stress.scenario.table-tail.stresses": "identité de ligne à travers les positions · reconstruction des lignes déplacées · closures de valeur de cellule",
+        "stress.scenario.table-tail.heading": "Tableau suiveur — fenêtre de {0} lignes sur une séquence croissante",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tableaux dans une vue défilante",
         "stress.scenario.tables-scroll.blurb": "N tableaux empilés dans une vue défilante ; chacun matérialise ses lignes et calcule ses propres largeurs de colonne.",

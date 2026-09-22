@@ -69,6 +69,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "multi-line row layout · every-row height measurement · cell value closures",
         "stress.scenario.table-churn-wrapped.heading": "Churning Wrapped Table — {0} rows, one in {1} differs per frame",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "Tailing Table",
+        "stress.scenario.table-tail.blurb": "A window over a growing sequence: every row keeps its content and moves up one line per frame.",
+        "stress.scenario.table-tail.stresses": "row identity across positions · per-row re-render of moved rows · cell value closures",
+        "stress.scenario.table-tail.heading": "Tailing Table — a {0}-row window over a growing sequence",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tables in a ScrollView",
         "stress.scenario.tables-scroll.blurb": "N tables stacked in a ScrollView; each materialises its rows and computes its own column widths.",

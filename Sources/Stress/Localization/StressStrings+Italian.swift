@@ -58,6 +58,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "layout di righe multilinea · misurazione dell'altezza di ogni riga · closure dei valori di cella",
         "stress.scenario.table-churn-wrapped.heading": "Tabella a capo in movimento — {0} righe, una su {1} cambia per frame",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "Tabella inseguitrice",
+        "stress.scenario.table-tail.blurb": "Una finestra su una sequenza crescente: ogni riga mantiene il contenuto e sale di una riga per frame.",
+        "stress.scenario.table-tail.stresses": "identità di riga tra le posizioni · ridisegno delle righe spostate · closure dei valori di cella",
+        "stress.scenario.table-tail.heading": "Tabella inseguitrice — finestra di {0} righe su una sequenza crescente",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabelle in una vista a scorrimento",
         "stress.scenario.tables-scroll.blurb": "N tabelle impilate in una vista a scorrimento; ognuna materializza le sue righe e calcola le proprie larghezze di colonna.",

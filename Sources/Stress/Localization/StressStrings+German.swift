@@ -58,6 +58,12 @@ extension StressStrings {
         "stress.scenario.table-churn-wrapped.stresses": "Mehrzeiliges Zeilenlayout · Höhenmessung aller Zeilen · Zellwert-Closures",
         "stress.scenario.table-churn-wrapped.heading": "Wechselnde umbrochene Tabelle — {0} Zeilen, eine von {1} ändert sich je Frame",
 
+        // MARK: table-tail
+        "stress.scenario.table-tail.title": "Mitlaufende Tabelle",
+        "stress.scenario.table-tail.blurb": "Ein Fenster über eine wachsende Folge: Jede Zeile behält ihren Inhalt und rückt pro Frame eine Zeile nach oben.",
+        "stress.scenario.table-tail.stresses": "Zeilenidentität über Positionen hinweg · Neuaufbau verschobener Zeilen · Zellwert-Closures",
+        "stress.scenario.table-tail.heading": "Mitlaufende Tabelle — Fenster mit {0} Zeilen über eine wachsende Folge",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabellen in einer Scrollansicht",
         "stress.scenario.tables-scroll.blurb": "N Tabellen in einer Scrollansicht gestapelt; jede materialisiert ihre Zeilen und berechnet eigene Spaltenbreiten.",

@@ -6,7 +6,7 @@
 
 import TUIkit
 
-// MARK: - Churning Tables
+// MARK: - Tables whose data moves
 
 /// A large `Table` whose data is replaced every frame, but only a small
 /// FRACTION of whose rows actually differ.
@@ -60,6 +60,31 @@ enum ChurningWrappedTableScenario {
         blurb: "250 wrapped rows below the estimator's limit; ~2% differ per frame.",
         stresses: "multi-line row layout · every-row height measurement · cell value closures",
         make: { config in AnyView(ChurningWrappedTableView(config: config)) }
+    )
+}
+
+/// A fixed-size window over a growing sequence: every row keeps its content and
+/// its identity, and moves up one line per frame.
+///
+/// The other half of the moving-data axis, and the one that tells two memo
+/// designs apart. In `table-churn` a row keeps its position and 2% of rows
+/// change content; here NOTHING changes content and every row changes position.
+/// A memo keyed by the row's identity serves the whole window on every frame; a
+/// memo keyed by its position — the obvious first thing to reach for, since
+/// `_TableCore` gives its rows no identity at all — serves none of it, while
+/// looking correct, because the bytes it would have served are the bytes some
+/// other row wanted.
+///
+/// This is what a log tailing into a table does, which is the commonest live
+/// table an app has.
+enum TailingTableScenario {
+    @MainActor
+    static let descriptor = Scenario(
+        id: "table-tail",
+        title: "Tailing Table",
+        blurb: "A window over a growing sequence: every row keeps its content and moves up one line per frame.",
+        stresses: "row identity across positions · per-row re-render of moved rows · cell value closures",
+        make: { config in AnyView(TailingTableView(config: config)) }
     )
 }
 
@@ -140,6 +165,32 @@ private struct ChurningTableView: View {
                 TableColumn("Summary") { ChurnCell.summary($0, words: 8) }
                 TableColumn("Load") { ChurnCell.bar($0) }
                     .width(.fixed(8))
+            }
+        }
+    }
+}
+
+private struct TailingTableView: View {
+    let config: StressConfig
+    @Environment(StressClock.self) private var clock
+
+    var body: some View {
+        let count = config.sized(5_000)
+        let tick = clock.tick
+        // The id TRAVELS with the content — `tick + index`, not `index` — which
+        // is what makes this a shift rather than a churn. Give every row the
+        // same id every frame and changing its content would be the other
+        // scenario; give it a moving id and the content follows it up the table.
+        let rows = (0..<count).map { ChurningRow(id: tick &+ $0, generation: 0) }
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(Lf("stress.scenario.table-tail.heading", count)).bold()
+            Divider()
+            Table(rows, selection: Binding<Int?>.constant(nil)) {
+                TableColumn("Seq") { ChurnCell.identifier($0) }
+                    .width(.fixed(9))
+                TableColumn("Source") { ChurnCell.slug($0) }
+                TableColumn("Level") { ChurnCell.status($0) }
+                TableColumn("Message") { ChurnCell.summary($0, words: 10) }
             }
         }
     }
