@@ -144,6 +144,15 @@ extension TableAPIMatrix {
                 AnyView(SortedTable(count: min(count(config), 5_000)))
             },
 
+            // The same table sorted the way `Table`'s own documentation now
+            // says to sort it: decorate, sort the pairs, undecorate. Beside
+            // `sorted` it prices that advice from the committed corpus rather
+            // than from a number in a comment — the two differ by a hundredfold,
+            // and none of the difference is the table's.
+            variant("sorted-decorated", axis: "interaction", "the same sort done by decorate-sort-undecorate") { config in
+                AnyView(DecoratedSortTable(count: min(count(config), 5_000)))
+            },
+
             variant("disabled", axis: "interaction", "a disabled table — out of the focus ring entirely") { config in
                 table("disabled", config) { rows in
                     Table(rows, selection: Binding<Int?>.constant(nil)) {
@@ -401,6 +410,10 @@ private struct MultiSelectionTable: View {
 
 /// A sort binding, with the app doing the sorting — every frame, because a live
 /// table's snapshot arrives unsorted.
+///
+/// Deliberately the naive spelling, which is what an app writes first and what
+/// the `Table` documentation's worked example shows. ``DecoratedSortTable`` is
+/// the same table sorted the way that documentation now recommends.
 private struct SortedTable: View {
     let count: Int
     @State private var selection: Int?
@@ -412,6 +425,39 @@ private struct SortedTable: View {
         rows.sort(using: order)
         return VStack(alignment: .leading, spacing: 0) {
             Text(Lf("stress.scenario.table-api.heading", "sorted", count)).bold()
+            Divider()
+            Table(rows, selection: $selection, sortOrder: $order) {
+                TableColumn("ID", value: \APIRow.id) { "\($0.id)" }.width(.fixed(7))
+                TableColumn("Name", value: \APIRow.name)
+                TableColumn("Score", value: \APIRow.score) { "\($0.score)" }
+                    .width(.fixed(8)).alignment(.trailing)
+                TableColumn("Summary", value: \APIRow.summary)
+            }
+        }
+    }
+}
+
+/// The same sorted table, decorated: each row's key is read ONCE, the pairs are
+/// sorted by a plain comparison, and the rows are read back out.
+///
+/// O(n) key-path reads instead of O(n log n) comparator calls. The ordering it
+/// produces differs from ``SortedTable``'s for a `String` key — Foundation's
+/// comparator compares those with localized standard ordering — but the key
+/// here is an `Int`, where the two agree exactly and only the cost differs.
+private struct DecoratedSortTable: View {
+    let count: Int
+    @State private var selection: Int?
+    @State private var order: [KeyPathComparator<APIRow>] = [KeyPathComparator(\APIRow.score)]
+    @Environment(StressClock.self) private var clock
+
+    var body: some View {
+        let ascending = order.first?.order != .reverse
+        var keyed = APIChurn.fraction(apiChurnPeriod).rows(count: count, tick: clock.tick)
+            .map { ($0.score, $0) }
+        keyed.sort { ascending ? $0.0 < $1.0 : $0.0 > $1.0 }
+        let rows = keyed.map(\.1)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(Lf("stress.scenario.table-api.heading", "sorted-decorated", count)).bold()
             Divider()
             Table(rows, selection: $selection, sortOrder: $order) {
                 TableColumn("ID", value: \APIRow.id) { "\($0.id)" }.width(.fixed(7))

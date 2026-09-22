@@ -81,6 +81,39 @@ import Foundation
 /// like every other row chord: see ``RowAction/sortNextColumn``,
 /// ``RowAction/reverseSortOrder`` and ``RowShortcuts``.
 ///
+/// ### What `sort(using:)` costs
+///
+/// `sort(using:)` with `KeyPathComparator`s is **two to three orders of
+/// magnitude** slower than sorting by the same property directly. Measured on
+/// macOS 26, arm64, release, one sort of an array of structs:
+///
+/// | rows | key | `sort(using:)` | `sort { $0.k < $1.k }` |
+/// |---|---|---|---|
+/// | 1,000 | stored `String` | 18.6 ms | 0.037 ms |
+/// | 5,000 | stored `String` | 78.5 ms | 0.185 ms |
+/// | 5,000 | stored `Int` | 9.8 ms | 0.036 ms |
+/// | 5,000 | computed `Int` | 45.2 ms | 0.145 ms |
+///
+/// Three separate costs stack up: a key-path read cannot inline the getter
+/// (~130 ns against ~1 ns, so a *computed* property is the worst case), the
+/// comparator is reached through a protocol, and `sort(using:)`'s own generic
+/// wrapper adds more again. For a `String` key some of it is not waste —
+/// Foundation compares those with localized standard ordering, so `"item2"`
+/// sorts before `"item10"`, which `<` does not do.
+///
+/// None of this is the table's: it publishes an order and never sorts. But it
+/// is paid on the frame the user clicks a header, and a table of a few thousand
+/// rows spends longer there than on every frame it has ever drawn. When a sort
+/// is slow enough to feel:
+///
+/// - sort by the property directly (`data.sort { $0.name < $1.name }`) where
+///   plain ordering will do, reading the comparator only for which column and
+///   which direction;
+/// - or decorate, sort, undecorate — build `(key, row)` pairs once and sort
+///   those — which reads each row's property once instead of O(n log n) times
+///   and is the whole difference on a computed key;
+/// - and sort on the frame the ORDER changes, not on every snapshot.
+///
 /// ## Column Spacing
 ///
 /// Columns are separated by spaces (no vertical lines) for a clean look.
