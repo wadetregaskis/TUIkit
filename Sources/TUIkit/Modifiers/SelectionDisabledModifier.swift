@@ -8,16 +8,16 @@
 ///
 /// When applied to a list row, `.selectionDisabled()` refuses to let that row
 /// become the `List`'s selection: Enter/Space and a click on it do nothing
-/// (``ItemListHandler/toggleSelectionAtFocusedIndex()``), and it renders with
+/// (`ItemListHandler.toggleSelectionAtFocusedIndex()`), and it renders with
 /// a dimmed foreground to show it.
 ///
 /// Reported to the enclosing `List` the same way `.deleteDisabled()` /
-/// `.moveDisabled()` are — as the row renders, via ``RowEditRestrictions``,
+/// `.moveDisabled()` are — as the row renders, via `RowEditRestrictions`,
 /// rather than by inspecting the row's structure, so a modifier written
 /// outside this one (`.selectionDisabled(_:).padding()`) still counts. That
 /// also means the restriction is only known for a row that has actually
 /// drawn: Up/Down and Page Up/Page Down route around a `.selectionDisabled()`
-/// row once it has rendered at least once (``ItemListHandler/moveFocus(by:wrap:)``),
+/// row once it has rendered at least once (`ItemListHandler.moveFocus(by:wrap:)`),
 /// the same on-screen-only guarantee `.deleteDisabled()` documents — Home and
 /// End jump straight to a boundary and do not yet consult it.
 ///

@@ -73,7 +73,8 @@ extension View {
     /// unconditionally, because it is dimension-independent: the number means
     /// the same thing whatever size the view ends up at. An alignment guide is
     /// not, and still has to be outermost — see
-    /// ``View/alignmentGuide(_:computeValue:)``.
+    /// ``View/alignmentGuide(_:computeValue:)-(HorizontalAlignment,_)`` and its
+    /// vertical twin.
     ///
     /// - Parameter value: The relative drawing order. Higher draws later.
     /// - Returns: A view with the given z-index.

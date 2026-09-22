@@ -45,7 +45,7 @@
 /// Conform to `GaugeStyle` and implement ``makeBody(configuration:)`` to draw a
 /// gauge however you like — a `▁▂▃▄▅▆▇` sparkline cell, an "N of M" readout, a
 /// house bar. The built-in styles above don't implement `makeBody`; they render
-/// procedurally, through ``TrackRenderer`` and the ring dial. Only custom styles
+/// procedurally, through `TrackRenderer` and the ring dial. Only custom styles
 /// use it, exactly as with ``ButtonStyle``, ``ToggleStyle`` and ``LabelStyle``.
 ///
 /// ```swift
@@ -79,7 +79,7 @@
 ///
 /// All seven built-in styles are therefore `Equatable`. None of them holds
 /// anything, and the only thing the framework ever reads off a style is
-/// ``builtInShape``, which is a function of the type and of nothing else — so
+/// `builtInShape`, which is a function of the type and of nothing else — so
 /// `==` within a type is vacuously true and two instances of one really do draw
 /// the same gauge. Between types it is the downcast in the comparison that
 /// answers, and that is what a gauge needs: a swap from a bar to a ring changes
@@ -267,7 +267,8 @@ public struct AccessoryCircularTinyGaugeStyle: GaugeStyle, Equatable {
 // MARK: - GaugeStyle Static Accessors
 
 extension GaugeStyle where Self == DefaultGaugeStyle {
-    /// The default gauge style. On a terminal this draws ``linearCapacity``.
+    /// The default gauge style. On a terminal this draws
+    /// ``GaugeStyle/linearCapacity``.
     public static var automatic: DefaultGaugeStyle { DefaultGaugeStyle() }
 }
 

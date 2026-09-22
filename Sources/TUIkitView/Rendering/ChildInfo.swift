@@ -550,7 +550,7 @@ public struct ChildView {
     /// `ordinal(of:)` above all — that this child has no index to match.
     ///
     /// A cast rather than a stored field: this struct's size is load-bearing
-    /// (see ``providerSlot``), and the only caller is a scroll seek, which
+    /// (see `providerSlot`), and the only caller is a scroll seek, which
     /// asks on the frames a `scrollTo` request arrives on and on no others.
     public var explicitIDKey: String? {
         (view as? ExplicitIDProviding)?.explicitIDKey
@@ -780,10 +780,10 @@ extension ChildViewProvider {
 /// is a VALUE it can carry to each of them (see `ChildView.modified(by:)`). A
 /// bare wrapper has no such value — re-wrapping means calling its own
 /// initialiser, whose content type is the wrapper's generic parameter and so
-/// cannot be bound to an `any View`. ``rewrapping(_:)`` is that initialiser
-/// call, written once per wrapper, and it is the ONLY member a conformance has
-/// to spell: it is generic over the new content, so passing an existential to
-/// it opens the existential instead of failing to convert.
+/// cannot be bound to an `any View`. ``ContentRewrapping/rewrapping(_:)`` is
+/// that initialiser call, written once per wrapper, and it is the ONLY member a
+/// conformance has to spell: it is generic over the new content, so passing an
+/// existential to it opens the existential instead of failing to convert.
 ///
 /// Public because two of the wrappers that must conform are — `FlexibleFrameView`
 /// (`.frame`) and `DisabledModifier` (`.disabled`) — and a public type's
