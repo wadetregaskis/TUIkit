@@ -78,6 +78,33 @@ struct RenderMemoVerifierTests {
         #expect(tui.renderCache.renderMemoMismatches.isEmpty)
     }
 
+    /// The verifier had never been pointed at a `Table`, which is the control
+    /// with the most to gain from it: a Table keeps one thing across frames
+    /// today (its `.fit` column widths) and is the candidate for keeping rows.
+    ///
+    /// It lives in THIS suite rather than beside the other Table cross-frame
+    /// tests because `verifiesRenderMemo` is a process-wide `static`, and this
+    /// suite is `.serialized` and owns it — `offByDefault` below asserts its
+    /// value, so a second suite flipping it concurrently would fail that one
+    /// for a reason that has nothing to do with it.
+    @Test("It stays quiet over a Table, across every shape in the matrix")
+    func verifierStaysQuiet() {
+        let was = RenderCache.verifiesRenderMemo
+        RenderCache.verifiesRenderMemo = true
+        defer { RenderCache.verifiesRenderMemo = was }
+
+        for testCase in TableMatrixShape.sweep {
+            let harness = TableMatrixHarness(testCase.shape)
+            harness.settle()
+            harness.mutate(rowAt: 0)
+            harness.frame()
+            harness.frame()
+            #expect(
+                harness.renderCacheMismatches.isEmpty,
+                "\(testCase.name): \(harness.renderCacheMismatches)")
+        }
+    }
+
     @Test("it is off unless asked for")
     func offByDefault() {
         // It re-renders what the memo just saved, so it costs more than the memo
