@@ -413,11 +413,51 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
         fatalError("_FormLayout renders via Renderable")
     }
 
+    /// Measures the column it is about to build, rather than BUILDING it.
+    ///
+    /// This was `measureFixedByRendering(self, …)`, which renders the whole form
+    /// to report its size — so a form was assembled twice per frame, and each
+    /// assembly is two measure walks over every row (the pillar and the content
+    /// width) plus a render of the composed column. On the
+    /// `app-shapes/settings-form` scenario — sixty bound controls, the shape of
+    /// an ordinary preferences window — `measureFixedByRendering` was 81% of
+    /// the frame and `_FormLayout.sizeThatFits` alone was 73.6% (Instruments,
+    /// release, 2026-09-22).
+    ///
+    /// Still `.fixed`, exactly as before: a form hugs its content on both axes,
+    /// and the column it composes is the content. What changed is that the
+    /// column is measured instead of drawn.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureFixedByRendering(self, proposal: proposal, context: context)
+        var measureContext = context
+        measureContext.isMeasuring = true
+        measureContext.hasExplicitWidth = false
+        if let width = proposal.width { measureContext.availableWidth = width }
+        if let height = proposal.height { measureContext.availableHeight = height }
+        guard let composed = composedColumn(context: measureContext) else {
+            // A custom style renders itself through `makeBuffer`, and there is
+            // nothing structural here to measure.
+            return measureFixedByRendering(self, proposal: proposal, context: context)
+        }
+        let size = measureChild(composed, proposal: proposal, context: measureContext)
+        return ViewSize.fixed(size.width, size.height)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        guard let composed = composedColumn(context: context) else {
+            // Custom style: hand it the (type-erased) content to render itself.
+            return context.environment.formStyle.makeBuffer(
+                configuration: FormStyleConfiguration(content: AnyView(content)), context: context)
+        }
+        return TUIkit.renderToBuffer(composed, context: context)
+    }
+
+    /// The column this form is, for whichever built-in style is in force, or
+    /// `nil` for a custom style (which builds its own buffer and has no column).
+    ///
+    /// One function so the measure and the render cannot compose different
+    /// trees — the pillar and the content width are derived here, and both
+    /// callers get the same answer for the same context.
+    private func composedColumn(context: RenderContext) -> AnyView? {
         let style = context.environment.formStyle
         let grouped: Bool
         if style is GroupedFormStyle {
@@ -425,9 +465,7 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
         } else if style is ColumnsFormStyle || style is AutomaticFormStyle {
             grouped = false
         } else {
-            // Custom style: hand it the (type-erased) content to render itself.
-            return style.makeBuffer(
-                configuration: FormStyleConfiguration(content: AnyView(content)), context: context)
+            return nil
         }
 
         let elements = formElements(from: content)
@@ -436,18 +474,18 @@ private struct _FormLayout<Content: View>: View, Renderable, Layoutable {
         // edge buttons right-align to; in grouped it's the shared box width.
         let contentWidth = contentWidth(of: elements, pillar: pillar, context: context)
 
-        let composed = VStack(alignment: .leading, spacing: grouped ? 1 : 0) {
-            ForEach(_indexed(elements)) { entry in
-                if grouped {
-                    groupedElementView(entry.value, pillar: pillar, contentWidth: contentWidth)
-                } else {
-                    columnsElementView(
-                        entry.value, pillar: pillar, contentWidth: contentWidth,
-                        isFirst: entry.id == 0)
+        return AnyView(
+            VStack(alignment: .leading, spacing: grouped ? 1 : 0) {
+                ForEach(_indexed(elements)) { entry in
+                    if grouped {
+                        groupedElementView(entry.value, pillar: pillar, contentWidth: contentWidth)
+                    } else {
+                        columnsElementView(
+                            entry.value, pillar: pillar, contentWidth: contentWidth,
+                            isFirst: entry.id == 0)
+                    }
                 }
-            }
-        }
-        return TUIkit.renderToBuffer(composed, context: context)
+            })
     }
 
     /// The shared pillar: the widest field label across every row (sections
