@@ -75,8 +75,17 @@ enum TextWrapping {
         // checked by generation rather than folded into the key, so a switch
         // frees the old host's entries instead of leaving them to the cap.
         dropMemosIfClaimMoved()
+        // The width-independent table first: it holds the common case (a label
+        // that fits, a source line nothing wraps), and a text in it is answered
+        // by one probe where the keyed table would need one per budget.
+        if width > 0, let known = unwrapped[text], known.widths[0] <= width { return known }
         if let hit = cache[WrapKey(text: text, width: width)] { return hit }
         let wrapped = uncachedWrapMeasured(text, width: width)
+        if width > 0, wrapped.lines.count == 1, wrapped.lines[0] == text {
+            if unwrapped.count >= cacheLimit { unwrapped.removeAll(keepingCapacity: true) }
+            unwrapped[text] = wrapped
+            return wrapped
+        }
         // A flat cap rather than an LRU: entries are small, a frame's working
         // set is far below this, and a cliff-edge flush costs one re-wrap of
         // whatever is still on screen. Tracking recency would cost more than
@@ -107,6 +116,34 @@ enum TextWrapping {
     private static var cache: [WrapKey: Wrapped] = [:]
     private static var fitCache: [FitKey: Wrapped] = [:]
 
+    /// The wrap of a text that came back from one AS ITSELF — one line, byte
+    /// for byte — keyed by the text alone.
+    ///
+    /// The whole ``Wrapped`` and not just its width, so a hit hands back the
+    /// arrays it already has: rebuilding `Wrapped(lines: [text], widths: [n])`
+    /// per hit allocated two arrays where the keyed table allocates none, and
+    /// gave back in churn most of what the table saved (`scrollfollow` +2.8%).
+    ///
+    /// Such a text did not wrap, and cannot wrap at any WIDER budget either, so
+    /// its answer is a property of the text and one entry serves every budget
+    /// above it. That is not a refinement of ``cache``; it is the fix for a way
+    /// ``cache`` was being defeated. The keyed table holds one entry per (text,
+    /// width), and the questions asked of a stack arrive at several widths:
+    /// `measureNaturalExtent` re-measures the whole content once per rung of its
+    /// budget ladder, and `resolveScrollbars` asks again at a viewport one cell
+    /// narrower after reserving a bar. A two-thousand-line editor therefore
+    /// filed four thousand entries for two thousand texts, blew the flat cap,
+    /// and flushed — taking the RENDER's own entries with it, so nothing was
+    /// ever served. Measured on `app-shapes/code-editor-tailing`: the cache
+    /// flushed 3.3 times per frame.
+    ///
+    /// Filled only from a proven result, never from a guess: the text is stored
+    /// when a real wrap returned it unchanged, so nothing here rests on an
+    /// assumption about what `wrapParagraph` does to indents, trailing spaces or
+    /// a CJK run. And dropped by ``dropMemosIfClaimMoved()`` with the others,
+    /// because a width is exactly what a host's claim changes.
+    private static var unwrapped: [String: Wrapped] = [:]
+
     /// The `TerminalWidthTraits.generation` both memos were filled under.
     ///
     /// Starts at zero instead of reading the counter, so its initializer is a
@@ -134,12 +171,14 @@ enum TextWrapping {
         memoizedUnderWidthGeneration = generation
         cache.removeAll()
         fitCache.removeAll()
+        unwrapped.removeAll()
     }
 
     /// Clears the wrap and fit memos. For tests that want to measure cold.
     static func clearWrapCache() {
         cache.removeAll()
         fitCache.removeAll()
+        unwrapped.removeAll()
     }
 
     private static func uncachedWrapMeasured(_ text: String, width: Int) -> Wrapped {
