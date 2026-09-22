@@ -62,6 +62,12 @@ extension StressStrings {
         "stress.scenario.table-tail.stresses": "跨位置的行标识 · 移动行的重新绘制 · 单元格取值闭包",
         "stress.scenario.table-tail.heading": "追踪表格 — 在不断增长的序列上的 {0} 行窗口",
 
+        // MARK: table-api
+        "stress.scenario.table-api.title": "表格 API 矩阵",
+        "stress.scenario.table-api.blurb": "以 API 允许的每一种方式构建的表格——用 --variant 选择其中一个点。",
+        "stress.scenario.table-api.stresses": "列取值方式 · 宽度模式 · 截断 · 选择 · 排序 · 更新模式",
+        "stress.scenario.table-api.heading": "表格 API — {0}，{1} 行",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "滚动视图中的多个表格",
         "stress.scenario.tables-scroll.blurb": "N 个表格堆叠在滚动视图中；每个都物化自己的行并计算各自的列宽。",

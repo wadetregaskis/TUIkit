@@ -75,6 +75,12 @@ extension StressStrings {
         "stress.scenario.table-tail.stresses": "row identity across positions · per-row re-render of moved rows · cell value closures",
         "stress.scenario.table-tail.heading": "Tailing Table — a {0}-row window over a growing sequence",
 
+        // MARK: table-api
+        "stress.scenario.table-api.title": "Table API Matrix",
+        "stress.scenario.table-api.blurb": "One Table built every way the API allows — pick a point with --variant.",
+        "stress.scenario.table-api.stresses": "column value kinds · width modes · truncation · selection · sorting · update patterns",
+        "stress.scenario.table-api.heading": "Table API — {0}, {1} rows",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tables in a ScrollView",
         "stress.scenario.tables-scroll.blurb": "N tables stacked in a ScrollView; each materialises its rows and computes its own column widths.",

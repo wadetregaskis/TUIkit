@@ -38,11 +38,13 @@ swift run -c release Stress -- --bench --scenario fanout --iterations 2000 --col
 | Env | Flag | Meaning |
 |---|---|---|
 | `TUIKIT_STRESS_SCENARIO` | `--scenario <id>` | boot directly into a scenario |
+| `TUIKIT_STRESS_VARIANT` | `--variant <id>` | pick a variant of a matrix scenario (see below) |
 | `TUIKIT_STRESS_SCALE` | `--scale <n>` | size multiplier (1 is already heavy; 10/100 are pathological) |
 | `TUIKIT_STRESS_SEED` | `--seed <n>` | synthetic-data seed |
 | `TUIKIT_STRESS_AUTOPILOT` | `--autopilot` | self-drive continuous re-renders |
 
-`--bench` also takes `--iterations N`, `--cols C`, `--rows R`, and `--cold`
+`--variants` lists every matrix scenario's variants, grouped by the axis each
+one varies. `--bench` also takes `--iterations N`, `--cols C`, `--rows R`, and `--cold`
 (fresh state + cache each frame → worst-case measure+render, vs the default
 cache-warm steady state).
 
@@ -57,6 +59,11 @@ scale live · `a` toggle autopilot.
 | `scrollfollow` | bottom-anchored `ScrollView` over variable-height rows with one appended per tick — windowed band render, anchor advance, tail estimate, O(window) at any N |
 | `table` | `Table` column-width computation, row windowing, per-cell value closures |
 | `table-multiline` | multi-line cell wrapping, lazy row sizing (visible window + bottom suffix only), variable-height windowing |
+| `truncate` | ANSI-aware clipping, all three truncation modes, per-cell measure/pad |
+| `table-churn` | per-row re-render of *unchanged* rows — the data is replaced every frame but ~2% of rows differ |
+| `table-churn-wrapped` | the same, 250 rows wrapped: below the extent estimator's row limit, where every row is measured |
+| `table-tail` | a window over a growing sequence — rows keep their content and change position |
+| `table-api` | **a matrix**: one `Table` built every way the API allows, one variant per point (see below) |
 | `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
 | `tables-vstack` | **multiple** `Table`s in a `VStack` (no scroll) — N per-table column-width computations, VStack measure/layout over many table children |
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
@@ -72,9 +79,36 @@ scale live · `a` toggle autopilot.
 | `animating` | animation store lookups, uncacheable subtrees, colour resolution per frame |
 | `translucent` | cell decomposition of both sides, per-cell region lookup, SGR re-emission |
 | `gradients` | ramp quantisation, per-cell geometry, origin propagation, re-ink on move, SGR runs |
+| `alpharamp` | per-cell alpha compositing over a patterned ground, blend arithmetic |
 | `menus` | `ButtonStyle` body measure, menu hug-width pass, shortcut hint column, per-row `@Environment` resolution |
 | `keyrows` | per-row registrations (`onKeyPress`, `.statusBarItems`) under the row memo, per-frame key and status-bar registries, a `.refreshable` panel |
 | `kitchensink` | split-view + list windowing + container grid simultaneously |
+
+## Matrix scenarios and variants
+
+Some questions are not about *a* shape but about a *space of* shapes: how a
+`Table` behaves across every way an app can build one. There are dozens of those
+points, they differ by a line each, and none of them wants a title a translator
+will ever read — so they are **variants** of one registered scenario rather than
+scenarios of their own.
+
+```sh
+swift run Stress -- --variants                                  # list them
+swift run Stress -- --bench --scenario table-api --variant width-fit
+```
+
+`--selfcheck` renders every variant of every matrix scenario, not just the one a
+config selects, so the whole space is smoke-tested (and, with
+`TUIKIT_VERIFY_RENDER_MEMO=1`, memo-verified) on every run.
+
+`table-api` is the first: 43 variants over seven axes — how a column gets its
+value (key path, closure, sort-by-one-display-another, non-`Equatable` rows,
+class rows), the four width modes, what a cell holds (interpolated integers,
+Foundation formatters, SGR, CJK/emoji, over-long text), truncation mode, line
+limits and alignment and column spacing, the selection and sort bindings, the
+update pattern, and the size/chrome/surroundings. A variant is a struct literal
+in `TableAPI*Variants.swift`; adding one costs no registry entry and no
+translations.
 
 ## Profiling
 
@@ -134,3 +168,8 @@ and the relative hot-spots shift.
 3. Prefer **on-demand** synthesis (`mix(seed, index)` per visible row) over a
    pre-materialised array, so memory stays O(visible). If you must materialise
    (e.g. `Table`), build it once in the view's `init`, not in `body`.
+
+Adding a **variant** to an existing matrix scenario is smaller: append a
+`variant(_:axis:_:_:)` literal to the relevant group in that scenario's
+`*Variants.swift`. It is listed, benchable and self-checked from there, with no
+registry entry and no strings to translate.

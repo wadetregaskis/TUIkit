@@ -64,6 +64,12 @@ extension StressStrings {
         "stress.scenario.table-tail.stresses": "Zeilenidentität über Positionen hinweg · Neuaufbau verschobener Zeilen · Zellwert-Closures",
         "stress.scenario.table-tail.heading": "Mitlaufende Tabelle — Fenster mit {0} Zeilen über eine wachsende Folge",
 
+        // MARK: table-api
+        "stress.scenario.table-api.title": "Tabellen-API-Matrix",
+        "stress.scenario.table-api.blurb": "Eine Tabelle, auf jede vom API erlaubte Weise gebaut — ein Punkt per --variant.",
+        "stress.scenario.table-api.stresses": "Spaltenwertarten · Breitenmodi · Kürzung · Auswahl · Sortierung · Aktualisierungsmuster",
+        "stress.scenario.table-api.heading": "Tabellen-API — {0}, {1} Zeilen",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabellen in einer Scrollansicht",
         "stress.scenario.tables-scroll.blurb": "N Tabellen in einer Scrollansicht gestapelt; jede materialisiert ihre Zeilen und berechnet eigene Spaltenbreiten.",

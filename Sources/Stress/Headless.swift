@@ -124,17 +124,51 @@ enum Headless {
     /// `App` type `RenderLoop` roots a real tree at.
     private enum BenchRoot {}
 
-    /// Renders every scenario once at a fixed size; prints dimensions. Returns
-    /// the number that produced an empty buffer (a failure).
+    /// One thing `--selfcheck` renders: a scenario, or one variant of a matrix
+    /// scenario.
+    ///
+    /// A matrix scenario contributes one case per variant rather than one case,
+    /// because the variant a config happens to select is not what wants
+    /// checking — the whole space is. Thirty-odd `Table` shapes cost a second of
+    /// wall clock here and are the only thing that renders every one of them.
+    struct SelfcheckCase {
+        let id: String
+        let title: String
+        let make: @MainActor () -> AnyView
+    }
+
+    /// Every scenario, with matrix scenarios expanded into their variants.
+    @MainActor
+    static func selfcheckCases(_ config: StressConfig) -> [SelfcheckCase] {
+        Scenarios.all.flatMap { scenario -> [SelfcheckCase] in
+            let variants = ScenarioVariants.variants(of: scenario.id)
+            guard !variants.isEmpty else {
+                return [SelfcheckCase(id: scenario.id, title: scenario.title,
+                    make: { scenario.make(config) })]
+            }
+            return variants.map { variant in
+                var scoped = config
+                scoped.variant = variant.id
+                return SelfcheckCase(
+                    id: "\(scenario.id)/\(variant.id)",
+                    title: variant.summary,
+                    make: { scenario.make(scoped) })
+            }
+        }
+    }
+
+    /// Renders every scenario (and every variant) once at a fixed size; prints
+    /// dimensions. Returns the number that produced an empty buffer (a failure).
     @MainActor
     static func selfcheck(_ config: StressConfig) -> Int {
         let clock = StressClock()
         var failures = 0
+        let cases = selfcheckCases(config)
         print("selfcheck — scale \(config.scale) seed \(config.seed) @ 120x40")
-        for scenario in Scenarios.all {
+        for scenario in cases {
             let channels = HeadlessInputChannels()
             let context = makeContext(cols: 120, rows: 40, channels: channels)
-            let view = AnyView(scenario.make(config).environment(clock))
+            let view = AnyView(scenario.make().environment(clock))
             let trimmedBefore = StackGuard.truncationCount
             // TWICE, with the pass lifecycle between, because a memo only
             // SERVES on a second render — so a one-render check never exercised
@@ -160,7 +194,13 @@ enum Headless {
                 buffer.width > 0 && buffer.height > 0 && !isBlank(buffer) && trimmed == 0
                 && staleServes.isEmpty
             if !ok { failures += 1 }
-            let id = scenario.id.padding(toLength: 12, withPad: " ", startingAt: 0)
+            // Padded, never TRUNCATED: `padding(toLength:)` cuts a longer
+            // string, which silently turned `size-wrapped-1000` into
+            // `size-wrapped-100` — the id of a case that does not exist, beside
+            // the one that does.
+            let id = scenario.id.count >= 26
+                ? scenario.id
+                : scenario.id.padding(toLength: 26, withPad: " ", startingAt: 0)
             let why =
                 trimmed > 0
                 ? "  (stack guard stopped \(trimmed) descents)"
@@ -172,7 +212,10 @@ enum Headless {
                 + "  \(scenario.title)\(why)")
             for line in staleServes.prefix(3) { print("      \(line)") }
         }
-        print(failures == 0 ? "selfcheck: all \(Scenarios.all.count) scenarios rendered" : "selfcheck: \(failures) FAILED")
+        print(
+            failures == 0
+                ? "selfcheck: all \(cases.count) cases rendered (\(Scenarios.all.count) scenarios)"
+                : "selfcheck: \(failures) FAILED")
         return failures
     }
 

@@ -64,6 +64,12 @@ extension StressStrings {
         "stress.scenario.table-tail.stresses": "identità di riga tra le posizioni · ridisegno delle righe spostate · closure dei valori di cella",
         "stress.scenario.table-tail.heading": "Tabella inseguitrice — finestra di {0} righe su una sequenza crescente",
 
+        // MARK: table-api
+        "stress.scenario.table-api.title": "Matrice dell'API Table",
+        "stress.scenario.table-api.blurb": "Una Table costruita in ogni modo consentito dall'API — scegli un punto con --variant.",
+        "stress.scenario.table-api.stresses": "tipi di valore di colonna · modalità di larghezza · troncamento · selezione · ordinamento · schemi di aggiornamento",
+        "stress.scenario.table-api.heading": "API Table — {0}, {1} righe",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabelle in una vista a scorrimento",
         "stress.scenario.tables-scroll.blurb": "N tabelle impilate in una vista a scorrimento; ognuna materializza le sue righe e calcola le proprie larghezze di colonna.",

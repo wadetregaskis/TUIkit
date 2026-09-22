@@ -17,6 +17,8 @@
 //
 //  Common options (env var | flag):
 //    TUIKIT_STRESS_SCENARIO | --scenario <id>   pick a scenario
+//    TUIKIT_STRESS_VARIANT  | --variant <id>     pick a variant of a matrix scenario
+//    --variants                                  list every matrix scenario's variants
 //    TUIKIT_STRESS_SCALE    | --scale <n>        size multiplier (1 is already heavy)
 //    TUIKIT_STRESS_SEED     | --seed <n>         synthetic-data seed
 //    TUIKIT_STRESS_AUTOPILOT| --autopilot        self-drive continuous re-renders
@@ -48,7 +50,8 @@ let usageText = """
 
     Interactive:  Stress
     Self-check:   Stress --selfcheck [--scale N]
-    Benchmark:    Stress --bench --scenario <id> [--iterations N] [--cols C] [--rows R] [--cold]
+    Benchmark:    Stress --bench --scenario <id> [--variant V] [--iterations N] [--cols C] [--rows R] [--cold]
+    Variants:     Stress --variants
 
     Scenario ids (the interactive menu shows titles, not ids):
     \(scenarioIDs)
@@ -56,6 +59,27 @@ let usageText = """
 
 if rawArgs.contains("--help") || rawArgs.contains("-h") {
     print(usageText)
+} else if rawArgs.contains("--variants") {
+    // A matrix scenario is one id covering many shapes of one API; this is the
+    // only listing of what those shapes are. Grouped by the axis each varies,
+    // because reading them in axis order is how you notice the one that is
+    // missing.
+    await MainActor.run {
+        for scenario in Scenarios.all {
+            let variants = ScenarioVariants.variants(of: scenario.id)
+            guard !variants.isEmpty else { continue }
+            print("\(scenario.id) — \(scenario.title), \(variants.count) variants")
+            var axis = ""
+            for variant in variants {
+                if variant.axis != axis {
+                    axis = variant.axis
+                    print("  [\(axis)]")
+                }
+                let id = variant.id.padding(toLength: 18, withPad: " ", startingAt: 0)
+                print("    \(id) \(variant.summary)")
+            }
+        }
+    }
 } else if rawArgs.contains("--selfcheck") {
     let failures = await MainActor.run { Headless.selfcheck(config) }
     exit(failures == 0 ? 0 : 1)

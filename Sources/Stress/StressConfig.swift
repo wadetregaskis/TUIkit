@@ -41,6 +41,18 @@ struct StressConfig {
     /// Scenario id to start in, or `nil` for the menu.
     var initialScenario: String?
 
+    /// Which VARIANT of a matrix scenario to build.
+    ///
+    /// A matrix scenario is one `Scenario` covering many shapes of one API —
+    /// every way a `Table` can be given its data, sized, truncated, aligned,
+    /// selected and updated — rather than one scenario per shape. One id keeps
+    /// the registry and its seven translation tables the size they are; the
+    /// variant picks the point in the space, and `--variants` lists them.
+    ///
+    /// `nil` builds the variant the matrix nominates as its default, so
+    /// `--bench --scenario table-api` works without one.
+    var variant: String?
+
     /// Scales a base count by `scale`, clamped to at least 1.
     func sized(_ base: Int) -> Int { max(1, base * scale) }
 
@@ -49,22 +61,33 @@ struct StressConfig {
     /// Builds a config from the environment, then applies CLI overrides.
     static func fromEnvironmentAndArgs(_ args: [String]) -> Self {
         var config = Self()
-        let env = ProcessInfo.processInfo.environment
-        if let s = env["TUIKIT_STRESS_SCALE"], let value = Int(s) { config.scale = max(1, value) }
-        if let s = env["TUIKIT_STRESS_SEED"], let value = UInt64(s) { config.seed = value }
-        if let s = env["TUIKIT_STRESS_AUTOPILOT"] { config.autopilot = (s == "1" || s.lowercased() == "true") }
-        if let s = env["TUIKIT_STRESS_SCENARIO"], !s.isEmpty { config.initialScenario = s }
+        config.applyEnvironment(ProcessInfo.processInfo.environment)
+        config.applyArguments(args)
+        return config
+    }
 
+    /// The environment half, split from the argument half only to keep each
+    /// under the complexity limit — every option is readable in one of them.
+    private mutating func applyEnvironment(_ env: [String: String]) {
+        if let s = env["TUIKIT_STRESS_SCALE"], let value = Int(s) { scale = max(1, value) }
+        if let s = env["TUIKIT_STRESS_SEED"], let value = UInt64(s) { seed = value }
+        if let s = env["TUIKIT_STRESS_AUTOPILOT"] { autopilot = (s == "1" || s.lowercased() == "true") }
+        if let s = env["TUIKIT_STRESS_SCENARIO"], !s.isEmpty { initialScenario = s }
+        if let s = env["TUIKIT_STRESS_VARIANT"], !s.isEmpty { variant = s }
+    }
+
+    /// The CLI half, which overrides the environment.
+    private mutating func applyArguments(_ args: [String]) {
         var it = args.makeIterator()
         while let arg = it.next() {
             switch arg {
-            case "--scale": if let value = it.next().flatMap(Int.init) { config.scale = max(1, value) }
-            case "--seed": if let value = it.next().flatMap(UInt64.init) { config.seed = value }
-            case "--autopilot": config.autopilot = true
-            case "--scenario": if let value = it.next() { config.initialScenario = value }
+            case "--scale": if let value = it.next().flatMap(Int.init) { scale = max(1, value) }
+            case "--seed": if let value = it.next().flatMap(UInt64.init) { seed = value }
+            case "--autopilot": autopilot = true
+            case "--scenario": if let value = it.next() { initialScenario = value }
+            case "--variant": if let value = it.next() { variant = value }
             default: break  // headless flags are handled in main.swift
             }
         }
-        return config
     }
 }

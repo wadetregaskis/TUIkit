@@ -62,6 +62,12 @@ extension StressStrings {
         "stress.scenario.table-tail.stresses": "位置をまたぐ行のアイデンティティ · 移動した行の再描画 · セル値クロージャ",
         "stress.scenario.table-tail.heading": "追従テーブル — 増え続けるシーケンスへの {0} 行のウィンドウ",
 
+        // MARK: table-api
+        "stress.scenario.table-api.title": "テーブル API マトリクス",
+        "stress.scenario.table-api.blurb": "API が許すあらゆる方法で組んだテーブル — --variant で 1 点を選びます。",
+        "stress.scenario.table-api.stresses": "列値の種類 · 幅モード · 切り詰め · 選択 · ソート · 更新パターン",
+        "stress.scenario.table-api.heading": "テーブル API — {0}、{1} 行",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "スクロールビュー内のテーブル群",
         "stress.scenario.tables-scroll.blurb": "N 個のテーブルをスクロールビューに積み重ね。各テーブルが自分の行を実体化し、独自の列幅を計算します。",
