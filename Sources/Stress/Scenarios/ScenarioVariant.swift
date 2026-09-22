@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 // MARK: - Variants
@@ -49,11 +50,23 @@ enum ScenarioVariants {
     }
 
     /// The variant a config selects, or the matrix's first as the default.
+    ///
+    /// A NAMED variant that does not exist exits rather than falling back. The
+    /// fallback was silent, and silence is the whole problem: a sweep that asked
+    /// for `code-editor-tailing` and was handed `file-browser` printed the file
+    /// browser's microseconds under the editor's name, in a tool whose entire job
+    /// is to be read down a column for the row that does not belong.
     static func resolve(_ config: StressConfig, in scenario: String) -> ScenarioVariant? {
         let variants = self.variants(of: scenario)
         guard !variants.isEmpty else { return nil }
         guard let wanted = config.variant else { return variants.first }
-        return variants.first { $0.id == wanted } ?? variants.first
+        guard let found = variants.first(where: { $0.id == wanted }) else {
+            let known = variants.map(\.id).joined(separator: ", ")
+            FileHandle.standardError.write(
+                Data("error: \(scenario) has no variant '\(wanted)'\n       known: \(known)\n".utf8))
+            exit(2)
+        }
+        return found
     }
 
     /// Every `scenario/variant` pair, for `--variants` and `--selfcheck`.

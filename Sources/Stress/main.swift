@@ -70,13 +70,20 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
             guard !variants.isEmpty else { continue }
             print("\(scenario.id) — \(scenario.title), \(variants.count) variants")
             var axis = ""
+            // Padded to the WIDEST id, never to a constant: `padding(toLength:)`
+            // truncates as readily as it pads, and this listing is machine-read
+            // — `Tools/Profiling/sweep.py` takes the first word of each line as
+            // the id to hand back with `--variant`. A constant 18 silently cut
+            // `code-editor-tailing` to `code-editor-tailin`, which the sweep
+            // then asked for and did not get.
+            let column = variants.map(\.id.count).max() ?? 0
             for variant in variants {
                 if variant.axis != axis {
                     axis = variant.axis
                     print("  [\(axis)]")
                 }
-                let id = variant.id.padding(toLength: 18, withPad: " ", startingAt: 0)
-                print("    \(id) \(variant.summary)")
+                let pad = String(repeating: " ", count: max(0, column - variant.id.count))
+                print("    \(variant.id)\(pad) \(variant.summary)")
             }
         }
     }
