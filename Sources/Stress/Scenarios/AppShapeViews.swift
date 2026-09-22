@@ -345,18 +345,21 @@ struct CodeEditorApp: View {
     let lines: Int
     let seed: UInt64
 
-    @Environment(StressClock.self) private var clock
-
     var body: some View {
-        let cursor = clock.tick % max(1, lines)
-        return VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(Lf("stress.scenario.app-shapes.heading", "code-editor", lines)).bold()
             ScrollView([.horizontal, .vertical]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(0..<lines, id: \.self) { index in
+                        // No clock read anywhere in here, deliberately: an
+                        // `@Observable` read invalidates the view whose body
+                        // took it and everything below, so a cursor line that
+                        // read the tick up in the editor's own body would throw
+                        // away every row's size and buffer memo on every frame —
+                        // and the scenario would measure the invalidation rather
+                        // than the editor. The caret is a leaf of its own.
                         HStack(spacing: 1) {
-                            Text(String(format: "%5d", index + 1))
-                                .foregroundStyle(index == cursor ? .orange : .gray)
+                            CaretLineNumber(index: index, lines: lines)
                             Text(Self.source(index, seed: seed))
                         }
                     }
@@ -438,6 +441,19 @@ struct ChatApp: View {
 }
 
 // MARK: - Shared pieces
+
+/// The caret's line number: a leaf that reads the clock, so a tick invalidates
+/// one line rather than the whole editor.
+private struct CaretLineNumber: View {
+    let index: Int
+    let lines: Int
+    @Environment(StressClock.self) private var clock
+
+    var body: some View {
+        Text(String(format: "%5d", index + 1))
+            .foregroundStyle(clock.tick % max(1, lines) == index ? .orange : .gray)
+    }
+}
 
 /// A leaf that reads the clock, so a tick invalidates a line rather than a page.
 private struct TickStamp: View {
