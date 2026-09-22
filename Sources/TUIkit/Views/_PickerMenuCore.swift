@@ -53,8 +53,59 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
     /// The picker's option menu sizes to its widest option (it does not fill), so
     /// a single render is its exact, fixed measure.
+    /// The collapsed control is one line whose width is the menu's inner width
+    /// plus its two caps — arithmetic, not a drawing.
+    ///
+    /// This was `measureFixedByRendering`, which renders the whole control to
+    /// learn that: the focus registration, the handler resolution, the
+    /// status-bar labels, the mouse handlers, the cap cycle, the contrast
+    /// flooring and the `ClaimingRow` assembly, all discarded. On
+    /// `app-shapes/settings-form` — twelve pickers among sixty controls —
+    /// `_PickerMenuCore.sizeThatFits` was 17.8% of the frame (Instruments,
+    /// release, 2026-09-22).
+    ///
+    /// What remains is what the width genuinely depends on: each option's label
+    /// rendered to a string, which is what `DropdownMenu.innerWidth` measures.
+    /// The two paths call the same two helpers, so they cannot answer
+    /// differently — and the `+ 2` is the two caps `collapsedLine` appends,
+    /// whose content is `fit(_:to:)`-padded to exactly the inner width.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureFixedByRendering(self, proposal: proposal, context: context)
+        // The same context `measureFixedByRendering` would have rendered under,
+        // because `innerWidth` caps itself against `availableWidth`.
+        var measureContext = context
+        measureContext.isMeasuring = true
+        measureContext.hasExplicitWidth = false
+        if let width = proposal.width { measureContext.availableWidth = width }
+        if let height = proposal.height { measureContext.availableHeight = height }
+        let labels = renderedOptionLabels(context: measureContext)
+        let inner = DropdownMenu.innerWidth(
+            for: dropdownEntries(labels: labels), context: measureContext)
+        return ViewSize.fixed(inner + 2, 1)
+    }
+
+    /// Every option's label, rendered once to the line the drop-down will show.
+    ///
+    /// Labels render at the SCREEN width, not the control's: the drop-down is an
+    /// overlay that may grow wider than its control, so a narrow picker must not
+    /// wrap or truncate its option labels.
+    private func renderedOptionLabels(context: RenderContext) -> [String?] {
+        let labelContext = context.withAvailableWidth(
+            max(context.availableWidth, context.environment.terminalWidth))
+        return entries.map { entry in
+            entry.label.map { $0.renderToBuffer(context: labelContext).lines.first ?? "" }
+        }
+    }
+
+    /// The drop-down's own model: an option is a label plus "is this the current
+    /// value". The marker column, the width arithmetic and the ordinal↔row
+    /// mapping all come from `DropdownMenu` — the combo box's suggestions menu is
+    /// assembled from the same call.
+    private func dropdownEntries(labels: [String?]) -> [DropdownMenu.Entry] {
+        entries.indices.map { index in
+            guard let tag = entries[index].tag else { return .divider }
+            return .option(
+                label: labels[index] ?? "", isSelected: tag == selection.wrappedValue)
+        }
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -88,27 +139,13 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
             stateStorage: stateStorage, context: context)
         let isHovered = !isDisabled && hoverBox.value
 
-        // Render every option's label once (dividers have none); reuse for
-        // sizing and drawing. Row indices match `entries` throughout — the
-        // drop-down highlight is tracked as an option ordinal on the handler
-        // and mapped to a row via `optionRowIndices`. Labels render at the
-        // SCREEN width, not the control's: the drop-down is an overlay that
-        // may grow wider than its control, so a narrow picker must not
-        // wrap/truncate its option labels.
-        let labelContext = context.withAvailableWidth(
-            max(context.availableWidth, context.environment.terminalWidth))
-        let renderedLabels: [String?] = entries.map { entry in
-            entry.label.map { $0.renderToBuffer(context: labelContext).lines.first ?? "" }
-        }
-        // The drop-down's own model: an option is a label plus "is this the
-        // current value". The marker column, the width arithmetic and the
-        // ordinal↔row mapping all come from `DropdownMenu` — the combo box's
-        // suggestions menu is assembled from the same call.
-        let menuEntries: [DropdownMenu.Entry] = entries.indices.map { index in
-            guard let tag = entries[index].tag else { return .divider }
-            return .option(
-                label: renderedLabels[index] ?? "", isSelected: tag == selection.wrappedValue)
-        }
+        // Rendered once (dividers have none) and reused for sizing and drawing;
+        // row indices match `entries` throughout — the drop-down highlight is
+        // tracked as an option ordinal on the handler and mapped to a row via
+        // `optionRowIndices`. The same two helpers the measure above calls, so
+        // the two cannot disagree about the width.
+        let renderedLabels = renderedOptionLabels(context: context)
+        let menuEntries = dropdownEntries(labels: renderedLabels)
         // The collapsed control is drawn to the width of the menu it opens.
         let innerWidth = DropdownMenu.innerWidth(for: menuEntries, context: context)
         let optionCount = menuEntries.count { if case .option = $0 { return true } else { return false } }
