@@ -164,16 +164,35 @@ final class LazyListRowContent {
         self.cached = (buffer, badge)
     }
 
-    private var resolved: (buffer: FrameBuffer, badge: BadgeValue?) {
-        if let cached { return cached }
-        let value = thunk!(gradientRamp?.placement(row: rowIndex))
-        cached = value
+    /// Renders the row if it has not been rendered, leaving the answer in
+    /// ``cached``. Separate from the two accessors below so that neither has to
+    /// hand back a COPY of the pair to read one half of it.
+    private func resolveIfNeeded() {
+        guard cached == nil else { return }
+        cached = thunk!(gradientRamp?.placement(row: rowIndex))
         thunk = nil  // release the captured view / context
-        return value
     }
 
-    var buffer: FrameBuffer { resolved.buffer }
-    var badge: BadgeValue? { resolved.badge }
+    /// The row's rendered buffer, BORROWED rather than returned.
+    ///
+    /// The same trade ``FrameBuffer/lines`` makes and for a bigger reason: this
+    /// used to read `resolved.buffer`, and `resolved` returned the whole
+    /// `(buffer, badge)` pair by value — so every read of one row's buffer
+    /// copied a `FrameBuffer` (six arrays retained and released) and then threw
+    /// the badge away. A `List` frame reads it several times per drawn row, and
+    /// `outlined init with copy of (buffer:badge:)` was 1.7% of a `megalist`
+    /// frame with nothing else to show for it.
+    var buffer: FrameBuffer {
+        _read {
+            resolveIfNeeded()
+            yield cached!.buffer
+        }
+    }
+
+    var badge: BadgeValue? {
+        resolveIfNeeded()
+        return cached!.badge
+    }
 
     /// The row's height, rendering it only if there is no other way to ask.
     var heightWithoutRendering: Int {
@@ -239,7 +258,11 @@ public struct SelectableListRow<SelectionValue: Hashable & Sendable>: Sendable {
     ///
     /// Forces the lazy render on first access (then memoised). Only ever read
     /// for rows in the visible window, so off-screen rows never render.
-    @MainActor public var buffer: FrameBuffer { content.buffer }
+    @MainActor public var buffer: FrameBuffer {
+        // Borrowed through, so a read of a row's buffer copies nothing at
+        // either level — see ``LazyListRowContent/buffer``.
+        _read { yield content.buffer }
+    }
 
     /// The badge value for this row (from environment). Forces the lazy render.
     @MainActor public var badge: BadgeValue? { content.badge }
