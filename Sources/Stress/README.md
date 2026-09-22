@@ -64,7 +64,7 @@ scale live · `a` toggle autopilot.
 | `table-churn-wrapped` | the same, 250 rows wrapped: below the extent estimator's row limit, where every row is measured |
 | `table-tail` | a window over a growing sequence — rows keep their content and change position |
 | `table-api` | **a matrix**: one `Table` built every way the API allows, one variant per point (see below) |
-| `app-shapes` | **a matrix**: whole applications — file browser, log viewer, process monitor, mail client, settings form, code editor, chat |
+| `app-shapes` | **a matrix**: whole applications — file browser, log viewer, process monitor, mail client, settings form, code editor (settled and tailing), chat |
 | `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
 | `tables-vstack` | **multiple** `Table`s in a `VStack` (no scroll) — N per-table column-width computations, VStack measure/layout over many table children |
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
@@ -111,6 +111,14 @@ bottom-anchored bubbles of wildly unequal height. Nothing assembled from single
 something the parts could not — `chat` against `chat-eager` is 1.4 ms against
 189 ms for the same application, the only difference being `LazyVStack` where an
 app would write `VStack`.
+
+Several variants come in pairs for exactly that reason, and the pair is the
+measurement: `chat`/`chat-eager` prices laziness, and `code-editor`/
+`code-editor-tailing` prices a SETTLED document against a growing one. The
+second of each pair exists because every memo keyed on the rows' data — the row
+memo, a `Table`'s `.fit` column, a windowed stack's width over all rows — serves
+100% on the settled shape and 0% on the growing one, and a matrix that only ever
+measured the settled shape would report the memo's best day as its only day.
 
 `table-api` is the first: 43 variants over seven axes — how a column gets its
 value (key path, closure, sort-by-one-display-another, non-`Equatable` rows,

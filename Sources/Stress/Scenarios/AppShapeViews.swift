@@ -344,13 +344,32 @@ struct SettingsFormApp: View {
 struct CodeEditorApp: View {
     let lines: Int
     let seed: UInt64
+    /// Whether the document GROWS — a build log, a test run, a `tail -f` in an
+    /// editor pane. A variant of its own because it is the only shape that
+    /// makes the two-axis width walk miss: the collection's identity changes
+    /// every tick, so everything keyed on the rows' DATA — the width over all
+    /// rows above all (`StackContentWidth.swift`) — is re-derived rather than
+    /// served. A settled document is the easy case and was the only one
+    /// measured until 2026-09-22.
+    var tailing = false
+
+    @Environment(StressClock.self) private var clock
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(Lf("stress.scenario.app-shapes.heading", "code-editor", lines)).bold()
+        // Read in the BODY on purpose here, unlike the settled editor below:
+        // an arriving line genuinely rebuilds the document, and a per-row leaf
+        // would be measuring the observer count instead (see the comment in the
+        // row). `lines` is the floor so the two variants start the same size.
+        let count = tailing ? lines + Int(clock.tick % 512) : lines
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(
+                Lf(
+                    "stress.scenario.app-shapes.heading",
+                    tailing ? "code-editor-tailing" : "code-editor", count)
+            ).bold()
             ScrollView([.horizontal, .vertical]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(0..<lines, id: \.self) { index in
+                    ForEach(0..<count, id: \.self) { index in
                         // The caret does NOT read the clock, and neither does
                         // anything else here. Both spellings were measured and
                         // both are wrong for this scenario: reading the tick in
@@ -364,7 +383,7 @@ struct CodeEditorApp: View {
                         // render, so its caret sits still.
                         HStack(spacing: 1) {
                             Text(String(format: "%5d", index + 1))
-                                .foregroundStyle(index == lines / 2 ? .orange : .gray)
+                                .foregroundStyle(index == count / 2 ? .orange : .gray)
                             Text(Self.source(index, seed: seed))
                         }
                     }
