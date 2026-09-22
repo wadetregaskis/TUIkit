@@ -157,6 +157,13 @@ Four things make it trustworthy, and each was validated by measurement:
 test yourself — `ab_bench.py X X` — whenever you doubt a result; it costs one
 command and tells you exactly what this machine can resolve today.
 
+**The Table scenarios** (null test at 20 reps, 2026-09-21, quiet machine):
+`table-churn` ±0.4%, `table-churn-wrapped` ±0.4%, `table` ±0.6%,
+`table-multiline` ±0.5%, `truncate` ±1.0%. All five resolve a one-percent
+change, which they need to: they are the corpus for the question of whether
+`Table` should memoise its rows, and the counters in the `rows` / `cells`
+column of a sweep move long before the clock does.
+
 **Some scenarios cannot resolve anything small.** `megalist` and
 `tables-vstack` null-test at **±15%** on this machine — their own run-to-run
 spread swamps any change worth making. Both produced spurious verdicts on a

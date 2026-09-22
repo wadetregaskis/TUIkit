@@ -64,12 +64,19 @@ FALLBACK_SCENARIOS = [
     "preferences", "gradients", "menus",
 ]
 
-# The `--quick` sweep: six shapes that between them cover a deep tree, a wide
-# eager one, styled controls, modifier chains, type erasure and an ordinary
-# page — and that all resolve tightly enough to trust at twelve reps (see
-# README.md for the measured floor). For iterating on a change; run the full
-# sweep before committing one.
-QUICK_SCENARIOS = ["deep", "fanout", "menus", "modifiers", "anyview", "framedcolumns"]
+# The `--quick` sweep: shapes that between them cover a deep tree, a wide eager
+# one, styled controls, modifier chains, type erasure, an ordinary page and a
+# table whose data moves — and that all resolve tightly enough to trust at
+# twelve reps (see README.md for the measured floor). For iterating on a
+# change; run the full sweep before committing one.
+#
+# `table-churn` joined them because the list had no `Table` at all, so the
+# four-minute loop used while iterating was blind to the control with the most
+# per-frame row work in the catalogue; only the twenty-five-minute full sweep
+# touched one.
+QUICK_SCENARIOS = [
+    "deep", "fanout", "menus", "modifiers", "anyview", "framedcolumns", "table-churn",
+]
 
 
 def scenario_ids(binary):
