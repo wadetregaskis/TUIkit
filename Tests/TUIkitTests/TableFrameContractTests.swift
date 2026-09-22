@@ -166,6 +166,46 @@ struct TableFrameContractTests {
         #expect(after.lines == harness.frame(coldCache: true).lines, "warm differed from cold")
     }
 
+    /// Scrolling moves the WINDOW: the rows on screen shift by one, each one
+    /// keeps its own content, and the warm frame still matches a cold one.
+    ///
+    /// The axis no Table scenario or test covered — nothing anywhere scrolled a
+    /// table between frames and then asked what it drew. It is also where a row
+    /// memo is most likely to go wrong in an interesting way: after a scroll of
+    /// one row, all but one of the rows on screen were on screen a moment ago
+    /// with exactly the same content, at a different LINE. A memo keyed by
+    /// position serves every one of them stale; a memo keyed by the row's
+    /// identity serves them all correctly. This says which happened, by reading
+    /// the drawn ids back off the picture rather than asking the scroll offset.
+    @Test("Scrolling shifts the window by one and keeps each row's content")
+    func scrollingShiftsTheWindow() {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 200,
+                columns: [
+                    TableMatrixColumn(title: "ID", width: .fixed(8), cost: .cheap),
+                    TableMatrixColumn(title: "Value", width: .fixed(18), cost: .formatted),
+                ]))
+        harness.settle()
+        // Down to the bottom of the window first, so the next press scrolls
+        // rather than just moving the cursor within what is already drawn.
+        harness.pressDown(30)
+        let before = harness.frame()
+        let idsBefore = TableMatrixHarness.drawnRowIDs(in: before)
+
+        harness.pressDown(1)
+        let after = harness.frame()
+        let idsAfter = TableMatrixHarness.drawnRowIDs(in: after)
+
+        #expect(idsBefore.count > 4, "the fixture drew \(idsBefore.count) rows")
+        #expect(
+            idsAfter == idsBefore.map { $0 + 1 },
+            "window went \(idsBefore) -> \(idsAfter)")
+        #expect(
+            after.lines == harness.frame(coldCache: true).lines,
+            "a scrolled frame differed from an unserved one")
+    }
+
     /// Each drawn row asks each column for its value exactly once.
     ///
     /// `renderRow` states this in its own comment — "the column's value closure

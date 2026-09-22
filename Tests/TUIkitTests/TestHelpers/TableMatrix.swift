@@ -330,6 +330,29 @@ final class TableMatrixHarness {
         }
     }
 
+    /// Which rows a frame drew, in order, read back off the picture.
+    ///
+    /// Only meaningful for a shape whose first column is ``TableCellCost/cheap``
+    /// — that cell is `"<id>.<generation>"`, so the drawn window can be
+    /// recovered from the bytes rather than from the handler's internal state.
+    /// Reading it from the FRAME is the point: a memo that served the wrong row
+    /// would be invisible to a question asked of the scroll offset.
+    static func drawnRowIDs(in buffer: FrameBuffer) -> [Int] {
+        buffer.lines.compactMap { line in
+            // The first `<int>.<int>` field on the line. Not simply the first
+            // field: every line opens with the container's border glyph, and a
+            // row also opens with the selection gutter when it has one.
+            for field in line.stripped.split(separator: " ", omittingEmptySubsequences: true) {
+                guard let dot = field.firstIndex(of: "."),
+                    let id = Int(field[field.startIndex..<dot]),
+                    Int(field[field.index(after: dot)...]) != nil
+                else { continue }
+                return id
+            }
+            return nil
+        }
+    }
+
     /// What the render-memo verifier found, when it is on.
     var renderCacheMismatches: [String] { tui.renderCache.renderMemoMismatches }
 
@@ -361,11 +384,25 @@ final class TableMatrixHarness {
         let context = RenderContext(
             availableWidth: shape.width, availableHeight: shape.height,
             environment: environment, tuiContext: tui)
+        tui.preferences.beginRenderPass()
         tui.renderCache.beginRenderPass()
         tui.stateStorage.beginRenderPass()
+        focusManager.beginRenderPass()
         let buffer = renderToBuffer(view(), context: context)
+        focusManager.endRenderPass()
         tui.stateStorage.endRenderPass()
+        tui.renderCache.removeInactive()
         return buffer
+    }
+
+    /// Walks the cursor down `times` rows, the way a key press does.
+    ///
+    /// Through the focus manager rather than by writing `scrollOffset`: moving
+    /// the window is a reveal driven by the cursor, and a fixture that set the
+    /// offset directly would skip the arithmetic that decides where the window
+    /// lands — which is the part a row memo has to keep working.
+    func pressDown(_ times: Int = 1) {
+        for _ in 0..<times { _ = focusManager.dispatchKeyEvent(KeyEvent(key: .down)) }
     }
 
     /// Renders until the table has settled, and answers the last frame.
