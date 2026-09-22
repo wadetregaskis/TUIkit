@@ -1456,7 +1456,7 @@ where Value.ID: Hashable {
         palette: any Palette
     ) -> ClaimingColumn {
         // Everything that shapes a row's wrapped height, so a stale mean
-        // cannot outlive the layout that produced it (see `extentMeanCache`).
+        // cannot outlive the layout that produced it (see `extentProfileCache`).
         var hasher = Hasher()
         hasher.combine(data.count)
         hasher.combine(context.environment.scrollExtentPrecision)
@@ -1465,14 +1465,14 @@ where Value.ID: Hashable {
             hasher.combine(column.lineLimit)
         }
         let signature = hasher.finalize()
-        let cachedMean =
-            handler.extentMeanCache.flatMap { $0.signature == signature ? $0.mean : nil }
+        let cachedProfile =
+            handler.extentProfileCache.flatMap { $0.signature == signature ? $0.profile : nil }
         let metrics = ScrollExtentEstimator.lineMetrics(
             visible: window.range, count: data.count, topClip: window.topClip,
             precision: context.environment.scrollExtentPrecision,
-            cachedMean: cachedMean, height: height)
-        if !context.isMeasuring, let mean = metrics.mean {
-            handler.extentMeanCache = (signature: signature, mean: mean)
+            cached: cachedProfile, height: height)
+        if !context.isMeasuring, let profile = metrics.profile {
+            handler.extentProfileCache = (signature: signature, profile: profile)
         }
         return ScrollbarRenderer.verticalScrollbar(
             height: contentHeight, extent: metrics.extent, viewport: contentHeight,

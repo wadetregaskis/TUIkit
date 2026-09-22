@@ -113,13 +113,15 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// moves one. See ``View/shiftStepMultiplier(_:)``.
     var shiftStepMultiplier: Int = 5
 
-    /// The scrollbar extent estimator's mean row height, carried across frames
-    /// while `signature` — a hash of everything that shapes row heights (row
-    /// count, widths/limits, precision) — holds. See the `cachedMean` parameter
-    /// of ``ScrollExtentEstimator/lineMetrics`` for the contract; the sample it
-    /// spares is the same 64 rows every frame, each of which costs a wrap (a
-    /// Table) or a row materialisation (a List) to ask.
-    var extentMeanCache: (signature: Int, mean: Double)?
+    /// What the scrollbar extent estimator worked out about these rows' heights,
+    /// carried across frames while `signature` — a hash of everything that
+    /// shapes row heights (row count, widths/limits, precision) — holds.
+    ///
+    /// See ``ScrollExtentProfile`` for the contract. It spares the same 64 rows
+    /// every frame under the approximate mode, and EVERY row under the exact one
+    /// — each of which costs a wrap (a Table) or a row materialisation (a List)
+    /// to ask.
+    var extentProfileCache: (signature: Int, profile: ScrollExtentProfile)?
 
     /// The chord → action map this list's keys dispatch through, resolved from
     /// `environment.rowShortcuts` during render (see ``RowShortcuts``). Captured
@@ -128,7 +130,7 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     var shortcuts: RowShortcutLookup = .default
 
     /// What ``shortcuts`` was built from, so it is not built again from the same
-    /// pair. Memoised for the reason ``extentMeanCache`` is: the inputs change
+    /// pair. Memoised for the reason ``extentProfileCache`` is: the inputs change
     /// almost never and the work is not free.
     ///
     /// `lookup` builds a fresh `Dictionary`, walks every ``RowAction`` twice

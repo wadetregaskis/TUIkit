@@ -249,36 +249,62 @@ struct TableFrameContractTests {
         #expect(calls(rows: 300) == calls(rows: 3_000))
     }
 
-    /// The multi-line composer is NOT bounded by its window, and there is a
-    /// cliff at 256 rows where it stops being bounded by the data either.
+    /// The multi-line composer is not bounded by its window: below the scroll
+    /// estimator's 256-row limit it measures EVERY row, because that is the mode
+    /// a small table gets for free. It now KEEPS that answer, so it pays for it
+    /// once rather than on every frame.
     ///
-    /// Deliberate, and documented where the two frame-local memos are built:
-    /// under `ScrollExtentPrecision.exact` "or for any table at or below its
-    /// 256-row limit" the scrollbar's extent estimator measures EVERY row, so
-    /// every row's cells are built every frame. Above the limit it samples.
-    ///
-    /// Recorded here because nothing measured it and the shape is surprising:
-    /// a 250-row wrapped table does an order of magnitude more per-frame work
-    /// than a 300-row one. The numbers are the current behaviour, not a budget
-    /// — if a change moves them, this test is where the decision gets made.
-    @Test("A wrapped table measures every row below the estimator's limit")
-    func wrappedTableMeasuresEveryRowBelowTheLimit() {
-        func touched(rows: Int) -> Int {
-            let harness = TableMatrixHarness(
-                TableMatrixShape(
-                    rows: rows,
-                    columns: [
-                        TableMatrixColumn(title: "ID", width: .fixed(5), cost: .cheap),
-                        TableMatrixColumn(title: "Body", lineLimit: 3, cost: .overlong),
-                    ]))
-            harness.settle()
-            harness.frame()
-            return harness.calls.perRow.count
+    /// The first frame still walks the whole table — the heights have to come
+    /// from somewhere — and a settled frame asks about its window and nothing
+    /// else. Above the limit the estimator samples, as it always did.
+    @Test("A wrapped table measures every row once, not every frame")
+    func wrappedTableMeasuresEveryRowOnce() {
+        func shape(rows: Int, precision: ScrollExtentPrecision = .approximate) -> TableMatrixShape {
+            TableMatrixShape(
+                rows: rows,
+                columns: [
+                    TableMatrixColumn(title: "ID", width: .fixed(5), cost: .cheap),
+                    TableMatrixColumn(title: "Body", lineLimit: 3, cost: .overlong),
+                ],
+                precision: precision)
         }
-        let below = touched(rows: 250)
-        let above = touched(rows: 300)
+        let below = TableMatrixHarness(shape(rows: 250))
+        below.frame()
+        let firstFrame = below.calls.perRow.count
+        below.settle()
+        below.frame()
+        let settled = below.calls.perRow.count
 
-        #expect(below == 250, "below the limit every row is measured, got \(below)")
-        #expect(above < 40, "above the limit the estimator samples, got \(above)")
+        #expect(firstFrame == 250, "the first frame has to walk the table, got \(firstFrame)")
+        #expect(settled < 40, "a settled frame walked \(settled) rows of 250")
+
+        let above = TableMatrixHarness(shape(rows: 300))
+        above.settle()
+        above.frame()
+        #expect(above.calls.perRow.count < 40, "above the limit the estimator samples")
+    }
+
+    /// `.exact` is never cached, and that is the point of it.
+    ///
+    /// Its own documentation sells it as O(rows) per frame for callers who want
+    /// a thumb proportionally exact to the line. Keeping its answer across
+    /// frames would quietly hand them the approximation they declined — the
+    /// heights are a function of the rows' CONTENT, and the signature the stash
+    /// is keyed on deliberately does not include it.
+    @Test("An .exact table re-measures every row on every frame")
+    func exactPrecisionIsNeverCached() {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 120,
+                columns: [
+                    TableMatrixColumn(title: "ID", width: .fixed(5), cost: .cheap),
+                    TableMatrixColumn(title: "Body", lineLimit: 3, cost: .overlong),
+                ],
+                precision: .exact))
+        harness.settle()
+        harness.frame()
+        #expect(
+            harness.calls.perRow.count == 120,
+            "a settled .exact table walked \(harness.calls.perRow.count) rows of 120")
     }
 }

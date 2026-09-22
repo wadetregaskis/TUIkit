@@ -1575,22 +1575,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 ..< ((dataRows.last?.index).map { $0 + 1 } ?? origin.offset)
             // Everything that shapes an off-screen row's rendered height, so a
             // stale mean cannot outlive the layout that produced it (see
-            // `extentMeanCache`). Content edits under an unchanged signature
+            // `extentProfileCache`). Content edits under an unchanged signature
             // are the documented estimate trade.
             var hasher = Hasher()
             hasher.combine(source.count)
             hasher.combine(context.availableWidth)
             hasher.combine(context.environment.scrollExtentPrecision)
             let signature = hasher.finalize()
-            let cachedMean =
-                handler.extentMeanCache.flatMap { $0.signature == signature ? $0.mean : nil }
+            let cachedProfile =
+                handler.extentProfileCache.flatMap { $0.signature == signature ? $0.profile : nil }
             let metrics = ScrollExtentEstimator.lineMetrics(
                 visible: visible, count: source.count, topClip: origin.topClip,
                 precision: context.environment.scrollExtentPrecision,
-                cachedMean: cachedMean,
+                cached: cachedProfile,
                 height: { onScreen[$0] ?? source.row(at: $0).buffer.height })
-            if !context.isMeasuring, let mean = metrics.mean {
-                handler.extentMeanCache = (signature: signature, mean: mean)
+            if !context.isMeasuring, let profile = metrics.profile {
+                handler.extentProfileCache = (signature: signature, profile: profile)
             }
             (extentLines, offsetLines) = (metrics.extent, metrics.offset)
         }

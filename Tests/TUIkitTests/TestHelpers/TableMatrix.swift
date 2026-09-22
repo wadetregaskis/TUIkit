@@ -140,6 +140,10 @@ struct TableMatrixShape: Sendable {
     var selection: TableMatrixSelection = .unbound
     var width: Int = 48
     var height: Int = 14
+    /// Which scroll-extent mode the table renders under. `.exact` is never
+    /// cached by the estimator, so it is the control for the below-the-limit
+    /// path that now is.
+    var precision: ScrollExtentPrecision = .approximate
 
     /// Whether any column wraps, which is the single predicate that sends the
     /// whole table down its variable-height row composer instead of the
@@ -380,6 +384,7 @@ final class TableMatrixHarness {
         calls.reset()
         var environment = EnvironmentValues()
         environment.focusManager = focusManager
+        environment.scrollExtentPrecision = shape.precision
         environment.applyRuntimeServices(from: tui)
         let context = RenderContext(
             availableWidth: shape.width, availableHeight: shape.height,

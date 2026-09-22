@@ -68,8 +68,22 @@ struct ScrollExtentPrecisionTests {
             visible: 10..<20, count: count, topClip: 0, precision: .exact,
             height: heights.height)
 
-        #expect(approximate == exact)
+        // The ANSWER, not the whole tuple: the two modes agree on the extent and
+        // the offset, which is what "identical below the limit" has always
+        // meant, and differ in what they hand back to be KEPT. Below the limit
+        // the approximate mode measures every row and stashes the prefix sums so
+        // the next frame need not; `.exact` re-measures every frame by
+        // definition and stashes nothing.
+        #expect(approximate.extent == exact.extent)
+        #expect(approximate.offset == exact.offset)
         #expect(approximate.extent == heights.total)
+        if case .prefixSums(let sums) = approximate.profile {
+            #expect(sums.count == count + 1)
+            #expect(sums.last == heights.total)
+        } else {
+            Issue.record("the cheap-exact path did not hand back sums to keep")
+        }
+        #expect(exact.profile == nil, "`.exact` must not be cached")
     }
 
     @Test("Uniform rows estimate exactly — the sample cannot be wrong")
@@ -107,17 +121,17 @@ struct ScrollExtentPrecisionTests {
         let first = ScrollExtentEstimator.lineMetrics(
             visible: 100..<110, count: 10_000, topClip: 0,
             precision: .approximate, height: heights.height)
-        #expect(first.mean != nil, "the estimate path must hand its mean back")
+        #expect(first.profile != nil, "the estimate path must hand its profile back")
         let askedAfterFirst = heights.asked.count
 
         // A different window, same collection: with the mean handed back, the
         // second frame may ask about its VISIBLE rows and nothing else.
         let second = ScrollExtentEstimator.lineMetrics(
             visible: 200..<210, count: 10_000, topClip: 0,
-            precision: .approximate, cachedMean: first.mean, height: heights.height)
+            precision: .approximate, cached: first.profile, height: heights.height)
         #expect(heights.asked.count == askedAfterFirst + 10,
             "off-screen rows were sampled despite the cached mean")
-        #expect(second.mean == first.mean, "the mean is carried, not re-derived")
+        #expect(second.profile == first.profile, "the mean is carried, not re-derived")
 
         // And it must not have bent the answer: a fresh estimate from the same
         // sample-stable collection reads the same extent.
