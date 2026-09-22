@@ -206,14 +206,16 @@ struct TableFrameContractTests {
             "a scrolled frame differed from an unserved one")
     }
 
-    /// Each drawn row asks each column for its value exactly once.
+    /// A row a `Table` COMPOSES asks each column for its value exactly once —
+    /// which `renderRow` states in its own comment and nothing checked — and a
+    /// row it SERVES asks for nothing at all.
     ///
-    /// `renderRow` states this in its own comment — "the column's value closure
-    /// still runs exactly once and in the same order whichever branch below
-    /// draws it" — and nothing checked it. A value closure is the one part of a
-    /// cell an app writes, so running it twice is the app's cost doubled.
-    @Test("Each drawn row asks each column once")
-    func eachDrawnRowAsksEachColumnOnce() {
+    /// A value closure is the one part of a cell an app writes, so running it
+    /// twice is the app's cost doubled and not running it is the app's cost
+    /// removed. Both halves are asserted against the frame's own counters
+    /// rather than inferred from a clock.
+    @Test("A composed row asks each column once")
+    func composedRowAsksEachColumnOnce() {
         let columns = [
             TableMatrixColumn(title: "A", width: .fixed(6), cost: .cheap),
             TableMatrixColumn(title: "B", width: .fixed(10), cost: .formatted),
@@ -223,11 +225,76 @@ struct TableFrameContractTests {
         harness.settle()
         harness.frame()
 
-        let perRow = Set(harness.calls.perRow.values)
-        #expect(perRow == [columns.count], "a drawn row asked for \(perRow.sorted()) values")
         #expect(
-            harness.calls.total == harness.calls.perRow.count * columns.count,
-            "\(harness.calls.total) calls over \(harness.calls.perRow.count) rows")
+            Set(harness.calls.perRow.values) == [columns.count],
+            "a composed row asked for \(Set(harness.calls.perRow.values).sorted()) values")
+        #expect(harness.rowWork.cellValues == harness.rowWork.rendered * columns.count)
+    }
+
+    /// A table whose every column NAMES its value keeps its rows across frames;
+    /// one with a single closure column keeps none of them.
+    ///
+    /// That is the whole of the memo's soundness argument, asserted rather than
+    /// argued. A key path has no closure context, so it cannot capture the
+    /// search term or the formatter that a closure column captures and that no
+    /// row value would ever show — so where every column is a key path, an
+    /// equal row draws equal text, and where any column is not, it does not.
+    @Test("Rows are kept only when every column names its value")
+    func rowsAreKeptOnlyForKeyPathColumns() {
+        func work(namesAProperty: Bool) -> RenderCache.RowWork {
+            let harness = TableMatrixHarness(
+                TableMatrixShape(
+                    rows: 300,
+                    columns: [
+                        TableMatrixColumn(
+                            title: "A", width: .fixed(8), cost: .cheap,
+                            namesAProperty: namesAProperty),
+                        TableMatrixColumn(
+                            title: "B", cost: .formatted, namesAProperty: namesAProperty),
+                    ]))
+            harness.settle()
+            harness.frame()
+            return harness.rowWork
+        }
+        let kept = work(namesAProperty: true)
+        #expect(kept.rendered == 0, "a settled key-path table composed \(kept.rendered) rows")
+        #expect(kept.served > 4, "a settled key-path table served only \(kept.served)")
+        #expect(kept.cellValues == 0, "a served frame still read \(kept.cellValues) values")
+
+        let computed = work(namesAProperty: false)
+        #expect(computed.served == 0, "a closure column's table kept \(computed.served) rows")
+        #expect(computed.rendered > 4)
+    }
+
+    /// And a kept row still follows its data, its selection and the window.
+    @Test("A kept row still follows the things that change it")
+    func keptRowsStillFollowTheirInputs() {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 200,
+                columns: [
+                    TableMatrixColumn(
+                        title: "ID", width: .fixed(8), cost: .cheap, namesAProperty: true),
+                    TableMatrixColumn(title: "V", cost: .formatted, namesAProperty: true),
+                ],
+                selection: .single(1)))
+        harness.settle()
+        let before = harness.frame()
+        #expect(harness.rowWork.served > 4, "the fixture is not exercising the memo")
+
+        harness.mutate(rowAt: 2)
+        let mutated = harness.frame()
+        #expect(mutated.lines != before.lines, "a changed row did not reach the frame")
+        #expect(mutated.lines == harness.frame(coldCache: true).lines)
+
+        harness.select(4)
+        let reselected = harness.frame()
+        #expect(reselected.lines != mutated.lines, "the moved selection did not reach the frame")
+        #expect(reselected.lines == harness.frame(coldCache: true).lines)
+
+        harness.pressDown(30)
+        let scrolled = harness.frame()
+        #expect(scrolled.lines == harness.frame(coldCache: true).lines)
     }
 
     /// And a single-line table's per-frame work is bounded by the WINDOW, not

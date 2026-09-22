@@ -123,6 +123,16 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// to ask.
     var extentProfileCache: (signature: Int, profile: ScrollExtentProfile)?
 
+    /// A `Table`'s composed row lines, kept across frames.
+    ///
+    /// Here, rather than in the render cache, for the reason `TableRowMemo.swift`
+    /// gives at length: the cache drops everything beneath an identity whose
+    /// state was written, which is the very frame a live table's data arrives
+    /// on. This store is keyed on the row's own inputs instead, so it does not
+    /// need the sweep to be correct — and a `List` does not use it, because a
+    /// `List`'s rows are views whose closures can capture anything.
+    var tableRowMemo = TableRowMemoStore<SelectionValue>()
+
     /// The chord → action map this list's keys dispatch through, resolved from
     /// `environment.rowShortcuts` during render (see ``RowShortcuts``). Captured
     /// rather than read live: a key event arrives between renders, with no

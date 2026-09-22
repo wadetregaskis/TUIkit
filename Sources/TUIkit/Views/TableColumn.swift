@@ -102,6 +102,27 @@ public struct TableColumn<Value>: Sendable {
     /// Extracts the display value from a data item.
     let valueExtractor: @Sendable (Value) -> String
 
+    /// Whether ``valueExtractor`` NAMES a property rather than computing one —
+    /// true exactly for the two `init(_:value:)` overloads that take a
+    /// `KeyPath<Value, String>`.
+    ///
+    /// The distinction is not cosmetic and it is not about sorting: a key path
+    /// has no closure context, so it cannot capture anything from the view that
+    /// built it. A closure can, and usually does — a formatter, a search term,
+    /// a units toggle — none of which appears in the row it is handed.
+    ///
+    /// That makes this the one property a row-level memo can be keyed on
+    /// honestly. Where every column names a property, a row's text is a pure
+    /// function of the row (modulo global state, which is the hole this
+    /// framework already has everywhere and this does not widen), so an equal
+    /// row draws equal text. Where any column computes one, it is not, and the
+    /// memo stands aside rather than guessing.
+    ///
+    /// NOT derivable from ``sortComparator``, which is the trap: the
+    /// `init(_:value:content:)` overloads take a key path to sort BY and a
+    /// closure to display, so they carry a comparator and compute their value.
+    let namesAProperty: Bool
+
     /// How this column sorts, when it can — the comparator a click on its
     /// header puts at the head of the table's `sortOrder`.
     ///
@@ -150,6 +171,7 @@ public struct TableColumn<Value>: Sendable {
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = { item in item[keyPath: value] }
+        self.namesAProperty = true
         self.sortComparator = KeyPathComparator(value)
     }
 
@@ -200,6 +222,7 @@ public struct TableColumn<Value>: Sendable {
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = content
+        self.namesAProperty = false
         self.sortComparator = KeyPathComparator(value)
     }
 
@@ -230,6 +253,7 @@ public struct TableColumn<Value>: Sendable {
         self.alignment = .leading
         self.width = .flexible
         self.valueExtractor = value
+        self.namesAProperty = false
         self.sortComparator = nil
     }
 }

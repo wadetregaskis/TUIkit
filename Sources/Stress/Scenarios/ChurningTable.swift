@@ -98,6 +98,14 @@ enum TailingTableScenario {
 struct ChurningRow: Identifiable, Sendable, Equatable {
     let id: Int
     let generation: Int
+
+    var identifier: String { ChurnCell.identifier(self) }
+    var name: String { ChurnCell.name(self) }
+    var slug: String { ChurnCell.slug(self) }
+    var status: String { ChurnCell.status(self) }
+    var summary: String { ChurnCell.summary(self, words: 8) }
+    var bar: String { ChurnCell.bar(self) }
+    var details: String { ChurnCell.summary(self, words: 18) }
 }
 
 /// How many rows change per frame: one in this many.
@@ -116,6 +124,18 @@ private func churningRows(config: StressConfig, count: Int, tick: Int) -> [Churn
     }
 }
 
+/// The cells, reached by KEY PATH from the columns below.
+///
+/// Deliberate, and it is what these scenarios are for: a `Table` may keep a row
+/// across frames only when every column NAMES its value rather than computing
+/// one, because a key path cannot capture what a closure captures. `table` and
+/// `truncate` keep their closure columns and are the control — between them the
+/// catalogue now has two scenarios on each side of that line.
+///
+/// Every one of these is a pure function of `(id, generation)`, which is what
+/// the key path's premise requires and what an app's own row properties
+/// normally are.
+///
 /// Cells of deliberately different expense, because a row memo's saving is
 /// (rows served) × (cost of a row) and every existing Table fixture sits at the
 /// cheap end.
@@ -157,13 +177,13 @@ private struct ChurningTableView: View {
             Text(Lf("stress.scenario.table-churn.heading", count, churnPeriod)).bold()
             Divider()
             Table(rows, selection: Binding<Int?>.constant(nil)) {
-                TableColumn("ID") { ChurnCell.identifier($0) }
+                TableColumn("ID", value: \ChurningRow.identifier)
                     .width(.fixed(7))
-                TableColumn("Name") { ChurnCell.name($0) }
-                TableColumn("Slug") { ChurnCell.slug($0) }
-                TableColumn("Status") { ChurnCell.status($0) }
-                TableColumn("Summary") { ChurnCell.summary($0, words: 8) }
-                TableColumn("Load") { ChurnCell.bar($0) }
+                TableColumn("Name", value: \ChurningRow.name)
+                TableColumn("Slug", value: \ChurningRow.slug)
+                TableColumn("Status", value: \ChurningRow.status)
+                TableColumn("Summary", value: \ChurningRow.summary)
+                TableColumn("Load", value: \ChurningRow.bar)
                     .width(.fixed(8))
             }
         }
@@ -186,11 +206,11 @@ private struct TailingTableView: View {
             Text(Lf("stress.scenario.table-tail.heading", count)).bold()
             Divider()
             Table(rows, selection: Binding<Int?>.constant(nil)) {
-                TableColumn("Seq") { ChurnCell.identifier($0) }
+                TableColumn("Seq", value: \ChurningRow.identifier)
                     .width(.fixed(9))
-                TableColumn("Source") { ChurnCell.slug($0) }
-                TableColumn("Level") { ChurnCell.status($0) }
-                TableColumn("Message") { ChurnCell.summary($0, words: 10) }
+                TableColumn("Source", value: \ChurningRow.slug)
+                TableColumn("Level", value: \ChurningRow.status)
+                TableColumn("Message", value: \ChurningRow.summary)
             }
         }
     }

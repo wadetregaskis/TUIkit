@@ -47,6 +47,33 @@ struct TableMatrixRow: Identifiable, Sendable, Equatable {
     let id: Int
     /// Bumped to make this row — and only this row — different content.
     var generation: Int = 0
+
+    // The same five cell shapes as ``TableCellCost``, reachable by KEY PATH.
+    //
+    // A column built from one of these names its value; a column built from a
+    // closure computes it. That distinction decides whether a `Table` may keep
+    // its rows across frames at all — a key path has no closure context and so
+    // cannot capture anything the row does not carry — so the fixture has to be
+    // able to build both, or it can only ever test one of the two behaviours.
+    var cheapText: String { TableCellCost.cheap.text(id: id, generation: generation) }
+    var formattedText: String { TableCellCost.formatted.text(id: id, generation: generation) }
+    var styledText: String { TableCellCost.styled.text(id: id, generation: generation) }
+    var wideText: String { TableCellCost.wide.text(id: id, generation: generation) }
+    var overlongText: String { TableCellCost.overlong.text(id: id, generation: generation) }
+}
+
+extension TableCellCost {
+    /// The key path that names this shape on a row, for a column that may be
+    /// memoised.
+    var keyPath: KeyPath<TableMatrixRow, String> & Sendable {
+        switch self {
+        case .cheap: \TableMatrixRow.cheapText
+        case .formatted: \TableMatrixRow.formattedText
+        case .styled: \TableMatrixRow.styledText
+        case .wide: \TableMatrixRow.wideText
+        case .overlong: \TableMatrixRow.overlongText
+        }
+    }
 }
 
 /// The same row with no `Equatable` conformance, for the cases that have to
@@ -121,6 +148,11 @@ struct TableMatrixColumn: Sendable {
     var truncation: TruncationMode = .tail
     var alignment: HorizontalAlignment = .leading
     var cost: TableCellCost = .cheap
+    /// Whether the column NAMES its value (a key path) or computes one (a
+    /// closure). Closures are the default because they are what the fixture's
+    /// call counter needs; a key-path column is counted by the framework's own
+    /// `RenderCache.rowWork.cellValues` instead.
+    var namesAProperty: Bool = false
 }
 
 /// What a table is bound to, which changes both the gutter and what a row draws.
@@ -357,6 +389,11 @@ final class TableMatrixHarness {
         }
     }
 
+    /// What this frame's rows cost: composed, served, and calls into the
+    /// fixture's own cell closures. Read from the cache the harness owns, so it
+    /// is this table's number and nobody else's.
+    var rowWork: RenderCache.RowWork { tui.renderCache.rowWork }
+
     /// What the render-memo verifier found, when it is on.
     var renderCacheMismatches: [String] { tui.renderCache.renderMemoMismatches }
 
@@ -382,6 +419,7 @@ final class TableMatrixHarness {
     func frame(coldCache: Bool = false) -> FrameBuffer {
         if coldCache { tui.renderCache.clearAll() }
         calls.reset()
+        tui.renderCache.rowWork = RenderCache.RowWork()
         var environment = EnvironmentValues()
         environment.focusManager = focusManager
         environment.scrollExtentPrecision = shape.precision
@@ -423,10 +461,14 @@ final class TableMatrixHarness {
     private func columns() -> [TableColumn<TableMatrixRow>] {
         shape.columns.map { spec in
             let calls = self.calls
-            return TableColumn<TableMatrixRow>(spec.title) { (row: TableMatrixRow) -> String in
-                calls.note(row: row.id)
-                return spec.cost.text(id: row.id, generation: row.generation)
-            }
+            let column =
+                spec.namesAProperty
+                ? TableColumn<TableMatrixRow>(spec.title, value: spec.cost.keyPath)
+                : TableColumn<TableMatrixRow>(spec.title) { (row: TableMatrixRow) -> String in
+                    calls.note(row: row.id)
+                    return spec.cost.text(id: row.id, generation: row.generation)
+                }
+            return column
             .width(spec.width)
             .lineLimit(spec.lineLimit)
             .truncationMode(spec.truncation)

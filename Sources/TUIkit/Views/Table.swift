@@ -1122,6 +1122,10 @@ where Value.ID: Hashable {
         // One sampler for the frame, not one per row: building it quantises the
         // ramp, which is an array a row must not allocate.
         let rowRamp = cellRamp(rowWidth: contentInnerWidth, context: context)
+        beginRowMemo(
+            handler: handler, columnWidths: columnWidths,
+            gutter: selectionGutter(context.environment), rowWidth: contentInnerWidth,
+            context: context, palette: palette)
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
@@ -1132,7 +1136,7 @@ where Value.ID: Hashable {
                     isFocused: handler.isCursorRow(rowIndex) && tableHasFocus,
                     isSelected: handler.isSelected(at: rowIndex),
                     isReturningHome: handler.returningRows.contains(rowIndex),
-                    context: context, palette: palette)
+                    context: context, palette: palette, memo: handler)
                 collect(
                     line: row.line, frames: row.pulseFrames, timing: row.pulseTiming, claims: row.claims,
                     into: &rowLines, runs: &pulseRuns, claims: &rowOpacity, transform: padded)
@@ -2250,6 +2254,10 @@ where Value.ID: Hashable {
         var rowOpacity: [OpacityRegion] = []
         // One sampler for the frame — see the twin in the single-line path.
         let rowRamp = cellRamp(rowWidth: contentWidth, context: context)
+        beginRowMemo(
+            handler: handler, columnWidths: columnWidths,
+            gutter: selectionGutter(context.environment), rowWidth: contentWidth,
+            context: context, palette: palette)
         for entry in drawn {
             switch entry {
             case .row(let rowIndex):
@@ -2261,7 +2269,8 @@ where Value.ID: Hashable {
                     isSelected: handler.isSelected(at: rowIndex),
                     isReturningHome: handler.returningRows.contains(rowIndex),
                     context: context,
-                    palette: palette
+                    palette: palette,
+                    memo: handler
                 )
                 collect(
                     line: row.line, frames: row.pulseFrames, timing: row.pulseTiming, claims: row.claims,
@@ -3591,7 +3600,140 @@ where Value.ID: Hashable {
 
     // MARK: - Row Rendering
 
+    /// The half of a row's key that the FRAME settles — see `TableRowMemo.swift`.
+    private func rowFrameKey(
+        columnWidths: [Int], gutter: Int, rowWidth: Int, context: RenderContext,
+        palette: any Palette
+    ) -> TableRowFrameKey {
+        TableRowFrameKey(
+            columnWidths: columnWidths,
+            columnSpacing: columnSpacing,
+            gutter: gutter,
+            rowWidth: rowWidth,
+            ink: cellColour(row: 0, ramp: nil, context: context, palette: palette),
+            alignments: columns.map(\.alignment),
+            truncations: columns.map(\.truncationMode),
+            lineLimits: columns.map(\.lineLimit),
+            colorDepth: ColorDepth.current,
+            colorGeneration: TerminalColors.generation,
+            widthGeneration: TerminalWidthTraits.generation)
+    }
+
+    /// Whether this table's rows may be kept across frames at all.
+    ///
+    /// Every column has to NAME its value rather than compute one. A key path
+    /// cannot capture the search term, the formatter or the units toggle that a
+    /// closure column captures and that no row value would ever show — so where
+    /// every column is a key path, an equal row draws equal text, and where any
+    /// column is a closure it does not and the memo stands aside. See
+    /// `TableRowMemo.swift`; this is the whole of the soundness argument.
+    private var rowsMayBeKept: Bool {
+        !columns.isEmpty && columns.allSatisfy(\.namesAProperty)
+    }
+
+    /// Opens the row store for a frame, or empties it if this table may not keep
+    /// rows at all. Called once per frame by each row-composing path.
+    private func beginRowMemo(
+        handler: ItemListHandler<Value.ID>, columnWidths: [Int], gutter: Int, rowWidth: Int,
+        context: RenderContext, palette: any Palette
+    ) {
+        guard rowsMayBeKept, !context.isMeasuring else {
+            handler.tableRowMemo.removeAll()
+            return
+        }
+        handler.tableRowMemo.begin(
+            frame: rowFrameKey(
+                columnWidths: columnWidths, gutter: gutter, rowWidth: rowWidth,
+                context: context, palette: palette),
+            viewportHeight: handler.viewportHeight)
+    }
+
     private func renderRow(
+        item: Value,
+        paint: RowPaint,
+        columnWidths: [Int],
+        isFocused: Bool,
+        isSelected: Bool,
+        isReturningHome: Bool = false,
+        context: RenderContext,
+        palette: any Palette,
+        memo handler: ItemListHandler<Value.ID>? = nil
+    ) -> (
+        line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
+        claims: [OpacityRegion]
+    ) {
+        func compose() -> (
+            line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
+            claims: [OpacityRegion]
+        ) {
+            renderRowUncached(
+                item: item, paint: paint, columnWidths: columnWidths, isFocused: isFocused,
+                isSelected: isSelected, isReturningHome: isReturningHome, context: context,
+                palette: palette)
+        }
+        // A ramp colours a row by its ORDINAL, which moves when the table
+        // scrolls while the row does not, so a ramped table keeps nothing.
+        guard let handler, handler.tableRowMemo.isOpen, !isReturningHome,
+            paint.ramp == nil, let rowBox = Self.rowsSignature(of: item)
+        else { return compose() }
+
+        if let kept = handler.tableRowMemo.line(
+            for: item.id, row: rowBox, isFocused: isFocused, isSelected: isSelected)
+        {
+            context.renderCache?.rowWork.served += 1
+            let served = (
+                line: kept.line, pulseFrames: [String]?.none,
+                pulseTiming: IndicatorCycleTiming?.none, claims: kept.claims)
+            verifyRowServe(
+                served, item: item, paint: paint, columnWidths: columnWidths,
+                isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
+            return served
+        }
+
+        let tracker = context.environment.volatileReadTracker
+        let unsafeBefore = tracker?.cacheUnsafeCount ?? 0
+        let result = compose()
+        // A row that BREATHES is one frame of a cycle, and a row that consulted
+        // a per-frame value said so — neither may be kept, by the rule every
+        // other memo in the framework states as "never a time-varying subtree".
+        guard result.pulseFrames == nil, tracker?.cacheUnsafeCount ?? 0 == unsafeBefore else {
+            return result
+        }
+        handler.tableRowMemo.keep(
+            TableRowMemoLine(
+                row: rowBox, isFocused: isFocused, isSelected: isSelected, line: result.line,
+                claims: result.claims),
+            for: item.id)
+        return result
+    }
+
+    /// Re-composes a served row and reports a disagreement, under
+    /// `TUIKIT_VERIFY_RENDER_MEMO`.
+    ///
+    /// The value memo gets this from `verifyServe`; a store that lives outside
+    /// the render cache has to say it, and saying it is the price of living
+    /// outside. It costs more than the memo saves, so it is never on in an app
+    /// — the flag is for the standing CI lane and the contract suite, both of
+    /// which now cover rows.
+    private func verifyRowServe(
+        _ served: (
+            line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
+            claims: [OpacityRegion]
+        ),
+        item: Value, paint: RowPaint, columnWidths: [Int], isFocused: Bool, isSelected: Bool,
+        context: RenderContext, palette: any Palette
+    ) {
+        guard RenderCache.verifiesRenderMemo, let cache = context.renderCache else { return }
+        let fresh = renderRowUncached(
+            item: item, paint: paint, columnWidths: columnWidths, isFocused: isFocused,
+            isSelected: isSelected, isReturningHome: false, context: context, palette: palette)
+        guard fresh.line != served.line else { return }
+        cache.noteRenderMemoMismatch(
+            viewType: "\(Self.self) row", served: FrameBuffer(lines: [served.line]),
+            fresh: FrameBuffer(lines: [fresh.line]), identity: identityKey(item.id))
+    }
+
+    private func renderRowUncached(
         item: Value,
         paint: RowPaint,
         columnWidths: [Int],
