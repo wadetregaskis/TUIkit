@@ -298,6 +298,37 @@ struct ScrollPositionTests {
         #expect(after.contains { $0.contains("row 18") })
     }
 
+    /// The same binding on a view that scrolls BOTH ways.
+    ///
+    /// The read-back rides the same visible-row window a `scrollTo` seek does
+    /// (`reportsIDAt:`), and one boolean used to withhold that window from any
+    /// axis set containing `.horizontal` — so on a two-axis view the binding was
+    /// never written and never obeyed, silently. Fixed with the seek; pinned
+    /// here because it is a second consumer of the same handshake and would
+    /// regress without a word.
+    @Test("scrollPosition(id:) round-trips when BOTH axes scroll")
+    func idBindingRoundTripsOnTwoAxes() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var visible: Int?
+        let binding = Binding<Int?>(get: { visible }, set: { visible = $0 })
+        let view = ScrollView([.horizontal, .vertical]) {
+            LazyVStack(spacing: 0) {
+                ForEach(0..<Self.rowCount, id: \.self) {
+                    Text("row \($0) " + String(repeating: "-", count: 60))
+                }
+            }
+        }
+        .scrollPosition(id: binding)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(visible == 0, "the top row is reported: \(String(describing: visible))")
+
+        visible = 18
+        let after = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(after.contains { $0.contains("row 18") }, "…and writing it scrolls there: \(after)")
+    }
+
     // MARK: - The value type
 
     @Test("ScrollPosition records what it was last asked for")

@@ -92,6 +92,95 @@ struct ScrollViewReaderTests {
         #expect(jumped.contains { $0.contains("row 50003") }, "…viewport fills below: \(jumped)")
     }
 
+    /// The two-axis case, which was refused by accident.
+    ///
+    /// One boolean used to gate both the visible-row window and the seek that
+    /// rides it, on the reasoning that "horizontal scrolling has no row
+    /// concept". True of `ScrollView(.horizontal)`; false of
+    /// `ScrollView([.horizontal, .vertical])`, which has exactly the row
+    /// structure a seek needs. `scrollTo` was silently a no-op there — the
+    /// request was consumed and dropped — which is the failure mode rule 2 of
+    /// the compatibility doc exists to forbid: an API that looks like it
+    /// accepted.
+    @Test("scrollTo reaches a row when BOTH axes scroll")
+    func twoAxisScrollTo() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView([.horizontal, .vertical]) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<1_000, id: \.self) { i in
+                        Text("row \(i) " + String(repeating: "-", count: 60))
+                    }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        let first = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(first.contains { $0.contains("row 0") }, "starts at the top: \(first)")
+
+        box.proxy?.scrollTo(500, anchor: .top)
+        let jumped = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(jumped.contains { $0.contains("row 500") }, "the seek landed: \(jumped)")
+        #expect(!jumped.contains { $0.contains("row 0 ") }, "…and left the top: \(jumped)")
+    }
+
+    /// The same, against EAGER content, because `resolveEagerSeek` reads the
+    /// window too and a two-axis view never handed it one.
+    @Test("scrollTo reaches a row when BOTH axes scroll — eager content")
+    func twoAxisEagerScrollTo() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView([.horizontal, .vertical]) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<60, id: \.self) { i in
+                        Text("row \(i) " + String(repeating: "-", count: 60))
+                    }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        box.proxy?.scrollTo(40, anchor: .top)
+        let jumped = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(jumped.contains { $0.contains("row 40") }, "the seek landed: \(jumped)")
+    }
+
+    /// And the refusal that STAYS. A purely horizontal scroll view scrolls
+    /// columns; `scrollTo` names a row, and this window has nothing to say
+    /// about one. The rows a `LazyVStack` puts in it are simply the ones that
+    /// fit, at every offset there is.
+    @Test("scrollTo is still a no-op on a purely horizontal ScrollView")
+    func horizontalOnlyScrollToIsRefused() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let box = ProxyBox()
+        let view = ScrollViewReader { proxy in
+            let _ = box.proxy = proxy
+            ScrollView(.horizontal) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<1_000, id: \.self) { i in
+                        Text("row \(i) " + String(repeating: "-", count: 60))
+                    }
+                }
+            }
+            .frame(height: Self.viewport)
+        }
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        box.proxy?.scrollTo(500, anchor: .top)
+        let after = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(after.contains { $0.contains("row 0") }, "the top is still the top: \(after)")
+        #expect(!after.contains { $0.contains("row 500") }, "nothing sought: \(after)")
+    }
+
     @Test("scrollTo anchors: .bottom and .center land exactly (uniform)")
     func uniformBottomAndCenterAnchors() {
         let tuiContext = TUIContext()

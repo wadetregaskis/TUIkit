@@ -135,11 +135,15 @@ extension _ScrollViewCore {
             // Only sample when someone is bound to hear it.
             reportsIDAt: context.isMeasuring
                 ? nil : context.environment.scrollPositionBinding?.anchor,
-            // A seek still rides the window only on a vertical-only view. The
-            // window itself is now published on both — see the note above — but
-            // `scrollTo` on a horizontal-capable view has never worked and
-            // turning it on here would be a feature with no tests behind it.
-            seek: horizontal ? nil : seek)
+            // A seek names a ROW, so it rides the window exactly when there are
+            // rows to name — whenever the VERTICAL axis scrolls, and not merely
+            // when the horizontal one does not. One boolean used to gate both
+            // the window and the seek, so `scrollTo` was refused on
+            // `ScrollView([.horizontal, .vertical])` by accident: that shape has
+            // exactly the row structure a seek needs. It stays refused on a
+            // purely horizontal view, where `scrollTo` would be asking about
+            // columns and this window has nothing to say about them.
+            seek: axes.contains(.vertical) ? seek : nil)
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
