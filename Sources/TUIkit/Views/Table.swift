@@ -712,7 +712,7 @@ where Value.ID: Hashable {
             // exactly their lines, each padded to the row content width.
             var totalLines = 0
             for item in data {
-                totalLines += rowHeight(of: item, columnWidths: columnWidths)
+                totalLines += rowHeight(of: item, columnWidths: columnWidths, context: context)
             }
             content = (contentWidth, totalLines)
         } else {
@@ -1243,7 +1243,7 @@ where Value.ID: Hashable {
         /// The wrapped cells and the height of a row that is about to be drawn.
         func layoutOf(_ index: Int) -> (cells: [[String]], height: Int) {
             if let cached = layoutCache[index] { return cached }
-            let layout = cellLayout(for: data[index], columnWidths: columnWidths)
+            let layout = cellLayout(for: data[index], columnWidths: columnWidths, context: context)
             layoutCache[index] = layout
             return layout
         }
@@ -1254,7 +1254,7 @@ where Value.ID: Hashable {
         func heightOf(_ index: Int) -> Int {
             if let cached = layoutCache[index] { return cached.height }
             if let cached = heightCache[index] { return cached }
-            let height = rowHeight(of: data[index], columnWidths: columnWidths)
+            let height = rowHeight(of: data[index], columnWidths: columnWidths, context: context)
             heightCache[index] = height
             return height
         }
@@ -1314,7 +1314,7 @@ where Value.ID: Hashable {
             environment: context.environment,
             reorderFeedback: .live,
             keyboardMoveIsLive: true,
-            rowHeight: { rowHeight(of: data[$0], columnWidths: columnWidths) })
+            rowHeight: { rowHeight(of: data[$0], columnWidths: columnWidths, context: context) })
         handler.idAt = { data[$0].id }
         handler.itemIDs = []
         // `viewportHeight` is set once the window is cut, below. It used to be
@@ -1489,14 +1489,14 @@ where Value.ID: Hashable {
     /// embedded newline or an over-long value expands within the column up to the
     /// column's line limit and then clips — the same model `Text` uses.
     private func cellLayout(
-        for item: Value, columnWidths: [Int]
+        for item: Value, columnWidths: [Int], context: RenderContext
     ) -> (cells: [[String]], height: Int) {
         var cells: [[String]] = []
         cells.reserveCapacity(columns.count)
         var height = 1
         for (column, width) in zip(columns, columnWidths) {
             let wrapped = TextWrapping.fit(
-                column.value(for: item), width: max(1, width),
+                cellValue(column, for: item, context: context), width: max(1, width),
                 maxLines: column.lineLimit, mode: column.truncationMode)
             height = max(height, wrapped.count)
             cells.append(wrapped)
@@ -1509,11 +1509,13 @@ where Value.ID: Hashable {
     /// scroll arithmetic has to measure are wrapped without also allocating their
     /// cell content; ``cellLayout(for:columnWidths:)`` returns the cells too, for
     /// the rows actually rendered.
-    private func rowHeight(of item: Value, columnWidths: [Int]) -> Int {
+    private func rowHeight(
+        of item: Value, columnWidths: [Int], context: RenderContext
+    ) -> Int {
         var height = 1
         for (column, width) in zip(columns, columnWidths) {
             let lineCount = TextWrapping.fit(
-                column.value(for: item), width: max(1, width),
+                cellValue(column, for: item, context: context), width: max(1, width),
                 maxLines: column.lineLimit, mode: column.truncationMode
             ).count
             height = max(height, lineCount)
@@ -1615,7 +1617,7 @@ where Value.ID: Hashable {
             context: context)
         var lines = 0
         for item in data {
-            lines += rowHeight(of: item, columnWidths: widths)
+            lines += rowHeight(of: item, columnWidths: widths, context: context)
             if lines > rowArea { return true }
         }
         return false
@@ -1823,6 +1825,7 @@ where Value.ID: Hashable {
         context: RenderContext,
         palette: any Palette
     ) -> RenderedRow {
+        context.renderCache?.rowWork.rendered += 1  // see `renderRow`
         let (row, ramp, rowWidth) = (paint.row, paint.ramp, paint.width)
         let gutter = selectionGutter(context.environment)
         let spacing = asciiSpaces(columnSpacing)
@@ -3283,6 +3286,20 @@ where Value.ID: Hashable {
         return widths.map { max(1, $0) }
     }
 
+    /// One column's value for one row, counted.
+    ///
+    /// Every `column.value(for:)` in this file goes through here so that the
+    /// number of times a `Table` calls into an APP's own closures is reportable
+    /// — it is the app's code, not the framework's, and it is what a per-row
+    /// memo would exist to stop repeating. `RenderCache.rowWork` is where it
+    /// lands, beside the cache statistics a harness already reads.
+    private func cellValue(
+        _ column: TableColumn<Value>, for item: Value, context: RenderContext
+    ) -> String {
+        context.renderCache?.rowWork.cellValues += 1
+        return column.value(for: item)
+    }
+
     /// The rows boxed for comparison, when the row type can be compared —
     /// `nil` when it cannot, which is what makes the memo below decline rather
     /// than guess. The same question, and the same answer, as
@@ -3371,7 +3388,7 @@ where Value.ID: Hashable {
         // column two cells short and truncated its own header ("Track…").
         var fitted = headerTitle(for: column).strippedLength
         for item in data {
-            fitted = max(fitted, column.value(for: item).strippedLength)
+            fitted = max(fitted, cellValue(column, for: item, context: context).strippedLength)
             if let cap, fitted >= cap { break }
         }
 
@@ -3587,6 +3604,10 @@ where Value.ID: Hashable {
         line: String, pulseFrames: [String]?, pulseTiming: IndicatorCycleTiming?,
         claims: [OpacityRegion]
     ) {
+        // Composed from scratch, which for a `Table` is every drawn row of every
+        // frame — the asymmetry with `List`, whose rows reach `_MemoizedRow` and
+        // can be SERVED, in one number. See ``RenderCache/RowWork``.
+        context.renderCache?.rowWork.rendered += 1
         let (row, ramp, rowWidth) = (paint.row, paint.ramp, paint.width)
         // A row whose picture is still walking back to it keeps its space and
         // draws nothing in it — see ``ItemListHandler/returningRows``, and
@@ -3655,7 +3676,7 @@ where Value.ID: Hashable {
             let cellWidth = columnWidths[index]
             // Hoisted, so the column's value closure still runs exactly once and
             // in the same order whichever branch below draws it.
-            let cellText = column.value(for: item)
+            let cellText = cellValue(column, for: item, context: context)
             if let ramp, bandsAcrossRow {
                 var walked = cellColumn
                 PaintRenderer.band(
@@ -3810,7 +3831,7 @@ where Value.ID: Hashable {
         guard count > 0, steps > 0 else { return Array(repeating: pad, count: max(0, steps)) }
 
         let clipped = (0..<count).map {
-            columns[$0].value(for: item)
+            cellValue(columns[$0], for: item, context: context)
                 .truncatedToWidth(columnWidths[$0], mode: columns[$0].truncationMode)
         }
         let widths = clipped.map(\.strippedLength)

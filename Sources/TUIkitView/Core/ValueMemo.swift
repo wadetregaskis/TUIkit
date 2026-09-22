@@ -99,6 +99,9 @@ func renderValueMemoized<Key: Equatable>(
         // the net mostly has to check, since `ForEach` wraps every Equatable
         // element in a `_MemoizedRow` and nothing in `Stress` uses
         // `.equatable()`.
+        // One row of `megalist` against one row of `table`, in a number: a
+        // served subtree is a row a control did not have to compose.
+        cache.rowWork.served += 1
         if RenderCache.verifiesRenderMemo {
             verifyServe(entry, viewType: viewType, context: context, cache: cache, render: render)
         } else if !entry.effects.isEmpty, !context.isMeasuring {
@@ -124,6 +127,8 @@ func renderValueMemoized<Key: Equatable>(
     //   • never a subtree that made a per-frame registration this memo cannot
     //     make again. One it CAN (`recordReplayableEffect`) was recorded in the
     //     effect journal while this render ran, and is stored with the buffer.
+    // The other half of the pair above: a subtree that had to be composed.
+    cache.rowWork.rendered += 1
     let existingTracker = context.environment.volatileReadTracker
     let tracker = existingTracker ?? VolatileReadTracker()
     let renderContext =

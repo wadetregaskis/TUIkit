@@ -97,10 +97,18 @@ CPU_RE = re.compile(r"cpu-per-frame=([0-9.]+)")
 # A render cache is the case that needs it: it buys an order of magnitude of CPU
 # by keeping buffers, and nothing here used to price that.
 RSS_RE = re.compile(r"rss-peak=([0-9.]+)")
+# What the rows cost, which a clock cannot say. A memo that engages turns
+# "composed" into "served" and drives "cell values" — calls into the app's own
+# closures — toward zero, and those move even where the timing does not resolve.
+# Reported as plain medians beside the verdict, for the same reason RSS is: a
+# count does not vary between runs of one binary, so an interval on it would be
+# theatre.
+ROWS_RE = re.compile(r"rows/frame: ([0-9.]+) composed, ([0-9.]+) served")
+CELLS_RE = re.compile(r"cell values/frame: ([0-9.]+)")
 
 
 def run(binary, scenario, scale, iterations, cols, rows, cold=False):
-    """One bench run; returns (wall_us, cpu_us, peak_rss_mb)."""
+    """One bench run; returns (wall_us, cpu_us, peak_rss_mb, work)."""
     out = subprocess.run(
         [binary, "--bench", "--scenario", scenario, "--scale", str(scale),
          "--iterations", str(iterations), "--cols", str(cols), "--rows", str(rows)]
@@ -111,14 +119,21 @@ def run(binary, scenario, scale, iterations, cols, rows, cold=False):
     rss = RSS_RE.search(out)
     if not wall:
         raise RuntimeError(f"no timing in output of {binary} {scenario}:\n{out}")
+    rows_match = ROWS_RE.search(out)
+    cells_match = CELLS_RE.search(out)
+    work = None
+    if rows_match and cells_match:
+        work = (float(rows_match.group(1)), float(rows_match.group(2)),
+                float(cells_match.group(1)))
     return (float(wall.group(1)),
             float(cpu.group(1)) if cpu else None,
-            float(rss.group(1)) if rss else None)
+            float(rss.group(1)) if rss else None,
+            work)
 
 
 def calibrate(binary, scenario, scale, target_seconds, cols, rows, cold=False):
     """Iterations that make one run last roughly `target_seconds`."""
-    wall_us, _, _ = run(binary, scenario, scale, 30, cols, rows, cold)
+    wall_us, _, _, _ = run(binary, scenario, scale, 30, cols, rows, cold)
     iterations = int(target_seconds * 1_000_000 / max(wall_us, 1.0))
     return max(50, min(iterations, 200_000))
 
@@ -225,6 +240,7 @@ def main():
 
         olds, news, ratios = [], [], []
         old_rss, new_rss = [], []
+        old_work, new_work = [], []
         for _ in range(args.reps):
             # Indexed by POSITION, not by path: a null test (`ab_bench.py X X`)
             # passes the same path twice, and keying by path would collapse the
@@ -235,12 +251,14 @@ def main():
             binaries = (args.old, args.new)
             results = [0.0, 0.0]
             memory = [None, None]
+            work = [None, None]
             for position in order:
                 reading = run(
                     binaries[position], scenario, args.scale, iterations,
                     args.cols, args.rows, args.cold)
                 results[position] = reading[index]
                 memory[position] = reading[2]
+                work[position] = reading[3]
             old_us, new_us = results[0], results[1]
             olds.append(old_us)
             news.append(new_us)
@@ -248,6 +266,9 @@ def main():
             if memory[0] and memory[1]:
                 old_rss.append(memory[0])
                 new_rss.append(memory[1])
+            if work[0] and work[1]:
+                old_work.append(work[0])
+                new_work.append(work[1])
 
         median_ratio = statistics.median(ratios)
         lo, hi = bootstrap_ci(ratios)
@@ -263,9 +284,22 @@ def main():
             ram = f"  ram {old_mb:.1f}->{new_mb:.1f}MB {(new_mb - old_mb):+.1f}"
         else:
             ram = ""
+        # Only printed when it MOVED: every scenario reports these now, and a
+        # sweep that repeated an unchanged pair of counts on twenty-two lines
+        # would bury the two that changed.
+        rowwork = ""
+        if old_work and new_work:
+            def median_of(samples, field):
+                return statistics.median(sample[field] for sample in samples)
+            before = [median_of(old_work, field) for field in range(3)]
+            after = [median_of(new_work, field) for field in range(3)]
+            if any(abs(a - b) > 0.05 for a, b in zip(before, after)):
+                rowwork = (f"  rows {before[0]:.0f}/{before[1]:.0f}->"
+                           f"{after[0]:.0f}/{after[1]:.0f} composed/served"
+                           f"  cells {before[2]:.0f}->{after[2]:.0f}")
         print(f"{scenario:<16}{iterations:>8}{statistics.median(olds):>11.1f}"
               f"{statistics.median(news):>11.1f}{(median_ratio - 1) * 100:>+8.1f}%"
-              f"{(lo - 1) * 100:>+9.1f}%{(hi - 1) * 100:>+7.1f}%  {verdict}{ram}")
+              f"{(lo - 1) * 100:>+9.1f}%{(hi - 1) * 100:>+7.1f}%  {verdict}{ram}{rowwork}")
 
     return 0
 

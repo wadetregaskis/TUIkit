@@ -187,7 +187,9 @@ enum Headless {
     /// registrations keep its rows out of the cache, which nothing else printed
     /// here can.
     @MainActor
-    private static func printMemoTotals(_ cache: RenderCache?, channels: HeadlessInputChannels) {
+    private static func printMemoTotals(
+        _ cache: RenderCache?, channels: HeadlessInputChannels, frames: Int = 1
+    ) {
         let memo = cache?.measureMemoTotals ?? (hits: 0, misses: 0)
         let lookups = memo.hits + memo.misses
         print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",
@@ -196,6 +198,21 @@ enum Headless {
         print("  value memos (buffer + size): \(render.hits) hits / \(render.lookups) lookups, "
             + "\(render.stores) stores; handlers (last frame): \(channels.keyHandlerCount) key, "
             + "\(channels.mouseHandlerCount) mouse")
+        // What the ROWS cost, which the line above cannot say: it sums the
+        // buffer memo, the size memo and the row memo together, so a control
+        // that composes every row from scratch and one that serves them all
+        // look the same in it. Per frame, because the totals are cumulative
+        // over the run and a per-frame number is the one worth comparing.
+        let work = cache?.rowWork ?? RenderCache.RowWork()
+        let divisor = Double(max(1, frames))
+        print(
+            String(
+                format: "  rows/frame: %.1f composed, %.1f served (%.0f%%); "
+                    + "cell values/frame: %.1f; clears: %d whole, %d subtree",
+                Double(work.rendered) / divisor, Double(work.served) / divisor,
+                work.rendered + work.served > 0
+                    ? Double(work.served) / Double(work.rendered + work.served) * 100 : 0,
+                Double(work.cellValues) / divisor, render.clears, render.subtreeClears))
     }
 
     /// Renders one scenario `iterations` times and reports timing + a checksum
@@ -316,7 +333,7 @@ enum Headless {
                 print(String(format: "  rss-peak=%.1fMB", mb(peak)))
             }
         }
-        printMemoTotals(warm.renderCache, channels: channels)
+        printMemoTotals(warm.renderCache, channels: channels, frames: iterations)
         // `TUIKIT_VERIFY_MEASURE_MEMO=1` re-measures every memo hit and reports
         // any the fresh measurement disagrees with — the direct check on the
         // memo's cross-budget claim, run over whichever scenario is at hand.

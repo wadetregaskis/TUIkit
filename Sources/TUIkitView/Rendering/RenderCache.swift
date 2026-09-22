@@ -92,6 +92,40 @@ public final class RenderCache: @unchecked Sendable {
 
     /// Aggregated cache performance statistics.
     ///
+    /// What a frame's row-shaped work cost, for the controls that draw rows.
+    ///
+    /// The numbers the question "should `Table` memoise its rows?" is actually
+    /// about, and which nothing reported: `List` rows reach `_MemoizedRow` and
+    /// so can be SERVED, `Table` composes every drawn row from scratch every
+    /// frame, and the aggregate cache line cannot tell those apart because it
+    /// sums the buffer memo, the size memo and the row memo together.
+    ///
+    /// ``cellValues`` is the one an app feels directly: it counts calls into a
+    /// `TableColumn`'s own value closure, which is the app's code, not the
+    /// framework's. A row memo's whole purpose is to drive it to zero for rows
+    /// that did not change.
+    public struct RowWork: Equatable, Sendable {
+        /// Rows (or memoized subtrees) composed from scratch.
+        public var rendered = 0
+        /// Rows (or memoized subtrees) served from a memo instead.
+        public var served = 0
+        /// Calls into an app's own cell value closures.
+        public var cellValues = 0
+
+        public init(rendered: Int = 0, served: Int = 0, cellValues: Int = 0) {
+            self.rendered = rendered
+            self.served = served
+            self.cellValues = cellValues
+        }
+
+        /// This minus `earlier`, for a per-frame reading rather than a total.
+        public func delta(since earlier: Self) -> Self {
+            Self(
+                rendered: rendered - earlier.rendered, served: served - earlier.served,
+                cellValues: cellValues - earlier.cellValues)
+        }
+    }
+
     /// Tracks hit/miss/store/clear counts. Use ``stats`` for cumulative
     /// totals, or `frameStats` (after ``logFrameStats()``) for the
     /// delta since the last ``beginRenderPass()``.
@@ -487,6 +521,15 @@ public final class RenderCache: @unchecked Sendable {
 
     /// Cumulative cache performance statistics.
     public private(set) var stats = Stats()
+
+    /// Cumulative row-shaped work, for the controls that draw rows.
+    ///
+    /// Lives beside ``stats`` and is deliberately NOT part of it: these count
+    /// what the RENDER did, not what the cache did. They are here because this
+    /// is the object a row memo would live on and the one a harness already
+    /// holds per context — a control reads it from the environment exactly as
+    /// it reads the cache.
+    public var rowWork = RowWork()
 
     /// Reports `@State` written mid-walk, when `TUIKIT_DIAGNOSE_BODY_MUTATION=1`
     /// asked for it. `nil` otherwise, which is the whole of its cost.
