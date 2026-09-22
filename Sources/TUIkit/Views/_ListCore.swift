@@ -588,25 +588,22 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // the pointer: the title line selected the first row, and the last row
             // could not be clicked at all.
             let contentTop = (style.showsBorder ? 1 : 0) + titleOverhead + style.rowPadding.top
-            attachMouseHandlers(
+            let registered = attachMouseHandlers(
                 to: &buffer,
                 context: context,
                 state: state,
                 topInset: contentTop
             )
-            // Compositing, not click handling — so it runs even when the list
-            // is disabled or has no mouse dispatcher. See `attachRowOverlays`.
-            attachRowOverlays(
+            // One walk for all three row payloads. Compositing is not click
+            // handling, so the overlays and the opacity regions go up even when
+            // the list is disabled or has no mouse dispatcher — which is what
+            // `registered` is threaded through for.
+            attachRowPayloads(
                 to: &buffer,
                 context: context,
                 state: state,
-                topInset: contentTop
-            )
-            attachRowOpacity(
-                to: &buffer,
-                context: context,
-                state: state,
-                topInset: contentTop
+                topInset: contentTop,
+                mergesHitRegions: registered
             )
         }
         return buffer
@@ -1948,15 +1945,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// emits its hit-test region (inserted at the front of the
     /// regions array so interactive children inside rows still
     /// win their clicks — this region is the fallback).
+    ///
+    /// - Returns: whether it registered anything — see
+    ///   ``attachRowPayloads(to:context:state:topInset:mergesHitRegions:)``,
+    ///   which carries the ROWS' own regions up and needs to know.
     private func attachMouseHandlers(
         to buffer: inout FrameBuffer,
         context: RenderContext,
         state: PopulatedRenderState,
         topInset: Int
-    ) {
+    ) -> Bool {
         guard !isDisabled(in: context), !context.isMeasuring,
             let mouseDispatcher = context.environment.mouseEventDispatcher
-        else { return }
+        else { return false }
         let focusManager = context.environment.focusManager
         // `topInset` is the buffer row of content line 0 — border, borderless
         // title and top padding, settled once in `renderToBuffer`. The captured
@@ -2077,21 +2078,56 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             )
         }
 
-        // Rows render into standalone (per-frame memoised) buffers, so their
-        // own hit-test regions — per-row `.onMouseEvent`, Buttons and other
-        // interactive children — must be carried into the list's buffer
-        // explicitly, translated to each row's on-screen position. Without
-        // this merge the container fallback above is the ONLY region that
-        // ever sees a click, and the "children win" contract is vacuously
-        // false. Rows re-render every frame (the row memo lives on the
-        // per-frame RowSource), so the handler ids are current. Appended
-        // after the container's insert(at: 0) — higher indices, which the
-        // dispatcher's reverse iteration matches first.
+        return true
+    }
+
+    /// One walk over the drawn rows, carrying up everything a row's own buffer
+    /// owes the list: its hit-test regions, its overlay layers, its opacity
+    /// regions.
+    ///
+    /// Three walks until now, one per payload — each re-reading the list style
+    /// out of the environment, re-deriving the same content column, and
+    /// re-copying the same row out of the same two arrays. On a `megalist`
+    /// frame, whose plain `Text` rows have none of the three, they were 11.3%
+    /// of the frame between them (blamed leaf-by-leaf, 2026-09-22) to walk 36
+    /// rows three times and find nothing each time. The per-payload bodies
+    /// below are unchanged and still carry their own reasoning; only the walk
+    /// is shared.
+    ///
+    /// Order survives the merge exactly, because the three payloads append to
+    /// three DIFFERENT arrays: interleaving them cannot change the order within
+    /// any one of them. The hit regions' relationship to the container's
+    /// `insert(at: 0)` is unchanged too — that insert has already happened, in
+    /// ``attachMouseHandlers``, before this is called.
+    ///
+    /// - Parameter mergesHitRegions: whether ``attachMouseHandlers`` registered
+    ///   anything this frame. It declines for a disabled list, a measure pass
+    ///   and a frame with no mouse dispatcher, and a row's regions would then
+    ///   name a handler that does not exist. Compositing is not click handling
+    ///   though — `List { row.sheet(…) }.disabled(true)` must still show its
+    ///   sheet — so the other two payloads run regardless, which is why this is
+    ///   a parameter rather than another guard.
+    private func attachRowPayloads(
+        to buffer: inout FrameBuffer,
+        context: RenderContext,
+        state: PopulatedRenderState,
+        topInset: Int,
+        mergesHitRegions: Bool
+    ) {
+        guard !context.isMeasuring else { return }
         let style = context.environment.listStyle
         // Border column (when drawn) + the leading space `renderPlainLine`
         // prefixes to every row line.
         let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
-        for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
+        let bounds = (width: buffer.width, height: buffer.height)
+        // By index rather than `zip`, which pairs the same two arrays: the zip
+        // iterator is generic over a tuple element and was instantiating type
+        // metadata on every step (1.5% of the frame, in a walk that mostly
+        // finds nothing to do). `min` is what zip's own truncation did.
+        let paired = min(state.visibleRowYRanges.count, state.visibleRows.count)
+        for index in 0..<paired {
+            let position = state.visibleRowYRanges[index]
+            let visible = state.visibleRows[index]
             // Line granularity: the top row's first `clip` lines are scrolled
             // off above the viewport, so its row-local coordinates shift up
             // by that much. Every other row has no clip. Measured from the
@@ -2099,97 +2135,52 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let clip =
                 (visible.index == state.origin.offset ? state.origin.topClip : 0)
                 + position.linesCutAbove
-            for region in visible.row.buffer.hitTestRegions {
-                // Rows can be partially visible — the top row clipped above
-                // (line granularity), the last row clipped below: intersect
-                // each region with the row-local window of lines actually
-                // shown, [clip, clip + position.height).
-                //
-                // Through the SHARED trim, because a clip is not merely an
-                // absence: `clipped(toColumns:rows:)` RECORDS the lines it cut
-                // away in `topClip`, and the dispatcher measures a handler's
-                // local coordinates from `localOriginY` — the region's top
-                // moved back up past the cut. Rebuilt by hand here, every
-                // merged region claimed `topClip: 0`, so a click inside a
-                // control spanning a clipped top row arrived short by the clip:
-                // on a 5-line row scrolled 3 lines up, a click on its last
-                // visible line reached the control as its line 1 instead of its
-                // line 4. `leftClip` and the reveal outsets went the same way,
-                // for the same reason — the plain initializer takes neither.
-                //
-                // Only the Y axis is trimmed: the column range spans the region
-                // and so cuts nothing. A row's HORIZONTAL clip is applied to its
-                // drawing (`fitted`), and whether the regions should follow it
-                // is a separate question this merge has never answered.
-                //
-                // Clip THEN shift: a translation records nothing, so the two
-                // orders agree on both clips — see `HitTestRegion.shifted(byX:y:)`.
-                let columns = region.offsetX..<(region.offsetX + region.width)
-                let visibleLines = clip..<(clip + position.height)
-                guard let trimmed = region.clipped(toColumns: columns, rows: visibleLines)
-                else { continue }
-                buffer.hitTestRegions.append(
-                    trimmed.shifted(byX: rowContentX, y: topInset + position.yStart - clip))
-            }
-        }
-    }
 
-    /// Carries the rows' overlay layers into the list's buffer.
-    ///
-    /// A modal, alert or popover presented from row content is emitted into
-    /// that row's standalone (per-frame memoised) buffer, and would otherwise
-    /// never reach the root compositor — an invisible dialog that has already
-    /// grabbed the keyboard.
-    ///
-    /// Separate from ``attachMouseHandlers`` on purpose, though it used to live
-    /// inside it. That function returns early for a DISABLED list and for one
-    /// with no mouse dispatcher, which are both perfectly good reasons not to
-    /// register click handling and neither of which has anything to do with
-    /// compositing — so `List { row.sheet(…) }.disabled(true)` dropped the
-    /// overlay for every row, visible ones included, while the presentation
-    /// went on activating its focus section and taking the keyboard. Gated on
-    /// the measure pass alone: a measure buffer is discarded, so an overlay
-    /// left on one describes a dialog that was never drawn.
-    ///
-    /// Anchored layers translate to the row's on-screen position (`shifted`
-    /// leaves screen-centred layers untouched). A layer that is a SURFACE —
-    /// a drop-down, a menu, a dialog — is then left alone, because floating
-    /// above the in-flow content is the point of an overlay and a picker on
-    /// the last row must not lose its options to the list's own edge.
-    ///
-    /// A row the frame rendered but drew none of (clipped, slid or cut off) has
-    /// no on-screen position to give an anchored layer, so it hands up its
-    /// centred layers alone.
-    ///
-    /// A layer carrying a piece of a row's own DRAWING is clipped to the list,
-    /// which is the same rule ``ScrollView`` applies — there for a SOURCED
-    /// reason (SwiftUI's `scrollClipDisabled(_:)` documents that "by default, a
-    /// scroll view clips its content to its bounds"), here for an inferred one.
-    /// **That SwiftUI's `List` clips is reasoning, not a measurement**: no
-    /// documentation was found saying so, and it is believed because a `List`
-    /// scrolls and because `.offset(x: 7)` on a row of a 14-wide list was
-    /// painting over the page beside it, which is certainly wrong.
-    ///
-    /// The clip is to the list's OUTER box, so displaced drawing can still
-    /// overwrite the list's own border — `.offset(x: 7)` in a 14-wide bordered
-    /// list eats the right `│`. Strictly better than before (it used to run
-    /// past the border and onto the page) and not yet right. Clipping to the
-    /// content box needs a rect-shaped clip on ``OverlayLayer``, whose current
-    /// one is anchored at the origin.
-    private func attachRowOverlays(
-        to buffer: inout FrameBuffer,
-        context: RenderContext,
-        state: PopulatedRenderState,
-        topInset: Int
-    ) {
-        guard !context.isMeasuring else { return }
-        let style = context.environment.listStyle
-        let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
-        let bounds = (width: buffer.width, height: buffer.height)
-        for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
-            let clip =
-                (visible.index == state.origin.offset ? state.origin.topClip : 0)
-                + position.linesCutAbove
+            // Rows render into standalone (per-frame memoised) buffers, so their
+            // own hit-test regions — per-row `.onMouseEvent`, Buttons and other
+            // interactive children — must be carried into the list's buffer
+            // explicitly, translated to each row's on-screen position. Without
+            // this merge the container fallback is the ONLY region that ever
+            // sees a click, and the "children win" contract is vacuously false.
+            // Rows re-render every frame (the row memo lives on the per-frame
+            // RowSource), so the handler ids are current. Appended after the
+            // container's insert(at: 0) — higher indices, which the dispatcher's
+            // reverse iteration matches first.
+            if mergesHitRegions {
+                for region in visible.row.buffer.hitTestRegions {
+                    // Rows can be partially visible — the top row clipped above
+                    // (line granularity), the last row clipped below: intersect
+                    // each region with the row-local window of lines actually
+                    // shown, [clip, clip + position.height).
+                    //
+                    // Through the SHARED trim, because a clip is not merely an
+                    // absence: `clipped(toColumns:rows:)` RECORDS the lines it cut
+                    // away in `topClip`, and the dispatcher measures a handler's
+                    // local coordinates from `localOriginY` — the region's top
+                    // moved back up past the cut. Rebuilt by hand here, every
+                    // merged region claimed `topClip: 0`, so a click inside a
+                    // control spanning a clipped top row arrived short by the clip:
+                    // on a 5-line row scrolled 3 lines up, a click on its last
+                    // visible line reached the control as its line 1 instead of its
+                    // line 4. `leftClip` and the reveal outsets went the same way,
+                    // for the same reason — the plain initializer takes neither.
+                    //
+                    // Only the Y axis is trimmed: the column range spans the region
+                    // and so cuts nothing. A row's HORIZONTAL clip is applied to its
+                    // drawing (`fitted`), and whether the regions should follow it
+                    // is a separate question this merge has never answered.
+                    //
+                    // Clip THEN shift: a translation records nothing, so the two
+                    // orders agree on both clips — see `HitTestRegion.shifted(byX:y:)`.
+                    let columns = region.offsetX..<(region.offsetX + region.width)
+                    let visibleLines = clip..<(clip + position.height)
+                    guard let trimmed = region.clipped(toColumns: columns, rows: visibleLines)
+                    else { continue }
+                    buffer.hitTestRegions.append(
+                        trimmed.shifted(byX: rowContentX, y: topInset + position.yStart - clip))
+                }
+            }
+
             for layer in visible.row.buffer.shiftedOverlays(
                 byX: rowContentX, y: topInset + position.yStart - clip)
             {
@@ -2205,44 +2196,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     buffer.overlays.append(clipped)
                 }
             }
-        }
-        // The rows after the paired ones were rendered but drew nothing (see
-        // `putDrawnRowsFirst(_:pairedWith:)`). NOT skipped with the rest of their
-        // payload: an anchored layer has no line left to hang from, but a centred
-        // one never needed one, and dropping it would leave its dialog holding the
-        // keyboard unseen. Empty unless the frame dropped a row it had rendered.
-        for visible in state.visibleRows.dropFirst(state.visibleRowYRanges.count) {
-            for layer in visible.row.buffer.overlays where layer.centered {
-                buffer.overlays.append(layer)
-            }
-        }
-    }
 
-    /// Moves the rows' opacity regions into the list's coordinates.
-    ///
-    /// Unlike an overlay, a region names cells that are IN the list's own
-    /// picture, so it clips to the row's visible extent on both axes: a row
-    /// half-scrolled off the top must not fade the border above it, and a
-    /// region wider than the row must not reach the scrollbar. That is the
-    /// same reasoning that clips hit regions in ``ScrollView`` — and the
-    /// opposite of what the runs do, because a run carries a fixed picture
-    /// that a clip would misalign, while a rectangle survives being trimmed.
-    ///
-    /// The extra column matches the runs' `1 + offsetX`: every row line begins
-    /// with the selection gutter, which the row's own buffer knows nothing of.
-    private func attachRowOpacity(
-        to buffer: inout FrameBuffer,
-        context: RenderContext,
-        state: PopulatedRenderState,
-        topInset: Int
-    ) {
-        guard !context.isMeasuring else { return }
-        let style = context.environment.listStyle
-        let rowContentX = (style.showsBorder ? 1 : 0) + style.rowPadding.leading + 1
-        for (position, visible) in zip(state.visibleRowYRanges, state.visibleRows) {
-            let clip =
-                (visible.index == state.origin.offset ? state.origin.topClip : 0)
-                + position.linesCutAbove
             /// The shared trim, so this is not a third spelling of it: the rows the
             /// window kept of this row, and the columns the row has. (The ScrollView
             /// copy was the one that drifted, clipping rows and letting columns run
@@ -2262,6 +2216,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // `.opacity(_:)` inside the row must already be down (§69.4).
             if !state.droppedRunClaims.isEmpty, let dropped = state.droppedRunClaims[visible.index] {
                 for region in dropped { attach(region) }
+            }
+        }
+        // The rows after the paired ones were rendered but drew nothing (see
+        // `putDrawnRowsFirst(_:pairedWith:)`). NOT skipped with the rest of their
+        // payload: an anchored layer has no line left to hang from, but a centred
+        // one never needed one, and dropping it would leave its dialog holding the
+        // keyboard unseen. Empty unless the frame dropped a row it had rendered.
+        for visible in state.visibleRows.dropFirst(state.visibleRowYRanges.count) {
+            for layer in visible.row.buffer.overlays where layer.centered {
+                buffer.overlays.append(layer)
             }
         }
     }
