@@ -351,15 +351,20 @@ struct CodeEditorApp: View {
             ScrollView([.horizontal, .vertical]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(0..<lines, id: \.self) { index in
-                        // No clock read anywhere in here, deliberately: an
-                        // `@Observable` read invalidates the view whose body
-                        // took it and everything below, so a cursor line that
-                        // read the tick up in the editor's own body would throw
-                        // away every row's size and buffer memo on every frame —
-                        // and the scenario would measure the invalidation rather
-                        // than the editor. The caret is a leaf of its own.
+                        // The caret does NOT read the clock, and neither does
+                        // anything else here. Both spellings were measured and
+                        // both are wrong for this scenario: reading the tick in
+                        // the editor's body invalidates every row's memo on
+                        // every frame, and reading it in a per-row leaf — the
+                        // discipline the file browser's footer follows — gives
+                        // the clock two thousand observers instead of one and
+                        // costs 3.5× more again (32.8 → 114.9 ms). A leaf is
+                        // the right place for a reader only when there is ONE
+                        // of it. This scenario is here to measure the two-axis
+                        // render, so its caret sits still.
                         HStack(spacing: 1) {
-                            CaretLineNumber(index: index, lines: lines)
+                            Text(String(format: "%5d", index + 1))
+                                .foregroundStyle(index == lines / 2 ? .orange : .gray)
                             Text(Self.source(index, seed: seed))
                         }
                     }
@@ -441,19 +446,6 @@ struct ChatApp: View {
 }
 
 // MARK: - Shared pieces
-
-/// The caret's line number: a leaf that reads the clock, so a tick invalidates
-/// one line rather than the whole editor.
-private struct CaretLineNumber: View {
-    let index: Int
-    let lines: Int
-    @Environment(StressClock.self) private var clock
-
-    var body: some View {
-        Text(String(format: "%5d", index + 1))
-            .foregroundStyle(clock.tick % max(1, lines) == index ? .orange : .gray)
-    }
-}
 
 /// A leaf that reads the clock, so a tick invalidates a line rather than a page.
 private struct TickStamp: View {

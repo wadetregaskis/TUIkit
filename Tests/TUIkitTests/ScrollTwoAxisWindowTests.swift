@@ -4,11 +4,13 @@
 //  Two things a `LazyVStack` inside a two-axis `ScrollView` gets wrong, pinned
 //  together because they are the same knot and neither can be fixed alone.
 //
-//  1. IT RENDERS EVERY ROW. `renderedContent` publishes its visible-row window
+//  1. IT WALKS EVERY ROW. `renderedContent` publishes its visible-row window
 //     only when the horizontal axis is off, on the reasoning that "horizontal
 //     scrolling has no row concept" — true of the horizontal axis, and not of
-//     the rows the vertical one still has. `app-shapes/code-editor` composes
-//     2,061 rows a frame to draw 37, at 32.8 ms.
+//     the rows the vertical one still has. `app-shapes/code-editor` asks about
+//     2,000 rows a frame to draw 37. It is cheaper than it sounds: the row memo
+//     serves 1,963 of them, so a settled editor is 4.4 ms, and what the window
+//     would save is the LOOKUPS rather than the composition.
 //
 //  2. A WIDE ROW OUT OF SIGHT IS UNREACHABLE. The window measure answers width
 //     from a sample: the rows the height budget reaches, capped at 64. A
@@ -19,20 +21,25 @@
 //     twins disagreeing rather than a property of laziness.
 //
 //  The knot: the horizontal extent is metered by the RENDERED buffer's width,
-//  which only (1) makes correct. Fixing (2) needs a width measured over every
-//  row, and then (1) is safe — both were implemented and measured on
-//  2026-09-22:
+//  which is the only thing making (1) harmless. Fixing (2) needs a width
+//  measured over every row, and then (1) is safe. Both were implemented and
+//  measured on 2026-09-22, on `app-shapes/code-editor` (2,000 syntax-coloured
+//  lines, release, 120x40):
 //
-//      today (wrong)                          32.8 ms   2,061 rows composed
-//      exact width only                      123.8 ms   2,061 rows composed
-//      exact width + vertical window          70.7 ms      41 rows composed
+//      today (wrong)                    4.4 ms    1.9 composed, 1,963 served
+//      exact width + vertical window   64.7 ms    1.9 composed,    39 served
 //
-//  So correctness costs 2.2× here, because measuring a row costs MORE than
-//  rendering one: the render serves its rows from the row memo while the width
-//  probe misses (0.2% measure-memo hits) and pays a view build, two reflection
-//  walks and a measure per row. Landing that as part of a performance sweep is
-//  the owner's call, and the cheap fix — per-ordinal widths kept across frames
-//  — is a caching design of its own. Both are noted; nothing is landed.
+//  Correctness costs 14.6× here, and the windowing does not begin to pay for
+//  it, because the thing the window removes is already nearly free: the row
+//  memo serves the rows it walks. What the exact width costs is a MEASURE of
+//  every row every frame — a view build, two reflection walks and a measure,
+//  none of which the measure memo catches (0.2% hits) — and that is strictly
+//  more than the memo lookups it saves.
+//
+//  So the fix has to be a cheap exact width, not this one: per-ordinal row
+//  widths kept across frames, which is a caching design of its own (the records
+//  exist in `StackWindowState`, seeded only for VISITED rows and answered per
+//  prefix). Noted for the owner; nothing is landed.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
