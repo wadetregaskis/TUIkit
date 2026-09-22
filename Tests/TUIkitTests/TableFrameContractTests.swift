@@ -135,6 +135,37 @@ struct TableFrameContractTests {
         #expect(changed.count == 1, "lines \(changed) changed, expected exactly one")
     }
 
+    /// Moving the selection changes two rows and no others, though the DATA
+    /// did not change at all.
+    ///
+    /// The case that decides what a row memo may key on. Both affected rows
+    /// compare exactly equal to what they were — one gained the mark and the
+    /// selected background, the other lost them — so a memo keyed on the row
+    /// value alone would serve both of them stale and the selection would
+    /// simply not move on screen.
+    @Test("Moving the selection changes two rows and no others")
+    func movingTheSelectionChangesTwoRows() {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 100,
+                columns: [
+                    TableMatrixColumn(title: "ID", width: .fixed(6), cost: .cheap),
+                    TableMatrixColumn(title: "Value", width: .fixed(18), cost: .formatted),
+                ],
+                selection: .single(1)))
+        harness.settle()
+        let before = harness.frame()
+
+        harness.select(3)
+        let after = harness.frame()
+
+        let changed = zip(before.lines, after.lines).enumerated()
+            .filter { $0.element.0 != $0.element.1 }
+            .map(\.offset)
+        #expect(changed.count == 2, "lines \(changed) changed, expected the two marked rows")
+        #expect(after.lines == harness.frame(coldCache: true).lines, "warm differed from cold")
+    }
+
     /// Each drawn row asks each column for its value exactly once.
     ///
     /// `renderRow` states this in its own comment — "the column's value closure

@@ -338,6 +338,17 @@ final class TableMatrixHarness {
         rows[index].generation += 1
     }
 
+    /// Moves the selection without touching the data.
+    ///
+    /// The case a memo keyed on the row VALUE alone would get wrong: two rows'
+    /// bytes change — the one that gained the mark and background, and the one
+    /// that lost them — while both rows compare exactly equal to what they were.
+    /// Whatever a `Table` learns to keep, this has to keep working.
+    func select(_ id: Int?) {
+        singleSelection = id
+        if let id { multiSelection = [id] } else { multiSelection = [] }
+    }
+
     /// Renders one frame. `coldCache` empties the cache first, which is how a
     /// warm answer is compared with the answer nothing could have served.
     @discardableResult
