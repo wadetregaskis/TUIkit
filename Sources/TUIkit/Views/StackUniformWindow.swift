@@ -109,6 +109,11 @@ final class StackWindowState {
         /// is the WHOLE stack for ≤64 rows — every frame.
         var rowWidths = RowWidthRecords()
 
+        /// The widest row over every row, and the prefix it was taken
+        /// over — the two-axis content-width answer. See
+        /// `StackContentWidth.swift`, which owns every rule about it.
+        var contentWidth: ContentWidthRecord?
+
         /// The widest row the LAST uniform render actually drew. The reported
         /// width is never below it: a stack must not tell its parent it is
         /// narrower than the band it is putting on screen, however few of the

@@ -132,3 +132,24 @@ func measureNaturalExtent<V: View>(
 func naturalExtentStartingBudget(forVisible extent: Int) -> Int {
     max(extent * 64, 4096)
 }
+
+/// Whether `budget` cells along an axis came from the ladder above rather than
+/// from anything real.
+///
+/// The floor is the ladder's own: `naturalExtentStartingBudget` never offers
+/// less than 4,096, and nothing that is actually bounding a view offers that
+/// much — a terminal is tens of lines tall, and a container that means to
+/// constrain a child says so in the PROPOSAL. So a subtree handed at least this
+/// much, with no proposal along the axis, is being asked "how big would you be
+/// if nothing stopped you" and may answer for all of itself rather than for the
+/// prefix a budget reaches.
+///
+/// A predicate rather than a comparison at each call site because the constant
+/// is the ladder's, and the two must not drift: a windowed stack that decided
+/// "unbounded" at a different number than the ladder offers would answer the
+/// prefix question to the natural-size ask, which is the bug
+/// `ScrollTwoAxisWindowTests` pins.
+@MainActor
+func isNaturalExtentBudget(_ budget: Int) -> Bool {
+    budget >= naturalExtentStartingBudget(forVisible: 0)
+}

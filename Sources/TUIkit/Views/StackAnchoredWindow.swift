@@ -761,6 +761,24 @@ extension _VStackCore {
             if size.isHeightFlexible { heightFlexible = true }
         }
 
+        // An UNBOUNDED ask is not the prefix question above: it is a two-axis
+        // `ScrollView` asking how far right its content can be scrolled, and a
+        // sample cannot answer it — see `StackContentWidth.swift`. Recognised by
+        // the BUDGET and not by whether that budget reaches every row, which is
+        // where this first went wrong: the horizontal probe's height budget is
+        // pinned at 4,096, so `walkedRowCount(4096, pitch 1) >= count` is false
+        // for any stack over four thousand rows and the fix stopped firing on
+        // exactly the collections it exists for (measured: identical checksums
+        // at 8,000 rows, differing at 2,000 and 4,000).
+        if isNaturalExtentBudget(heightLimit), proposal.height == nil,
+            let exact = contentWidthOverAllRows(
+                children, widthLimit: widthLimit, mayWalk: proposal.width == nil,
+                state: state, context: context)
+        {
+            maxWidth = max(maxWidth, exact.width)
+            if exact.isWidthFlexible { widthFlexible = true }
+        }
+
         let total = count * estimate - spacing
         return ViewSize(
             width: maxWidth, height: min(total, max(0, heightLimit)),

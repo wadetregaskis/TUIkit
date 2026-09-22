@@ -225,3 +225,67 @@ extension _MemoizedRow: _ValueMemoWrapping {
     public var memoizedContentType: any View.Type { Content.self }
     public var memoizedContent: any View { content }
 }
+
+// MARK: - Prefix extension
+
+/// A value that can say whether another value of its own type is a PREFIX of
+/// it — the same leading elements, in the same order, with none lost.
+///
+/// `Equatable` answers "must this be re-derived from scratch"; this answers
+/// "how much of it still holds". The difference is the whole of an incremental
+/// aggregate: a maximum over a collection that GREW is the old maximum joined
+/// with the new elements, where a maximum over a collection that lost members
+/// has to be taken again.
+///
+/// Deliberately not an `extends(_: Self)` requirement: the caller holds an
+/// ``AnyEquatableBox``, whose payload is an existential, and a same-type
+/// requirement cannot be called through one. The `Any` is narrowed by a cast in
+/// each conformance, and a dynamic-type mismatch answers `false` — the same
+/// shape, and the same conservatism, as ``AnyEquatableBox/==(_:_:)``.
+public protocol PrefixExtending {
+    /// Whether `previous` is a prefix of this value.
+    func extends(_ previous: Any) -> Bool
+}
+
+extension AnyEquatableBox {
+    /// Whether the data this box holds begins with the data `previous` holds.
+    ///
+    /// `false` whenever the question cannot be answered cheaply — a payload
+    /// that is not ``PrefixExtending``, a different dynamic type, a collection
+    /// that shrank — which means "re-derive", and is always safe.
+    public func extends(_ previous: AnyEquatableBox) -> Bool {
+        guard let extending = value as? any PrefixExtending else { return false }
+        return extending.extends(previous.value)
+    }
+}
+
+/// `ForEach(0..<n)` — the overwhelmingly common growing collection, and the one
+/// case this answers in O(1) rather than by comparing elements.
+///
+/// The lower bound must MATCH, not merely contain: a window that slides
+/// (`n..<m` with `n` rising, a tailing log with a cap) has dropped rows, and a
+/// maximum over a set that lost members may have come from one of them.
+extension Range: PrefixExtending where Bound: Strideable, Bound.Stride: SignedInteger {
+    public func extends(_ previous: Any) -> Bool {
+        guard let previous = previous as? Self else { return false }
+        return previous.lowerBound == lowerBound && previous.upperBound <= upperBound
+    }
+}
+
+/// The general case: a leading-element comparison, O(previous.count) — which is
+/// a scan of `Equatable` elements against a scan that would BUILD AND MEASURE a
+/// view per element, and the two are not close. The count test alone rejects
+/// every collection that shrank, before an element is touched.
+extension Array: PrefixExtending where Element: Equatable {
+    public func extends(_ previous: Any) -> Bool {
+        guard let previous = previous as? Self, previous.count <= count else { return false }
+        return prefix(previous.count).elementsEqual(previous)
+    }
+}
+
+extension ContiguousArray: PrefixExtending where Element: Equatable {
+    public func extends(_ previous: Any) -> Bool {
+        guard let previous = previous as? Self, previous.count <= count else { return false }
+        return prefix(previous.count).elementsEqual(previous)
+    }
+}

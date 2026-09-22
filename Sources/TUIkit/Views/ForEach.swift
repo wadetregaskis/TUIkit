@@ -264,6 +264,8 @@ extension ForEach: LazyChildViewProvider {
         let idKeyPath = self.idKeyPath
         return ChildViewCollection(
             count: data.count,
+            // The same box `listRowsSignature` builds, taken once here rather
+            // than by a `content as? any WindowedListRowExtractor` at each ask.
             key: { ordinal in
                 let element = data[data.index(data.startIndex, offsetBy: ordinal)]
                 return identityKey(element[keyPath: idKeyPath])
@@ -272,6 +274,9 @@ extension ForEach: LazyChildViewProvider {
                 let element = data[data.index(data.startIndex, offsetBy: ordinal)]
                 return AnyHashable(element[keyPath: idKeyPath])
             },
+            // The same box `listRowsSignature` builds, taken once here rather
+            // than by a `content as? any WindowedListRowExtractor` at each ask.
+            dataSignature: listRowsSignature,
             build: { ordinal in
                 makeChild(for: data[data.index(data.startIndex, offsetBy: ordinal)])
             })

@@ -1,62 +1,54 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollTwoAxisWindowTests.swift
 //
-//  Two things a `LazyVStack` inside a two-axis `ScrollView` gets wrong, pinned
-//  together because they are the same knot and neither can be fixed alone.
+//  What a `LazyVStack` inside a two-axis `ScrollView` gets wrong — one of the
+//  two fixed, and the other left with its reason written down.
 //
-//  1. IT WALKS EVERY ROW. `renderedContent` publishes its visible-row window
-//     only when the horizontal axis is off, on the reasoning that "horizontal
-//     scrolling has no row concept" — true of the horizontal axis, and not of
-//     the rows the vertical one still has. `app-shapes/code-editor` asks about
-//     2,000 rows a frame to draw 37. It is cheaper than it sounds: the row memo
-//     serves 1,963 of them, so a settled editor is 4.4 ms, and what the window
-//     would save is the LOOKUPS rather than the composition.
+//  FIXED — A WIDE ROW OUT OF SIGHT WAS UNREACHABLE. The horizontal extent comes
+//  from `measureNaturalExtent(along: .horizontal)`, an unbounded width ask, and
+//  the windowed stack answered it from a sample: the first SIXTEEN rows, for
+//  any collection over 256, wherever the viewport was. So the cut-off was an
+//  ordinal and it did not move — measured, on 400 rows in a 40-column viewport:
 //
-//  2. A WIDE ROW OUT OF SIGHT IS UNREACHABLE. The horizontal extent comes from
-//     `measureNaturalExtent(along: .horizontal)` — an UNBOUNDED width ask under
-//     a height budget that reaches every row — and the windowed stack answers it
-//     from a sample: the first sixteen rows, for a collection over 256. A
-//     120-cell row 200 rows down therefore reports nothing; the content measures
-//     8 wide, renders 8 wide, draws no horizontal bar, and that row's tail
-//     cannot be scrolled to at any offset. The EAGER `VStack` of the same
-//     content answers 120, because it measures every child, so this is the twins
-//     disagreeing rather than a property of laziness.
+//      wide row at 15   bar drawn, tail reachable
+//      wide row at 16   no bar
+//      wide row at 200  no bar at the top, and none at the bottom either
+//      wide row at 399  no bar with the view anchored to .bottom — where that
+//                       row is ON SCREEN, drawn truncated, ending in an
+//                       ellipsis that nothing can scroll to
 //
-//  WHAT THE FIX COSTS, measured properly on 2026-09-22 — and the first attempt
-//  at this number was wrong in a way worth recording, because the mistake is
-//  reusable. It read "none of which the measure memo catches (0.2% hits)", and
-//  concluded the work was uncacheable. The 0.2% is the hit rate the Stress
-//  harness prints, and that counter is `RenderCache.MeasureKey` ALONE — per-pass
-//  scratch, emptied by every `beginRenderPass()`. A walk that measures each of
-//  2,000 rows exactly once a frame hands it 2,000 lookups and no hits BY
-//  CONSTRUCTION. It was never evidence about caching; it was evidence that the
-//  walk walks. (The corroboration is the per-type table: paths that measure a
-//  row twice a pass sit at 50%, paths that measure it once sit at 0%.)
+//  On `app-shapes/code-editor` the content measured 135 cells against a true
+//  142, so fifteen of the twenty-two columns of horizontal travel the document
+//  needs were reachable and the tails of its longest lines were not. The eager
+//  `VStack` of the same content answers correctly, so this was the twins
+//  disagreeing rather than a property of laziness.
 //
-//  The cache that could serve it is the other one — `RenderCache.SizeKey`, the
-//  cross-frame table `_ListCore.widestRowWidth` and `Table.fitWidth` already use
-//  to keep ONE integer against the rows' data. Built for a lazy stack
-//  (`_VStackCore.contentWidthOverAllRows`, on the `two-axis-exact-width` branch)
-//  and measured paired, 10 reps, release, 120x40:
+//  The answer is now taken over every row, by `StackContentWidth.swift`, which
+//  owns the whole design: a ceiling the walk stops at, a kept answer, a kept
+//  PREFIX that an appended collection extends rather than re-derives, and the
+//  walk itself only when none of those can answer. Paired A/B, 12 reps,
+//  release, 120x40, against the frame that had the bug:
 //
-//      app-shapes/code-editor           4,400 →   4,847 µs    +9.9%  (CI  +9.3 …  +10.5)
-//      app-shapes/code-editor-tailing  50,311 → 130,636 µs  +159.4%  (CI +158.1 … +161.6)
+//      app-shapes/code-editor           4,422 →  4,669 µs    +5.4%
+//      app-shapes/code-editor-tailing  52,000 → 36,811 µs   −29.2%
 //
-//  The same code, twice, and the difference between the two rows is entirely
-//  whether the memo can serve: a settled document keys on an unchanging
-//  collection and pays only the machinery, a growing one re-walks every frame
-//  and pays 2.6×. So the answer to "can a width memo work where the measure memo
-//  could not" is yes — and a data-keyed memo is exactly as good as its data is
-//  stable, which is why `code-editor-tailing` now exists to say so.
+//  The growing document comes out FASTER than it was with the bug in, because
+//  the walk shares a commit with the wrap memo it would otherwise have blown
+//  (see `TextWrapping.unwrapped`). Taken alone the walk is +4.6% and +18.4%,
+//  and the naive version of it — no ceiling, no kept prefix, one entry per
+//  ladder rung — was +9.9% and +159.4%.
 //
-//  NOT LANDED. +159% on a growing document is the same class of regression the
-//  14.6× was, and the cheaper design is visible from here: the width over all
-//  rows is a MAXIMUM, so a collection that grew by appending needs only its new
-//  rows measured. Making that sound needs an "does this data extend that data"
-//  question the extractors do not answer today (`ForEach` could, for a `Range`
-//  outright and for an `Equatable` collection by a prefix compare that costs a
-//  memcmp against 2,000 view measures). That is a caching design of its own, and
-//  it is noted for the owner rather than guessed at here.
+//  STILL OPEN — IT WALKS EVERY ROW TO DRAW A SCREENFUL. `renderedContent`
+//  publishes its visible-row window only when the horizontal axis is off, on
+//  the reasoning that "horizontal scrolling has no row concept" — true of the
+//  horizontal axis, and not of the rows the vertical one still has.
+//  `app-shapes/code-editor` builds 2,000 rows a frame to draw 37. It is
+//  cheaper than it sounds: the row memo serves 1,963 of them. What kept it
+//  open was that the horizontal extent was metered by what the eager render
+//  produced, so windowing the vertical axis would have taken the wide row's
+//  extent with it; that is no longer true — the extent is measured above,
+//  independently of what the render drew — so the remaining question is
+//  whether windowing PAYS, which nobody has measured.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -99,21 +91,41 @@ struct ScrollTwoAxisWindowTests {
     private static let wideRowWidth = 120
 
     private func render(
-        anchor: UnitPoint?, tally: RowRenderTally, wideRow: Int = 0, width: Int = 40
+        anchor: UnitPoint?, tally: RowRenderTally, wideRow: Int = 0, width: Int = 40,
+        rows: Int? = nil, tuiContext: TUIContext? = nil
     ) -> FrameBuffer {
+        let count = rows ?? Self.rows
         let content = ScrollView([.horizontal, .vertical]) {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<Self.rows, id: \.self) { index in
+                ForEach(0..<count, id: \.self) { index in
                     TallyRow(
                         index: index, tally: tally, width: Self.wideRowWidth, wideRow: wideRow)
                 }
             }
         }
         let view = anchor.map { AnyView(content.defaultScrollAnchor($0)) } ?? AnyView(content)
-        let context = RenderContext(
-            availableWidth: width, availableHeight: Self.viewport, tuiContext: TUIContext()
-        ).isolatingRenderCache()
-        return renderToBuffer(view, context: context)
+        // A caller that supplies the context is driving several frames through
+        // ONE cache, which is the only way to exercise a cross-frame memo; the
+        // default is a private cache per render, as every other test here wants.
+        guard let tuiContext else {
+            let context = RenderContext(
+                availableWidth: width, availableHeight: Self.viewport, tuiContext: TUIContext()
+            ).isolatingRenderCache()
+            return renderToBuffer(view, context: context)
+        }
+        tuiContext.preferences.beginRenderPass()
+        tuiContext.stateStorage.beginRenderPass()
+        tuiContext.renderCache.beginRenderPass()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tuiContext)
+        let buffer = renderToBuffer(
+            view,
+            context: RenderContext(
+                availableWidth: width, availableHeight: Self.viewport,
+                environment: environment, tuiContext: tuiContext))
+        tuiContext.stateStorage.endRenderPass()
+        tuiContext.renderCache.removeInactive()
+        return buffer
     }
 
     /// The cost, stated as a count rather than a clock.
@@ -147,11 +159,9 @@ struct ScrollTwoAxisWindowTests {
     func wideRowInTheMiddleIsReachable() {
         let tally = RowRenderTally()
         let buffer = render(anchor: UnitPoint?.none, tally: tally, wideRow: 200)
-        withKnownIssue("the window measure samples the width; see the file comment") {
-            #expect(
-                buffer.lines.last?.stripped.contains("\u{25C0}") == true,
-                "no horizontal bar for the wide row at 200: \(buffer.lines.last?.stripped ?? "")")
-        }
+        #expect(
+            buffer.lines.last?.stripped.contains("\u{25C0}") == true,
+            "no horizontal bar for the wide row at 200: \(buffer.lines.last?.stripped ?? "")")
         // The eager twin of the same content, which does measure every child —
         // so the assertion above is about laziness and not about the rows.
         let eager = renderToBuffer(
@@ -169,6 +179,53 @@ struct ScrollTwoAxisWindowTests {
         #expect(
             eager.lines.last?.stripped.contains("\u{25C0}") == true,
             "the eager VStack lost the wide row too: \(eager.lines.last?.stripped ?? "")")
+    }
+
+    /// The memo's own rule, which is the whole reason the walk is affordable at
+    /// all: the kept width is checked against the rows' DATA, so a stack whose
+    /// collection changed gets a fresh walk rather than the old answer.
+    ///
+    /// Driven through ONE cache, because a per-render cache cannot serve a
+    /// cross-frame memo and so cannot fail this way. The second collection is
+    /// longer and its wide row is past the end of the first, so a kept answer
+    /// would be the 8-cell one from before the data moved — and the bar would go
+    /// missing exactly as it does without the walk.
+    @Test("The exact width is re-walked when the collection changes")
+    func theExactWidthFollowsTheData() {
+        let tally = RowRenderTally()
+        let tuiContext = TUIContext()
+        let first = render(
+            anchor: UnitPoint?.none, tally: tally, wideRow: 200, rows: 400,
+            tuiContext: tuiContext)
+        #expect(
+            first.lines.last?.stripped.contains("\u{25C0}") == true,
+            "no bar for 400 rows wide at 200: \(first.lines.last?.stripped ?? "")")
+        let second = render(
+            anchor: UnitPoint?.none, tally: tally, wideRow: 450, rows: 500,
+            tuiContext: tuiContext)
+        #expect(
+            second.lines.last?.stripped.contains("\u{25C0}") == true,
+            "no bar for 500 rows wide at 450: \(second.lines.last?.stripped ?? "")")
+    }
+
+    /// The gate's own regression test, and the reason it is not written in
+    /// terms of the rows a budget reaches.
+    ///
+    /// The horizontal probe's HEIGHT budget is pinned at 4,096 lines
+    /// (`naturalExtentStartingBudget(forVisible:)` — the horizontal ladder grows
+    /// the WIDTH, not the height), so a first version of this fix asked "does
+    /// the budget reach every row" and silently stopped firing above four
+    /// thousand of them: identical output at 8,000 rows, differing at 2,000 and
+    /// 4,000. That is the wrong way round — a collection too big for the budget
+    /// is exactly the one whose wide row is furthest out of sight.
+    @Test("A wide row is reachable in a collection larger than the height budget")
+    func theFixSurvivesPastTheHeightBudget() {
+        let tally = RowRenderTally()
+        let buffer = render(
+            anchor: UnitPoint?.none, tally: tally, wideRow: 4_500, rows: 5_000)
+        #expect(
+            buffer.lines.last?.stripped.contains("\u{25C0}") == true,
+            "no bar for 5,000 rows wide at 4,500: \(buffer.lines.last?.stripped ?? "")")
     }
 
     /// The other half of the same trade: the extent must not move when the

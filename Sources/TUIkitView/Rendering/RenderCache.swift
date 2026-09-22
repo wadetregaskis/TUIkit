@@ -346,6 +346,18 @@ public final class RenderCache: @unchecked Sendable {
     /// Memoized value-keyed measurements (see ``lookupSize`` / ``storeSize``).
     private var sizeEntries: [SizeKey: SizeEntry] = [:]
 
+    /// How many times this cache has been dropped WHOLE.
+    ///
+    /// A counter rather than a notification because the thing that needs it is
+    /// not in the cache: `_VStackCore`'s content-width record lives in `@State`
+    /// precisely so that a `@State` write cannot sweep it (see
+    /// `StackContentWidth.swift`), which also means the cache's own
+    /// invalidation never reaches it. The two events that clear everything —
+    /// a moved `EnvironmentSnapshot` and a moved width or colour generation —
+    /// are exactly the ones such a record cannot detect for itself, so it
+    /// carries this number and compares it.
+    public private(set) var clearGeneration = 0
+
     /// One measurement under one vertical budget: what ``MeasureKey`` leaves out.
     ///
     /// A key holds at most one of these. The pattern the memo exists for is a
@@ -1247,6 +1259,7 @@ extension RenderCache {
     /// For state changes that only affect a subtree, prefer
     /// ``clearAffected(by:keepingSizes:)``.
     public func clearAll() {
+        clearGeneration &+= 1
         stats.clears += 1
         logDebug("CLEAR ALL (\(entries.count) entries)")
         entries.removeAll(keepingCapacity: true)

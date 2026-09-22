@@ -39,6 +39,19 @@ public struct ChildViewCollection {
     /// children never match an index step.
     public let isUniformlyKeyed: Bool
 
+    /// The provider's DATA, boxed for comparison, when it can be compared at
+    /// all — what a cross-frame aggregate over the rows checks its kept answer
+    /// against (`_VStackCore.contentWidthOverAllRows`).
+    ///
+    /// Carried here rather than recovered with `content as? any …` at the point
+    /// of use, because that cast is not free: on a `ForEach` of a deeply generic
+    /// row type it measured **~108 µs a call**, twice a frame, which was most of
+    /// the exact-width fix's cost on a table whose answer was already memoised.
+    /// The collection is built once per measure and already closes over the
+    /// data, so the cast happens where the data is rather than where the
+    /// question is.
+    public let dataSignature: AnyEquatableBox?
+
     private let build: (Int) -> ChildView
     private let keyAt: ((Int) -> String)?
     private let anyIDAt: ((Int) -> AnyHashable?)?
@@ -49,6 +62,7 @@ public struct ChildViewCollection {
     /// `anyID` the id VALUE that key was derived from.
     public init(
         count: Int, key: ((Int) -> String)?, anyID: ((Int) -> AnyHashable?)? = nil,
+        dataSignature: AnyEquatableBox? = nil,
         build: @escaping (Int) -> ChildView
     ) {
         self.count = count
@@ -56,6 +70,7 @@ public struct ChildViewCollection {
         self.build = build
         self.keyAt = key
         self.anyIDAt = anyID
+        self.dataSignature = dataSignature
         self.eagerChildren = nil
     }
 
@@ -66,6 +81,7 @@ public struct ChildViewCollection {
         self.build = { children[$0] }
         self.keyAt = nil
         self.anyIDAt = nil
+        self.dataSignature = nil
         self.eagerChildren = children
     }
 

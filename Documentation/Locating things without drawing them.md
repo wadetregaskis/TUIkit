@@ -628,17 +628,23 @@ genuinely changes reported width under this rule (it stops shrink-wrapping
 to its widest visited row). `ScrollView`'s horizontal axis needs the same
 statement when horizontal windowing arrives (§12).
 
-**One case the rule gets wrong, measured 2026-09-22.** §5j answers "how wide
-should you lay out", and for that it is right. It is the wrong answer to a
-different question, which a **two-axis `ScrollView`** asks and nothing else
-does: *how far right can this content be scrolled?* That arrives as an
-UNBOUNDED width ask (`measureNaturalExtent(along: .horizontal)`) under a height
-budget that reaches every row, and filling the proposal means reporting the
-viewport — so a 120-cell row two hundred rows down draws no horizontal bar and
-its tail is unreachable at every offset, while the eager `VStack` of the same
-content scrolls to it. §5j does not license the twins disagreeing, so this is a
-gap in the rule rather than an application of it. Pinned by
-`ScrollTwoAxisWindowTests`; see §12 for what a fix costs and why none is landed.
+**One exception, closed 2026-09-22.** §5j answers "how wide should you lay
+out", and for that it is right. It is the wrong answer to a different question,
+which a **two-axis `ScrollView`** asks and nothing else does: *how far right can
+this content be scrolled?* That arrives as an UNBOUNDED width ask
+(`measureNaturalExtent(along: .horizontal)`), and filling the proposal means
+reporting the viewport — so a 120-cell row sixteen or two hundred or three
+hundred and ninety-nine rows down drew no horizontal bar and its tail was
+unreachable at every offset, including with that row on screen and visibly
+truncated, while the eager `VStack` of the same content scrolled to it. §5j does
+not license the twins disagreeing.
+
+That one ask — recognised by an unbounded width AND an unbounded height budget
+(`isNaturalExtentBudget`), never by whether the budget reaches every row — is
+answered over every row by `_VStackCore.contentWidthOverAllRows`
+(`StackContentWidth.swift`). Every bounded ask keeps the prefix answer this
+section describes, which is what keeps `WindowedStackWidthTests` green. It is
+Ω(rows), and §12 records what makes that affordable.
 
 ---
 
@@ -1197,22 +1203,37 @@ question.
   small enough to want it. A sampled `.fit` (visited rows only, sticky
   maxima) is possible but jitters column edges on scroll; not proposed.
 
-  **Priced 2026-09-22.** One of these is not optional after all: a two-axis
-  `ScrollView` genuinely needs "widest row", and §5j's fill leaves a wide row
-  out of sight unreachable. The walk was built and measured
-  (`two-axis-exact-width`), keeping the ANSWER in the size memo under the
-  stack's identity against the rows' data — the shape `_ListCore.widestRowWidth`
-  and `Table.fitWidth` already use. Paired A/B, 10 reps, release, 120x40:
-  `app-shapes/code-editor` 4,400 → 4,847 µs (+9.9%, CI +9.3…+10.5);
-  `app-shapes/code-editor-tailing` 50,311 → 130,636 µs (+159.4%, CI
-  +158.1…+161.6). The same code: a memo keyed on data is exactly as good as the
-  data is stable, and a growing document re-walks every frame. So the Ω(N) is
-  affordable for a settled collection and not for a moving one, and the design
-  that would close the gap is an INCREMENTAL walk — the answer is a maximum, so
-  an appended collection needs only its new rows — which needs a "does this data
-  extend that data" question `ForEach` can answer (outright for a `Range`, by a
-  prefix compare for an `Equatable` collection) and the extractors do not ask
-  today. Not landed; owner's call.
+  **Amended 2026-09-22: one of them is paid, and the bullet above was the wrong
+  lesson.** A two-axis `ScrollView` genuinely needs "widest row" — §5j's fill
+  left a wide row out of sight unreachable — so the walk is landed. Ω(N) by
+  information content is a statement about ONE ANSWER, not about one per frame,
+  and the four rungs of `StackContentWidth.swift` are what separate them:
+
+  1. a **ceiling** the walk stops at, so content that is mostly wider than the
+     space offered exits after a row or two, and a saturating ladder rung costs
+     that rather than N;
+  2. a **kept answer**, since an unchanged collection re-derives nothing;
+  3. a **kept prefix** — the answer is a MAXIMUM, so a collection that only grew
+     at the end is the old maximum joined with the new rows.
+     `AnyEquatableBox.extends(_:)` proves it, O(1) for a `Range` and by a
+     leading-element compare otherwise;
+  4. the **walk**, for a first frame and a genuinely new collection.
+
+  Rung 3 is why the record lives in `@State` (`StackWindowState.contentWidth`)
+  and not in `sizeEntries`: an arriving row is a write, a write clears the cache
+  from the app root down, and a record that is gone before it can be extended is
+  no record at all. It carries the invalidation the cache would have given it —
+  `TerminalWidthTraits.generation`, `measureGeneration`, and
+  `RenderCache.clearGeneration` for the whole-cache drops a `@State` payload
+  cannot otherwise see.
+
+  Paired A/B, 10 reps, release, against the frame that had the bug and with the
+  canvas held identical so the measurement is the mechanism and not the extra
+  content it makes reachable: `app-shapes/code-editor` +4.9%,
+  `app-shapes/code-editor-tailing` +3.2%. At the real viewport, where the canvas
+  legitimately widens from 135 to 142 cells, +5.1% and +12.1%. The naive version
+  — no ceiling, no kept prefix, one memo entry per ladder rung — was +9.9% and
+  +159.4%, which is what made this look unaffordable when it was first measured.
 - **Precise pruning of deleted rows' state** under deferred identity:
   lingers until the container dies (§5h). Bounded by visited-and-stateful
   rows; revisit only if real apps accumulate meaningful state across
