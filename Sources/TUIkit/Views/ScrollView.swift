@@ -252,12 +252,20 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
 
     /// Syncs the horizontal axis to the rendered content width and clamps
     /// its offset (render passes only).
+    /// - Parameters:
+    ///   - bufferWidth: What the render actually produced. A floor, not the
+    ///     answer: the content is windowed on both axes now, so the buffer holds
+    ///     the BAND and its width is the widest row in it.
+    ///   - contentExtentWidth: What the measure says the whole content is —
+    ///     `contentExtents`' horizontal answer, which walks every row. Metering
+    ///     the axis from the buffer instead is what made a wide row outside the
+    ///     band unreachable, and what kept the rows from being windowed at all.
     private func syncHorizontalAxis(
         handler: ScrollViewHandler, wantsHorizontal: Bool,
-        bufferWidth: Int, contentWidth: Int, context: RenderContext
+        bufferWidth: Int, contentExtentWidth: Int, contentWidth: Int, context: RenderContext
     ) {
         guard wantsHorizontal else { return }
-        handler.horizontal.extent = bufferWidth
+        handler.horizontal.extent = max(bufferWidth, contentExtentWidth)
         handler.horizontal.viewportHeight = contentWidth
         if !context.isMeasuring {
             handler.horizontal.clampScrollOffset()
@@ -409,7 +417,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // draw landed its row one line down.
         let pendingSeek = consumedSeek(
             handler: handler, edgeInset: chrome.edgeInset, context: context)
-        var (fullBuffer, contentSlice, seekOffset) = renderedContent(
+        var (fullBuffer, contentSlice, seekOffset, contentExtent) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             seek: pendingSeek, edgeInset: chrome.edgeInset,
@@ -437,7 +445,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         }
         syncHorizontalAxis(
             handler: handler, wantsHorizontal: wantsHorizontal,
-            bufferWidth: fullBuffer.width, contentWidth: contentWidth, context: context)
+            bufferWidth: fullBuffer.width, contentExtentWidth: contentExtent.width,
+            contentWidth: contentWidth, context: context)
         // Re-clamp the offset against the now-known content height — but only on
         // the real render pass. A measure pass may be offered a larger height
         // than the ScrollView finally renders into (e.g. when it shares space
@@ -487,7 +496,10 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // with no visible indicator). Overflow is known now the content is
         // measured.
         let hasVerticalOverflow = handler.contentHeight > contentViewportHeight
-        let hasHorizontalOverflow = wantsHorizontal && fullBuffer.width > contentWidth
+        // From the handler, which `syncHorizontalAxis` has already set from the
+        // MEASURED content width: the buffer is a band now and its width is the
+        // widest row in it, not the widest row there is.
+        let hasHorizontalOverflow = wantsHorizontal && handler.horizontal.extent > contentWidth
         // `.scrollDisabled` leaves no scroll command for the keys to run, so the
         // view drops out of the Tab ring for the same reason a non-overflowing
         // one does: a stop that can do nothing is only an obstacle.

@@ -667,13 +667,27 @@ extension _VStackCore {
         // right one for a parent asking "how wide are you in N lines", but a
         // scrolled stack is drawing rows the prefix does not contain, and it
         // must never report itself narrower than what it is putting on screen.
+        // The exact answer, for the one ask that needs it — see
+        // `StackContentWidth.swift`, and `anchoredSizeThatFits` for the twin of
+        // this block. Both paths need it: which of them answers depends on
+        // whether a render has seeded the uniformity hypothesis yet, so wiring
+        // only one left a two-axis `ScrollView` correct on its first frame and
+        // wrong from its second (measured — the bar appeared and then went).
+        let exact =
+            isNaturalExtentBudget(heightLimit) && proposal.height == nil
+            ? contentWidthOverAllRows(
+                children, widthLimit: widthLimit, mayWalk: proposal.width == nil,
+                state: state, context: context)
+            : nil
+
         if state.rowWidths.isSeeded {
             let walked = Self.walkedRowCount(
                 budget: heightLimit, pitch: pitch, spacing: spacing, count: count)
+            let prefix = min(max(state.rowWidths.width(forFirst: walked), state.bandWidth), widthLimit)
             return ViewSize(
-                width: min(max(state.rowWidths.width(forFirst: walked), state.bandWidth), widthLimit),
+                width: max(prefix, exact?.width ?? 0),
                 height: height,
-                isWidthFlexible: state.hypothesisWidthFlexible,
+                isWidthFlexible: state.hypothesisWidthFlexible || (exact?.isWidthFlexible ?? false),
                 isHeightFlexible: state.hypothesisHeightFlexible)
         }
 
@@ -696,7 +710,8 @@ extension _VStackCore {
             if size.isHeightFlexible { heightFlexible = true }
         }
         return ViewSize(
-            width: maxWidth, height: height,
-            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+            width: max(maxWidth, exact?.width ?? 0), height: height,
+            isWidthFlexible: widthFlexible || (exact?.isWidthFlexible ?? false),
+            isHeightFlexible: heightFlexible)
     }
 }

@@ -1,54 +1,48 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ScrollTwoAxisWindowTests.swift
 //
-//  What a `LazyVStack` inside a two-axis `ScrollView` gets wrong — one of the
-//  two fixed, and the other left with its reason written down.
+//  Two things a `LazyVStack` inside a two-axis `ScrollView` got wrong. They
+//  were one knot, and they are both untied.
 //
-//  FIXED — A WIDE ROW OUT OF SIGHT WAS UNREACHABLE. The horizontal extent comes
-//  from `measureNaturalExtent(along: .horizontal)`, an unbounded width ask, and
-//  the windowed stack answered it from a sample: the first SIXTEEN rows, for
-//  any collection over 256, wherever the viewport was. So the cut-off was an
-//  ordinal and it did not move — measured, on 400 rows in a 40-column viewport:
+//  1. A WIDE ROW OUT OF SIGHT WAS UNREACHABLE. The horizontal extent comes from
+//     `measureNaturalExtent(along: .horizontal)`, an unbounded width ask, and
+//     the windowed stack answered it from a sample: the first SIXTEEN rows, for
+//     any collection over 256, wherever the viewport was. So the cut-off was an
+//     ordinal and it did not move — measured, on 400 rows in a 40-column
+//     viewport:
 //
-//      wide row at 15   bar drawn, tail reachable
-//      wide row at 16   no bar
-//      wide row at 200  no bar at the top, and none at the bottom either
-//      wide row at 399  no bar with the view anchored to .bottom — where that
-//                       row is ON SCREEN, drawn truncated, ending in an
-//                       ellipsis that nothing can scroll to
+//         wide row at 15   bar drawn, tail reachable
+//         wide row at 16   no bar
+//         wide row at 200  no bar at the top, and none at the bottom either
+//         wide row at 399  no bar with the view anchored to .bottom — where
+//                          that row is ON SCREEN, drawn truncated, ending in an
+//                          ellipsis that nothing can scroll to
 //
-//  On `app-shapes/code-editor` the content measured 135 cells against a true
-//  142, so fifteen of the twenty-two columns of horizontal travel the document
-//  needs were reachable and the tails of its longest lines were not. The eager
-//  `VStack` of the same content answers correctly, so this was the twins
-//  disagreeing rather than a property of laziness.
+//     Answered over every row now, by `StackContentWidth.swift`.
 //
-//  The answer is now taken over every row, by `StackContentWidth.swift`, which
-//  owns the whole design: a ceiling the walk stops at, a kept answer, a kept
-//  PREFIX that an appended collection extends rather than re-derives, and the
-//  walk itself only when none of those can answer. Paired A/B, 12 reps,
-//  release, 120x40, against the frame that had the bug:
+//  2. IT DREW EVERY ROW TO SHOW A SCREENFUL. `renderedContent` published its
+//     visible-row window only when the horizontal axis was off, on the
+//     reasoning that "horizontal scrolling has no row concept" — true of the
+//     horizontal axis, and not of the rows the vertical one still has.
 //
-//      app-shapes/code-editor           4,422 →  4,669 µs    +5.4%
-//      app-shapes/code-editor-tailing  52,000 → 36,811 µs   −29.2%
+//  What tied them together: the horizontal extent used to be metered from the
+//  RENDERED buffer's width, so windowing the rows would have taken the width of
+//  every row outside the band with it, and (1) would have gone from bad to
+//  total. Fixing (1) is what made (2) safe — `syncHorizontalAxis` meters from
+//  the measure now — and (2) is where the whole cost of (1) comes back, several
+//  times over:
 //
-//  The growing document comes out FASTER than it was with the bug in, because
-//  the walk shares a commit with the wrap memo it would otherwise have blown
-//  (see `TextWrapping.unwrapped`). Taken alone the walk is +4.6% and +18.4%,
-//  and the naive version of it — no ceiling, no kept prefix, one entry per
-//  ladder rung — was +9.9% and +159.4%.
+//      app-shapes/code-editor           4,648 → 395 µs   −91.5%   2000 → 39 rows
+//      app-shapes/code-editor-tailing  35,810 → 976 µs   −97.3%   2066 → 40 rows
 //
-//  STILL OPEN — IT WALKS EVERY ROW TO DRAW A SCREENFUL. `renderedContent`
-//  publishes its visible-row window only when the horizontal axis is off, on
-//  the reasoning that "horizontal scrolling has no row concept" — true of the
-//  horizontal axis, and not of the rows the vertical one still has.
-//  `app-shapes/code-editor` builds 2,000 rows a frame to draw 37. It is
-//  cheaper than it sounds: the row memo serves 1,963 of them. What kept it
-//  open was that the horizontal extent was metered by what the eager render
-//  produced, so windowing the vertical axis would have taken the wide row's
-//  extent with it; that is no longer true — the extent is measured above,
-//  independently of what the render drew — so the remaining question is
-//  whether windowing PAYS, which nobody has measured.
+//  and −6.8 MB of resident memory. Against the frame that had the bug in it,
+//  before any of this, the settled editor is −91% and the growing one −98%, with
+//  byte-identical output on every scenario in the corpus.
+//
+//  Still refused on a horizontal-capable view: a `scrollTo` seek, which rides
+//  this window. It has never worked there, and turning it on is a parity item
+//  of its own (`SwiftUI-semantic-audit-2026-08.md` names it) rather than a
+//  by-product of this.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -58,6 +52,17 @@ import Testing
 @testable import TUIkit
 @testable import TUIkitCore
 @testable import TUIkitView
+
+/// Which rows a pass touched, split by what the pass was for.
+@MainActor
+final class TwoAxisPassCounter {
+    var measured: Set<Int> = []
+    var rendered: Set<Int> = []
+    func reset() {
+        measured.removeAll()
+        rendered.removeAll()
+    }
+}
 
 /// Counts the rows whose body actually ran.
 @MainActor
@@ -130,30 +135,71 @@ struct ScrollTwoAxisWindowTests {
 
     /// The cost, stated as a count rather than a clock.
     ///
-    /// A `withKnownIssue` FAILS when the issue does not occur, so the day the
-    /// window is published for two-axis scroll views this test fails and says
-    /// where to look — including at its neighbour below, which is the reason it
-    /// is not published today.
-    @Test("Every row is built, however few are on screen")
-    func doesNotWindowVertically() {
-        let tally = RowRenderTally()
-        _ = render(anchor: UnitPoint?.none, tally: tally)
-        #expect(tally.rendered.contains(0), "the first row is on screen and was not built")
-        withKnownIssue("a two-axis ScrollView renders its whole content; see the file comment") {
+    /// Counted on the RENDER pass alone, with the render cache cleared between
+    /// frames — which is the state any app is in after a `@State` write, and
+    /// also the state that forces every row's body to run rather than be served
+    /// from the row memo, so the count means something.
+    ///
+    /// The MEASURE pass legitimately touches every row here and is not asserted
+    /// on: a whole-cache clear takes the content-width record with it
+    /// (`RenderCache.clearGeneration`), so the exact width is walked again. That
+    /// is the trade — a theme change costs a re-walk — and it is the reason this
+    /// test says nothing about measures while `LazyMeasureProbeTests` says
+    /// everything about them for the vertical-only case.
+    @Test("Only the visible band is drawn, however many rows there are")
+    func windowsVerticallyOnBothAxes() {
+        let sink = TwoAxisPassCounter()
+        let tuiContext = TUIContext()
+        let view = ScrollView([.horizontal, .vertical]) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<Self.rows, id: \.self) { index in
+                    Text(String(repeating: "\(index % 10)", count: index == 200 ? 120 : 8))
+                        .onRenderPass { pass in
+                            if pass == .measure {
+                                sink.measured.insert(index)
+                            } else {
+                                sink.rendered.insert(index)
+                            }
+                        }
+                }
+            }
+        }
+        func frame() {
+            sink.reset()
+            var environment = EnvironmentValues()
+            environment.applyRuntimeServices(from: tuiContext)
+            tuiContext.preferences.beginRenderPass()
+            tuiContext.stateStorage.beginRenderPass()
+            tuiContext.renderCache.beginRenderPass()
+            _ = renderToBuffer(
+                AnyView(view),
+                context: RenderContext(
+                    availableWidth: 40, availableHeight: Self.viewport,
+                    environment: environment, tuiContext: tuiContext))
+            tuiContext.stateStorage.endRenderPass()
+            tuiContext.renderCache.removeInactive()
+        }
+        frame()
+        for pass in 0..<3 {
+            tuiContext.renderCache.clearAll()
+            frame()
             #expect(
-                tally.rendered.count < Self.rows / 4,
-                "built \(tally.rendered.count) of \(Self.rows) rows")
+                sink.rendered.count <= Self.viewport + 4,
+                "pass \(pass): drew \(sink.rendered.count) of \(Self.rows) rows")
+            #expect(sink.rendered.contains(0), "pass \(pass): the band starts at the top")
+            #expect(
+                !sink.rendered.contains(200),
+                "pass \(pass): the wide row 200 rows down is not drawn to be measured")
         }
     }
 
     /// Nothing on screen at the top knows the content is 120 cells wide — the
     /// one row that is lives 200 rows down, outside the band the render draws
-    /// and outside the sixteen-row sample the measure answers from. So no
-    /// horizontal bar is drawn, and a bar that is not drawn is a row whose tail
-    /// cannot be reached at any offset, not a missing decoration.
+    /// and outside the sixteen-row sample the measure used to answer from. So
+    /// no horizontal bar was drawn, and a bar that is not drawn is a row whose
+    /// tail cannot be reached at any offset, not a missing decoration.
     ///
-    /// The assertion below is the one the fix in the file comment makes pass;
-    /// the control after it is the EAGER `VStack` of the same content, which
+    /// The control after it is the EAGER `VStack` of the same content, which
     /// answers 120 — so this is about laziness and not about the rows.
     @Test("A wide row far from the viewport still widens the content")
     func wideRowInTheMiddleIsReachable() {
@@ -162,8 +208,6 @@ struct ScrollTwoAxisWindowTests {
         #expect(
             buffer.lines.last?.stripped.contains("\u{25C0}") == true,
             "no horizontal bar for the wide row at 200: \(buffer.lines.last?.stripped ?? "")")
-        // The eager twin of the same content, which does measure every child —
-        // so the assertion above is about laziness and not about the rows.
         let eager = renderToBuffer(
             ScrollView([.horizontal, .vertical]) {
                 VStack(alignment: .leading, spacing: 0) {

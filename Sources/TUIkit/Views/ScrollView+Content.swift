@@ -90,7 +90,14 @@ extension _ScrollViewCore {
     ) -> (
         buffer: FrameBuffer,
         slice: (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
-        seekOffset: Int?
+        seekOffset: Int?,
+        /// The extents the content was rendered against. Returned rather than
+        /// left inside because the horizontal axis is metered from the WIDTH of
+        /// them: the buffer is a band now, and a caller that had to fall back to
+        /// its width would lose every row outside it. `settledExtents` cannot
+        /// serve — it is `nil` for the direct callers (tests, and the
+        /// non-`.automatic` scrollbar path).
+        extents: (width: Int, height: Int)
     ) {
         let extents =
             settledExtents
@@ -102,28 +109,37 @@ extension _ScrollViewCore {
             width: contentWidth, height: viewportHeight)
         // Publish the visible vertical slice so a direct `LazyVStack` renders only
         // the rows intersecting the viewport (true windowing) rather than every
-        // row into the tall canvas. Vertical-only: horizontal scrolling has no
-        // row concept (which is also why a `seek` request rides this window and
-        // is unsupported on horizontal-capable scroll views). The offset is this
-        // frame's already-clamped value; the final clip (`windowedBuffer`) uses
-        // the same value, so they agree for stable content. `contentIdentity`
-        // restricts consumption to the direct content (a lazy stack under a
-        // header is NOT at the scroll origin); the `reply` slot lets the stack
-        // return a compact band + metadata (Stage 6) instead of a full-height
-        // canvas of mostly blank lines.
-        var reply: ScrollContentReply?
-        if !horizontal {
-            let contentReply = ScrollContentReply()
-            reply = contentReply
-            measureContext.environment.scrollContentWindow = ScrollContentWindow(
-                offset: verticalScrollOffset, viewportHeight: viewportHeight,
-                contentIdentity: measureContext.identity,
-                reply: contentReply, edgeInset: edgeInset,
-                // Only sample when someone is bound to hear it.
-                reportsIDAt: context.isMeasuring
-                    ? nil : context.environment.scrollPositionBinding?.anchor,
-                seek: seek)
-        }
+        // row into the tall canvas. The offset is this frame's already-clamped
+        // value; the final clip (`windowedBuffer`) uses the same value, so they
+        // agree for stable content. `contentIdentity` restricts consumption to
+        // the direct content (a lazy stack under a header is NOT at the scroll
+        // origin); the `reply` slot lets the stack return a compact band +
+        // metadata (Stage 6) instead of a full-height canvas of mostly blank
+        // lines.
+        //
+        // On BOTH axes since 2026-09-22. It was vertical-only on the reasoning
+        // that "horizontal scrolling has no row concept" — true of the
+        // horizontal axis, and not of the rows the vertical one still has — but
+        // what actually held it there was that the horizontal EXTENT was metered
+        // from the rendered buffer's width, so windowing the rows would have
+        // taken the width of every row outside the band with it. The extent is
+        // measured now (`StackContentWidth.swift`), independently of what the
+        // render drew, so `syncHorizontalAxis` meters from that and the rows are
+        // free to be windowed.
+        let contentReply = ScrollContentReply()
+        let reply: ScrollContentReply? = contentReply
+        measureContext.environment.scrollContentWindow = ScrollContentWindow(
+            offset: verticalScrollOffset, viewportHeight: viewportHeight,
+            contentIdentity: measureContext.identity,
+            reply: contentReply, edgeInset: edgeInset,
+            // Only sample when someone is bound to hear it.
+            reportsIDAt: context.isMeasuring
+                ? nil : context.environment.scrollPositionBinding?.anchor,
+            // A seek still rides the window only on a vertical-only view. The
+            // window itself is now published on both — see the note above — but
+            // `scrollTo` on a horizontal-capable view has never worked and
+            // turning it on here would be a feature with no tests behind it.
+            seek: horizontal ? nil : seek)
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
@@ -131,9 +147,11 @@ extension _ScrollViewCore {
             reportVisibleID(id, handler: handler, context: context)
         }
         if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
-            return (buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset)
+            return (
+                buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset,
+                extents)
         }
-        return (buffer, nil, reply?.seekResolvedOffset)
+        return (buffer, nil, reply?.seekResolvedOffset, extents)
     }
 
     // MARK: Windowing

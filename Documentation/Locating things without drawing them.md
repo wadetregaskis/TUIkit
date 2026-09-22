@@ -1171,6 +1171,7 @@ answers:
 | §5f — the anchor ladder | `73df238a` (2026-07-17) | `AnchorLadderTests` |
 | §5i — the uniform fast path | `c3ecc31d` (2026-07-17) | `UniformSeekWindowTests` |
 | Stage 6 — `renderedContent` draws only the window | `1ca37d88` (2026-07-17) | `SlicedWindowTests` |
+| Stage 6b — …on BOTH axes, not just a vertical-only view | 2026-09-22 | `ScrollTwoAxisWindowTests` |
 
 Stage 6 needed no protocol change, so §10's falsification criterion held.
 One honest limit: `LayoutPlacing` has exactly one conformer, `_VStackCore`
@@ -1234,6 +1235,15 @@ question.
   legitimately widens from 135 to 142 cells, +5.1% and +12.1%. The naive version
   — no ceiling, no kept prefix, one memo entry per ladder rung — was +9.9% and
   +159.4%, which is what made this look unaffordable when it was first measured.
+
+  **And then it paid for itself several times over.** Metering the horizontal
+  axis from that measure rather than from the rendered buffer's width is what
+  freed the rows to be windowed at all (Stage 6b, §11): with the window
+  published on both axes, `app-shapes/code-editor` is 4,648 → 395 µs (−91.5%,
+  2,000 rows drawn → 39) and `app-shapes/code-editor-tailing` 35,810 → 976 µs
+  (−97.3%), for byte-identical output. The Ω(N) answer bought an O(window)
+  render; the ledger is not the walk's cost against zero, it is the walk's cost
+  against what knowing the answer makes possible.
 - **Precise pruning of deleted rows' state** under deferred identity:
   lingers until the container dies (§5h). Bounded by visited-and-stateful
   rows; revisit only if real apps accumulate meaningful state across
