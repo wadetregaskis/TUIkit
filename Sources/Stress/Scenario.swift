@@ -56,6 +56,8 @@ enum Scenarios {
         WideTableScenario.descriptor,
         MultiLineTableScenario.descriptor,
         TruncatingTableScenario.descriptor,
+        ChurningTableScenario.descriptor,
+        ChurningWrappedTableScenario.descriptor,
         TablesInScrollViewScenario.descriptor,
         TablesInVStackScenario.descriptor,
         DeepRecursionScenario.descriptor,

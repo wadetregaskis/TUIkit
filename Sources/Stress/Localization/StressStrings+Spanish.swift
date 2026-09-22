@@ -46,6 +46,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "Recorte compatible con ANSI · los tres modos de truncamiento · medida/relleno por celda",
         "stress.scenario.truncate.heading": "Tabla truncada — {0} filas × 6 columnas recortadas",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "Tabla cambiante",
+        "stress.scenario.table-churn.blurb": "N filas × 6 columnas; los datos se reemplazan cada fotograma pero solo ~2% de las filas difieren.",
+        "stress.scenario.table-churn.stresses": "redibujado de filas sin cambios · closures de valor de celda · margen para un memo por fila",
+        "stress.scenario.table-churn.heading": "Tabla cambiante — {0} filas, una de cada {1} cambia por fotograma",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "Tabla ajustada cambiante",
+        "stress.scenario.table-churn-wrapped.blurb": "250 filas ajustadas por debajo del límite del estimador; ~2% cambian por fotograma.",
+        "stress.scenario.table-churn-wrapped.stresses": "maquetación de filas multilínea · medición de altura de todas las filas · closures de valor de celda",
+        "stress.scenario.table-churn-wrapped.heading": "Tabla ajustada cambiante — {0} filas, una de cada {1} cambia por fotograma",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tablas en una vista de desplazamiento",
         "stress.scenario.tables-scroll.blurb": "N tablas apiladas en una vista de desplazamiento; cada una materializa sus filas y calcula sus propios anchos de columna.",

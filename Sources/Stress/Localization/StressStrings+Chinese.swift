@@ -44,6 +44,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "ANSI 感知裁剪 · 三种截断模式 · 逐单元格测量与填充",
         "stress.scenario.truncate.heading": "截断表格 — {0} 行 × 6 个被裁剪的列",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "变动表格",
+        "stress.scenario.table-churn.blurb": "N 行 × 6 列；每帧都替换数据，但只有约 2% 的行不同。",
+        "stress.scenario.table-churn.stresses": "未变动行的重新绘制 · 单元格取值闭包 · 行级备忘的空间",
+        "stress.scenario.table-churn.heading": "变动表格 — {0} 行，每帧每 {1} 行变动 1 行",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "变动折行表格",
+        "stress.scenario.table-churn-wrapped.blurb": "250 个折行行，低于估算器的上限；每帧约 2% 变动。",
+        "stress.scenario.table-churn-wrapped.stresses": "多行布局 · 全部行的高度测量 · 单元格取值闭包",
+        "stress.scenario.table-churn-wrapped.heading": "变动折行表格 — {0} 行，每帧每 {1} 行变动 1 行",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "滚动视图中的多个表格",
         "stress.scenario.tables-scroll.blurb": "N 个表格堆叠在滚动视图中；每个都物化自己的行并计算各自的列宽。",

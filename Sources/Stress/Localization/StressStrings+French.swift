@@ -46,6 +46,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "Rognage compatible ANSI · les trois modes de troncature · mesure/remplissage par cellule",
         "stress.scenario.truncate.heading": "Tableau tronqué — {0} lignes × 6 colonnes rognées",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "Tableau en mouvement",
+        "stress.scenario.table-churn.blurb": "N lignes × 6 colonnes ; les données sont remplacées à chaque image mais ~2% des lignes diffèrent.",
+        "stress.scenario.table-churn.stresses": "reconstruction de lignes inchangées · closures de valeur de cellule · marge pour un mémo de ligne",
+        "stress.scenario.table-churn.heading": "Tableau en mouvement — {0} lignes, une sur {1} change par image",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "Tableau enroulé en mouvement",
+        "stress.scenario.table-churn-wrapped.blurb": "250 lignes enroulées sous la limite de l'estimateur ; ~2% changent par image.",
+        "stress.scenario.table-churn-wrapped.stresses": "mise en page multiligne · mesure de hauteur de toutes les lignes · closures de valeur de cellule",
+        "stress.scenario.table-churn-wrapped.heading": "Tableau enroulé en mouvement — {0} lignes, une sur {1} change par image",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tableaux dans une vue défilante",
         "stress.scenario.tables-scroll.blurb": "N tableaux empilés dans une vue défilante ; chacun matérialise ses lignes et calcule ses propres largeurs de colonne.",

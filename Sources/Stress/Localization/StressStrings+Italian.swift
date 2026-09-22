@@ -46,6 +46,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "Ritaglio compatibile ANSI · tutte e tre le modalità di troncamento · misura/riempimento per cella",
         "stress.scenario.truncate.heading": "Tabella troncata — {0} righe × 6 colonne ritagliate",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "Tabella in movimento",
+        "stress.scenario.table-churn.blurb": "N righe × 6 colonne; i dati vengono sostituiti a ogni frame ma solo ~2% delle righe differisce.",
+        "stress.scenario.table-churn.stresses": "ridisegno di righe invariate · closure dei valori di cella · margine per un memo per riga",
+        "stress.scenario.table-churn.heading": "Tabella in movimento — {0} righe, una su {1} cambia per frame",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "Tabella a capo in movimento",
+        "stress.scenario.table-churn-wrapped.blurb": "250 righe a capo sotto il limite dello stimatore; ~2% cambiano per frame.",
+        "stress.scenario.table-churn-wrapped.stresses": "layout di righe multilinea · misurazione dell'altezza di ogni riga · closure dei valori di cella",
+        "stress.scenario.table-churn-wrapped.heading": "Tabella a capo in movimento — {0} righe, una su {1} cambia per frame",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabelle in una vista a scorrimento",
         "stress.scenario.tables-scroll.blurb": "N tabelle impilate in una vista a scorrimento; ognuna materializza le sue righe e calcola le proprie larghezze di colonna.",

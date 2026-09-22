@@ -44,6 +44,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "ANSI 対応のクリップ · 3 つの切り詰めモードすべて · セルごとの計測とパディング",
         "stress.scenario.truncate.heading": "切り詰めテーブル — {0} 行 × 6 列（切り詰め）",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "更新テーブル",
+        "stress.scenario.table-churn.blurb": "N 行 × 6 列。データは毎フレーム差し替えられますが、異なる行は約 2% です。",
+        "stress.scenario.table-churn.stresses": "変化していない行の再描画 · セル値クロージャ · 行メモの余地",
+        "stress.scenario.table-churn.heading": "更新テーブル — {0} 行、{1} 行に 1 行がフレームごとに変化",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "更新折り返しテーブル",
+        "stress.scenario.table-churn-wrapped.blurb": "推定器の上限を下回る 250 行の折り返し行。約 2% がフレームごとに変化します。",
+        "stress.scenario.table-churn-wrapped.stresses": "複数行のレイアウト · 全行の高さ計測 · セル値クロージャ",
+        "stress.scenario.table-churn-wrapped.heading": "更新折り返しテーブル — {0} 行、{1} 行に 1 行がフレームごとに変化",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "スクロールビュー内のテーブル群",
         "stress.scenario.tables-scroll.blurb": "N 個のテーブルをスクロールビューに積み重ね。各テーブルが自分の行を実体化し、独自の列幅を計算します。",

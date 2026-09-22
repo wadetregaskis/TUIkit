@@ -57,6 +57,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "ANSI-aware clipping · all three truncation modes · per-cell measure/pad",
         "stress.scenario.truncate.heading": "Truncating Table — {0} rows × 6 clipped columns",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "Churning Table",
+        "stress.scenario.table-churn.blurb": "N rows × 6 columns; the data is replaced every frame but ~2% of rows differ.",
+        "stress.scenario.table-churn.stresses": "per-row re-render of unchanged rows · cell value closures · row-memo headroom",
+        "stress.scenario.table-churn.heading": "Churning Table — {0} rows, one in {1} differs per frame",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "Churning Wrapped Table",
+        "stress.scenario.table-churn-wrapped.blurb": "250 wrapped rows below the estimator's limit; ~2% differ per frame.",
+        "stress.scenario.table-churn-wrapped.stresses": "multi-line row layout · every-row height measurement · cell value closures",
+        "stress.scenario.table-churn-wrapped.heading": "Churning Wrapped Table — {0} rows, one in {1} differs per frame",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tables in a ScrollView",
         "stress.scenario.tables-scroll.blurb": "N tables stacked in a ScrollView; each materialises its rows and computes its own column widths.",

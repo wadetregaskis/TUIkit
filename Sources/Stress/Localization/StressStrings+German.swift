@@ -46,6 +46,18 @@ extension StressStrings {
         "stress.scenario.truncate.stresses": "ANSI-bewusstes Beschneiden · alle drei Kürzungsmodi · Messen/Auffüllen je Zelle",
         "stress.scenario.truncate.heading": "Kürzende Tabelle — {0} Zeilen × 6 beschnittene Spalten",
 
+        // MARK: table-churn
+        "stress.scenario.table-churn.title": "Wechselnde Tabelle",
+        "stress.scenario.table-churn.blurb": "N Zeilen × 6 Spalten; die Daten werden jeden Frame ersetzt, aber nur ~2% der Zeilen unterscheiden sich.",
+        "stress.scenario.table-churn.stresses": "Neuaufbau unveränderter Zeilen · Zellwert-Closures · Spielraum für einen Zeilen-Memo",
+        "stress.scenario.table-churn.heading": "Wechselnde Tabelle — {0} Zeilen, eine von {1} ändert sich je Frame",
+
+        // MARK: table-churn-wrapped
+        "stress.scenario.table-churn-wrapped.title": "Wechselnde umbrochene Tabelle",
+        "stress.scenario.table-churn-wrapped.blurb": "250 umbrochene Zeilen unter dem Limit des Schätzers; ~2% ändern sich je Frame.",
+        "stress.scenario.table-churn-wrapped.stresses": "Mehrzeiliges Zeilenlayout · Höhenmessung aller Zeilen · Zellwert-Closures",
+        "stress.scenario.table-churn-wrapped.heading": "Wechselnde umbrochene Tabelle — {0} Zeilen, eine von {1} ändert sich je Frame",
+
         // MARK: tables-scroll
         "stress.scenario.tables-scroll.title": "Tabellen in einer Scrollansicht",
         "stress.scenario.tables-scroll.blurb": "N Tabellen in einer Scrollansicht gestapelt; jede materialisiert ihre Zeilen und berechnet eigene Spaltenbreiten.",
