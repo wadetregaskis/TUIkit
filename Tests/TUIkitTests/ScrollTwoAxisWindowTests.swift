@@ -12,34 +12,51 @@
 //     serves 1,963 of them, so a settled editor is 4.4 ms, and what the window
 //     would save is the LOOKUPS rather than the composition.
 //
-//  2. A WIDE ROW OUT OF SIGHT IS UNREACHABLE. The window measure answers width
-//     from a sample: the rows the height budget reaches, capped at 64. A
-//     120-cell row 200 rows down therefore reports nothing — the content
-//     measures 8 wide, renders 8 wide, draws no horizontal bar, and that row's
-//     tail cannot be scrolled to at any offset. The EAGER `VStack` of the same
-//     content answers 120, because it measures every child, so this is the
-//     twins disagreeing rather than a property of laziness.
+//  2. A WIDE ROW OUT OF SIGHT IS UNREACHABLE. The horizontal extent comes from
+//     `measureNaturalExtent(along: .horizontal)` — an UNBOUNDED width ask under
+//     a height budget that reaches every row — and the windowed stack answers it
+//     from a sample: the first sixteen rows, for a collection over 256. A
+//     120-cell row 200 rows down therefore reports nothing; the content measures
+//     8 wide, renders 8 wide, draws no horizontal bar, and that row's tail
+//     cannot be scrolled to at any offset. The EAGER `VStack` of the same
+//     content answers 120, because it measures every child, so this is the twins
+//     disagreeing rather than a property of laziness.
 //
-//  The knot: the horizontal extent is metered by the RENDERED buffer's width,
-//  which is the only thing making (1) harmless. Fixing (2) needs a width
-//  measured over every row, and then (1) is safe. Both were implemented and
-//  measured on 2026-09-22, on `app-shapes/code-editor` (2,000 syntax-coloured
-//  lines, release, 120x40):
+//  WHAT THE FIX COSTS, measured properly on 2026-09-22 — and the first attempt
+//  at this number was wrong in a way worth recording, because the mistake is
+//  reusable. It read "none of which the measure memo catches (0.2% hits)", and
+//  concluded the work was uncacheable. The 0.2% is the hit rate the Stress
+//  harness prints, and that counter is `RenderCache.MeasureKey` ALONE — per-pass
+//  scratch, emptied by every `beginRenderPass()`. A walk that measures each of
+//  2,000 rows exactly once a frame hands it 2,000 lookups and no hits BY
+//  CONSTRUCTION. It was never evidence about caching; it was evidence that the
+//  walk walks. (The corroboration is the per-type table: paths that measure a
+//  row twice a pass sit at 50%, paths that measure it once sit at 0%.)
 //
-//      today (wrong)                    4.4 ms    1.9 composed, 1,963 served
-//      exact width + vertical window   64.7 ms    1.9 composed,    39 served
+//  The cache that could serve it is the other one — `RenderCache.SizeKey`, the
+//  cross-frame table `_ListCore.widestRowWidth` and `Table.fitWidth` already use
+//  to keep ONE integer against the rows' data. Built for a lazy stack
+//  (`_VStackCore.contentWidthOverAllRows`, on the `two-axis-exact-width` branch)
+//  and measured paired, 10 reps, release, 120x40:
 //
-//  Correctness costs 14.6× here, and the windowing does not begin to pay for
-//  it, because the thing the window removes is already nearly free: the row
-//  memo serves the rows it walks. What the exact width costs is a MEASURE of
-//  every row every frame — a view build, two reflection walks and a measure,
-//  none of which the measure memo catches (0.2% hits) — and that is strictly
-//  more than the memo lookups it saves.
+//      app-shapes/code-editor           4,400 →   4,847 µs    +9.9%  (CI  +9.3 …  +10.5)
+//      app-shapes/code-editor-tailing  50,311 → 130,636 µs  +159.4%  (CI +158.1 … +161.6)
 //
-//  So the fix has to be a cheap exact width, not this one: per-ordinal row
-//  widths kept across frames, which is a caching design of its own (the records
-//  exist in `StackWindowState`, seeded only for VISITED rows and answered per
-//  prefix). Noted for the owner; nothing is landed.
+//  The same code, twice, and the difference between the two rows is entirely
+//  whether the memo can serve: a settled document keys on an unchanging
+//  collection and pays only the machinery, a growing one re-walks every frame
+//  and pays 2.6×. So the answer to "can a width memo work where the measure memo
+//  could not" is yes — and a data-keyed memo is exactly as good as its data is
+//  stable, which is why `code-editor-tailing` now exists to say so.
+//
+//  NOT LANDED. +159% on a growing document is the same class of regression the
+//  14.6× was, and the cheaper design is visible from here: the width over all
+//  rows is a MAXIMUM, so a collection that grew by appending needs only its new
+//  rows measured. Making that sound needs an "does this data extend that data"
+//  question the extractors do not answer today (`ForEach` could, for a `Range`
+//  outright and for an `Equatable` collection by a prefix compare that costs a
+//  memcmp against 2,000 view measures). That is a caching design of its own, and
+//  it is noted for the owner rather than guessed at here.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -117,12 +134,15 @@ struct ScrollTwoAxisWindowTests {
         }
     }
 
-    /// What the windowing would cost, and why it is not taken.
-    ///
     /// Nothing on screen at the top knows the content is 120 cells wide — the
-    /// one row that is lives 200 rows down. Today the full render finds it and
-    /// the bar is drawn. Metering the axis from a windowed measure does not, and
-    /// the wide row's tail becomes unreachable.
+    /// one row that is lives 200 rows down, outside the band the render draws
+    /// and outside the sixteen-row sample the measure answers from. So no
+    /// horizontal bar is drawn, and a bar that is not drawn is a row whose tail
+    /// cannot be reached at any offset, not a missing decoration.
+    ///
+    /// The assertion below is the one the fix in the file comment makes pass;
+    /// the control after it is the EAGER `VStack` of the same content, which
+    /// answers 120 — so this is about laziness and not about the rows.
     @Test("A wide row far from the viewport still widens the content")
     func wideRowInTheMiddleIsReachable() {
         let tally = RowRenderTally()

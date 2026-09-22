@@ -628,6 +628,18 @@ genuinely changes reported width under this rule (it stops shrink-wrapping
 to its widest visited row). `ScrollView`'s horizontal axis needs the same
 statement when horizontal windowing arrives (§12).
 
+**One case the rule gets wrong, measured 2026-09-22.** §5j answers "how wide
+should you lay out", and for that it is right. It is the wrong answer to a
+different question, which a **two-axis `ScrollView`** asks and nothing else
+does: *how far right can this content be scrolled?* That arrives as an
+UNBOUNDED width ask (`measureNaturalExtent(along: .horizontal)`) under a height
+budget that reaches every row, and filling the proposal means reporting the
+viewport — so a 120-cell row two hundred rows down draws no horizontal bar and
+its tail is unreachable at every offset, while the eager `VStack` of the same
+content scrolls to it. §5j does not license the twins disagreeing, so this is a
+gap in the rule rather than an application of it. Pinned by
+`ScrollTwoAxisWindowTests`; see §12 for what a fix costs and why none is landed.
+
 ---
 
 ## 6. Worked examples
@@ -1112,14 +1124,16 @@ happens for the workloads that need 50M rows.
   — a spacer's height comes from distributing the leftover after every sibling
   has rendered, so it is a property of the fill, not of any one child
   (`VStack.swift:235-240`).
-- **No general measure cache.** `lookupSize`/`storeSize` are called from
-  exactly TWO places in the whole codebase — `measureValueMemoized` in
+- **No general measure cache.** `lookupSize`/`storeSize` are called from three
+  places in the whole codebase — `measureValueMemoized` in
   `ValueMemo.swift`, reached only by `EquatableView` and `_MemoizedRow` (it used
-  to be the same code written twice, in those two types), and, since
+  to be the same code written twice, in those two types); since
   `32b87838` (2026-09-05), `_ListCore.widestRowWidth`
-  (`_ListCore.swift:276`, `:312`), which keeps a hugging list's widest row
-  keyed on its rows' data. Both are a value memo asked by something that
-  already knows what its content IS; neither is a cache `measureChild` can
+  (`_ListCore.swift:305`), which keeps a hugging list's widest row
+  keyed on its rows' data; and, since 2026-09-21, `Table.fitWidth`
+  (`Table.swift:3396`), which keeps one `.fit` column's width the same way and
+  with the same four guards. All three are a value memo asked by something that
+  already knows what its content IS; none of them is a cache `measureChild` can
   consult. A plain
   `VStack { ForEach { … } }` of non-`Equatable` content is fully re-measured
   every frame. Any claim that
@@ -1182,6 +1196,23 @@ question.
   stays what it is today — an eager scan, documented as such, for tables
   small enough to want it. A sampled `.fit` (visited rows only, sticky
   maxima) is possible but jitters column edges on scroll; not proposed.
+
+  **Priced 2026-09-22.** One of these is not optional after all: a two-axis
+  `ScrollView` genuinely needs "widest row", and §5j's fill leaves a wide row
+  out of sight unreachable. The walk was built and measured
+  (`two-axis-exact-width`), keeping the ANSWER in the size memo under the
+  stack's identity against the rows' data — the shape `_ListCore.widestRowWidth`
+  and `Table.fitWidth` already use. Paired A/B, 10 reps, release, 120x40:
+  `app-shapes/code-editor` 4,400 → 4,847 µs (+9.9%, CI +9.3…+10.5);
+  `app-shapes/code-editor-tailing` 50,311 → 130,636 µs (+159.4%, CI
+  +158.1…+161.6). The same code: a memo keyed on data is exactly as good as the
+  data is stable, and a growing document re-walks every frame. So the Ω(N) is
+  affordable for a settled collection and not for a moving one, and the design
+  that would close the gap is an INCREMENTAL walk — the answer is a maximum, so
+  an appended collection needs only its new rows — which needs a "does this data
+  extend that data" question `ForEach` can answer (outright for a `Range`, by a
+  prefix compare for an `Equatable` collection) and the extractors do not ask
+  today. Not landed; owner's call.
 - **Precise pruning of deleted rows' state** under deferred identity:
   lingers until the container dies (§5h). Bounded by visited-and-stateful
   rows; revisit only if real apps accumulate meaningful state across
