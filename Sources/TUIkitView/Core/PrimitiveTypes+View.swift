@@ -45,9 +45,11 @@ extension Optional: Renderable where Wrapped: View {
             // and this slot is the only thing left of it: the view is gone from
             // the tree, so nothing else can play out its removal transition.
             // See ``DepartureStore``.
+            // One read for both halves — see `AnimatableResolution`.
+            let frame = context.environment.animationFrame
             return context.stateStorage?.departures.departing(
-                at: context.identity, nowNanos: context.environment.frameNowNanos,
-                frameAnimation: context.environment.canAnimate
+                at: context.identity, nowNanos: frame.nowNanos,
+                frameAnimation: frame.canAnimate
                     ? context.environment.transaction.effectiveAnimation : nil)
                 ?? FrameBuffer()
         }
@@ -65,10 +67,11 @@ extension Optional: Layoutable where Wrapped: View {
             // A view on its way out still holds its slot open, or the page
             // would close up around it on the first frame of the removal and
             // the transition would play in a space that had already gone.
+            let frame = context.environment.animationFrame
             guard
                 let leaving = context.stateStorage?.departures.departingSize(
-                    at: context.identity, nowNanos: context.environment.frameNowNanos,
-                    frameAnimation: context.environment.canAnimate
+                    at: context.identity, nowNanos: frame.nowNanos,
+                    frameAnimation: frame.canAnimate
                         ? context.environment.transaction.effectiveAnimation : nil)
             else { return ViewSize.fixed(0, 0) }
             return ViewSize.fixed(leaving.width, leaving.height)

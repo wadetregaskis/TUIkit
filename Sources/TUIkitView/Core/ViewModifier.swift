@@ -167,14 +167,15 @@ extension ViewModifier where Self: Animatable {
         _ modifier: Self, owner: Any.Type, context: RenderContext, isMeasuring: Bool
     ) -> Self? {
         guard let storage = context.stateStorage else { return nil }
-        let animation = context.environment.canAnimate
-            ? context.environment.transaction.effectiveAnimation : nil
+        // One read for both halves — see `AnimatableResolution`.
+        let frame = context.environment.animationFrame
+        let animation = frame.canAnimate ? context.environment.transaction.effectiveAnimation : nil
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(owner))
         let target = modifier.animatableData
         let drawn = storage.animations.value(
             for: key, target: target, animation: animation,
-            nowNanos: context.environment.frameNowNanos, isMeasuring: isMeasuring)
+            nowNanos: frame.nowNanos, isMeasuring: isMeasuring)
         guard drawn != target else { return nil }
         context.environment.volatileReadTracker?.recordRenderSideEffect()
         var copy = modifier

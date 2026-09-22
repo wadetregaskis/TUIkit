@@ -64,11 +64,18 @@ extension View where Self: Animatable {
         // ``AnimationStore/isSettled(_:at:isMeasuring:)`` for what it cost
         // when it was not.
         if storage.animations.isSettled(key, at: target, isMeasuring: isMeasuring) { return nil }
-        let animation = context.environment.canAnimate
-            ? context.environment.transaction.effectiveAnimation : nil
+        // ONE environment read for both halves: `canAnimate` and `frameNowNanos`
+        // are computed properties over the same `AnimationFrame` key, so asking
+        // for each separately is two dictionary lookups — a hash, a probe and an
+        // `Any` unbox each — for one value. It was the most-read key in the
+        // environment (112 reads a frame on a menu tree). Still AFTER the
+        // `isSettled` return above, which is where it has to stay: hoisting it
+        // would charge every settled view for an animation it is not running.
+        let frame = context.environment.animationFrame
+        let animation = frame.canAnimate ? context.environment.transaction.effectiveAnimation : nil
         let drawn = storage.animations.value(
             for: key, target: target, animation: animation,
-            nowNanos: context.environment.frameNowNanos, isMeasuring: isMeasuring)
+            nowNanos: frame.nowNanos, isMeasuring: isMeasuring)
         guard drawn != target else { return nil }
 
         // The subtree's appearance is now a function of time, which a value memo

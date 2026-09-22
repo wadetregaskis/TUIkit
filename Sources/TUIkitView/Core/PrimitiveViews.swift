@@ -206,11 +206,13 @@ extension Optional: ChildViewProvider where Wrapped: View {
         case .some(let wrapped):
             return resolveChildViews(from: wrapped, context: context)
         case .none:
+            // One read for both halves — see `AnimatableResolution`.
+            let frame = context.environment.animationFrame
             guard let storage = context.stateStorage,
                 storage.departures.hasDeparture(
                     directlyUnder: context.identity, ofType: Wrapped.self,
-                    nowNanos: context.environment.frameNowNanos,
-                    frameAnimation: context.environment.canAnimate
+                    nowNanos: frame.nowNanos,
+                    frameAnimation: frame.canAnimate
                         ? context.environment.transaction.effectiveAnimation : nil)
             else { return [] }
             // `childIndex` is provisional: the enclosing container rebases it to

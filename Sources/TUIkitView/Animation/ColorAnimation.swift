@@ -90,12 +90,13 @@ package enum ColorAnimation {
         let key = AnimationStore.Key(
             identity: context.identity, owner: ObjectIdentifier(owner), slot: slot)
         let wanted = data(components, alpha: resolved.alpha)
+        // One read for both halves — see `AnimatableResolution`.
+        let frame = context.environment.animationFrame
         let drawn = storage.animations.value(
             for: key,
             target: wanted,
-            animation: context.environment.canAnimate
-                ? context.environment.transaction.effectiveAnimation : nil,
-            nowNanos: context.environment.frameNowNanos,
+            animation: frame.canAnimate ? context.environment.transaction.effectiveAnimation : nil,
+            nowNanos: frame.nowNanos,
             isMeasuring: context.isMeasuring)
         guard drawn != wanted else { return target }
 
