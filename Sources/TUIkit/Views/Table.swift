@@ -3696,6 +3696,12 @@ where Value.ID: Hashable {
         // outright, for any row type and any column.
         let cells = rowCells(for: item, count: cellCount, context: context)
         if let kept, kept.answers(cells: cells, isFocused: isFocused, isSelected: isSelected) {
+            // Re-point the entry at THIS row, or a row that changed in a way its
+            // columns do not show would take this path for ever — see
+            // `TableRowMemoStore.refresh(row:for:)`.
+            if handler.tableRowMemo.namesItsValues, let rowBox, kept.row != rowBox {
+                handler.tableRowMemo.refresh(row: rowBox, for: item.id)
+            }
             return serve(kept, item: item, paint: paint, columnWidths: columnWidths,
                 isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
         }

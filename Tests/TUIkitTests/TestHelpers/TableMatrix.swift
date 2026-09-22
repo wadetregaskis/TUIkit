@@ -47,6 +47,15 @@ struct TableMatrixRow: Identifiable, Sendable, Equatable {
     let id: Int
     /// Bumped to make this row — and only this row — different content.
     var generation: Int = 0
+    /// A field NO column displays, bumped by ``TableMatrixHarness/touch(rowAt:)``.
+    ///
+    /// The commonest shape a live table has and the one no fixture had: a model
+    /// row carries more than it shows — a timestamp, a revision, a sequence
+    /// number — so a snapshot that changes nothing on screen still hands over a
+    /// row that is not equal to the last one. Anything keyed on the row must
+    /// notice that its TEXT is unchanged, and must go on noticing on the frame
+    /// after that.
+    var hidden: Int = 0
 
     // The same five cell shapes as ``TableCellCost``, reachable by KEY PATH.
     //
@@ -408,6 +417,12 @@ final class TableMatrixHarness {
     /// Gives one row new content, leaving every other row's bytes alone.
     func mutate(rowAt index: Int) {
         rows[index].generation += 1
+    }
+
+    /// Changes one row WITHOUT changing anything it draws — see
+    /// ``TableMatrixRow/hidden``.
+    func touch(rowAt index: Int) {
+        rows[index].hidden += 1
     }
 
     /// Moves the selection without touching the data.

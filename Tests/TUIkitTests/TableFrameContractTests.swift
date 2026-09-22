@@ -407,4 +407,50 @@ struct TableFrameContractTests {
             harness.calls.perRow.count == 120,
             "a settled .exact table walked \(harness.calls.perRow.count) rows of 120")
     }
+
+    /// A row that changed in a way its columns do not show must not be demoted
+    /// from the cheapest tier — not on the next frame, and not for ever.
+    ///
+    /// The cheap tier compares the ROW, which a key-path table may do because
+    /// its cells are a pure function of it. The tier below compares the CELLS,
+    /// which costs a build per column. A row whose hidden field moves fails the
+    /// first and passes the second — and if serving it that way leaves the kept
+    /// entry pointing at the row it was COMPOSED for, it fails the first test
+    /// again on the next frame, and the next, having permanently fallen to the
+    /// expensive path while drawing identical bytes. On a table whose cells come
+    /// from a formatter that is the difference between a frame and ten.
+    ///
+    /// Found by sweeping the `table-api` matrix: `text-cheap` built 139 cell
+    /// values a frame — four columns × every drawn row — while composing none.
+    @Test("A row whose hidden field changes goes back to the cheap tier")
+    func hiddenFieldDoesNotDemoteARowForEver() {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 40,
+                columns: [
+                    TableMatrixColumn(
+                        title: "ID", width: .fixed(6), cost: .cheap, namesAProperty: true),
+                    TableMatrixColumn(title: "Name", cost: .formatted, namesAProperty: true),
+                ]))
+        harness.settle()
+        harness.frame()
+        #expect(
+            harness.rowWork.cellValues == 0,
+            "a settled key-path table built \(harness.rowWork.cellValues) cell values")
+
+        // One row changes in a way nothing draws.
+        harness.touch(rowAt: 0)
+        harness.frame()
+
+        // The frame AFTER: every row is equal to the row the kept line was last
+        // proved to answer for, so nothing needs a cell built at all.
+        harness.frame()
+        #expect(
+            harness.rowWork.cellValues == 0,
+            "a row touched two frames ago still costs \(harness.rowWork.cellValues) cell values")
+
+        // And it is still drawing the right thing.
+        let drawn = TableMatrixHarness.drawnRowIDs(in: harness.frame())
+        #expect(drawn.first == 0, "the touched row is no longer first, got \(String(describing: drawn.first))")
+    }
 }

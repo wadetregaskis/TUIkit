@@ -83,10 +83,16 @@ struct TableRowFrameKey: Equatable {
 
 /// One row's composed line, and the row state it was composed for.
 struct TableRowMemoLine {
-    /// The row, when its type could be compared at all. `nil` for a row type
-    /// that is not `Equatable`, which `Table` does not require — those rows are
-    /// answered by their CELLS alone.
-    let row: AnyEquatableBox?
+    /// The row this line was last PROVED to answer for, when its type could be
+    /// compared at all. `nil` for a row type that is not `Equatable`, which
+    /// `Table` does not require — those rows are answered by their CELLS alone.
+    ///
+    /// `var`, and re-pointed by ``TableRowMemoStore/refresh(row:for:)``: a row
+    /// that changed in a way its columns do not show passes the cell test and
+    /// fails the row test, and leaving it pointing at the row the line was
+    /// COMPOSED for would fail that test again every frame thereafter. See the
+    /// note on `refresh`.
+    var row: AnyEquatableBox?
     /// What every column produced for this row, in column order.
     ///
     /// The soundness of a closure column rests entirely on this. A closure may
@@ -163,6 +169,26 @@ struct TableRowMemoStore<ID: Hashable> {
 
     mutating func keep(_ entry: TableRowMemoLine, for id: ID) {
         lines[id] = entry
+    }
+
+    /// Re-points a kept line at the row it was JUST proved to answer for.
+    ///
+    /// A model row carries more than it shows — a timestamp, a revision, a
+    /// sequence number — so a live snapshot hands over rows that are not equal
+    /// to last frame's while drawing identical bytes. Such a row fails the row
+    /// test and passes the cell test, which is correct and costs a build per
+    /// column. Without this it costs that on EVERY later frame too: the kept
+    /// entry still names the row it was composed for, which nothing will ever
+    /// equal again, so the table falls permanently to its expensive tier while
+    /// drawing the same picture. On cells that come from a formatter, that is
+    /// the difference between a frame and ten.
+    ///
+    /// Sound because it asserts no more than the frame just proved: the line
+    /// was built from cells equal to this row's under this frame key, and under
+    /// `namesItsValues` the cells are a pure function of the row — so any later
+    /// row equal to this one produces those cells and therefore that line.
+    mutating func refresh(row: AnyEquatableBox, for id: ID) {
+        lines[id]?.row = row
     }
 
     mutating func removeAll() {
