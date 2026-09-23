@@ -229,6 +229,7 @@ enum Headless {
             for divergence in report.divergences.prefix(3) { print("      " + divergence) }
             for problem in report.brokenExpectations.prefix(3) { print("      " + problem) }
             for stale in report.staleServes.prefix(3) { print("      STALE MEMO: " + stale) }
+            for stale in report.staleSizes.prefix(3) { print("      STALE SIZE: " + stale) }
         }
         print(
             failures == 0

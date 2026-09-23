@@ -367,4 +367,45 @@ struct MeasureMemoEquivalenceTests {
             the cache.
             """)
     }
+
+    /// The CROSS-frame size memo's serves are checked too. They were returned
+    /// unchecked, so a size that outlived what it measured showed up only if
+    /// it happened to move a pixel. A card that compares by title alone is the
+    /// lie that memo cannot see: a longer body under the same title.
+    @Test("A size the cross-frame memo serves stale is reported")
+    func crossFrameSizeServesAreVerified() {
+        let was = RenderCache.verifiesMeasureMemo
+        defer { RenderCache.verifiesMeasureMemo = was }
+        RenderCache.verifiesMeasureMemo = true
+        let tui = TUIContext()
+        func frame(_ body: String) {
+            var environment = EnvironmentValues()
+            environment.applyRuntimeServices(from: tui)
+            environment.installVolatileReadTracker(VolatileReadTracker())
+            let context = RenderContext(
+                availableWidth: 30, availableHeight: 4, environment: environment, tuiContext: tui)
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            _ = renderToBuffer(HStack { TitledCard(title: "t", text: body).equatable(); Text("|") }, context: context)
+            tui.stateStorage.endRenderPass()
+            tui.renderCache.removeInactive()
+        }
+        frame("short")
+        frame("short")
+        #expect(tui.renderCache.measureMemoMismatches.isEmpty, "an honest serve was reported")
+        frame("a much longer body")
+        #expect(
+            tui.renderCache.measureMemoMismatches.contains { $0.contains("(cross-frame)") },
+            "the stale serve went unreported: \(tui.renderCache.measureMemoMismatches)")
+    }
+}
+
+/// A card that compares by title alone.
+private struct TitledCard: View, @preconcurrency Equatable {
+    let title: String
+    let text: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.title == rhs.title }
+
+    var body: some View { Text(verbatim: text) }
 }

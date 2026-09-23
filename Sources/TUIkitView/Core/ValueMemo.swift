@@ -257,6 +257,28 @@ private func verifyServe(
     }
 }
 
+/// Re-measures what a served cross-frame size stands for, and reports a
+/// disagreement — ``RenderCache/verifiesMeasureMemo``'s check, for this table.
+///
+/// The per-pass memo's serves were checked and these were not: a size served
+/// here was returned as it stood, so an entry that outlived what it measured
+/// could be caught only by the pixels it happened to move. On a throwaway
+/// tracker, so what the check reads cannot decide what the live pass stores.
+/// Out of line, to keep the serve itself small.
+@inline(never)
+@MainActor
+private func verifyServedSize<Key>(
+    _ served: ViewSize, of _: Key.Type, proposal: ProposedSize, context: RenderContext,
+    measure: (RenderContext) -> ViewSize
+) {
+    let fresh = context.withVolatileReadTracker(VolatileReadTracker()) { measure($0) }
+    guard fresh != served else { return }
+    context.renderCache?.noteMeasureMemoMismatch(
+        viewType: "\(Key.self) (cross-frame)", served: served, fresh: fresh, proposal: proposal,
+        availableWidth: context.availableWidth, availableHeight: context.availableHeight,
+        identity: context.identity.path)
+}
+
 /// The size half: the same memo keyed by proposal as well as value.
 ///
 /// Deliberately marks NOTHING active. Marking every measured identity is
@@ -294,7 +316,12 @@ func measureValueMemoized<Key: Equatable>(
         availableWidth: context.availableWidth, availableHeight: context.availableHeight,
         hasExplicitWidth: context.hasExplicitWidth, hasExplicitHeight: context.hasExplicitHeight,
         measureGeneration: context.measureGeneration)
-    if let cached = cache.lookupSize(key: sizeKey, view: key) { return cached }
+    if let cached = cache.lookupSize(key: sizeKey, view: key) {
+        if RenderCache.verifiesMeasureMemo {
+            verifyServedSize(cached, of: Key.self, proposal: proposal, context: context, measure: measure)
+        }
+        return cached
+    }
 
     // The same gate as the buffer half: a subtree that declares a render side
     // effect (`.onRenderPass`) or reads a per-frame-volatile value must not have

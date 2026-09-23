@@ -117,6 +117,9 @@ final class DrivenSession {
     /// What `TUIKIT_VERIFY_RENDER_MEMO` found: each served buffer that a fresh
     /// render of the same subtree disagreed with. Empty unless it is set.
     let staleServes: () -> [String]
+    /// What `TUIKIT_VERIFY_MEASURE_MEMO` found: each served size, from either
+    /// size memo, that a fresh measure disagreed with. Empty unless it is set.
+    let staleSizes: () -> [String]
 
     /// Plays `session` against its own ``HeadlessApp`` of `width` × `height`
     /// cells, clearing its render cache before every frame when `cold`.
@@ -135,6 +138,7 @@ final class DrivenSession {
         bytesWritten = { app.bytesWritten }
         check = { session.check($0, after: $1) }
         staleServes = { app.renderCache.renderMemoMismatches }
+        staleSizes = { app.renderCache.measureMemoMismatches }
     }
 }
 

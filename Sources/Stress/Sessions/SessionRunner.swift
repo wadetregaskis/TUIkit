@@ -75,6 +75,12 @@ enum SessionRunner {
         var staleServes: [String] = []
         /// The steps whose frames served them.
         var staleServeSteps: [Int] = []
+        /// Whether `TUIKIT_VERIFY_MEASURE_MEMO` was set, and what it found on
+        /// the warm instance: served sizes that a fresh measure disagreed with.
+        var sizesVerified = false
+        var staleSizes: [String] = []
+        /// The steps whose frames served them.
+        var staleSizeSteps: [Int] = []
         /// Every step whose frame did not show what the session said it must.
         var brokenSteps: [Int] = []
         /// The first few of those, described.
@@ -86,7 +92,8 @@ enum SessionRunner {
         /// Whether the run found nothing wrong: no divergence from the twin, no
         /// frame that failed the session's own check, and a deterministic script.
         var passed: Bool {
-            divergentSteps.isEmpty && brokenSteps.isEmpty && staleServes.isEmpty && scriptMismatch == nil
+            divergentSteps.isEmpty && brokenSteps.isEmpty && staleServes.isEmpty && staleSizes.isEmpty
+                && scriptMismatch == nil
         }
         /// The last frame, when asked for (``Options/show``).
         var lastScreen: [String] = []
@@ -124,6 +131,7 @@ enum SessionRunner {
         if options.checks { checkFrame(of: warm, after: -1, action: "open", into: &report) }
 
         var staleSoFar = warm.staleServes().count
+        var staleSizesSoFar = warm.staleSizes().count
         for index in 0..<options.steps {
             var step = warm.step(index)
             if options.resizeEvery > 0, index > 0, index.isMultiple(of: options.resizeEvery) {
@@ -156,6 +164,10 @@ enum SessionRunner {
                 report.staleServeSteps.append(index)
                 staleSoFar = warm.staleServes().count
             }
+            if RenderCache.verifiesMeasureMemo, warm.staleSizes().count > staleSizesSoFar {
+                report.staleSizeSteps.append(index)
+                staleSizesSoFar = warm.staleSizes().count
+            }
 
             guard let cold else { continue }
             var twin = cold.step(index)
@@ -179,6 +191,8 @@ enum SessionRunner {
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
         report.memoVerified = RenderCache.verifiesRenderMemo
         report.staleServes = warm.staleServes()
+        report.sizesVerified = RenderCache.verifiesMeasureMemo
+        report.staleSizes = warm.staleSizes()
         return report
     }
 
@@ -223,6 +237,22 @@ enum SessionRunner {
             """
     }
 
+    /// One verifier's verdict, when it was armed: a line saying it found
+    /// nothing, or what it found and the steps whose frames served it.
+    private static func printVerdict(
+        armed: Bool, findings: [String], steps: [Int], clean: String, failure: String
+    ) {
+        guard armed else { return }
+        guard !findings.isEmpty else {
+            Swift.print("  " + clean)
+            return
+        }
+        Swift.print(
+            "  FAIL: \(findings.count) \(failure), "
+                + "on steps \(steps.prefix(8).map(String.init).joined(separator: ", "))")
+        for finding in findings.prefix(5) { Swift.print("    " + finding) }
+    }
+
     /// Prints `report` in the shape `--bench` prints a scenario's, so
     /// `ab_bench.py` reads a session as it reads a scenario: `per-frame=` is
     /// the wall clock per step and `cpu-per-frame=` the thread's CPU per step,
@@ -257,16 +287,14 @@ enum SessionRunner {
         if let mismatch = report.scriptMismatch {
             Swift.print("  FAIL: the script is not deterministic — \(mismatch)")
         }
-        if report.memoVerified {
-            if report.staleServes.isEmpty {
-                Swift.print("  memo-verified: every served buffer matched a fresh render of it")
-            } else {
-                Swift.print(
-                    "  FAIL: \(report.staleServes.count) served buffers differed from a fresh render, "
-                        + "on steps \(report.staleServeSteps.prefix(8).map(String.init).joined(separator: ", "))")
-                for stale in report.staleServes.prefix(5) { Swift.print("    " + stale) }
-            }
-        }
+        printVerdict(
+            armed: report.memoVerified, findings: report.staleServes, steps: report.staleServeSteps,
+            clean: "memo-verified: every served buffer matched a fresh render of it",
+            failure: "served buffers differed from a fresh render")
+        printVerdict(
+            armed: report.sizesVerified, findings: report.staleSizes, steps: report.staleSizeSteps,
+            clean: "sizes-verified: every served size matched a fresh measure",
+            failure: "served sizes differed from a fresh measure")
         if options.checks {
             if report.brokenSteps.isEmpty {
                 Swift.print("  checked: every frame showed what the session expected")

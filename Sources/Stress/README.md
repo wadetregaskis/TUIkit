@@ -191,7 +191,10 @@ render-memo verifier found — every served buffer re-rendered and compared, and
 the registrations it replays with the ones a fresh render makes — and fails on
 any, naming the steps. The twin compares whole frames; the verifier compares
 each serve, including those no frame shows (a navigation stack's covered root,
-the focus-reach probe's rows).
+the focus-reach probe's rows). `TUIKIT_VERIFY_MEASURE_MEMO=1` does the same for
+sizes — every size served by either measure memo, the per-pass one and the
+cross-frame one, re-measured and compared — and a run fails on any of those
+too.
 
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
