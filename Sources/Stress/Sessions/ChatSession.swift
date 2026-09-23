@@ -22,6 +22,9 @@ final class Conversation {
 
     var messages: [Message]
     var draft = ""
+    /// The anchor the conversation's scroll view holds: `nil` while it follows
+    /// its end as declared, `.window` once the reader pages away.
+    var anchor: ScrollAnchor<Int>?
     private(set) var nextID: Int
 
     init(messages: [Message]) {
@@ -51,13 +54,14 @@ struct ChatPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: "\(conversation.messages.count) messages")
+            Text(verbatim: "\(conversation.messages.count) messages · \(conversation.anchor == nil ? "following" : "reading")")
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(conversation.messages) { message in Bubble(message: message) }
                 }
             }
             .defaultScrollAnchor(.bottom)
+            .anchorPosition(Binding(get: { conversation.anchor }, set: { conversation.anchor = $0 }))
             TextField("Message", text: Binding(get: { conversation.draft }, set: { conversation.draft = $0 }))
                 .onSubmit { conversation.send() }
         }
@@ -158,13 +162,15 @@ final class ChatSession: StressSession {
         }
     }
 
-    /// The count is right, and while the conversation is being followed its
-    /// newest message is on the screen: a bottom-anchored view that opened at
-    /// its top, or let go of its end as a message arrived, fails here.
+    /// The count is right, the header says whether the conversation is being
+    /// followed — the bound anchor `nil` while it is, `.window` once paged away,
+    /// and `nil` again at End — and while it is, its newest message is on the
+    /// screen: a bottom-anchored view that opened at its top, or let go of its
+    /// end as a message arrived, fails here.
     func check(_ screen: [String], after index: Int) -> String? {
-        let count = "\(conversation.messages.count) messages"
-        guard screen.contains(where: { $0.hasPrefix(count) }) else {
-            return "the header does not say \(count)"
+        let header = "\(conversation.messages.count) messages · \(following ? "following" : "reading")"
+        guard screen.contains(where: { $0.hasPrefix(header) }) else {
+            return "the header does not say \(header)"
         }
         guard following, let newest = conversation.messages.last else { return nil }
         let tag = "#\(newest.id) "
