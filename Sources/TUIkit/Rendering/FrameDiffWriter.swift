@@ -136,6 +136,13 @@ final class FrameDiffWriter {
     /// The previous frame's app header lines.
     private var previousAppHeaderLines: [String] = []
 
+    /// The frame last built for the terminal — header, content and status bar
+    /// lines, in screen order. What a headless harness compares two runs by
+    /// (see `HeadlessApp.screen`).
+    package var shownLines: [String] {
+        previousAppHeaderLines + previousContentLines + previousStatusBarLines
+    }
+
     /// The three independently-diffed terminal regions. Each keeps its own
     /// previous built lines (above) and its own background colour, so the
     /// incremental builder's reuse state is tracked per region.
