@@ -407,6 +407,19 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         if !context.isMeasuring { handler.seekingTail = false }
         let wasGluedToBottom =
             isGluedToBottom(handler: handler, context: context) || seekingTail
+        // The opening frame is glued by definition (see `isGluedToBottom`) but
+        // its offset is still 0, so move it to the tail BEFORE the content
+        // renders, as End does — the height is known, because the app's first
+        // frame measured the page before drawing it. Rendered at 0 and re-glued
+        // afterwards, the jump was the whole content: the windowed paths repair
+        // that in `coverSnappedViewport`, but a lazy stack under 256 rows draws
+        // only the rows around the offset it is given and returns no slice to
+        // repair, so the frame showed blank lines where the newest rows belong.
+        // With no walk beforehand (a view rendered directly) the height is
+        // still 0, so is `maxOffset`, and this changes nothing.
+        if wasGluedToBottom, !handler.hasOpened, !context.isMeasuring {
+            handler.scrollOffset = handler.maxOffset
+        }
         // The opening frame is now spent: from here on the `.sizeChanges`
         // anchor governs. Render passes only — a measure must not consume it.
         if !context.isMeasuring { handler.hasOpened = true }

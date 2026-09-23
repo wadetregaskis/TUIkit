@@ -314,10 +314,20 @@ extension _VStackCore {
             pitch: pitch, extent: extent, totalHeight: totalHeight)
         // A designated row overrides the offset: the position follows the ROW.
         // Exact here — a uniform row's absolute y is arithmetic.
-        let (window, resolvedAnchor) = holdingDesignatedRow(
+        var (window, resolvedAnchor) = holdingDesignatedRow(
             in: seeked, children: children, state: state,
             rowY: { $0 * pitch }, rowHeight: extent,
             totalHeight: totalHeight, context: context)
+        // The offset can lie past the content THIS hypothesis describes: the
+        // opening frame of a bottom-anchored view is placed at the tail a
+        // measure of the real rows found, and a shrink reaches here before the
+        // ScrollView clamps. Then no row meets the window, so none is drawn —
+        // and none is VERIFIED, so a false hypothesis outlived the one frame
+        // that could refute it, and that frame was blank. Clamped to the extent,
+        // as the exact walk clamps (`renderViewportWindow`), the band is the
+        // last rows: drawn if the rows really are uniform, refuted by the first
+        // that is not, and the exact walk draws the frame instead.
+        window.offset = min(window.offset, max(0, totalHeight - window.viewportHeight))
 
         let candidates = candidateOrdinals(
             children: children, window: window, pitch: pitch, state: state, context: context)

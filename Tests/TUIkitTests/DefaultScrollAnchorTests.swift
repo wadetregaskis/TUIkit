@@ -16,20 +16,31 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
+/// How a ``TailApp`` stacks its lines — each shape reaches a different path.
+enum TailShape: CaseIterable, Sendable {
+    /// A lazy stack of equal rows: the uniform window.
+    case lazyUniform
+    /// A lazy stack of unequal rows, under 256 of them: the full walk, which
+    /// draws only the rows around the offset it is given.
+    case lazyUnequal
+    /// An eager stack, which draws every row.
+    case eager
+}
+
 /// A log as a whole app: 200 lines in a scroll view anchored at its end.
 private struct TailApp: App {
-    let lazy: Bool
+    let shape: TailShape
 
-    init() { lazy = true }
-    init(lazy: Bool) { self.lazy = lazy }
+    init() { shape = .lazyUniform }
+    init(shape: TailShape) { self.shape = shape }
 
     var body: some Scene {
         WindowGroup {
             ScrollView {
-                if lazy {
-                    LazyVStack(alignment: .leading, spacing: 0) { lines }
-                } else {
+                if shape == .eager {
                     VStack(alignment: .leading, spacing: 0) { lines }
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 0) { lines }
                 }
             }
             .defaultScrollAnchor(.bottom)
@@ -37,7 +48,9 @@ private struct TailApp: App {
     }
 
     private var lines: some View {
-        ForEach(0..<200, id: \.self) { index in Text("line \(index)") }
+        ForEach(0..<200, id: \.self) { index in
+            Text("line \(index)").frame(height: shape == .lazyUnequal ? index % 3 + 1 : 1, alignment: .top)
+        }
     }
 }
 
@@ -241,9 +254,13 @@ struct DefaultScrollAnchorTests {
     /// height of 0 — then saw an offset of 0 short of the maximum: every app
     /// opened its bottom-anchored views at the top. The tests above render the
     /// view directly, which runs no such walk.
-    @Test("An app opens a bottom-anchored view at its end", arguments: [true, false])
-    func anAppOpensAtTheEnd(lazy: Bool) {
-        let app = HeadlessApp(TailApp(lazy: lazy), width: 30, height: 8)
+    ///
+    /// Then, glued but rendered at offset 0 and moved to the tail afterwards,
+    /// the unequal lazy stack opened on BLANK lines: it draws only the rows
+    /// around the offset it is given, and the jump was the whole content.
+    @Test("An app opens a bottom-anchored view at its end", arguments: TailShape.allCases)
+    func anAppOpensAtTheEnd(shape: TailShape) {
+        let app = HeadlessApp(TailApp(shape: shape), width: 30, height: 8)
         app.frame(atNanos: 0)
         let screen = app.screen.map(\.stripped)
         #expect(screen.contains { $0.contains("line 199") }, "opened at: \(screen)")
