@@ -34,6 +34,13 @@ private struct ActiveFocusSectionKey: EnvironmentKey {
     static let defaultValue: String? = nil
 }
 
+// MARK: - Backdrop
+
+/// EnvironmentKey for whether this render draws a backdrop.
+private struct DrawsBackdropKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 // MARK: - EnvironmentValues Extensions
 
 extension EnvironmentValues {
@@ -59,6 +66,21 @@ extension EnvironmentValues {
     package var activeFocusSectionID: String? {
         get { self[ActiveFocusSectionKey.self] }
         set { self[ActiveFocusSectionKey.self] = newValue }
+    }
+
+    /// Whether this subtree is drawn as a BACKDROP: the page beneath a modal,
+    /// a navigation stack's covered root — every control drawn unfocused and
+    /// registering with a focus manager that focuses nothing. Set by the TUIkit
+    /// module's `isolatedForBackground()`, with that manager.
+    ///
+    /// Declared in this module, beside ``activeFocusSectionID`` and for the
+    /// same reason: the value memos compare it. A buffer drawn as a backdrop is
+    /// a picture of the controls with none of them focused, so it must not be
+    /// served to the live page, and a live one must not be served to a
+    /// backdrop — see `RenderCache.EffectScope`.
+    package var drawsBackdrop: Bool {
+        get { self[DrawsBackdropKey.self] }
+        set { self[DrawsBackdropKey.self] = newValue }
     }
 
     /// The persistent `@State` value storage indexed by `ViewIdentity`.

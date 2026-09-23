@@ -286,10 +286,12 @@ struct FocusRegistrationMemoTests {
         let focused = frame(sheet: false)
         #expect(focused.contains("*one"), "the arrangement focuses the first stop: \(focused)")
 
-        // The page renders as a BACKDROP while the sheet is up: a picture, drawn
-        // against a throwaway manager that focuses nothing. Stored, it would be
-        // served once the sheet went — and a sheet with no focusables of its own
-        // moves no focused id, so no invalidation would ever fire.
+        // In this harness the sheet itself is not presented — modals are hosted
+        // by the app's root, which a direct render has none of — but presenting
+        // it still activates the modal's focus section, so the page draws with
+        // nothing focused, and dismissing it has to draw the focus again. The
+        // page as a BACKDROP, which a real root does draw, is tested through the
+        // real loop in `BackdropMemoTests`.
         _ = frame(sheet: true)
         _ = frame(sheet: true)
 

@@ -173,29 +173,37 @@ enum FocusRegistration {
     /// what ``FocusRegistrar`` is: recorded here while a memo records, and
     /// replayed at the point in the walk where the control would have rendered,
     /// so the ring is in the same order whether the subtree rendered or was
-    /// served. Four cases cannot be made again and keep declining:
+    /// served. Three cases cannot be made again and keep declining:
     ///
     /// - **A control that holds the focus.** Its buffer draws the focus ring,
     ///   and nothing in the memo's key sees the focus move away from it.
-    /// - **A backdrop's manager** (`isBackdrop`). The page beneath a modal is a
-    ///   picture drawn with everything unfocused. Stored, it would be served
-    ///   again once the modal was dismissed — and a modal carrying no focusables
-    ///   of its own moves no focused id, so nothing would invalidate it and the
-    ///   page would keep drawing no focus at all.
-    /// - **A probe's manager** (`suppressesAutoFocus`). The windowed stack's
-    ///   focus-reach probe renders rows the frame never draws.
+    /// - **A probe's manager** (`suppressesAutoFocus`, not a backdrop). The
+    ///   windowed stack's focus-reach probe renders rows the frame never draws.
     /// - **A control under an offered declaration**, per the caller: replayed, it
     ///   would hold an id another focusable is free to claim on the frame that
     ///   serves it, and a handoff — pruned at the end of every pass — would not
     ///   be re-declared at all.
     ///
+    /// **A backdrop's manager** (`isBackdrop`) used to be a fourth. The page
+    /// beneath a modal is a picture drawn with everything unfocused; stored, it
+    /// would be served again once the modal was dismissed, and a modal carrying
+    /// no focusables of its own moves no focused id, so nothing would
+    /// invalidate it. Declining kept that picture out of the cache, and with it
+    /// every control behind a sheet and under a navigation stack's pushed
+    /// screen, drawn afresh every frame. A backdrop's registrations are replayed
+    /// now like any other, and the memo keeps the picture where it belongs
+    /// instead: an entry drawn as a backdrop is served only to a backdrop, and
+    /// a live one only to the live page (`RenderCache.EffectScope`).
+    ///
     /// The entry carries the key channels in force, as every other replayable
-    /// registration does, even though the focus ring is not one of them. That is
-    /// exact rather than merely cautious: the only two contexts with throwaway
-    /// key channels are `RenderContext.isolatedForBackground()` and the
-    /// focus-reach probe, and both carry a manager refused above — so no entry a
-    /// memo would filter out on its token is ever recorded, and no control can
-    /// vanish from the ring that way.
+    /// registration does, even though the focus ring is not one of them. The
+    /// only two contexts with throwaway key channels are
+    /// `RenderContext.isolatedForBackground()` and the focus-reach probe. The
+    /// probe's manager is refused above, and a backdrop's registrations go to a
+    /// throwaway manager too: a memo inside the backdrop keeps them (its own
+    /// channels are the throwaways) and replays them into the next backdrop's,
+    /// and a memo above it filters them out on the token, which loses nothing
+    /// from the live ring, since they were never in it.
     @MainActor
     private static func declareRegistration(
         context: RenderContext, handler: Focusable, focusID: String, sectionID: String?,
@@ -204,8 +212,7 @@ enum FocusRegistration {
         let tracker = context.environment.volatileReadTracker
         let manager = context.environment.focusManager
         guard !carriesOfferedDeclaration,
-            manager?.isBackdrop != true,
-            manager?.suppressesAutoFocus != true,
+            manager?.isBackdrop == true || manager?.suppressesAutoFocus != true,
             // Asked AFTER registering, because registering is what can focus it:
             // an empty section auto-focuses its first registrant, and a pending
             // intent resolves the moment its target appears.

@@ -540,24 +540,34 @@ Three rules keep that equivalent to rendering:
   renders in, and that section is assigned into the environment rather than
   compared, so the key would not see it change. A hit under a different section
   than the one the registrations were recorded in is a miss.
+- **Whether it was a backdrop.** The page beneath a modal, and a navigation
+  stack's covered root, render against a throwaway focus manager that focuses
+  nothing, so their pictures show every control unfocused. An entry that
+  recorded registrations remembers whether it was drawn as a backdrop, and a hit
+  across that line either way is a miss (`RenderCache.EffectScope`). A backdrop
+  is served as a backdrop while the sheet stays up, and the live page draws
+  again, focused, when it goes: a sheet with no focusables of its own moves no
+  focused id, so nothing else would invalidate it.
 - **What the handler captured.** A replayed handler is the closure the subtree
   built when it rendered. `@State` and `@Observable` changes reach it as they
   reach any memo (they clear the entry), and bindings read current values. A
   value a `ForEach` row captures from *outside* its element stays as it was,
   the same captured-data hole a row's drawing already has.
 
-A focus registration keeps declining in four cases, because in each of them
+A focus registration keeps declining in three cases, because in each of them
 registering again is not the same thing as having rendered:
 
 - **A control that holds the focus**, whose buffer draws the focus ring.
-- **A backdrop's focus manager.** The page beneath a modal is a picture drawn
-  with everything unfocused; stored, it would be served after the modal was
-  dismissed, and a modal carrying no focusables of its own moves no focused id,
-  so nothing would invalidate it.
 - **A probe's focus manager**, which renders rows the frame never draws.
 - **A control named by an offered declaration** — `.focused(_:equals:)` or
   `.focusHandoff(_:_:)` — since the offer is planted above the control and
   possibly above the memo, where the key cannot see it.
+
+A backdrop's focus manager used to be a fourth, which kept everything behind a
+sheet, and under a navigation stack's pushed screen, out of the cache: drawn
+afresh on every frame. Its registrations are replayed now, into the next
+backdrop's throwaway manager, and the backdrop line above keeps the picture
+where it belongs.
 
 A `.focusSection` likewise declines while its section is ACTIVE, because an
 active section hands its subtree a breathing ● that is drawn into the buffer and

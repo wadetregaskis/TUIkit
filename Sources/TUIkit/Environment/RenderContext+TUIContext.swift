@@ -120,6 +120,7 @@ extension RenderContext {
         backdropFocus.suppressesAutoFocus = true
         backdropFocus.isBackdrop = true
         copy.environment.focusManager = backdropFocus
+        copy.environment.drawsBackdrop = true
         return copy
     }
 

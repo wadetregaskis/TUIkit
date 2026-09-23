@@ -159,9 +159,9 @@ public final class RenderCache: @unchecked Sendable {
         /// `EffectJournal`. Empty for almost every entry.
         package let effects: [EffectJournal.Entry]
 
-        /// The focus section in force where `effects` were recorded, or `nil`
-        /// when there are none. A lookup under a different section misses.
-        package let effectSection: String?
+        /// Where `effects` were recorded — `.none` when there are none. A
+        /// lookup from anywhere else misses.
+        package let effectScope: EffectScope
 
         public convenience init(
             identity: ViewIdentity,
@@ -173,7 +173,7 @@ public final class RenderCache: @unchecked Sendable {
                 identity: identity, viewSnapshot: viewSnapshot, buffer: buffer,
                 contextWidth: contextWidth, contextHeight: contextHeight,
                 gradientFrame: gradientFrame, surfaceBackground: surfaceBackground,
-                effects: [], effectSection: nil)
+                effects: [], effectScope: .none)
         }
 
         /// Creates an entry that carries recorded registrations.
@@ -181,7 +181,7 @@ public final class RenderCache: @unchecked Sendable {
             identity: ViewIdentity,
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
             gradientFrame: GradientFrame?, surfaceBackground: Color?,
-            effects: [EffectJournal.Entry], effectSection: String?
+            effects: [EffectJournal.Entry], effectScope: EffectScope
         ) {
             self.identity = identity
             self.viewSnapshot = viewSnapshot
@@ -191,7 +191,39 @@ public final class RenderCache: @unchecked Sendable {
             self.gradientFrame = gradientFrame
             self.surfaceBackground = surfaceBackground
             self.effects = effects
-            self.effectSection = effectSection
+            self.effectScope = effectScope
+        }
+    }
+
+    /// Where a subtree's registrations were recorded, which is where a hit
+    /// replaying them has to be too — or the served buffer and the replayed
+    /// registrations describe a render that did not happen there.
+    ///
+    /// Neither half is in the memo's key, because both are written straight
+    /// into the environment and nothing notices them change. So they are
+    /// compared here, for an entry that has registrations, and only there: a
+    /// subtree that registers nothing draws no control and no focus.
+    package struct EffectScope: Equatable {
+        /// The focus section the registrations were filed in.
+        package var section: String?
+
+        /// Whether the subtree was drawn as a backdrop
+        /// (`EnvironmentValues.drawsBackdrop`). Its controls registered with a
+        /// manager that focuses nothing, so the buffer shows none of them
+        /// focused. Served to the live page after a sheet with no focusables of
+        /// its own was dismissed, it would show the control the focus returned
+        /// to as unfocused: no focused id moved, so nothing would invalidate
+        /// it. That used to be prevented by never storing a backdrop render at
+        /// all, and so everything behind a modal, or under a navigation stack's
+        /// pushed screen, was drawn afresh on every frame it was up.
+        package var isBackdrop: Bool
+
+        /// No registrations, or a lookup made without a scope.
+        package static let none = Self(section: nil, isBackdrop: false)
+
+        package init(section: String?, isBackdrop: Bool) {
+            self.section = section
+            self.isBackdrop = isBackdrop
         }
     }
 
@@ -572,18 +604,20 @@ extension RenderCache {
     ) -> FrameBuffer? {
         lookupEntry(
             identity: identity, view: view, contextWidth: contextWidth, contextHeight: contextHeight,
-            gradientFrame: gradientFrame, surfaceBackground: surfaceBackground, effectSection: nil
+            gradientFrame: gradientFrame, surfaceBackground: surfaceBackground, effectScope: .none
         )?.buffer
     }
 
     /// The whole entry for a view, under the same rules as
     /// ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``,
-    /// plus one: an entry that stored registrations misses when `effectSection`
-    /// is not the section they were recorded in.
+    /// plus one: an entry that stored registrations misses when `effectScope`
+    /// is not where they were recorded — another focus section, or a backdrop
+    /// where they were live, or the reverse (see ``EffectScope``).
     ///
-    /// The section is not in the key because it is assigned straight into the
-    /// environment (`.focusSection` and six other sites), so nothing notices it
-    /// change. An autoclosure, read only for an entry that has registrations.
+    /// The scope is not in the key because it is assigned straight into the
+    /// environment (`.focusSection` and six other sites, `isolatedForBackground`),
+    /// so nothing notices it change. An autoclosure, read only for an entry that
+    /// has registrations.
     ///
     /// One caller, the value memo.
     package func lookupEntry<V: Equatable>(
@@ -593,9 +627,17 @@ extension RenderCache {
         contextHeight: Int,
         gradientFrame: GradientFrame?,
         surfaceBackground: Color?,
-        effectSection: @autoclosure () -> String?
+        effectScope: @autoclosure () -> EffectScope
     ) -> CacheEntry? {
-        guard let entry = entries[identity.structuralHash] else {
+        // Read at most once, and only for an entry that has registrations.
+        var scopeRead: EffectScope?
+        func scope() -> EffectScope {
+            if let scopeRead { return scopeRead }
+            let read = effectScope()
+            scopeRead = read
+            return read
+        }
+        guard let entry = scopedEntry(for: identity, effectScope: scope) else {
             stats.misses += 1
             logDebug("MISS (no entry) \(identity.path)")
             return nil
@@ -632,15 +674,48 @@ extension RenderCache {
             return nil
         }
         // Replaying would file the registrations in the section they were
-        // recorded in, not the one in force here.
-        guard entry.effects.isEmpty || entry.effectSection == effectSection() else {
+        // recorded in, not the one in force here — and a backdrop's picture
+        // shows its controls unfocused, which the live page's may not.
+        guard entry.effects.isEmpty || entry.effectScope == scope() else {
             stats.misses += 1
-            logDebug("MISS (focus section changed) \(identity.path)")
+            logDebug("MISS (focus section or backdrop changed) \(identity.path)")
             return nil
         }
         stats.hits += 1
         logDebug("HIT \(identity.path)")
         return entry
+    }
+
+    /// The entry a lookup under `effectScope` should compare: the one in the
+    /// identity's own slot, or — for a backdrop, when that slot holds the live
+    /// page's registrations — the one a backdrop keeps beside it.
+    ///
+    /// A picture drawn as a backdrop and one drawn live are never served for
+    /// each other (see ``EffectScope``), and with one slot per identity each
+    /// replaced the other: presenting a sheet overwrote every row the page had
+    /// stored, and dismissing it drew them all again. So an entry that recorded
+    /// registrations while drawn as a backdrop is stored under a second key
+    /// (``backdropKey(_:)``), and the live one stays where it was, served again
+    /// the moment the sheet goes. Everything else — no registrations, so the
+    /// same picture either way — keeps the one slot.
+    ///
+    /// The scope is read only when the own slot is empty or holds registrations,
+    /// as the check after it always was: the common entry costs no environment
+    /// read.
+    private func scopedEntry(for identity: ViewIdentity, effectScope: () -> EffectScope) -> CacheEntry? {
+        let own = entries[identity.structuralHash]
+        if let own, own.effects.isEmpty { return own }
+        guard effectScope().isBackdrop else { return own }
+        return entries[Self.backdropKey(identity.structuralHash)] ?? own
+    }
+
+    /// Where an entry drawn as a backdrop with registrations is kept: beside
+    /// the identity's own slot, not in it — see
+    /// ``scopedEntry(for:effectScope:)``. A mix of the structural hash, under
+    /// the bargain the plain key already strikes: a false hit needs this word
+    /// to equal another identity's hash AND the view values to compare equal.
+    private static func backdropKey(_ hash: Int) -> Int {
+        hash &* 0x5851_F42D_4C95_7F2D &+ 0x1405_7B7E_F767_814F
     }
 
     /// Stores a rendered buffer for a view identity.
@@ -672,15 +747,15 @@ extension RenderCache {
             identity: identity, view: view, buffer: buffer,
             contextWidth: contextWidth, contextHeight: contextHeight,
             gradientFrame: gradientFrame, surfaceBackground: surfaceBackground,
-            recorded: (effects: [], section: nil))
+            recorded: (effects: [], scope: .none))
     }
 
     /// Stores a rendered buffer with the registrations to make again on a hit.
     ///
     /// - Parameter recorded: The replayable registrations the render made into
-    ///   its own key channels, in order, and the focus section they were made
-    ///   in (`nil` when there are none). One parameter, as the pair is only
-    ///   ever meaningful together.
+    ///   its own key channels, in order, and where they were made (`.none`
+    ///   when there are none). One parameter, as the pair is only ever
+    ///   meaningful together.
     package func store<V: Equatable>(
         identity: ViewIdentity,
         view: V,
@@ -689,10 +764,13 @@ extension RenderCache {
         contextHeight: Int,
         gradientFrame: GradientFrame?,
         surfaceBackground: Color?,
-        recorded: (effects: [EffectJournal.Entry], section: String?)
+        recorded: (effects: [EffectJournal.Entry], scope: EffectScope)
     ) {
         stats.stores += 1
-        entries[identity.structuralHash] = CacheEntry(
+        let key =
+            !recorded.effects.isEmpty && recorded.scope.isBackdrop
+            ? Self.backdropKey(identity.structuralHash) : identity.structuralHash
+        entries[key] = CacheEntry(
             identity: identity,
             viewSnapshot: view,
             buffer: buffer,
@@ -701,7 +779,7 @@ extension RenderCache {
             gradientFrame: gradientFrame,
             surfaceBackground: surfaceBackground,
             effects: recorded.effects,
-            effectSection: recorded.section
+            effectScope: recorded.scope
         )
         logDebug("STORE \(identity.path)")
     }

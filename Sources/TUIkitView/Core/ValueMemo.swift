@@ -75,7 +75,7 @@ func renderValueMemoized<Key: Equatable>(
         contextWidth: context.availableWidth, contextHeight: context.availableHeight,
         gradientFrame: context.gradientFrame,
         surfaceBackground: context.environment.surfaceBackground,
-        effectSection: context.environment.activeFocusSectionID)
+        effectScope: context.effectScope)
     {
         // Keep the cached subtree's state alive for GC — the WHOLE subtree, not
         // just this identity: nothing below is visited on a hit, so a `@State`
@@ -164,12 +164,21 @@ func renderValueMemoized<Key: Equatable>(
             contextWidth: context.availableWidth, contextHeight: context.availableHeight,
             gradientFrame: context.gradientFrame,
             surfaceBackground: context.environment.surfaceBackground,
-            recorded: (effects, effects.isEmpty ? nil : context.environment.activeFocusSectionID))
+            recorded: (effects, effects.isEmpty ? .none : context.effectScope))
     }
     // Empties the journal when this was the outermost recording memo. An inner
     // one leaves its entries in place for the memo enclosing it.
     journal.endRecording()
     return buffer
+}
+
+extension RenderContext {
+    /// Where registrations made here are recorded — see
+    /// `RenderCache.EffectScope`.
+    fileprivate var effectScope: RenderCache.EffectScope {
+        RenderCache.EffectScope(
+            section: environment.activeFocusSectionID, isBackdrop: environment.drawsBackdrop)
+    }
 }
 
 /// The recorded registrations since `start` that went into `context`'s own key
