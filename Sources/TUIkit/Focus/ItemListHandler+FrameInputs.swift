@@ -102,7 +102,7 @@ extension ItemListHandler {
         followMargin = environment.scrollFollowMargin
         // §1.1: a USER wheel scroll releases a bound anchor to `.window` at
         // event time, and the anchor hold reads the declared mode.
-        anchorPositionBinding = environment.anchorPosition
+        anchorPositionBinding = environment.anchorPosition?.binding
         (declaredAnchorMode, declaredOpeningAnchorMode) = environment.declaredAnchorModes
         self.reorderFeedback = reorderFeedback
         self.keyboardMoveIsLive = keyboardMoveIsLive

@@ -51,7 +51,7 @@ struct DesignatedRowAnchorTests {
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
         if let anchored {
-            environment.anchorPosition = .constant(.row(AnyHashable(anchored)))
+            environment.anchorPosition = AnchorPositionBinding(.constant(.row(AnyHashable(anchored))))
         }
         let context = RenderContext(
             availableWidth: 30, availableHeight: Self.viewport,

@@ -77,7 +77,7 @@ struct TableRowAnchorHoldTests {
         env.focusManager = fm
         env.applyRuntimeServices(from: tui)
         if let anchored {
-            env.anchorPosition = .constant(.row(AnyHashable(anchored)))
+            env.anchorPosition = AnchorPositionBinding(.constant(.row(AnyHashable(anchored))))
         }
         let context = RenderContext(
             availableWidth: 28, availableHeight: height, environment: env, tuiContext: tui)

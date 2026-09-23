@@ -53,17 +53,47 @@ extension ErasedScrollAnchor {
     }
 }
 
+/// The binding `.anchorPosition` hands the scrollables below it, and the anchor
+/// it held when the modifier applied it.
+///
+/// Compared by that snapshot. A `Binding` is not `Equatable`, and an environment
+/// value that cannot be compared turns off every memo beneath it: every row of a
+/// list or lazy stack bound with `.anchorPosition` was drawn afresh every frame.
+/// Nor could two bindings be compared by what they hold — both read the same
+/// live storage, so they would always agree, and a changed anchor would never
+/// clear what was drawn under the old one. The snapshot is taken in the body
+/// that applies the modifier, so a new anchor arrives as a new snapshot: the
+/// subtree below is cleared, as it was before, and an unchanged one lets its
+/// memos serve.
+///
+/// Readers still read the LIVE value (``wrappedValue``), and the handlers keep
+/// the ``binding`` to write a user's scroll back through.
+struct AnchorPositionBinding: Equatable {
+    let binding: Binding<ErasedScrollAnchor?>
+    let snapshot: ErasedScrollAnchor?
+
+    init(_ binding: Binding<ErasedScrollAnchor?>) {
+        self.binding = binding
+        snapshot = binding.wrappedValue
+    }
+
+    /// The anchor the binding holds now.
+    var wrappedValue: ErasedScrollAnchor? { binding.wrappedValue }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.snapshot == rhs.snapshot }
+}
+
 private struct AnchorPositionKey: EnvironmentKey {
     // `Binding` is not `Sendable`, so the immutable `nil` default needs
     // `nonisolated(unsafe)` — the value never mutates, so it is genuinely safe
     // (the same treatment `\.editMode` gets).
-    nonisolated(unsafe) static let defaultValue: Binding<ErasedScrollAnchor?>? = nil
+    nonisolated(unsafe) static let defaultValue: AnchorPositionBinding? = nil
 }
 
 extension EnvironmentValues {
     /// The bound anchor override for scrollables in this subtree, or `nil` when
     /// none was supplied. See ``TUIkit/View/anchorPosition(_:)``.
-    var anchorPosition: Binding<ErasedScrollAnchor?>? {
+    var anchorPosition: AnchorPositionBinding? {
         get { self[AnchorPositionKey.self] }
         set { self[AnchorPositionKey.self] = newValue }
     }
@@ -130,6 +160,6 @@ extension View {
                     anchor.wrappedValue = .row(id)
                 }
             })
-        return environment(\.anchorPosition, erased)
+        return environment(\.anchorPosition, AnchorPositionBinding(erased))
     }
 }

@@ -35,7 +35,7 @@ private struct ComparabilitySpy: View, Renderable {
 }
 
 @MainActor
-@Suite("Memos inside a ScrollViewReader, a bound scroll position, a searchable")
+@Suite("Memos inside a ScrollViewReader, a bound scroll position or anchor, a searchable")
 struct ScrollViewReaderMemoTests {
     @Test("A reader's content sees an environment the memos can compare")
     func theReaderLeavesTheEnvironmentComparable() {
@@ -62,6 +62,19 @@ struct ScrollViewReaderMemoTests {
                 .scrollPosition(Binding(get: { position }, set: { position = $0 })),
             context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
         #expect(log.sawUncomparable == false, "the position box made the environment uncomparable")
+    }
+
+    /// And for a bound `.anchorPosition`, a `Binding` built afresh by every body
+    /// evaluation: compared by the anchor it held when the modifier applied it.
+    @Test("A bound anchor position leaves its content's environment comparable")
+    func aBoundAnchorLeavesTheEnvironmentComparable() {
+        let log = ComparabilityLog()
+        var anchor: ScrollAnchor<Int>?
+        _ = renderToBuffer(
+            ScrollView { ComparabilitySpy(log: log) }
+                .anchorPosition(Binding(get: { anchor }, set: { anchor = $0 })),
+            context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
+        #expect(log.sawUncomparable == false, "the anchor binding made the environment uncomparable")
     }
 
     /// And for a searchable's content, which is handed the action that ends

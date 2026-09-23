@@ -50,7 +50,7 @@ struct EdgeAnchorTests {
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
         environment.defaultScrollAnchor = declared
-        environment.anchorPosition = binding
+        environment.anchorPosition = binding.map(AnchorPositionBinding.init)
         let context = RenderContext(
             availableWidth: 30, availableHeight: Self.viewport,
             environment: environment, tuiContext: tuiContext)

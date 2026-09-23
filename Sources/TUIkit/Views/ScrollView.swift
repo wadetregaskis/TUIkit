@@ -293,7 +293,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         // Captured at render so a USER scroll can release a bound anchor to
         // `.window` at event time (the environment is out of reach there).
-        handler.anchorPositionBinding = context.environment.anchorPosition
+        handler.anchorPositionBinding = context.environment.anchorPosition?.binding
         (handler.declaredAnchorMode, handler.declaredOpeningAnchorMode) =
             context.environment.declaredAnchorModes
         handler.wheelEdgeHold.delayNanos = context.environment.scrollChainingDelay.clampedNanoseconds

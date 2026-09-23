@@ -64,7 +64,7 @@ struct ListEdgeAnchorTests {
         env.focusManager = fm
         env.applyRuntimeServices(from: tui)
         env.defaultScrollAnchor = declared
-        if let bound { env.anchorPosition = .constant(bound) }
+        if let bound { env.anchorPosition = AnchorPositionBinding(.constant(bound)) }
         let context = RenderContext(
             availableWidth: 28, availableHeight: Self.height + 3, environment: env, tuiContext: tui)
 
