@@ -337,6 +337,38 @@ struct AnchoredWindowTests {
             perFrame <= 8,
             "a steady uniform append frame re-measures a handful of rows, not the 64-row sample: \(perFrame)")
     }
+
+    /// The pins above are for the windowed paths, above 256 rows. Below that a
+    /// lazy stack walks every row, measuring them all and drawing the few in
+    /// the viewport, and nothing marked the rest: the memos deliberately do not
+    /// mark on a measure. So every row out of sight lost its size at the end of
+    /// every frame and was measured again on the next, three times over (the
+    /// enclosing measure, the scroll view's content measure, the render's own
+    /// walk). Found by the Stress `chat` session: 6 ms a frame at 200 messages,
+    /// where nothing on the screen had changed.
+    @Test("Below the window threshold, rows out of sight keep their measures across frames")
+    func fullWalkRowMeasuresMemoizeAcrossFrames() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        let log = MeasureLog()
+        let view = VStack(spacing: 0) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<200, id: \.self) { i in MeasureCountRow(log: log, index: i) }
+                }
+            }
+            .defaultScrollAnchor(.bottom)
+        }
+        .frame(height: Self.viewport)
+
+        for _ in 0..<2 {
+            renderScrollFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        }
+        let before = log.measures
+        renderScrollFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        let perFrame = log.measures - before
+        #expect(perFrame == 0, "an unchanged frame measured \(perFrame) rows")
+    }
 }
 
 /// The uniform-height sibling of ``MeasureCountRow`` — constant extent so

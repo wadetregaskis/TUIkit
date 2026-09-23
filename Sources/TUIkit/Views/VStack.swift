@@ -265,7 +265,8 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // exact walk asks it (`StackContentWidth.swift`), so a filling frame
         // answers with its content rather than the rung.
         let asksIdealWidth = proposal.width == nil && context.asksIdealWidth
-        let slots = naturalRowSlots(width: asksIdealWidth ? nil : widthLimit, context: measureContext)
+        let slots = naturalRowSlots(
+            width: asksIdealWidth ? nil : widthLimit, context: measureContext, keepsMeasuresLive: true)
 
         var widthFlexible = false
         var heightFlexible = false
@@ -812,7 +813,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // visitors): the window predicate below and any locate/enumerate
         // query agree on every row's y by construction. Width-aware, so a
         // wrapping row's slot is its wrapped height.
-        let slots = naturalRowSlots(width: width, context: childContext)
+        let slots = naturalRowSlots(width: width, context: childContext, keepsMeasuresLive: true)
 
         // A pending scrollTo: exact on this path — the slots carry every
         // row's true y. Re-aim the window before choosing the render set,

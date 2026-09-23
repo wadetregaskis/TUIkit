@@ -39,9 +39,22 @@ extension _VStackCore {
     /// Measurement-only: no rendering, no side effects. Callers inside a
     /// scroll window must pass a context whose `scrollContentWindow` is
     /// cleared (descendants aren't at the scroll origin).
-    func naturalRowSlots(width: Int?, context: RenderContext) -> [RowSlot] {
+    ///
+    /// `keepsMeasuresLive` marks every row measured here live for the render
+    /// cache's end-of-pass collection. A LAZY stack passes `true`: it draws
+    /// only the rows in its viewport, and the memos deliberately do not mark
+    /// on a measure (ebf547fe: doing so cost +13.5% on a giant eager tree), so
+    /// nothing else marks the rest. Unmarked, every one of those rows lost its
+    /// measure memo at the end of every frame and was measured from scratch on
+    /// the next: a 250-message chat spent 6 ms a frame re-measuring bubbles
+    /// nobody could see. The windowed paths above 256 rows mark the rows they
+    /// touch for the same reason (`AnchoredWindowFrame.pitch`); this is the
+    /// same mark on the path below that threshold, bounded by the rows this
+    /// stack holds. An eager stack draws every row, so the render marks them.
+    func naturalRowSlots(width: Int?, context: RenderContext, keepsMeasuresLive: Bool = false) -> [RowSlot] {
         let children = resolveChildViews(from: content, context: context)
         let proposal = ProposedSize(width: width, height: nil)
+        let liveMarks = keepsMeasuresLive ? context.renderCache : nil
         var slots: [RowSlot] = []
         slots.reserveCapacity(children.count)
         var runningY = 0
@@ -55,6 +68,7 @@ extension _VStackCore {
             // stack's seek reads these slots too) aimed one line past their row
             // per empty row above.
             let size = child.measure(proposal: proposal, context: context)
+            liveMarks?.markActive(child.identity(under: context))
             let spacingBefore = linearSpacing(before: size.height, placedExtent: runningY, spacing: spacing)
             let y = runningY + spacingBefore
             slots.append(RowSlot(child: child, y: y, size: size, spacingBefore: spacingBefore))
