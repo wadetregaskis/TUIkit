@@ -163,6 +163,7 @@ enum Sessions {
         SettingsSession.descriptor,
         ChatSession.descriptor,
         NotesSession.descriptor,
+        PlaylistSession.descriptor,
     ]
 
     @MainActor
