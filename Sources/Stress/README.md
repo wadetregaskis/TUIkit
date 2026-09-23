@@ -171,6 +171,7 @@ focus.
 | `editor` | an index-keyed code editor in a two-axis scroll view: a row's width moving under an unchanged collection, the kept all-rows width, `scrollTo` following the caret, per-keystroke frames |
 | `inbox` | a searchable, selectable `List` of items that arrive, leave, move and change underneath: keyed rows around the selection, the row memo, `List` windowing, a search narrowing and restoring the collection, focus between a field and a list |
 | `log` | a log viewer following its end while lines arrive in bursts, and a reader paging back: a bottom-anchored lazy stack growing under the viewport, wrapped lines of unequal height, `scrollPosition(id:)` reporting the top line |
+| `settings` | a settings `Form` worked through with the keyboard while accounts sync in and out: focus traversal, toggles, a picker, a stepper, a disclosure group opening and closing, every row re-shown when the units change |
 | `processes` | a sortable, filterable process `Table` whose numbers move on every step: `.fit` columns and the row memo under continuous churn, re-sorting, a filter narrowing the rows, rows appended and removed, selection moved with the keys |
 
 Adding one: a `StressSession` — a page built once over a model the session
