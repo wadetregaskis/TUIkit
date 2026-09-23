@@ -35,7 +35,7 @@ private struct ComparabilitySpy: View, Renderable {
 }
 
 @MainActor
-@Suite("Memos inside a ScrollViewReader")
+@Suite("Memos inside a ScrollViewReader or a bound scroll position")
 struct ScrollViewReaderMemoTests {
     @Test("A reader's content sees an environment the memos can compare")
     func theReaderLeavesTheEnvironmentComparable() {
@@ -48,6 +48,20 @@ struct ScrollViewReaderMemoTests {
             },
             context: context)
         #expect(log.sawUncomparable == false, "the reader's registry made the environment uncomparable")
+    }
+
+    /// The same for a scroll view bound with `.scrollPosition`, whose box is
+    /// built afresh by every body evaluation: compared by its anchor, the one
+    /// thing the content reads of it, it leaves the environment comparable.
+    @Test("A bound scroll position leaves its content's environment comparable")
+    func aBoundPositionLeavesTheEnvironmentComparable() {
+        let log = ComparabilityLog()
+        var position = ScrollPosition()
+        _ = renderToBuffer(
+            ScrollView { ComparabilitySpy(log: log) }
+                .scrollPosition(Binding(get: { position }, set: { position = $0 })),
+            context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
+        #expect(log.sawUncomparable == false, "the position box made the environment uncomparable")
     }
 
     @Test("A row inside a reader is served from the row memo on an unchanged frame")

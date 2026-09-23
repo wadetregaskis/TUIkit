@@ -234,6 +234,28 @@ final class ScrollPositionBinding {
     }
 }
 
+/// Equal when the ANCHOR is: the one thing the scroll view's content reads
+/// of it while drawing.
+///
+/// The box is built afresh by every evaluation of the body that applies
+/// `.scrollPosition`, so it has no identity to compare, and it was not
+/// `Equatable` at all — which turned every memo off beneath it: a log viewer
+/// that reported its top line spent 800 µs on a frame where nothing had
+/// changed (`Stress --session log`). Compared by identity it would be worse,
+/// a change on every frame and the scroll view's caches cleared with it.
+///
+/// What the binding HOLDS is read by the scroll view itself, on every render
+/// it makes (`positionSeek`, `applyPositionOffset`, the report of the row it
+/// shows) — none of which a memo below it serves — and a request an app makes
+/// by writing the binding reaches the scroll view as a write to the app's own
+/// state, which invalidates the view that holds it. The content reads only
+/// where the reported row is sampled, the anchor.
+extension ScrollPositionBinding: Equatable {
+    nonisolated static func == (lhs: ScrollPositionBinding, rhs: ScrollPositionBinding) -> Bool {
+        lhs.anchor == rhs.anchor
+    }
+}
+
 private struct ScrollPositionBindingKey: EnvironmentKey {
     static let defaultValue: ScrollPositionBinding? = nil
 }
