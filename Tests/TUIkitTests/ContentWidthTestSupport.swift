@@ -23,9 +23,9 @@ final class WidthBox {
     init(cells: Int) { self.cells = cells }
 }
 
-/// A two-axis `ScrollView` over a `LazyVStack` of `rows()` rows, driven frame
-/// after frame through ONE cache as the render loop drives it — pass tracker
-/// and all — returning each
+/// A two-axis `ScrollView` over a `LazyVStack` — or, `eager`, a `VStack` — of
+/// `rows()` rows, driven frame after frame through ONE cache as the render
+/// loop drives it — pass tracker and all — returning each
 /// frame's bottom line — the horizontal bar, when there is one — with its
 /// styling, which is where the thumb is: stripped, a bar is its two arrows and
 /// blanks. The view is rebuilt each frame, as a body is, so a count read from a
@@ -33,12 +33,18 @@ final class WidthBox {
 @MainActor
 func twoAxisFrames<Row: View>(
     tuiContext: TUIContext, rows: @escaping () -> Int = { 400 }, width: Int = 40,
-    row: @escaping (Int) -> Row
+    eager: Bool = false, row: @escaping (Int) -> Row
 ) -> () -> String {
     {
         let view = ScrollView([.horizontal, .vertical]) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<rows(), id: \.self) { index in row(index) }
+            if eager {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<rows(), id: \.self) { index in row(index) }
+                }
+            } else {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<rows(), id: \.self) { index in row(index) }
+                }
             }
         }
         var environment = EnvironmentValues()

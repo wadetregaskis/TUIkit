@@ -767,11 +767,13 @@ extension _VStackCore {
             // entries alive across the pass GC (see AnchoredWindowFrame.pitch).
             measureContext.renderCache?.markActive(child.identity(under: measureContext))
             guard size.height == extent else { return nil }  // falsified: exact walk
-            // With the exact answer in hand, a filler counts as the walk counts
-            // it: its flexibility, not the width it was offered.
-            if exact == nil || !size.isWidthFlexible {
-                maxWidth = max(maxWidth, min(size.width, widthLimit))
-            }
+            // With the exact answer in hand, a row counts as the walk counts
+            // it: a filler its flexibility, not the width it was offered.
+            maxWidth = max(
+                maxWidth,
+                exact == nil
+                    ? min(size.width, widthLimit)
+                    : wholeContentWidth(of: size, limit: widthLimit))
             if size.isWidthFlexible { widthFlexible = true }
             if size.isHeightFlexible { heightFlexible = true }
         }

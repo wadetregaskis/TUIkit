@@ -148,22 +148,23 @@ struct ContentWidthRecord {
     let rows: AnyEquatableBox
     /// How many leading rows `widest` is the maximum over.
     let covered: Int
-    /// The widest INFLEXIBLE row among them. A row that fills whatever it is
-    /// offered has no natural width to contribute; it contributes `isFlexible`.
+    /// The widest row among them that has a width of its own. A row that
+    /// fills whatever it is offered has none to contribute; it contributes
+    /// `isFlexible` (``wholeContentWidth(of:limit:)``).
     /// Moved in place when a challenge finds that row wider than it was, or
     /// narrower but still at least ``runnerUp``.
     var widest: Int
     /// Which row that was — the one `challenge` re-measures after a write.
-    /// `nil` when every row was flexible: no row's width decided the answer, so
-    /// there is nothing to challenge, and a write that makes a row inflexible is
-    /// inside the residue `challenge` states.
+    /// `nil` when no row had a width of its own: no row's width decided the
+    /// answer, so there is nothing to challenge, and a write that gives a row
+    /// one is inside the residue `challenge` states.
     let widestOrdinal: Int?
     /// The proposal width that row was measured under, which `challenge`
     /// measures it under again: a width taken under one proposal is only
     /// comparable with one taken under the same proposal, because a row wider
     /// than a proposal WRAPS to it rather than reporting that it is wider.
     let measuredAt: Int
-    /// The second-widest inflexible row's width — a bound, not a row: every
+    /// The second-widest such row's width — a bound, not a row: every
     /// row but the widest is at most this wide, so a challenge that finds the
     /// widest row narrower but still at least this wide knows the new maximum
     /// exactly. `0` when there is no second row.
@@ -282,7 +283,10 @@ extension _VStackCore {
         let (measureContext, tracker) = rowWidthContext(context, width: widthLimit)
         let unsafeBefore = tracker.cacheUnsafeCount
 
-        let proposal = ProposedSize(width: widthLimit, height: nil)
+        // Unproposed, under the mark: each row is asked its IDEAL width, which
+        // is the question — a filling frame answers with its content rather
+        // than the rung (``RenderContext/asksIdealWidth``).
+        let proposal = ProposedSize(width: nil, height: nil)
         var walked = from
         // An inherited maximum can already be at this ask's ceiling — a wider
         // ask kept it — and then there is nothing left to walk for: the answer
@@ -293,14 +297,11 @@ extension _VStackCore {
             let ordinal = walked
             let size = children[ordinal].measure(proposal: proposal, context: measureContext)
             walked += 1
-            // A row that fills whatever it is offered has no natural width:
-            // folding its clamped measurement into the maximum would report the
-            // ladder's budget as the content's width. It contributes its
-            // flexibility instead, which is what ends the ladder.
-            if size.isWidthFlexible {
-                isFlexible = true
-                continue
-            }
+            if size.isWidthFlexible { isFlexible = true }
+            // A row with no width of its own contributes only its flexibility,
+            // and is never the row a challenge re-measures — see
+            // `wholeContentWidth(of:limit:)`.
+            if hasNoWidthOfItsOwn(size, limit: widthLimit) { continue }
             if size.width >= widthLimit {
                 widest = widthLimit
                 widestOrdinal = ordinal
@@ -400,10 +401,11 @@ extension _VStackCore {
     ///   the widest now and only a walk can say which.
     /// * **At or past the width it was measured at** — it falls: the row
     ///   outgrew the ceiling it was measured against, by an amount a measure
-    ///   under that ceiling cannot say.
-    /// * **Flexible** — it falls: a row that fills whatever it is offered has
-    ///   no width to hold the maximum with, so which row does is a walk's
-    ///   question too.
+    ///   under that ceiling cannot say — or it fills whatever it is offered
+    ///   now, and has no width to hold the maximum with, so which row does is
+    ///   a walk's question too. A row that is flexible BELOW that width — a
+    ///   filling frame, answering with its content — holds by its width like
+    ///   any other.
     ///
     /// The row is MEASURED, not remembered: its own memoized sizes are
     /// forgotten first (``RenderCache/forgetSizes(of:measureGeneration:)``).
@@ -477,12 +479,10 @@ extension _VStackCore {
         context.renderCache?.forgetSizes(
             of: row.identity(under: measureContext),
             measureGeneration: measureContext.measureGeneration)
-        let size = row.measure(
-            proposal: ProposedSize(width: record.measuredAt, height: nil),
-            context: measureContext)
-        guard !size.isWidthFlexible, size.width < record.measuredAt,
-            size.width >= record.runnerUp
-        else { return false }
+        // Asked as the walk asks — unproposed, under the mark — or the two
+        // answers are not comparable.
+        let size = row.measure(proposal: ProposedSize(width: nil, height: nil), context: measureContext)
+        guard size.width < record.measuredAt, size.width >= record.runnerUp else { return false }
         record.widest = size.width
         // Read AFTER the measure: a clear the measure itself caused — a row's
         // environment modifier noting a change — is one this answer reflects.
@@ -524,4 +524,31 @@ extension _VStackCore {
 /// answered, whether `measureNaturalExtent` climbs past its first rung.
 func wholeContentFlexibility(_ isFlexible: Bool, width: Int, limit: Int) -> Bool {
     isFlexible && width < limit
+}
+
+/// What one row adds to a whole-content width answer: its width, capped at
+/// the limit — or nothing, when it came back flexible AT the limit. Such a
+/// row reported what it was offered, and would report any other offer
+/// just the same (a `TextEditor`, a nested `List`), so it has no width to
+/// contribute and contributes its flexibility instead; counted, it put the
+/// ladder's rung into the answer as if a row were that wide.
+///
+/// A flexible row BELOW the limit counts like any other. Under the
+/// ideal-width ask that is what a `.frame(maxWidth: .infinity)` answers —
+/// its content's width (``RenderContext/asksIdealWidth``) — and it was
+/// once left out of the maximum with the true fillers, so a filler whose
+/// text was the widest thing in the content was cut at the viewport.
+///
+/// The one rule for every arm that answers the natural-width ask, and for
+/// the eager column (`clipSizeThatFits`), for the reason
+/// ``wholeContentFlexibility(_:width:limit:)`` gives.
+func wholeContentWidth(of size: ViewSize, limit: Int) -> Int {
+    hasNoWidthOfItsOwn(size, limit: limit) ? 0 : min(size.width, limit)
+}
+
+/// Whether a row came back flexible at the limit — filling what it was
+/// offered, with no width of its own. See
+/// ``wholeContentWidth(of:limit:)``.
+func hasNoWidthOfItsOwn(_ size: ViewSize, limit: Int) -> Bool {
+    size.isWidthFlexible && size.width >= limit
 }

@@ -299,7 +299,8 @@ extension FlexibleFrameView: Layoutable {
     /// always width-flexible, so its size needs no flexibility probe — a single
     /// content measure (structural when the content is itself `Layoutable`, the
     /// common `VStack`/`HStack`/`Text` case) gives the height, and the width is
-    /// the available width. Every other constraint shape measures analytically
+    /// the available width — or, asked for its ideal width, its content's. Every
+    /// other constraint shape measures analytically
     /// too, by mirroring `renderToBuffer`'s sizing math around one content
     /// measure — see `measureAnalytically(proposal:context:)`.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
@@ -309,6 +310,14 @@ extension FlexibleFrameView: Layoutable {
 
         let availableWidth = proposal.width ?? context.availableWidth
         let availableHeight = proposal.height ?? context.availableHeight
+        // The ideal-width ask — a nil width under the horizontal probe's mark,
+        // ``RenderContext/asksIdealWidth`` — is the width half of what
+        // `contentTargetHeight(availableHeight:fills:)` says of heights: "as
+        // wide as I'm given" has no answer when nothing was given, so the frame
+        // answers with its content, as SwiftUI's does under an unspecified
+        // proposal. Anywhere else a nil width means the available width, as it
+        // always has in TUIkit, and the frame fills it.
+        let asksIdealWidth = proposal.width == nil && context.asksIdealWidth
 
         // Measure the content once, in the same context renderToBuffer renders
         // it in (full width, optional fixed height, explicit-width flag), to get
@@ -319,8 +328,12 @@ extension FlexibleFrameView: Layoutable {
         // (see `contentTargetHeight(availableHeight:fills:)`).
         let fillsHeight = proposal.height != nil
         let targetHeight = contentTargetHeight(availableHeight: availableHeight, fills: fillsHeight)
+        // Under the ideal-width ask the content is asked ITS ideal width, or
+        // offered the frame's own ideal when it has one.
+        let contentProposalWidth: Int? =
+            asksIdealWidth ? idealWidth.map { max(0, min($0, availableWidth)) } : availableWidth
         var contentContext = context
-        contentContext.availableWidth = availableWidth
+        contentContext.availableWidth = contentProposalWidth ?? availableWidth
         if let targetHeight {
             contentContext.availableHeight = targetHeight
         }
@@ -331,8 +344,25 @@ extension FlexibleFrameView: Layoutable {
         }
         let contentSize = measureChild(
             content,
-            proposal: ProposedSize(width: availableWidth, height: targetHeight),
+            proposal: ProposedSize(width: contentProposalWidth, height: targetHeight),
             context: contentContext)
+
+        // Flexible under the ideal-width ask too — it still fills whatever it
+        // is later given — except where the answer is CAPPED: the ladder stops
+        // climbing at a flexible answer that reached its budget, and a frame
+        // whose content, minimum or ideal is wider than the budget has a real
+        // width past it. Content that itself fills whatever it is given has
+        // none, and says so.
+        var width = availableWidth
+        var isWidthFlexible = true
+        if asksIdealWidth {
+            let wanted = max(idealWidth ?? contentSize.width, minWidth ?? 0)
+            width = max(0, min(wanted, availableWidth))
+            isWidthFlexible =
+                wanted < availableWidth
+                || (idealWidth == nil && (minWidth ?? 0) < availableWidth
+                    && contentSize.isWidthFlexible)
+        }
 
         var height = contentSize.height
         if let minHeight {
@@ -350,8 +380,8 @@ extension FlexibleFrameView: Layoutable {
         // height, "can grow" is the only thing distinguishing this from a rigid frame,
         // and the measure/render parity harness reads it.
         return ViewSize(
-            width: availableWidth, height: height,
-            isWidthFlexible: true,
+            width: width, height: height,
+            isWidthFlexible: isWidthFlexible,
             isHeightFlexible: hasInfiniteMaxHeight || contentSize.isHeightFlexible)
     }
 

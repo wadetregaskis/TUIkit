@@ -779,14 +779,17 @@ extension _VStackCore {
         var widthFlexible = false
         var heightFlexible = false
         for size in sampled.prefix(prefix) {
-            // With the exact answer in hand a filler counts as the walk counts
-            // it — its flexibility, not the budget it was measured under — so
-            // that this arm and the walk give one answer to one question: the
-            // uniform path answers with the walk from the second frame for rows
-            // of one height, and this answers every frame for rows of several.
-            if exact == nil || !size.isWidthFlexible {
-                maxWidth = max(maxWidth, min(size.width, widthLimit))
-            }
+            // With the exact answer in hand a row counts as the walk counts it
+            // — a filler its flexibility, not the budget it was measured under
+            // (`wholeContentWidth(of:limit:)`) — so that this arm and the walk
+            // give one answer to one question: the uniform path answers with
+            // the walk from the second frame for rows of one height, and this
+            // answers every frame for rows of several.
+            maxWidth = max(
+                maxWidth,
+                exact == nil
+                    ? min(size.width, widthLimit)
+                    : wholeContentWidth(of: size, limit: widthLimit))
             if size.isWidthFlexible { widthFlexible = true }
             if size.isHeightFlexible { heightFlexible = true }
         }

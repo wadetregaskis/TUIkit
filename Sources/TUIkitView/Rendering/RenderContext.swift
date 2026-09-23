@@ -244,14 +244,17 @@ public struct RenderContext {
     /// `nil` means SwiftUI's unspecified: a view that fills whatever it is
     /// offered reports what it would be if it were offered nothing, rather than
     /// the probe's budget.
+    @inlinable
     package var asksIdealWidth: Bool { measureGeneration & 0x80 != 0 }
 
     /// ``measureGeneration`` without the ideal-width mark: the generation a
     /// value kept across passes is compared by, since an answer filed under
     /// the probe is the same answer when a render asks for it.
+    @inlinable
     package var generationIgnoringIdealWidth: UInt8 { measureGeneration & 0x7F }
 
     /// This context with the ideal-width mark set or cleared.
+    @inlinable
     package func askingIdealWidth(_ asks: Bool = true) -> Self {
         var copy = self
         copy.measureGeneration = asks ? copy.measureGeneration | 0x80 : copy.measureGeneration & 0x7F

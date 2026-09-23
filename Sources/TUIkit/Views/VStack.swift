@@ -125,18 +125,26 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // "occupies nothing" would drop one `spacing` from the reported minimum
         // of every column that has one.
         var occupiedRows = 0
+        let widthLimit = proposal.width ?? context.availableWidth
+        // Asked for its ideal width — the horizontal probe, through a nil
+        // proposal — a column counts its rows as the windowed twin's arms do:
+        // a row that came back filling the limit has no width of its own, and
+        // counted, it made the column as wide as the ladder's rung
+        // (`wholeContentWidth(of:limit:)`).
+        let asksIdealWidth = proposal.width == nil && context.asksIdealWidth
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
             if !size.isNaturalSize { childrenAreNatural = false }
             tallestChild = max(tallestChild, size.height)
             if child.isSpacer || size.height > 0 { occupiedRows += 1 }
+            let width = asksIdealWidth ? wholeContentWidth(of: size, limit: widthLimit) : size.width
             if hasGuides {
                 guideSizes.append(
                     child.isSpacer
-                        ? (width: 0, height: 0) : (width: size.width, height: size.height))
+                        ? (width: 0, height: 0) : (width: width, height: size.height))
             }
             totalHeight += size.height
-            maxWidth = max(maxWidth, size.width)
+            maxWidth = max(maxWidth, width)
             if child.isSpacer || size.isHeightFlexible {
                 hasFlexibleHeight = true
             }
@@ -165,14 +173,17 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // Never advertise a size larger than the constraint we were given —
         // an over-report would make the parent reserve space that does not
         // exist and let content overlap.
-        let widthLimit = proposal.width ?? context.availableWidth
         let heightLimit = proposal.height ?? context.availableHeight
         // A guide can make the column wider than its widest child; the report
-        // has to say so or the parent reserves too little and clips it.
+        // has to say so or the parent reserves too little and clips it. A
+        // flexible child fills the limit when drawn — but not when the column
+        // is asked its ideal width, where the limit is the ladder's rung and
+        // fixing the run to it made every answer capped, and the ladder climb
+        // after it to the edge of `Int`.
         if hasGuides,
             let run = horizontalGuideRun(
                 children, sizes: guideSizes, alignment: alignment,
-                fixedExtent: hasFlexibleWidth ? max(0, widthLimit) : nil,
+                fixedExtent: hasFlexibleWidth && !asksIdealWidth ? max(0, widthLimit) : nil,
                 minimumExtent: maxWidth)
         {
             maxWidth = run.extent
@@ -190,10 +201,18 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // heights is already at least its own maximum — the test earns its keep
         // for a NEGATIVE `spacing`, which subtracts from the total and could
         // otherwise report a column shorter than a child inside it.
+        //
+        // Under the ideal-width ask a CAPPED width is not flexible, as the
+        // windowed twin's is not (`wholeContentFlexibility(_:width:limit:)`):
+        // the ladder stops climbing at a flexible answer that reached its
+        // budget, and a row wider than the budget decided this one.
+        let width = min(maxWidth, max(0, widthLimit))
         return ViewSize(
-            width: min(maxWidth, max(0, widthLimit)),
+            width: width,
             height: min(totalHeight, max(0, heightLimit)),
-            isWidthFlexible: hasFlexibleWidth,
+            isWidthFlexible: asksIdealWidth
+                ? wholeContentFlexibility(hasFlexibleWidth, width: width, limit: widthLimit)
+                : hasFlexibleWidth,
             isHeightFlexible: hasFlexibleHeight
         ).declaringNaturalSize(
             childrenAreNatural && totalHeight <= max(0, heightLimit) && tallestChild <= totalHeight)
@@ -242,7 +261,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         let widthLimit = proposal.width ?? context.availableWidth
         let heightLimit = proposal.height ?? context.availableHeight
-        let slots = naturalRowSlots(width: widthLimit, context: measureContext)
+        // Under the ideal-width ask each row is asked ITS ideal width, as the
+        // exact walk asks it (`StackContentWidth.swift`), so a filling frame
+        // answers with its content rather than the rung.
+        let asksIdealWidth = proposal.width == nil && context.asksIdealWidth
+        let slots = naturalRowSlots(width: asksIdealWidth ? nil : widthLimit, context: measureContext)
 
         var widthFlexible = false
         var heightFlexible = false
@@ -274,17 +297,14 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // The ask a two-axis `ScrollView` makes for how far right it can
         // scroll. For rows of one height it is answered by the exact walk
         // (`StackContentWidth.swift`) from the second frame; for rows of
-        // several, by this on every frame. The walk counts a filler's
-        // flexibility, not the width it was offered, and never calls a capped
-        // answer flexible — counted the same way here, or the first frame
-        // answers the ladder's rung and the second the rows. Which ask this is
-        // comes from `contentWidthAsk`, by the probe's own mark.
-        let fillersAreWidthless =
-            collection.dataSignature != nil
-            && measureContext.contentWidthAsk(
-                proposal: proposal, widthLimit: widthLimit, heightLimit: heightLimit) == .probe
+        // several, by this on every frame. The walk leaves out a row with no
+        // width of its own and never calls a capped answer flexible — counted
+        // the same way here, or the first frame answers the ladder's rung and
+        // the second the rows (`wholeContentWidth(of:limit:)`).
         func counted(_ slot: RowSlot) -> Int {
-            fillersAreWidthless && slot.size.isWidthFlexible ? 0 : min(slot.width, widthLimit)
+            asksIdealWidth
+                ? wholeContentWidth(of: slot.size, limit: widthLimit)
+                : min(slot.width, widthLimit)
         }
         var height = 0
         var maxWidth = 0
@@ -320,17 +340,17 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // own widest row as the floor (the render's floor is the widest
         // buffer). Costs nothing when no row sets a guide, which is almost
         // always: `anyAlignmentGuide` is asked first.
-        // The guide run counts fillers as `counted` does. Given their raw
-        // widths — the rung they were offered — it came out at the limit, the
-        // rule above called that capped and inflexible, and the ladder climbed
+        // The guide run counts rows as `counted` does. Given a filler's raw
+        // width — the rung it was offered — it came out at the limit, the rule
+        // above called that capped and inflexible, and the ladder climbed
         // every rung to the edge of `Int`, the filler reporting each new rung.
         let guideRun = slotGuideRun(
             slots, fixedExtent: nil, minimumExtent: maxWidth,
-            fillersAreWidthless: fillersAreWidthless)
+            idealWidthLimit: asksIdealWidth ? widthLimit : nil)
         let width = min(guideRun?.extent ?? maxWidth, widthLimit)
         return ViewSize(
             width: width, height: height,
-            isWidthFlexible: fillersAreWidthless
+            isWidthFlexible: asksIdealWidth
                 ? wholeContentFlexibility(widthFlexible, width: width, limit: widthLimit)
                 : widthFlexible,
             isHeightFlexible: heightFlexible)
@@ -751,15 +771,23 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// The explicit-guide run over a windowed stack's slots, or `nil` — the
     /// common answer, which is why the question is asked before the two arrays
     /// that would carry it are built. See ``anyAlignmentGuide(in:)``.
+    ///
+    /// - Parameter idealWidthLimit: The limit of an ideal-width ask, whose rows
+    ///   are counted by ``wholeContentWidth(of:limit:)``; `nil` for any other,
+    ///   whose rows count as drawn.
     private func slotGuideRun(
         _ slots: [RowSlot], fixedExtent: Int?, minimumExtent: Int = 0,
-        fillersAreWidthless: Bool = false
+        idealWidthLimit: Int? = nil
     ) -> AlignmentGuideRun? {
         guard anyAlignmentGuide(in: slots.map(\.child)) else { return nil }
         return horizontalGuideRun(
             slots.map(\.child),
-            sizes: slots.map {
-                (width: fillersAreWidthless && $0.size.isWidthFlexible ? 0 : $0.width, height: $0.height)
+            sizes: slots.map { slot in
+                (
+                    width: idealWidthLimit.map { wholeContentWidth(of: slot.size, limit: $0) }
+                        ?? slot.width,
+                    height: slot.height
+                )
             },
             alignment: alignment,
             fixedExtent: fixedExtent,
