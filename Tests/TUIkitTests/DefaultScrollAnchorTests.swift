@@ -16,6 +16,31 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
+/// A log as a whole app: 200 lines in a scroll view anchored at its end.
+private struct TailApp: App {
+    let lazy: Bool
+
+    init() { lazy = true }
+    init(lazy: Bool) { self.lazy = lazy }
+
+    var body: some Scene {
+        WindowGroup {
+            ScrollView {
+                if lazy {
+                    LazyVStack(alignment: .leading, spacing: 0) { lines }
+                } else {
+                    VStack(alignment: .leading, spacing: 0) { lines }
+                }
+            }
+            .defaultScrollAnchor(.bottom)
+        }
+    }
+
+    private var lines: some View {
+        ForEach(0..<200, id: \.self) { index in Text("line \(index)") }
+    }
+}
+
 @MainActor
 @Suite("defaultScrollAnchor(.bottom)")
 struct DefaultScrollAnchorTests {
@@ -208,6 +233,20 @@ struct DefaultScrollAnchorTests {
                 focusManager: focusManager)
         }
         #expect(grown.contains { $0.contains("line 439") }, "follows on estimates: \(grown)")
+    }
+
+    /// Through the real render loop, whose first frame runs a measuring walk
+    /// (to size the app header) before the render. That walk records the
+    /// content's height, and the opening frame's glue — once implied by a
+    /// height of 0 — then saw an offset of 0 short of the maximum: every app
+    /// opened its bottom-anchored views at the top. The tests above render the
+    /// view directly, which runs no such walk.
+    @Test("An app opens a bottom-anchored view at its end", arguments: [true, false])
+    func anAppOpensAtTheEnd(lazy: Bool) {
+        let app = HeadlessApp(TailApp(lazy: lazy), width: 30, height: 8)
+        app.frame(atNanos: 0)
+        let screen = app.screen.map(\.stripped)
+        #expect(screen.contains { $0.contains("line 199") }, "opened at: \(screen)")
     }
 
     @Test("Without the anchor, the view starts at the top (unchanged default)")

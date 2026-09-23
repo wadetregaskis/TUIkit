@@ -25,9 +25,16 @@ extension _ScrollViewCore {
     /// cover the difference (it does for the common one-row append).
     /// Scrolling up breaks the condition (offset < max) and appends stop
     /// moving the view; any scroll that lands back at the bottom
-    /// re-engages. The very first frame (contentHeight 0, offset 0) is
-    /// glued by construction, giving the initial at-the-tail placement.
-    /// Vertical only.
+    /// re-engages. Vertical only.
+    ///
+    /// The OPENING frame is glued by definition, not by those numbers: that is
+    /// the initial at-the-tail placement. It used to follow from them — a view
+    /// that has never been drawn has a content height of 0, so an offset of 0
+    /// is its maximum — until every app's first frame began to run a measuring
+    /// walk first (to size the app header), which records the real height. The
+    /// render after it then saw an offset of 0 far short of the maximum, and a
+    /// bottom-anchored view opened at its TOP in every app. Tests rendering the
+    /// view directly never ran that walk; `HeadlessApp` does.
     ///
     /// Deliberately NO pre-render tail estimate: this used to measure the
     /// whole content tree every glued frame to pre-position the offset, and
@@ -57,7 +64,7 @@ extension _ScrollViewCore {
         // programmatic scroll is exactly the "scrolling away releases the
         // follow" interaction, expressed in code.
         return followsBottom && handler.pendingScrollTo == nil
-            && handler.scrollOffset >= handler.maxOffset
+            && (!handler.hasOpened || handler.scrollOffset >= handler.maxOffset)
     }
 
     /// Adopts a bound anchor the app just *wrote*: `.top` jumps to the top,
