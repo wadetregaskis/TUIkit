@@ -63,7 +63,7 @@ content, at both ends, specifiable as **absolute** rows (`5`) and
 
 | Spec item | State (all on `main`) |
 |---|---|
-| Bottom mode | **Shipped**, on every scrollable (`db848b03`, `2d9931e3`). Starts at the tail and follows appends; scrolling up releases it and scrolling back re-engages, because engagement is POSITIONAL (being at the tail *is* the follow — no stored flag to fall out of step). Available from the declaration *and* from a bound `.anchorPosition`, whose write jumps to the edge (§3.2's `anchor(to:)`). **End re-engages** it explicitly. |
+| Bottom mode | **Shipped**, on every scrollable (`db848b03`, `2d9931e3`). Starts at the tail and follows appends; scrolling up releases it and scrolling back re-engages, because engagement is POSITIONAL (being at the tail *is* the follow — no stored flag to fall out of step). Available from the declaration *and* from a bound `.anchorPosition`, whose write jumps to the edge (§3.2's `anchor(to:)`). **End re-engages** it explicitly. "At the tail" means the tail **as last drawn** — content AND viewport from the frame the user is looking at (`ScrollViewHandler.tailAsLastDrawn`, the `ScrollView` twin of `ItemListHandler.bottomFollowBound`): judged against this frame's viewport, a terminal that shrank released the follow (`df0bd527`). A glued frame whose tail is an estimate re-glues until the tail holds still (at most four passes): once was not enough for a burst of wrapping lines, and the log let go of its end (`a489def4`). |
 | Top mode | **Shipped** (`28ef33e6`), and smaller than it looks. Top asks only that the view stay at the start, and a scroll offset of 0 is not moved by *any* data change — so once the edge modes stopped hijacking the row-identity re-bind (below), Top needed no offset logic at all. Writing `.top` into the binding jumps there; after that it is positional like Bottom. It is deliberately indistinguishable from Window once the user has scrolled away — snapping back unconditionally would nail a `.defaultScrollAnchor(.top)` view to the top and make it unscrollable, which is worse than useless. |
 | Window mode (default) | **Resolved (slice 1).** Was divergent: the uniform-extent path behaved as Window, but the anchored (variable-height) path re-bound its anchor to the row's identity every frame (§5f ladder), so an insert-above *held the row* — Row semantics, silently, as the default. Policy is now explicit: `ScrollAnchorMode` (Top/Bottom/Row/Window) is resolved from the environment and passed to `rebindAnchor(mode:)`, which **skips the key re-bind in Window mode**, keeping the ordinal and therefore the position in line coordinates. The ladder machinery is untouched — it now runs only for the row-holding modes, exactly the one branch this row predicted. `AnchorLadderTests` asserts the new default (prepending shifts the view); the test that asserted the placeholder row-holding default was retargeted, not deleted. Note the trade-off the original entry recorded: identity-binding also stabilised against extent-estimate error, so Window leans harder on the estimate — watch for drift on very large variable-height data. |
 | Row mode | **Shipped.** `.anchorPosition(_:)` designates a row, and every scrollable holds it — the three stack render paths, `List`, and `Table` (`017683fa`; Table had never been wired to the anchor at all). See §3.4. The one remaining restriction is that a raw stack must be LAZY. |
@@ -84,11 +84,22 @@ it the standing one*, which for a view using the unlabelled form substitutes a
 value for itself.
 
 It has to be that way round rather than an extra opening seek, because §1.1's
-opening placement **is not a separate step**: engagement is positional, a view
-with no content yet is at its own bottom (`offset 0 == maxOffset 0`), so the
-follow rule glues on frame one and that is what lands a `.bottom` view at the
-tail. A `.bottom` stated for `.sizeChanges` alone therefore needs the opening
-frame to consult something that is *not* `.bottom`.
+opening placement **is not a separate step**: the follow rule glues on frame one,
+and that is what lands a `.bottom` view at the tail. A `.bottom` stated for
+`.sizeChanges` alone therefore needs the opening frame to consult something that
+is *not* `.bottom`.
+
+The opening frame is glued **by definition** — `!hasOpened` — and no longer by
+the numbers. It used to follow from them: a view with no content yet is at its
+own bottom (`offset 0 == maxOffset 0`). That stopped being true in every app on
+2026-08-07 (`69e36229`), when the first frame's header-sizing walk became a
+measure: the walk records the real content height before the first render, and
+a `.bottom` view opened at its TOP until `6bcbbfbe`. The glued opening frame
+also moves the offset to that recorded tail BEFORE the content renders, as End
+does (`5130e4b0`): a lazy stack under 256 rows draws only the rows around the
+offset it is given, so a frame rendered at 0 and re-glued afterwards opened on
+blank lines. Tests that render a view directly run no such walk, which is why
+none saw either; `HeadlessApp` drives the real loop.
 
 Both the environment key and the handlers' captured mode carry a third state
 ("nobody stated an opening role") which defers to the standing one — that is
