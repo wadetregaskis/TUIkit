@@ -4,7 +4,7 @@
 //  A row that fills its width, asked how wide it would be if nothing stopped
 //  it. A `.frame(maxWidth: .infinity)` answers with its content, as SwiftUI's
 //  does under an unspecified proposal; a view with nothing to answer with — a
-//  `TextEditor`, greedy on both axes — has no width of its own, and every
+//  view that takes the whole of any offer — has no width of its own, and every
 //  stack that adds up its rows' widths for that ask leaves it out.
 //
 //  Created by Wade Tregaskis
@@ -50,6 +50,23 @@ struct IdealFrameCase: Sendable, CustomTestStringConvertible {
     var testDescription: String {
         "\(cells) cells, min \(minWidth.map(String.init) ?? "-"), ideal \(idealWidth.map(String.init) ?? "-"), "
             + "\(marked ? "marked" : "unmarked"), proposal \(proposal.map(String.init) ?? "nil")"
+    }
+}
+
+/// A leaf that takes the whole of any offer and has no ideal width to say
+/// otherwise — what a third-party `Layout`, or a control measured by
+/// rendering, can answer. The built-in greedy views answer the ideal-width ask
+/// with 0 (`GreedyIdealWidthTests`), so this is what keeps the rule that
+/// leaves such a view out under test.
+private struct WholeOfferLeaf: View, Renderable, Layoutable {
+    var body: Never { fatalError("WholeOfferLeaf renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        FrameBuffer(lines: [String(repeating: "-", count: max(0, context.availableWidth))], width: max(0, context.availableWidth))
+    }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        ViewSize(width: proposal.width ?? context.availableWidth, height: 1, isWidthFlexible: true)
     }
 }
 
@@ -155,7 +172,7 @@ struct IdealWidthFillerTests {
     @Test("A filling frame around a filler stays a filler")
     func aFrameAroundAFillerStaysOne() {
         let size = measureChild(
-            TextEditor(text: .constant("hello")).frame(maxWidth: .infinity),
+            WholeOfferLeaf().frame(maxWidth: .infinity),
             proposal: ProposedSize(width: nil, height: nil),
             context: RenderContext(
                 availableWidth: 4_096, availableHeight: 4_096, tuiContext: TUIContext()
@@ -273,14 +290,14 @@ struct IdealWidthFillerTests {
     @Test("A row and a layered stack leave a greedy child out", arguments: [120, 6_000])
     func rowsAndLayersLeaveAGreedyChildOut(cells: Int) {
         let text = String(repeating: "0", count: cells)
-        let row = horizontalExtent(of: HStack(spacing: 0) { Text(text); TextEditor(text: .constant("hello")) })
+        let row = horizontalExtent(of: HStack(spacing: 0) { Text(text); WholeOfferLeaf() })
         #expect(row.width == cells, "the row answered \(row.width)")
-        let layers = horizontalExtent(of: ZStack { Text(text); TextEditor(text: .constant("hello")) })
+        let layers = horizontalExtent(of: ZStack { Text(text); WholeOfferLeaf() })
         #expect(layers.width == cells, "the layered stack answered \(layers.width)")
     }
 
     /// An eager column's width for the ideal ask is its widest row's, and a
-    /// row with no width of its own — a greedy `TextEditor` — neither adds
+    /// row with no width of its own — one that takes the whole offer — neither adds
     /// the ladder's rung to it nor, at a capped answer, stops the ladder short
     /// of the row that capped it.
     @Test("An eager column leaves a greedy row out of its width", arguments: [120, 6_000])
@@ -288,7 +305,7 @@ struct IdealWidthFillerTests {
         let size = horizontalExtent(
             of: VStack(alignment: .leading, spacing: 0) {
                 Text(String(repeating: "0", count: cells))
-                TextEditor(text: .constant("hello"))
+                WholeOfferLeaf()
             })
         #expect(size.width == cells)
     }

@@ -316,8 +316,10 @@ private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Re
         let height =
             visibleLabelLine(width: width, palette: context.environment.palette, context: context) != nil
             ? 2 : 1
+        // Greedy, so no ideal width of its own (`fillingWidth(proposal:)`);
+        // the label line is still laid out across the offer.
         return ViewSize(
-            width: width,
+            width: context.fillingWidth(proposal: proposal),
             height: height,
             isWidthFlexible: true,
             isHeightFlexible: false

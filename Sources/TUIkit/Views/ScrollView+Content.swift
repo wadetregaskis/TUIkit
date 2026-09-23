@@ -54,12 +54,17 @@ extension _ScrollViewCore {
 
         let renderWidth: Int
         if horizontal {
-            let natural = measureNaturalExtent(
+            let natural = naturalExtent(
                 content, along: .horizontal,
                 proposal: ProposedSize(width: nil, height: nil),
                 context: measureContext,
                 startingBudget: naturalExtentStartingBudget(forVisible: contentWidth))
-            renderWidth = max(contentWidth, natural.width)
+            // Content that FILLS the probe's budget has no width of its own: it
+            // reported the rung and would have reported any other, so it is
+            // drawn at the viewport, which it fills. Taken as a width, the rung
+            // became the canvas — thousands of blank columns to scroll through.
+            renderWidth =
+                natural.fillsBudget ? contentWidth : max(contentWidth, natural.size.width)
         } else {
             renderWidth = contentWidth
         }

@@ -143,7 +143,7 @@ private struct _TextEditorCore: View, Renderable, Layoutable {
     }
 
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let width = proposal.width ?? context.availableWidth
+        let width = context.fillingWidth(proposal: proposal)
         let contentHeight = max(1, lines(of: text.wrappedValue).count)
         let height = proposal.height ?? min(contentHeight, max(1, context.availableHeight))
         return ViewSize(width: width, height: height, isWidthFlexible: true, isHeightFlexible: true)

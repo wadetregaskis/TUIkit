@@ -233,7 +233,11 @@ private struct _GaugeCore<Label: View, CurrentValueLabel: View, BoundsLabel: Vie
         if case .linear = shape {
             let width = proposal.width ?? context.availableWidth
             let height = visibleLabelLine(width: width, context: context) != nil ? 2 : 1
-            return ViewSize(width: width, height: height, isWidthFlexible: true, isHeightFlexible: false)
+            // Greedy, so no ideal width of its own (`fillingWidth(proposal:)`);
+            // the label line is still laid out across the offer.
+            return ViewSize(
+                width: context.fillingWidth(proposal: proposal), height: height,
+                isWidthFlexible: true, isHeightFlexible: false)
         }
         let size = circularSize(shape: shape, context: context)
         return ViewSize(

@@ -80,6 +80,33 @@ func measureNaturalExtent<V: View>(
     context: RenderContext,
     startingBudget: Int
 ) -> ViewSize {
+    naturalExtent(
+        view, along: axis, proposal: proposal, context: context, startingBudget: startingBudget
+    ).size
+}
+
+/// What the natural-extent ladder settled on.
+struct NaturalExtentAnswer {
+    /// The content's size at the rung the ladder stopped on.
+    let size: ViewSize
+    /// Whether the content FILLED that rung: flexible along the axis, and
+    /// reporting at least the budget. Such content has no extent of its own —
+    /// it would have reported any budget it was given — and the caller's own
+    /// viewport is the honest value (``measureNaturalExtent``'s second way the
+    /// ladder ends). Read as an extent, the rung became one.
+    let fillsBudget: Bool
+}
+
+/// ``measureNaturalExtent(_:along:proposal:context:startingBudget:)``, saying
+/// also whether the answer filled the budget it was given.
+@MainActor
+func naturalExtent<V: View>(
+    _ view: V,
+    along axis: Axis,
+    proposal: ProposedSize,
+    context: RenderContext,
+    startingBudget: Int
+) -> NaturalExtentAnswer {
     /// How much bigger each rung of the ladder is than the last. Every doubling
     /// costs one more full measure of the content, and the resolved budget can
     /// overshoot the true extent by up to this factor — a budget nothing fills
@@ -111,7 +138,9 @@ func measureNaturalExtent<V: View>(
         // `>=`, not `==`: a report that lands exactly on the budget is what a
         // clamp looks like, and a report above it can still be a clamped subtree
         // plus a border's two rows, so neither is proof the content is done.
-        guard extent >= budget, !fills else { return size }
+        guard extent >= budget, !fills else {
+            return NaturalExtentAnswer(size: size, fillsBudget: fills && extent >= budget)
+        }
 
         // How far to step. A report ABOVE the budget came from something that
         // declined to clamp — a wrapping `Text`, a stack reporting its true total
@@ -122,7 +151,8 @@ func measureNaturalExtent<V: View>(
         let informed = extent > budget && extent < Int.max ? extent + 1 : 0
         let geometric = budget <= Int.max / growthFactor ? budget * growthFactor : 0
         let next = max(informed, geometric)
-        guard next > budget else { return size }  // no headroom left in `Int`
+        // No headroom left in `Int`.
+        guard next > budget else { return NaturalExtentAnswer(size: size, fillsBudget: false) }
         budget = next
     }
 }
@@ -229,5 +259,23 @@ extension RenderContext {
                 && isNaturalExtentBudget(heightLimit) ? .probe : .serve
         }
         return environment.asksWholeContentWidth ? .serve : .prefix
+    }
+}
+
+extension RenderContext {
+    /// The width a view that fills whatever it is offered takes: the proposal,
+    /// or the available width — or, asked for its IDEAL width, none.
+    ///
+    /// SwiftUI's greedy views have no ideal width. Measured through a `Layout`
+    /// that proposes `.unspecified`, a `TextEditor`, a `List` and a linear
+    /// `ProgressView` all report 0. TUIkit's reported the probe's budget, which
+    /// the stacks around them learned to count as nothing
+    /// (`wholeContentWidth(of:limit:)`) — and which, with no stack around the
+    /// view, became the width of a two-axis `ScrollView`'s canvas: a
+    /// `TextEditor` scrolled sideways through four thousand blank columns.
+    /// Everywhere else a nil width means the available width, as it always
+    /// has, and the view fills it.
+    func fillingWidth(proposal: ProposedSize) -> Int {
+        proposal.width ?? (asksIdealWidth ? 0 : availableWidth)
     }
 }

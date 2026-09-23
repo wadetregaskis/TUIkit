@@ -261,7 +261,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // makes the layout pass cheap.
         guard context.environment.fixedSizeWidth else {
             return ViewSize(
-                width: proposal.width ?? context.availableWidth, height: height,
+                width: context.fillingWidth(proposal: proposal), height: height,
                 isWidthFlexible: true, isHeightFlexible: true)
         }
         // `.fixedSize(horizontal:)`: hug content — the widest of ALL rows, stable

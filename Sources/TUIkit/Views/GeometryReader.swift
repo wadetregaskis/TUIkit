@@ -203,7 +203,7 @@ private struct _GeometryReaderCore<Content: View>: View, Renderable, Layoutable 
     /// circularity SwiftUI resolves the same way, by making the reader greedy.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         ViewSize(
-            width: proposal.width ?? context.availableWidth,
+            width: context.fillingWidth(proposal: proposal),
             height: proposal.height ?? context.availableHeight,
             isWidthFlexible: true,
             isHeightFlexible: true)
