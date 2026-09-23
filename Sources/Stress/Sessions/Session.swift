@@ -121,6 +121,7 @@ enum Sessions {
         EditorSession.descriptor,
         InboxSession.descriptor,
         ProcessesSession.descriptor,
+        LogSession.descriptor,
     ]
 
     @MainActor
