@@ -233,19 +233,22 @@ struct SearchableModifier<Content: View>: View {
     /// a `.textInputSuggestions` set above the whole searchable is a
     /// deliberate statement about every field in it, and clearing it here
     /// would make the search field the one exception.
-    @ViewBuilder
+    ///
+    /// Decided INSIDE one modifier, not by choosing between two views: a
+    /// branch would make the field a different view whenever a keystroke
+    /// filtered the suggestions down to nothing, and its caret and focus with
+    /// it.
     private var queryField: some View {
         // The fallback prompt is the framework's word, not the caller's, so it
         // comes from the table. `Text(verbatim:)` because the lookup has
         // already happened — see `ContentUnavailableView.search`.
         let defaultPrompt = Text(
             verbatim: LocalizationService.shared.string(for: LocalizationKey.Label.search))
-        let field = TextField("", text: text, prompt: prompt ?? defaultPrompt)
+        let offered = suggestions
+        return TextField("", text: text, prompt: prompt ?? defaultPrompt)
             .onEditingChanged { isSearching = $0 }
-        if suggestions.entries.isEmpty {
-            field
-        } else {
-            field.environment(\.textInputSuggestions, suggestions)
-        }
+            .transformEnvironment(\.textInputSuggestions) { inherited in
+                if !offered.entries.isEmpty { inherited = offered }
+            }
     }
 }

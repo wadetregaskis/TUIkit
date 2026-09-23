@@ -323,6 +323,36 @@ struct SearchableTests {
         #expect(screen(view, tui: tui, focus: focus).contains("inherited"))
     }
 
+    @Test("The search field keeps its caret as the suggestions run out")
+    func searchFieldKeepsItsStateWhenSuggestionsRunOut() {
+        // Suggestions filtered by the query, the usual way, so a keystroke can
+        // leave none. The field must stay the same field across that — the
+        // caret it was left at, and the focus, belong to it.
+        let tui = TUIContext()
+        let focus = FocusManager()
+        let box = QueryBox()
+        func view() -> some View {
+            Text("CONTENT")
+                .searchable(text: binding(box))
+                .searchSuggestions {
+                    ForEach(["abc", "abd"].filter { $0.hasPrefix(box.query) }, id: \.self) { Text($0) }
+                }
+        }
+        func type(_ key: Key) {
+            _ = focus.dispatchKeyEvent(KeyEvent(key: key))
+            _ = screen(view(), tui: tui, focus: focus)
+        }
+
+        _ = screen(view(), tui: tui, focus: focus)
+        _ = screen(view(), tui: tui, focus: focus)
+        type(.character("a"))
+        type(.character("b"))
+        type(.left)
+        type(.character("x"))  // "axb": nothing starts with that
+        type(.character("y"))
+        #expect(box.query == "axyb", "the field lost its caret or its focus: \(box.query)")
+    }
+
     @Test("searchCompletion decides what choosing a suggestion types")
     func searchCompletionFillsTheField() {
         // The label and the completion deliberately share no text, so the
