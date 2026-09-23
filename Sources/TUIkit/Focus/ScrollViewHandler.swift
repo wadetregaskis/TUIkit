@@ -68,6 +68,13 @@ public final class ScrollViewHandler: PersistedFocusable, ScrollableOffsetState 
     /// pins it answering.
     var verticalScrollbarMemoHits = 0
 
+    /// The horizontal scrollbar drawn last time — the same memo, for the same
+    /// reason (`_ScrollViewCore.appendHorizontalScrollbar`).
+    var horizontalScrollbarMemo: ScrollbarMemo<ClaimingRow>?
+
+    /// How many times ``horizontalScrollbarMemo`` answered.
+    var horizontalScrollbarMemoHits = 0
+
     /// The unique focus identifier for this scroll view.
     public var focusID: String
 

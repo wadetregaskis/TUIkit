@@ -32,7 +32,7 @@ private struct EditablePalette: Palette, Hashable {
 /// kept on the handler with the inputs they were drawn from, and drawn again
 /// only when one of those moves.
 @MainActor
-@Suite("The vertical scrollbar is drawn again only when its inputs move", .serialized)
+@Suite("A scrollbar is drawn again only when its inputs move", .serialized)
 struct ScrollbarMemoTests {
 
     @MainActor
@@ -40,12 +40,16 @@ struct ScrollbarMemoTests {
         let tui = TUIContext()
         let focusManager = FocusManager()
 
+        /// Whether the content is wide as well as tall, and scrolls both ways.
+        var twoAxis = false
+
         func frame(palette: any Palette = SystemPalette(.green)) -> FrameBuffer {
-            let view = ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(0..<60, id: \.self) { index in Text("row \(index)") }
+            let rows = VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<60, id: \.self) { index in
+                    Text(twoAxis ? "row \(index) " + String(repeating: "=", count: 80) : "row \(index)")
                 }
             }
+            let view = ScrollView(twoAxis ? [.horizontal, .vertical] : .vertical) { rows }
             var environment = EnvironmentValues()
             environment.focusManager = focusManager
             environment.applyRuntimeServices(from: tui)
@@ -95,6 +99,39 @@ struct ScrollbarMemoTests {
         let scrolled = harness.frame()
         #expect(handler.verticalScrollbarMemoHits == hitsBefore, "moved inputs are not served: \(handler.verticalScrollbarMemoHits) vs \(hitsBefore)")
         #expect(first.lines.map(\.stripped) != scrolled.lines.map(\.stripped))
+    }
+
+    @Test("Same inputs: the second frame's HORIZONTAL bar comes from the memo and matches the first")
+    func horizontalMemoAnswersUnchangedInputs() {
+        var harness = Harness()
+        harness.twoAxis = true
+        let first = harness.frame()
+        guard let handler = harness.handler else {
+            Issue.record("no scroll handler registered")
+            return
+        }
+        #expect(handler.horizontal.extent > 30, "precondition: the content scrolls sideways")
+        let hitsAfterFirst = handler.horizontalScrollbarMemoHits
+        let second = harness.frame()
+        #expect(handler.horizontalScrollbarMemoHits > hitsAfterFirst, "the memo did not answer")
+        #expect(first.lines == second.lines)
+    }
+
+    @Test("A sideways offset draws a new horizontal bar")
+    func horizontalOffsetInvalidates() {
+        var harness = Harness()
+        harness.twoAxis = true
+        let first = harness.frame()
+        guard let handler = harness.handler else {
+            Issue.record("no scroll handler registered")
+            return
+        }
+        _ = harness.frame()
+        let hitsBefore = handler.horizontalScrollbarMemoHits
+        handler.horizontal.scrollOffset = 30
+        let scrolled = harness.frame()
+        #expect(handler.horizontalScrollbarMemoHits == hitsBefore, "moved inputs were served")
+        #expect(first.lines.last?.stripped != scrolled.lines.last?.stripped, "the bar did not move")
     }
 
     @Test("A palette edited under the same id draws a new bar")

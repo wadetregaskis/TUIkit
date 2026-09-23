@@ -224,16 +224,49 @@ extension _ScrollViewCore {
         handler: ScrollViewHandler, isFocused: Bool, context: RenderContext
     ) -> FrameBuffer {
         let palette = context.environment.palette
-        var bar = ScrollbarRenderer.horizontalScrollbar(
-            width: contentWidth,
-            extent: handler.horizontal.extent,
-            viewport: handler.horizontal.viewportHeight,
-            offset: handler.horizontal.scrollOffset,
-            arrows: context.environment.scrollbarArrows,
+        let axis = handler.horizontal
+        // Kept as the vertical bar is kept, and for its reason: a focused bar
+        // pulses, and the run that pulses it is one bar render per frame of the
+        // pulse cycle. Drawn afresh every frame, the horizontal bar was 35.6% of
+        // a keystroke in a two-axis editor (`Stress --session editor`).
+        let pulse = ScrollbarColors.focusPulse(
+            isFocused: isFocused, hoveredCell: axis.hoveredBarCell, context: context)
+        let key = ScrollbarMemo<ClaimingRow>.Key(
+            length: contentWidth, extent: axis.extent, viewport: axis.viewportHeight,
+            offset: axis.scrollOffset, arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
-            colors: .focusIndicating(
-                isFocused: isFocused, hoveredCell: handler.horizontal.hoveredBarCell,
-                context: context))
+            isFocused: isFocused, isScrollEnabled: context.environment.isScrollEnabled,
+            hoveredCell: axis.hoveredBarCell, palette: ComparablePalette(palette),
+            depth: ColorDepth.current, terminalColors: TerminalColors.current,
+            cycle: pulse?.cycle)
+        let memo: ScrollbarMemo<ClaimingRow>
+        if let remembered = handler.horizontalScrollbarMemo, remembered.key == key {
+            handler.horizontalScrollbarMemoHits += 1
+            memo = remembered
+        } else {
+            let bar = ScrollbarRenderer.horizontalScrollbar(
+                width: contentWidth,
+                extent: axis.extent,
+                viewport: axis.viewportHeight,
+                offset: axis.scrollOffset,
+                arrows: context.environment.scrollbarArrows,
+                proportional: context.environment.scrollbarProportionalThumb,
+                colors: .focusIndicating(
+                    isFocused: isFocused, hoveredCell: axis.hoveredBarCell, context: context))
+            let run = pulse.flatMap { pulse in
+                ScrollbarRenderer.horizontalScrollbarRun(
+                    width: contentWidth,
+                    extent: axis.extent,
+                    viewport: axis.viewportHeight,
+                    offset: axis.scrollOffset,
+                    arrows: context.environment.scrollbarArrows,
+                    proportional: context.environment.scrollbarProportionalThumb,
+                    pulse: pulse)
+            }
+            memo = ScrollbarMemo(key: key, bar: bar, runs: run.map { [$0] } ?? [])
+            handler.horizontalScrollbarMemo = memo
+        }
+        var bar = memo.bar
         if hasVerticalBar {
             bar.append(" ", cells: 1, ink: nil, field: ScrollbarColors.track(in: palette))
         }
@@ -243,23 +276,12 @@ extension _ScrollViewCore {
             lines, width: contentWidth + (hasVerticalBar ? 1 : 0), uniformWidth: true)
         result.opacityRegions += bar.claims.map { $0.shifted(byX: 0, y: lines.count - 1) }
         // The bar occupies the row just appended.
-        if !context.isMeasuring,
-            let pulse = ScrollbarColors.focusPulse(
-                isFocused: isFocused, hoveredCell: handler.horizontal.hoveredBarCell,
-                context: context),
-            let run = ScrollbarRenderer.horizontalScrollbarRun(
-                width: contentWidth,
-                extent: handler.horizontal.extent,
-                viewport: handler.horizontal.viewportHeight,
-                offset: handler.horizontal.scrollOffset,
-                arrows: context.environment.scrollbarArrows,
-                proportional: context.environment.scrollbarProportionalThumb,
-                pulse: pulse)
-        {
-            result.animatedCells.append(run.shifted(byX: 0, y: lines.count - 1))
+        if !context.isMeasuring, pulse != nil {
+            result.animatedCells += memo.runs.map { $0.shifted(byX: 0, y: lines.count - 1) }
         }
         return result
-    }}
+    }
+}
 
 // MARK: - The bar drawn last time
 
