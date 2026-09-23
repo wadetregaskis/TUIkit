@@ -331,7 +331,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         return ViewSize(
             width: width, height: height,
             isWidthFlexible: fillersAreWidthless
-                ? Self.wholeContentFlexibility(widthFlexible, width: width, limit: widthLimit)
+                ? wholeContentFlexibility(widthFlexible, width: width, limit: widthLimit)
                 : widthFlexible,
             isHeightFlexible: heightFlexible)
     }

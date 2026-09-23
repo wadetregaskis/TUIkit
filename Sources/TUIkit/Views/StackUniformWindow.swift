@@ -741,7 +741,7 @@ extension _VStackCore {
             // "flexible" after the last filler had left the data.
             let flexible: Bool
             if let exact {
-                flexible = Self.wholeContentFlexibility(
+                flexible = wholeContentFlexibility(
                     exact.isWidthFlexible, width: width, limit: widthLimit)
             } else {
                 flexible = state.hypothesisWidthFlexible
@@ -780,7 +780,7 @@ extension _VStackCore {
         return ViewSize(
             width: width, height: height,
             isWidthFlexible: exact == nil
-                ? flexible : Self.wholeContentFlexibility(flexible, width: width, limit: widthLimit),
+                ? flexible : wholeContentFlexibility(flexible, width: width, limit: widthLimit),
             isHeightFlexible: heightFlexible)
     }
 }

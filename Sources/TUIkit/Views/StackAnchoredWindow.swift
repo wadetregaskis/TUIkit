@@ -793,7 +793,7 @@ extension _VStackCore {
 
         if let exact {
             maxWidth = max(maxWidth, exact.width)
-            widthFlexible = Self.wholeContentFlexibility(
+            widthFlexible = wholeContentFlexibility(
                 widthFlexible || exact.isWidthFlexible, width: maxWidth, limit: widthLimit)
         }
 

@@ -508,18 +508,20 @@ extension _VStackCore {
     private func answer(widest: Int, isFlexible: Bool, limit: Int) -> ViewSize {
         ViewSize(
             width: min(widest, limit), height: 0,
-            isWidthFlexible: Self.wholeContentFlexibility(isFlexible, width: widest, limit: limit),
+            isWidthFlexible: wholeContentFlexibility(isFlexible, width: widest, limit: limit),
             isHeightFlexible: false)
     }
+}
 
-    /// Whether a whole-content width answer is flexible: only when it is below
-    /// its limit. The rule ``answer(widest:isFlexible:limit:)`` applies, stated
-    /// once, because every arm that answers the same natural-width ask — the
-    /// anchored sample, the uniform band and sample, the small-collection slot
-    /// walk — has to apply it too. An arm that said "flexible" for a capped
-    /// answer where the walk said not would decide, by being the one that
-    /// answered, whether `measureNaturalExtent` climbs past its first rung.
-    static func wholeContentFlexibility(_ isFlexible: Bool, width: Int, limit: Int) -> Bool {
-        isFlexible && width < limit
-    }
+// MARK: - Counting rows
+
+/// Whether a whole-content width answer is flexible: only when it is below
+/// its limit. The rule `_VStackCore.answer(widest:isFlexible:limit:)` applies,
+/// stated once, because every arm that answers the same natural-width ask — the
+/// anchored sample, the uniform band and sample, the small-collection slot
+/// walk — has to apply it too. An arm that said "flexible" for a capped
+/// answer where the walk said not would decide, by being the one that
+/// answered, whether `measureNaturalExtent` climbs past its first rung.
+func wholeContentFlexibility(_ isFlexible: Bool, width: Int, limit: Int) -> Bool {
+    isFlexible && width < limit
 }
