@@ -251,24 +251,41 @@ extension _ScrollViewCore {
     }
 
     /// A coverage render refines the content-height estimate, which can move
-    /// maxOffset out from under the earlier re-glue — leaving the view a hair
-    /// off the tail, where the NEXT frame's glue condition
-    /// (offset >= maxOffset) would silently release the follow. Re-glue
-    /// against the refined number; the guard render is a no-op once a band
-    /// actually reaches the tail, whose totals are exact (§3: estimates cover
-    /// only what was never rendered), so this converges — no loop.
+    /// maxOffset out from under the earlier re-glue — leaving the view off the
+    /// tail, where the NEXT frame's glue condition (offset >= maxOffset) would
+    /// silently release the follow. Re-glue against the refined number, and
+    /// again after the render that number calls for, until the tail holds
+    /// still.
+    ///
+    /// Once used to be enough when the refined estimate was close: the guard
+    /// render's band then reaches the tail, whose totals are exact (§3:
+    /// estimates cover only what was never rendered). A burst of wrapped lines
+    /// is not close. The band at the refined tail reaches only a row past the
+    /// viewport, the rows beyond it are still estimates, the total grows again,
+    /// and the view was left short of the end. The follow then let go, and a
+    /// log stopped following itself mid-burst. Each pass measures rows the last
+    /// one estimated, so this converges; the bound only guards against an
+    /// estimator that never does, and costs nothing on the usual frame, which
+    /// stops after one pass because its band already covered the tail.
     func reglueToRefinedTail(
         handler: ScrollViewHandler, fullBuffer: inout FrameBuffer,
         contentSlice: inout (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
         contentWidth: Int, viewportHeight: Int,
         horizontal: Bool, context: RenderContext
     ) {
-        handler.scrollOffset = handler.maxOffset
-        coverSnappedViewport(
-            handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
-            contentWidth: contentWidth, viewportHeight: viewportHeight,
-            horizontal: horizontal, context: context)
+        for _ in 0..<Self.reglueLimit {
+            handler.scrollOffset = handler.maxOffset
+            coverSnappedViewport(
+                handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
+                contentWidth: contentWidth, viewportHeight: viewportHeight,
+                horizontal: horizontal, context: context)
+            if handler.scrollOffset >= handler.maxOffset { return }
+        }
     }
+
+    /// How many times ``reglueToRefinedTail`` re-renders chasing a tail whose
+    /// estimate keeps growing, before it settles for the next frame.
+    static var reglueLimit: Int { 4 }
 
     /// Records the reveal pursuit's memory for the next frame: the offset the
     /// frame SETTLED on when the snap moved it, or nothing when it did not.

@@ -266,6 +266,41 @@ struct DefaultScrollAnchorTests {
         #expect(screen.contains { $0.contains("line 199") }, "opened at: \(screen)")
     }
 
+    /// A burst of rows that wrap, landing under a glued view on the anchored
+    /// path (over 256 rows): the rows below the band are estimates, and each
+    /// render at the refined tail measured a few more of them and moved the
+    /// tail again. One re-glue left the view short of the end, the next frame
+    /// read that as the user having scrolled away, and the log stopped
+    /// following itself mid-burst. Found by the Stress `log` session's check
+    /// that its newest line is on the screen while it follows.
+    @Test("A burst of wrapping rows lands at the tail and the follow holds")
+    func aBurstOfWrappingRowsKeepsTheFollow() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        func view(_ rows: [String]) -> some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows.indices, id: \.self) { index in Text(rows[index]) }
+                }
+            }
+            .frame(height: Self.viewport)
+            .defaultScrollAnchor(.bottom)
+        }
+        var rows = (0..<300).map { "line \($0)" }
+        renderFrame(view(rows), tuiContext: tuiContext, focusManager: focusManager)
+        renderFrame(view(rows), tuiContext: tuiContext, focusManager: focusManager)
+
+        // Forty rows, each wrapping to several lines at this width, estimated
+        // at the one line every row before them took.
+        rows += (300..<340).map { String(repeating: "word ", count: 12) + "burst \($0)" }
+        let burst = renderFrame(view(rows), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(burst.contains { $0.contains("burst 339") }, "the burst's frame is not at the tail: \(burst)")
+
+        rows.append("line 340")
+        let next = renderFrame(view(rows), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(next.contains { $0.contains("line 340") }, "the follow let go after the burst: \(next)")
+    }
+
     @Test("Without the anchor, the view starts at the top (unchanged default)")
     func defaultRemainsTop() {
         let tuiContext = TUIContext()
