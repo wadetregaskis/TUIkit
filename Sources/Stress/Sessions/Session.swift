@@ -123,6 +123,7 @@ enum Sessions {
         ProcessesSession.descriptor,
         LogSession.descriptor,
         SettingsSession.descriptor,
+        ChatSession.descriptor,
     ]
 
     @MainActor

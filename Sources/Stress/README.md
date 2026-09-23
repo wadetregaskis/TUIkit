@@ -148,7 +148,11 @@ the app's five-layer input chain to the focused control, and a frame is the
 loop's own — header, status bar and diff writer included — at an instant the
 runner supplies, so two runs of one script draw the same pictures. Its report
 prices each KIND of step separately (mean, p50, p95, max, bytes emitted), since
-a keystroke and a page-down are different frames.
+a keystroke and a page-down are different frames. The real loop matters: its
+first frame runs a measuring walk to size the app header before it draws, which
+no direct render does, and that walk was why every app opened a
+`defaultScrollAnchor(.bottom)` view at its top — found by the `chat` session,
+invisible to every test that rendered the view directly.
 
 `--verify` is the oracle, and it needs no expected pictures: a second instance
 plays the same script with its render cache emptied before every frame, and
@@ -180,6 +184,7 @@ focus.
 | `inbox` | a searchable, selectable `List` of items that arrive, leave, move and change underneath: keyed rows around the selection, the row memo, `List` windowing, a search narrowing and restoring the collection, focus between a field and a list |
 | `log` | a log viewer following its end while lines arrive in bursts, and a reader paging back: a bottom-anchored lazy stack growing under the viewport, wrapped lines of unequal height, `scrollPosition(id:)` reporting the top line |
 | `settings` | a settings `Form` worked through with the keyboard while accounts sync in and out: focus traversal, toggles, a picker, a stepper, a disclosure group opening and closing, every row re-shown when the units change |
+| `chat` | a conversation of bubbles arriving at the end, earlier ones edited, the person typing and sending: a bottom-anchored lazy stack of unequal heights under the 256-row window threshold, a row's HEIGHT changing under an unchanged collection, full-width alignment frames, a text field typed into and submitted |
 | `processes` | a sortable, filterable process `Table` whose numbers move on every step: `.fit` columns and the row memo under continuous churn, re-sorting, a filter narrowing the rows, rows appended and removed, selection moved with the keys |
 
 Adding one: a `StressSession` — a page built once over a model the session
