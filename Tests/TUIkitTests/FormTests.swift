@@ -246,6 +246,24 @@ struct FormTests {
         #expect(headerRow.contains("On"))
     }
 
+    /// A header wider than every field label is not cut to the label column:
+    /// the column is the labels' width, and a header is not a label. Found by
+    /// the `Stress` settings session, whose "Measurements" drew as
+    /// "Measuremen…" over a column sized by "Page height".
+    @Test("A columns section header wider than the pillar is drawn whole")
+    func aWideSectionHeaderIsNotCut() {
+        let out = lines(
+            Form {
+                Section("Measurements") {
+                    LabeledContent("Gap", value: "1 mm")
+                }
+            })
+        #expect(out.contains { $0.contains("Measurements") }, "the header was cut: \(out)")
+        // And the field row keeps its column: the label pillar is still "Gap"'s.
+        let fieldRow = out.first { $0.contains("Gap") } ?? ""
+        #expect(fieldRow.hasPrefix("Gap"), "the header widened the label column: \(fieldRow)")
+    }
+
     @Test("A Toggle's click zone in a form covers its label (full row clickable)")
     func toggleClickZoneCoversLabel() {
         // A field label gives the toggle a non-zero control-column indent; the

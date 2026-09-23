@@ -326,10 +326,16 @@ private func formRowView(_ row: _FormRow, pillar: Int, contentWidth: Int) -> som
 /// A bold section header right-aligned to the pillar (left-aligned when there are
 /// no field labels). There is no direct AppKit analogue for a header in a columns
 /// form, so it is aligned with the field labels.
+///
+/// At LEAST the pillar, not exactly it: the pillar is the field labels' width, and
+/// a header is not a field label. Framed to exactly the pillar, a header wider than
+/// every label was cut — "Measurements" over a column sized by "Page height" drew
+/// as "Measuremen…". Wider, it simply runs on past the column's edge, on a line of
+/// its own.
 @MainActor @ViewBuilder
 private func sectionHeaderView(_ header: AnyView, pillar: Int) -> some View {
     if pillar > 0 {
-        header.bold().frame(width: pillar, alignment: .trailing)
+        header.bold().frame(minWidth: pillar, alignment: .trailing)
     } else {
         header.bold()
     }
