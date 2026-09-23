@@ -438,12 +438,20 @@ extension _VStackCore {
     /// drawn and not this one. Served from it, the challenge would certify the
     /// width it exists to catch; and the sizes it holds under other proposals
     /// are wrong the same way, which the walk that follows a fall must not be
-    /// served. A memo deeper INSIDE the row, keyed on something the write did
-    /// not touch, is that same hole one level down, and is not reached. It
-    /// survives a frame only while some ancestor is served from the buffer
-    /// memo, so it is pruned by the end of the frame whose write reached the
-    /// row's ancestors — but a width it held back in that frame's challenge
-    /// stands until the next write challenges the record again.
+    /// served. A memo deeper INSIDE the row — an `.equatable()` view whose
+    /// value compares equal while what its body reads has moved — is not
+    /// forgotten, and need not be: the size memo drops, at the end of every
+    /// frame, the entries of a row that frame did not draw, so what the
+    /// challenge finds inside the widest row was measured this frame, after
+    /// the write. An entry outlives its frame only under an `.equatable()`
+    /// ancestor served from the buffer memo in that same frame
+    /// (`RenderCache.retainSubtree(_:)`), and a frame that serves the stack
+    /// that way does not measure it. `ContentWidthFreshChallengeTests` fails
+    /// the day that stops being true. What is left sits upstream of every
+    /// memo: a row measured but never drawn reads its `@Observable`s
+    /// untracked, so a change to one moves nothing — no clear, so no
+    /// challenge — and the extent learns it when the row is drawn, or when the
+    /// next write challenges the record.
     ///
     /// A measure that read something that moves on its own — an animation in
     /// flight — still answers, but does not mark the record checked, so the next
