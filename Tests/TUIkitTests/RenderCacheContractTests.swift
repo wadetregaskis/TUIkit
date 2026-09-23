@@ -389,6 +389,34 @@ struct RenderCacheContractTests: RenderCacheHarness {
         #expect(cache.stats.delta(since: beforeProbe).hits == 0, "\(cache.stats.delta(since: beforeProbe))")
     }
 
+    /// The same line drawn through `.theme(_:)`, which carries both kinds of
+    /// value: a new palette is ink and keeps the sizes, and a new control style
+    /// is not — a plain button has neither brackets nor padding. The theme
+    /// used to promise "no cell moved" for all of it, so the size a `Button`
+    /// was measured at under one style was served under the other.
+    @Test("A theme's palette keeps the memoized sizes; its control styles drop them")
+    func themeStyleChangeDropsTheSizeMemo() {
+        let shared = context()
+        let cache = shared.environment.renderCache!
+        let proposal = ProposedSize(width: nil, height: nil)
+        func hits(_ theme: Theme) -> Int {
+            cache.beginRenderPass()
+            let before = cache.stats
+            _ = measureChild(
+                CacheLeaf(text: "hi").equatable().theme(theme), proposal: proposal,
+                context: shared)
+            return cache.stats.delta(since: before).hits
+        }
+
+        _ = hits(Theme(palette: SystemPalette(.green), buttonStyle: .plain))
+        #expect(
+            hits(Theme(palette: SystemPalette(.blue), buttonStyle: .plain)) >= 1,
+            "a new palette is ink, and the size under green is the size under blue")
+        #expect(
+            hits(Theme(palette: SystemPalette(.blue), buttonStyle: DefaultButtonStyle())) == 0,
+            "a new button style can move cells, and was served the old style's size")
+    }
+
     @Test("A non-Equatable environment value declines caching rather than risking it")
     func incomparableEnvironmentDeclinesCaching() {
         let shared = context()

@@ -189,26 +189,35 @@ public struct ThemeModifier<Content: View>: View {
         // value where the style can answer.
         if let cache = context.renderCache {
             var changed = false
-            func note(_ value: some Equatable, _ keyPath: PartialKeyPath<EnvironmentValues>) {
+            var movedCells = false
+            func note(
+                _ value: some Equatable, _ keyPath: PartialKeyPath<EnvironmentValues>,
+                movesCells: Bool = false
+            ) {
                 if case .changed = cache.noteAppliedEnvironment(
                     value, identity: context.identity, keyPath: keyPath,
                     depth: context.environmentApplicationDepth)
                 {
                     changed = true
+                    movedCells = movedCells || movesCells
                 }
             }
             note(theme.appearance, \EnvironmentValues.appearance)
             note(ComparablePalette(theme.palette), \EnvironmentValues.palette)
             note(theme.tint, \EnvironmentValues.tint)
-            note(theme.styles, \EnvironmentValues.styleCascade)
-            note(ComparableStyle(theme.buttonStyle), \EnvironmentValues.buttonStyle)
-            note(ComparableStyle(theme.listStyle), \EnvironmentValues.listStyle)
-            note(ComparableStyle(theme.pickerStyle), \EnvironmentValues.pickerStyle)
+            note(theme.styles, \EnvironmentValues.styleCascade, movesCells: true)
+            note(ComparableStyle(theme.buttonStyle), \EnvironmentValues.buttonStyle, movesCells: true)
+            note(ComparableStyle(theme.listStyle), \EnvironmentValues.listStyle, movesCells: true)
+            note(ComparableStyle(theme.pickerStyle), \EnvironmentValues.pickerStyle, movesCells: true)
             note(theme.indicatorAnimationSpeeds, \EnvironmentValues.indicatorAnimationSpeeds)
             if changed {
-                // A theme is ink; the sizes below it stay, as `TintModifier` and
-                // `_StyleEnvironmentView` both keep theirs.
-                cache.clearAffected(by: context.identity, keepingSizes: true)
+                // Most of a theme is ink, and ink keeps the sizes below it, as
+                // `TintModifier` and `_StyleEnvironmentView` keep theirs. The
+                // control styles and the style cascade are NOT ink: a plain
+                // button has neither brackets nor padding, and a cascaded
+                // `textCase` turns "ß" into "SS". Kept across one of those, a
+                // memoized size is the old style's size, laid out as the new one.
+                cache.clearAffected(by: context.identity, keepingSizes: !movedCells)
             }
         }
 
