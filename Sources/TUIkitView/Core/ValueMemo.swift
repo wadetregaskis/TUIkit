@@ -221,6 +221,8 @@ private func verifyServe(
     let journal = cache.effectJournal
     let start = journal.beginRecording()
     defer { journal.endRecording() }
+    let tracker = context.environment.volatileReadTracker
+    let unreplayableBefore = tracker?.unreplayableCount ?? 0
     let fresh = render(context)
     if fresh.lines != entry.buffer.lines {
         cache.noteRenderMemoMismatch(
@@ -228,6 +230,15 @@ private func verifyServe(
             fresh: fresh, identity: context.identity.path)
     }
     guard !context.isMeasuring else { return }
+    // A fresh render that declined — it made a registration that cannot be
+    // replayed — leaves no journal to compare with: the declined registrations
+    // were made, just not recorded. That is the focus-reach probe, which renders
+    // rows beside the focused one under a manager that declines them all, and is
+    // served what the live page stored; the replay registers the same controls
+    // the fresh render would. The picture is still compared above, and would
+    // catch the case that matters here, a control that now holds the focus
+    // drawn as it looked without it.
+    guard (tracker?.unreplayableCount ?? 0) == unreplayableBefore else { return }
     let freshKinds = ownChannelEffects(journal, since: start, context: context).map(\.kind)
     let servedKinds = entry.effects.map(\.kind)
     if freshKinds != servedKinds {
