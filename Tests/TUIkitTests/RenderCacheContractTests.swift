@@ -86,6 +86,20 @@ private struct ProbeEcho: View, Equatable {
     var body: some View { Text(probe) }
 }
 
+/// A memoizing view that applies `comparableProbe` to a memoized echo of it.
+private struct ProbeOuter: View, Equatable {
+    let probe: String
+
+    var body: some View { ProbeEcho().equatable().environment(\.comparableProbe, probe) }
+}
+
+/// A memoizing view that tints a memoized leaf.
+private struct TintedOuter: View, Equatable {
+    let color: Color
+
+    var body: some View { CacheLeaf(text: "hi").equatable().foregroundStyle(color) }
+}
+
 // MARK: - Tests
 
 /// The two `EquatableView`/`RenderCache` contracts upstream fixed in PR #64
@@ -330,6 +344,49 @@ struct RenderCacheContractTests: RenderCacheHarness {
         #expect(
             served.lines.first?.stripped == "bbb",
             "the inner change was eaten by the outer slot: \(served.lines.map(\.stripped))")
+    }
+
+    /// A slot under a memo that was SERVED for a frame went unseen that frame,
+    /// and was pruned by pass number while the entries below it were retained.
+    /// The next time the subtree rendered, the slot answered `.first`, which
+    /// clears nothing: the inner memo served what it had drawn under the old
+    /// value.
+    @Test("A value changed inside a memo that was just served is seen")
+    func aChangeUnderAServedMemoIsSeen() {
+        let shared = context()
+        frame(shared, ProbeOuter(probe: "aaa").equatable())
+        frame(shared, ProbeOuter(probe: "aaa").equatable())  // served: the inner slot goes unseen
+        let changed = frame(shared, ProbeOuter(probe: "bbb").equatable())
+        #expect(
+            changed.lines.first?.stripped == "bbb",
+            "the inner memo served the old value: \(changed.lines.map(\.stripped))")
+    }
+
+    /// The slots are swept only every so many passes; a sweep that ran while the
+    /// memo was being served must keep the slot inside it, which it is asked
+    /// about precisely because it went unseen.
+    @Test("A value changed inside a memo served across a slot sweep is seen")
+    func aChangeUnderAMemoServedAcrossASweepIsSeen() {
+        let shared = context()
+        for _ in 0...(RenderCache.slotSweepInterval + 2) {
+            frame(shared, ProbeOuter(probe: "aaa").equatable())
+        }
+        let changed = frame(shared, ProbeOuter(probe: "bbb").equatable())
+        #expect(
+            changed.lines.first?.stripped == "bbb",
+            "the sweep dropped a slot a served memo still guarded: \(changed.lines.map(\.stripped))")
+    }
+
+    /// The same, as an app meets it: a row whose tint comes from its data, with
+    /// a memoized view inside it.
+    @Test("A style changed inside a memo that was just served is drawn")
+    func aStyleChangeUnderAServedMemoIsDrawn() {
+        let shared = context()
+        frame(shared, TintedOuter(color: .red).equatable())
+        frame(shared, TintedOuter(color: .red).equatable())
+        let changed = frame(shared, TintedOuter(color: .blue).equatable())
+        let fresh = frame(context(), TintedOuter(color: .blue).equatable())
+        #expect(changed.lines == fresh.lines, "drawn in the old colour: \(changed.lines.map(\.debugDescription))")
     }
 
     @Test("An unchanged style still memoizes")

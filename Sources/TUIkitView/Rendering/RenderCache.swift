@@ -485,7 +485,10 @@ public final class RenderCache: @unchecked Sendable {
 
     /// What ``noteAppliedEnvironment(_:identity:keyPath:depth:)`` found.
     public enum EnvironmentChange {
-        /// Nothing was applied here before — nothing below can be stale.
+        /// Nothing was applied here before — nothing below can be stale. True
+        /// because a slot is kept for as long as anything cached below it is:
+        /// seen this pass, or inside a subtree a memo served (see
+        /// ``removeInactive()``).
         case first
         /// The same value as last pass.
         case unchanged
@@ -1282,10 +1285,36 @@ extension RenderCache {
         // — only memoizing views mark themselves active, and an environment
         // modifier is not one, so an identity check would drop every slot on
         // every frame and the comparison above could never fire.
-        for (slot, applied) in appliedEnvironment where applied.lastSeenFrame < frameCounter {
-            appliedEnvironment.removeValue(forKey: slot)
+        //
+        // But NOT a slot inside a subtree a memo served this pass. Nothing
+        // below a hit is visited, so its slots go unseen while the entries they
+        // guard are retained (`retainSubtree`). Pruned, such a slot came back as
+        // `.first` the next time the subtree rendered — and `.first` clears
+        // nothing, so an inner memo served what it had drawn under the OLD
+        // value: an outer row re-rendered for a new tint, its inner rows still
+        // in the old one. So a slot is kept for as long as anything cached below
+        // it is live.
+        //
+        // And only every `slotSweepInterval` passes, because the liveness check
+        // is the price: every slot inside a served row is unseen on every frame
+        // it is served, and asking each whether it is retained, every frame,
+        // was +10.9% on `menus`. Keeping a dead slot a while is safe — at worst
+        // it answers `.changed` for a subtree that returns, one conservative
+        // clear — where dropping a live one is not. Sweeping periodically also
+        // spares the frames between sweeps the walk over the whole table that
+        // pruning by pass number made on every one of them.
+        guard frameCounter.isMultiple(of: Self.slotSweepInterval) else { return }
+        var staleSlots: [EnvironmentSlot] = []
+        for (slot, applied) in appliedEnvironment
+        where applied.lastSeenFrame < frameCounter && !isLive(slot.identity) {
+            staleSlots.append(slot)
         }
+        for slot in staleSlots { appliedEnvironment.removeValue(forKey: slot) }
     }
+
+    /// How many passes apart ``removeInactive()`` sweeps the environment slots
+    /// — see there.
+    package static var slotSweepInterval: UInt64 { 64 }
 
     /// Clears all cached entries.
     ///
