@@ -63,7 +63,7 @@ extension RenderCache {
         /// Number of times ``clearAll()`` was called.
         public var clears: Int = 0
 
-        /// Number of times ``clearAffected(by:keepingSizes:)`` was called.
+        /// Number of times ``clearAffected(by:keepingSizes:includingDescendants:)`` was called.
         public var subtreeClears: Int = 0
 
         /// Creates a new Stats instance with default values.

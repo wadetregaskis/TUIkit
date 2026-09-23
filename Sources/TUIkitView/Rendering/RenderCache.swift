@@ -143,7 +143,7 @@ public final class RenderCache: @unchecked Sendable {
         /// Creates a new cache entry.
         /// Where this view sat.
         ///
-        /// Read by ``removeInactive()`` and ``clearAffected(by:keepingSizes:)``
+        /// Read by ``removeInactive()`` and ``clearAffected(by:keepingSizes:includingDescendants:)``
         /// and by nothing else — which is the whole reason it is kept: the table's
         /// key is now only the identity's structural hash, and
         /// `RetainedSubtreeIndex.retains` climbs a chain, so there is nowhere else
@@ -240,7 +240,7 @@ public final class RenderCache: @unchecked Sendable {
         let viewSnapshot: Any
         let size: ViewSize
         /// Where the measured view sat — read by ``removeInactive()`` and
-        /// ``clearAffected(by:keepingSizes:)``, which is the only reason it is
+        /// ``clearAffected(by:keepingSizes:includingDescendants:)``, which is the only reason it is
         /// kept. Overwritten by each store, so it is the most recent
         /// structurally-equal chain rather than the first one the key ever saw;
         /// both prunes compare identities structurally, so that is the same
@@ -269,7 +269,7 @@ public final class RenderCache: @unchecked Sendable {
     public private(set) var clearGeneration = 0
 
     /// How many subtree clears have dropped memoized SIZES — every
-    /// ``clearAffected(by:keepingSizes:)`` that does not keep them. That is the
+    /// ``clearAffected(by:keepingSizes:includingDescendants:)`` that does not keep them. That is the
     /// `@State` and `@Observable` writes drained at frame start, and also the
     /// focus moves and scoped environment changes applied mid-pass, so it can
     /// move between two measures of one frame. A clear that keeps sizes (a
@@ -1214,7 +1214,7 @@ extension RenderCache {
     /// Called by `RenderLoop` when global environment values change
     /// (theme, appearance) that affect all views simultaneously.
     /// For state changes that only affect a subtree, prefer
-    /// ``clearAffected(by:keepingSizes:)``.
+    /// ``clearAffected(by:keepingSizes:includingDescendants:)``.
     public func clearAll() {
         clearGeneration &+= 1
         stats.clears += 1
