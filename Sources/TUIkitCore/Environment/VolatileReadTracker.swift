@@ -106,15 +106,28 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// them exactly as it did before it became replayable.
     public private(set) var replayableEffects: Int = 0
 
+    /// Monotonic count of reads of a value that no memo KEYS on and that no
+    /// modifier reports a change of — the enclosing `ScrollView`'s visible
+    /// viewport, which an `Image` fitted to it sizes itself by. The keys see
+    /// the extent a view is offered, and under a two-axis view whose content
+    /// is wider than its viewport that extent does not move when the terminal
+    /// is resized, so a size or a picture memoized against one viewport was
+    /// served at another. Like ``reads``, only ever compared as a delta.
+    ///
+    /// Counted apart from ``reads``, which alone drives the pulse timer: a
+    /// viewport is not a function of time, and a view that read one would
+    /// otherwise keep the run loop ticking for as long as it was on screen.
+    package private(set) var unkeyedReads: Int = 0
+
     /// The combined count a value-memoizing view snapshots around a scoped
     /// render: any delta means the subtree is unsafe to cache.
-    public var cacheUnsafeCount: Int { reads &+ sideEffects &+ replayableEffects }
+    public var cacheUnsafeCount: Int { reads &+ sideEffects &+ replayableEffects &+ unkeyedReads }
 
     /// Everything in ``cacheUnsafeCount`` except ``replayableEffects``: the
     /// count the buffer memo's store gate reads, since that memo stores a
     /// subtree's replayable registrations with its buffer and makes them again
     /// on every hit.
-    public var unreplayableCount: Int { reads &+ sideEffects }
+    public var unreplayableCount: Int { reads &+ sideEffects &+ unkeyedReads }
 
     /// Creates a tracker with zero counts.
     public init() {}
@@ -136,6 +149,11 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// ``replayableEffects``.
     public func recordReplayableEffect() {
         replayableEffects &+= 1
+    }
+
+    /// Records a read of a value no memo keys on — see ``unkeyedReads``.
+    package func recordUnkeyedRead() {
+        unkeyedReads &+= 1
     }
 }
 

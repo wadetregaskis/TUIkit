@@ -937,8 +937,17 @@ private struct ScrollViewportSizeKey: EnvironmentKey {
 extension EnvironmentValues {
     /// The innermost enclosing ``ScrollView``'s visible viewport size — see
     /// ``ScrollViewportSize``.
+    ///
+    /// A read DECLARES itself (``VolatileReadTracker/recordUnkeyedRead()``), so
+    /// the memos decline to keep whatever depended on it: no memo keys on the
+    /// viewport, and under a two-axis view the extent they do key on can stay
+    /// put while it moves — a resize, or the column a vertical bar takes.
+    /// Only a view that sizes itself to the viewport reads it.
     var scrollViewportSize: ScrollViewportSize? {
-        get { self[ScrollViewportSizeKey.self] }
+        get {
+            volatileReadTracker?.recordUnkeyedRead()
+            return self[ScrollViewportSizeKey.self]
+        }
         set { self[ScrollViewportSizeKey.self] = newValue }
     }
 }
