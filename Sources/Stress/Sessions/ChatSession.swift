@@ -65,12 +65,14 @@ struct ChatPage: View {
 }
 
 /// One message in a bordered bubble, pushed to its author's side by a frame
-/// that fills the row — the filler a scroll view has to measure sensibly.
+/// that fills the row — the filler a scroll view has to measure sensibly. It
+/// ends with the message's number, which is how the session tells which
+/// messages are on the screen.
 private struct Bubble: View {
     let message: Conversation.Message
 
     var body: some View {
-        Text(verbatim: message.edited ? message.text + "  (edited)" : message.text)
+        Text(verbatim: message.text + (message.edited ? "  (edited)" : "") + "  #\(message.id)")
             .frame(maxWidth: .fixed(60), alignment: .leading)
             .padding(.horizontal, 1)
             .border()
@@ -90,6 +92,10 @@ final class ChatSession: StressSession {
     /// The keys still to come of a message being typed, or of a reread, each
     /// with the action it is reported under.
     private var pending: [(action: String, key: KeyEvent)] = []
+    /// Whether the person is following the conversation: the view at its end,
+    /// where the anchor keeps it as messages arrive. Paging up leaves it; End
+    /// comes back to it.
+    private var following = true
 
     init(config: StressConfig) {
         let seed = config.seed
@@ -111,6 +117,8 @@ final class ChatSession: StressSession {
         }
         if !pending.isEmpty {
             let next = pending.removeFirst()
+            if next.key.key == .pageUp { following = false }
+            if next.key.key == .end { following = true }
             return SessionStep(action: next.action, keys: [next.key])
         }
         switch random.pick([("write", 12), ("arrive", 30), ("edit", 14), ("unsend", 4), ("reread", 6), ("quiet", 34)]) {
@@ -138,16 +146,30 @@ final class ChatSession: StressSession {
             conversation.messages.remove(at: random.below(conversation.messages.count))
             return SessionStep(action: "unsend")
         case "reread":
-            // Back to the conversation to page up through it, and back to the
-            // field to go on writing.
-            pending = [
-                ("reread", KeyEvent(key: .pageUp)), ("reread", KeyEvent(key: .pageUp)),
-                ("reread", KeyEvent(key: .tab)),
-            ]
+            // Back to the conversation to page up through it, usually down to
+            // its end again with End, and back to the field to go on writing.
+            // Left where it was, the view stays put as messages arrive.
+            pending = Array(repeating: ("reread", KeyEvent(key: .pageUp)), count: random.within(1...3))
+            if random.below(4) != 0 { pending.append(("reread", KeyEvent(key: .end))) }
+            pending.append(("reread", KeyEvent(key: .tab)))
             return SessionStep(action: "reread", keys: [KeyEvent(key: .tab, shift: true)])
         default:
             return SessionStep(action: "quiet")
         }
+    }
+
+    /// The count is right, and while the conversation is being followed its
+    /// newest message is on the screen: a bottom-anchored view that opened at
+    /// its top, or let go of its end as a message arrived, fails here.
+    func check(_ screen: [String], after index: Int) -> String? {
+        let count = "\(conversation.messages.count) messages"
+        guard screen.contains(where: { $0.hasPrefix(count) }) else {
+            return "the header does not say \(count)"
+        }
+        guard following, let newest = conversation.messages.last else { return nil }
+        let tag = "#\(newest.id) "
+        return screen.contains { $0.contains(tag) }
+            ? nil : "following the conversation, but its newest message (\(tag)) is not on the screen"
     }
 
     static let descriptor = SessionDescriptor(

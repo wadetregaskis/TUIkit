@@ -35,6 +35,10 @@ enum SessionRunner {
         /// Print every step as it is played: its action and input, what its
         /// frame cost, and how many bytes it wrote.
         var trace = false
+        /// Ask the session whether each frame shows what it should (see
+        /// ``StressSession/check(_:after:)``). Outside the timed region, but
+        /// off for `--bench`, which measures and nothing else.
+        var checks = true
     }
 
     /// What one kind of step cost, over every step of that kind.
@@ -65,9 +69,19 @@ enum SessionRunner {
         var divergentSteps: [Int] = []
         /// The first few of those, described.
         var divergences: [String] = []
+        /// Every step whose frame did not show what the session said it must.
+        var brokenSteps: [Int] = []
+        /// The first few of those, described.
+        var brokenExpectations: [String] = []
         /// A step whose twin chose a different action: the SCRIPT is not
         /// deterministic, and nothing it found can be trusted.
         var scriptMismatch: String?
+
+        /// Whether the run found nothing wrong: no divergence from the twin, no
+        /// frame that failed the session's own check, and a deterministic script.
+        var passed: Bool {
+            divergentSteps.isEmpty && brokenSteps.isEmpty && scriptMismatch == nil
+        }
         /// The last frame, when asked for (``Options/show``).
         var lastScreen: [String] = []
     }
@@ -101,6 +115,7 @@ enum SessionRunner {
         // first frame is drawn before anyone touches it.
         warm.frame(0)
         cold?.frame(0)
+        if options.checks { checkFrame(of: warm, after: -1, action: "open", into: &report) }
 
         for index in 0..<options.steps {
             var step = warm.step(index)
@@ -129,6 +144,7 @@ enum SessionRunner {
             report.costs[step.action, default: ActionCost()].count += 1
             report.costs[step.action, default: ActionCost()].cpuNanos.append(cpu)
             report.costs[step.action, default: ActionCost()].bytes += bytes
+            if options.checks { checkFrame(of: warm, after: index, action: step.action, into: &report) }
 
             guard let cold else { continue }
             var twin = cold.step(index)
@@ -151,6 +167,19 @@ enum SessionRunner {
         }
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
         return report
+    }
+
+    /// Asks `session` whether the frame drawn after step `index` shows what it
+    /// should, and files what it says if not.
+    @MainActor
+    private static func checkFrame(
+        of session: DrivenSession, after index: Int, action: String, into report: inout Report
+    ) {
+        guard let problem = session.check(session.screen().map(\.stripped), index) else { return }
+        report.brokenSteps.append(index)
+        if report.brokenExpectations.count < 5 {
+            report.brokenExpectations.append("step \(index) (\(action)): \(problem)")
+        }
     }
 
     /// Delivers one step's input to `session` and draws its frame.
@@ -214,6 +243,16 @@ enum SessionRunner {
         }
         if let mismatch = report.scriptMismatch {
             Swift.print("  FAIL: the script is not deterministic — \(mismatch)")
+        }
+        if options.checks {
+            if report.brokenSteps.isEmpty {
+                Swift.print("  checked: every frame showed what the session expected")
+            } else {
+                Swift.print(
+                    "  FAIL: \(report.brokenSteps.count) frames did not show what the session expected "
+                        + "(first after step \(report.brokenSteps[0]))")
+                for problem in report.brokenExpectations { Swift.print("    " + problem) }
+            }
         }
         if options.verify {
             if report.divergentSteps.isEmpty {

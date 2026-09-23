@@ -120,7 +120,7 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
         }
         let report = SessionRunner.run(descriptor, config: config, options: options)
         SessionRunner.print(report, id: id, options: options, config: config)
-        return report.divergentSteps.isEmpty && report.scriptMismatch == nil ? 0 : 1
+        return report.passed ? 0 : 1
     }
     exit(code)
 } else if rawArgs.contains("--selfcheck") {
@@ -147,6 +147,7 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
             options.steps = iterations
             options.width = cols
             options.height = rows
+            options.checks = false
             let report = SessionRunner.run(descriptor, config: config, options: options)
             SessionRunner.print(report, id: sessionID, options: options, config: config)
             return 0

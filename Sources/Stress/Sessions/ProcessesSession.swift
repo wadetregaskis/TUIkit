@@ -179,6 +179,13 @@ final class ProcessesSession: StressSession {
         }
     }
 
+    /// The count over the table is the model's: the processes the filter
+    /// leaves.
+    func check(_ screen: [String], after index: Int) -> String? {
+        let count = "\(table.shown.count) processes · "
+        return screen.contains { $0.hasPrefix(count) } ? nil : "the count does not say \(count)"
+    }
+
     static let descriptor = SessionDescriptor(
         id: "processes",
         summary: "a sortable, filterable process table whose numbers move on every step",

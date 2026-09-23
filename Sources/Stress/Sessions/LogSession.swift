@@ -49,12 +49,15 @@ struct LogPage: View {
     }
 }
 
-/// One line: its level, coloured by severity, then the message, which wraps.
+/// One line: its number, its level coloured by severity, then the message,
+/// which wraps. The number is how the session tells which lines are on the
+/// screen.
 private struct LogRow: View {
     let line: LogModel.Line
 
     var body: some View {
         HStack(alignment: .top, spacing: 1) {
+            Text(verbatim: "\(line.id)").frame(width: 6, alignment: .trailing).foregroundStyle(Color.gray)
             Text(verbatim: line.level)
                 .foregroundStyle(line.level == "ERROR" ? Color.red : line.level == "WARN" ? Color.yellow : Color.gray)
             Text(verbatim: line.text)
@@ -70,6 +73,10 @@ private struct LogRow: View {
 final class LogSession: StressSession {
     private let log: LogModel
     private var random: SessionRandom
+    /// Whether the reader is following the log: `true` at its end, where the
+    /// anchor keeps it as lines arrive, `false` once they page back, and `nil`
+    /// after a page down, which may or may not have reached the end again.
+    private var following: Bool? = true
 
     init(config: StressConfig) {
         let seed = config.seed
@@ -97,11 +104,14 @@ final class LogSession: StressSession {
             append(random.within(5...40))
             return SessionStep(action: "burst")
         case "back":
+            following = false
             return SessionStep(
                 action: "scroll", keys: Array(repeating: KeyEvent(key: .pageUp), count: random.within(1...3)))
         case "forward":
+            following = following == true ? true : nil
             return SessionStep(action: "scroll", keys: [KeyEvent(key: .pageDown)])
         case "end":
+            following = true
             return SessionStep(action: "end", keys: [KeyEvent(key: .end)])
         default:
             return SessionStep(action: "quiet")
@@ -111,6 +121,19 @@ final class LogSession: StressSession {
     private func append(_ count: Int) {
         let next = log.lines.count
         log.lines += (0..<count).map { Self.line(id: next + $0, hash: random.next()) }
+    }
+
+    /// The count is right, and while the log is being followed its newest line
+    /// is on the screen, its number starting a row.
+    func check(_ screen: [String], after index: Int) -> String? {
+        let count = "\(log.lines.count) lines"
+        guard screen.contains(where: { $0.hasPrefix(count) }) else {
+            return "the header does not say \(count)"
+        }
+        guard following == true, let newest = log.lines.last else { return nil }
+        let number = "\(newest.id) "
+        return screen.contains { $0.drop { $0 == " " }.hasPrefix(number) }
+            ? nil : "following the log, but its newest line (\(newest.id)) is not on the screen"
     }
 
     static let descriptor = SessionDescriptor(

@@ -52,6 +52,23 @@ protocol StressSession: AnyObject {
     /// Advances the script to step `index`: makes that step's data changes on
     /// the session's own model and says what input to deliver.
     func step(_ index: Int) -> SessionStep
+
+    /// What is wrong with `screen`, the frame drawn after step `index` (−1 for
+    /// the page as it opens), or `nil` when it shows what it should.
+    ///
+    /// The oracle twin cannot see a mistake both instances make. A scroll view
+    /// opening at the wrong end draws the same with a render cache and without
+    /// one, and `log` opened every run at its top, verified clean, until a chat
+    /// showing its oldest message where the newest belongs made it plain. So a
+    /// session also says what its page must SHOW, from the model it drives:
+    /// the newest message while the conversation is being followed, a count
+    /// that matches the data. Written from the person's side: what would they
+    /// see that is wrong?
+    func check(_ screen: [String], after index: Int) -> String?
+}
+
+extension StressSession {
+    func check(_ screen: [String], after index: Int) -> String? { nil }
 }
 
 /// The app a session's page is the whole of.
@@ -84,6 +101,7 @@ final class DrivenSession {
     let frame: (_ nanos: Int64) -> Void
     let screen: () -> [String]
     let bytesWritten: () -> Int
+    let check: (_ screen: [String], _ index: Int) -> String?
 
     /// Plays `session` against its own ``HeadlessApp`` of `width` × `height`
     /// cells, clearing its render cache before every frame when `cold`.
@@ -97,6 +115,7 @@ final class DrivenSession {
         frame = { app.frame(atNanos: $0) }
         screen = { app.screen }
         bytesWritten = { app.bytesWritten }
+        check = { session.check($0, after: $1) }
     }
 }
 

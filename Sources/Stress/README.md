@@ -170,6 +170,22 @@ where: a hundred and fifty steps would not have reached it. The selfcheck is a
 smoke test; a change to a memo or a kept value deserves a few thousand
 verified steps of the sessions it touches.
 
+The oracle has a blind spot: it cannot see a mistake that both instances
+make. A scroll view opening at the wrong end is drawn the same with a render
+cache and without one, and `log` opened at its top on every run, verified
+clean. So each session can also say what its page must SHOW
+(`StressSession.check(_:after:)`), judged from the model the session drives
+rather than from another rendering. `chat` and `log` check that, while the
+conversation or log is being followed, its newest message or line is on the
+screen; `editor` that the caret's line is on the screen once the caret has
+moved; and every session with a count or a status line that it says what the
+model says. The checks run on every frame of a `--session` run and of the
+selfcheck, outside the timed region, and are off for `--bench`. Their first
+runs found three bugs that had passed thousands of verified steps: a
+bottom-anchored lazy stack of unequal rows opened on blank lines, a log lost
+its end on a burst of wrapping lines, and a view following its end let go of
+it when the terminal shrank.
+
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
 
@@ -186,14 +202,17 @@ memos at the end of every frame.
 |---|---|
 | `editor` | an index-keyed code editor in a two-axis scroll view: a row's width moving under an unchanged collection, the kept all-rows width, `scrollTo` following the caret, per-keystroke frames |
 | `inbox` | a searchable, selectable `List` of items that arrive, leave, move and change underneath: keyed rows around the selection, the row memo, `List` windowing, a search narrowing and restoring the collection, focus between a field and a list |
-| `log` | a log viewer following its end while lines arrive in bursts, and a reader paging back: a bottom-anchored lazy stack growing under the viewport, wrapped lines of unequal height, `scrollPosition(id:)` reporting the top line |
+| `log` | a numbered log viewer following its end while lines arrive in bursts, and a reader paging back: a bottom-anchored lazy stack growing under the viewport, wrapped lines of unequal height, `scrollPosition(id:)` reporting the top line |
 | `settings` | a settings `Form` worked through with the keyboard while accounts sync in and out: focus traversal, toggles, a picker, a stepper, a disclosure group opening and closing, every row re-shown when the units change |
 | `chat` | a conversation of bubbles arriving at the end, earlier ones edited, the person typing and sending: a bottom-anchored lazy stack of unequal heights under the 256-row window threshold, a row's HEIGHT changing under an unchanged collection, full-width alignment frames, a text field typed into and submitted |
 | `processes` | a sortable, filterable process `Table` whose numbers move on every step: `.fit` columns and the row memo under continuous churn, re-sorting, a filter narrowing the rows, rows appended and removed, selection moved with the keys |
 
 Adding one: a `StressSession` — a page built once over a model the session
-owns, and a `step(_:)` that makes that step's data changes on the model and
-returns the input to deliver — plus a `SessionDescriptor` in `Sessions.all`.
+owns, a `step(_:)` that makes that step's data changes on the model and
+returns the input to deliver, and, wherever the page shows something the model
+decides, a `check(_:after:)` that says what must be on the screen — plus a
+`SessionDescriptor` in `Sessions.all`. Give the rows something the check can
+find: a message number, a line number.
 Choices come from a `SessionRandom` seeded from the config, so the twin makes
 the same ones.
 

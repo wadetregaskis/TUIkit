@@ -174,6 +174,13 @@ final class InboxSession: StressSession {
         }
     }
 
+    /// The counts over the list are the model's: what the search leaves, what
+    /// there is, and what is done.
+    func check(_ screen: [String], after index: Int) -> String? {
+        let counts = "\(inbox.shown.count) of \(inbox.items.count) · \(inbox.items.count { $0.done }) done"
+        return screen.contains { $0.hasPrefix(counts) } ? nil : "the counts do not say \(counts)"
+    }
+
     static let descriptor = SessionDescriptor(
         id: "inbox",
         summary: "a searchable, selectable list of items that arrive, leave, move and change underneath",

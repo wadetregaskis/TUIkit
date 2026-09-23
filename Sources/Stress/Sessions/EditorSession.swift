@@ -145,6 +145,9 @@ final class EditorSession: StressSession {
     private var run = 0
     /// Backspaces left in the correction being made.
     private var erasing = 0
+    /// The caret's line and the screen's size at the last check, and whether
+    /// the caret's line must be on the screen: see ``check(_:after:)``.
+    private var checked = (line: 0, rows: 0, columns: 0, caretMustShow: true)
 
     init(config: StressConfig) {
         let seed = config.seed
@@ -209,6 +212,27 @@ final class EditorSession: StressSession {
         let roll = random.below(26 + 5)
         guard roll < 26 else { return KeyEvent(key: .space) }
         return KeyEvent(key: .character(Character(UnicodeScalar(UInt8(97 + roll)))))
+    }
+
+    /// The status line says where the caret is, and the caret's line is on the
+    /// screen once the caret has moved: the page follows moves with `scrollTo`,
+    /// so a move, a page or a jump that left it out of sight fails here. A
+    /// resize is not a move — a shorter window can leave the caret below it,
+    /// as it would in any editor that follows only the caret — so after one the
+    /// caret's line need not show until it next moves.
+    func check(_ screen: [String], after index: Int) -> String? {
+        let status = "Ln \(document.line + 1), Col \(document.column + 1) · \(document.lines.count) lines"
+        guard screen.contains(where: { $0.hasPrefix(status) }) else {
+            return "the status line does not say \(status)"
+        }
+        let (rows, columns) = (screen.count, screen.first?.count ?? 0)
+        if index >= 0, (rows, columns) != (checked.rows, checked.columns) { checked.caretMustShow = false }
+        if document.line != checked.line { checked.caretMustShow = true }
+        checked = (document.line, rows, columns, checked.caretMustShow)
+        guard checked.caretMustShow else { return nil }
+        let number = "\(document.line + 1) "
+        return screen.contains { $0.drop { $0 == " " }.hasPrefix(number) }
+            ? nil : "the caret's line (\(document.line + 1)) is not on the screen"
     }
 
     static let descriptor = SessionDescriptor(
