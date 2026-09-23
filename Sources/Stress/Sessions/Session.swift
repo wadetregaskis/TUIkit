@@ -120,6 +120,7 @@ enum Sessions {
     static let all: [SessionDescriptor] = [
         EditorSession.descriptor,
         InboxSession.descriptor,
+        ProcessesSession.descriptor,
     ]
 
     @MainActor

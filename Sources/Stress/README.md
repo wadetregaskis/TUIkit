@@ -170,6 +170,7 @@ focus.
 |---|---|
 | `editor` | an index-keyed code editor in a two-axis scroll view: a row's width moving under an unchanged collection, the kept all-rows width, `scrollTo` following the caret, per-keystroke frames |
 | `inbox` | a searchable, selectable `List` of items that arrive, leave, move and change underneath: keyed rows around the selection, the row memo, `List` windowing, a search narrowing and restoring the collection, focus between a field and a list |
+| `processes` | a sortable, filterable process `Table` whose numbers move on every step: `.fit` columns and the row memo under continuous churn, re-sorting, a filter narrowing the rows, rows appended and removed, selection moved with the keys |
 
 Adding one: a `StressSession` — a page built once over a model the session
 owns, and a `step(_:)` that makes that step's data changes on the model and
