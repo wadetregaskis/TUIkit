@@ -29,6 +29,11 @@ enum SessionRunner {
         /// cycle through three, narrower and shorter then wider and taller than
         /// the start, as a window dragged about does.
         var resizeEvery = 0
+        /// Print the last frame, styling stripped — what a session is doing,
+        /// for the person writing one.
+        var show = false
+        /// Print every step's action and input as it is played.
+        var trace = false
     }
 
     /// What one kind of step cost, over every step of that kind.
@@ -62,6 +67,8 @@ enum SessionRunner {
         /// A step whose twin chose a different action: the SCRIPT is not
         /// deterministic, and nothing it found can be trusted.
         var scriptMismatch: String?
+        /// The last frame, when asked for (``Options/show``).
+        var lastScreen: [String] = []
     }
 
     /// The sizes a resizing run cycles through.
@@ -100,6 +107,10 @@ enum SessionRunner {
                 step.resize = sizes[(index / options.resizeEvery) % sizes.count]
                 step.action = "resize"
             }
+            if options.trace {
+                let keys = step.keys.map { "\($0.key)" }.joined(separator: " ")
+                Swift.print("  step \(index): \(step.action)\(keys.isEmpty ? "" : " [\(keys)]")")
+            }
             let bytesBefore = warm.bytesWritten()
             let cpuStart = threadCPUNanoseconds()
             let wallStart = DispatchTime.now().uptimeNanoseconds
@@ -135,6 +146,7 @@ enum SessionRunner {
                 }
             }
         }
+        if options.show { report.lastScreen = warm.screen().map(\.stripped) }
         return report
     }
 
@@ -192,6 +204,10 @@ enum SessionRunner {
                     action.padding(toLength: max(14, action.count), withPad: " ", startingAt: 0),
                     cost.count, mean, cost.quantileMicros(0.5), cost.quantileMicros(0.95),
                     cost.quantileMicros(1), Double(cost.bytes) / Double(max(1, cost.count))))
+        }
+        if !report.lastScreen.isEmpty {
+            Swift.print("  last frame:")
+            for line in report.lastScreen { Swift.print("  | " + line) }
         }
         if let mismatch = report.scriptMismatch {
             Swift.print("  FAIL: the script is not deterministic — \(mismatch)")

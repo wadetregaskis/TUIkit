@@ -161,9 +161,15 @@ terminal resized under it, so CI does too.
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
 
+Writing one, `--trace` prints each step's action and keys as it is played, and
+`--show` the last frame with its styling stripped — which is how you find out
+that the keys you meant for the list went into the search field that held the
+focus.
+
 | id | Exercises |
 |---|---|
 | `editor` | an index-keyed code editor in a two-axis scroll view: a row's width moving under an unchanged collection, the kept all-rows width, `scrollTo` following the caret, per-keystroke frames |
+| `inbox` | a searchable, selectable `List` of items that arrive, leave, move and change underneath: keyed rows around the selection, the row memo, `List` windowing, a search narrowing and restoring the collection, focus between a field and a list |
 
 Adding one: a `StressSession` — a page built once over a model the session
 owns, and a `step(_:)` that makes that step's data changes on the model and

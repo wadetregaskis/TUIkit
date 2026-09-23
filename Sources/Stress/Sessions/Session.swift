@@ -118,7 +118,8 @@ struct SessionDescriptor {
 enum Sessions {
     @MainActor
     static let all: [SessionDescriptor] = [
-        EditorSession.descriptor
+        EditorSession.descriptor,
+        InboxSession.descriptor,
     ]
 
     @MainActor
