@@ -429,6 +429,8 @@ extension _VStackCore {
             state.lastDerivedOffset = window.offset
         }
         var (placed, lastPlaced, bottomY) = frame.fill(window: window)
+        // The rows the fill drew, before any focus target joins them.
+        let drawn = ordinalSpan(of: placed.map(\.ordinal))
 
         // Focus / pending targets, wherever they are (§5d): estimated
         // positions relative to the anchor — the reveal snap converges on
@@ -498,6 +500,7 @@ extension _VStackCore {
         if buffer != nil, let resolvedSeek {
             window.reply?.seekResolvedOffset = resolvedSeek
         }
+        if buffer != nil { state.drawnOrdinals = drawn }
         return buffer
     }
 

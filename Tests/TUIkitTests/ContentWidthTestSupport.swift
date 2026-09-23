@@ -24,8 +24,9 @@ final class WidthBox {
 }
 
 /// A two-axis `ScrollView` over a `LazyVStack` — or, `eager`, a `VStack` — of
-/// `rows()` rows, driven frame after frame through ONE cache as the render
-/// loop drives it — pass tracker and all — returning each
+/// `rows()` rows, scrolled to its end when `atBottom`, driven frame after
+/// frame through ONE cache as the render loop drives it — pass tracker and
+/// all — returning each
 /// frame's bottom line — the horizontal bar, when there is one — with its
 /// styling, which is where the thumb is: stripped, a bar is its two arrows and
 /// blanks. The view is rebuilt each frame, as a body is, so a count read from a
@@ -33,10 +34,10 @@ final class WidthBox {
 @MainActor
 func twoAxisFrames<Row: View>(
     tuiContext: TUIContext, rows: @escaping () -> Int = { 400 }, width: Int = 40,
-    eager: Bool = false, row: @escaping (Int) -> Row
+    eager: Bool = false, atBottom: Bool = false, row: @escaping (Int) -> Row
 ) -> () -> String {
     {
-        let view = ScrollView([.horizontal, .vertical]) {
+        let scroll = ScrollView([.horizontal, .vertical]) {
             if eager {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(0..<rows(), id: \.self) { index in row(index) }
@@ -47,6 +48,7 @@ func twoAxisFrames<Row: View>(
                 }
             }
         }
+        let view = atBottom ? AnyView(scroll.defaultScrollAnchor(.bottom)) : AnyView(scroll)
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
         // What `RenderLoop.renderContent` installs every frame, and what turns
@@ -57,7 +59,7 @@ func twoAxisFrames<Row: View>(
         tuiContext.stateStorage.beginRenderPass()
         tuiContext.renderCache.beginRenderPass()
         let buffer = renderToBuffer(
-            AnyView(view),
+            view,
             context: RenderContext(
                 availableWidth: width, availableHeight: 12,
                 environment: environment, tuiContext: tuiContext))

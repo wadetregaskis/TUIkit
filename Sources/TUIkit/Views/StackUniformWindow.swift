@@ -130,19 +130,21 @@ final class StackWindowState {
         /// `StackContentWidth.swift`, which owns every rule about it.
         var contentWidth: ContentWidthRecord?
 
+        /// The rows the last band render DREW — the viewport's rows, not the
+        /// focus targets rendered beside them. After a write, the challenge
+        /// re-measures these with the row the record names as its widest
+        /// (`StackContentWidth.swift`): a row being written on screen is the
+        /// one most likely to have moved, and a write that widens a row the
+        /// record does not name is otherwise unseen until a walk starts over.
+        /// A render-path mutation, and what it records is what was drawn.
+        var drawnOrdinals: Range<Int> = 0..<0
+
         /// The widest row the LAST uniform render actually drew. The reported
         /// width is never below it: a stack must not tell its parent it is
         /// narrower than the band it is putting on screen, however few of the
         /// first rows that band contains (scrolled to row 300, the first nine
         /// rows are not what is drawn).
         var bandWidth = 0
-
-        /// ``bandWidth`` without the rows that fill whatever they are offered.
-        /// What floors a whole-content answer: a filler's measured width is the
-        /// width it was given — last frame's canvas, in a two-axis view — so
-        /// folding it in would hold the extent at last frame's forever, which
-        /// is why the walk leaves fillers out of its maximum too.
-        var inflexibleBandWidth = 0
 
         var hypothesisWidthFlexible = false
         var hypothesisHeightFlexible = false
@@ -361,6 +363,7 @@ extension _VStackCore {
         recordWidths(
             band: rows, grafted: graftRows, children: children, state: state,
             proposal: proposal, context: childContext)
+        state.drawnOrdinals = ordinalSpan(of: candidates.band)
 
         // Assemble: exact blank blocks between the rendered rows. With a
         // reply channel (Stage 6), the buffer is just the rendered band —
@@ -517,17 +520,9 @@ extension _VStackCore {
         // Not `(band + grafted).reduce`: that concatenation would allocate a
         // fresh array of the band on every frame of every windowed stack.
         var bandWidth = 0
-        var inflexibleBandWidth = 0
-        for row in band {
-            bandWidth = max(bandWidth, row.width)
-            if !row.fills { inflexibleBandWidth = max(inflexibleBandWidth, row.width) }
-        }
-        for row in grafted {
-            bandWidth = max(bandWidth, row.width)
-            if !row.fills { inflexibleBandWidth = max(inflexibleBandWidth, row.width) }
-        }
+        for row in band { bandWidth = max(bandWidth, row.width) }
+        for row in grafted { bandWidth = max(bandWidth, row.width) }
         state.bandWidth = bandWidth
-        state.inflexibleBandWidth = inflexibleBandWidth
         seedWidthRecords(children, state: state, proposal: proposal, context: context)
     }
 
@@ -720,19 +715,19 @@ extension _VStackCore {
         if state.rowWidths.isSeeded {
             let walked = Self.walkedRowCount(
                 budget: heightLimit, pitch: pitch, spacing: spacing, count: count)
-            // The exact answer is already a maximum over every row, so the
-            // records do not floor it: they only ever grow, and hold the widest
-            // any row was when some path last saw it, so a row that NARROWED —
-            // a line backspaced, a toggle turned off — would keep its old width
-            // in the extent for as long as the stack lived. The band's
-            // inflexible rows still floor it, because they are what is on
-            // screen; its fillers do not, for the reason the walk leaves them
-            // out. That is the band the LAST render drew, so a row on screen
-            // that shrinks or widens reaches the extent at the next frame
-            // rendered after it — which, in an app that renders on demand, is
-            // the next thing that happens, not a frame scheduled for it.
+            // The exact answer is already a maximum over every row, so neither
+            // floor applies to it. The records only ever grow, and hold the
+            // widest any row was when some path last saw it, so a row that
+            // NARROWED — a line backspaced, a toggle turned off — would keep
+            // its old width in the extent for as long as the stack lived. And
+            // the band is the one the LAST render drew: it floored the answer
+            // once, so the rows on screen could never be wider than the extent,
+            // at the price of a row that shrank reaching the extent a frame
+            // late. The challenge measures those rows now, on the frame of the
+            // write that moved them (``StackWindowState/drawnOrdinals``), so
+            // the floor was only the lag.
             let seen = exact == nil ? state.rowWidths.width(forFirst: walked) : 0
-            let drawn = exact == nil ? state.bandWidth : state.inflexibleBandWidth
+            let drawn = exact == nil ? state.bandWidth : 0
             let prefix = min(max(seen, drawn), widthLimit)
             let width = max(prefix, exact?.width ?? 0)
             // The exact answer's flexibility is already over every row, so it

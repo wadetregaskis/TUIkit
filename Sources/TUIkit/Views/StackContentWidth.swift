@@ -152,13 +152,14 @@ struct ContentWidthRecord {
     /// fills whatever it is offered has none to contribute; it contributes
     /// `isFlexible` (``wholeContentWidth(of:limit:)``).
     /// Moved in place when a challenge finds that row wider than it was, or
-    /// narrower but still at least ``runnerUp``.
+    /// narrower but still at least ``runnerUp`` — or a row the last frame
+    /// drew wider than both.
     var widest: Int
-    /// Which row that was — the one `challenge` re-measures after a write.
-    /// `nil` when no row had a width of its own: no row's width decided the
-    /// answer, so there is nothing to challenge, and a write that gives a row
-    /// one is inside the residue `challenge` states.
-    let widestOrdinal: Int?
+    /// Which row that was — the one `challenge` re-measures after a write,
+    /// with the rows the last frame drew. `nil` when no row had a width of
+    /// its own: no row's width decided the answer, and a write that gives an
+    /// undrawn row one is inside the residue `challenge` states.
+    var widestOrdinal: Int?
     /// The proposal width that row was measured under, which `challenge`
     /// measures it under again: a width taken under one proposal is only
     /// comparable with one taken under the same proposal, because a row wider
@@ -167,8 +168,10 @@ struct ContentWidthRecord {
     /// The second-widest such row's width — a bound, not a row: every
     /// row but the widest is at most this wide, so a challenge that finds the
     /// widest row narrower but still at least this wide knows the new maximum
-    /// exactly. `0` when there is no second row.
-    let runnerUp: Int
+    /// exactly. `0` when there is no second row. Raised by a challenge that
+    /// finds a drawn row wider than the widest, which leaves the old widest
+    /// among the rest.
+    var runnerUp: Int
     let isFlexible: Bool
     let widthGeneration: Int
     /// ``RenderContext/generationIgnoringIdealWidth``: a record filed under
@@ -256,7 +259,15 @@ extension _VStackCore {
             // rows is about to be replaced by a walk, and re-measuring its
             // widest row would be a row measured for nothing.
             if whole || (record.covered <= count && signature.extends(record.rows)) {
-                if challenge(&record, children: children, context: context) {
+                // The drawn rows only when the collection did not move: a write
+                // that edits rows in place is where one drawn row outgrows the
+                // rest — typing into a line — and a write that only grew the
+                // collection has its new rows walked by the extension below. A
+                // document appended to every frame would otherwise pay a band
+                // of row measures every frame for rows it never touched:
+                // measured, +21.3% on `app-shapes/code-editor-tailing`.
+                let drawn = whole ? state.drawnOrdinals : 0..<0
+                if challenge(&record, children: children, drawn: drawn, context: context) {
                     state.contentWidth = record
                     if whole {
                         return answer(
@@ -369,9 +380,10 @@ extension _VStackCore {
         )
     }
 
-    /// Re-measures the one row a kept record names as its widest, when a size
-    /// clear has happened since the record was last known to hold, and reports
-    /// whether it still does. `true` when there was nothing to challenge.
+    /// Re-measures the one row a kept record names as its widest, and the rows
+    /// the last frame drew, when a size clear has happened since the record was
+    /// last known to hold, and reports whether it still does. `true` when there
+    /// was nothing to challenge.
     ///
     /// The row is measured at the width it was measured at when it was filed
     /// (``ContentWidthRecord/measuredAt``), NOT at this ask's — so the verdict is
@@ -406,6 +418,17 @@ extension _VStackCore {
     ///   a walk's question too. A row that is flexible BELOW that width — a
     ///   filling frame, answering with its content — holds by its width like
     ///   any other.
+    ///
+    /// The rows the last frame DREW (``StackWindowState/drawnOrdinals``) are
+    /// measured the same way, and the widest of everything measured is the
+    /// maximum, exact on the same premise: the runner-up bounds every row not
+    /// measured. A drawn row wider than the named one TAKES the record — and
+    /// the named row joins the rest under the runner-up — so a line typed on
+    /// until it is the longest reaches the extent on the frame of the keystroke
+    /// that made it so. A drawn row past the ceiling falls it like the named
+    /// row; one that fills whatever it is offered counts nothing, as in the
+    /// walk. They cost a band of row measures on the frames a write moved the
+    /// sizes, and nothing on the others.
     ///
     /// The row is MEASURED, not remembered: its own memoized sizes are
     /// forgotten first (``RenderCache/forgetSizes(of:measureGeneration:)``).
@@ -448,43 +471,81 @@ extension _VStackCore {
     /// draw moves that row too whenever it is uniform (a format, a locale, a
     /// units toggle), which is what such changes overwhelmingly are.
     ///
-    /// **It is a sample of one, and the residue is stated rather than hidden**:
-    /// a change that widens some OTHER row past the runner-up, under an
-    /// unchanged collection, is not caught until something starts a walk over —
-    /// and growth does not, because a collection that only grew is extended.
-    /// Past the maximum, the extent is short at once; past only the runner-up,
-    /// it is short once the widest row narrows below that other row, since the
-    /// bound it was lowered against was stale. The
-    /// exact alternative — re-walking to verify, while holding the old maximum
-    /// as a floor so nothing becomes unreachable meanwhile — is a design of its
-    /// own and is noted rather than guessed at here.
+    /// **It is a sample — the named row and the drawn ones — and the residue
+    /// is stated rather than hidden**: a change that widens some row the last
+    /// frame did NOT draw past the runner-up, under an unchanged collection, is
+    /// not caught until something starts a walk over — and growth does not,
+    /// because a collection that only grew is extended. Past the maximum, the
+    /// extent is short at once; past only the runner-up, it is short once the
+    /// widest row narrows below that other row, since the bound it was lowered
+    /// against was stale. Scrolled into view, such a row is drawn, and the next
+    /// write measures it; with no write, nothing asks. And the drawn rows are
+    /// measured only for a write that left the collection as it was (see the
+    /// caller): one that ALSO grew it — a paste of several lines into a line —
+    /// leaves the edited line to the next write that does not. The exact
+    /// alternative —
+    /// re-walking to verify, while holding the old maximum as a floor so
+    /// nothing becomes unreachable meanwhile — is a design of its own and is
+    /// noted rather than guessed at here.
     private func challenge(
         _ record: inout ContentWidthRecord, children: ChildViewCollection,
-        context: RenderContext
+        drawn: Range<Int>, context: RenderContext
     ) -> Bool {
         guard record.verifiedGeneration != (context.renderCache?.sizeClearGeneration ?? 0)
         else { return true }
-        guard let ordinal = record.widestOrdinal else {
-            record.verifiedGeneration = context.renderCache?.sizeClearGeneration ?? 0
-            return true
-        }
-        guard ordinal < children.count else { return false }
         let (measureContext, tracker) = rowWidthContext(context, width: record.measuredAt)
         let unsafeBefore = tracker.cacheUnsafeCount
-        let row = children[ordinal]
-        // Its sizes forgotten FIRST, so it is measured rather than remembered —
-        // and so the ones memoized under a proposal this does not ask are gone
-        // too, and the walk that follows a fall, at whichever rung it runs, is
-        // not served one of those.
-        context.renderCache?.forgetSizes(
-            of: row.identity(under: measureContext),
-            measureGeneration: measureContext.measureGeneration)
-        // Asked as the walk asks — unproposed, under the mark — or the two
-        // answers are not comparable.
-        let size = row.measure(proposal: ProposedSize(width: nil, height: nil), context: measureContext)
-        guard size.width < record.measuredAt, size.width >= record.runnerUp else { return false }
-        record.widest = size.width
-        // Read AFTER the measure: a clear the measure itself caused — a row's
+        // Asked as the walk asks — unproposed, under the mark — or the answers
+        // are not comparable with the record's.
+        let unproposed = ProposedSize(width: nil, height: nil)
+
+        // Every row measured here is known exactly; every other row is at most
+        // the runner-up, on the challenge's premise that it did not move.
+        var widest = 0
+        var widestOrdinal: Int?
+        var runnerUp = record.runnerUp
+        if let ordinal = record.widestOrdinal {
+            guard ordinal < children.count else { return false }
+            let row = children[ordinal]
+            // Its sizes forgotten FIRST, so it is measured rather than
+            // remembered — and so the ones memoized under a proposal this does
+            // not ask are gone too, and the walk that follows a fall, at
+            // whichever rung it runs, is not served one of those.
+            context.renderCache?.forgetSizes(
+                of: row.identity(under: measureContext),
+                measureGeneration: measureContext.measureGeneration)
+            let size = row.measure(proposal: unproposed, context: measureContext)
+            guard size.width < record.measuredAt else { return false }
+            widest = size.width
+            widestOrdinal = ordinal
+        }
+
+        // The rows the last frame DREW — see ``StackWindowState/drawnOrdinals``.
+        // Not forgotten first: a drawn row was observed as it rendered, so the
+        // write that moved it cleared its sizes already, which is exactly what
+        // the widest row, measured but perhaps never drawn, cannot count on.
+        // Rows past the record's prefix are the extension's, and walked by it.
+        let reach = min(record.covered, children.count)
+        for ordinal in drawn.clamped(to: 0..<reach) where ordinal != record.widestOrdinal {
+            let size = children[ordinal].measure(proposal: unproposed, context: measureContext)
+            if hasNoWidthOfItsOwn(size, limit: record.measuredAt) { continue }
+            guard size.width < record.measuredAt else { return false }
+            if size.width > widest {
+                if widestOrdinal != nil { runnerUp = max(runnerUp, widest) }
+                widest = size.width
+                widestOrdinal = ordinal
+            } else {
+                runnerUp = max(runnerUp, size.width)
+            }
+        }
+
+        // Narrower than the bound on the rows NOT measured: one of them may be
+        // the widest now, and only a walk can say which.
+        guard widestOrdinal == nil || widest >= record.runnerUp else { return false }
+        record.widest = widest
+        record.widestOrdinal = widestOrdinal
+        record.runnerUp = runnerUp
+        // Read AFTER the measures: a clear a measure itself caused — a row's
         // environment modifier noting a change — is one this answer reflects.
         if tracker.cacheUnsafeCount == unsafeBefore,
             !measureContext.environment.hasUncomparableEnvironmentValue
@@ -551,4 +612,11 @@ func wholeContentWidth(of size: ViewSize, limit: Int) -> Int {
 /// ``wholeContentWidth(of:limit:)``.
 func hasNoWidthOfItsOwn(_ size: ViewSize, limit: Int) -> Bool {
     size.isWidthFlexible && size.width >= limit
+}
+
+/// The smallest range holding every ordinal in `ordinals` — the rows a band
+/// render drew, for ``StackWindowState/drawnOrdinals``. Empty for none.
+func ordinalSpan(of ordinals: [Int]) -> Range<Int> {
+    guard let first = ordinals.min(), let last = ordinals.max() else { return 0..<0 }
+    return first..<(last + 1)
 }
