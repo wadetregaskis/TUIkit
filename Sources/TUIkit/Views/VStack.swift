@@ -271,6 +271,28 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
         }
 
+        // The ask a two-axis `ScrollView` makes for how far right it can
+        // scroll. For rows of one height it is answered by the exact walk
+        // (`StackContentWidth.swift`) from the second frame; for rows of
+        // several, by this on every frame. The walk counts a filler's
+        // flexibility, not the width it was offered, and never calls a capped
+        // answer flexible — counted the same way here, or the first frame
+        // answers the ladder's rung and the second the rows.
+        //
+        // Recognised by the budget's SIZE, as every natural-extent gate is
+        // (`isNaturalExtentBudget`), which has two known edges: an ordinary
+        // `.unspecified` layout ask inside content over two thousand cells on
+        // both axes passes it too, and a filler's guide in the run below is
+        // resolved at the filler's counted width of 0, which clamps a constant
+        // guide over two cells. An explicit marker from the probe would close
+        // both; it is a design of its own.
+        let fillersAreWidthless =
+            collection.dataSignature != nil && proposal.width == nil
+            && proposal.height == nil && isNaturalExtentBudget(widthLimit)
+            && isNaturalExtentBudget(heightLimit)
+        func counted(_ slot: RowSlot) -> Int {
+            fillersAreWidthless && slot.size.isWidthFlexible ? 0 : min(slot.width, widthLimit)
+        }
         var height = 0
         var maxWidth = 0
         for slot in slots {
@@ -290,11 +312,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 // The partially-shown row's width still counts — the render
                 // places its clipped buffer, so the column hugs it.
                 height = heightLimit
-                maxWidth = max(maxWidth, min(slot.width, widthLimit))
+                maxWidth = max(maxWidth, counted(slot))
                 break
             }
             height = next
-            maxWidth = max(maxWidth, min(slot.width, widthLimit))
+            maxWidth = max(maxWidth, counted(slot))
         }
         // An explicit `.alignmentGuide` can push a row off the alignment line,
         // and the run that resolves it is allowed to come out WIDER than the
@@ -305,10 +327,20 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // own widest row as the floor (the render's floor is the widest
         // buffer). Costs nothing when no row sets a guide, which is almost
         // always: `anyAlignmentGuide` is asked first.
-        let guideRun = slotGuideRun(slots, fixedExtent: nil, minimumExtent: maxWidth)
+        // The guide run counts fillers as `counted` does. Given their raw
+        // widths — the rung they were offered — it came out at the limit, the
+        // rule above called that capped and inflexible, and the ladder climbed
+        // every rung to the edge of `Int`, the filler reporting each new rung.
+        let guideRun = slotGuideRun(
+            slots, fixedExtent: nil, minimumExtent: maxWidth,
+            fillersAreWidthless: fillersAreWidthless)
+        let width = min(guideRun?.extent ?? maxWidth, widthLimit)
         return ViewSize(
-            width: min(guideRun?.extent ?? maxWidth, widthLimit), height: height,
-            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+            width: width, height: height,
+            isWidthFlexible: fillersAreWidthless
+                ? Self.wholeContentFlexibility(widthFlexible, width: width, limit: widthLimit)
+                : widthFlexible,
+            isHeightFlexible: heightFlexible)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -727,12 +759,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
     /// common answer, which is why the question is asked before the two arrays
     /// that would carry it are built. See ``anyAlignmentGuide(in:)``.
     private func slotGuideRun(
-        _ slots: [RowSlot], fixedExtent: Int?, minimumExtent: Int = 0
+        _ slots: [RowSlot], fixedExtent: Int?, minimumExtent: Int = 0,
+        fillersAreWidthless: Bool = false
     ) -> AlignmentGuideRun? {
         guard anyAlignmentGuide(in: slots.map(\.child)) else { return nil }
         return horizontalGuideRun(
             slots.map(\.child),
-            sizes: slots.map { (width: $0.width, height: $0.height) },
+            sizes: slots.map {
+                (width: fillersAreWidthless && $0.size.isWidthFlexible ? 0 : $0.width, height: $0.height)
+            },
             alignment: alignment,
             fixedExtent: fixedExtent,
             minimumExtent: minimumExtent)

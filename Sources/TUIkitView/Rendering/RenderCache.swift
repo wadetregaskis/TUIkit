@@ -268,6 +268,53 @@ public final class RenderCache: @unchecked Sendable {
     /// carries this number and compares it.
     public private(set) var clearGeneration = 0
 
+    /// How many subtree clears have dropped memoized SIZES — every
+    /// ``clearAffected(by:keepingSizes:)`` that does not keep them. That is the
+    /// `@State` and `@Observable` writes drained at frame start, and also the
+    /// focus moves and scoped environment changes applied mid-pass, so it can
+    /// move between two measures of one frame. A clear that keeps sizes (a
+    /// paint, a tint) does not count: it promises that no cell moved.
+    ///
+    /// Beside ``clearGeneration`` for the same reason: something that keeps a
+    /// size OUTSIDE this cache, and needs to hear when one in it would have
+    /// been dropped, carries this number and compares it.
+    public private(set) var sizeClearGeneration = 0
+
+    /// Forgets every size memoized AT `identity` — in the cross-frame table,
+    /// and in this pass's under `measureGeneration` — and nothing else: no
+    /// buffer, no ancestor, no descendant, no generation moves. What is next
+    /// asked there is measured rather than served; a memo deeper inside the
+    /// view, keyed on something the change did not touch, is not reached.
+    ///
+    /// For a caller that has been told an answer may have moved and has to find
+    /// out. A value memo compares only the value it was keyed on, and a view
+    /// that reads anything else — a `ForEach` row reading data its element does
+    /// not carry, or an `@Observable` read while it was measured but not drawn,
+    /// which nothing tracks — goes on being served its old answer until
+    /// something clears it. Forgetting it first is the only way to ask it
+    /// again: a bumped ``RenderContext/measureGeneration`` is not one, because
+    /// what is measured under the bump is stored under the bump, and the next
+    /// bump of the same generation is served it. Nor is a lookup that misses on
+    /// request, which puts a branch in every lookup in every app for the sake
+    /// of this one — an earlier form of this did, and measured +0.5% to +0.8%
+    /// on the memo-heavy scenarios.
+    ///
+    /// Matched by hash, which is all the keys hold: the identity's own for the
+    /// cross-frame table, and for this pass's the one `measureChild` folds the
+    /// generation into. A collision forgets an
+    /// unrelated entry, which costs a measure and nothing else. A scan of both
+    /// size tables, so for a single identity on an uncommon event.
+    package func forgetSizes(of identity: ViewIdentity, measureGeneration: UInt8) {
+        let hash = identity.structuralHash
+        var staleSizes: [SizeKey] = []
+        for key in sizeEntries.keys where key.identityHash == hash { staleSizes.append(key) }
+        for key in staleSizes { sizeEntries.removeValue(forKey: key) }
+        let folded = measureIdentityHash(identity, generation: measureGeneration)
+        var staleMeasures: [MeasureKey] = []
+        for key in measureEntries.keys where key.identityHash == folded { staleMeasures.append(key) }
+        for key in staleMeasures { measureEntries.removeValue(forKey: key) }
+    }
+
     /// One measurement under one vertical budget: what ``MeasureKey`` leaves out.
     ///
     /// A key holds at most one of these. The pattern the memo exists for is a
@@ -1195,6 +1242,7 @@ extension RenderCache {
     ///     anything that can affect layout, which is every other environment
     ///     value and every `@State` write.
     public func clearAffected(by identity: ViewIdentity, keepingSizes: Bool = false) {
+        if !keepingSizes { sizeClearGeneration &+= 1 }
         stats.subtreeClears += 1
         // The hashes of `identity` and every ancestor of it, so "is the cached
         // identity `identity` or above it" is a set lookup per entry (confirmed

@@ -1092,11 +1092,19 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
 /// calls per row.
 @inline(__always)
 private func measureIdentityHash(_ context: RenderContext) -> Int {
-    let structural = UInt64(bitPattern: Int64(context.identity.structuralHash))
+    measureIdentityHash(context.identity, generation: context.measureGeneration)
+}
+
+/// `measureChild`'s key hash for `identity` measured under `generation` — also
+/// what `RenderCache.forgetSizes(of:measureGeneration:)` matches a per-pass
+/// entry by, so the two cannot disagree about where an entry lives.
+@inline(__always)
+func measureIdentityHash(_ identity: ViewIdentity, generation: UInt8) -> Int {
+    let structural = UInt64(bitPattern: Int64(identity.structuralHash))
     // The golden-ratio odd constant: each of the 255 non-zero generations gets a
     // distinct, well-spread mask, and generation 0 gets none at all.
-    let generation = UInt64(context.measureGeneration) &* 0x9E37_79B9_7F4A_7C15
-    return Int(truncatingIfNeeded: structural ^ generation)
+    let folded = UInt64(generation) &* 0x9E37_79B9_7F4A_7C15
+    return Int(truncatingIfNeeded: structural ^ folded)
 }
 
 /// Hashes a view value's raw storage, to tell two values of one type apart

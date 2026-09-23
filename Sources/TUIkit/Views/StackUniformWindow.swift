@@ -30,6 +30,10 @@ private enum VStackStateIndex {
     static let uniformWindow = -70
 }
 
+/// A band row as the uniform render measured it: `fills` when it is
+/// width-flexible, whose `width` is then only the width it was offered.
+typealias UniformBandRow = (ordinal: Int, child: ChildView, width: Int, fills: Bool)
+
 /// The widest rows a windowed stack has measured, kept as the running maxima
 /// of every row any of its paths has seen: records in increasing ordinal order
 /// whose widths strictly increase, so ``width(forFirst:)`` is the widest known
@@ -90,8 +94,20 @@ struct RowWidthRecords {
 /// `_VStackCore`) so non-generic helpers can hold it.
 final class StackWindowState {
         /// Every row is exactly this tall, as far as this path has measured.
-        /// `nil` until seeded (from row 0, on the render path only — the
-        /// measure-side-effect rule forbids seeding while measuring).
+        /// `nil` until seeded (from row 0, on the render path only).
+        ///
+        /// Render-path-only because this is a HYPOTHESIS taken from a sample —
+        /// one row, taken under one proposal — and a sample's answer depends on
+        /// how it was taken. Row 0 is always the row, but not always at the same
+        /// width: a measure asks at whatever width its caller is trying (a
+        /// dialog's trial widths, a ladder's rungs), where row 0 can wrap to a
+        /// different height than the render draws it at, and kept, that height
+        /// would be every row's pitch. So the stack's size would depend on which
+        /// speculative passes happened to run, which is the one thing a measure
+        /// may not do (see ``RenderContext/isMeasuring``). A complete aggregate
+        /// taken the same way whoever takes it has no such dependence and may be
+        /// written from a measure — `StackContentWidth.swift` is the worked
+        /// example.
         var hypothesisExtent: Int?
 
         /// A measured row disagreed: uniform arithmetic is dead, permanently
@@ -120,6 +136,13 @@ final class StackWindowState {
         /// first rows that band contains (scrolled to row 300, the first nine
         /// rows are not what is drawn).
         var bandWidth = 0
+
+        /// ``bandWidth`` without the rows that fill whatever they are offered.
+        /// What floors a whole-content answer: a filler's measured width is the
+        /// width it was given — last frame's canvas, in a two-axis view — so
+        /// folding it in would hold the extent at last frame's forever, which
+        /// is why the walk leaves fillers out of its maximum too.
+        var inflexibleBandWidth = 0
 
         var hypothesisWidthFlexible = false
         var hypothesisHeightFlexible = false
@@ -359,7 +382,7 @@ extension _VStackCore {
         } else if cursor < totalHeight {
             result.appendVertically(FrameBuffer(emptyWithHeight: totalHeight - cursor), spacing: 0)
         }
-        for (ordinal, child, rowWidth) in graftRows {
+        for (ordinal, child, rowWidth, _) in graftRows {
             graftOffBandRow(
                 child, into: &result, bandLocalY: ordinal * pitch - sliceOrigin,
                 width: width, viewportHeight: window.viewportHeight,
@@ -438,8 +461,8 @@ extension _VStackCore {
     private func verifiedUniformRows(
         _ ordinals: [Int], children: ChildViewCollection, extent: Int,
         state: StackWindowState, proposal: ProposedSize, context: RenderContext
-    ) -> [(ordinal: Int, child: ChildView, width: Int)]? {
-        var result: [(ordinal: Int, child: ChildView, width: Int)] = []
+    ) -> [UniformBandRow]? {
+        var result: [UniformBandRow] = []
         result.reserveCapacity(ordinals.count)
         for ordinal in ordinals {
             let child = children[ordinal]
@@ -450,7 +473,7 @@ extension _VStackCore {
             if measured.isHeightFlexible { state.hypothesisHeightFlexible = true }
             // The measured width is kept for the ramp: it is what the row will
             // be aligned by, and the rendered one does not exist yet.
-            result.append((ordinal, child, measured.width))
+            result.append((ordinal, child, measured.width, measured.isWidthFlexible))
         }
         return result
     }
@@ -459,14 +482,14 @@ extension _VStackCore {
     /// with a blank block for each gap, and returns where the walk left the
     /// cursor plus the key→ordinal memo it built on the way.
     private func appendUniformRows(
-        _ rows: [(ordinal: Int, child: ChildView, width: Int)], into result: inout FrameBuffer,
+        _ rows: [UniformBandRow], into result: inout FrameBuffer,
         from sliceOrigin: Int, children: ChildViewCollection,
         geometry: (extent: Int, pitch: Int, width: Int, viewportHeight: Int),
         rowContext: (Int, Int) -> RenderContext
     ) -> (cursor: Int, memo: [String: Int]) {
         var cursor = sliceOrigin
         var memo: [String: Int] = [:]
-        for (ordinal, child, rowWidth) in rows {
+        for (ordinal, child, rowWidth, _) in rows {
             let rowY = ordinal * geometry.pitch
             if rowY > cursor {
                 result.appendVertically(FrameBuffer(emptyWithHeight: rowY - cursor), spacing: 0)
@@ -486,17 +509,25 @@ extension _VStackCore {
     /// is drawing (the floor the report may never fall below) and, once per
     /// stack, the sample a measure of it would have walked.
     private func recordWidths(
-        band: [(ordinal: Int, child: ChildView, width: Int)],
-        grafted: [(ordinal: Int, child: ChildView, width: Int)],
+        band: [UniformBandRow],
+        grafted: [UniformBandRow],
         children: ChildViewCollection, state: StackWindowState,
         proposal: ProposedSize, context: RenderContext
     ) {
         // Not `(band + grafted).reduce`: that concatenation would allocate a
         // fresh array of the band on every frame of every windowed stack.
         var bandWidth = 0
-        for row in band { bandWidth = max(bandWidth, row.width) }
-        for row in grafted { bandWidth = max(bandWidth, row.width) }
+        var inflexibleBandWidth = 0
+        for row in band {
+            bandWidth = max(bandWidth, row.width)
+            if !row.fills { inflexibleBandWidth = max(inflexibleBandWidth, row.width) }
+        }
+        for row in grafted {
+            bandWidth = max(bandWidth, row.width)
+            if !row.fills { inflexibleBandWidth = max(inflexibleBandWidth, row.width) }
+        }
         state.bandWidth = bandWidth
+        state.inflexibleBandWidth = inflexibleBandWidth
         seedWidthRecords(children, state: state, proposal: proposal, context: context)
     }
 
@@ -659,9 +690,14 @@ extension _VStackCore {
 
         // O(1) once the render has seeded the width records: the answer is
         // pure arithmetic plus the widest row already known within this
-        // budget's reach — no row measures at all, the steady state. (Before
-        // the first render only the sample below can answer, and it must not
-        // persist anything — measuring must not mutate.)
+        // budget's reach — no row measures at all, the steady state. (The
+        // sample below is the fallback for a live hypothesis whose records are
+        // not seeded — a state no render currently leaves, since the render
+        // that seeds the one seeds the other — and it must not persist
+        // anything: a sample's answer depends on which rows were in it, so a
+        // measure that kept one would make the stack's width depend on which
+        // speculative passes ran. ``RenderContext/isMeasuring`` has the rule
+        // and the line it draws.)
         //
         // Floored by the band the last render drew: a prefix answer is the
         // right one for a parent asking "how wide are you in N lines", but a
@@ -683,11 +719,36 @@ extension _VStackCore {
         if state.rowWidths.isSeeded {
             let walked = Self.walkedRowCount(
                 budget: heightLimit, pitch: pitch, spacing: spacing, count: count)
-            let prefix = min(max(state.rowWidths.width(forFirst: walked), state.bandWidth), widthLimit)
+            // The exact answer is already a maximum over every row, so the
+            // records do not floor it: they only ever grow, and hold the widest
+            // any row was when some path last saw it, so a row that NARROWED —
+            // a line backspaced, a toggle turned off — would keep its old width
+            // in the extent for as long as the stack lived. The band's
+            // inflexible rows still floor it, because they are what is on
+            // screen; its fillers do not, for the reason the walk leaves them
+            // out. That is the band the LAST render drew, so a row on screen
+            // that shrinks or widens reaches the extent at the next frame
+            // rendered after it — which, in an app that renders on demand, is
+            // the next thing that happens, not a frame scheduled for it.
+            let seen = exact == nil ? state.rowWidths.width(forFirst: walked) : 0
+            let drawn = exact == nil ? state.bandWidth : state.inflexibleBandWidth
+            let prefix = min(max(seen, drawn), widthLimit)
+            let width = max(prefix, exact?.width ?? 0)
+            // The exact answer's flexibility is already over every row, so it
+            // stands alone: the hypothesis's flag is sticky — set the first
+            // time any band row filled, never cleared — and would go on saying
+            // "flexible" after the last filler had left the data.
+            let flexible: Bool
+            if let exact {
+                flexible = Self.wholeContentFlexibility(
+                    exact.isWidthFlexible, width: width, limit: widthLimit)
+            } else {
+                flexible = state.hypothesisWidthFlexible
+            }
             return ViewSize(
-                width: max(prefix, exact?.width ?? 0),
+                width: width,
                 height: height,
-                isWidthFlexible: state.hypothesisWidthFlexible || (exact?.isWidthFlexible ?? false),
+                isWidthFlexible: flexible,
                 isHeightFlexible: state.hypothesisHeightFlexible)
         }
 
@@ -705,13 +766,20 @@ extension _VStackCore {
             // entries alive across the pass GC (see AnchoredWindowFrame.pitch).
             measureContext.renderCache?.markActive(child.identity(under: measureContext))
             guard size.height == extent else { return nil }  // falsified: exact walk
-            maxWidth = max(maxWidth, min(size.width, widthLimit))
+            // With the exact answer in hand, a filler counts as the walk counts
+            // it: its flexibility, not the width it was offered.
+            if exact == nil || !size.isWidthFlexible {
+                maxWidth = max(maxWidth, min(size.width, widthLimit))
+            }
             if size.isWidthFlexible { widthFlexible = true }
             if size.isHeightFlexible { heightFlexible = true }
         }
+        let width = max(maxWidth, exact?.width ?? 0)
+        let flexible = widthFlexible || (exact?.isWidthFlexible ?? false)
         return ViewSize(
-            width: max(maxWidth, exact?.width ?? 0), height: height,
-            isWidthFlexible: widthFlexible || (exact?.isWidthFlexible ?? false),
+            width: width, height: height,
+            isWidthFlexible: exact == nil
+                ? flexible : Self.wholeContentFlexibility(flexible, width: width, limit: widthLimit),
             isHeightFlexible: heightFlexible)
     }
 }

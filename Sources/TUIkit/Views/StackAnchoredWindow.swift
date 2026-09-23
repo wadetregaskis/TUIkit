@@ -722,15 +722,42 @@ extension _VStackCore {
         let widthLimit = proposal.width ?? context.availableWidth
         let heightLimit = proposal.height ?? context.availableHeight
         let sampleProposal = ProposedSize(width: widthLimit, height: nil)
+        let sampleSize = min(count, Self.anchoredWidthSampleCount)
+        // Built once, for the check below and the sample: a subscript BUILDS
+        // its child, and building the sixteen twice cost a million-row
+        // `scrollfollow` 4-5% of its frame (measured). Declined before anything
+        // is measured, because the eager path that answers instead measures
+        // every row, and an exact walk here first would be paid for twice.
+        let sampleChildren = (0..<sampleSize).map { children[$0] }
+        guard !sampleChildren.contains(where: \.isSpacer) else { return nil }
+
+        // An UNBOUNDED ask is not the prefix question the sample below
+        // answers: it is a two-axis `ScrollView` asking how far right its
+        // content can be scrolled, and a sample cannot answer it — see
+        // `StackContentWidth.swift`. Recognised by the BUDGET and not by whether
+        // that budget reaches every row, which is where this first went wrong:
+        // the horizontal probe's height budget is pinned at 4,096, so
+        // `walkedRowCount(4096, pitch 1) >= count` is false for any stack over
+        // four thousand rows and the fix stopped firing on exactly the
+        // collections it exists for (measured: identical checksums at 8,000
+        // rows, differing at 2,000 and 4,000).
+        //
+        // Asked BEFORE the sample, as the uniform twin asks it: its challenge
+        // can find the widest row moved and drop that row's memoized sizes, and
+        // a sample taken first had already been served the old one — so the
+        // ask that corrected the record answered with the width it corrected.
+        let exact =
+            isNaturalExtentBudget(heightLimit) && proposal.height == nil
+            ? contentWidthOverAllRows(
+                children, widthLimit: widthLimit, mayWalk: proposal.width == nil,
+                state: state, context: context)
+            : nil
 
         var estimate = state.estimatedPitch(spacing: spacing)
         var sampleTotal = 0
-        let sampleSize = min(count, Self.anchoredWidthSampleCount)
         var sampled: [ViewSize] = []
         sampled.reserveCapacity(sampleSize)
-        for ordinal in 0..<sampleSize {
-            let child = children[ordinal]
-            guard !child.isSpacer else { return nil }
+        for (ordinal, child) in sampleChildren.enumerated() {
             let size = child.measure(proposal: sampleProposal, context: measureContext)
             // Sample rows are measured but never rendered — keep their memo
             // entries alive (see `AnchoredWindowFrame.pitch`).
@@ -756,27 +783,22 @@ extension _VStackCore {
         var widthFlexible = false
         var heightFlexible = false
         for size in sampled.prefix(prefix) {
-            maxWidth = max(maxWidth, min(size.width, widthLimit))
+            // With the exact answer in hand a filler counts as the walk counts
+            // it — its flexibility, not the budget it was measured under — so
+            // that this arm and the walk give one answer to one question: the
+            // uniform path answers with the walk from the second frame for rows
+            // of one height, and this answers every frame for rows of several.
+            if exact == nil || !size.isWidthFlexible {
+                maxWidth = max(maxWidth, min(size.width, widthLimit))
+            }
             if size.isWidthFlexible { widthFlexible = true }
             if size.isHeightFlexible { heightFlexible = true }
         }
 
-        // An UNBOUNDED ask is not the prefix question above: it is a two-axis
-        // `ScrollView` asking how far right its content can be scrolled, and a
-        // sample cannot answer it — see `StackContentWidth.swift`. Recognised by
-        // the BUDGET and not by whether that budget reaches every row, which is
-        // where this first went wrong: the horizontal probe's height budget is
-        // pinned at 4,096, so `walkedRowCount(4096, pitch 1) >= count` is false
-        // for any stack over four thousand rows and the fix stopped firing on
-        // exactly the collections it exists for (measured: identical checksums
-        // at 8,000 rows, differing at 2,000 and 4,000).
-        if isNaturalExtentBudget(heightLimit), proposal.height == nil,
-            let exact = contentWidthOverAllRows(
-                children, widthLimit: widthLimit, mayWalk: proposal.width == nil,
-                state: state, context: context)
-        {
+        if let exact {
             maxWidth = max(maxWidth, exact.width)
-            if exact.isWidthFlexible { widthFlexible = true }
+            widthFlexible = Self.wholeContentFlexibility(
+                widthFlexible || exact.isWidthFlexible, width: maxWidth, limit: widthLimit)
         }
 
         let total = count * estimate - spacing

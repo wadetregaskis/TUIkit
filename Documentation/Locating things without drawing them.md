@@ -1223,10 +1223,28 @@ question.
   Rung 3 is why the record lives in `@State` (`StackWindowState.contentWidth`)
   and not in `sizeEntries`: an arriving row is a write, a write clears the cache
   from the app root down, and a record that is gone before it can be extended is
-  no record at all. It carries the invalidation the cache would have given it —
+  no record at all. Three events make it stale outright —
   `TerminalWidthTraits.generation`, `measureGeneration`, and
   `RenderCache.clearGeneration` for the whole-cache drops a `@State` payload
   cannot otherwise see.
+
+  **The fourth it survives on purpose, and has to answer another way.** A
+  write that changes what rows DRAW without changing their data — a units
+  toggle, a "show details" — clears the cache's own width memos, and would have
+  left this one standing with the old width and the new tails unreachable.
+  Treating every write as staleness is exact and measured +3,590% on
+  `code-editor-tailing`, where the write and the growth are one event. So a
+  write (`RenderCache.sizeClearGeneration`) CHALLENGES the record instead: the
+  one row it names as its widest is re-measured, at the width it was first
+  measured at so that the verdict does not depend on which ask runs it, and
+  measured fresh rather than out of the row's memo, which the write may not
+  have reached. Same or wider but still under that width, it holds and is
+  raised; narrower but at least the second-widest row the record also keeps, it
+  holds and is lowered; narrower than that, flexible, or at or past that
+  width, it falls and the next natural-extent ask walks. The residue is stated
+  where the code is: a write that widens some OTHER row past the second-widest
+  width the record keeps, under an unchanged collection, is missed until a walk
+  starts over.
 
   Paired A/B, 10 reps, release, against the frame that had the bug and with the
   canvas held identical so the measurement is the mechanism and not the extra

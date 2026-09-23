@@ -143,6 +143,29 @@ public struct RenderContext {
     /// for the same reason.
     ///
     /// Views should skip side-effects like focus registration when this is true.
+    ///
+    /// ## What counts as a side effect
+    ///
+    /// A measure is SPECULATIVE — it runs several times a frame, at sizes
+    /// nothing is drawn at, for subtrees that may never be rendered — and the
+    /// rule it works under is a CPU's: speculation may do anything it likes,
+    /// including fill caches, so long as nothing anyone is meant to be able to
+    /// RELY on differs when the speculation turns out not to have been needed.
+    ///
+    /// So the forbidden things are the ones a user or an app can depend on: a
+    /// focus registration, a lifecycle callback, a committed frame, a decision
+    /// that shapes a later answer. Filling a derived cache is not one of them,
+    /// and the render cache's size memo says so outright for the store it owns
+    /// (`RenderCache.lookupSize(key:view:)`) — "Unlike the buffer cache this is
+    /// safe to populate from a measure pass".
+    /// That a cache was filled is of course INFERABLE, from latency or from
+    /// allocation; nothing here is secret and none of it is a reason to refuse.
+    ///
+    /// The line a derived cache has to stay the right side of is that its answer
+    /// must not depend on WHICH speculative passes ran. A complete aggregate
+    /// does not; a sample does — see `RowWidthRecords`, which is a sample and is
+    /// therefore seeded from the render path only, and `StackContentWidth.swift`,
+    /// which is a maximum over every row and is not.
     public var isMeasuring: Bool = false
 
     /// Which generation of the environment a measurement belongs to — the

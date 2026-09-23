@@ -149,7 +149,15 @@ func naturalExtentStartingBudget(forVisible extent: Int) -> Int {
 /// "unbounded" at a different number than the ladder offers would answer the
 /// prefix question to the natural-size ask, which is the bug
 /// `ScrollTwoAxisWindowTests` pins.
+///
+/// HALF the floor, not the floor itself, because what arrives is the floor
+/// minus whatever sits between the probe and the view: a `.padding(.horizontal)`
+/// or a border takes its cells off the budget before the stack sees it. At the
+/// floor exactly, a two-cell inset turned 4,096 into 4,094 — a real terminal's
+/// width, by this test — and a padded stack in a pane up to 64 columns wide
+/// stopped answering for its rows out of sight. Half the floor is still two
+/// thousand cells, which no terminal is.
 @MainActor
 func isNaturalExtentBudget(_ budget: Int) -> Bool {
-    budget >= naturalExtentStartingBudget(forVisible: 0)
+    budget >= naturalExtentStartingBudget(forVisible: 0) / 2
 }
