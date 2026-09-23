@@ -277,19 +277,12 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // several, by this on every frame. The walk counts a filler's
         // flexibility, not the width it was offered, and never calls a capped
         // answer flexible — counted the same way here, or the first frame
-        // answers the ladder's rung and the second the rows.
-        //
-        // Recognised by the budget's SIZE, as every natural-extent gate is
-        // (`isNaturalExtentBudget`), which has two known edges: an ordinary
-        // `.unspecified` layout ask inside content over two thousand cells on
-        // both axes passes it too, and a filler's guide in the run below is
-        // resolved at the filler's counted width of 0, which clamps a constant
-        // guide over two cells. An explicit marker from the probe would close
-        // both; it is a design of its own.
+        // answers the ladder's rung and the second the rows. Which ask this is
+        // comes from `contentWidthAsk`, by the probe's own mark.
         let fillersAreWidthless =
-            collection.dataSignature != nil && proposal.width == nil
-            && proposal.height == nil && isNaturalExtentBudget(widthLimit)
-            && isNaturalExtentBudget(heightLimit)
+            collection.dataSignature != nil
+            && measureContext.contentWidthAsk(
+                proposal: proposal, widthLimit: widthLimit, heightLimit: heightLimit) == .probe
         func counted(_ slot: RowSlot) -> Int {
             fillersAreWidthless && slot.size.isWidthFlexible ? 0 : min(slot.width, widthLimit)
         }

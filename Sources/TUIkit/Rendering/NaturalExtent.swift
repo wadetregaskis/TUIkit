@@ -87,6 +87,12 @@ func measureNaturalExtent<V: View>(
     /// against overshoot rather than maximising either.
     let growthFactor = 8
 
+    // The horizontal ladder is the ideal-width ask, and says so; the vertical
+    // one is not, and clears the mark an enclosing horizontal probe may have
+    // set, since its content's height is its own question. See
+    // ``RenderContext/asksIdealWidth``.
+    let context = context.askingIdealWidth(axis == .horizontal)
+
     func measure(at budget: Int) -> ViewSize {
         var probe = context
         switch axis {
@@ -160,4 +166,68 @@ func naturalExtentStartingBudget(forVisible extent: Int) -> Int {
 @MainActor
 func isNaturalExtentBudget(_ budget: Int) -> Bool {
     budget >= naturalExtentStartingBudget(forVisible: 0) / 2
+}
+
+// MARK: - Which question a width ask is
+
+/// What a windowed stack is being asked for its width, decided once from
+/// explicit marks rather than from how big the offer happens to be.
+enum ContentWidthAsk {
+    /// The ordinary layout question — how wide are the rows this height
+    /// budget reaches — answered from those rows.
+    case prefix
+    /// How wide are ALL the rows, answered from the kept record if there is
+    /// one, and never by walking: a render, or a probe under a real bound.
+    case serve
+    /// The horizontal natural-extent probe itself: how wide are all the rows,
+    /// and it may pay to walk them and keep the answer.
+    case probe
+}
+
+private struct AsksWholeContentWidthKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether this subtree is laid out on a horizontally unbounded canvas —
+    /// the content of a `ScrollView` that scrolls horizontally — so a windowed
+    /// stack's width means ALL its rows, at the probe and at render alike.
+    /// Without it a sibling of the stack would be placed by the rows on screen
+    /// while the canvas was sized by every row. Set by the scroll view for its
+    /// content, and to `false` by one that does not scroll horizontally, since
+    /// its content's width is its own viewport's question.
+    var asksWholeContentWidth: Bool {
+        get { self[AsksWholeContentWidthKey.self] }
+        set { self[AsksWholeContentWidthKey.self] = newValue }
+    }
+}
+
+extension RenderContext {
+    /// Which question a windowed stack's width ask is — the one classifier,
+    /// so the arms that answer it cannot disagree about it.
+    ///
+    /// Recognised by MARKS, not by the size of the offer. It used to be the
+    /// size — at least half the ladder's floor with no proposal meant "the
+    /// probe" — and an ordinary `.unspecified` layout ask inside content over
+    /// two thousand cells on both axes met that test at render, walked every
+    /// row, and filed the widths it found there. The size survives only as a
+    /// BOUND DETECTOR: a probe that reaches the stack under a real width or
+    /// height bound is not asking for its natural width, so it may read the
+    /// kept answer but must not walk and file one.
+    ///
+    /// - Parameters:
+    ///   - proposal: The stack's proposal.
+    ///   - widthLimit: `proposal.width ?? availableWidth`.
+    ///   - heightLimit: `proposal.height ?? availableHeight`.
+    @MainActor
+    func contentWidthAsk(proposal: ProposedSize, widthLimit: Int, heightLimit: Int)
+        -> ContentWidthAsk
+    {
+        guard proposal.height == nil else { return .prefix }
+        if asksIdealWidth {
+            return proposal.width == nil && isNaturalExtentBudget(widthLimit)
+                && isNaturalExtentBudget(heightLimit) ? .probe : .serve
+        }
+        return environment.asksWholeContentWidth ? .serve : .prefix
+    }
 }

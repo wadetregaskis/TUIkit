@@ -221,10 +221,42 @@ public struct RenderContext {
     /// `modifiers`**, the two shapes that pass the most contexts. In the flag
     /// run it lands in padding that was already there and the stride does not
     /// move. It wraps (``invalidatingMeasureMemo()`` uses `&+`), which is
-    /// harmless: 256 opt-in bumps on one root-to-leaf path is not a shape that
+    /// harmless: 128 opt-in bumps on one root-to-leaf path is not a shape that
     /// exists, and the consequence of a wrap would be the stale serve that is
     /// the status quo everywhere this is not called.
+    ///
+    /// ## Bit 7 is not a generation
+    ///
+    /// It is the IDEAL-WIDTH mark: set while a horizontal natural-extent probe
+    /// asks "how wide would you be if nothing stopped you" (`asksIdealWidth`),
+    /// and never at a committed render. It lives here rather than in a field of
+    /// its own because an answer taken under it differs from one taken without
+    /// it — a windowed stack answers for every row under it and for the rows
+    /// its budget reaches otherwise — and this byte is already in both measure
+    /// keys, so the two answers are kept apart by construction and at no cost.
+    /// A generation is
+    /// the low seven bits; anything that compares generations across passes
+    /// compares `generationIgnoringIdealWidth`.
     public var measureGeneration: UInt8 = 0
+
+    /// Whether this measure is a horizontal natural-extent probe's IDEAL-WIDTH
+    /// ask — see ``measureGeneration``'s bit 7. Under it, a width proposal of
+    /// `nil` means SwiftUI's unspecified: a view that fills whatever it is
+    /// offered reports what it would be if it were offered nothing, rather than
+    /// the probe's budget.
+    package var asksIdealWidth: Bool { measureGeneration & 0x80 != 0 }
+
+    /// ``measureGeneration`` without the ideal-width mark: the generation a
+    /// value kept across passes is compared by, since an answer filed under
+    /// the probe is the same answer when a render asks for it.
+    package var generationIgnoringIdealWidth: UInt8 { measureGeneration & 0x7F }
+
+    /// This context with the ideal-width mark set or cleared.
+    package func askingIdealWidth(_ asks: Bool = true) -> Self {
+        var copy = self
+        copy.measureGeneration = asks ? copy.measureGeneration | 0x80 : copy.measureGeneration & 0x7F
+        return copy
+    }
 
     /// How many environment applications lie between the root and here.
     ///
@@ -251,7 +283,10 @@ public struct RenderContext {
     /// before the environment changed.
     public func invalidatingMeasureMemo() -> Self {
         var copy = self
-        copy.measureGeneration &+= 1
+        // The low seven bits only: bit 7 is the ideal-width mark, which a bump
+        // must neither set nor clear.
+        copy.measureGeneration =
+            (copy.measureGeneration & 0x80) | ((copy.measureGeneration &+ 1) & 0x7F)
         return copy
     }
 

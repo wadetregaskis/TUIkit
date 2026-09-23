@@ -61,11 +61,11 @@ func twoAxisFrames<Row: View>(
     }
 }
 
-/// The content-width ladder asked directly, one width at a time, as a
-/// width-UNBOUNDED ask arrives from the callers (`mayWalk` is theirs:
-/// `proposal.width == nil`). Whether it walks is then the ladder's own rule —
-/// only at a natural-extent width — so an ask of 40 here is one a terminal-width
-/// `HStack` makes, and may read the kept answer but never start a walk. One
+/// The content-width ladder asked directly, one width at a time, as the
+/// horizontal probe asks it: under the ideal-width mark with no proposal, and
+/// classified by `contentWidthAsk` as the arms classify it. So an ask at a
+/// rung is `.probe` and may walk, and an ask of 40 is a probe under a real
+/// bound — `.serve` — which may read the kept answer but never start a walk. One
 /// `StackWindowState` across every ask, so the record carries from one to the
 /// next as it does in a frame. One pass tracker and no `beginRenderPass()`
 /// between asks, so every ask is in ONE pass, as a frame's rungs and probes
@@ -90,14 +90,19 @@ func contentWidthAsks<Row: View>(
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
         environment.installVolatileReadTracker(pass)
+        // Under the horizontal probe's own mark, as `measureNaturalExtent`
+        // asks; the production classifier then decides what the ask may do.
         var context = RenderContext(
             availableWidth: limit, availableHeight: 4_096,
-            environment: environment, tuiContext: tuiContext)
+            environment: environment, tuiContext: tuiContext
+        ).askingIdealWidth()
         if underInvalidatedMemo { context = context.invalidatingMeasureMemo() }
         let children = resolveChildViewCollection(from: stack.content, context: context)
+        let proposal = ProposedSize(width: nil, height: nil)
         return stack.contentWidthOverAllRows(
-            children, widthLimit: limit, mayWalk: true, state: state,
-            context: context)?.width
+            children, widthLimit: limit,
+            ask: context.contentWidthAsk(proposal: proposal, widthLimit: limit, heightLimit: 4_096),
+            state: state, context: context)?.width
     }
 }
 

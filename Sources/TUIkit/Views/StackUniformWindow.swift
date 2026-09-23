@@ -709,12 +709,13 @@ extension _VStackCore {
         // whether a render has seeded the uniformity hypothesis yet, so wiring
         // only one left a two-axis `ScrollView` correct on its first frame and
         // wrong from its second (measured — the bar appeared and then went).
+        let ask = context.contentWidthAsk(
+            proposal: proposal, widthLimit: widthLimit, heightLimit: heightLimit)
         let exact =
-            isNaturalExtentBudget(heightLimit) && proposal.height == nil
-            ? contentWidthOverAllRows(
-                children, widthLimit: widthLimit, mayWalk: proposal.width == nil,
-                state: state, context: context)
-            : nil
+            ask == .prefix
+            ? nil
+            : contentWidthOverAllRows(
+                children, widthLimit: widthLimit, ask: ask, state: state, context: context)
 
         if state.rowWidths.isSeeded {
             let walked = Self.walkedRowCount(

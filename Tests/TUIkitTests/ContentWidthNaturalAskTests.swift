@@ -150,9 +150,11 @@ struct ContentWidthNaturalAskTests {
         func ask() -> Int? {
             var environment = EnvironmentValues()
             environment.applyRuntimeServices(from: tuiContext)
+            // Under the probe's mark, as `measureNaturalExtent` asks.
             let context = RenderContext(
                 availableWidth: 4_096, availableHeight: 4_096,
-                environment: environment, tuiContext: tuiContext)
+                environment: environment, tuiContext: tuiContext
+            ).askingIdealWidth()
             let core = stack()
             return core.anchoredSizeThatFits(
                 resolveChildViewCollection(from: core.content, context: context),
@@ -284,9 +286,11 @@ struct ContentWidthNaturalAskTests {
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
         environment.installVolatileReadTracker(VolatileReadTracker())
+        // Under the probe's mark, as `measureNaturalExtent` asks.
         let context = RenderContext(
             availableWidth: 4_096, availableHeight: 4_096,
-            environment: environment, tuiContext: tuiContext)
+            environment: environment, tuiContext: tuiContext
+        ).askingIdealWidth()
         let stack = _VStackCore(
             alignment: .leading, spacing: 0, overflow: .window,
             content: ForEach(0..<Self.rows, id: \.self) { index in
@@ -313,9 +317,11 @@ struct ContentWidthNaturalAskTests {
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
         environment.installVolatileReadTracker(VolatileReadTracker())
+        // Under the probe's mark, as `measureNaturalExtent` asks.
         let context = RenderContext(
             availableWidth: 4_096, availableHeight: 4_096,
-            environment: environment, tuiContext: tuiContext)
+            environment: environment, tuiContext: tuiContext
+        ).askingIdealWidth()
         let wide = WidthBox(cells: Self.wideRowWidth)
         let stack = _VStackCore(
             alignment: .leading, spacing: 0, overflow: .window,

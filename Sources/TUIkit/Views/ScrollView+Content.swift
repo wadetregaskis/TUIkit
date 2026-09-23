@@ -44,6 +44,12 @@ extension _ScrollViewCore {
         // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
         measureContext.environment.scrollViewportSize = ScrollViewportSize(
             width: contentWidth, height: viewportHeight)
+        // A windowed stack's width means every row here exactly when this
+        // scrolls horizontally — see `asksWholeContentWidth`. Written only when
+        // it differs, since most scroll views are vertical inside nothing.
+        if measureContext.environment.asksWholeContentWidth != horizontal {
+            measureContext.environment.asksWholeContentWidth = horizontal
+        }
         measureContext.availableHeight = naturalExtentStartingBudget(forVisible: viewportHeight)
 
         let renderWidth: Int
@@ -104,9 +110,15 @@ extension _ScrollViewCore {
             ?? contentExtents(
                 contentWidth: contentWidth, viewportHeight: viewportHeight,
                 horizontal: horizontal, context: context)
-        var measureContext = context.withChildIdentity(type: Content.self)
+        // A committed render never carries the ideal-width mark: under it a
+        // filler reports its content rather than filling, which is a measure's
+        // question and never a drawn frame's.
+        var measureContext = context.withChildIdentity(type: Content.self).askingIdealWidth(false)
         measureContext.environment.scrollViewportSize = ScrollViewportSize(
             width: contentWidth, height: viewportHeight)
+        if measureContext.environment.asksWholeContentWidth != horizontal {
+            measureContext.environment.asksWholeContentWidth = horizontal
+        }
         // Publish the visible vertical slice so a direct `LazyVStack` renders only
         // the rows intersecting the viewport (true windowing) rather than every
         // row into the tall canvas. The offset is this frame's already-clamped

@@ -731,27 +731,23 @@ extension _VStackCore {
         let sampleChildren = (0..<sampleSize).map { children[$0] }
         guard !sampleChildren.contains(where: \.isSpacer) else { return nil }
 
-        // An UNBOUNDED ask is not the prefix question the sample below
+        // A whole-content ask is not the prefix question the sample below
         // answers: it is a two-axis `ScrollView` asking how far right its
         // content can be scrolled, and a sample cannot answer it — see
-        // `StackContentWidth.swift`. Recognised by the BUDGET and not by whether
-        // that budget reaches every row, which is where this first went wrong:
-        // the horizontal probe's height budget is pinned at 4,096, so
-        // `walkedRowCount(4096, pitch 1) >= count` is false for any stack over
-        // four thousand rows and the fix stopped firing on exactly the
-        // collections it exists for (measured: identical checksums at 8,000
-        // rows, differing at 2,000 and 4,000).
+        // `StackContentWidth.swift`. Which ask this is comes from
+        // `contentWidthAsk`, by marks rather than by the size of the offer.
         //
         // Asked BEFORE the sample, as the uniform twin asks it: its challenge
         // can find the widest row moved and drop that row's memoized sizes, and
         // a sample taken first had already been served the old one — so the
         // ask that corrected the record answered with the width it corrected.
+        let ask = context.contentWidthAsk(
+            proposal: proposal, widthLimit: widthLimit, heightLimit: heightLimit)
         let exact =
-            isNaturalExtentBudget(heightLimit) && proposal.height == nil
-            ? contentWidthOverAllRows(
-                children, widthLimit: widthLimit, mayWalk: proposal.width == nil,
-                state: state, context: context)
-            : nil
+            ask == .prefix
+            ? nil
+            : contentWidthOverAllRows(
+                children, widthLimit: widthLimit, ask: ask, state: state, context: context)
 
         var estimate = state.estimatedPitch(spacing: spacing)
         var sampleTotal = 0

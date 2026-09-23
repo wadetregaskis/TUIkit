@@ -170,6 +170,8 @@ struct ContentWidthRecord {
     let runnerUp: Int
     let isFlexible: Bool
     let widthGeneration: Int
+    /// ``RenderContext/generationIgnoringIdealWidth``: a record filed under
+    /// the probe's ideal-width mark is the same answer when a render asks.
     let measureGeneration: UInt8
     /// ``RenderCache/clearGeneration`` — how many times the cache had been
     /// dropped whole when this was taken. The two events that do that, a moved
@@ -186,7 +188,7 @@ struct ContentWidthRecord {
     /// Whether this record was taken under the same world as `context`.
     func isCurrent(in context: RenderContext) -> Bool {
         widthGeneration == TerminalWidthTraits.generation
-            && measureGeneration == context.measureGeneration
+            && measureGeneration == context.generationIgnoringIdealWidth
             && clearGeneration == (context.renderCache?.clearGeneration ?? 0)
     }
 }
@@ -210,20 +212,18 @@ extension _VStackCore {
     /// - Parameters:
     ///   - widthLimit: The budget the rows are measured against, and the
     ///     ceiling the walk stops at.
-    ///   - mayWalk: Whether this ask is allowed to pay for a walk. `false` for
-    ///     a BOUNDED ask (`proposal.width != nil`), which can read a kept
-    ///     answer — a `.frame(maxWidth:)` around the stack should not be told
-    ///     the sample's width when the exact one is already in hand — but must
-    ///     never start one: the vertical natural-extent probe is a bounded ask
-    ///     over every row, and walking there cost `log-viewer` 45× and `chat`
-    ///     56× before this parameter existed. Even when `true`, a walk happens
-    ///     only at a natural-extent WIDTH (``isNaturalExtentBudget(_:)``): an
-    ///     unbounded ask can still arrive at a terminal's width — an `HStack`
-    ///     measures its children `.unspecified` against its own — and a
-    ///     sentence walked there WRAPS to a little under it, which is a width
-    ///     that looks honest and is filed as the content's.
+    ///   - ask: What this ask may do (`contentWidthAsk`). Only `.probe` — the
+    ///     horizontal natural-extent probe itself, unbounded — may pay for a
+    ///     walk and file what it finds. `.serve` may read a kept answer (a
+    ///     render, the vertical probe, a `.frame(maxWidth:)` around the stack
+    ///     should not be told the sample's width when the exact one is in hand)
+    ///     but never starts one: the vertical probe asks over every row, and
+    ///     walking there cost `log-viewer` 45× and `chat` 56× before this rule
+    ///     existed; and an unbounded ask arriving at a terminal's width WRAPS a
+    ///     sentence to a little under it, a width that looks honest and would
+    ///     be filed as the content's.
     func contentWidthOverAllRows(
-        _ children: ChildViewCollection, widthLimit: Int, mayWalk: Bool,
+        _ children: ChildViewCollection, widthLimit: Int, ask: ContentWidthAsk,
         state: StackWindowState, context: RenderContext
     ) -> ViewSize? {
         guard let signature = children.dataSignature else { return nil }
@@ -276,7 +276,7 @@ extension _VStackCore {
                 }
             }
         }
-        guard mayWalk, isNaturalExtentBudget(widthLimit) else { return nil }
+        guard ask == .probe else { return nil }
 
         // RUNG 4 — the walk, and RUNG 1, the ceiling it stops at.
         let (measureContext, tracker) = rowWidthContext(context, width: widthLimit)
@@ -332,7 +332,7 @@ extension _VStackCore {
                 widestOrdinal: widestOrdinal, measuredAt: measuredAt, runnerUp: runnerUp,
                 isFlexible: isFlexible,
                 widthGeneration: TerminalWidthTraits.generation,
-                measureGeneration: context.measureGeneration,
+                measureGeneration: context.generationIgnoringIdealWidth,
                 clearGeneration: context.renderCache?.clearGeneration ?? 0,
                 verifiedGeneration: inheritedVerification
                     ?? (context.renderCache?.sizeClearGeneration ?? 0))
@@ -347,7 +347,11 @@ extension _VStackCore {
     private func rowWidthContext(
         _ context: RenderContext, width: Int
     ) -> (context: RenderContext, tracker: VolatileReadTracker) {
-        var measureContext = context
+        // Under the ideal-width mark always, whoever asks: the walk runs at the
+        // probe, but the challenge can run at a render, and a row that answers
+        // the probe's question differently from a render's must answer the
+        // walk's question both times.
+        var measureContext = context.askingIdealWidth()
         measureContext.isMeasuring = true
         measureContext.availableWidth = width
         // Children of a windowed stack are not at the scroll origin; the window
