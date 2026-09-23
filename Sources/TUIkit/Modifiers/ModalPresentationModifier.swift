@@ -278,6 +278,7 @@ extension ModalPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(overlayHeight)
         modalContext.environment.activeFocusSectionID = sectionID
+        modalContext.environment.leaveScrollCanvas()
         modalContext.environment.dismiss = dismissAction()
         modalContext.environment.isPresented = true
 

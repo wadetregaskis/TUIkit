@@ -991,6 +991,26 @@ extension EnvironmentValues {
         get { self[ScrollContentWindowKey.self] }
         set { self[ScrollContentWindowKey.self] = newValue }
     }
+
+    /// Forgets the canvas an enclosing ``ScrollView`` published for its content
+    /// — ``scrollViewportSize``, `asksWholeContentWidth` and
+    /// ``scrollContentWindow`` — for a subtree drawn somewhere else.
+    ///
+    /// A sheet, a popover, an alert or a pop-up menu is attached inside the
+    /// content that presents it, but drawn over the screen, and its context
+    /// starts as the presenter's. So a sheet presented from a horizontal strip
+    /// of thumbnails fitted its image to the STRIP's viewport — a photo a few
+    /// rows tall in the middle of a full-screen sheet — and a lazy stack in it
+    /// answered for all its rows as if it were the strip's canvas.
+    ///
+    /// Writes only what is set, since most presenters sit in no scroll view.
+    /// The viewport is tested through its key rather than its getter, which
+    /// would declare a volatile read and stop every memo above from storing.
+    mutating func leaveScrollCanvas() {
+        if self[ScrollViewportSizeKey.self] != nil { self[ScrollViewportSizeKey.self] = nil }
+        if asksWholeContentWidth { asksWholeContentWidth = false }
+        if scrollContentWindow != nil { scrollContentWindow = nil }
+    }
 }
 
 // MARK: - Disabled state

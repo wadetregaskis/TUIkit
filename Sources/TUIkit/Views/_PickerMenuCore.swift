@@ -89,8 +89,9 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// overlay that may grow wider than its control, so a narrow picker must not
     /// wrap or truncate its option labels.
     private func renderedOptionLabels(context: RenderContext) -> [String?] {
-        let labelContext = context.withAvailableWidth(
+        var labelContext = context.withAvailableWidth(
             max(context.availableWidth, context.environment.terminalWidth))
+        labelContext.environment.leaveScrollCanvas()
         return entries.map { entry in
             entry.label.map { $0.renderToBuffer(context: labelContext).lines.first ?? "" }
         }
