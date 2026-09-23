@@ -129,6 +129,48 @@ update pattern, and the size/chrome/surroundings. A variant is a struct literal
 in `TableAPI*Variants.swift`; adding one costs no registry entry and no
 translations.
 
+## Sessions: a UI in use, over time
+
+A scenario is a UI at rest, drawn again and again. A **session** is a UI in
+use: an interaction script played against a page step after step — keys typed
+into it, rows inserted and moved under it, the terminal resized around it. The
+bugs of a UI in use are the ones that need a write, a scroll or a moved row
+between two frames, and a screen drawn at rest never has one.
+
+```sh
+swift run Stress -- --sessions                                   # list them
+swift run -c release Stress -- --session editor --steps 3000 --verify --resize-every 97
+swift run -c release Stress -- --bench --scenario session/editor --iterations 2000
+```
+
+A session drives the REAL render loop headless (`HeadlessApp`): keys go through
+the app's five-layer input chain to the focused control, and a frame is the
+loop's own — header, status bar and diff writer included — at an instant the
+runner supplies, so two runs of one script draw the same pictures. Its report
+prices each KIND of step separately (mean, p50, p95, max, bytes emitted), since
+a keystroke and a page-down are different frames.
+
+`--verify` is the oracle, and it needs no expected pictures: a second instance
+plays the same script with its render cache emptied before every frame, and
+every frame must match. A cache is right exactly when a frame drawn through it
+is the frame drawn without it, so any difference is a memo, a kept width or an
+invalidation serving something stale — the class of bug that static renders
+cannot see. `--selfcheck` plays every session a short way this way, the
+terminal resized under it, so CI does too.
+
+`--bench --scenario session/<id>` plays one step per iteration and prints the
+lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
+
+| id | Exercises |
+|---|---|
+| `editor` | an index-keyed code editor in a two-axis scroll view: a row's width moving under an unchanged collection, the kept all-rows width, `scrollTo` following the caret, per-keystroke frames |
+
+Adding one: a `StressSession` — a page built once over a model the session
+owns, and a `step(_:)` that makes that step's data changes on the model and
+returns the input to deliver — plus a `SessionDescriptor` in `Sessions.all`.
+Choices come from a `SessionRandom` seeded from the config, so the twin makes
+the same ones.
+
 ## Profiling
 
 The `--bench` mode is a counted `renderToBuffer` loop with **no PTY and no

@@ -23,6 +23,11 @@
 //    TUIKIT_STRESS_SEED     | --seed <n>         synthetic-data seed
 //    TUIKIT_STRESS_AUTOPILOT| --autopilot        self-drive continuous re-renders
 //    --bench options: --iterations <n> --cols <c> --rows <r> --cold
+//
+//  Sessions (interaction scripts played over time — see Sessions/Session.swift):
+//    --sessions                                  list them
+//    --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R]
+//    --bench --scenario session/<id> ...         a session as a benchmark
 
 import Dispatch
 import Foundation
@@ -52,6 +57,9 @@ let usageText = """
     Self-check:   Stress --selfcheck [--scale N]
     Benchmark:    Stress --bench --scenario <id> [--variant V] [--iterations N] [--cols C] [--rows R] [--cold]
     Variants:     Stress --variants
+    Sessions:     Stress --sessions
+    Session:      Stress --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R]
+                  (and Stress --bench --scenario session/<id>, which ab_bench.py can A/B)
 
     Scenario ids (the interactive menu shows titles, not ids):
     \(scenarioIDs)
@@ -87,6 +95,32 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
             }
         }
     }
+} else if rawArgs.contains("--sessions") {
+    await MainActor.run {
+        let column = Sessions.all.map(\.id.count).max() ?? 0
+        for session in Sessions.all {
+            let pad = String(repeating: " ", count: max(0, column - session.id.count))
+            print("\(session.id)\(pad)  \(session.summary)")
+            print("\(String(repeating: " ", count: column))  exercises: \(session.exercises)")
+        }
+    }
+} else if let id = flagValue("--session") {
+    var options = SessionRunner.Options()
+    options.steps = flagValue("--steps").flatMap(Int.init) ?? options.steps
+    options.width = flagValue("--cols").flatMap(Int.init) ?? options.width
+    options.height = flagValue("--rows").flatMap(Int.init) ?? options.height
+    options.verify = rawArgs.contains("--verify")
+    options.resizeEvery = flagValue("--resize-every").flatMap(Int.init) ?? 0
+    let code = await MainActor.run { () -> Int32 in
+        guard let descriptor = Sessions.byID(id) else {
+            print("session: unknown session '\(id)'. Known: \(Sessions.all.map(\.id).joined(separator: ", "))")
+            return 1
+        }
+        let report = SessionRunner.run(descriptor, config: config, options: options)
+        SessionRunner.print(report, id: id, options: options, config: config)
+        return report.divergentSteps.isEmpty && report.scriptMismatch == nil ? 0 : 1
+    }
+    exit(code)
 } else if rawArgs.contains("--selfcheck") {
     let failures = await MainActor.run { Headless.selfcheck(config) }
     exit(failures == 0 ? 0 : 1)
@@ -97,6 +131,24 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
     let cold = rawArgs.contains("--cold")
     let code = await MainActor.run { () -> Int in
         let id = config.initialScenario ?? Scenarios.all.first?.id ?? "megalist"
+        // A session where a scenario is expected — `session/<id>` — so the
+        // tools built around `--bench --scenario` play sessions unchanged. One
+        // step per iteration; `--cold` has no meaning for a session, whose
+        // oracle is `--verify`.
+        if id.hasPrefix(Sessions.scenarioPrefix) {
+            let sessionID = String(id.dropFirst(Sessions.scenarioPrefix.count))
+            guard let descriptor = Sessions.byID(sessionID) else {
+                print("bench: unknown session '\(sessionID)'. Known: \(Sessions.all.map(\.id).joined(separator: ", "))")
+                return 1
+            }
+            var options = SessionRunner.Options()
+            options.steps = iterations
+            options.width = cols
+            options.height = rows
+            let report = SessionRunner.run(descriptor, config: config, options: options)
+            SessionRunner.print(report, id: sessionID, options: options, config: config)
+            return 0
+        }
         return Headless.bench(id, config: config, iterations: iterations, cols: cols, rows: rows, cold: cold)
     }
     exit(Int32(code))

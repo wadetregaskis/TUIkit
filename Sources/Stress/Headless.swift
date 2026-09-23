@@ -212,9 +212,26 @@ enum Headless {
                 + "  \(scenario.title)\(why)")
             for line in staleServes.prefix(3) { print("      \(line)") }
         }
+        // Every session, played a short way with its cache-cleared twin and
+        // the terminal resized under it: the one check here that a UI IN USE
+        // draws what it should, frame after frame, and not only at rest.
+        var sessionOptions = SessionRunner.Options()
+        sessionOptions.steps = 150
+        sessionOptions.verify = true
+        sessionOptions.resizeEvery = 37
+        for session in Sessions.all {
+            let report = SessionRunner.run(session, config: config, options: sessionOptions)
+            let ok = report.divergentSteps.isEmpty && report.scriptMismatch == nil
+            if !ok { failures += 1 }
+            let id = "session/\(session.id)".padding(toLength: 26, withPad: " ", startingAt: 0)
+            print("  \(ok ? "ok  " : "FAIL") \(id) \(report.steps) steps  \(session.summary)")
+            if let mismatch = report.scriptMismatch { print("      \(mismatch)") }
+            for divergence in report.divergences.prefix(3) { print("      " + divergence) }
+        }
         print(
             failures == 0
-                ? "selfcheck: all \(cases.count) cases rendered (\(Scenarios.all.count) scenarios)"
+                ? "selfcheck: all \(cases.count) cases rendered (\(Scenarios.all.count) scenarios), "
+                    + "and every session verified (\(Sessions.all.count))"
                 : "selfcheck: \(failures) FAILED")
         return failures
     }
