@@ -32,7 +32,8 @@ enum SessionRunner {
         /// Print the last frame, styling stripped — what a session is doing,
         /// for the person writing one.
         var show = false
-        /// Print every step's action and input as it is played.
+        /// Print every step as it is played: its action and input, what its
+        /// frame cost, and how many bytes it wrote.
         var trace = false
     }
 
@@ -107,10 +108,6 @@ enum SessionRunner {
                 step.resize = sizes[(index / options.resizeEvery) % sizes.count]
                 step.action = "resize"
             }
-            if options.trace {
-                let keys = step.keys.map { "\($0.key)" }.joined(separator: " ")
-                Swift.print("  step \(index): \(step.action)\(keys.isEmpty ? "" : " [\(keys)]")")
-            }
             let bytesBefore = warm.bytesWritten()
             let cpuStart = threadCPUNanoseconds()
             let wallStart = DispatchTime.now().uptimeNanoseconds
@@ -118,6 +115,12 @@ enum SessionRunner {
             let wall = DispatchTime.now().uptimeNanoseconds &- wallStart
             let cpu = threadCPUNanoseconds().flatMap { end in cpuStart.map { end &- $0 } } ?? wall
             let bytes = warm.bytesWritten() &- bytesBefore
+            if options.trace {
+                let keys = step.keys.map { "\($0.key)" }.joined(separator: " ")
+                let micros = String(format: "%.1f", Double(cpu) / 1_000)
+                Swift.print(
+                    "  step \(index): \(step.action)\(keys.isEmpty ? "" : " [\(keys)]") — \(micros) µs, \(bytes) bytes")
+            }
 
             report.steps += 1
             report.wallNanos &+= wall

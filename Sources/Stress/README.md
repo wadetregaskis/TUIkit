@@ -173,10 +173,14 @@ verified steps of the sessions it touches.
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
 
-Writing one, `--trace` prints each step's action and keys as it is played, and
-`--show` the last frame with its styling stripped — which is how you find out
-that the keys you meant for the list went into the search field that held the
-focus.
+Writing one, `--trace` prints each step as it is played — its action and keys,
+what its frame cost and how many bytes it wrote — and `--show` the last frame
+with its styling stripped, which is how you find out that the keys you meant
+for the list went into the search field that held the focus. The trace is also
+where a cost that follows no action shows itself: every `chat` frame cost 6 ms,
+quiet ones included, until the conversation passed 256 messages and the stack
+took its windowed path — the rows out of sight had been losing their measure
+memos at the end of every frame.
 
 | id | Exercises |
 |---|---|
