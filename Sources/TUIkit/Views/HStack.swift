@@ -118,8 +118,14 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     /// and measured children at a different proposal, which let the reported
     /// size drift from the rendered one — e.g. a nested row measured one row
     /// taller than it rendered.)
+    ///
+    /// - Parameter asksIdealWidth: Whether this is the ideal-width ask
+    ///   (``RenderContext/asksIdealWidth`` under a nil width), which a row
+    ///   answers with its children's ideal widths summed and nothing
+    ///   distributed — see the comment at the distribution.
     private func resolvedLayout(
-        _ children: [ChildView], availableWidth: Int, context: RenderContext
+        _ children: [ChildView], availableWidth: Int, asksIdealWidth: Bool = false,
+        context: RenderContext
     ) -> ResolvedRowLayout {
         let count = children.count
 
@@ -156,7 +162,10 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
                 let size = child.measure(proposal: .unspecified, context: context)
                 if !size.isNaturalSize { childrenAreNatural = false }
                 tallestConsumedChild = max(tallestConsumedChild, size.height)
-                ideal[index] = size.width
+                // A child that came back filling the limit has no ideal width
+                // of its own to add to the row's (`wholeContentWidth(of:limit:)`).
+                ideal[index] =
+                    asksIdealWidth ? wholeContentWidth(of: size, limit: availableWidth) : size.width
                 idealHeight[index] = size.height
                 fills[index] = size.isWidthFlexible
                 if size.isHeightFlexible {
@@ -169,8 +178,30 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // Full available width + spacing: the distribution charges each gap only
         // between columns it places, so an over-wide row clips its trailing
         // columns instead of collapsing every column to zero.
+        //
+        // Except under the ideal-width ask, where the row offers itself only
+        // its children's ideal widths and their gaps — capped at the limit,
+        // which still squeezes an over-wide row as above. The leftover a
+        // filler takes when the row is DRAWN is the offer's width, not the
+        // row's; distributed here, it made every row holding a `Spacer` or a
+        // filling frame answer the ladder's rung. SwiftUI's `HStack` answers an
+        // unspecified width with the sum, not an offer — measured,
+        // `HStack { Text("a"); Spacer(); Text("b") }` reports 23.5 points.
+        var distributable = availableWidth
+        if asksIdealWidth {
+            var idealTotal = 0
+            var occupying = 0
+            for index in ideal.indices {
+                idealTotal += max(0, ideal[index])
+                // Who occupies the axis, by `distributeLinearSpace`'s own rule.
+                if fills[index] || ideal[index] > 0 { occupying += 1 }
+            }
+            distributable = min(
+                availableWidth,
+                idealTotal + totalLinearSpacing(occupiedChildren: occupying, spacing: max(0, spacing)))
+        }
         let widths = distributeLinearSpace(
-            naturalSizes: ideal, isFlexible: fills, available: availableWidth, spacing: spacing)
+            naturalSizes: ideal, isFlexible: fills, available: distributable, spacing: spacing)
 
         // Heights at the widths children will actually be given. A child given
         // at least its ideal width wraps no further than it did at `.unspecified`
@@ -267,8 +298,10 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     private func clipSizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         let children = resolveChildViews(from: content, context: context)
         guard !children.isEmpty else { return ViewSize.fixed(0, 0) }
+        let widthLimit = proposal.width ?? context.availableWidth
+        let asksIdealWidth = proposal.width == nil && context.asksIdealWidth
         let layout = resolvedLayout(
-            children, availableWidth: proposal.width ?? context.availableWidth, context: context)
+            children, availableWidth: widthLimit, asksIdealWidth: asksIdealWidth, context: context)
         // Natural when its children are AND the row is at least as tall as the
         // tallest answer it was built from. A row reads the vertical budget
         // nowhere: it measures children at their ideal, distributes WIDTH, and
@@ -283,10 +316,16 @@ struct _HStackCore<Content: View>: View, Renderable, Layoutable {
         // the row can end up shorter than an answer it consumed, and claiming
         // natural there would offer the row at budgets where one of the answers
         // underneath it had already lapsed.
+        //
+        // Under the ideal-width ask a CAPPED row is not flexible, as a column's
+        // is not (`wholeContentFlexibility(_:width:limit:)`): the ladder stops
+        // climbing at a flexible answer that reached its budget.
         return ViewSize(
             width: layout.totalWidth,
             height: layout.height,
-            isWidthFlexible: layout.fills,
+            isWidthFlexible: asksIdealWidth
+                ? wholeContentFlexibility(layout.fills, width: layout.totalWidth, limit: widthLimit)
+                : layout.fills,
             isHeightFlexible: layout.fillsHeight
         ).declaringNaturalSize(layout.childrenAreNatural && layout.tallestConsumedChild <= layout.height)
     }

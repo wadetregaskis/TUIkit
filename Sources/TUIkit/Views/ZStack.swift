@@ -182,16 +182,23 @@ extension _ZStackCore: Layoutable {
         let hasGuides = anyAlignmentGuide(in: children)
         var guideSizes: [(width: Int, height: Int)] = []
         if hasGuides { guideSizes.reserveCapacity(children.count) }
+        let widthLimit = proposal.width ?? context.availableWidth
+        // Asked for its ideal width, a stack of layers counts them as a column
+        // counts its rows: one that came back filling the limit has no width of
+        // its own (`wholeContentWidth(of:limit:)`), and counted, it made the
+        // stack as wide as the ladder's rung.
+        let asksIdealWidth = proposal.width == nil && context.asksIdealWidth
         for child in children {
             let size = child.measure(proposal: proposal, context: context)
+            let width = asksIdealWidth ? wholeContentWidth(of: size, limit: widthLimit) : size.width
             // Spacers have no visual box in a ZStack — `renderToBuffer` filters
             // them — so they must not contribute a guide here either.
             if hasGuides {
                 guideSizes.append(
                     child.isSpacer
-                        ? (width: 0, height: 0) : (width: size.width, height: size.height))
+                        ? (width: 0, height: 0) : (width: width, height: size.height))
             }
-            maxWidth = max(maxWidth, size.width)
+            maxWidth = max(maxWidth, width)
             maxHeight = max(maxHeight, size.height)
             hasFlexibleWidth = hasFlexibleWidth || size.isWidthFlexible
             hasFlexibleHeight = hasFlexibleHeight || size.isHeightFlexible
@@ -213,13 +220,17 @@ extension _ZStackCore: Layoutable {
                 maxHeight = run.extent
             }
         }
-        // Never advertise larger than the constraint (mirrors VStack/HStack).
-        let widthLimit = proposal.width ?? context.availableWidth
+        // Never advertise larger than the constraint (mirrors VStack/HStack) —
+        // and, under the ideal-width ask, never call a capped answer flexible,
+        // as they do not (`wholeContentFlexibility(_:width:limit:)`).
         let heightLimit = proposal.height ?? context.availableHeight
+        let width = min(maxWidth, max(0, widthLimit))
         return ViewSize(
-            width: min(maxWidth, max(0, widthLimit)),
+            width: width,
             height: min(maxHeight, max(0, heightLimit)),
-            isWidthFlexible: hasFlexibleWidth,
+            isWidthFlexible: asksIdealWidth
+                ? wholeContentFlexibility(hasFlexibleWidth, width: width, limit: widthLimit)
+                : hasFlexibleWidth,
             isHeightFlexible: hasFlexibleHeight)
     }
 }

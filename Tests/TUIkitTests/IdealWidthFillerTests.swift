@@ -75,6 +75,33 @@ private struct TallySpy: View, Renderable, Layoutable {
     }
 }
 
+/// Row 50's name is 120 cells and the rest eight, then a value — pushed to the
+/// trailing edge by a `Spacer` when `spaced`, the shape of a settings or
+/// file-list row.
+private struct SpacedRow: View {
+    let index: Int
+    let spaced: Bool
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text(String(repeating: "\(index % 10)", count: index == 50 ? 120 : 8))
+            if spaced { Spacer() }
+            Text("v")
+        }
+    }
+}
+
+/// `view` measured as the horizontal probe asks: no width proposed, under
+/// the ideal-width mark, against a 4,096-cell rung.
+@MainActor
+private func idealSize(of view: some View) -> ViewSize {
+    measureChild(
+        view, proposal: ProposedSize(width: nil, height: nil),
+        context: RenderContext(
+            availableWidth: 4_096, availableHeight: 4_096, tuiContext: TUIContext()
+        ).askingIdealWidth())
+}
+
 /// The horizontal natural extent of `view`, asked as a two-axis `ScrollView`
 /// asks it of its content.
 @MainActor
@@ -200,6 +227,56 @@ struct IdealWidthFillerTests {
                 }
             })
         #expect(size.width == 120, "the ladder ran to \(size.width)")
+    }
+
+    /// A row asked its ideal width sums its children's, as SwiftUI's does, and
+    /// hands nothing out: the leftover a `Spacer` or a filling frame takes
+    /// when the row is drawn is the offer's width, and distributed at the
+    /// probe it made the row as wide as the ladder's rung. So the row is
+    /// exactly as wide as the same row without the filler — plus the filler's
+    /// own content — and still flexible.
+    @Test("A row asked its ideal width distributes nothing")
+    func aRowDistributesNothing() {
+        let spaced = idealSize(of: HStack(spacing: 1) { Text(String(repeating: "0", count: 30)); Spacer(); Text("v") })
+        let plain = idealSize(of: HStack(spacing: 1) { Text(String(repeating: "0", count: 30)); Text("v") })
+        #expect(spaced.width == plain.width, "the spacer took the rung's leftover: \(spaced.width)")
+        #expect(spaced.isWidthFlexible)
+
+        let framed = idealSize(
+            of: HStack(spacing: 1) { Text(String(repeating: "0", count: 30)); Text("v").frame(maxWidth: .infinity) })
+        #expect(framed.width == plain.width, "the frame took the rung's leftover: \(framed.width)")
+    }
+
+    /// The shape that matters: rows of a name and a value pushed apart by a
+    /// `Spacer`, one name wider than the viewport. Every row filled the rung
+    /// at the probe, so every row had no width of its own and the wide name
+    /// was cut at the viewport with no bar. Every frame's bar must be the
+    /// spacer-less control's.
+    @Test("A spaced row's own width reaches the extent", arguments: [false, true])
+    func aSpacedRowReachesTheExtent(eager: Bool) {
+        func frames(spaced: Bool) -> () -> String {
+            twoAxisFrames(
+                tuiContext: TUIContext(), rows: { 100 }, eager: eager,
+                row: { index in SpacedRow(index: index, spaced: spaced) })
+        }
+        let spaced = frames(spaced: true)
+        let control = frames(spaced: false)
+        let controlFirst = control()
+        #expect(controlFirst.stripped.contains("\u{25C0}"), "precondition: row 50 needs the bar")
+        #expect(spaced() == controlFirst, "the first frame lost row 50's width")
+        #expect(spaced() == control(), "the second frame lost row 50's width")
+    }
+
+    /// A row or a stack of layers holding a greedy view beside text answers
+    /// the text, at 120 cells and at 6,000 — where the text caps the first
+    /// rung and the answer must NOT say flexible, or the ladder stops there.
+    @Test("A row and a layered stack leave a greedy child out", arguments: [120, 6_000])
+    func rowsAndLayersLeaveAGreedyChildOut(cells: Int) {
+        let text = String(repeating: "0", count: cells)
+        let row = horizontalExtent(of: HStack(spacing: 0) { Text(text); TextEditor(text: .constant("hello")) })
+        #expect(row.width == cells, "the row answered \(row.width)")
+        let layers = horizontalExtent(of: ZStack { Text(text); TextEditor(text: .constant("hello")) })
+        #expect(layers.width == cells, "the layered stack answered \(layers.width)")
     }
 
     /// An eager column's width for the ideal ask is its widest row's, and a
