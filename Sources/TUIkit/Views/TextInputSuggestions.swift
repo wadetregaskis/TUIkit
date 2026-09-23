@@ -145,16 +145,36 @@ extension View {
 
 // MARK: - Environment
 
+/// What a `.textInputSuggestions` or `.searchSuggestions` above offers: the
+/// entries, and whether such a modifier is in force at all — one can be,
+/// offering nothing this frame, because its builder filtered everything out.
+struct TextSuggestions {
+    /// The normalized entries, in menu order.
+    let entries: [_TextSuggestionEntry]
+
+    /// Whether a suggestions modifier put these here, as opposed to the key's
+    /// default.
+    let isPresent: Bool
+
+    /// No suggestions modifier in force.
+    static let none = Self(entries: [], isPresent: false)
+
+    /// What a suggestions modifier offers.
+    static func offering(_ entries: [_TextSuggestionEntry]) -> Self {
+        Self(entries: entries, isPresent: true)
+    }
+}
+
 /// Environment key carrying the extracted suggestion entries down to the
 /// text fields in the modified subtree.
 private struct TextInputSuggestionsKey: EnvironmentKey {
-    static let defaultValue: [_TextSuggestionEntry] = []
+    static let defaultValue = TextSuggestions.none
 }
 
 extension EnvironmentValues {
     /// The input suggestions available to text fields in this subtree.
     /// Set via ``View/textInputSuggestions(_:)``.
-    var textInputSuggestions: [_TextSuggestionEntry] {
+    var textInputSuggestions: TextSuggestions {
         get { self[TextInputSuggestionsKey.self] }
         set { self[TextInputSuggestionsKey.self] = newValue }
     }
@@ -206,7 +226,7 @@ extension View {
         @ViewBuilder _ suggestions: () -> S
     ) -> some View {
         environment(
-            \.textInputSuggestions, extractTextSuggestions(suggestions()))
+            \.textInputSuggestions, .offering(extractTextSuggestions(suggestions())))
     }
 
     /// Presents input suggestions built from a collection of identifiable
@@ -222,7 +242,7 @@ extension View {
     ) -> some View where Data.Element: Identifiable {
         environment(
             \.textInputSuggestions,
-            extractTextSuggestions(ForEach(suggestions, content: content)))
+            .offering(extractTextSuggestions(ForEach(suggestions, content: content))))
     }
 
     /// Presents input suggestions built from a collection of data, identified
@@ -242,7 +262,7 @@ extension View {
     ) -> some View {
         environment(
             \.textInputSuggestions,
-            extractTextSuggestions(ForEach(suggestions, id: id, content: content)))
+            .offering(extractTextSuggestions(ForEach(suggestions, id: id, content: content))))
     }
 }
 

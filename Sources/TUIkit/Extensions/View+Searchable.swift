@@ -95,7 +95,7 @@ extension View {
     public func searchSuggestions<S: View>(
         @ViewBuilder _ suggestions: () -> S
     ) -> some View {
-        environment(\.searchSuggestions, extractTextSuggestions(suggestions()))
+        environment(\.searchSuggestions, .offering(extractTextSuggestions(suggestions())))
     }
 
     /// Associates a completed query with this view when it is used as a search
@@ -130,13 +130,13 @@ extension View {
 /// key would make `.searchSuggestions` silently arm any text field the caller
 /// happens to have in their content.
 private struct SearchSuggestionsKey: EnvironmentKey {
-    static let defaultValue: [_TextSuggestionEntry] = []
+    static let defaultValue = TextSuggestions.none
 }
 
 extension EnvironmentValues {
     /// Suggestions for the enclosing search field. Set via
     /// ``View/searchSuggestions(_:)``.
-    var searchSuggestions: [_TextSuggestionEntry] {
+    var searchSuggestions: TextSuggestions {
         get { self[SearchSuggestionsKey.self] }
         set { self[SearchSuggestionsKey.self] = newValue }
     }
@@ -242,7 +242,7 @@ struct SearchableModifier<Content: View>: View {
             verbatim: LocalizationService.shared.string(for: LocalizationKey.Label.search))
         let field = TextField("", text: text, prompt: prompt ?? defaultPrompt)
             .onEditingChanged { isSearching = $0 }
-        if suggestions.isEmpty {
+        if suggestions.entries.isEmpty {
             field
         } else {
             field.environment(\.textInputSuggestions, suggestions)

@@ -453,7 +453,7 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
             isDisabled
             ? nil
             : TextFieldSuggestions.prepare(
-                entries: context.environment.textInputSuggestions,
+                entries: context.environment.textInputSuggestions.entries,
                 handler: handler,
                 currentText: text.wrappedValue,
                 isFocused: isFocused,
