@@ -158,6 +158,14 @@ invalidation serving something stale — the class of bug that static renders
 cannot see. `--selfcheck` plays every session a short way this way, the
 terminal resized under it, so CI does too.
 
+The oracle was checked the way a test is: with the kept all-rows width's
+challenge disabled (the fix of `65d3015f`), `--session editor --steps 1500
+--verify` reports 75 of 1,500 frames different from the twin's, the first at
+step 1,106 — the stale width scrolls the rows to a different slice. Note
+where: a hundred and fifty steps would not have reached it. The selfcheck is a
+smoke test; a change to a memo or a kept value deserves a few thousand
+verified steps of the sessions it touches.
+
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
 
