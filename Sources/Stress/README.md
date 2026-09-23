@@ -186,6 +186,13 @@ bottom-anchored lazy stack of unequal rows opened on blank lines, a log lost
 its end on a burst of wrapping lines, and a view following its end let go of
 it when the terminal shrank.
 
+Under `TUIKIT_VERIFY_RENDER_MEMO=1` a session run also reports what the
+render-memo verifier found — every served buffer re-rendered and compared, and
+the registrations it replays with the ones a fresh render makes — and fails on
+any, naming the steps. The twin compares whole frames; the verifier compares
+each serve, including those no frame shows (a navigation stack's covered root,
+the focus-reach probe's rows).
+
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
 

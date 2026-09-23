@@ -106,6 +106,10 @@ package final class HeadlessApp<A: App> {
 
     /// How many bytes every frame so far has written to the terminal.
     package var bytesWritten: Int { terminal.bytesWritten }
+
+    /// The app's render cache, for what its counters say about the frames: how
+    /// many rows were served and how many drawn, what the memos hit.
+    package var renderCache: RenderCache { tuiContext.renderCache }
 }
 
 // MARK: - In-Memory Terminal

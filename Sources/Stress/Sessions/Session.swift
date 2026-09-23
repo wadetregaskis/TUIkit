@@ -102,6 +102,9 @@ final class DrivenSession {
     let screen: () -> [String]
     let bytesWritten: () -> Int
     let check: (_ screen: [String], _ index: Int) -> String?
+    /// What `TUIKIT_VERIFY_RENDER_MEMO` found: each served buffer that a fresh
+    /// render of the same subtree disagreed with. Empty unless it is set.
+    let staleServes: () -> [String]
 
     /// Plays `session` against its own ``HeadlessApp`` of `width` × `height`
     /// cells, clearing its render cache before every frame when `cold`.
@@ -116,6 +119,7 @@ final class DrivenSession {
         screen = { app.screen }
         bytesWritten = { app.bytesWritten }
         check = { session.check($0, after: $1) }
+        staleServes = { app.renderCache.renderMemoMismatches }
     }
 }
 

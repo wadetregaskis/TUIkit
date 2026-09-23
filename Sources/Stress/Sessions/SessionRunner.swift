@@ -69,6 +69,12 @@ enum SessionRunner {
         var divergentSteps: [Int] = []
         /// The first few of those, described.
         var divergences: [String] = []
+        /// Whether `TUIKIT_VERIFY_RENDER_MEMO` was set, and what it found on the
+        /// warm instance: served buffers that a fresh render disagreed with.
+        var memoVerified = false
+        var staleServes: [String] = []
+        /// The steps whose frames served them.
+        var staleServeSteps: [Int] = []
         /// Every step whose frame did not show what the session said it must.
         var brokenSteps: [Int] = []
         /// The first few of those, described.
@@ -80,7 +86,7 @@ enum SessionRunner {
         /// Whether the run found nothing wrong: no divergence from the twin, no
         /// frame that failed the session's own check, and a deterministic script.
         var passed: Bool {
-            divergentSteps.isEmpty && brokenSteps.isEmpty && scriptMismatch == nil
+            divergentSteps.isEmpty && brokenSteps.isEmpty && staleServes.isEmpty && scriptMismatch == nil
         }
         /// The last frame, when asked for (``Options/show``).
         var lastScreen: [String] = []
@@ -117,6 +123,7 @@ enum SessionRunner {
         cold?.frame(0)
         if options.checks { checkFrame(of: warm, after: -1, action: "open", into: &report) }
 
+        var staleSoFar = warm.staleServes().count
         for index in 0..<options.steps {
             var step = warm.step(index)
             if options.resizeEvery > 0, index > 0, index.isMultiple(of: options.resizeEvery) {
@@ -145,6 +152,10 @@ enum SessionRunner {
             report.costs[step.action, default: ActionCost()].cpuNanos.append(cpu)
             report.costs[step.action, default: ActionCost()].bytes += bytes
             if options.checks { checkFrame(of: warm, after: index, action: step.action, into: &report) }
+            if RenderCache.verifiesRenderMemo, warm.staleServes().count > staleSoFar {
+                report.staleServeSteps.append(index)
+                staleSoFar = warm.staleServes().count
+            }
 
             guard let cold else { continue }
             var twin = cold.step(index)
@@ -166,6 +177,8 @@ enum SessionRunner {
             }
         }
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
+        report.memoVerified = RenderCache.verifiesRenderMemo
+        report.staleServes = warm.staleServes()
         return report
     }
 
@@ -243,6 +256,16 @@ enum SessionRunner {
         }
         if let mismatch = report.scriptMismatch {
             Swift.print("  FAIL: the script is not deterministic — \(mismatch)")
+        }
+        if report.memoVerified {
+            if report.staleServes.isEmpty {
+                Swift.print("  memo-verified: every served buffer matched a fresh render of it")
+            } else {
+                Swift.print(
+                    "  FAIL: \(report.staleServes.count) served buffers differed from a fresh render, "
+                        + "on steps \(report.staleServeSteps.prefix(8).map(String.init).joined(separator: ", "))")
+                for stale in report.staleServes.prefix(5) { Swift.print("    " + stale) }
+            }
         }
         if options.checks {
             if report.brokenSteps.isEmpty {

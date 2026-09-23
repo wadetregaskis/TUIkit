@@ -228,6 +228,7 @@ enum Headless {
             if let mismatch = report.scriptMismatch { print("      \(mismatch)") }
             for divergence in report.divergences.prefix(3) { print("      " + divergence) }
             for problem in report.brokenExpectations.prefix(3) { print("      " + problem) }
+            for stale in report.staleServes.prefix(3) { print("      STALE MEMO: " + stale) }
         }
         print(
             failures == 0
