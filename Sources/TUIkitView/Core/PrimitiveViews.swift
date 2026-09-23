@@ -135,7 +135,43 @@ extension AnyView {
 
 extension AnyView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        TUIkitView.renderToBuffer(view, context: context)
+        TUIkitView.renderToBuffer(view, context: contentContext(noting: context))
+    }
+}
+
+// MARK: - AnyView Cache Coherency
+
+extension AnyView {
+    /// The context the content is drawn and measured in, after telling the
+    /// render cache what TYPE of content it is.
+    ///
+    /// An `AnyView` draws its content at its own identity, and so does every
+    /// modifier inside it. Swapping the content for one of another type —
+    /// `AnyView(row.foregroundStyle(.red))` one frame, `AnyView(row)` the next,
+    /// the usual type-erased conditional — therefore leaves every memo below
+    /// at the identity it had, keyed by a value that did not change. It was
+    /// served drawn in the style of the content that had gone. The type is
+    /// noted (`RenderCache.noteErasedContent`), and a change clears the
+    /// subtree, on whichever walk sees it first.
+    ///
+    /// Not by giving the content a child identity named by its type, which is
+    /// what SwiftUI's identity amounts to: a node built on every visit cost
+    /// `anyview` +21% and `deep` +5.8%, where this costs a table probe.
+    ///
+    /// The depth goes up for the content, as an environment modifier's does,
+    /// so two `AnyView`s nested at one identity note under two keys rather
+    /// than the outer answering for both.
+    fileprivate func contentContext(noting context: RenderContext) -> RenderContext {
+        var contentContext = context
+        contentContext.environmentApplicationDepth += 1
+        guard let cache = context.renderCache else { return contentContext }
+        if cache.noteErasedContent(
+            ObjectIdentifier(type(of: view)), identity: context.identity,
+            depth: context.environmentApplicationDepth)
+        {
+            cache.clearAffected(by: context.identity)
+        }
+        return contentContext
     }
 }
 
@@ -327,9 +363,12 @@ extension ViewArray: Renderable, ChildInfoProvider {
 // storage.
 
 extension AnyView: Layoutable {
-    /// Forwards measurement to the wrapped view — see the note above.
+    /// Forwards measurement to the wrapped view — see the note above — after
+    /// noting its type, as the render does (`contentContext(noting:)`): the
+    /// measure walk runs first, and a swap noticed only by the render would
+    /// already have served a stale size.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureChild(view, proposal: proposal, context: context)
+        measureChild(view, proposal: proposal, context: contentContext(noting: context))
     }
 }
 

@@ -389,6 +389,38 @@ struct RenderCacheContractTests: RenderCacheHarness {
         #expect(changed.lines == fresh.lines, "drawn in the old colour: \(changed.lines.map(\.debugDescription))")
     }
 
+    /// An `AnyView` draws its content at its own identity, and so does every
+    /// modifier inside it, so a type-erased conditional that drops a modifier
+    /// leaves the memo below at the identity it had, keyed by a value that did
+    /// not change. It was served drawn under the modifier that had gone.
+    @Test("A modifier swapped out through an AnyView is not drawn")
+    func aModifierSwappedOutThroughAnyViewIsNotDrawn() {
+        let shared = context()
+        frame(shared, AnyView(ProbeEcho().equatable().environment(\.comparableProbe, "xxx")))
+        frame(shared, AnyView(ProbeEcho().equatable().environment(\.comparableProbe, "xxx")))
+        let swapped = frame(shared, AnyView(ProbeEcho().equatable()))
+        #expect(
+            swapped.lines.first?.stripped == "-",
+            "served under the modifier that was swapped out: \(swapped.lines.map(\.stripped))")
+    }
+
+    /// Two `AnyView`s at one identity note in two slots: the outer one's
+    /// content never changes type, the inner one's does.
+    @Test("A swap one AnyView deeper is seen past an unchanged outer one")
+    func aSwapInsideANestedAnyViewIsSeen() {
+        let shared = context()
+        func view(_ styled: Bool) -> AnyView {
+            AnyView(
+                styled
+                    ? AnyView(ProbeEcho().equatable().environment(\.comparableProbe, "xxx"))
+                    : AnyView(ProbeEcho().equatable()))
+        }
+        frame(shared, view(true))
+        frame(shared, view(true))
+        let swapped = frame(shared, view(false))
+        #expect(swapped.lines.first?.stripped == "-", "the inner swap was eaten: \(swapped.lines.map(\.stripped))")
+    }
+
     @Test("An unchanged style still memoizes")
     func unchangedStyleStillHits() {
         let shared = context()

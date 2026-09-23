@@ -3,7 +3,8 @@
 //
 //  The render cache's record of what each environment modifier applied, and
 //  the change it reports — the check that keeps a scoped style change from
-//  serving a buffer drawn under the old style.
+//  serving a buffer drawn under the old style — and its twin for the type of
+//  content each `AnyView` erases.
 //
 //  Split out of `RenderCache.swift`, which had reached the file-length ceiling.
 //  The table itself stays a stored property there, as a class's must.
@@ -97,5 +98,54 @@ extension RenderCache {
         appliedEnvironment[slot] = AppliedEnvironment(
             value: value, lastSeenFrame: frameCounter, isComparable: true)
         return .changed
+    }
+
+    /// What an `AnyView` last held at one identity and depth — see
+    /// ``noteErasedContent(_:identity:depth:)``.
+    struct ErasedContent {
+        var type: ObjectIdentifier
+        var lastSeenFrame: UInt64
+        let identity: ViewIdentity
+    }
+
+    /// Records the TYPE of what an `AnyView` erases, and reports whether it is
+    /// a different type from the one it held last pass.
+    ///
+    /// An `AnyView` draws its content at its own identity, and so does every
+    /// modifier inside it, so swapping the content for one of another type — a
+    /// modifier added or removed by a type-erased conditional — leaves every
+    /// memo below at the identity it had, keyed by a value that did not change.
+    /// Unnoticed, it served what it had drawn under the modifier that had gone.
+    /// The caller clears the subtree on `true`, as an environment modifier
+    /// does on `.changed`.
+    ///
+    /// Its own table, not ``noteAppliedEnvironment(_:identity:keyPath:depth:)``,
+    /// because an `AnyView` is visited far more often than an environment
+    /// modifier — every framework control that erases its label has one, and a
+    /// measure cascade visits each many times — and a slot's key hashes an
+    /// `AnyKeyPath` on every visit, where this one is two integers. Once per
+    /// pass, like the environment's; kept and swept by the same liveness rule
+    /// (``removeInactive()``).
+    ///
+    /// - Parameters:
+    ///   - type: The erased content's dynamic type.
+    ///   - identity: The `AnyView`'s identity.
+    ///   - depth: `RenderContext.environmentApplicationDepth` there, which
+    ///     tells apart two `AnyView`s nested at one identity.
+    /// - Returns: Whether the type changed since the last pass.
+    package func noteErasedContent(_ type: ObjectIdentifier, identity: ViewIdentity, depth: Int) -> Bool {
+        let key = finalizeHashWord(
+            mixHashWord(
+                mixHashWord(hashFoldSeed, UInt64(bitPattern: Int64(identity.structuralHash))),
+                UInt64(bitPattern: Int64(depth))))
+        guard let index = erasedContent.index(forKey: key) else {
+            erasedContent[key] = ErasedContent(type: type, lastSeenFrame: frameCounter, identity: identity)
+            return false
+        }
+        if erasedContent.values[index].lastSeenFrame == frameCounter { return false }
+        erasedContent.values[index].lastSeenFrame = frameCounter
+        guard erasedContent.values[index].type != type else { return false }
+        erasedContent.values[index].type = type
+        return true
     }
 }
