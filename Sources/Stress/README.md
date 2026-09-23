@@ -212,6 +212,7 @@ memos at the end of every frame.
 | `log` | a numbered log viewer following its end while lines arrive in bursts, and a reader paging back: a bottom-anchored lazy stack growing under the viewport, wrapped lines of unequal height, `scrollPosition(id:)` reporting the top line |
 | `settings` | a settings `Form` worked through with the keyboard while accounts sync in and out: focus traversal, toggles, a picker, a stepper, a disclosure group opening and closing, every row re-shown when the units change |
 | `chat` | a conversation of bubbles arriving at the end, earlier ones edited, the person typing and sending: a bottom-anchored lazy stack of unequal heights under the 256-row window threshold, a row's HEIGHT changing under an unchanged collection, full-width alignment frames, a text field typed into and submitted |
+| `notes` | notes opened, written in and closed, a sheet to write one, an alert to delete one, two tabs: navigation push and pop by keyboard and by path, a covered root drawn every frame, a `TextEditor` typed into, a sheet and an alert over the page, a tab switched with a mouse click found on the screen, the wheel over a list, rows changing underneath |
 | `processes` | a sortable, filterable process `Table` whose numbers move on every step: `.fit` columns and the row memo under continuous churn, re-sorting, a filter narrowing the rows, rows appended and removed, selection moved with the keys |
 
 Adding one: a `StressSession` — a page built once over a model the session
@@ -219,7 +220,10 @@ owns, a `step(_:)` that makes that step's data changes on the model and
 returns the input to deliver, and, wherever the page shows something the model
 decides, a `check(_:after:)` that says what must be on the screen — plus a
 `SessionDescriptor` in `Sessions.all`. Give the rows something the check can
-find: a message number, a line number.
+find: a message number, a line number. A session that clicks or wheels over
+something where it is DRAWN says `looksBeforeEachStep` and is shown the screen
+before each step (`look(at:)`), so both instances of a verified run aim at the
+same cell.
 Choices come from a `SessionRandom` seeded from the config, so the twin makes
 the same ones.
 

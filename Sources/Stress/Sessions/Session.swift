@@ -53,6 +53,16 @@ protocol StressSession: AnyObject {
     /// the session's own model and says what input to deliver.
     func step(_ index: Int) -> SessionStep
 
+    /// Whether ``step(_:)`` needs to see the screen first — to click on
+    /// something where it is drawn, say. `false` unless a session asks: reading
+    /// the screen strips every line, and it happens outside the timed region
+    /// but not for free.
+    var looksBeforeEachStep: Bool { get }
+
+    /// The screen as it stands before step `index`, styling stripped; called
+    /// just before ``step(_:)`` when ``looksBeforeEachStep``.
+    func look(at screen: [String])
+
     /// What is wrong with `screen`, the frame drawn after step `index` (−1 for
     /// the page as it opens), or `nil` when it shows what it should.
     ///
@@ -69,6 +79,8 @@ protocol StressSession: AnyObject {
 
 extension StressSession {
     func check(_ screen: [String], after index: Int) -> String? { nil }
+    var looksBeforeEachStep: Bool { false }
+    func look(at screen: [String]) {}
 }
 
 /// The app a session's page is the whole of.
@@ -111,7 +123,10 @@ final class DrivenSession {
     init<S: StressSession>(_ session: S, width: Int, height: Int, cold: Bool) {
         let app = HeadlessApp(SessionHost(page: session.page), width: width, height: height)
         app.clearsRenderCacheEachFrame = cold
-        step = { session.step($0) }
+        step = { index in
+            if session.looksBeforeEachStep { session.look(at: app.screen.map(\.stripped)) }
+            return session.step(index)
+        }
         send = { app.send($0) }
         sendMouse = { app.send($0) }
         resize = { app.resize(width: $0, height: $1) }
@@ -147,6 +162,7 @@ enum Sessions {
         LogSession.descriptor,
         SettingsSession.descriptor,
         ChatSession.descriptor,
+        NotesSession.descriptor,
     ]
 
     @MainActor
