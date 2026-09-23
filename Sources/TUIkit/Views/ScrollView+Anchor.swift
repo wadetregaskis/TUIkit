@@ -18,8 +18,9 @@ extension _ScrollViewCore {
 
     /// Bottom edge affinity (defaultScrollAnchor(.bottom), §5c/§6c): being
     /// AT the bottom is the engagement — no stored flag. If last frame's
-    /// numbers say the offset sits at (or past) maxOffset, the view is
-    /// glued: the frame renders at the previous tail, the post-render
+    /// numbers say the offset sits at (or past) the tail — BOTH of them,
+    /// content and viewport, which is what `tailAsLastDrawn` records — the
+    /// view is glued: the frame renders at the previous tail, the post-render
     /// re-glue lands on the real new maximum, and `coverSnappedViewport`
     /// re-renders — O(window) — when the band's margin doesn't already
     /// cover the difference (it does for the common one-row append).
@@ -64,7 +65,7 @@ extension _ScrollViewCore {
         // programmatic scroll is exactly the "scrolling away releases the
         // follow" interaction, expressed in code.
         return followsBottom && handler.pendingScrollTo == nil
-            && (!handler.hasOpened || handler.scrollOffset >= handler.maxOffset)
+            && (!handler.hasOpened || handler.scrollOffset >= handler.tailAsLastDrawn)
     }
 
     /// Adopts a bound anchor the app just *wrote*: `.top` jumps to the top,

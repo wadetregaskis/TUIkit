@@ -166,6 +166,18 @@ public final class ScrollViewHandler: PersistedFocusable, ScrollableOffsetState 
     /// render passes only: a measure must not spend the opening frame.
     var hasOpened = false
 
+    /// ``maxOffset`` as it stood when the last frame was done: the tail as
+    /// the user last saw it.
+    ///
+    /// The bottom glue asks whether the offset is at the tail, and has to ask
+    /// of the frame the user is looking at. Asked of the live ``maxOffset``,
+    /// whose viewport half is already THIS frame's, a terminal that shrank
+    /// made the tail the user was at look short of the new one, and a view
+    /// following its end let go of it. `ItemListHandler.bottomFollowBound` is
+    /// the same record, for the same reason. Set at the end of each render
+    /// pass, never by a measure.
+    var tailAsLastDrawn = 0
+
     /// The declared anchor as an EDGE, for the shared user-scroll path
     /// (``ScrollableOffsetState/declaredEdgeAnchor``). Row and Window name no
     /// edge, so they answer `nil`.

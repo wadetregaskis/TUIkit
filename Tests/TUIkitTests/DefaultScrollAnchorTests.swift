@@ -301,6 +301,33 @@ struct DefaultScrollAnchorTests {
         #expect(next.contains { $0.contains("line 340") }, "the follow let go after the burst: \(next)")
     }
 
+    /// A terminal that shrinks under a view following its end. The glue asked
+    /// whether the offset sat at `maxOffset`, whose viewport half was already
+    /// the NEW, shorter one — so the tail the user was at looked short of it,
+    /// and the view let go. It now asks of the tail as last drawn. Found by the
+    /// Stress `log` and `chat` sessions under `--resize-every`.
+    @Test("A shrinking viewport keeps the follow")
+    func aShrinkingViewportKeepsTheFollow() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        func view(lines: Int, height: Int) -> some View {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<lines, id: \.self) { i in Text("line \(i)") }
+                }
+            }
+            .frame(height: height)
+            .defaultScrollAnchor(.bottom)
+        }
+        renderFrame(view(lines: 100, height: 6), tuiContext: tuiContext, focusManager: focusManager)
+        renderFrame(view(lines: 100, height: 6), tuiContext: tuiContext, focusManager: focusManager)
+
+        let shrunk = renderFrame(view(lines: 100, height: 3), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(shrunk.contains { $0.contains("line 99") }, "the shrink left the tail: \(shrunk)")
+        let next = renderFrame(view(lines: 101, height: 3), tuiContext: tuiContext, focusManager: focusManager)
+        #expect(next.contains { $0.contains("line 100") }, "the follow let go after the shrink: \(next)")
+    }
+
     @Test("Without the anchor, the view starts at the top (unchanged default)")
     func defaultRemainsTop() {
         let tuiContext = TUIContext()
