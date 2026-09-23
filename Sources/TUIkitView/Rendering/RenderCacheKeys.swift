@@ -39,13 +39,12 @@ extension RenderCache {
         /// until that value next changed — never as aliased state, since nothing
         /// is keyed from here but a size.
         ///
-        /// The measure generation is deliberately NOT folded in, unlike the one
-        /// `measureIdentityHash` folds into `MeasureKey`: this key ignores
-        /// ``RenderContext/measureGeneration`` today, and folding it would change
-        /// which menu rows re-measure — a behaviour change wearing a performance
-        /// change's clothes. Set from `structuralHash` and nothing else, the word
-        /// this hashes is bit-identical to the one the identity-carrying key
-        /// hashed, so not one probe changes bucket.
+        /// The measure generation is NOT folded into this word, unlike the one
+        /// `measureIdentityHash` folds into `MeasureKey`: it has a stored field
+        /// of its own, ``measureGeneration`` below, for the reason given there.
+        /// Set from `structuralHash` and nothing else, the word this hashes is
+        /// bit-identical to the one the identity-carrying key hashed, so not one
+        /// probe changes bucket.
         public let identityHash: Int
         public let proposalWidth: Int?
         public let proposalHeight: Int?
