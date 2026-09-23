@@ -1241,7 +1241,14 @@ extension RenderCache {
     ///     as well, re-measuring rows a colour cannot resize. `false` for
     ///     anything that can affect layout, which is every other environment
     ///     value and every `@State` write.
-    public func clearAffected(by identity: ViewIdentity, keepingSizes: Bool = false) {
+    ///   - includingDescendants: `false` when nothing below `identity` can draw
+    ///     differently for the change: then only `identity` and the buffers
+    ///     that CONTAIN it go. A focus move onto a scroll view, whose content
+    ///     learns nothing of its focus, used to drop every row the content had
+    ///     measured and drawn, and the next frame rebuilt them all.
+    public func clearAffected(
+        by identity: ViewIdentity, keepingSizes: Bool = false, includingDescendants: Bool = true
+    ) {
         if !keepingSizes { sizeClearGeneration &+= 1 }
         stats.subtreeClears += 1
         // The hashes of `identity` and every ancestor of it, so "is the cached
@@ -1262,13 +1269,13 @@ extension RenderCache {
             if identity.isRawRooted || cached.isRawRooted {
                 return cached == identity
                     || cached.isAncestor(of: identity)
-                    || identity.isAncestor(of: cached)
+                    || (includingDescendants && identity.isAncestor(of: cached))
             }
             if cached.depth <= identity.depth {
                 return chain.contains(cached.structuralHash)
                     && (cached == identity || cached.isAncestor(of: identity))
             }
-            return identity.isAncestor(of: cached)
+            return includingDescendants && identity.isAncestor(of: cached)
         }
         // `affects` reads `depth`, `isRawRooted`, `structuralHash`, `==` and
         // `isAncestor(of:)` — all structural, none of it available from a hash.

@@ -392,7 +392,9 @@ enum FocusRegistrar {
         // on the spot — an empty section auto-focuses its first registrant — and
         // the write that does it drops the cached buffers drawing this control,
         // which it can only do once the manager knows where this control is.
-        manager.noteFocusIdentity(identity, for: focusID, cachedIn: context.renderCache)
+        manager.noteFocusIdentity(
+            identity, for: focusID, cachedIn: context.renderCache,
+            drawnBelow: !(handler is any FocusDrawnOnlyAtItself))
         manager.register(handler, inSection: sectionID)
     }
 }

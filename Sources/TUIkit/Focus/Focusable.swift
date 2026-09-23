@@ -77,3 +77,23 @@ extension Focusable {
 protocol PersistedFocusable: Focusable {
     var focusID: String { get set }
 }
+
+/// A control whose focus shows only in what it draws ITSELF, never in the
+/// content below it.
+///
+/// A focus move drops the cached buffers at both ends of it (see
+/// `FocusManager.invalidateCachedRender(of:)`). For most controls that has to
+/// include everything below the control's identity, because that is where the
+/// control draws itself: a core view renders its own label, or tells it how to
+/// look. A `ScrollView`'s focus shows only in its scrollbar, which its core
+/// draws after the content, and it passes the content nothing focus-dependent.
+/// A focusable view INSIDE the content registers and clears for itself. So
+/// only the scroll view's own identity and the buffers containing it are
+/// dropped. Before this, tabbing onto a scroll view, or away from it, dropped
+/// every row it held, and the next frame measured and drew them all again:
+/// 6.8 ms for a 200-message chat.
+///
+/// Conform only when that is true of everything the control will ever put
+/// below itself, including through the environment. A `List` does not qualify:
+/// its rows draw the selection differently while it holds the focus.
+protocol FocusDrawnOnlyAtItself: Focusable {}

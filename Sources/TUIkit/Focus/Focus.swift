@@ -107,7 +107,10 @@ public final class FocusManager: @unchecked Sendable {
     /// A focus id is what this manager moves focus between; a `ViewIdentity` is
     /// what the render cache keys buffers on. Registration is the only moment
     /// the two are known together.
-    private var focusIdentities: [String: (identity: ViewIdentity, generation: UInt64)] = [:]
+    ///
+    /// `drawnBelow` is whether the control's focus can change what is drawn
+    /// BELOW its identity — see ``FocusDrawnOnlyAtItself``.
+    private var focusIdentities: [String: (identity: ViewIdentity, generation: UInt64, drawnBelow: Bool)] = [:]
 
     /// The cache holding the buffers that draw those controls, so a focus move
     /// can drop the ones at either end of it. Weak, like `StateStorage`'s
@@ -476,11 +479,13 @@ extension FocusManager {
     ///   - focusID: The id it declared this pass.
     ///   - cache: The render cache of the render that made it, or `nil` when
     ///     there is none (an isolated render, a test).
+    ///   - drawnBelow: Whether the control's focus can change what is drawn
+    ///     below its identity: `false` for a ``FocusDrawnOnlyAtItself``.
     func noteFocusIdentity(
-        _ identity: ViewIdentity, for focusID: String, cachedIn cache: RenderCache?
+        _ identity: ViewIdentity, for focusID: String, cachedIn cache: RenderCache?, drawnBelow: Bool = true
     ) {
         renderCache = cache
-        focusIdentities[focusID] = (identity: identity, generation: focusRenderGeneration)
+        focusIdentities[focusID] = (identity: identity, generation: focusRenderGeneration, drawnBelow: drawnBelow)
     }
 
     /// Drops the cached buffers that draw the control answering to `focusID`,
@@ -507,9 +512,12 @@ extension FocusManager {
     /// A focus id with nothing recorded — a control that has not rendered since
     /// the map was last pruned — drops nothing, which is right: the cache drops
     /// a subtree's entries in the pass that stops rendering it.
+    ///
+    /// The descendants go too unless the control is a ``FocusDrawnOnlyAtItself``,
+    /// whose focus shows only in what it draws itself.
     private func invalidateCachedRender(of focusID: String?) {
         guard let focusID, let known = focusIdentities[focusID] else { return }
-        renderCache?.clearAffected(by: known.identity)
+        renderCache?.clearAffected(by: known.identity, includingDescendants: known.drawnBelow)
     }
 
     /// Unregisters a focusable element from all sections.

@@ -402,3 +402,6 @@ extension ScrollViewHandler {
         return true
     }
 }
+
+// A scroll view's focus shows in its scrollbar alone — see the protocol.
+extension ScrollViewHandler: FocusDrawnOnlyAtItself {}
