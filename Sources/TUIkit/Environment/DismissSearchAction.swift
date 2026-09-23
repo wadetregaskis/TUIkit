@@ -39,30 +39,57 @@ import TUIkitCore
 /// nothing, as in SwiftUI: a view that offers a Clear button need not know
 /// whether anything is searching.
 public struct DismissSearchAction: Sendable {
-    /// What ending the search does here, or `nil` where nothing is searching.
-    ///
-    /// A stored closure for the same reason ``DismissAction`` uses one: the
-    /// search field owns the query binding and its own focus, and hands down
-    /// the one act that undoes both.
-    private let action: (@MainActor @Sendable () -> Void)?
+    /// The search this ends, or `nil` where nothing is searching.
+    fileprivate let dismissal: SearchDismissal?
 
-    /// Creates the inert action — what a view reads outside any searchable
-    /// subtree.
-    init() {
-        self.action = nil
-    }
-
-    /// Creates an action that runs `action`, for
-    /// ``View/searchable(text:placement:prompt:)-(_,_,LocalizedStringKey)`` to publish to its content.
-    init(_ action: @escaping @MainActor @Sendable () -> Void) {
-        self.action = action
+    /// Creates the action that ends `dismissal`'s search — the inert one for
+    /// `nil`, which is what a view reads outside any searchable subtree.
+    init(_ dismissal: SearchDismissal? = nil) {
+        self.dismissal = dismissal
     }
 
     /// Triggers the action. Equivalent to writing `dismissSearch()`.
     @MainActor
     public func callAsFunction() {
-        action?()
+        dismissal?.dismiss()
     }
+}
+
+// MARK: - The search a modifier holds
+
+/// What ending one searchable's search does, kept by that modifier and handed
+/// to its content through the environment.
+///
+/// An object the modifier holds in `@State` rather than a closure it builds,
+/// for the reason `ScrollViewReader`'s registry is one (`2964e3e5`): the
+/// environment value must be comparable, or it turns every memo off beneath
+/// it, and a closure cannot be compared. As a closure it was, and the whole of
+/// every searchable's content was drawn from scratch on every frame. One object
+/// for the modifier's life compares by identity, and the modifier refreshes it
+/// with the query binding, the focus manager and whether the field is being
+/// typed in each time its body runs — so an action read on an earlier frame
+/// and called now does what ending the search means NOW, where a captured
+/// closure would have done what it meant then.
+@MainActor
+final class SearchDismissal: Equatable {
+    var text: Binding<String>?
+    weak var focusManager: FocusManager?
+    var isSearching = false
+
+    /// Ending the search: empty the query, and give the keyboard back.
+    ///
+    /// The focus move is conditional because the action is callable from
+    /// anywhere in the content — a Clear button in a results list is the
+    /// canonical shape — and moving focus off a control the user is actually
+    /// using would be a bug, not a dismissal. Focus goes to the *next*
+    /// focusable, which is the content: the field is drawn above it, so this is
+    /// the same step Tab would take out of the field.
+    func dismiss() {
+        text?.wrappedValue = ""
+        if isSearching { focusManager?.focusNext() }
+    }
+
+    nonisolated static func == (lhs: SearchDismissal, rhs: SearchDismissal) -> Bool { lhs === rhs }
 }
 
 // MARK: - Environment Keys
@@ -72,9 +99,10 @@ private struct IsSearchingKey: EnvironmentKey {
     static let defaultValue = false
 }
 
-/// Environment key for ``EnvironmentValues/dismissSearch``.
-private struct DismissSearchActionKey: EnvironmentKey {
-    static let defaultValue = DismissSearchAction()
+/// Environment key for ``EnvironmentValues/dismissSearch``: the search it
+/// ends, comparable by identity, rather than the action itself.
+private struct SearchDismissalKey: EnvironmentKey {
+    static let defaultValue: SearchDismissal? = nil
 }
 
 extension EnvironmentValues {
@@ -107,7 +135,16 @@ extension EnvironmentValues {
     /// `@Environment(\.dismissSearch)` and call it like a function; outside a
     /// searchable subtree it does nothing.
     public internal(set) var dismissSearch: DismissSearchAction {
-        get { self[DismissSearchActionKey.self] }
-        set { self[DismissSearchActionKey.self] = newValue }
+        get { DismissSearchAction(self[SearchDismissalKey.self]) }
+        set { self[SearchDismissalKey.self] = newValue.dismissal }
+    }
+
+    /// The search ``dismissSearch`` ends, by the key path the searchable
+    /// modifier writes it through: an environment write is judged comparable
+    /// by the type of the value WRITTEN, so writing the action, which is not
+    /// `Equatable` (nor is SwiftUI's), would still turn every memo off.
+    var searchDismissal: SearchDismissal? {
+        get { self[SearchDismissalKey.self] }
+        set { self[SearchDismissalKey.self] = newValue }
     }
 }

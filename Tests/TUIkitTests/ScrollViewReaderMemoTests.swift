@@ -35,7 +35,7 @@ private struct ComparabilitySpy: View, Renderable {
 }
 
 @MainActor
-@Suite("Memos inside a ScrollViewReader or a bound scroll position")
+@Suite("Memos inside a ScrollViewReader, a bound scroll position, a searchable")
 struct ScrollViewReaderMemoTests {
     @Test("A reader's content sees an environment the memos can compare")
     func theReaderLeavesTheEnvironmentComparable() {
@@ -62,6 +62,18 @@ struct ScrollViewReaderMemoTests {
                 .scrollPosition(Binding(get: { position }, set: { position = $0 })),
             context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
         #expect(log.sawUncomparable == false, "the position box made the environment uncomparable")
+    }
+
+    /// And for a searchable's content, which is handed the action that ends
+    /// the search: an object the modifier keeps, compared by identity.
+    @Test("A searchable's content sees an environment the memos can compare")
+    func aSearchableLeavesTheEnvironmentComparable() {
+        let log = ComparabilityLog()
+        var query = ""
+        _ = renderToBuffer(
+            ComparabilitySpy(log: log).searchable(text: Binding(get: { query }, set: { query = $0 })),
+            context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
+        #expect(log.sawUncomparable == false, "the dismiss action made the environment uncomparable")
     }
 
     @Test("A row inside a reader is served from the row memo on an unchanged frame")

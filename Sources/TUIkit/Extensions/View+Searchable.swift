@@ -159,6 +159,10 @@ struct SearchableModifier<Content: View>: View {
     /// focus rather than approximating it.
     @State private var isSearching = false
 
+    /// What ending this search does, handed to the content — see
+    /// ``SearchDismissal``.
+    @State private var dismissal = SearchDismissal()
+
     /// Taken out of the environment here, in the body, because the closure
     /// below runs during event dispatch — outside any render, where an
     /// `@Environment` read is nil.
@@ -188,7 +192,13 @@ struct SearchableModifier<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Refreshed on every evaluation, so the action the content was handed
+        // — perhaps frames ago, and served from a memo since — ends the search
+        // as it stands now.
+        dismissal.text = text
+        dismissal.focusManager = focusManager
+        dismissal.isSearching = isSearching
+        return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 1) {
                 if supportsEmojiChrome, iconPlacement == .leading {
                     icon
@@ -208,7 +218,7 @@ struct SearchableModifier<Content: View>: View {
             // framework's, not the caller's.
             content
                 .environment(\.isSearching, isSearching)
-                .environment(\.dismissSearch, dismissAction)
+                .environment(\.searchDismissal, dismissal)
         }
     }
 
@@ -236,24 +246,6 @@ struct SearchableModifier<Content: View>: View {
             field
         } else {
             field.environment(\.textInputSuggestions, suggestions)
-        }
-    }
-
-    /// Ending the search: empty the query, and give the keyboard back.
-    ///
-    /// The focus move is conditional because the action is callable from
-    /// anywhere in the content — a Clear button in a results list is the
-    /// canonical shape — and moving focus off a control the user is actually
-    /// using would be a bug, not a dismissal. Focus goes to the *next*
-    /// focusable, which is the content: the field is drawn above it, so this is
-    /// the same step Tab would take out of the field.
-    private var dismissAction: DismissSearchAction {
-        let text = text
-        let focusManager = focusManager
-        let wasSearching = isSearching
-        return DismissSearchAction {
-            text.wrappedValue = ""
-            if wasSearching { focusManager?.focusNext() }
         }
     }
 }
