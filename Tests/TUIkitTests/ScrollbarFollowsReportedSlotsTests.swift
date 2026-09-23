@@ -2,7 +2,7 @@
 //  ScrollbarFollowsReportedSlotsTests.swift
 //
 //  The vertical scrollbar is kept on its handler with the inputs it was drawn
-//  from (`VerticalScrollbarMemo`). At sixteen colours an RGB colour is emitted as
+//  from (`ScrollbarMemo`). At sixteen colours an RGB colour is emitted as
 //  the slot nearest to what that slot PAINTS — the colour the terminal reported
 //  for it, or xterm's value while it has reported none — so the bar's bytes are a
 //  function of the terminal's colours as well as of the palette. The key has to

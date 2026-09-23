@@ -146,15 +146,15 @@ extension _ScrollViewCore {
         // sits there.
         let pulse = ScrollbarColors.focusPulse(
             isFocused: isFocused, hoveredCell: handler.hoveredBarCell, context: context)
-        let key = VerticalScrollbarMemo.Key(
-            height: height, extent: handler.contentHeight, viewport: handler.viewportHeight,
+        let key = ScrollbarMemo<ClaimingColumn>.Key(
+            length: height, extent: handler.contentHeight, viewport: handler.viewportHeight,
             offset: handler.scrollOffset, arrows: context.environment.scrollbarArrows,
             proportional: context.environment.scrollbarProportionalThumb,
             isFocused: isFocused, isScrollEnabled: context.environment.isScrollEnabled,
             hoveredCell: handler.hoveredBarCell, palette: ComparablePalette(palette),
             depth: ColorDepth.current, terminalColors: TerminalColors.current,
             cycle: pulse?.cycle)
-        let memo: VerticalScrollbarMemo
+        let memo: ScrollbarMemo<ClaimingColumn>
         if let remembered = handler.verticalScrollbarMemo, remembered.key == key {
             handler.verticalScrollbarMemoHits += 1
             memo = remembered
@@ -183,7 +183,7 @@ extension _ScrollViewCore {
                         proportional: context.environment.scrollbarProportionalThumb,
                         pulse: pulse)
                 } ?? []
-            memo = VerticalScrollbarMemo(key: key, bar: bar, runs: runs)
+            memo = ScrollbarMemo(key: key, bar: bar, runs: runs)
             handler.verticalScrollbarMemo = memo
         }
         var bar = memo.bar
@@ -263,14 +263,17 @@ extension _ScrollViewCore {
 
 // MARK: - The bar drawn last time
 
-/// A vertical scrollbar and the animated runs that pulse it, with the inputs
-/// they were drawn from. See `ScrollViewHandler.verticalScrollbarMemo`.
-struct VerticalScrollbarMemo {
+/// A scrollbar and the animated runs that pulse it, with the inputs they were
+/// drawn from — a vertical bar's column or a horizontal bar's row. See
+/// `ScrollViewHandler.verticalScrollbarMemo`.
+struct ScrollbarMemo<Bar> {
     /// Everything the bar's cells and runs are a function of. The palette by
     /// its id and the depth outright, since the cells carry resolved colours;
     /// the pulse cycle whole, since the runs carry one render per frame of it.
     struct Key: Equatable {
-        let height: Int
+        /// The bar's length along its axis: a vertical bar's height, a
+        /// horizontal bar's width.
+        let length: Int
         let extent: Int
         let viewport: Int
         let offset: Int
@@ -302,6 +305,6 @@ struct VerticalScrollbarMemo {
     }
 
     let key: Key
-    let bar: ClaimingColumn
+    let bar: Bar
     let runs: [AnimatedCellRun]
 }

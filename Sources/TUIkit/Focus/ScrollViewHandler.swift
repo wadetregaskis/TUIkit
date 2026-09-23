@@ -62,7 +62,7 @@ public final class ScrollViewHandler: PersistedFocusable, ScrollableOffsetState 
     /// on every frame: 15.6% of a live `dashboard` frame for a bar whose
     /// inputs had not moved. Compared, not hashed, since one entry is all
     /// there is.
-    var verticalScrollbarMemo: VerticalScrollbarMemo?
+    var verticalScrollbarMemo: ScrollbarMemo<ClaimingColumn>?
 
     /// How many times ``verticalScrollbarMemo`` answered — for the test that
     /// pins it answering.
