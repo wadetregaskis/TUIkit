@@ -144,6 +144,28 @@ final class ScrollToRegistry: @unchecked Sendable {
     }
 }
 
+/// Equal by IDENTITY: a reader's registry is its `@State`, one object for the
+/// reader's life, and the environment value it publishes changes only when the
+/// reader is replaced.
+///
+/// Without this the value was not `Equatable` at all, and an environment value
+/// that cannot be compared tells every memo below it that it cannot see what
+/// the subtree depends on: `EnvironmentModifier` declines them all, and the
+/// kept all-rows width of a two-axis stack is never filed. So everything inside
+/// a `ScrollViewReader` was drawn from scratch on every frame, and an editor
+/// that follows its caret with `proxy.scrollTo` walked every row of its
+/// document on every keystroke — 61% of the frame (measured, `Stress --session
+/// editor`).
+///
+/// Nothing the registry holds is read while drawing. A request reaches its
+/// scroll view by invalidating that view's identity (`invalidateRender(for:)`),
+/// which works whatever a memo would have served; and a registration outlives
+/// the frame that made it, held weakly, so a scroll view served from a memo
+/// keeps the entry it made when it was last drawn.
+extension ScrollToRegistry: Equatable {
+    static func == (lhs: ScrollToRegistry, rhs: ScrollToRegistry) -> Bool { lhs === rhs }
+}
+
 // MARK: - Environment
 
 private struct ScrollToRegistryKey: EnvironmentKey {
