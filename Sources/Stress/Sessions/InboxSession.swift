@@ -43,6 +43,22 @@ final class Inbox {
     var shown: [Item] {
         query.isEmpty ? items : items.filter { $0.title.contains(query) }
     }
+
+    /// Words from the titles that begin with what has been typed — at most
+    /// five, and none until something has been — as a search field offers
+    /// completions. Empty as often as not, so the field's menu comes and goes.
+    var suggestedWords: [String] {
+        guard !query.isEmpty else { return [] }
+        var words: [String] = []
+        for item in items {
+            for word in item.title.split(separator: " ") where word.hasPrefix(query) && word != query {
+                let word = String(word)
+                if !words.contains(word) { words.append(word) }
+                if words.count == 5 { return words }
+            }
+        }
+        return words
+    }
 }
 
 // MARK: - The page
@@ -64,6 +80,9 @@ struct InboxPage: View {
                 ForEach(shown) { item in InboxRow(item: item) }
             }
             .searchable(text: Binding(get: { inbox.query }, set: { inbox.query = $0 }))
+            .searchSuggestions {
+                ForEach(inbox.suggestedWords, id: \.self) { word in Text(verbatim: word) }
+            }
         }
         .onKeyPress(keys: [.space]) { _ in
             guard let id = inbox.selection, let index = inbox.items.firstIndex(where: { $0.id == id })
@@ -186,7 +205,8 @@ final class InboxSession: StressSession {
         summary: "a searchable, selectable list of items that arrive, leave, move and change underneath",
         exercises:
             "keyed rows inserted, deleted and moved around the selection, the row memo, List windowing, "
-            + "a search narrowing and restoring the collection, focus between a field and a list",
+            + "a search narrowing and restoring the collection, search suggestions that come and go as "
+            + "the query is typed, focus between a field and a list",
         make: { config, width, height, cold in
             DrivenSession(InboxSession(config: config), width: width, height: height, cold: cold)
         })
