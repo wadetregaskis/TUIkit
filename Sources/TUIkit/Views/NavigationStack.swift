@@ -262,7 +262,7 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
         // which the invisible root could reach the USER, and left it the two
         // by which it reached the CLOCK.
         if !context.isMeasuring {
-            let backdrop = base.isolatedForBackground().withThrowawayFrameDemand()
+            let backdrop = base.isolatedForBackground()
             // Collect the root's title while it renders, because this is the
             // only place it is ever published — the bar draws for pushed
             // screens, so nothing else sees depth 0's name, and the crumb trail
@@ -276,8 +276,9 @@ private struct _NavigationStackCore<Root: View>: View, Renderable, Layoutable {
             // the render exists to keep.
             context.environment.volatileReadTracker?.recordRenderSideEffect()
             preferences?.push()
-            _ = TUIkit.renderToBuffer(
-                root, context: backdrop.withChildIdentity(type: type(of: root)))
+            _ = backdrop.withThrowawayFrameDemand { hidden in
+                TUIkit.renderToBuffer(root, context: hidden.withChildIdentity(type: type(of: root)))
+            }
             coordinator.recordTitle(preferences?.pop()[NavigationTitleKey.self] ?? "", atDepth: 0)
         }
 

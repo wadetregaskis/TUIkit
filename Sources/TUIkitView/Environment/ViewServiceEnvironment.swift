@@ -93,3 +93,33 @@ extension EnvironmentValues {
         renderCache?.volatileReadTracker = tracker
     }
 }
+
+extension RenderContext {
+    /// Renders `body` with `tracker` as the volatile-read tracker, installed
+    /// with its mirror, and puts the pass's own mirror back afterwards.
+    ///
+    /// For a render that must count its volatile reads apart from the pass's,
+    /// in the middle of the pass. The mirror is on the render cache, which the
+    /// whole pass shares, so installing a tracker for one subtree with
+    /// ``EnvironmentValues/installVolatileReadTracker(_:)`` alone would leave
+    /// it gating every measure after the subtree was done. Assigning the
+    /// environment alone is worse: the measure memo gates on the mirror, so the
+    /// subtree's volatile reads land on a tracker the gate never reads, and a
+    /// size that depended on the clock was stored as safe. (Debug builds trap
+    /// on that in `measureChild`, which is how a navigation stack's covered
+    /// root was found doing it.)
+    ///
+    /// - Parameters:
+    ///   - tracker: The tracker the subtree records to.
+    ///   - body: Renders the subtree, with the context to render it in.
+    /// - Returns: What `body` returns.
+    package func withVolatileReadTracker<Result>(
+        _ tracker: VolatileReadTracker, _ body: (RenderContext) -> Result
+    ) -> Result {
+        var copy = self
+        let passMirror = environment.renderCache?.volatileReadTracker
+        copy.environment.installVolatileReadTracker(tracker)
+        defer { environment.renderCache?.volatileReadTracker = passMirror }
+        return body(copy)
+    }
+}

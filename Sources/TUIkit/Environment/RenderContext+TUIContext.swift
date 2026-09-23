@@ -148,8 +148,9 @@ extension RenderContext {
         return copy
     }
 
-    /// A copy whose two channels for asking that the loop keep rendering are
-    /// throwaways — for a render whose buffer is discarded ENTIRELY.
+    /// Renders `body` with the two channels for asking that the loop keep
+    /// rendering swapped for throwaways — for a render whose buffer is
+    /// discarded ENTIRELY.
     ///
     /// Both channels are pass-wide, and a pass does not know which of its
     /// renders reached the screen. The volatile-read tracker's `reads` is read
@@ -181,10 +182,17 @@ extension RenderContext {
     /// the rows inside the viewport — must NOT use this: the surviving part
     /// renders in the same pass, so its demand would be denied along with the
     /// rest. Those need a demand that rides on the buffer; §92 prices it.
-    func withThrowawayFrameDemand() -> Self {
+    ///
+    /// Scoped rather than a copy, because the tracker has a mirror on the render
+    /// cache that the measure memo gates on and the whole pass shares: it is
+    /// installed for `body` and the pass's put back after (see
+    /// `withVolatileReadTracker(_:_:)`). The copy this used to return set the
+    /// environment alone, so the covered root's measures gated on the LIVE
+    /// tracker's counters while its reads went to the throwaway: debug builds
+    /// trapped on the first push over a root with a scroll view in it.
+    func withThrowawayFrameDemand<Result>(_ body: (RenderContext) -> Result) -> Result {
         var copy = self
-        copy.environment.volatileReadTracker = VolatileReadTracker()
         copy.environment.animationScheduler = AnimationScheduler()
-        return copy
+        return copy.withVolatileReadTracker(VolatileReadTracker(), body)
     }
 }

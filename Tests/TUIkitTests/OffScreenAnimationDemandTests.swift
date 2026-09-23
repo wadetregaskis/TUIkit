@@ -62,6 +62,25 @@ private struct CoveredRootApp: App {
     }
 }
 
+/// A covered root that MEASURES its content — any scroll view does — which
+/// the throwaway tracker has to be installed for, mirror and all.
+private struct CoveredScrollingRootApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            NavigationStack(path: .constant([1])) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<50, id: \.self) { index in Text("row \(index)") }
+                    }
+                }
+                .navigationDestination(for: Int.self) { _ in Text("detail") }
+            }
+        }
+    }
+}
+
 /// The control for the one above: the same stack, with a root that wants
 /// nothing. Without it, `usesPulse` being set would not be evidence about the
 /// ROOT — a navigation bar or a focused control on the pushed screen would do
@@ -233,6 +252,21 @@ struct OffScreenAnimationDemandTests {
     /// scheduler for its frames meets the rule before it meets the symptom:
     /// asking the scheduler does not keep a clock running, so nothing that
     /// asks may read one.
+    /// The throwaway tracker used to be set in the environment alone. The
+    /// measure memo gates on its MIRROR on the render cache, which the whole pass
+    /// shares, so the covered root's measures snapshotted the live tracker's
+    /// counters while its volatile reads went to the throwaway: a size that
+    /// depended on the clock was stored as safe. Debug builds trap on the
+    /// disagreement in `measureChild`, and this app trapped on its first frame.
+    /// Found by the Stress `notes` session's pushed notes.
+    @Test("A covered root that measures is drawn under its own tracker, mirror and all")
+    func aCoveredRootMeasuresUnderItsOwnTracker() {
+        let app = HeadlessApp(CoveredScrollingRootApp(), width: 40, height: 12)
+        app.frame(atNanos: 0)
+        app.frame(atNanos: 16_666_667)
+        #expect(app.screen.contains { $0.stripped.contains("detail") }, "the pushed screen is drawn")
+    }
+
     @Test("A scheduler-driven animation keeps no clock running")
     func schedulerDrivenKeepsNoClock() {
         let harness = RenderLoopHarness()
