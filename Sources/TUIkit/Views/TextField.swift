@@ -449,15 +449,9 @@ private struct _TextFieldCore<Label: View>: View, Renderable, Layoutable {
         // Input suggestions (``View/textInputSuggestions(_:)``): sync the
         // handler's completions and reserve two trailing columns for the ▾
         // affordance that marks the field as a combo box.
-        let suggestionMenu =
-            isDisabled
-            ? nil
-            : TextFieldSuggestions.prepare(
-                entries: context.environment.textInputSuggestions.entries,
-                handler: handler,
-                currentText: text.wrappedValue,
-                isFocused: isFocused,
-                context: context)
+        let suggestionMenu = TextFieldSuggestions.prepare(
+            isDisabled: isDisabled, handler: handler, currentText: text.wrappedValue,
+            isFocused: isFocused, context: context)
         let textWidth =
             suggestionMenu != nil ? max(minContentWidth, contentWidth - 2) : contentWidth
 

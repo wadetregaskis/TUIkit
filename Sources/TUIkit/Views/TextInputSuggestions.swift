@@ -148,7 +148,9 @@ extension View {
 /// What a `.textInputSuggestions` or `.searchSuggestions` above offers: the
 /// entries, and whether such a modifier is in force at all — one can be,
 /// offering nothing this frame, because its builder filtered everything out.
-struct TextSuggestions {
+///
+/// Compared by presence and emptiness alone — see `==`.
+struct TextSuggestions: Equatable {
     /// The normalized entries, in menu order.
     let entries: [_TextSuggestionEntry]
 
@@ -162,6 +164,28 @@ struct TextSuggestions {
     /// What a suggestions modifier offers.
     static func offering(_ entries: [_TextSuggestionEntry]) -> Self {
         Self(entries: entries, isPresent: true)
+    }
+
+    /// Equal when both are present or both are not, and both are empty or
+    /// both are not — never by what the entries say.
+    ///
+    /// An environment value that cannot be compared turns off every memo
+    /// beneath it, and the entries cannot be: a label is an `AnyView`, and a
+    /// completion is read off the label's RENDERED text. So a List under
+    /// `.searchSuggestions` drew every row afresh on every frame. Comparing by
+    /// content would be worse — suggestions are rebuilt as the query is typed,
+    /// so every keystroke would clear everything below.
+    ///
+    /// This is enough because the one reader of the entries, a text field
+    /// (`TextFieldSuggestions.prepare`), declares a render side effect whenever
+    /// suggestions are present, so no memo that holds such a field ever stores
+    /// — it re-renders, and re-syncs its handler, as it always did. Any other
+    /// memo below holds no reader, so it cannot draw differently for different
+    /// entries. The emptiness term is a margin on top: the `▾` a field draws
+    /// depends on it, and should a reader ever skip the declaration, a change
+    /// of emptiness still clears.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.isPresent == rhs.isPresent && lhs.entries.isEmpty == rhs.entries.isEmpty
     }
 }
 
@@ -298,14 +322,30 @@ enum TextFieldSuggestions {
     }
 
     /// Builds the menu model and syncs the handler's completions/highlight.
-    /// Returns `nil` when there are no suggestions.
+    /// Returns `nil` when there are no suggestions, or the field is disabled.
+    ///
+    /// Reads the entries itself, because reading them obliges it to declare: a
+    /// field under a suggestions modifier syncs handler state from labels it
+    /// renders on every pass, and nothing in any memo's key sees them — the
+    /// environment value compares by presence and emptiness alone
+    /// (``TextSuggestions``). So the field makes every memo that holds it
+    /// decline, whenever a modifier is present, empty or not and disabled or
+    /// not, and a served buffer can never stand in for a render that would
+    /// have changed its completions.
     static func prepare(
-        entries: [_TextSuggestionEntry],
+        isDisabled: Bool,
         handler: TextFieldHandler,
         currentText: String,
         isFocused: Bool,
         context: RenderContext
     ) -> Menu? {
+        let suggestions = context.environment.textInputSuggestions
+        if suggestions.isPresent {
+            context.environment.volatileReadTracker?.recordRenderSideEffect()
+        }
+        // A disabled field leaves its handler alone, as it always has.
+        guard !isDisabled else { return nil }
+        let entries = suggestions.entries
         guard !entries.isEmpty else {
             // No suggestions this frame — make sure stale completions don't
             // leave the handler intercepting Down/Enter.
@@ -316,8 +356,13 @@ enum TextFieldSuggestions {
         // Labels render at the SCREEN width, not the field's: the pop-up is
         // an overlay that may grow wider than its control, so a narrow field
         // must not wrap/truncate its option labels.
-        let labelContext = context.withAvailableWidth(
+        var labelContext = context.withAvailableWidth(
             max(context.availableWidth, context.environment.terminalWidth))
+        // Every label renders at the field's own identity, so two labels'
+        // memos would share one entry and one environment slot. The entries
+        // being uncomparable used to keep them all from storing; this keeps
+        // them so now that the value compares.
+        labelContext.environment.hasUncomparableEnvironmentValue = true
 
         // The drop-down's own model — the same one the `Picker` builds, so the
         // marker column, the width and the pointer handling are one

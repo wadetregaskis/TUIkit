@@ -89,6 +89,27 @@ struct ScrollViewReaderMemoTests {
         #expect(log.sawUncomparable == false, "the dismiss action made the environment uncomparable")
     }
 
+    /// And for suggestions, whose entries hold `AnyView` labels: compared by
+    /// presence and emptiness, because only a text field reads them, and it
+    /// declares.
+    @Test("Suggestions leave their content's environment comparable")
+    func suggestionsLeaveTheEnvironmentComparable() {
+        let inputLog = ComparabilityLog()
+        _ = renderToBuffer(
+            ComparabilitySpy(log: inputLog).textInputSuggestions { Text("x") },
+            context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
+        #expect(inputLog.sawUncomparable == false, "text input suggestions made the environment uncomparable")
+
+        let searchLog = ComparabilityLog()
+        var query = ""
+        _ = renderToBuffer(
+            ComparabilitySpy(log: searchLog)
+                .searchable(text: Binding(get: { query }, set: { query = $0 }))
+                .searchSuggestions { Text("x") },
+            context: RenderContext(availableWidth: 40, availableHeight: 10, tuiContext: TUIContext()))
+        #expect(searchLog.sawUncomparable == false, "search suggestions made the environment uncomparable")
+    }
+
     @Test("A row inside a reader is served from the row memo on an unchanged frame")
     func rowsInsideAReaderAreServed() {
         let tuiContext = TUIContext()
