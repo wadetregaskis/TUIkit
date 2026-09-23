@@ -255,9 +255,13 @@ private struct ImageURLTimeoutKey: EnvironmentKey {
 /// `.fit`/`.fill` (``ContentMode``) decides *how* an image scales relative to a box;
 /// this decides *which box*. The two are orthogonal.
 public enum ImageFitTarget: Sendable, Hashable, CaseIterable {
-    /// Fit the size the layout proposes — the default. Inside a `ScrollView` the
-    /// proposed size is unbounded on the scroll axis, so the image becomes
-    /// width-driven and can be scrolled at full size.
+    /// Fit the size the layout proposes — the default. Inside a vertical
+    /// `ScrollView` the proposed height is unbounded, so the image is driven by
+    /// its width and can be scrolled at full size. Inside one that scrolls
+    /// horizontally — alone or both ways — nothing bounds it at all, and a
+    /// terminal has no natural size in cells to give a picture, so it fits the
+    /// visible viewport, as ``viewport`` does — on every axis a `.frame` inside
+    /// the scroll view leaves open. A `.frame(width: 300)` is 300 wide.
     case proposedSize
 
     /// Fit the visible viewport — the innermost enclosing `ScrollView`'s visible
@@ -718,7 +722,8 @@ extension View {
     /// scales; this decides *which box* it scales to. By default an image fits the
     /// size the layout proposes (``ImageFitTarget/proposedSize``) — which inside a
     /// `ScrollView` is unbounded on the scroll axis, so the image renders at full
-    /// size and scrolls. Pass ``ImageFitTarget/viewport`` to fit the enclosing
+    /// size and scrolls (inside one that scrolls horizontally, where nothing
+    /// bounds it, it fits the viewport). Pass ``ImageFitTarget/viewport`` to fit the enclosing
     /// `ScrollView`'s *visible* area instead: the image fills the viewport at
     /// ``imageZoom(_:)`` `1` and overflows (showing scrollbars) only when zoomed in,
     /// so one fixed view tree goes from "fits exactly" to "scroll around" purely by

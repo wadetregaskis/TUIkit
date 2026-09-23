@@ -294,6 +294,23 @@ the default before one answers, so an unmeasured terminal draws glyphs. TUI-spec
 photograph, which an app built around a ramp genuinely wants — see
 `Documentation/Terminal graphics protocols.md`.
 
+**An image fills what it is offered, and fits the viewport when it is offered
+nothing.** SwiftUI's resizable image, offered no size, takes its natural pixel
+size. A terminal has no size in cells to give it: pixels are not cells, and how
+many make one depends on the font — assume a cell size and a photograph is drawn
+tiny, count two pixels a cell and it is drawn enormous. So a TUIkit `Image`
+aspect-fits the size its layout proposes, which in practice sizes it to fit the
+TUI around it. Inside a vertical scroll view the width bounds it, so the image
+is width driven and scrolls at full size. Inside one that scrolls horizontally —
+alone or both ways — NOTHING bounds it: the content is asked how big it would be
+if nothing stopped it. There the image fits the visible viewport, as
+`.imageFitTarget(.viewport)` fits it explicitly — on every axis a `.frame`
+inside the scroll view leaves open: `.frame(width: 300)` is 300 wide, and its
+height is the viewport's unless the frame states one too. (Before that it fitted the
+scroll view's probe budget, thousands of cells, and was drawn the size of a
+wall.) Code ported from SwiftUI that relies on a natural size should give the
+image an explicit `.frame`.
+
 **`.mono` plays the template image's part.** SwiftUI tints a template image with
 `foregroundStyle`. TUIkit has no `renderingMode(_:)`; `.imageColorMode(.mono)` draws
 a picture in two tones instead, and its ink is the view's `foregroundStyle`, so it is

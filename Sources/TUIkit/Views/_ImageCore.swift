@@ -141,14 +141,22 @@ struct _ImageCore: View, Renderable, Layoutable {
         // image fill the visible area at zoom 1 and overflow (scroll) only once
         // zoomed in, even though a ScrollView measures content against an unbounded
         // canvas.
+        //
+        // Under a scroll view that scrolls HORIZONTALLY, an axis offered as the
+        // probe's budget — thousands of cells, which an image aspect-fitted to
+        // and was drawn the size of a wall — is the viewport's instead
+        // (``viewportCap(_:offer:)``).
         let fitWidth: Int
         let fitHeight: Int
         if environment.imageFitTarget == .viewport, let viewport = environment.scrollViewportSize {
             fitWidth = viewport.width
             fitHeight = viewport.height
         } else {
-            fitWidth = proposal.width ?? context.availableWidth
-            fitHeight = proposal.height ?? context.availableHeight
+            let proposedWidth = proposal.width ?? context.availableWidth
+            let proposedHeight = proposal.height ?? context.availableHeight
+            let cap = Self.viewportCap(environment, offer: (proposedWidth, proposedHeight))
+            fitWidth = cap.width ?? proposedWidth
+            fitHeight = cap.height ?? proposedHeight
         }
 
         // Once the image has loaded, report the SAME aspect-fitted size the renderer
@@ -178,6 +186,39 @@ struct _ImageCore: View, Renderable, Layoutable {
         let cellAspect = environment.imageCellAspect > 0 ? environment.imageCellAspect : 2.0
         let placeholderHeight = min(fitHeight, max(1, Int(Double(fitWidth) / cellAspect)))
         return .fixed(Self.zoomed(fitWidth, zoom), Self.zoomed(placeholderHeight, zoom))
+    }
+
+    /// The viewport's extent on each axis the offer does not bound, under a
+    /// scroll view that scrolls horizontally — or `nil`, the offer standing.
+    ///
+    /// SwiftUI sizes a resizable image offered nothing at its natural pixel
+    /// size, and a terminal has no size in cells to give it: pixels are not
+    /// cells, and how many make one depends on the font. A scroll view that
+    /// scrolls horizontally asks its content how big it would be if nothing
+    /// stopped it — the probe's budget across, and down — so on an axis
+    /// offered that, the image fits what the person can see instead, as
+    /// ``ImageFitTarget/viewport`` fits it explicitly.
+    ///
+    /// Only an unbounded axis: a `.frame(width: 300)` offers a real 300 and is
+    /// 300 wide however narrow the viewport, while the height it leaves open
+    /// is the viewport's. And only while measuring, which is the only time the
+    /// budget is offered: the render is handed the size the measure answered,
+    /// so the two agree without the render reading the viewport. A vertical
+    /// scroll view bounds the width, so there the image is width driven and
+    /// scrolls at full size, as it always has.
+    ///
+    /// Reads the viewport only when an axis is unbounded: the read is volatile,
+    /// and keeps any memo above from storing the image's size.
+    private static func viewportCap(_ environment: EnvironmentValues, offer: (width: Int, height: Int))
+        -> (width: Int?, height: Int?)
+    {
+        guard environment.asksWholeContentWidth else { return (nil, nil) }
+        let unboundedWidth = isNaturalExtentBudget(offer.width)
+        let unboundedHeight = isNaturalExtentBudget(offer.height)
+        guard unboundedWidth || unboundedHeight, let viewport = environment.scrollViewportSize else {
+            return (nil, nil)
+        }
+        return (unboundedWidth ? viewport.width : nil, unboundedHeight ? viewport.height : nil)
     }
 
     /// Multiplies a cell dimension by the zoom factor (rounded, floored at 1).
