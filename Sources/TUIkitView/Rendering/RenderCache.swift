@@ -463,6 +463,10 @@ public final class RenderCache: @unchecked Sendable {
     /// generation instead would clear every cache in the test process.
     var renderedUnderTerminalColorsGeneration = TerminalColors.generation
 
+    /// The process-wide answers this cache's buffers were drawn under. See
+    /// ``RenderedUnder``.
+    private var renderedUnder = RenderedUnder.now
+
     /// Identities seen during the current render pass (for garbage collection).
     private var activeIdentities: Set<ViewIdentity> = []
 
@@ -1127,9 +1131,11 @@ extension RenderCache {
         // only when the terminal reports them.
         let widthMoved = measuredUnderWidthGeneration != TerminalWidthTraits.generation
         let coloursMoved = renderedUnderTerminalColorsGeneration != TerminalColors.generation
-        if widthMoved || coloursMoved {
+        let now = RenderedUnder.now
+        if widthMoved || coloursMoved || now != renderedUnder {
             measuredUnderWidthGeneration = TerminalWidthTraits.generation
             renderedUnderTerminalColorsGeneration = TerminalColors.generation
+            renderedUnder = now
             clearAll()
         }
 
@@ -1401,6 +1407,40 @@ extension RenderCache: RenderInvalidationSink {
             }
         }
         AppState.shared.setNeedsRender()
+    }
+}
+
+// MARK: - Process-Wide Answers
+
+extension RenderCache {
+    /// What a render reads from process-wide answers and bakes into what it
+    /// draws: the colour depth, which decides how every colour is spelled and
+    /// how a blend is quantised; and whether the terminal takes OSC 8 links and
+    /// Kitty pictures, which decide whether a `Link` emits one and whether a
+    /// picture is placed or drawn in glyphs.
+    ///
+    /// None has a generation, and each can change while an app runs — a
+    /// runtime `ColorDepth.cap`, a diagnostic override — or for one task, under
+    /// the task-local pins tests use. A buffer served across the change drew
+    /// the old answer: under a 256-colour cap, a memo went on spelling its
+    /// colours in truecolor. So ``beginRenderPass()`` reads the effective
+    /// answers, pins included, and clears everything when they moved.
+    ///
+    /// Links and pictures are a margin today — both renders declare side
+    /// effects, so neither is ever stored — kept because four reads a pass is
+    /// nothing, and a memo that could hold one some day would otherwise
+    /// inherit the hole.
+    struct RenderedUnder: Equatable {
+        var colorDepth: ColorDepth
+        var hyperlinks: Bool
+        var pictures: Bool
+        var compressedPictures: Bool
+
+        static var now: Self {
+            Self(
+                colorDepth: ColorDepth.current, hyperlinks: TerminalHyperlink.isSupported,
+                pictures: KittyGraphics.isSupported, compressedPictures: KittyGraphics.isCompressionSupported)
+        }
     }
 }
 
