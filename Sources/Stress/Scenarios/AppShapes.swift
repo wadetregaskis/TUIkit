@@ -240,5 +240,14 @@ enum AppShapeMatrix {
         variant("sidebar-untagged", "the same source list answering by the projects' ids — no row built to read a tag") {
             AnyView(ProjectSidebarApp(count: $0.sized(300), seed: $0.seed, tagged: false))
         },
+        variant("grouped-feed", "40 sections, each a heading over its own lazy stack of ~300 one- and two-line entries; the page moves every tick") {
+            AnyView(GroupedFeedApp(sections: $0.sized(40), entries: 300, seed: $0.seed, mixedHeights: true))
+        },
+        variant("grouped-feed-uniform", "the same feed with one-line entries — nested stacks a sixteen-row sample already prices exactly") {
+            AnyView(GroupedFeedApp(sections: $0.sized(40), entries: 300, seed: $0.seed, mixedHeights: false))
+        },
+        variant("headed-log", "a header over a lazy stack of 2,000 one- and two-line entries in one scroll view; the page moves every tick") {
+            AnyView(HeadedLogApp(entries: $0.sized(2_000), seed: $0.seed))
+        },
     ]
 }
