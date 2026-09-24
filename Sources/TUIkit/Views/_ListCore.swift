@@ -2791,7 +2791,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     // MARK: - Row Extraction
 
-    private func extractRows(from content: Content, context: RenderContext) -> RowSource<SelectionValue> {
+    private func extractRows<V: View>(from content: V, context: RenderContext) -> RowSource<SelectionValue> {
         // Section first (it conforms to both Section- and List-RowExtractor, and
         // its row set — header/content/footer — is small and built eagerly).
         if let section = content as? SectionRowExtractor {
@@ -2908,8 +2908,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// `if`/`else` gets its branch step. Asking the provider directly skipped
     /// it, and `List { if a { Row("1") } else { Row("2") } }` drew both
     /// branches' rows at the list's own identity, one `@State` between them.
-    private func extractFromChildren(
-        of content: Content,
+    private func extractFromChildren<V: View>(
+        of content: V,
         context: RenderContext
     ) -> ExtractedRows {
         var result: [SelectableListRow<SelectionValue>] = []
@@ -3005,7 +3005,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// `nil` rather than an owner with two `nil` actions so the common list —
     /// which is not editable at all — carries an empty array and every lookup
     /// against it answers immediately.
-    private static func editOwner(of content: Content, rows: Range<Int>) -> ListRowEditOwner? {
+    private static func editOwner<V: View>(of content: V, rows: Range<Int>) -> ListRowEditOwner? {
         guard let actions = content as? any DynamicViewContentActions,
             actions.deleteAction != nil || actions.moveAction != nil
         else { return nil }
