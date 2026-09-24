@@ -510,9 +510,12 @@ extension TextFieldHandler {
         if let chord = TextFieldChord(event) {
             return perform(chord)
         }
-        // A Control chord nothing binds propagates rather than typing its
-        // letter.
-        if event.ctrl {
+        // A Control or Option chord nothing binds propagates rather than
+        // typing its letter, as in the editor: under `.commandKey(.option)` an
+        // app's ⌘S arrives as Option-S, and a field that typed an "s" kept it
+        // from the shortcut. (A terminal that composes Option-S sends "ß",
+        // which arrives without `alt` and is typed.)
+        if event.ctrl || event.alt {
             return false
         }
         // Ignore control characters except printable ones.

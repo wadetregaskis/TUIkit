@@ -423,6 +423,30 @@ struct TextInputShortcutPrecedenceTests {
         #expect(played.text == (host.isEditor ? "abX\ncd" : "abXcd"))
     }
 
+    /// Under `.commandKey(.option)` an app's ⌘S arrives as Option-S. The
+    /// editor declines an Option letter it has no command for; a field typed
+    /// the letter, so the shortcut never fired while a field had the focus.
+    @Test(
+        "Under .commandKey(.option), an unbound Option letter reaches the app's shortcut",
+        arguments: PrecedenceHost.allCases)
+    func unboundOptionLetterReachesTheShortcut(host: PrecedenceHost) {
+        let played = play(
+            [home, right, option("s"), typed("X")], into: host, from: GivingWayCase.initial(host),
+            shortcut: AppShortcut(key: "s", modifiers: .command, commandKey: .option))
+        #expect(played.fired == ["s"], "\(host): the shortcut did not fire")
+        #expect(played.text == (host.isEditor ? "aXb\ncd" : "aXbcd"), "\(host): the letter was typed")
+    }
+
+    /// And with no shortcut on it, the key goes on and types nothing.
+    @Test("An unbound Option letter types nothing", arguments: PrecedenceHost.allCases)
+    func unboundOptionLetterTypesNothing(host: PrecedenceHost) {
+        let played = play(
+            [home, right, option("s"), typed("X")], into: host, from: GivingWayCase.initial(host),
+            shortcut: nil)
+        #expect(played.text == (host.isEditor ? "aXb\ncd" : "aXbcd"), "\(host)")
+        #expect(played.unconsumed == [2], "\(host) consumed the Option letter")
+    }
+
     /// A disabled button registers no shortcut, so it takes nothing.
     @Test("A disabled button's shortcut does not take the chord")
     func disabledShortcutLeavesTheChord() {
