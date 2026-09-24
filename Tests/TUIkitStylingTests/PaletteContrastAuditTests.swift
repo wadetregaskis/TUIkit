@@ -180,7 +180,8 @@ struct PaletteContrastAuditTests {
                 foreground: palette.foreground, background: pulseDim, minimum: 2.4),
             AuditedPair(
                 name: "foreground/focusPulseBright",
-                foreground: palette.foreground, background: pulseBright, minimum: 2.0),
+                foreground: palette.foreground, background: pulseBright,
+                minimum: ViewConstants.rowBreathPeakContrastFloor),
             AuditedPair(
                 name: "foreground/focusWashPulseBright",
                 foreground: palette.foreground, background: washPulseBright,

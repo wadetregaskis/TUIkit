@@ -31,6 +31,17 @@ public enum ViewConstants {
     /// Maximum accent opacity during focus pulsing animation (bright phase).
     public static let focusPulseMax: Double = 0.50
 
+    /// The least contrast a row's own text keeps against the BRIGHT end of the
+    /// breath behind it.
+    ///
+    /// A focused list's or table's cursor row breathes behind content that keeps
+    /// its own foreground, so the top of that breath is bounded by what the text
+    /// stays readable against. Lower than ``labelContrastFloor``, which a label
+    /// resting on a face is held to: the top of a breath is one moment of each
+    /// cycle, not a colour the row rests on. The accent's top
+    /// (``focusPulseMax``) is held to it by `PaletteContrastAuditTests`.
+    public static let rowBreathPeakContrastFloor: Double = 2.0
+
     /// Background opacity for selected (but unfocused) rows.
     public static let selectedBackground: Double = 0.25
 
