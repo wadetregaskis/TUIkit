@@ -59,6 +59,11 @@
 /// | Ctrl+Z | Undo last change |
 /// | Enter | Trigger the submit action — with no `onSubmit` the field declines Return, so a dialog's default button fires |
 ///
+/// An app's keyboard shortcut on the same chord takes Ctrl+A, Ctrl+E and the
+/// Alt+b / Alt+f word motions from the field; Home, End and Option+Left /
+/// Right do the same things. See
+/// ``TextEditingCommand/givesWayToKeyboardShortcuts(homeAndEndReachLineEnds:)``.
+///
 /// Option+Left and Alt+b are one binding, not two — likewise Option+Right and
 /// Alt+f: macOS Terminal sends the readline escapes `ESC b` / `ESC f` when
 /// Option is held with an arrow, in addition to the modified-arrow CSI

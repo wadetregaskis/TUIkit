@@ -109,6 +109,52 @@ enum TextEditingCommand: Equatable {
     }
 }
 
+// MARK: - Keyboard Shortcuts
+
+extension TextEditingCommand {
+    /// Whether an app's keyboard shortcut on the same chord takes the key from
+    /// the focused text control, which then does nothing.
+    ///
+    /// A focused text control is offered a key before the app's shortcuts are
+    /// (`InputHandler`, layer 0 before layer 3.5). Under the default
+    /// `.commandKey(.control)` a SwiftUI ⌘ shortcut arrives as a Control chord,
+    /// so ⌘F, "Find", is Ctrl-F, the chord for forward a character, and ⌘D is
+    /// Ctrl-D; under `.commandKey(.option)` ⌘B and ⌘F arrive as Option-B and
+    /// Option-F, the word motions. The owner's rule (2026-09-23) is that the
+    /// Emacs chords are a bonus: whatever one does can be done some other way,
+    /// with another key or by selecting and typing, so the app's shortcut wins
+    /// it.
+    ///
+    /// Where a chord *is* the only way, it keeps the key:
+    ///
+    /// - Option-Ctrl-A, select-all, everywhere. ⌘A cannot reach a terminal
+    ///   app, and no other key selects everything.
+    /// - Ctrl-A and Ctrl-E where Home and End do not go to the ends of the
+    ///   line. In a field they do, so there the pair gives way like the rest.
+    ///   In the editor Home and End go to the ends of the document, which
+    ///   leaves Ctrl-A and Ctrl-E the only keys for the ends of a line.
+    ///
+    /// The chords that stand in for the Command-key ones, for the clipboard,
+    /// undo and erase (``StandInEditingCommand``), are not in this table and
+    /// keep the key: they are what the app's ⌘ shortcut would ask the focused
+    /// text for anyway.
+    ///
+    /// - Parameter homeAndEndReachLineEnds: Whether the control's Home and End
+    ///   keys go to the ends of the line the caret is on.
+    func givesWayToKeyboardShortcuts(homeAndEndReachLineEnds: Bool) -> Bool {
+        switch self {
+        case .selectAll:
+            false
+        case .moveToStartOfLine, .moveToEndOfLine:
+            homeAndEndReachLineEnds
+        case .moveBackward, .moveForward, .moveToPreviousLine, .moveToNextLine, .deleteForward,
+            .killToEndOfLine, .yank, .transpose, .openLine, .pageDown, .moveWordBackward,
+            .moveWordForward, .moveWordBackwardAndModifySelection, .moveWordForwardAndModifySelection:
+            true
+        }
+    }
+}
+
 // MARK: - Transpose
 
 extension TextEditingCommand {

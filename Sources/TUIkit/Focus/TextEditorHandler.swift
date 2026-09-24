@@ -243,7 +243,11 @@ final class TextEditorHandler: PersistedFocusable {
     /// Ctrl+letter chord (the Emacs-style Cocoa bindings), or Option-B or
     /// Option-F. Control is read first, so Option-Ctrl-B is Ctrl-B, back a
     /// character. `nil` for any other key.
-    private func editingCommand(for event: KeyEvent) -> TextEditingCommand? {
+    ///
+    /// The key handling acts on this answer, so the input dispatcher's
+    /// question about a chord (``givesWayToKeyboardShortcut(_:)``) gets the
+    /// same one.
+    func editingCommand(for event: KeyEvent) -> TextEditingCommand? {
         guard case .character(let character) = event.key else { return nil }
         if event.ctrl { return TextEditingCommand(control: character, alt: event.alt) }
         if event.alt { return TextEditingCommand(option: character, shift: event.shift) }

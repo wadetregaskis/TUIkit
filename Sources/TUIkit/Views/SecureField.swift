@@ -40,6 +40,8 @@
 /// | Ctrl+V | Paste at cursor |
 /// | Enter | Trigger onSubmit action |
 ///
+/// The chords give way to an app's keyboard shortcut as ``TextField``'s do.
+///
 /// ## The contents never leave the field
 ///
 /// Cut and copy are refused, as they are in SwiftUI ("prevents anyone from

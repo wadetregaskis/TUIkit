@@ -1,5 +1,5 @@
-<svg width="395pt" height="964pt"
- viewBox="0.00 0.00 395.00 964.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="647pt" height="940pt"
+ viewBox="0.00 0.00 647.00 940.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <style>
 .edge path { fill: none; stroke: #8a8a8a; }
 .edge polygon { stroke: #8a8a8a; fill: #8a8a8a; }
@@ -12,195 +12,216 @@
   .cluster path, .cluster polygon { stroke: #5a5a5a; }
 }
 </style>
-<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 960.48)">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 936.15)">
 <title>keyboard&#45;event&#45;dispatch</title>
 <!-- ev -->
 <g id="node1" class="node">
 <title>ev</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M139.54,-956.48C139.54,-956.48 94,-956.48 94,-956.48 88,-956.48 82,-950.48 82,-944.48 82,-944.48 82,-932.48 82,-932.48 82,-926.48 88,-920.48 94,-920.48 94,-920.48 139.54,-920.48 139.54,-920.48 145.54,-920.48 151.54,-926.48 151.54,-932.48 151.54,-932.48 151.54,-944.48 151.54,-944.48 151.54,-950.48 145.54,-956.48 139.54,-956.48"/>
-<text xml:space="preserve" text-anchor="middle" x="116.77" y="-934.03" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">KeyEvent</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M391.54,-932.15C391.54,-932.15 346,-932.15 346,-932.15 340,-932.15 334,-926.15 334,-920.15 334,-920.15 334,-908.15 334,-908.15 334,-902.15 340,-896.15 346,-896.15 346,-896.15 391.54,-896.15 391.54,-896.15 397.54,-896.15 403.54,-902.15 403.54,-908.15 403.54,-908.15 403.54,-920.15 403.54,-920.15 403.54,-926.15 397.54,-932.15 391.54,-932.15"/>
+<text xml:space="preserve" text-anchor="middle" x="368.77" y="-909.7" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">KeyEvent</text>
 </g>
 <!-- g0 -->
 <g id="node2" class="node">
 <title>g0</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M105.13,-880.56C105.13,-880.56 56.59,-868.4 56.59,-868.4 50.77,-866.94 50.77,-864.02 56.59,-862.56 56.59,-862.56 105.13,-850.4 105.13,-850.4 110.95,-848.94 122.59,-848.94 128.41,-850.4 128.41,-850.4 176.95,-862.56 176.95,-862.56 182.77,-864.02 182.77,-866.94 176.95,-868.4 176.95,-868.4 128.41,-880.56 128.41,-880.56 122.59,-882.02 110.95,-882.02 105.13,-880.56"/>
-<text xml:space="preserve" text-anchor="middle" x="116.77" y="-861.03" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">text input focused?</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M357.13,-856.23C357.13,-856.23 308.59,-844.07 308.59,-844.07 302.77,-842.61 302.77,-839.69 308.59,-838.23 308.59,-838.23 357.13,-826.07 357.13,-826.07 362.95,-824.61 374.59,-824.61 380.41,-826.07 380.41,-826.07 428.95,-838.23 428.95,-838.23 434.77,-839.69 434.77,-842.61 428.95,-844.07 428.95,-844.07 380.41,-856.23 380.41,-856.23 374.59,-857.69 362.95,-857.69 357.13,-856.23"/>
+<text xml:space="preserve" text-anchor="middle" x="368.77" y="-836.7" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">text input focused?</text>
 </g>
 <!-- ev&#45;&gt;g0 -->
 <g id="edge1" class="edge">
 <title>ev&#45;&gt;g0</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M116.77,-920.65C116.77,-912.08 116.77,-901.47 116.77,-891.92"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="119.22,-892 116.77,-885 114.32,-892 119.22,-892"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M368.77,-896.32C368.77,-887.75 368.77,-877.14 368.77,-867.59"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="371.22,-867.67 368.77,-860.67 366.32,-867.67 371.22,-867.67"/>
 </g>
-<!-- l0 -->
+<!-- gw -->
 <g id="node3" class="node">
-<title>l0</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M177.54,-747.73C177.54,-747.73 12,-747.73 12,-747.73 6,-747.73 0,-741.73 0,-735.73 0,-735.73 0,-713.65 0,-713.65 0,-707.65 6,-701.65 12,-701.65 12,-701.65 177.54,-701.65 177.54,-701.65 183.54,-701.65 189.54,-707.65 189.54,-713.65 189.54,-713.65 189.54,-735.73 189.54,-735.73 189.54,-741.73 183.54,-747.73 177.54,-747.73"/>
-<text xml:space="preserve" text-anchor="middle" x="94.77" y="-732.24" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 0 · Text input</text>
-<text xml:space="preserve" text-anchor="middle" x="94.77" y="-720.24" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">focusManager.dispatchKeyEvent</text>
-<text xml:space="preserve" text-anchor="middle" x="94.77" y="-708.24" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">TextField / SecureField / TextEditor</text>
+<title>gw</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M213.88,-775.81C213.88,-775.81 103.41,-760.99 103.41,-760.99 97.46,-760.2 97.46,-758.6 103.41,-757.81 103.41,-757.81 213.88,-742.99 213.88,-742.99 219.82,-742.2 231.72,-742.2 237.66,-742.99 237.66,-742.99 348.13,-757.81 348.13,-757.81 354.08,-758.6 354.08,-760.2 348.13,-760.99 348.13,-760.99 237.66,-775.81 237.66,-775.81 231.72,-776.6 219.82,-776.6 213.88,-775.81"/>
+<text xml:space="preserve" text-anchor="middle" x="225.77" y="-754.95" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">editing chord an app shortcut takes?</text>
 </g>
-<!-- g0&#45;&gt;l0 -->
+<!-- g0&#45;&gt;gw -->
 <g id="edge2" class="edge">
-<title>g0&#45;&gt;l0</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M114.2,-848.29C110.63,-825.74 104.08,-784.45 99.59,-756.07"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="102.06,-756.03 98.54,-749.5 97.22,-756.8 102.06,-756.03"/>
-<text xml:space="preserve" text-anchor="middle" x="118.33" y="-820.93" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+<title>g0&#45;&gt;gw</title>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M347.98,-828.55C324.19,-815.29 284.96,-793.41 257.38,-778.03"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="258.83,-776.03 251.52,-774.76 256.44,-780.31 258.83,-776.03"/>
+<text xml:space="preserve" text-anchor="middle" x="312.96" y="-796.6" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- gesc -->
-<g id="node4" class="node">
+<g id="node5" class="node">
 <title>gesc</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M247.89,-800.05C247.89,-800.05 144.71,-785.41 144.71,-785.41 138.77,-784.57 138.77,-782.89 144.71,-782.05 144.71,-782.05 247.89,-767.41 247.89,-767.41 253.83,-766.57 265.71,-766.57 271.65,-767.41 271.65,-767.41 374.83,-782.05 374.83,-782.05 380.77,-782.89 380.77,-784.57 374.83,-785.41 374.83,-785.41 271.65,-800.05 271.65,-800.05 265.71,-800.89 253.83,-800.89 247.89,-800.05"/>
-<text xml:space="preserve" text-anchor="middle" x="259.77" y="-779.28" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">ESC claimed by an open surface?</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M499.89,-775.72C499.89,-775.72 396.71,-761.08 396.71,-761.08 390.77,-760.24 390.77,-758.56 396.71,-757.72 396.71,-757.72 499.89,-743.08 499.89,-743.08 505.83,-742.24 517.71,-742.24 523.65,-743.08 523.65,-743.08 626.83,-757.72 626.83,-757.72 632.77,-758.56 632.77,-760.24 626.83,-761.08 626.83,-761.08 523.65,-775.72 523.65,-775.72 517.71,-776.56 505.83,-776.56 499.89,-775.72"/>
+<text xml:space="preserve" text-anchor="middle" x="511.77" y="-754.95" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">ESC claimed by an open surface?</text>
 </g>
 <!-- g0&#45;&gt;gesc -->
-<g id="edge3" class="edge">
+<g id="edge5" class="edge">
 <title>g0&#45;&gt;gesc</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M137.56,-852.88C161.35,-839.62 200.58,-817.74 228.16,-802.36"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="229.1,-804.64 234.02,-799.09 226.71,-800.36 229.1,-804.64"/>
-<text xml:space="preserve" text-anchor="middle" x="202.08" y="-820.93" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M389.56,-828.55C413.35,-815.29 452.58,-793.41 480.16,-778.03"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="481.1,-780.31 486.02,-774.76 478.71,-776.03 481.1,-780.31"/>
+<text xml:space="preserve" text-anchor="middle" x="454.08" y="-796.6" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+</g>
+<!-- l0 -->
+<g id="node4" class="node">
+<title>l0</title>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M177.54,-695.65C177.54,-695.65 12,-695.65 12,-695.65 6,-695.65 0,-689.65 0,-683.65 0,-683.65 0,-661.57 0,-661.57 0,-655.57 6,-649.57 12,-649.57 12,-649.57 177.54,-649.57 177.54,-649.57 183.54,-649.57 189.54,-655.57 189.54,-661.57 189.54,-661.57 189.54,-683.65 189.54,-683.65 189.54,-689.65 183.54,-695.65 177.54,-695.65"/>
+<text xml:space="preserve" text-anchor="middle" x="94.77" y="-680.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 0 · Text input</text>
+<text xml:space="preserve" text-anchor="middle" x="94.77" y="-668.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">focusManager.dispatchKeyEvent</text>
+<text xml:space="preserve" text-anchor="middle" x="94.77" y="-656.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">TextField / SecureField / TextEditor</text>
+</g>
+<!-- gw&#45;&gt;l0 -->
+<g id="edge3" class="edge">
+<title>gw&#45;&gt;l0</title>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M204.14,-744.4C185.65,-732.43 158.52,-714.87 135.91,-700.24"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="137.48,-698.33 130.27,-696.59 134.82,-702.45 137.48,-698.33"/>
+<text xml:space="preserve" text-anchor="middle" x="173.36" y="-714.85" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- l05 -->
-<g id="node6" class="node">
+<g id="node7" class="node">
 <title>l05</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M289.66,-600.57C289.66,-600.57 145.88,-600.57 145.88,-600.57 139.88,-600.57 133.88,-594.57 133.88,-588.57 133.88,-588.57 133.88,-566.49 133.88,-566.49 133.88,-560.49 139.88,-554.49 145.88,-554.49 145.88,-554.49 289.66,-554.49 289.66,-554.49 295.66,-554.49 301.66,-560.49 301.66,-566.49 301.66,-566.49 301.66,-588.57 301.66,-588.57 301.66,-594.57 295.66,-600.57 289.66,-600.57"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-585.08" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 0.5 · Drag navigators</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-573.08" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">scrolls what the pointer is over</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-561.08" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">only while a drag is in flight</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M360.66,-612.57C360.66,-612.57 216.88,-612.57 216.88,-612.57 210.88,-612.57 204.88,-606.57 204.88,-600.57 204.88,-600.57 204.88,-578.49 204.88,-578.49 204.88,-572.49 210.88,-566.49 216.88,-566.49 216.88,-566.49 360.66,-566.49 360.66,-566.49 366.66,-566.49 372.66,-572.49 372.66,-578.49 372.66,-578.49 372.66,-600.57 372.66,-600.57 372.66,-606.57 366.66,-612.57 360.66,-612.57"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-597.08" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 0.5 · Drag navigators</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-585.08" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">scrolls what the pointer is over</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-573.08" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">only while a drag is in flight</text>
+</g>
+<!-- gw&#45;&gt;l05 -->
+<g id="edge4" class="edge">
+<title>gw&#45;&gt;l05</title>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M227.98,-742.02C231.3,-720.26 238.62,-680.92 251.77,-649.57 256.09,-639.27 262.11,-628.72 268.03,-619.44"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="269.93,-621.01 271.73,-613.82 265.84,-618.32 269.93,-621.01"/>
+<text xml:space="preserve" text-anchor="middle" x="280.27" y="-668.93" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes — skip L0</text>
 </g>
 <!-- l0&#45;&gt;l05 -->
-<g id="edge4" class="edge">
+<g id="edge6" class="edge">
 <title>l0&#45;&gt;l05</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M96.65,-701.89C99.24,-683.17 105.34,-656.33 119.77,-637.57 129.93,-624.36 143.95,-613.47 158.21,-604.8"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="159.28,-607.01 164.1,-601.38 156.82,-602.77 159.28,-607.01"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M147.27,-649.67C172.29,-639.21 202.34,-626.65 228.31,-615.8"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="229.04,-618.15 234.55,-613.19 227.15,-613.63 229.04,-618.15"/>
 </g>
 <!-- pre -->
-<g id="node5" class="node">
+<g id="node6" class="node">
 <title>pre</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M290.79,-683.65C290.79,-683.65 144.75,-683.65 144.75,-683.65 138.75,-683.65 132.75,-677.65 132.75,-671.65 132.75,-671.65 132.75,-649.57 132.75,-649.57 132.75,-643.57 138.75,-637.57 144.75,-637.57 144.75,-637.57 290.79,-637.57 290.79,-637.57 296.79,-637.57 302.79,-643.57 302.79,-649.57 302.79,-649.57 302.79,-671.65 302.79,-671.65 302.79,-677.65 296.79,-683.65 290.79,-683.65"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-668.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">ESC pre&#45;route · Focus system</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-656.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">open drop&#45;down closes FIRST</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-644.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">before any page&#45;level handler</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M479.79,-695.65C479.79,-695.65 333.75,-695.65 333.75,-695.65 327.75,-695.65 321.75,-689.65 321.75,-683.65 321.75,-683.65 321.75,-661.57 321.75,-661.57 321.75,-655.57 327.75,-649.57 333.75,-649.57 333.75,-649.57 479.79,-649.57 479.79,-649.57 485.79,-649.57 491.79,-655.57 491.79,-661.57 491.79,-661.57 491.79,-683.65 491.79,-683.65 491.79,-689.65 485.79,-695.65 479.79,-695.65"/>
+<text xml:space="preserve" text-anchor="middle" x="406.77" y="-680.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">ESC pre&#45;route · Focus system</text>
+<text xml:space="preserve" text-anchor="middle" x="406.77" y="-668.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">open drop&#45;down closes FIRST</text>
+<text xml:space="preserve" text-anchor="middle" x="406.77" y="-656.16" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">before any page&#45;level handler</text>
 </g>
 <!-- gesc&#45;&gt;pre -->
-<g id="edge5" class="edge">
+<g id="edge7" class="edge">
 <title>gesc&#45;&gt;pre</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M254.19,-766.65C247.59,-747.62 236.47,-715.54 228.25,-691.82"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="230.57,-691.03 225.96,-685.22 225.94,-692.64 230.57,-691.03"/>
-<text xml:space="preserve" text-anchor="middle" x="254.48" y="-721.01" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M493.96,-744.02C479.26,-732.15 458.01,-714.98 440.16,-700.57"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="442.16,-699.04 435.17,-696.54 439.08,-702.85 442.16,-699.04"/>
+<text xml:space="preserve" text-anchor="middle" x="472.68" y="-714.85" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes</text>
 </g>
 <!-- gesc&#45;&gt;l05 -->
-<g id="edge6" class="edge">
+<g id="edge8" class="edge">
 <title>gesc&#45;&gt;l05</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M273.68,-768.1C297.49,-741.18 341.15,-682.49 315.77,-637.57 308.14,-624.07 296.06,-613.32 282.94,-604.89"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="284.39,-602.9 277.13,-601.38 281.86,-607.09 284.39,-602.9"/>
-<text xml:space="preserve" text-anchor="middle" x="328.7" y="-656.93" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M515.98,-742.3C521.02,-719.06 526.31,-675.98 504.77,-649.57 488.62,-629.77 432.12,-614.74 380.96,-604.8"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="381.59,-602.43 374.25,-603.53 380.67,-607.24 381.59,-602.43"/>
+<text xml:space="preserve" text-anchor="middle" x="525.45" y="-668.93" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- pre&#45;&gt;l05 -->
-<g id="edge7" class="edge">
+<g id="edge9" class="edge">
 <title>pre&#45;&gt;l05</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M217.77,-637.88C217.77,-628.98 217.77,-618.51 217.77,-608.87"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="220.22,-609.13 217.77,-602.13 215.32,-609.13 220.22,-609.13"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M374.84,-649.67C360.28,-639.66 342.91,-627.73 327.6,-617.21"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="329.38,-615.46 322.22,-613.52 326.61,-619.5 329.38,-615.46"/>
 </g>
 <!-- l1 -->
-<g id="node7" class="node">
+<g id="node8" class="node">
 <title>l1</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M278.79,-517.49C278.79,-517.49 156.75,-517.49 156.75,-517.49 150.75,-517.49 144.75,-511.49 144.75,-505.49 144.75,-505.49 144.75,-493.49 144.75,-493.49 144.75,-487.49 150.75,-481.49 156.75,-481.49 156.75,-481.49 278.79,-481.49 278.79,-481.49 284.79,-481.49 290.79,-487.49 290.79,-493.49 290.79,-493.49 290.79,-505.49 290.79,-505.49 290.79,-511.49 284.79,-517.49 278.79,-517.49"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-501.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 1 · Status bar items</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-489.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shortcut&#45;triggered actions</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M349.79,-529.49C349.79,-529.49 227.75,-529.49 227.75,-529.49 221.75,-529.49 215.75,-523.49 215.75,-517.49 215.75,-517.49 215.75,-505.49 215.75,-505.49 215.75,-499.49 221.75,-493.49 227.75,-493.49 227.75,-493.49 349.79,-493.49 349.79,-493.49 355.79,-493.49 361.79,-499.49 361.79,-505.49 361.79,-505.49 361.79,-517.49 361.79,-517.49 361.79,-523.49 355.79,-529.49 349.79,-529.49"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-513.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 1 · Status bar items</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-501.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">shortcut&#45;triggered actions</text>
 </g>
 <!-- l05&#45;&gt;l1 -->
-<g id="edge8" class="edge">
+<g id="edge10" class="edge">
 <title>l05&#45;&gt;l1</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M217.77,-554.54C217.77,-545.59 217.77,-535.19 217.77,-525.92"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="220.22,-525.93 217.77,-518.93 215.32,-525.93 220.22,-525.93"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M288.77,-566.54C288.77,-557.59 288.77,-547.19 288.77,-537.92"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="291.22,-537.93 288.77,-530.93 286.32,-537.93 291.22,-537.93"/>
 </g>
 <!-- l2 -->
-<g id="node8" class="node">
+<g id="node9" class="node">
 <title>l2</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M294.16,-444.49C294.16,-444.49 141.38,-444.49 141.38,-444.49 135.38,-444.49 129.38,-438.49 129.38,-432.49 129.38,-432.49 129.38,-420.49 129.38,-420.49 129.38,-414.49 135.38,-408.49 141.38,-408.49 141.38,-408.49 294.16,-408.49 294.16,-408.49 300.16,-408.49 306.16,-414.49 306.16,-420.49 306.16,-420.49 306.16,-432.49 306.16,-432.49 306.16,-438.49 300.16,-444.49 294.16,-444.49"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-428.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 2 · View handlers</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-416.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">.onKeyPress · deepest view first</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M365.16,-456.49C365.16,-456.49 212.38,-456.49 212.38,-456.49 206.38,-456.49 200.38,-450.49 200.38,-444.49 200.38,-444.49 200.38,-432.49 200.38,-432.49 200.38,-426.49 206.38,-420.49 212.38,-420.49 212.38,-420.49 365.16,-420.49 365.16,-420.49 371.16,-420.49 377.16,-426.49 377.16,-432.49 377.16,-432.49 377.16,-444.49 377.16,-444.49 377.16,-450.49 371.16,-456.49 365.16,-456.49"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-440.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 2 · View handlers</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-428.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">.onKeyPress · deepest view first</text>
 </g>
 <!-- l1&#45;&gt;l2 -->
-<g id="edge9" class="edge">
+<g id="edge11" class="edge">
 <title>l1&#45;&gt;l2</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M217.77,-481.66C217.77,-473.09 217.77,-462.48 217.77,-452.93"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="220.22,-453.01 217.77,-446.01 215.32,-453.01 220.22,-453.01"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M288.77,-493.66C288.77,-485.09 288.77,-474.48 288.77,-464.93"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="291.22,-465.01 288.77,-458.01 286.32,-465.01 291.22,-465.01"/>
 </g>
 <!-- g3 -->
-<g id="node9" class="node">
+<g id="node10" class="node">
 <title>g3</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M206.13,-368.57C206.13,-368.57 157.59,-356.41 157.59,-356.41 151.77,-354.95 151.77,-352.03 157.59,-350.57 157.59,-350.57 206.13,-338.41 206.13,-338.41 211.95,-336.95 223.59,-336.95 229.41,-338.41 229.41,-338.41 277.95,-350.57 277.95,-350.57 283.77,-352.03 283.77,-354.95 277.95,-356.41 277.95,-356.41 229.41,-368.57 229.41,-368.57 223.59,-370.03 211.95,-370.03 206.13,-368.57"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-349.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">still has text focus?</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M277.13,-380.57C277.13,-380.57 228.59,-368.41 228.59,-368.41 222.77,-366.95 222.77,-364.03 228.59,-362.57 228.59,-362.57 277.13,-350.41 277.13,-350.41 282.95,-348.95 294.59,-348.95 300.41,-350.41 300.41,-350.41 348.95,-362.57 348.95,-362.57 354.77,-364.03 354.77,-366.95 348.95,-368.41 348.95,-368.41 300.41,-380.57 300.41,-380.57 294.59,-382.03 282.95,-382.03 277.13,-380.57"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-361.04" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">still has text focus?</text>
 </g>
 <!-- l2&#45;&gt;g3 -->
-<g id="edge10" class="edge">
+<g id="edge12" class="edge">
 <title>l2&#45;&gt;g3</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M217.77,-408.66C217.77,-400.09 217.77,-389.48 217.77,-379.93"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="220.22,-380.01 217.77,-373.01 215.32,-380.01 220.22,-380.01"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M288.77,-420.66C288.77,-412.09 288.77,-401.48 288.77,-391.93"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="291.22,-392.01 288.77,-385.01 286.32,-392.01 291.22,-392.01"/>
 </g>
 <!-- l3 -->
-<g id="node10" class="node">
+<g id="node11" class="node">
 <title>l3</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M227.16,-289.74C227.16,-289.74 68.38,-289.74 68.38,-289.74 62.38,-289.74 56.37,-283.74 56.37,-277.74 56.37,-277.74 56.37,-255.66 56.37,-255.66 56.37,-249.66 62.37,-243.66 68.37,-243.66 68.37,-243.66 227.16,-243.66 227.16,-243.66 233.16,-243.66 239.16,-249.66 239.16,-255.66 239.16,-255.66 239.16,-277.74 239.16,-277.74 239.16,-283.74 233.16,-289.74 227.16,-289.74"/>
-<text xml:space="preserve" text-anchor="middle" x="147.77" y="-274.25" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 3 · Focus system</text>
-<text xml:space="preserve" text-anchor="middle" x="147.77" y="-262.25" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">focused element · Tab / Shift+Tab</text>
-<text xml:space="preserve" text-anchor="middle" x="147.77" y="-250.25" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">arrow&#45;key fallback</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M298.16,-301.74C298.16,-301.74 139.38,-301.74 139.38,-301.74 133.38,-301.74 127.37,-295.74 127.37,-289.74 127.37,-289.74 127.37,-267.66 127.37,-267.66 127.37,-261.66 133.38,-255.66 139.38,-255.66 139.38,-255.66 298.16,-255.66 298.16,-255.66 304.16,-255.66 310.16,-261.66 310.16,-267.66 310.16,-267.66 310.16,-289.74 310.16,-289.74 310.16,-295.74 304.16,-301.74 298.16,-301.74"/>
+<text xml:space="preserve" text-anchor="middle" x="218.77" y="-286.25" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 3 · Focus system</text>
+<text xml:space="preserve" text-anchor="middle" x="218.77" y="-274.25" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">focused element · Tab / Shift+Tab</text>
+<text xml:space="preserve" text-anchor="middle" x="218.77" y="-262.25" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">arrow&#45;key fallback</text>
 </g>
 <!-- g3&#45;&gt;l3 -->
-<g id="edge12" class="edge">
+<g id="edge14" class="edge">
 <title>g3&#45;&gt;l3</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M206.21,-338.49C196.8,-327.09 183.21,-310.62 171.5,-296.44"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="173.43,-294.93 167.08,-291.09 169.65,-298.05 173.43,-294.93"/>
-<text xml:space="preserve" text-anchor="middle" x="192.21" y="-308.94" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M277.21,-350.49C267.8,-339.09 254.21,-322.62 242.5,-308.44"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="244.43,-306.93 238.08,-303.09 240.65,-310.05 244.43,-306.93"/>
+<text xml:space="preserve" text-anchor="middle" x="263.21" y="-320.94" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">no</text>
 </g>
 <!-- l35 -->
-<g id="node11" class="node">
+<g id="node12" class="node">
 <title>l35</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M290.04,-206.66C290.04,-206.66 145.5,-206.66 145.5,-206.66 139.5,-206.66 133.5,-200.66 133.5,-194.66 133.5,-194.66 133.5,-168.08 133.5,-168.08 133.5,-162.08 139.5,-156.08 145.5,-156.08 145.5,-156.08 290.04,-156.08 290.04,-156.08 296.04,-156.08 302.04,-162.08 302.04,-168.08 302.04,-168.08 302.04,-194.66 302.04,-194.66 302.04,-200.66 296.04,-206.66 290.04,-206.66"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-191.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 3.5 · Semantic shortcuts</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-179.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Return → default button</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-164.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Escape → cancel button</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M368.16,-218.66C368.16,-218.66 209.38,-218.66 209.38,-218.66 203.38,-218.66 197.38,-212.66 197.38,-206.66 197.38,-206.66 197.38,-168.08 197.38,-168.08 197.38,-162.08 203.38,-156.08 209.38,-156.08 209.38,-156.08 368.16,-156.08 368.16,-156.08 374.16,-156.08 380.16,-162.08 380.16,-168.08 380.16,-168.08 380.16,-206.66 380.16,-206.66 380.16,-212.66 374.16,-218.66 368.16,-218.66"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-203.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 3.5 · Semantic shortcuts</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-191.17" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Return → default button</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-176.92" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Escape → cancel button</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-162.67" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">key&#45;equivalent .keyboardShortcut</text>
 </g>
 <!-- g3&#45;&gt;l35 -->
-<g id="edge11" class="edge">
+<g id="edge13" class="edge">
 <title>g3&#45;&gt;l35</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M228.08,-338.39C236.31,-326.2 247.2,-307.76 251.77,-289.74 256.8,-269.89 256.9,-263.49 251.77,-243.66 249.13,-233.44 244.37,-223.12 239.24,-213.93"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="241.46,-212.86 235.8,-208.07 237.23,-215.34 241.46,-212.86"/>
-<text xml:space="preserve" text-anchor="middle" x="284.08" y="-263.02" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes — skip L3</text>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M299.08,-350.39C307.31,-338.2 318.2,-319.76 322.77,-301.74 327.8,-281.89 327.52,-275.58 322.77,-255.66 320.38,-245.61 316.23,-235.37 311.63,-226"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="313.91,-225.08 308.53,-219.97 309.56,-227.32 313.91,-225.08"/>
+<text xml:space="preserve" text-anchor="middle" x="354.94" y="-275.02" font-family="Helvetica,sans-Serif" font-size="9.00" fill="#555555">yes — skip L3</text>
 </g>
 <!-- l3&#45;&gt;l35 -->
-<g id="edge13" class="edge">
+<g id="edge15" class="edge">
 <title>l3&#45;&gt;l35</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M166.16,-243.81C174.07,-234.39 183.45,-223.22 192.03,-213.01"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="193.74,-214.79 196.36,-207.85 189.99,-211.64 193.74,-214.79"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M235.72,-256.08C242.95,-246.84 251.6,-235.8 259.8,-225.34"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="261.6,-227.02 263.98,-220 257.74,-224 261.6,-227.02"/>
 </g>
 <!-- l4 -->
-<g id="node12" class="node">
+<g id="node13" class="node">
 <title>l4</title>
-<path fill="#1f9b76" stroke="black" stroke-width="0" d="M312.91,-119.08C312.91,-119.08 122.63,-119.08 122.63,-119.08 116.62,-119.08 110.62,-113.08 110.62,-107.08 110.62,-107.08 110.62,-85 110.62,-85 110.62,-79 116.62,-73 122.62,-73 122.62,-73 312.91,-73 312.91,-73 318.91,-73 324.91,-79 324.91,-85 324.91,-85 324.91,-107.08 324.91,-107.08 324.91,-113.08 318.91,-119.08 312.91,-119.08"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-103.59" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 4 · Default bindings</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-91.59" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">quit (always) · theme · appearance</text>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-79.59" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">chrome gated while a modal grabs input</text>
+<path fill="#1f9b76" stroke="black" stroke-width="0" d="M383.91,-119.08C383.91,-119.08 193.62,-119.08 193.62,-119.08 187.62,-119.08 181.62,-113.08 181.62,-107.08 181.62,-107.08 181.62,-85 181.62,-85 181.62,-79 187.62,-73 193.62,-73 193.62,-73 383.91,-73 383.91,-73 389.91,-73 395.91,-79 395.91,-85 395.91,-85 395.91,-107.08 395.91,-107.08 395.91,-113.08 389.91,-119.08 383.91,-119.08"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-103.59" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Layer 4 · Default bindings</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-91.59" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">quit (always) · theme · appearance</text>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-79.59" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">chrome gated while a modal grabs input</text>
 </g>
 <!-- l35&#45;&gt;l4 -->
-<g id="edge14" class="edge">
+<g id="edge16" class="edge">
 <title>l35&#45;&gt;l4</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M217.77,-156.27C217.77,-147.31 217.77,-137.02 217.77,-127.56"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="220.22,-127.63 217.77,-120.63 215.32,-127.63 220.22,-127.63"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M288.77,-156.13C288.77,-147.02 288.77,-137.01 288.77,-127.86"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="291.22,-127.88 288.77,-120.88 286.32,-127.88 291.22,-127.88"/>
 </g>
 <!-- drop -->
-<g id="node13" class="node">
+<g id="node14" class="node">
 <title>drop</title>
-<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M273.54,-36C273.54,-36 162,-36 162,-36 156,-36 150,-30 150,-24 150,-24 150,-12 150,-12 150,-6 156,0 162,0 162,0 273.54,0 273.54,0 279.54,0 285.54,-6 285.54,-12 285.54,-12 285.54,-24 285.54,-24 285.54,-30 279.54,-36 273.54,-36"/>
-<text xml:space="preserve" text-anchor="middle" x="217.77" y="-14.68" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Unmatched → dropped</text>
+<path fill="#9c3d3d" stroke="black" stroke-width="0" d="M344.54,-36C344.54,-36 233,-36 233,-36 227,-36 221,-30 221,-24 221,-24 221,-12 221,-12 221,-6 227,0 233,0 233,0 344.54,0 344.54,0 350.54,0 356.54,-6 356.54,-12 356.54,-12 356.54,-24 356.54,-24 356.54,-30 350.54,-36 344.54,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="288.77" y="-14.68" font-family="Helvetica,sans-Serif" font-size="11.00" fill="white">Unmatched → dropped</text>
 </g>
 <!-- l4&#45;&gt;drop -->
-<g id="edge15" class="edge">
+<g id="edge17" class="edge">
 <title>l4&#45;&gt;drop</title>
-<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M217.77,-73.05C217.77,-64.1 217.77,-53.7 217.77,-44.43"/>
-<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="220.22,-44.44 217.77,-37.44 215.32,-44.44 220.22,-44.44"/>
+<path vector-effect="non-scaling-stroke" fill="none" stroke="#8a8a8a" stroke-width="1.2" d="M288.77,-73.05C288.77,-64.1 288.77,-53.7 288.77,-44.43"/>
+<polygon fill="#8a8a8a" stroke="#8a8a8a" stroke-width="1.2" points="291.22,-44.44 288.77,-37.44 286.32,-44.44 291.22,-44.44"/>
 </g>
 </g>
 </svg>

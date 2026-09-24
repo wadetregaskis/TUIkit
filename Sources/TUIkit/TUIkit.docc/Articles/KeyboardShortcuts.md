@@ -4,11 +4,11 @@ How keyboard input flows through TUIkit: from raw terminal bytes to your view ha
 
 ## Overview
 
-TUIkit uses a layered event dispatch system. When a key is pressed, it passes through up to five layers. The first layer that consumes the event wins: remaining layers are skipped. Layer 0 (text input) and Layer 3 (focus system) are mutually exclusive: when a text input element is focused, Layer 0 runs and Layer 3 is skipped.
+TUIkit uses a layered event dispatch system. When a key is pressed, it passes through up to five layers. The first layer that consumes the event wins: remaining layers are skipped. Layer 0 (text input) and Layer 3 (focus system) are mutually exclusive: when a text input element is focused, Layer 0 runs and Layer 3 is skipped. The one key Layer 0 does not offer the focused text control is an Emacs editing chord your own `.keyboardShortcut` is on; see <doc:KeyboardShortcuts#Your-Shortcuts-and-the-Editing-Chords>.
 
 Three additional stages refine the layer sequence. When an open drop-down (e.g. a ``Picker`` menu) has claimed Escape for the frame, ESC is pre-routed through the focus system *before* Layer 1, so the surface closes instead of a page-level handler firing. Layer 0.5 then offers the key to a drag in flight, which is how you scroll to an off-screen destination without letting go — it has to beat every layer below, all of which would otherwise spend the key on the focused control. And between Layer 3 and Layer 4, a semantic-shortcut stage (Layer 3.5) fires the default button on Return and the cancel button on Escape — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)` — when the focused control let the key fall through.
 
-@Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the keyboard dispatch: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField/TextEditor). Without text focus, an ESC-claimed-by-an-open-surface check pre-routes Escape through the focus system so an open drop-down closes before any page-level handler. Layer 0.5 Drag Navigators (while a drag is in flight, arrows and paging scroll whatever the pointer is over). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 3.5 Semantic Shortcuts (Return fires the default button, Escape the cancel button). Layer 4 Default Bindings (q quit and ? help always; t theme and a appearance gated while a modal grabs input). Unmatched events are dropped.")
+@Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the keyboard dispatch: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField/TextEditor), except that an editing chord the focused control gives up to an app shortcut registered on it skips Layer 0 and continues down the chain. Without text focus, an ESC-claimed-by-an-open-surface check pre-routes Escape through the focus system so an open drop-down closes before any page-level handler. Layer 0.5 Drag Navigators (while a drag is in flight, arrows and paging scroll whatever the pointer is over). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 3.5 Semantic Shortcuts (Return fires the default button, Escape the cancel button, and a key-equivalent .keyboardShortcut fires on its key). Layer 4 Default Bindings (q quit and ? help always; t theme and a appearance gated while a modal grabs input). Unmatched events are dropped.")
 
 `Ctrl+C` is an ordinary key here. A terminal normally turns it into SIGINT, but TUIkit's raw mode switches that off, so it reaches these layers as `c` held with Control like any other chord, and nothing binds it unless you do: a ⌘C shortcut under the default ``EnvironmentValues/commandKey``, or ``QuitShortcut/ctrlC``. `Ctrl+Z` arrives the same way, and Layer 4 suspends the app on it only when nothing earlier claimed it (see Default Bindings).
 
@@ -186,9 +186,69 @@ everything of yours on the same keys comes first:
 - An `onKeyPress` handler that consumes the key wins.
 - A focused control that uses the key wins: a sortable ``Table`` sorts on
   Ctrl-S. A `TextField`, a `TextEditor` and a `List` do not use it, so the chord
-  works while typing.
+  works while typing. That holds for every framework shortcut, including the
+  text controls' own editing chords against a framework default. Only your
+  own shortcuts can take one of those, as the next section describes.
 
 A `.disabled()` split view ignores them.
+
+## Your Shortcuts and the Editing Chords
+
+A focused control is offered a key before your shortcuts are (Layer 0 and
+Layer 3 come before Layer 3.5), so as a rule a focused control that uses a key
+keeps it. The text controls are the exception, for one family of keys.
+
+Under the default ``EnvironmentValues/commandKey`` of `.control`, a SwiftUI ⌘
+shortcut arrives as a Control chord: `.keyboardShortcut("f")`, Find, is Ctrl-F.
+Ctrl-F is also an Emacs editing chord in ``TextEditor``, where it moves the
+caret forward a character. Under `.option`, ⌘B and ⌘F arrive as Option-B and
+Option-F, readline's word motions, which every text control answers. The text
+controls read those chords the way the macOS text system and readline do, and
+they are a bonus: whatever one does can be done some other way, with another
+key or by selecting and typing. So **your shortcut wins them**. Layer 0 does
+not offer the chord to the focused text control when a `.keyboardShortcut` is
+registered on it. The chord goes on down the chain as a chord the control does
+not bind would, and Layer 3.5 fires your button.
+
+| Chord | What the text control does with it | With your shortcut on it |
+|-------|------------------------------------|--------------------------|
+| Ctrl-A, Ctrl-E | A field: start, end of the line, as Home and End do | Yours |
+| Ctrl-A, Ctrl-E | `TextEditor`: start, end of the line; its Home and End go to the ends of the document | The editor's |
+| Option-B, Option-F | Back, forward a word, as Option-Left and Option-Right do; with Shift, a field extends its selection | Yours |
+| Option-Ctrl-B, Option-Ctrl-F | A field: back, forward a word. `TextEditor`: back, forward a character | Yours |
+| Ctrl-B, Ctrl-F | `TextEditor`: back, forward a character | Yours |
+| Ctrl-D | `TextEditor`: delete forward | Yours |
+| Ctrl-K, Ctrl-Y | `TextEditor`: kill to the end of the line, yank it back | Yours |
+| Ctrl-T | `TextEditor`: transpose the characters around the caret | Yours |
+| Ctrl-P, Ctrl-N | `TextEditor`: previous, next line | Yours |
+| Ctrl-O | `TextEditor`: open a line after the caret | Yours |
+| Ctrl-V | `TextEditor`: page down | Yours |
+| Option-Ctrl-A | Select all | The control's |
+| Ctrl-C, Ctrl-X, Ctrl-V, Ctrl-Z, Ctrl-U | A field's copy, cut, paste, undo and erase | The field's |
+
+A chord gives way when what it does can be done some other way in that
+control, and keeps the key when it is the only way. Select-all has no other key
+at all, since ⌘A cannot reach a terminal app. A field's Home and End go to the
+ends of its line, so its Ctrl-A and Ctrl-E give way. The editor's Home and End
+go to the ends of the whole document, which leaves Ctrl-A and Ctrl-E its only
+keys for the ends of a line, so there they stay. A field's clipboard and undo
+chords stand in for ⌘C, ⌘X, ⌘V and ⌘Z and do what those would, and its Ctrl-U
+erases it; those stay too.
+
+Only your shortcuts take a chord this way, and only one that is registered: an
+enabled button on screen, not on a page behind a modal. A framework default,
+such as the split view's sidebar chord above, never takes a key from the
+focused control.
+
+Nor does an `onKeyPress` handler. Layer 0 comes before Layer 2, so a focused
+text control keeps its editing chords, and every key it types, from your key
+handlers. SwiftUI orders these the other way round: on macOS 15, an
+`onKeyPress` on a view that contains the focused `TextField` sees even a plain
+letter before the field does, and returning `.handled` takes it from the field.
+But a SwiftUI handler only sees keys while the focus is inside its view, and a
+TUIkit one sees them wherever the focus is, so the same order here would let
+any handler on the page take typing away from a field. To take a chord from a
+focused text control, give it a `.keyboardShortcut`.
 
 ## Default Bindings
 

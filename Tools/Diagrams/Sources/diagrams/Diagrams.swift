@@ -140,13 +140,16 @@ let lifecycleRunCreates = Diagram(
 /// pre-route (before Layer 1), the mid-drag Layer 0.5 and the
 /// semantic-shortcut Layer 3.5 (default / cancel action, between Layers 3 and
 /// 4) — plus the two `hasTextInputFocus` gates that switch Layer 0 on and Layer
-/// 3 off. Mirrors `InputHandler.handle(_:)`.
+/// 3 off, and the one key Layer 0 is not offered: an editing chord the focused
+/// text control gives up to an app shortcut (`textInputGivesWay(_:)`).
+/// Mirrors `InputHandler.handle(_:)`.
 let keyboardEventDispatch = Diagram(
     name: "keyboard-event-dispatch",
     title: "Keyboard event dispatch — five layers + three refinement stages",
     nodes: [
         Node(id: "ev", title: "KeyEvent", kind: .terminal),
         Node(id: "g0", title: "text input focused?", kind: .decision),
+        Node(id: "gw", title: "editing chord an app shortcut takes?", kind: .decision),
         Node(id: "l0", title: "Layer 0 · Text input",
              detail: ["focusManager.dispatchKeyEvent", "TextField / SecureField / TextEditor"]),
         Node(id: "gesc", title: "ESC claimed by an open surface?", kind: .decision),
@@ -160,14 +163,18 @@ let keyboardEventDispatch = Diagram(
         Node(id: "l3", title: "Layer 3 · Focus system",
              detail: ["focused element · Tab / Shift+Tab", "arrow-key fallback"]),
         Node(id: "l35", title: "Layer 3.5 · Semantic shortcuts",
-             detail: ["Return → default button", "Escape → cancel button"]),
+             detail: ["Return → default button", "Escape → cancel button", "key-equivalent .keyboardShortcut"]),
         Node(id: "l4", title: "Layer 4 · Default bindings",
              detail: ["quit (always) · theme · appearance", "chrome gated while a modal grabs input"]),
         Node(id: "drop", title: "Unmatched → dropped", kind: .terminal),
     ],
     edges: [
         Edge("ev", "g0"),
-        Edge("g0", "l0", label: "yes"),
+        Edge("g0", "gw", label: "yes"),
+        Edge("gw", "l0", label: "no"),
+        // A chord the text input gives way on skips it; Layer 3.5 fires the
+        // app's shortcut.
+        Edge("gw", "l05", label: "yes — skip L0"),
         Edge("g0", "gesc", label: "no"),
         // With text focus, the ESC pre-route is skipped (Layer 0 already
         // routed through the focus system).

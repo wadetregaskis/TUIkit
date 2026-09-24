@@ -11,8 +11,10 @@
 /// layer 3.5, described after the list.
 ///
 /// The dispatch order is:
-/// 0. **Text input** (conditional) — a focused `TextField`/`SecureField`
-///    consumes the event first
+/// 0. **Text input** (conditional) — a focused `TextField`/`SecureField`/
+///    `TextEditor` consumes the event first, except an Emacs editing chord
+///    that an app's keyboard shortcut is registered on (see
+///    `textInputGivesWay(_:)`)
 /// 1. **Status bar** — items with actions
 /// 2. **View handlers** — registered via `onKeyPress` modifiers
 /// 3. **Focus system** (conditional) — Tab/Shift+Tab navigation, Enter/Space
@@ -107,7 +109,11 @@ extension InputHandler {
         // (Escape, Tab, unhandled Ctrl+shortcuts) fall through to other layers.
         // Mutually exclusive with Layer 3 (focus system), which is skipped
         // below when text input has focus.
-        if focusManager.hasTextInputFocus {
+        //
+        // The one key the text input is not offered: an editing chord it
+        // gives up to an app shortcut. It goes on down the chain as a chord
+        // the input does not bind would, and Layer 3.5 fires the shortcut.
+        if focusManager.hasTextInputFocus, !textInputGivesWay(event) {
             if focusManager.dispatchKeyEvent(event) {
                 return true
             }
@@ -217,6 +223,26 @@ extension InputHandler {
             statusBar.escapeLabelOverride != nil && statusBar.escapeClaimGrabsInput
         let inputGrabbed = focusManager.activeSectionIsModal || escapeClaimGrabs
         return handleGlobalShortcut(event, inputGrabbed: inputGrabbed)
+    }
+
+    /// Whether the focused text input gives `event` up to an app's keyboard
+    /// shortcut: the event is one of the input's Emacs editing chords, of the
+    /// kind that gives way there
+    /// (``TextInputFocusHandler/givesWayToKeyboardShortcut(_:)``), and an app
+    /// shortcut is registered on it.
+    ///
+    /// Asked before the input is offered the key, not after it declines,
+    /// because the input would not decline: Ctrl-F moves its caret. Under the
+    /// default `.commandKey(.control)` that same Ctrl-F is SwiftUI's ⌘F, and
+    /// an app's Find must not lose it to a caret motion the arrow keys also
+    /// make. The registry answers from the same table
+    /// ``KeyboardShortcutRegistry/trigger(for:)`` fires from, so the key it
+    /// says is claimed is the key Layer 3.5 fires.
+    private func textInputGivesWay(_ event: KeyEvent) -> Bool {
+        guard let input = focusManager.currentFocused as? any TextInputFocusHandler,
+            input.givesWayToKeyboardShortcut(event)
+        else { return false }
+        return keyboardShortcuts.hasAppShortcut(for: event)
     }
 
     /// The tail of layer 4: the global appearance/theme cycling shortcuts.

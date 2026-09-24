@@ -137,6 +137,8 @@ When the terminal delivers a key event, the `InputHandler` dispatches it through
 
 When a text input element (TextField/SecureField) is focused, `focusManager.dispatchKeyEvent()` runs first. This ensures printable characters, backspace, delete, arrows, home, end, and enter reach the text field before any other layer. Only keys the text field does not consume (Escape, Tab, unhandled Ctrl+shortcuts) fall through.
 
+One key is not offered to the text input at all: an Emacs editing chord that an app's `.keyboardShortcut` is registered on, such as Ctrl-F under an app's ⌘F. It goes on down the chain as a chord the text input does not bind would, and Layer 3.5 fires the shortcut. See <doc:KeyboardShortcuts> for which chords give way.
+
 ### Layer 0.5: Drag Navigators
 
 While something is in hand, the arrow and paging keys scroll whatever the pointer is over — how you reach a drop destination that is off screen without letting go. This has to beat every layer below it, all of which would otherwise spend the key on the focused control: a page-level `onKeyPress` returning to the menu, or the source list moving its own selection. It declines unless a drag is actually in flight *and* the pointer is over something that drag could land in.

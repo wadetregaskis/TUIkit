@@ -44,6 +44,13 @@
 /// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
 ///
+/// An app's own keyboard shortcut on Ctrl+A, Ctrl+E, Option+B or Option+F wins
+/// the chord: under the default ``EnvironmentValues/commandKey``,
+/// `.keyboardShortcut("e")` is Ctrl+E, and pressing it in a focused field runs
+/// the shortcut and leaves the field alone. Home, End and Option+Left / Right
+/// do what those chords do. The field keeps Option+Ctrl+A, which has no other
+/// key, and its clipboard, undo and erase chords. See <doc:KeyboardShortcuts>.
+///
 /// ## The selection and the caret where the terminal decides the colours
 ///
 /// A selection is a tint of the palette's accent over the field, and a block

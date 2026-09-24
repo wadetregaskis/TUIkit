@@ -37,6 +37,16 @@
 /// | Option-Backspace / Delete | Delete the word before / after the cursor |
 /// | Option-Tab | Insert a literal tab (plain Tab moves focus) |
 ///
+/// An app's own keyboard shortcut beats most of the Emacs chords. Under the
+/// default ``EnvironmentValues/commandKey`` a SwiftUI ⌘ shortcut arrives as a
+/// Control chord, so `.keyboardShortcut("f")` (Find) is Ctrl-F, and the editor
+/// gives the chord up: the shortcut fires and the editor does nothing. The same
+/// goes for Option-B and Option-F, where ⌘B and ⌘F arrive under
+/// `.commandKey(.option)`. Ctrl-A and Ctrl-E keep the key, because Home and End
+/// go to the ends of the document here and leave them the only keys for the
+/// ends of a line, and so does Option-Ctrl-A, the only way to select
+/// everything. See <doc:KeyboardShortcuts>.
+///
 /// Literal tabs are laid out against tab *stops* — by default every 4 columns
 /// (a tab advances to the next multiple of 4, so its visual width varies),
 /// matching how the macOS text system, terminals and code editors treat tabs.

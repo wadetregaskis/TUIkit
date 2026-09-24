@@ -3824,6 +3824,53 @@ shortcut on ⌃Z (an app's ⌘Z under `.control`) takes the suspend key for as l
 as it is on screen. SIGINT itself still shuts the app down; it comes from
 `kill -INT`, not from the keyboard.
 
+#### ⌘ shortcuts meet the text controls' Emacs chords (recorded 2026-09-24)
+
+A framework rule rather than a terminal measurement, recorded here because it
+is the other half of the collision above. The letters the C0 range leaves
+deliverable are not all free either: the macOS text system (Cocoa's
+`StandardKeyBinding.dict`) gives a Control letter an Emacs editing command,
+readline gives Option-B and Option-F the word motions, and TUIkit's text
+controls read them the same way, from one table (`TextEditingCommand`). The ⌘
+shortcuts an app is most likely to carry land on them:
+
+| ⌘ shortcut | Arrives as | Byte | The editing chord there | Who gets the key |
+|---|---|---|---|---|
+| ⌘F Find | ⌃F | `0x06` | `TextEditor`: forward a character | the app's shortcut |
+| ⌘D Duplicate | ⌃D | `0x04` | `TextEditor`: delete forward | the app's shortcut |
+| ⌘B Bold | ⌃B | `0x02` | `TextEditor`: back a character | the app's shortcut |
+| ⌘K | ⌃K | `0x0B` | `TextEditor`: kill to the end of the line | the app's shortcut |
+| ⌘T | ⌃T | `0x14` | `TextEditor`: transpose | the app's shortcut |
+| ⌘Y | ⌃Y | `0x19` | `TextEditor`: yank | the app's shortcut |
+| ⌘N New, ⌘O Open, ⌘P Print | ⌃N, ⌃O, ⌃P | `0x0E`, `0x0F`, `0x10` | `TextEditor`: next line, open a line, previous line | the app's shortcut |
+| ⌘V Paste | ⌃V | `0x16` | `TextEditor`: page down | the app's shortcut |
+| ⌘A Select All, ⌘E | ⌃A, ⌃E | `0x01`, `0x05` | a field: start, end of the line | the app's shortcut |
+| ⌘B, ⌘F under `.option` | ⌥B, ⌥F | `ESC b`, `ESC f` | back, forward a word | the app's shortcut |
+| ⌥⌘B, ⌥⌘F | ⌥⌃B, ⌥⌃F | `ESC 0x02`, `ESC 0x06` | a field: back, forward a word; `TextEditor`: a character | the app's shortcut |
+| ⌘A Select All, ⌘E | ⌃A, ⌃E | `0x01`, `0x05` | `TextEditor`: start, end of the line | the editor |
+| ⌥⌘A | ⌥⌃A | `ESC 0x01` | select all | the text control |
+| ⌘V Paste | ⌃V | `0x16` | a field: paste | the field |
+| ⌘C, ⌘X, ⌘Z | ⌃C, ⌃X, ⌃Z | `0x03`, `0x18`, `0x1A` | a field: copy, cut, undo | the field |
+
+A focused text control is offered a key before the app's shortcuts (layer 0
+before layer 3.5), so a focused editor used to swallow the app's Find and move
+its caret instead. The owner's decision (2026-09-23): the app's shortcut wins,
+because the Emacs chords are a bonus, and whatever one does can be done some
+other way. `InputHandler` does not offer the focused text control a chord it
+gives way on (`TextInputFocusHandler.givesWayToKeyboardShortcut(_:)`, answered
+from the control's own reading of the chord) when an app shortcut is
+registered on it (`KeyboardShortcutRegistry.hasAppShortcut(for:)`, the same
+match `trigger(for:)` fires by). The last four rows keep the key, because
+each is the only way to do what it does or stands in for the ⌘ chord itself:
+select-all has no other route at all (see the ⌥⌃A section above); the
+editor's Home and End go to the ends of the document, so Ctrl-A and Ctrl-E
+are its only keys for the ends of a line (a field's Home and End go to the
+ends of its line, so there the pair gives way); and a field's clipboard and
+undo chords are what ⌘C, ⌘X, ⌘V and ⌘Z would do anyway. A framework default,
+such as the split view's ⌃S below, never takes a key from the focused
+control. `TextInputShortcutPrecedenceTests` pins every row through
+the input chain.
+
 #### ⌃S and ⌥⌃S: the split view's sidebar chords (recorded 2026-09-13)
 
 `NavigationSplitView` registers SwiftUI's sidebar chords, ⌃⌘S (View ▸ Show

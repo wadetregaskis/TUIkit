@@ -141,7 +141,9 @@ public struct EventModifiers: OptionSet, Hashable, Sendable {
 /// > Note: A terminal never reports the Command key, so SwiftUI's default
 /// > `modifiers: .command` is remapped at registration to whatever
 /// > ``EnvironmentValues/commandKey`` says stands in for it here — see
-/// > ``CommandKeyBinding``.
+/// > ``CommandKeyBinding``. Under the default, Control, ⌘F is Ctrl-F, which is
+/// > also a text control's Emacs chord for forward a character. The shortcut
+/// > wins such a chord from a focused text control; see <doc:KeyboardShortcuts>.
 public struct KeyboardShortcut: Hashable, Sendable {
     /// What activates this shortcut.
     enum Trigger: Hashable, Sendable {
@@ -443,6 +445,21 @@ final class KeyboardShortcutRegistry: @unchecked Sendable {
     func trigger(for event: KeyEvent) -> Bool {
         guard let trigger = KeyboardShortcut.trigger(for: event) else { return false }
         return run(trigger)
+    }
+
+    /// Whether an app shortcut is registered for `event`: what ``trigger(for:)``
+    /// would match, without running anything.
+    ///
+    /// App shortcuts only. A framework default never takes a key from the
+    /// control holding the focus, so it has no say here.
+    ///
+    /// For `InputHandler`, which asks it before offering a focused text control
+    /// one of its editing chords. An app shortcut on the chord takes the key
+    /// instead; see
+    /// ``TextEditingCommand/givesWayToKeyboardShortcuts(homeAndEndReachLineEnds:)``.
+    func hasAppShortcut(for event: KeyEvent) -> Bool {
+        guard let trigger = KeyboardShortcut.trigger(for: event) else { return false }
+        return actions[trigger] != nil
     }
 
     /// Runs the registered action for `trigger`, reporting whether there was one:

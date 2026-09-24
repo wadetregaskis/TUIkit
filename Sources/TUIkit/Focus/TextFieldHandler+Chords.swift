@@ -50,6 +50,16 @@ enum TextFieldChord: Equatable {
 // MARK: - Carrying Chords Out
 
 extension TextFieldHandler {
+    /// The ``TextEditingCommand`` `event` reaches in this field, read by
+    /// ``TextFieldChord`` as the field's key handling reads it, whether or not
+    /// the field carries it out. So Ctrl-V is not the editor's page down here,
+    /// because paste takes it first, and Option-Ctrl-B is the word motion,
+    /// because Option is read first. `nil` for any other key.
+    func editingCommand(for event: KeyEvent) -> TextEditingCommand? {
+        guard case .shared(let command) = TextFieldChord(event) else { return nil }
+        return command
+    }
+
     /// Carries out `chord`, and returns whether the field took the key.
     ///
     /// Every stand-in is taken, whether or not it had anything to act on:
