@@ -140,6 +140,18 @@ extension FrameBuffer {
     /// payload into whatever covers it, so the wash's field would be faded twice on
     /// every frame the payload spoke for.
     ///
+    /// A kept run's ground (`AnimatedCellRun.ground`) is washed with its frames,
+    /// by the same rule: every cell of it repainted in the wash, a ground no
+    /// painter had reached yet included. The replay draws a frame over the ground
+    /// wherever the frame names no field of its own, and a frame stating the
+    /// terminal's own field — which is how every frame comes out when the wash is
+    /// `Color.default` — names none. Left as it was, the ground still held what
+    /// was painted beneath the dim: a `Spinner().padding(1).background(.blue)`
+    /// behind a sheet, on a palette whose page is the terminal's own, rendered on
+    /// the terminal's field and replayed every tick on blue. And a fill painted
+    /// OUTSIDE the dim would have painted a ground the flatten never reached, as
+    /// if the cell were bare, where the row shows the wash in front of it.
+    ///
     /// A run whose frames all flatten to the SAME picture is dropped instead:
     /// the block glyphs an indeterminate bar animates in are ornaments, so a
     /// `.pulse` bar has nothing left to show once they are spaces, and keeping
@@ -158,9 +170,11 @@ extension FrameBuffer {
         // and anything still waiting to be drawn above it must not vanish.
         result.overlays = overlays
         result.animatedCells = animatedCells.compactMap { run in
-            // The payload is consumed, not lost — see the note above.
+            // The payload is consumed, not lost — see the note above. The ground is
+            // washed with the frames — see the note above on the ground.
             let dimmed = run.replacingFrames(
-                run.frames.map { wrap($0, toWidth: run.width) }, alpha: nil)
+                run.frames.map { wrap($0, toWidth: run.width) }, alpha: nil
+            ).paintingGround { wrap($0, toWidth: run.width) }
             return dimmed.isAnimating ? dimmed : nil
         }
         // One rectangle, over everything the wash covers — the runs included, whose

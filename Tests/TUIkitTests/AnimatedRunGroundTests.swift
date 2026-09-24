@@ -184,6 +184,67 @@ struct AnimatedRunGroundTests {
         #expect(run.groundFields(onPage: Self.page).map(spelled) == ["\u{1B}[48;2;200;40;40m"])
     }
 
+    // MARK: - A pass that repaints every field
+
+    /// Where the fill sits relative to the dim.
+    enum Placement: String, CaseIterable, Sendable {
+        /// `.background(…).dimmed()`: the flatten washes out a ground a fill
+        /// already painted.
+        case fillInside
+        /// `.dimmed().background(…)`: the fill paints a ground the flatten left.
+        case fillOutside
+    }
+
+    /// The wash the flatten repaints every cell in.
+    enum Wash: String, CaseIterable, Sendable {
+        /// A palette whose backdrop is a colour: every frame names it.
+        case colour
+        /// `Color.default`: every frame states `ESC[49m`, which names no field
+        /// of its own to the splice, so every cell of every frame is drawn over
+        /// the ground.
+        case terminalsOwn
+    }
+
+    /// `.dimmed()` — and a modal's backdrop, which is the same flatten — rewrites
+    /// the field of every cell of every line and of every frame of every run it
+    /// keeps. The ground has to be rewritten with them: the replay draws a frame's
+    /// `ESC[49m` over the ground, and a ground the wash never reached still holds
+    /// the fill beneath the dim, so a spinner behind a sheet ticked on the fill it
+    /// had before the sheet opened.
+    @Test("A flatten washes the grounds of the runs it keeps", arguments: Placement.allCases, Wash.allCases)
+    func aFlattenWashesTheGround(placement: Placement, wash: Wash) throws {
+        let blue = Color.rgb(40, 40, 200)
+        let palette: any Palette =
+            switch wash {
+            case .colour: SystemPalette(.green)
+            case .terminalsOwn: ThemeProbePalette(background: .default, overlayBackground: .default)
+            }
+        let probe = GroundProbe(drawn: 1).padding(1)
+        let context = makeRenderContext(width: Self.width, height: 6)
+        let buffer = ColorDepth.withCurrent(.truecolor) {
+            switch placement {
+            case .fillInside: renderToScreen(probe.background(blue).dimmed().palette(palette), context: context)
+            case .fillOutside: renderToScreen(probe.dimmed().background(blue).palette(palette), context: context)
+            }
+        }
+        try #require(!buffer.animatedCells.isEmpty, "the dim dropped the probe's run")
+        let writer = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
+        let rows = writer.buildOutputLines(
+            buffer: buffer, terminalWidth: Self.width, terminalHeight: buffer.lines.count,
+            bgCode: Self.page, reset: ANSIRenderer.reset)
+        for run in buffer.animatedCells {
+            let cells = paintedCells(rows[run.offsetY])
+            let shown = (run.offsetX..<(run.offsetX + run.width)).map { cells[$0].background }
+            #expect(
+                run.groundFields(onPage: Self.page).map(spelled) == shown,
+                "\(placement), \(wash): the ground is not what the dimmed row shows")
+        }
+        // And the splice itself, which is what a tick does: the drawn frame over
+        // its ground is the row as the flatten drew it.
+        expectReplayIsIdentity(buffer, at: 1, "\(placement), \(wash)")
+    }
+
     // MARK: - The ground itself
 
     @Test("A run nothing painted under has no ground, and sits on the page")

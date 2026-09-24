@@ -4213,7 +4213,10 @@ Both are replaced by one record. A run now carries its GROUND
 (`AnimatedCellRun.ground`): what the containers around it painted beneath its
 cells, recorded by each painter as it paints — a `.background` (flat or ramp),
 compositing and a floating layer made opaque, a `List` row's fill, a menu row's
-bar — with the very function it paints the lines with. The replay reads it on
+bar — with the very function it paints the lines with; and rewritten by every
+pass that rewrites the fields of lines already painted, with the function it
+rewrites them with — the flatten `.dimmed()` and a modal's backdrop go through
+(see the later note below). The replay reads it on
 the row's page, exactly as `buildLine` reads a row (the page in front, restated
 after every reset: `AnimatedCellRun.groundFields(onPage:)`), so a cell no painter
 reached sits on the page and every other cell on its innermost painter's field.
@@ -4241,9 +4244,25 @@ top-level, nested in a bordered tab and in a compact one),
 `ReplayedCaretBlinkTests` (the caret on the page, on a colour and under a fade),
 `ReplayedWholeRowFadeTests` (a whole-row fade, on a painted page and on
 `Color.default`) and `ReplayedRunFieldTests` (every run of a catalogue of
-controls on three grounds, each replayed tick against a render at the same
-instant); per host by `ReplayedEraseFieldTests`; the record by
+controls on every ground listed there, each replayed tick against a render at
+the same instant); per host by `ReplayedEraseFieldTests`; the record by
 `AnimatedRunGroundTests`.
+
+**2026-09-24, later: a pass that rewrites the fields rewrites the grounds.** The
+painter list above first named only the painters that put a field under content.
+The passes that REWRITE the fields of lines already painted were left out, and
+each left every run's ground as it was while the lines moved on. The flatten
+behind a modal and under `.dimmed()` repaints every line and every frame of every
+run it keeps in its wash. When the wash is `Color.default` every frame states
+`ESC[49m`, which names no field of its own to the splice, so every cell was drawn
+over a ground that still held what was painted beneath the dim. Measured through
+the run loop (`ReplayedRunFieldTests`: a catalogue of controls on a colour, on a
+`Color.default` palette, dimmed and behind a sheet), three rows per ground:
+`replayed '⠦' … on "…48;2;90;20;120m", rendered '⠦' … on ""`. The flatten now
+washes each kept run's ground with its frames. A ground no painter had reached is
+washed too, so a fill painted OUTSIDE the dim finds the wash in front of it, as the
+row does. Pinned per placement and wash by `AnimatedRunGroundTests`. Washing only
+a ground that already existed fails a fill outside the dim on both washes.
 
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the

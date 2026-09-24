@@ -25,6 +25,12 @@
 //  cells — the innermost painter's field winning, as it wins in the lines, where
 //  its escapes are the later statement.
 //
+//  A pass that REWRITES the fields of lines already painted owes the ground the
+//  same rewrite, for the same reason: the flatten behind a modal and under
+//  `.dimmed()` washes every line, every frame and every ground. A pass that
+//  rewrote the lines and the frames and not the ground left the replay drawing
+//  a frame's bare cells on a field the row no longer has.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 

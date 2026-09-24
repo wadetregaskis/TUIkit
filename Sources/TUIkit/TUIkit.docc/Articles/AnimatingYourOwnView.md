@@ -175,11 +175,14 @@ borders and stacks shift the runs along with the cells they describe.
 
 Declare a run *inside* anything that paints under its cells. A frame that
 leaves a cell without a background of its own is drawn over what the views
-around it painted there, and each of those records it on the run as it paints
-— so `.animatedCells(_:)` belongs inside `.background(_:)`, not outside it: a
-fill painted before the run exists has no run to record itself on. For the same
-reason, a field your own ``Renderable`` draws beneath its own run belongs in the
-run's frames.
+around it painted there. The framework's painters record that on the run as
+they paint: `.background(_:)`, a `ZStack` or an `.overlay`, a `List` row, a menu
+row's bar. So do the passes that repaint what was already drawn, such as the dim
+behind a modal and `.dimmed()`. So `.animatedCells(_:)` belongs inside
+`.background(_:)`, not outside it: a fill painted before the run exists has no
+run to record itself on. Your own ``Renderable`` records nothing, so a field it
+draws beneath its own run belongs in the run's frames. Otherwise every replayed
+tick draws those cells on whatever is around your view.
 
 ## Getting it wrong looks like a win
 

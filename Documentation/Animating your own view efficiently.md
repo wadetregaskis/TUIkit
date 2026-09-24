@@ -460,7 +460,9 @@ the one worth remembering:
   resets before an overlay, so a foreground-only frame lands on the terminal's
   default background, while the tick paints each bare cell of the frame over the
   field recorded beneath it — the run's ground, which `BackgroundModifier` and
-  every other container that paints under a run records on it as it paints.
+  every other container that paints under a run records on it as it paints,
+  and which every pass that repaints fields already drawn (the flatten behind a
+  modal and under `.dimmed()`) repaints with the lines.
   Replaying the wrong one accuses every focus cap inside a `.background()` of
   dropping its surface — which reads exactly like a real bug, right down to a
   plausible mechanism, and is not one. `patchingAnimatedCells` exists precisely

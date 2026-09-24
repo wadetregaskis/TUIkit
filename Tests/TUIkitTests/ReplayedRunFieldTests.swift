@@ -3,12 +3,13 @@
 //
 //  Every run a catalogue of controls leaves behind, replayed through the run
 //  loop on several grounds — the page, a tab's surface, a colour of the app's
-//  own, a ramp — and every replayed tick compared with a render at the same
-//  instant (`ReplayOracle`): each cell's glyph and field, and the ink a glyph is
-//  drawn in. The class `ReplayedTabChipBackgroundTests` is one case of, and the
-//  class `ReplayedCaretBlinkTests` is another: whatever a frame leaves bare has
-//  to land on the field its containers painted beneath it, and nothing else on
-//  the row may move.
+//  own, a ramp, the terminal's own page (`Color.default`), and a colour on it
+//  dimmed and behind a sheet — and every replayed tick compared with a render at
+//  the same instant (`ReplayOracle`): each cell's glyph and field, and the ink a
+//  glyph is drawn in. The class `ReplayedTabChipBackgroundTests` is one case of,
+//  and the class `ReplayedCaretBlinkTests` is another: whatever a frame leaves
+//  bare has to land on the field its containers painted beneath it, and nothing
+//  else on the row may move.
 //
 //  The replay used to put the PAGE's background back after each reset in a
 //  frame, and a frame that names a background is one the splice leaves alone.
@@ -128,6 +129,40 @@ private struct OnAColourApp: App {
     }
 }
 
+/// The terminal's own page: every field the palette names for the page — the
+/// page itself, a tab's surface, a chip's label, the wash a dim or a backdrop
+/// flattens everything to — is `Color.default`, spelled `ESC[49m`, and nothing
+/// has an RGB to blend with.
+@MainActor
+let terminalPagePalette = ThemeProbePalette(background: .default, overlayBackground: .default)
+
+private struct OnTheTerminalPageApp: App {
+    init() {}
+    var body: some Scene { WindowGroup { catalogue() }.palette(terminalPagePalette) }
+}
+
+/// A colour of the app's own on the terminal's page, flattened by `.dimmed()`:
+/// every line and every frame of every run washed to the terminal's own field.
+private struct DimmedApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup { catalogue().padding(1).background(Color.rgb(90, 20, 120)).dimmed() }
+            .palette(terminalPagePalette)
+    }
+}
+
+/// The same colour behind a sheet: the backdrop's flatten, at the root.
+private struct BehindASheetApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup {
+            catalogue().padding(1).background(Color.rgb(90, 20, 120))
+                .sheet(isPresented: .constant(true)) { Text("Sheet") }
+        }
+        .palette(terminalPagePalette)
+    }
+}
+
 /// A ramp: a different field under each column of a run, painted by the ramp's
 /// own row painter.
 private struct OnARampApp: App {
@@ -148,7 +183,7 @@ private struct OnARampApp: App {
 struct ReplayedRunFieldTests {
 
     enum Ground: String, CaseIterable, Sendable {
-        case page, tabSurface, colour, ramp
+        case page, tabSurface, colour, ramp, terminalPage, dimmed, backdrop
     }
 
     /// The walk every ground takes: more stops than the catalogue has focusables,
@@ -166,6 +201,9 @@ struct ReplayedRunFieldTests {
             case .tabSurface: walk { InATabApp() }
             case .colour: walk { OnAColourApp() }
             case .ramp: walk { OnARampApp() }
+            case .terminalPage: walk { OnTheTerminalPageApp() }
+            case .dimmed: walk { DimmedApp() }
+            case .backdrop: walk { BehindASheetApp() }
             }
         // Enough that the walk reached the catalogue, not just its first stop.
         #expect(found.compared >= 200, "only \(found.compared) rows were replayed")
