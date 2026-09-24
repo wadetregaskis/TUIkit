@@ -310,16 +310,32 @@ protocol SectionRowExtractor {
     /// - Returns: Section metadata including header, content rows, and footer.
     func extractSectionInfo(context: RenderContext) -> SectionInfo
 
-    /// The row-mutation actions this section's content carries, when the
-    /// content IS an editable `ForEach`, or a `Group` or an `if`/`else` around
-    /// one (any number deep) — `nil` otherwise.
+    /// The rows this section's content contributes to the enclosing `List`,
+    /// with the row-mutation actions of the `ForEach` that produced them.
     ///
-    /// Asked separately from the rows because a `Section`'s rows are rows of
-    /// the enclosing `List` while its `.onDelete` / `.onMove` offsets are
-    /// indices into the `ForEach`'s own collection; the list needs both, and
-    /// the only thing that can pair them is the section that holds them. Both
-    /// look through the same wrappers (``ListRowsPassThrough``), so the loop
-    /// these actions belong to is the loop that produced the rows.
+    /// One walk for both because a `Section`'s rows are rows of the enclosing
+    /// `List` while its `.onDelete` / `.onMove` offsets are indices into the
+    /// `ForEach`'s own collection; the list needs both, and the only thing
+    /// that can pair them is the section that holds them. Asked as two
+    /// questions, they were two walks through the same wrappers
+    /// (``ListRowsPassThrough``) that had to agree about which loop they had
+    /// reached; asked as one, the loop the actions belong to is the loop that
+    /// produced the rows by construction.
+    ///
+    /// See ``SectionContentRows/actions`` for when there are actions.
+    func extractSectionContentRows<RowID: Hashable>(context: RenderContext) -> SectionContentRows<RowID>
+}
+
+/// What a `Section`'s content contributes to the enclosing `List`: its rows,
+/// and the actions of the `ForEach` that produced every one of them.
+struct SectionContentRows<RowID: Hashable> {
+    /// The content's rows, in order — the section's own header and footer are
+    /// not among them.
+    var rows: [ListRow<RowID>]
+
+    /// The row-mutation actions the content carries, when the content IS an
+    /// editable `ForEach`, or a `Group` or an `if`/`else` around one (any
+    /// number deep) — `nil` otherwise.
     ///
     /// A `Group` or an `if`/`else` is not one of the exceptions below: each
     /// contributes exactly its content's rows, so a `ForEach` alone inside one
@@ -344,7 +360,7 @@ protocol SectionRowExtractor {
     /// ids does know which loop made each row and at what offset; wiring the
     /// editing gestures through it (an owner per loop, with its row span) is
     /// a change of its own, and until it is made the refusal stands.
-    var sectionRowActions: (any DynamicViewContentActions)? { get }
+    var actions: (any DynamicViewContentActions)?
 }
 
 /// Metadata about a section for List rendering.
@@ -355,17 +371,24 @@ struct SectionInfo {
     /// The rendered footer buffer (nil if no footer).
     let footerBuffer: FrameBuffer?
 
-    /// The content rows within this section.
+    /// The whole content, rendered as one buffer.
+    ///
+    /// Read by nothing: the `List` takes a section's rows from
+    /// ``SectionRowExtractor/extractSectionContentRows(context:)``, and the
+    /// branch that fell back to this buffer could not be reached: it was taken
+    /// only for a section that is not a `ListRowExtractor`, and `Section`, the
+    /// only conformer, always is one. Still rendered, because
+    /// that render has effects beyond its buffer — every row of the section,
+    /// on screen or not, is drawn, registers what it registers and marks its
+    /// identity alive — and dropping it is a behaviour change of its own.
     let contentBuffer: FrameBuffer
 }
 
 extension Section: SectionRowExtractor {
-    // Only when the content IS the `ForEach`, seen through any `Group` or
-    // `if`/`else`: `resolveChildViews` flattens a `ForEach` sitting among
-    // static rows, so in that arrangement no row can be attributed to it and
-    // this stays `nil` (see the protocol's doc comment).
-    var sectionRowActions: (any DynamicViewContentActions)? {
-        throughListPassThroughs(content, as: (any DynamicViewContentActions).self)
+    func extractSectionContentRows<RowID: Hashable>(
+        context: RenderContext
+    ) -> SectionContentRows<RowID> {
+        Self.listRows(of: content, context: context)
     }
 
     func extractSectionInfo(context: RenderContext) -> SectionInfo {
@@ -413,27 +436,39 @@ extension Section: ListRowExtractor {
     /// - Parameter context: The rendering context.
     /// - Returns: Array of list rows from the section's content.
     func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
-        Self.listRows(of: content, context: context)
+        Self.listRows(of: content, context: context).rows
     }
 
-    /// The rows `content` contributes to the enclosing `List`, asked of what it
-    /// IS — generic over the view, rather than reading `self.content`, so it
-    /// can be asked again of the view inside a `Group` or an `if`/`else`.
+    /// The rows `content` contributes to the enclosing `List`, and the actions
+    /// of the loop that produced them, asked of what it IS — generic over the
+    /// view, rather than reading `self.content`, so it can be asked again of
+    /// the view inside a `Group` or an `if`/`else`.
     private static func listRows<V: View, RowID: Hashable>(
         of content: V, context: RenderContext
-    ) -> [ListRow<RowID>] {
+    ) -> SectionContentRows<RowID> {
         // A `Group` or an `if`/`else` is taken off first, under the step the
         // child walk would have taken through it — `_ListCore.extractRows`'s
         // rule, for its reason (see ``ListRowsPassThrough``). Asked of the
         // wrapper, the `ListRowExtractor` question below failed and the rows
         // came from the child walk: keyed by position rather than by element,
-        // and owned by no loop's `.onDelete` / `.onMove`. `sectionRowActions`
-        // looks through the same wrappers, so it names the loop found here.
+        // and owned by no loop's `.onDelete` / `.onMove`.
         if let passThrough = content as? any ListRowsPassThrough {
             return listRows(
                 of: passThrough.listRowsContent, context: passThrough.listRowsContext(context))
         }
+        // Only when the content IS the `ForEach`, seen through those wrappers:
+        // `resolveChildViews` flattens a `ForEach` sitting among static rows,
+        // so in that arrangement no row can be attributed to it and this is
+        // `nil` (see ``SectionContentRows/actions``).
+        return SectionContentRows(
+            rows: unwrappedListRows(of: content, context: context),
+            actions: content as? any DynamicViewContentActions)
+    }
 
+    /// ``listRows(of:context:)``'s rows once the wrappers are off.
+    private static func unwrappedListRows<V: View, RowID: Hashable>(
+        of content: V, context: RenderContext
+    ) -> [ListRow<RowID>] {
         // Delegate to content if it's a ListRowExtractor (e.g., ForEach)
         if let extractor = content as? ListRowExtractor {
             return extractor.extractListRows(context: context)

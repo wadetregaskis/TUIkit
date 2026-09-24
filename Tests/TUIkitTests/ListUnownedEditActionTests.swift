@@ -240,7 +240,7 @@ struct ListUnownedEditActionTests {
     /// hand-written row flattens through the same call. Pinned beside its
     /// twin because a shared cause is not a shared rule until both are
     /// asserted — the flat list reaches it through `_ListCore`'s own child
-    /// walk, not through `Section.sectionRowActions`.
+    /// walk, not through a `Section`'s `SectionContentRows.actions`.
     @Test("A List mixing a ForEach with a hand-written row refuses Delete on every row")
     func mixedFlatListRefusesEveryDelete() {
         let items = MainActorBox(["alpha", "beta", "gamma"])
@@ -271,7 +271,7 @@ struct ListUnownedEditActionTests {
     /// three of the four squares being pinned says nothing about the fourth —
     /// the flat list's move refusal is decided by `_ListCore`'s own child
     /// walk producing no ``ListRowEditOwner``, which is a different line of
-    /// code from the one `Section.sectionRowActions` returns `nil` on.
+    /// code from the one that leaves `SectionContentRows.actions` `nil`.
     @Test("A List mixing a ForEach with a hand-written row refuses the pick-up on every row")
     func mixedFlatListRefusesEveryPickUp() {
         let items = MainActorBox(["alpha", "beta", "gamma"])
@@ -363,7 +363,7 @@ struct ListUnownedEditActionTests {
     /// No hand-written row in sight and the attribution is lost just the same:
     /// two `ForEach`es are a `TupleView`, a `TupleView` is flattened by the
     /// same call, and what comes back is six rows that no longer say which
-    /// loop made them. The obvious repair — `Section.sectionRowActions`
+    /// loop made them. The obvious repair — `SectionContentRows.actions`
     /// answering with the content's actions — cannot even be written here,
     /// because there are two sets of actions and nothing to choose between
     /// them; a guess at the first would delete from `starts` while the cursor
@@ -422,7 +422,7 @@ struct ListUnownedEditActionTests {
 
     /// And the same two loops without a `Section` around them, which is a
     /// different route to the same place — `_ListCore`'s own child walk rather
-    /// than `Section.sectionRowActions` — for the same reason its hand-written
+    /// than a `Section`'s `SectionContentRows.actions` — for the same reason its hand-written
     /// twin is pinned separately.
     @Test("A List holding two ForEaches refuses both editing gestures on every row")
     func flatListOfTwoForEachesRefusesEveryGesture() {

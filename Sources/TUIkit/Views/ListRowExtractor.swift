@@ -161,6 +161,12 @@ protocol WindowedListRowExtractor {
 /// `String` or `UUID` selection at all — and no `.onDelete` or `.onMove`
 /// reached any of them.
 ///
+/// The wrappers come off ONCE, in the walk that extracts the rows, and every
+/// later question is asked of the view that walk landed on — `_ListCore`'s
+/// `RowSource.rowsContent`, a `Section`'s ``SectionContentRows`` — so the
+/// rows and the actions they are edited by cannot have looked through two
+/// different sets of wrappers.
+///
 /// A lone `if` needs no conformance. `as?` looks through an `Optional`'s `some`
 /// by itself — a rule of the language, not of anything written here — which is
 /// why an `if` around the loop always worked where a `Group` did not.
@@ -208,26 +214,6 @@ extension ConditionalView: ListRowsPassThrough {
     func listRowsContext(_ context: RenderContext) -> RenderContext {
         identityBranchLabel.map { context.withBranchIdentity($0) } ?? context
     }
-}
-
-/// The nearest `T` at or inside `view`, looking through any number of
-/// ``ListRowsPassThrough`` wrappers — how a `List` and a `Section` ask what
-/// their content IS.
-///
-/// `throughWrappers(_:as:)`'s shape over a much narrower set of wrappers, and
-/// the narrowness is load-bearing: see the protocol for what is not looked
-/// through, and why.
-///
-/// The view is asked first as the generic it arrives as, so content wrapped in
-/// nothing — nearly all of it — answers with the one cast it always paid, plus
-/// one failed conformance check, and is never boxed. Each step after that moves
-/// strictly inward through a statically nested generic type, which is finite by
-/// construction.
-@MainActor
-func throughListPassThroughs<V: View, T>(_ view: V, as type: T.Type = T.self) -> T? {
-    if let found = view as? T { return found }
-    guard let passThrough = view as? any ListRowsPassThrough else { return nil }
-    return throughListPassThroughs(passThrough.listRowsContent, as: type)
 }
 
 // MARK: - ForEach Conformance

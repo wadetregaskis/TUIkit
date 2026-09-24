@@ -82,7 +82,7 @@
 ///   row is in or where — a tag can replace it and a second loop can share it —
 ///   so recovering it does not make `.onDelete` / `.onMove` attributable in this
 ///   arrangement, and those still refuse (see
-///   ``SectionRowExtractor/sectionRowActions``). The placement itself does know
+///   ``SectionContentRows/actions``). The placement itself does know
 ///   each row's loop and offset; it is used for the id and nothing else.
 @MainActor
 struct FlattenedRowIDs<ID: Hashable> {
