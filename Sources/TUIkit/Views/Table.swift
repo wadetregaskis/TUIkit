@@ -3644,6 +3644,10 @@ where Value.ID: Hashable {
             gutter: gutter,
             rowWidth: rowWidth,
             ink: cellColour(row: 0, ramp: nil, context: context, palette: palette),
+            selectedMark: RowSelectionIndicator.forRow(
+                isFocused: false, isSelected: true, context: context, palette: palette),
+            unselectedMark: RowSelectionIndicator.forRow(
+                isFocused: false, isSelected: false, context: context, palette: palette),
             alignments: columns.map(\.alignment),
             truncations: columns.map(\.truncationMode),
             lineLimits: columns.map(\.lineLimit),

@@ -273,7 +273,7 @@ enum SelectableRowClaims {
 /// chosen, and says so with a still highlight and no glyph. So a control with
 /// no selection at all draws no glyph on any row, which is what a plain `List`
 /// looked like before this existed and still looks like now.
-struct RowSelectionIndicator {
+struct RowSelectionIndicator: Equatable {
     /// Exactly one cell wide, always — the gutter is reserved whether or not
     /// there is anything to put in it, so a blank is a space rather than an
     /// empty string. A row whose glyph changed width would move its content.

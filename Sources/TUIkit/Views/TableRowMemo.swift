@@ -32,9 +32,9 @@
 //    optimisation on top of the rule above, not the rule itself.
 //  * everything the FRAME settles that reaches a row's bytes is compared once
 //    per frame in ``TableRowFrameKey`` — the widths, the geometry, the resolved
-//    ink, each column's alignment and truncation and limit, the colour depth,
-//    and the two generations that make a colour or a width mean something
-//    different than it did.
+//    ink and selection marks, each column's alignment and truncation and limit,
+//    the colour depth, and the two generations that make a colour or a width
+//    mean something different than it did.
 //  * everything the ROW settles is compared per row: the row value itself, and
 //    whether it is selected, which decides its mark and background.
 //  * except for the one row whose look is not settled by the row at all: the
@@ -73,6 +73,17 @@ struct TableRowFrameKey: Equatable {
     /// palette both reach. Resolved rather than named, so a palette that
     /// changed what `foreground` means changes this.
     let ink: Color
+    /// What the gutter of a row the cursor is not on draws, selected and not: an
+    /// unfocused selection's ● — the accent dimmed over the page, or a blank under
+    /// `.unfocusedSelectionVisibility(.hidden)` — and the blank every other row
+    /// spells in a colour of its own. Resolved, as `ink` is, and for the same
+    /// reason: the accent, the page and that visibility all reach these bytes and
+    /// none of them is the row. Keyed on the ink alone, a palette with the same
+    /// text and another accent — Silver Aerogel to Solid Colors, neighbours in the
+    /// palette cycle — went on serving the old ● on every kept selected row, and
+    /// hiding the unfocused selection left the marks it had.
+    let selectedMark: RowSelectionIndicator
+    let unselectedMark: RowSelectionIndicator
     let alignments: [HorizontalAlignment]
     let truncations: [TruncationMode]
     let lineLimits: [Int]
