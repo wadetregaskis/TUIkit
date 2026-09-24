@@ -3801,12 +3801,13 @@ not already spent:
 
 | Combination | Arrives instead as | Why |
 |---|---|---|
+| Ctrl-H | Backspace | 0x08 is BS, matched before the Ctrl range (`parseSingleByte`) |
 | Ctrl-I | Tab | 0x09 is HT, matched before the Ctrl range |
 | Ctrl-J | Enter | 0x0A is LF |
 | Ctrl-M | Enter | 0x0D is CR |
 | Ctrl-[ | Escape | 0x1B, outside the 0x01–0x1A range |
 
-These four cannot be delivered under `.commandKey(.control)` by any means. Ask
+These five cannot be delivered under `.commandKey(.control)` by any means (Ctrl-H added 2026-09-24: `isDeliverableInTerminal` used to call it deliverable, though a ⌘H button could never fire). Ask
 `KeyboardShortcut.isDeliverableInTerminal` (after `resolved(commandKey:)`)
 rather than wondering why one menu item is dead. `.commandKey(.option)` has no
 such collision, at the cost of Option itself being less reliable: Apple

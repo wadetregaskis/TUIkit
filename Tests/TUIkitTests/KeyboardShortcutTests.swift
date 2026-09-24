@@ -465,7 +465,9 @@ struct CommandKeySubstitutionTests {
     /// `InputHandlerTests` fires a ⌘C shortcut on one).
     @Test("The C0 collisions are reported, not silently dead")
     func c0CollisionsAreQueryable() {
-        for key: KeyEquivalent in ["i", "j", "m", "["] {
+        // Ctrl-H is Backspace: `KeyEvent.parse` reads 0x08 before the
+        // Control range, so a ⌘H shortcut could never fire.
+        for key: KeyEquivalent in ["h", "i", "j", "m", "["] {
             let resolved = KeyboardShortcut(key).resolved(commandKey: .control)
             #expect(
                 resolved?.isDeliverableInTerminal == false,

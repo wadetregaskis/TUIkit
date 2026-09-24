@@ -209,9 +209,10 @@ public struct KeyboardShortcut: Hashable, Sendable {
     /// Whether a terminal can actually deliver this shortcut.
     ///
     /// `false` for the Control combinations the C0 range spends on other keys:
-    /// Ctrl-I is Tab, Ctrl-J and Ctrl-M are newline and Return, Ctrl-[ is
-    /// Escape — `KeyEvent.parse` matches those *before* the Ctrl-letter range,
-    /// so they never arrive as a modified letter and never can. Consult it
+    /// Ctrl-H is Backspace, Ctrl-I is Tab, Ctrl-J and Ctrl-M are newline and
+    /// Return, Ctrl-[ is Escape — `KeyEvent.parse` matches those *before* the
+    /// Ctrl-letter range, so they never arrive as a modified letter and never
+    /// can. Consult it
     /// after `resolved(commandKey:)` — that is where a ⌘ shortcut becomes a
     /// Control one and can collide.
     ///
@@ -224,7 +225,7 @@ public struct KeyboardShortcut: Hashable, Sendable {
         guard case .key(let key, let modifiers) = trigger else { return true }
         if modifiers.contains(.command) { return false }
         guard modifiers.contains(.control) else { return true }
-        return !"ijm[".contains(key.character)
+        return !"hijm[".contains(key.character)
     }
 
     private init(trigger: Trigger) {
