@@ -85,8 +85,9 @@ struct FocusIndicatorContainerAnimationTests {
 
     // MARK: - List cursor row
 
-    /// A focused list whose cursor row is also selected — the one state in
-    /// which a row's background breathes.
+    /// A focused list whose cursor row is also selected, which breathes the
+    /// accent. An unselected cursor row breathes too, in the neutral wash (see
+    /// `listCursorRowOffTheSelection`).
     private func selectedRowList(height: Int = 8) -> FrameBuffer {
         let list = List(selection: .constant("Alpha" as String?)) {
             ForEach(["Alpha", "Bravo", "Charlie"], id: \.self) { Text($0) }
@@ -123,8 +124,8 @@ struct FocusIndicatorContainerAnimationTests {
         #expect(run.offsetX + run.width < buffer.width - 1)
     }
 
-    @Test("An unfocused list, or one whose cursor row is unselected, animates nothing")
-    func listCursorRowStill() {
+    @Test("An unfocused list animates nothing; a focused one breathes its cursor row off the selection too")
+    func listCursorRowOffTheSelection() {
         let context = makeRenderContext(width: 30, height: 8)
         context.environment.focusManager!.register(FocusSentinel())
         let unfocused = renderToBuffer(
@@ -133,13 +134,14 @@ struct FocusIndicatorContainerAnimationTests {
             }, context: context)
         #expect(unfocused.animatedCells.isEmpty, "an unfocused list is breathing")
 
-        // Focused, but the cursor row is not the selected one: the cursor row
-        // gets the flat focus background, which does not animate.
+        // Focused, but the cursor row is not the selected one: it breathes the
+        // neutral focus wash, on the same terms as a selected cursor row — the
+        // list has the keys, and motion is what says where they go.
         let unselected = renderToBuffer(
             List(selection: .constant(String?.none)) {
                 ForEach(["Alpha", "Bravo"], id: \.self) { Text($0) }
             }, context: makeRenderContext(width: 30, height: 8))
-        #expect(unselected.animatedCells.isEmpty, "an unselected cursor row is breathing")
+        expectAnimates(unselected, runs: 1, "unselected list cursor row")
     }
 
     // MARK: - Table cursor row
@@ -216,8 +218,8 @@ struct FocusIndicatorContainerAnimationTests {
         #expect(rows == [rows[0], rows[0] + 1])
     }
 
-    @Test("An unfocused table, or one whose cursor row is unselected, animates nothing")
-    func tableCursorRowStill() {
+    @Test("An unfocused table animates nothing; a focused one breathes its cursor row off the selection too")
+    func tableCursorRowOffTheSelection() {
         let context = makeRenderContext(width: 40, height: 10)
         context.environment.focusManager!.register(FocusSentinel())
         let unfocused = renderToBuffer(
@@ -230,7 +232,7 @@ struct FocusIndicatorContainerAnimationTests {
             Table(tableRows, selection: .constant(String?.none)) {
                 TableColumn("Name", value: \Row.name)
             }, context: makeRenderContext(width: 40, height: 10))
-        #expect(unselected.animatedCells.isEmpty, "an unselected cursor row is breathing")
+        expectAnimates(unselected, runs: 1, "unselected table cursor row")
     }
 
     // MARK: - "N more" scroll indicators

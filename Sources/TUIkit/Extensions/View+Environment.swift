@@ -213,6 +213,10 @@ extension View {
     ///     .rowSelectionIndicator(.hidden)
     /// ```
     ///
+    /// With the mark off, a focused control's cursor row still says whether it is
+    /// selected: it breathes the accent on a selected row and the neutral focus
+    /// wash on one that is not.
+    ///
     /// TUI-specific: SwiftUI has no row marker to suppress. A `Table` told
     /// `.hidden` also gives back the two cells the mark would have occupied,
     /// so its columns start where any other bordered content does; a `List`

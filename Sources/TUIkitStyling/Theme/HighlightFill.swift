@@ -84,8 +84,9 @@ extension Palette {
         return .pulse(dim: dim, bright: bright)
     }
 
-    /// The wash a row merely under the cursor shows — the cursor row of a focused list
-    /// or table, on a row the selection does not include: ``focusBackground``, or
+    /// The still wash of a row merely under the cursor — the cursor row of a focused
+    /// list or table, on a row the selection does not include, wherever it does not
+    /// breathe (``focusWashEmphasis(appearsActive:)``): ``focusBackground``, or
     /// reverse video where that wash cannot be measured.
     ///
     /// The default wash is the tertiary tier at 30% over the page, and a share below
@@ -135,8 +136,43 @@ extension Palette {
     /// - Parameter appearsActive: Whether the row's view appears active
     ///   (`EnvironmentValues.appearsActive`).
     package func highlightedRowFill(appearsActive: Bool) -> HighlightFill {
-        let emphasis = emphasisFill()
-        guard case .pulse = emphasis, !appearsActive else { return emphasis }
-        return selectedRowFill()
+        emphasisFill().stilled(to: selectedRowFill(), unless: appearsActive)
+    }
+
+    /// What the cursor row of a list or table paints on a row the selection does not
+    /// include: the focus wash breathing (``focusWashPulse()``), and where the row's
+    /// view does not appear active, the still wash (``focusWashFill()``) in its place.
+    ///
+    /// The neutral counterpart of ``highlightedRowFill(appearsActive:)``, under the
+    /// same rule: motion says the keys go HERE, now, so a list that has them breathes
+    /// its cursor row whether or not that row is selected, and one whose window has
+    /// lost the terminal's focus holds it still in the look it always had. The hue is
+    /// what tells the two apart — accent on a selected row, neutral on one that is
+    /// not — which is all a list drawn with `.rowSelectionIndicator(.hidden)` has to
+    /// go on.
+    ///
+    /// Where the wash cannot be measured it is reversed, still, as it always was.
+    ///
+    /// - Parameter appearsActive: Whether the row's view appears active
+    ///   (`EnvironmentValues.appearsActive`).
+    package func focusWashEmphasis(appearsActive: Bool) -> HighlightFill {
+        let still = focusWashFill()
+        guard case .fill = still else { return still }
+        let (dim, bright) = focusWashPulse()
+        return HighlightFill.pulse(dim: dim, bright: bright).stilled(to: still, unless: appearsActive)
+    }
+}
+
+extension HighlightFill {
+    /// This highlight, or `still` in place of a breath where the row's view does not
+    /// appear active: the one rule every cursor-like row follows
+    /// (``Palette/highlightedRowFill(appearsActive:)``,
+    /// ``Palette/focusWashEmphasis(appearsActive:)``). A fill or a reversal is already
+    /// still and is returned as it is.
+    fileprivate func stilled(
+        to still: @autoclosure () -> HighlightFill, unless appearsActive: Bool
+    ) -> HighlightFill {
+        guard case .pulse = self, !appearsActive else { return self }
+        return still()
     }
 }

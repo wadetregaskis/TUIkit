@@ -202,7 +202,7 @@ Custom views that implement ``Focusable`` typically do not need `FocusRegistrati
 
 ## Focus Indicator
 
-The visual indicator depends on the view type. Buttons and similar controls use a **highlight background bar** for the focused item. Text fields render as a bracketed field (`[ text ]`) and show a **visible text cursor** inside it when focused — a block, bar or underscore that pulses unless the `.textCursor(_:)` modifier says to blink or hold still. Lists and tables use a **highlight background** for the focused row, with a **pulsing accent background** when the row is both focused and selected.
+The visual indicator depends on the view type. Buttons and similar controls use a **highlight background bar** for the focused item. Text fields render as a bracketed field (`[ text ]`) and show a **visible text cursor** inside it when focused — a block, bar or underscore that pulses unless the `.textCursor(_:)` modifier says to blink or hold still. Lists and tables **breathe the background of the cursor row**: the accent when that row is selected, the neutral focus wash (``Palette/focusWashPulse()``) when it is not.
 
 The pulse runs on a shared clock so everything on screen breathes together, and
 it walks a discrete ramp of shades rather than lerping — the 256-colour cube has
@@ -306,10 +306,13 @@ vanished with the window read as the focus having been lost.
   selection it does not hold the keys for: the look an unfocused list already
   has, which is what makes it read as "here, but not now". A selected cursor
   row keeps its ● at full strength, which still tells it from a selection the
-  list merely remembers. A cursor row that is not selected keeps its focus
-  wash, which never breathed.
-- **Nothing else changes.** The bold, the recoloured arrows and values, the
-  focus wash: they were still to begin with, and they stay.
+  list merely remembers.
+- **A cursor row that is not selected** holds still in the plain focus wash,
+  ``Palette/focusBackground`` — the bottom of the breath it draws while the
+  window is active (``Palette/focusWashPulse()``), and the look it has always
+  had.
+- **Nothing else changes.** The bold, the recoloured arrows and values: they
+  were still to begin with, and they stay.
 
 ``View/unfocusedSelectionVisibility(_:)`` with `.hidden` does not hide an
 inactive list's cursor row: the list still holds the focus, so it is not the

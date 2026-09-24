@@ -520,7 +520,9 @@ extension SelectionEmphasisClock {
     /// is still focused, so a fill still draws as focused. A highlighted ROW — a
     /// list's or table's cursor row on a selected row, a menu's — does not draw that
     /// frame: it takes the still tint of an unfocused selection instead, the look an
-    /// unfocused list already had.
+    /// unfocused list already had. Nor does a list's or table's cursor row on a row
+    /// the selection does not include: it holds the plain focus wash, the bottom of
+    /// the breath it draws while active.
     ///
     /// See ``SelectionEmphasisCycle``.
     @MainActor

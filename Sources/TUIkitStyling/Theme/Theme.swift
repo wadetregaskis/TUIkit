@@ -97,7 +97,12 @@ public protocol Palette: Cyclable {
     /// Border color for boxes, cards, etc.
     var border: Color { get }
 
-    /// Background color for focused list/table rows.
+    /// Background color for the cursor row of a focused list or table, on a row
+    /// the selection does not include.
+    ///
+    /// Where the list has the keys the row breathes up from this colour
+    /// (``focusWashPulse()``); where it does not — its window has lost the
+    /// terminal's focus — the row holds still in it.
     var focusBackground: Color { get }
 
     /// Text cursor color for TextField and SecureField.
@@ -994,6 +999,53 @@ extension Palette {
         // this pair's own bright end, which stops short of the accent.
         guard accent.rgbComponents != nil, ground.rgbComponents != nil else { return (bright, bright) }
         return (accent.opacity(ViewConstants.focusPulseMin, over: ground), bright)
+    }
+
+    /// The two ends the focus wash breathes between: the cursor row of a list or
+    /// table that has the keys, on a row the selection does not include. The
+    /// neutral counterpart of ``accentFillPulse(over:)``, which a selected cursor
+    /// row breathes in, so the two rows breathe alike and differ in hue alone.
+    ///
+    /// The dim end is the wash itself, ``focusBackground`` — the look such a row has
+    /// wherever it does not breathe. The bright end is twice as far from the page:
+    /// the colour the wash is a half-strength composite of, over the page. That is
+    /// how the accent's breath stands to the still tint of an unfocused selection
+    /// (``ViewConstants/selectedBackground`` is half of
+    /// ``ViewConstants/focusPulseMax``), stated for a wash a palette may choose
+    /// outright — a preset's own tone, a Terminal profile's selection colour —
+    /// where no tint and share exist to double.
+    ///
+    /// Up from the wash, where ``accentPulse(over:)`` breathes down from the accent:
+    /// the bottom of a breath has to be distinguishable from the row not being the
+    /// cursor at all, and a wash already sits close to the page — for some Terminal
+    /// profiles all but on it — so a breath down from it would all but put the
+    /// cursor out once a cycle. Up from it, the cursor row is never fainter than it
+    /// has always been.
+    ///
+    /// Twice as far is clamped to what an sRGB channel can hold, and floored so the
+    /// row's text stays readable on it — ``ViewConstants/labelContrastFloor``, the
+    /// floor a Terminal profile's stated wash is held to — which on a palette whose
+    /// wash is already near that floor leaves little room to breathe.
+    /// `PaletteContrastAuditTests` measures the bright end.
+    ///
+    /// Where the wash or the page has no RGB, both ends are the wash: there is no
+    /// distance to double, and a breath between two equal ends is still.
+    public func focusWashPulse() -> (dim: Color, bright: Color) {
+        let dim = focusBackground.spendingAlpha(over: background)
+        guard let wash = dim.rgbComponents, let page = background.rgbComponents else {
+            return (dim, dim)
+        }
+        // Per channel, in the encoded sRGB every `opacity(_:over:)` composites in, so
+        // `bright.opacity(0.5, over: background)` is the wash again, to the rounding,
+        // wherever nothing clamped.
+        func twiceAsFar(_ wash: UInt8, from page: UInt8) -> UInt8 {
+            UInt8(clamping: 2 * Int(wash) - Int(page))
+        }
+        let bright = Color.rgb(
+            twiceAsFar(wash.red, from: page.red),
+            twiceAsFar(wash.green, from: page.green),
+            twiceAsFar(wash.blue, from: page.blue))
+        return (dim, bright.ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: foreground))
     }
 }
 

@@ -132,7 +132,10 @@ struct ContainerPayloadAudit {
             ("Section with a footer", { child in
                 AnyView(Section(content: { child }, header: { Text("h") }, footer: { Text("f") }))
             }),
-            ("List", { child in AnyView(List { child }) }),
+            // The child on the SECOND row: the list takes the focus, and its cursor
+            // row — the first — breathes, repainting its whole line every tick, so a
+            // child on it hands its runs to that breath rather than up the tree.
+            ("List", { child in AnyView(List { Text("cursor"); child }) }),
             ("Form", { child in AnyView(Form { child }) }),
             ("Form of Sections", { child in
                 AnyView(Form { Section("s") { child } })

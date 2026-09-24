@@ -4210,9 +4210,11 @@ where Value.ID: Hashable {
                 // pair as `_ListCore`'s cursor row, from the same place.
                 .focusedSelection(in: context, palette: palette)
             } else if isFocused {
-                // The focus wash, or a reversal where it cannot be measured — the same
-                // answer `_ListCore` takes for the same row, from the same place.
-                .focused(palette: palette)
+                // The cursor on a row the selection does not include breathes too,
+                // in the neutral focus wash rather than the accent. A reversal where
+                // the wash cannot be measured — the same answer `_ListCore` takes for
+                // the same row, from the same place.
+                .focused(in: context, palette: palette)
             } else {
                 // A selected row while the table itself does not have focus
                 // draws its mark and no fill; `.hidden` suppresses both, and

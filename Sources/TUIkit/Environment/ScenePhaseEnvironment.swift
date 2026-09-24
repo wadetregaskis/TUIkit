@@ -53,9 +53,10 @@ import TUIkitCore
 /// What an inactive scene changes is how it looks, through
 /// ``EnvironmentValues/appearsActive``: the focus is parked rather than lost,
 /// so focus indicators stay on screen and hold still — a highlighted row in the
-/// still tint of an unfocused selection, everything else half-way between the
-/// two ends it breathes or blinks between — and a text caret holds still and
-/// dims (see <doc:FocusSystem>).
+/// still tint of an unfocused selection, a list's or table's cursor row off the
+/// selection in the plain focus wash, everything else half-way between the two
+/// ends it breathes or blinks between — and a text caret holds still and dims
+/// (see <doc:FocusSystem>).
 /// To draw a view of your own that way, read `appearsActive` rather than the
 /// phase.
 public enum ScenePhase: Comparable, Hashable, Sendable {

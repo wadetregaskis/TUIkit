@@ -60,19 +60,36 @@ enum RowBackground {
     /// drop-down's highlighted row.
     @MainActor
     static func focusedSelection(in context: RenderContext, palette: any Palette) -> Self {
-        let highlight = palette.highlightedRowFill(appearsActive: context.environment.appearsActive)
-        guard case .pulse(let dim, let bright) = highlight else { return still(highlight) }
-        return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
+        breathing(
+            palette.highlightedRowFill(appearsActive: context.environment.appearsActive),
+            in: context)
     }
 
-    /// The still highlight a row merely UNDER the cursor shows: the focus wash, or a
-    /// reversal where that wash cannot be measured.
+    /// The highlight a row merely UNDER the cursor shows — the cursor row of a focused
+    /// list or table, on a row the selection does not include: the focus wash,
+    /// breathing (``Palette/focusWashPulse()``), or a reversal where that wash cannot
+    /// be measured.
+    ///
+    /// It breathes for the reason the selected cursor row does: motion says the keys
+    /// go here, now, and a list that has them says so wherever its cursor is. Where the
+    /// view does not appear active it holds still in the plain wash, the look it has
+    /// always had — `Palette.focusWashEmphasis(appearsActive:)` is the rule.
     ///
     /// Here rather than at the two call sites for the reason ``focusedSelection(in:palette:)``
     /// is: the twins ask one question in one place.
     @MainActor
-    static func focused(palette: any Palette) -> Self {
-        still(palette.focusWashFill())
+    static func focused(in context: RenderContext, palette: any Palette) -> Self {
+        breathing(
+            palette.focusWashEmphasis(appearsActive: context.environment.appearsActive),
+            in: context)
+    }
+
+    /// `highlight` as a cursor row draws it: a breath on the shared focus-emphasis
+    /// cycle, and anything else still.
+    @MainActor
+    private static func breathing(_ highlight: HighlightFill, in context: RenderContext) -> Self {
+        guard case .pulse(let dim, let bright) = highlight else { return still(highlight) }
+        return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
     }
 
     /// The fill of a highlight that only ever TINTS — a selected row that is not the
@@ -89,8 +106,8 @@ enum RowBackground {
 
     /// `highlight` as a background that does not animate.
     ///
-    /// A breath is not one: a site that can show one asks ``focusedSelection(in:palette:)``,
-    /// and here the bright end stands in, which is the colour such a cycle holds anyway
+    /// A breath is not one: a site that can show one asks ``breathing(_:in:)``, and
+    /// here the bright end stands in, which is the colour such a cycle holds anyway
     /// wherever it cannot be measured (§79).
     private static func still(_ highlight: HighlightFill) -> Self {
         switch highlight {
@@ -269,10 +286,12 @@ enum SelectableRowClaims {
 /// same palette, same pulse — one showed the mark and the other did not.
 ///
 /// **It marks SELECTION, not focus.** Which row the cursor is on is said by the
-/// background, which breathes; a row merely under the cursor has not been
-/// chosen, and says so with a still highlight and no glyph. So a control with
-/// no selection at all draws no glyph on any row, which is what a plain `List`
-/// looked like before this existed and still looks like now.
+/// background, which breathes while the control has the keys; a row merely
+/// under the cursor has not been chosen, and says so with no glyph, and with the
+/// neutral focus wash breathing behind it rather than the accent
+/// (``RowBackground/focused(in:palette:)``). So a control with no selection at
+/// all draws no glyph on any row, which is what a plain `List` looked like
+/// before this existed and still looks like now.
 struct RowSelectionIndicator: Equatable {
     /// Exactly one cell wide, always — the gutter is reserved whether or not
     /// there is anything to put in it, so a blank is a space rather than an

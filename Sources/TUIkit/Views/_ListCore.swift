@@ -3589,9 +3589,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // ``AnimatedCellRun``s over the row's own lines.
                 return .focusedSelection(in: context, palette: palette)
             } else if isFocused {
-                // The focus wash, or a reversal where it cannot be measured — the same
-                // answer `Table` takes for the same row, from the same place.
-                return .focused(palette: palette)
+                // The cursor on a row the selection does not include breathes too,
+                // in the neutral focus wash rather than the accent: a list that has
+                // the keys says where they go wherever its cursor is. A reversal
+                // where the wash cannot be measured — the same answer `Table` takes
+                // for the same row, from the same place.
+                return .focused(in: context, palette: palette)
             } else if isSelected {
                 // Selected row while the list itself doesn't have
                 // focus. Controlled by the

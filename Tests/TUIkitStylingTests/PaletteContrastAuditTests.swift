@@ -151,6 +151,10 @@ struct PaletteContrastAuditTests {
             ViewConstants.alternatingRowBackground, over: background)
         let pulseDim = palette.accent.opacity(ViewConstants.focusPulseMin, over: background)
         let pulseBright = palette.accent.opacity(ViewConstants.focusPulseMax, over: background)
+        // The cursor row on a row the selection does not include breathes the focus
+        // wash; its dim end is `focusBackground`, audited above, and its bright end is
+        // floored for exactly this pair.
+        let washPulseBright = palette.focusWashPulse().bright
         return [
             AuditedPair(
                 name: "buttonLabel/buttonFace",
@@ -177,6 +181,10 @@ struct PaletteContrastAuditTests {
             AuditedPair(
                 name: "foreground/focusPulseBright",
                 foreground: palette.foreground, background: pulseBright, minimum: 2.0),
+            AuditedPair(
+                name: "foreground/focusWashPulseBright",
+                foreground: palette.foreground, background: washPulseBright,
+                minimum: ViewConstants.labelContrastFloor),
         ]
     }
 
@@ -213,6 +221,30 @@ struct PaletteContrastAuditTests {
                     ratio >= pair.minimum,
                     "\(palette.name): \(pair.name) contrast \(String(format: "%.2f", ratio)) < \(pair.minimum)")
             }
+        }
+    }
+
+    // MARK: - The focus wash has to breathe
+
+    /// The cursor row on a row the selection does not include breathes UP from the
+    /// wash: its dim end is the wash itself — never fainter than the row has always
+    /// been — and its bright end sits further from the page, so on every shipped
+    /// palette the breath moves rather than holding one colour, and never toward the
+    /// page, where the cursor would all but go out once a cycle. Every shipped palette
+    /// states its own wash, so this is the rule's reach beyond the default derivation.
+    @Test("The focus wash breathes away from the page on every shipped palette")
+    func focusWashBreathesAwayFromThePage() {
+        for palette in Self.statedPalettes {
+            let ends = palette.focusWashPulse()
+            #expect(
+                ends.dim == palette.focusBackground.spendingAlpha(over: palette.background),
+                "\(palette.name): the breath does not start from the wash")
+            #expect(ends.bright != ends.dim, "\(palette.name): the wash does not breathe")
+            let dimFromPage = Self.contrast(ends.dim, palette.background)
+            let brightFromPage = Self.contrast(ends.bright, palette.background)
+            #expect(
+                brightFromPage > dimFromPage,
+                "\(palette.name): the bright end \(Self.hex(ends.bright)) is no further from the page than the wash")
         }
     }
 

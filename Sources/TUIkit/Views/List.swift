@@ -99,7 +99,7 @@
 /// | State | Rendering |
 /// |-------|-----------|
 /// | Focused + Selected | Pulsing accent background, bold |
-/// | Focused only | Highlight background bar |
+/// | Focused only | Pulsing focus-wash background |
 /// | Selected only | Dimmed accent indicator |
 /// | Neither | Default foreground |
 ///

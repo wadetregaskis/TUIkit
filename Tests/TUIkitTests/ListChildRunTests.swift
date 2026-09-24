@@ -19,10 +19,17 @@ import TUIkitCore
 @Suite("Animated runs inside a List")
 struct ListChildRunTests {
 
+    /// A context whose focus is parked elsewhere, so the list does not have the
+    /// keys: a list that does breathes its cursor row, and a breathing row repaints
+    /// its whole line every tick, so it drops its own children's runs for the
+    /// duration and asks for renders on their behalf instead — which is not the
+    /// carrying these tests are about.
     private func harness(width: Int = 40, height: Int = 20) -> (TUIContext, RenderContext) {
         let tui = TUIContext()
         var environment = EnvironmentValues()
-        environment.focusManager = FocusManager()
+        let focusManager = FocusManager()
+        focusManager.register(FocusSentinel())
+        environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tui)
         environment.terminalWidth = width
         return (

@@ -2569,7 +2569,7 @@ keeps there:
 
 | Site | Where the colours cannot be measured | Otherwise |
 |---|---|---|
-| A `List`'s or a `Table`'s cursor row, selected or not | a steady `ESC[7;<ink>;<field>m` over the palette's own ink and page, restated after every reset in the row, keeping its ● | the accent's breath over the page |
+| A `List`'s or a `Table`'s cursor row, selected or not | a steady `ESC[7;<ink>;<field>m` over the palette's own ink and page, restated after every reset in the row, keeping its ● | the accent's breath over the page on a selected row, the focus wash's breath on one that is not |
 | A selected row that is not the cursor; an alternating row | nothing at all: the ● says which row is selected | a tint of the accent over the page |
 | A text input's selection (`TextField`, `SecureField`, `TextEditor`) | `ESC[7;<ink>;<field>m` over the cell's OWN pair: the field's ink and its well | the accent at 60% over the well |
 | A block text caret | the cell under it with its reversal flipped — a plain cell reversed, a selected cell's reversal taken off. A blink alternates the two; a pulse holds one | the caret's colour with the character punched out of it in the well |
