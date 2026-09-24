@@ -219,8 +219,9 @@ extension View {
     /// .toggleStyle(.checkbox)
     /// ```
     ///
-    /// > Note: In TUIkit, all `ToggleStyle`s currently render as a checkbox; the
-    /// > checkbox glyphs are set separately via ``ToggleCharacterSet``.
+    /// > Note: `.automatic` and `.checkbox` draw a checkbox, whose glyphs are set
+    /// > separately via ``ToggleCharacterSet``; `.switch` draws a two-position
+    /// > switch, a coloured track with a knob on the side it points to.
     ///
     /// - Parameter style: The toggle style to use.
     /// - Returns: A view with the toggle style set.
