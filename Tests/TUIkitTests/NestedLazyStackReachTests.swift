@@ -341,6 +341,37 @@ struct NestedLazyStackReachTests {
         #expect(missing.isEmpty, "\(missing.count) rows never drawn: \(missing.prefix(10))")
     }
 
+    @Test("Past 256 groups, where the outer stack samples, a group still draws every one of its rows")
+    func rowsOfASampledOuterStackReachEveryRow() {
+        // Past 256 rows the OUTER stack takes the anchored path: its measure
+        // samples sixteen groups, and its render places the groups on screen
+        // and draws each at the height it measured for it. Two things cut a
+        // group short there: its nested stack's estimate, as below 256 (every
+        // group stopped at its row 157), and — until 1f5d063b — drawing a group
+        // taller than the viewport to its first screenful, blank lines after.
+        // Group 0 is 1 + 16 + 2 × 284 lines; the viewport, under the tick line
+        // and above the status bar, is eight, so 100 pages cover it.
+        let app = HeadlessApp(
+            GroupsApp(groups: 260, tallAfterSixteen: true, builds: RowBuilds()), width: 30, height: 12)
+        app.frame(atNanos: 0)
+        var seen = Set<Int>()
+        func collect() {
+            for line in visible(app) {
+                for match in line.matches(of: /g0 r(\d+)/) {
+                    if let row = Int(match.1) { seen.insert(row) }
+                }
+            }
+        }
+        collect()
+        for page in 1...100 {
+            app.send(KeyEvent(key: .pageDown))
+            app.frame(atNanos: Int64(page) * Self.frame)
+            collect()
+        }
+        let missing = (0..<300).filter { !seen.contains($0) }
+        #expect(missing.isEmpty, "\(missing.count) rows of group 0 never drawn: \(missing.prefix(10))")
+    }
+
     @Test("The scroll view's direct content is still estimated after a write above it")
     func directContentKeepsTheEstimate() {
         // The fix measures a NESTED stack over every row it will draw; the
@@ -351,9 +382,12 @@ struct NestedLazyStackReachTests {
         // Pinned on the frame after a write ABOVE the scroll view, which
         // clears every memo beneath it, so that frame measures from scratch —
         // the frame the gate decides. (Not frame 1: its discarded walk for the
-        // app header's height renders with `isMeasuring` set, which already
-        // takes a lazy stack's classic walk and builds every row, gate or no
-        // gate. And not a quiet frame: its measures are all served.)
+        // app header's height renders with `isMeasuring` set, which takes a
+        // lazy stack's classic walk and builds every row whatever the gate
+        // says — 133,388 here — so there is no small bound to hold it to. The
+        // gate does show there, a wrong one building 402,737, but only against
+        // a baseline that is already every row. And not a quiet frame: its
+        // measures are all served.)
         let builds = RowBuilds()
         let app = HeadlessApp(DirectLazyApp(builds: builds), width: 30, height: 10)
         app.frame(atNanos: 0)

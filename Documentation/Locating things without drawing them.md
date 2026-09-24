@@ -767,8 +767,14 @@ That walk is Ω(rows) per measure, and it is priced by who reads it:
   render. Where every row is one line the estimate was already exact, and that
   cost buys nothing. `Stress --bench --scenario app-shapes --variant
   grouped-feed` prices it (`grouped-feed-uniform` the one-line case,
-  `--scale 8` the sampled outer stack); the commit that shipped this has the
-  numbers.
+  `--scale 8` the sampled outer stack, 320 sections); the commit that shipped
+  this has the row counts. The sampled case has been a price for a correct
+  drawing only since 1f5d063b: before it, a section taller than the viewport
+  in an outer stack of more than 256 was drawn to its first screenful and
+  padded with blank lines, so every row past that stayed unreachable however
+  exactly its nested stack had been walked, and a price taken then paid for
+  rows nothing showed. `NestedLazyStackReachTests` now pins every row of such
+  a section drawn.
 - **In a view that also scrolls horizontally** neither bullet's arithmetic
   holds. The content is asked how wide it is as well — the horizontal probe —
   and a nested stack answers every width ask there with the whole-content
