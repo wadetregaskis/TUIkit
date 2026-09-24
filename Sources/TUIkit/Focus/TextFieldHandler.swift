@@ -157,11 +157,8 @@ final class TextFieldHandler: PersistedFocusable {
     /// environment during each render pass.
     var textContentType: TextContentType?
 
-    /// Undo history stack storing previous text states and cursor positions.
-    private var undoStack: [(text: String, cursor: Int)] = []
-
-    /// Maximum number of undo states to keep.
-    private let maxUndoStates = 50
+    /// The text and cursor position before each edit, for Ctrl-Z.
+    private var undoHistory = TextUndoHistory<Int>()
 
     // MARK: Input suggestions (``View/textInputSuggestions(_:)``)
 
@@ -874,27 +871,15 @@ extension TextFieldHandler {
 extension TextFieldHandler {
     /// Pushes the current state onto the undo stack.
     func pushUndoState() {
-        let state = (text: text.wrappedValue, cursor: cursorPosition)
-
-        // Avoid duplicate states
-        if let last = undoStack.last, last.text == state.text {
-            return
-        }
-
-        undoStack.append(state)
-
-        // Limit stack size
-        if undoStack.count > maxUndoStates {
-            undoStack.removeFirst()
-        }
+        undoHistory.record(text: text.wrappedValue, caret: cursorPosition)
     }
 
     /// Restores the previous text state from the undo stack.
     func undo() {
-        guard let previous = undoStack.popLast() else { return }
+        guard let previous = undoHistory.popLast() else { return }
         resetSuggestionNavigation()
         text.wrappedValue = previous.text
-        cursorPosition = min(previous.cursor, previous.text.count)
+        cursorPosition = min(previous.caret, previous.text.count)
         clearSelection()
     }
 }

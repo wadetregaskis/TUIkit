@@ -604,7 +604,6 @@ extension TextEditorHandler {
         return anchor < cursor ? (anchor, cursor) : (cursor, anchor)
     }
 
-    /// Drops the selection without moving the cursor.
     /// Selects the whole document — Option-Ctrl-A.
     ///
     /// The empty guard mirrors `TextFieldHandler.selectAll()`, and it is
@@ -620,6 +619,7 @@ extension TextEditorHandler {
         syncDesiredColumn(lines)
     }
 
+    /// Drops the selection without moving the cursor.
     func clearSelection() {
         selectionAnchor = nil
     }
@@ -657,14 +657,29 @@ extension TextEditorHandler {
         return clampedLo < clampedHi ? clampedLo..<clampedHi : nil
     }
 
+    /// `span` clamped into `lines`: each end on a real line, at a real column.
+    /// A corrupt span's clamped columns can come out inverted on one line;
+    /// the callers order them.
+    private func clamped(_ span: SelectionSpan, in lines: [[Character]]) -> SelectionSpan {
+        let startLine = min(max(0, span.start.line), lines.count - 1)
+        let endLine = min(max(0, span.end.line), lines.count - 1)
+        return (
+            TextEditorPosition(
+                line: startLine, column: min(max(0, span.start.column), lines[startLine].count)),
+            TextEditorPosition(
+                line: endLine, column: min(max(0, span.end.column), lines[endLine].count))
+        )
+    }
+
     /// Removes the selected text, placing the cursor at the span's start and
     /// clearing the selection.
     fileprivate func deleteSelection(_ span: SelectionSpan) {
         var lines = readLines()
-        let startLine = min(max(0, span.start.line), lines.count - 1)
-        let endLine = min(max(0, span.end.line), lines.count - 1)
-        let startColumn = min(max(0, span.start.column), lines[startLine].count)
-        let endColumn = min(max(0, span.end.column), lines[endLine].count)
+        let (start, end) = clamped(span, in: lines)
+        let startLine = start.line
+        let endLine = end.line
+        let startColumn = start.column
+        let endColumn = end.column
         if startLine == endLine {
             // The per-line clamps can invert a corrupt span's columns once its
             // lines collapse together; an inverted range must not trap.
