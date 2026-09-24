@@ -56,6 +56,10 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   stand while a replay registered anyway. Planted inside the memo the
     ///   registration is replayed instead (below). See
     ///   `KeyboardShortcutRegistrar`.
+    /// - `.defaultFocus`, under a backdrop's or a probe's focus manager — the
+    ///   declaration is discarded with the throwaway, so a subtree stored from
+    ///   that render would be served against the live manager having never
+    ///   declared its default. Elsewhere it is replayed instead (below).
     /// - `NavigationSplitView`, with a focus manager — its column sections, its
     ///   dividers' and edge's focus registrations, and the hand-over of the
     ///   keyboard when a column hides.
@@ -81,6 +85,10 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   registration a hit can make again — every control that does not fall
     ///   into one of the four cases listed under ``sideEffects``;
     /// - `.focusSection`, once per section registered while it is inactive;
+    /// - `.defaultFocus`, once per declaration against a live focus manager;
+    /// - `.focused(_:)` / `.focused(_:equals:)`, once per value↔id binding —
+    ///   under a backdrop's manager too, where it binds nothing but is still
+    ///   recorded, which scopes a stored subtree to the backdrop;
     /// - a `Button`'s `.keyboardShortcut`, once per registration whose carrier
     ///   was planted inside the memo now recording;
     /// - a hit-test handler, once per registration a render walk makes with a

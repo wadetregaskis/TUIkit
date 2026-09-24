@@ -17,6 +17,11 @@
 //  the store's applied-once flag with it, so a served frame RE-ARMED a default
 //  the user had already moved away from.
 //
+//  So is the binding `.focused(_:equals:)` makes between a value and the id it
+//  offers. Over content nothing below claims the offer, so nothing declined the
+//  cache, and a served frame let the prune drop the binding: the app's writes to
+//  that value went nowhere from then on.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -141,6 +146,72 @@ private struct DefaultFocusPage: View {
             FocusProbe(bound: "second").focused($focus, equals: .second)
             DefaultFocusCard(title: title.value, focus: $focus, priority: priority).equatable()
         }
+    }
+}
+
+/// A memoizable card that is a label until it is edited and a focus stop while
+/// it is — the edit-in-place shape. One `.focused(_:equals:)` spans both, so the
+/// binding is made on every frame whether or not anything below can claim it.
+private struct EditableCard: View, @MainActor Equatable {
+    let title: String
+    let isEditing: Bool
+    let focus: FocusState<ProbeField?>.Binding
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.title == rhs.title && lhs.isEditing == rhs.isEditing
+    }
+
+    var body: some View {
+        VStack {
+            if isEditing {
+                FocusProbe(bound: title)
+            } else {
+                Text(title)
+            }
+        }
+        .focused(focus, equals: .second)
+    }
+}
+
+/// A stop named by a `@FocusState`, and a memoized card bound to the state's
+/// other value that is not focusable until it is edited.
+///
+/// The `@FocusState` is reachable from the test for the reason
+/// ``DefaultFocusPage``'s is. So is `isEditing`: a `var` on the page rather
+/// than a class beside it, since a copy of the page shares the one store.
+private struct EditInPlacePage: View {
+    @FocusState var focus: ProbeField?
+    let title: CardTitle
+    var isEditing = false
+
+    var body: some View {
+        VStack {
+            FocusProbe(bound: "first").focused($focus, equals: .first)
+            EditableCard(title: title.value, isEditing: isEditing, focus: $focus).equatable()
+        }
+    }
+}
+
+/// A memoizable card whose label is bound to a `@FocusState` value and drawn
+/// `.dimmed()` — through `isolatedForBackground()`, so against a backdrop's
+/// throwaway manager, which is never told the binding.
+private struct DimmedLabelCard: View, @MainActor Equatable {
+    let title: String
+    let focus: FocusState<ProbeField?>.Binding
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.title == rhs.title }
+
+    var body: some View {
+        Text(title).focused(focus, equals: .second).dimmed()
+    }
+}
+
+/// The `@FocusState` behind a ``DimmedLabelCard``.
+private struct DimmedLabelPage: View {
+    @FocusState var focus: ProbeField?
+
+    var body: some View {
+        DimmedLabelCard(title: "card", focus: $focus).equatable()
     }
 }
 
@@ -478,5 +549,83 @@ struct FocusRegistrationMemoTests {
                 \(String(describing: page.focus))
                 """)
         }
+    }
+
+    @Test("A served frame keeps a focus binding nothing below it has claimed yet")
+    func unclaimedFocusBindingSurvivesServedFrames() {
+        let harness = LoopHarness()
+        var page = EditInPlacePage(title: CardTitle())
+
+        // The first stop is the first registrant, so it takes the focus. The
+        // card is a label, which claims nothing, so nothing in it declines.
+        harness.frame(page)
+        #expect(page.focus == .first, "the arrangement focuses the first stop")
+        #expect(harness.misses(page) == 0, "frame 2 rendered the card again")
+
+        // The edit-in-place idiom: reveal the field and focus it in one action.
+        // The write resolves against the bindings the manager kept from the last
+        // frame — the field is not on screen yet — and becomes an intent the
+        // field takes up as it registers on the next one.
+        page.isEditing = true
+        page.focus = .second
+        #expect(harness.misses(page) > 0, "frame 3 served the card that the edit changed")
+
+        #expect(
+            page.focus == .second,
+            """
+            the served frame let the binding lapse, so focusing the value it \
+            names did nothing: \(String(describing: page.focus))
+            """)
+    }
+
+    @Test("A focus binding rendered behind a sheet is not stored from that render")
+    func backdropFocusBindingIsNotStored() {
+        let harness = LoopHarness()
+        let title = CardTitle()
+        var page = EditInPlacePage(title: title)
+        func frame(sheet: Bool) {
+            harness.frame(
+                page.sheet(isPresented: .constant(sheet)) { Text("no focus stops here") }
+            ) { environment in
+                environment.terminalWidth = 40
+                environment.overlayContentHeight = 20
+            }
+        }
+
+        frame(sheet: false)
+        frame(sheet: false)
+
+        // Behind the sheet the page is a picture drawn against a throwaway
+        // manager, which is never told the binding, and the live one, hearing
+        // nothing from the page, prunes it. The rename makes the card render
+        // THERE rather than be served.
+        frame(sheet: true)
+        title.value = "card renamed"
+        frame(sheet: true)
+
+        // Stored, that render is served here, and the live manager is not told
+        // the binding again either.
+        frame(sheet: false)
+        page.isEditing = true
+        page.focus = .second
+        frame(sheet: false)
+
+        #expect(
+            page.focus == .second,
+            """
+            the card was served the render it made behind the sheet, so the \
+            binding never came back: \(String(describing: page.focus))
+            """)
+    }
+
+    @Test("A binding drawn dimmed leaves the memo above it caching")
+    func dimmedFocusBindingKeepsTheMemo() {
+        let harness = LoopHarness()
+        let page = DimmedLabelPage()
+
+        // The dimmed render binds nothing, as it never has. Declining there
+        // instead of recording the binding would miss on every frame.
+        harness.frame(page)
+        #expect(harness.misses(page) == 0, "the dimmed card was drawn again")
     }
 }

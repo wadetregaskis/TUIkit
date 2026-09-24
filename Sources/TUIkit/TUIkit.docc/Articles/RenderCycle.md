@@ -534,7 +534,7 @@ subtree declines the cache.
 A key handler (`onKeyPress`, or the <kbd>Ctrl</kbd>-<kbd>R</kbd> binding of
 `.refreshable`), a status-bar item (`.statusBarItems`), an unfocused control's
 place in the focus ring (`FocusRegistration.register`), a `.defaultFocus`
-declaration, an inactive
+declaration, the binding a `.focused(_:equals:)` makes, an inactive
 `.focusSection`, a `Button`'s `.keyboardShortcut`, a hit-test handler with
 the mouse features its control asks for, and the drag session's three
 registrations (a drop destination, a drag auto-scroll zone, a row-reorder
@@ -606,6 +606,22 @@ frame, as it is documented to. It declines under a backdrop's or a probe's
 manager — where the declaration is discarded with the throwaway manager, so a
 subtree stored while it drew against one would be served against the LIVE
 manager having never told it the default at all.
+
+The binding a `.focused(_:equals:)` makes — this value of this `@FocusState`
+is the id offered below — is per-frame presence of the same kind, stamped and
+pruned the same way. Over a focusable it never reached a hit: the control that
+claims the offer declines, as above. Over content nothing claims — a label that
+becomes a field when it is edited — nothing declined, so the first served frame
+lost the binding, and the app's `focus = value` found nothing to turn into a
+focus intent: the field revealed by the same action never took the focus. It is
+replayed now, into the manager of the frame that serves it. The offer is not,
+since a hit renders nothing below the modifier that could claim it. Under a
+backdrop's manager, which is never told the binding, it follows the focus
+registrations' policy rather than the default's decline: the binding is still
+recorded, which scopes a subtree stored from that render to the backdrop, so it
+is not served to the live page after the sheet goes having told the live manager
+nothing — and a memo above a `.dimmed()` one filters the throwaway entry out and
+goes on caching.
 
 A `Button`'s `.keyboardShortcut` is replayed only when the modifier carrying it
 is INSIDE the memoized subtree, which is where writing the button and its

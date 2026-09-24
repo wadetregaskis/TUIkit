@@ -280,6 +280,18 @@ struct _FocusedModifier<Content: View, Value: Hashable>: View {
 extension _FocusedModifier: Renderable {
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let id = forcedID(context)
+        registerBinding(focusID: id, context: context)
+        // A fresh offer per render: the claim is this render's, so the same
+        // control takes the id again next frame rather than the offer staying
+        // spent.
+        let env = context.environment.setting(\.assignedFocusID, to: AssignedFocusID(id: id))
+        return TUIkitView.renderToBuffer(content, context: context.withEnvironment(env))
+    }
+
+    /// Registers this frame's value↔focusID binding, and says what a
+    /// value-memoizing ancestor may do about it.
+    private func registerBinding(focusID: String, context: RenderContext) {
+        guard !context.isMeasuring, let manager = context.environment.focusManager else { return }
         // NOT under a dimmed backdrop. That render uses a throwaway
         // FocusManager, and `store.focusManager` is weak — so wiring it there
         // pointed the page's `@FocusState` at an object that dies with the
@@ -287,18 +299,56 @@ extension _FocusedModifier: Renderable {
         // `focus = .email` to direct focus after dismissal) then resolved a nil
         // manager and silently did nothing: the store is what event closures
         // read, since the environment is out of reach outside a render.
-        if !context.isMeasuring, let manager = context.environment.focusManager,
-            !manager.isBackdrop
-        {
-            store.focusManager = manager
-            manager.registerFocusBinding(
-                store: store.storeID, value: AnyHashable(value), focusID: id)
-        }
-        // A fresh offer per render: the claim is this render's, so the same
-        // control takes the id again next frame rather than the offer staying
-        // spent.
-        let env = context.environment.setting(\.assignedFocusID, to: AssignedFocusID(id: id))
-        return TUIkitView.renderToBuffer(content, context: context.withEnvironment(env))
+        //
+        // The binding is still recorded there, though the registrar binds
+        // nothing into a backdrop's manager: the recorded entry is what scopes
+        // a subtree stored from this render to the backdrop
+        // (`RenderCache.EffectScope`), so it is never served to the live page
+        // after the sheet goes, having told the live manager nothing. It is
+        // `FocusRegistration`'s backdrop policy, not `.defaultFocus`'s decline:
+        // declining would turn caching off above every unclaimed `.focused`
+        // drawn through `isolatedForBackground()` — a `.dimmed()` card, a page
+        // behind a sheet — on every frame, where a live memo above one filters
+        // the throwaway-channel entry out and stores as it always did.
+        if !manager.isBackdrop { store.focusManager = manager }
+        FocusBindingRegistrar.register(
+            store: store.storeID, value: AnyHashable(value), focusID: focusID, context: context)
+        registerReplay(focusID: focusID, context: context)
+    }
+
+    /// Tells a value-memoizing ancestor that the binding is one a hit can
+    /// simply make again, and records it while one is listening.
+    ///
+    /// A binding is per-frame presence: it carries the render generation, and
+    /// `FocusManager.pruneFocusRegistry` drops one a pass did not renew. Over a
+    /// focusable that never mattered, since the control that claims the offer
+    /// declines the cache (`FocusRegistration.declareRegistration`). Over
+    /// content nothing claims — a label that becomes a field when edited —
+    /// nothing declined, so the first served frame lost the binding, and the
+    /// app's `focus = value` from then on found no binding to turn into a focus
+    /// intent: the field it revealed in the same action never took the focus.
+    ///
+    /// The offer is not replayed, and needs no replaying: a hit renders nothing
+    /// below this modifier, so nothing is there to claim it. The next render
+    /// that does reach the content plants a fresh one, as every render does.
+    private func registerReplay(focusID: String, context: RenderContext) {
+        context.environment.volatileReadTracker?.recordReplayableEffect()
+        guard let journal = context.recordingEffectJournal else { return }
+        // Built only while a memo records, so the live path allocates no second
+        // closure. Everything captured is a value, and the store's ID rather
+        // than the store, for the reasons `_DefaultFocusModifier.declareReplay`
+        // gives — nor does a hit re-wire `store.focusManager`, for the same
+        // ones. The forced id is derived from this modifier's identity, which a
+        // hit shares with the render that recorded it.
+        let boundValue = AnyHashable(value)
+        let storeID = store.storeID
+        journal.append(
+            EffectJournal.Entry(
+                kind: FocusBindingRegistrar.kind, channelToken: context.environment.keyChannelToken
+            ) { replay in
+                FocusBindingRegistrar.register(
+                    store: storeID, value: boundValue, focusID: focusID, context: replay)
+            })
     }
 }
 
@@ -332,10 +382,10 @@ extension _DefaultFocusModifier: Renderable {
     /// ancestor may do about it.
     private func declareDefaultFocus(context: RenderContext) {
         guard !context.isMeasuring, let manager = context.environment.focusManager else { return }
-        // Backdrop- and probe-excluded for the same reasons as
-        // `_FocusedModifier` and `FocusRegistration.declareRegistration`: the
-        // throwaway manager must not become the store's, and a declaration made
-        // against it is discarded with it. Declining the cache there as well,
+        // Backdrop- and probe-excluded: the throwaway manager must not become
+        // the store's (`_FocusedModifier` keeps a backdrop's out of it for the
+        // same reason), and a declaration made against it is discarded with
+        // it. Declining the cache there as well,
         // because a subtree stored while it drew against a throwaway would be
         // served later against the LIVE manager — which would then never be
         // told the default at all, where an unmemoized page re-declares it on
@@ -394,6 +444,24 @@ extension _DefaultFocusModifier: Layoutable {
 }
 
 // MARK: - Registration
+
+/// The one binding `.focused(_:)` / `.focused(_:equals:)` makes, shared by the
+/// live render and by a value memo replaying it — see `EffectJournal`.
+enum FocusBindingRegistrar {
+    /// The journal kind of a `@FocusState` binding.
+    static let kind = EffectJournal.Kind("focusBinding")
+
+    /// Binds `value` of `store` to `focusID` on `context`'s manager.
+    ///
+    /// It looks the manager up in `context` rather than taking one, so a replay
+    /// binds into the manager of the frame that serves it — and refuses the
+    /// backdrop's, as the render does, so a replay is the call the render made.
+    @MainActor
+    static func register(store: String, value: AnyHashable, focusID: String, context: RenderContext) {
+        guard let manager = context.environment.focusManager, !manager.isBackdrop else { return }
+        manager.registerFocusBinding(store: store, value: value, focusID: focusID)
+    }
+}
 
 /// The one declaration `.defaultFocus(_:_:priority:)` makes, shared by the live
 /// render and by a value memo replaying it — see `EffectJournal`.
