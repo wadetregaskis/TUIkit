@@ -30,6 +30,7 @@
 /// | Any printable | Insert character at cursor |
 /// | Backspace | Delete character before cursor |
 /// | Delete | Delete character at cursor |
+/// | Option+Backspace / Option+Delete | Delete the word before / after the cursor |
 /// | Left / Right | Move cursor one character |
 /// | Option+Left | Move cursor to the start of the current (or previous) word |
 /// | Option+Right | Move cursor to the end of the current (or next) word |

@@ -35,6 +35,8 @@
 /// | Any printable | Insert character at cursor (replaces selection) |
 /// | Backspace | Delete selection or character before cursor |
 /// | Delete | Delete selection or character at cursor |
+/// | Option+Backspace | Delete selection or back to the previous word boundary |
+/// | Option+Delete | Delete selection or forward to the next word boundary |
 /// | Left | Move cursor left (clears selection) |
 /// | Right | Move cursor right (clears selection) |
 /// | Option+Left / Alt+b | Move to the previous word boundary (clears selection) |
@@ -425,12 +427,8 @@ extension TextFieldHandler {
         case .character(let char):
             return handleCharacterEvent(char, event: event)
 
-        case .backspace:
-            deleteBackward()
-            return true
-
-        case .delete:
-            deleteForward()
+        case .backspace, .delete:
+            handleDeletion(event)
             return true
 
         case .left:
@@ -482,6 +480,18 @@ extension TextFieldHandler {
     /// Direction enum for `handleHorizontalArrow`.
     fileprivate enum ArrowDirection {
         case left, right
+    }
+
+    /// Backspace and Delete: a character, or with Option a word, as in the
+    /// editor. Either takes a selection instead when there is one.
+    fileprivate func handleDeletion(_ event: KeyEvent) {
+        switch (event.key, event.alt) {
+        case (.backspace, false): deleteBackward()
+        case (.backspace, true): deleteWordBackward()
+        case (.delete, false): deleteForward()
+        case (.delete, true): deleteWordForward()
+        default: break
+        }
     }
 
     /// Handles a `.character(c)` event: a chord (``TextFieldChord``, where
@@ -733,6 +743,33 @@ extension TextFieldHandler {
         let index = current.index(current.startIndex, offsetBy: cursorPosition)
         current.remove(at: index)
         text.wrappedValue = current
+    }
+
+    /// Option-Backspace: deletes back to the word boundary Option-Left moves
+    /// to (``WordBoundary``, which the editor's Option-Backspace uses too), as
+    /// one undoable edit. A selection goes instead, as for plain Backspace.
+    func deleteWordBackward() {
+        guard !hasSelection else {
+            deleteBackward()
+            return
+        }
+        let target = WordBoundary.previous(in: Array(text.wrappedValue), from: cursorPosition)
+        guard target < cursorPosition else { return }
+        resetSuggestionNavigation()
+        deleteRange(target..<cursorPosition)
+    }
+
+    /// Option-Delete: deletes forward to the word boundary Option-Right moves
+    /// to, as one undoable edit. A selection goes instead, as for plain Delete.
+    func deleteWordForward() {
+        guard !hasSelection else {
+            deleteForward()
+            return
+        }
+        let target = WordBoundary.next(in: Array(text.wrappedValue), from: cursorPosition)
+        guard target > cursorPosition else { return }
+        resetSuggestionNavigation()
+        deleteRange(cursorPosition..<target)
     }
 }
 
