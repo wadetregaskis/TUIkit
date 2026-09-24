@@ -29,6 +29,16 @@
 /// included. And a resize is what `SIGWINCH` does in the app — the terminal
 /// reports the new size and the diff writer forgets what it drew.
 ///
+/// A change made inside `withAnimation` plays out over the frames that follow
+/// it, as it does in the app: each frame is fenced by an ``AnimationScheduler``
+/// the way `AppRunner.renderFrame` fences it. Without one a frame cannot
+/// animate — `AnimationFrame.canAnimate` is false, because a one-off render
+/// would show an animation's first value and never advance — so every
+/// animated change, every transition in and out, landed on its end state in
+/// one frame, and a harness that exists to watch what an app draws could not
+/// see any of them move. Only the fence: the loop's next firing is still the
+/// caller's to choose, since time is.
+///
 /// `package`, not public: harness plumbing, not API.
 @MainActor
 package final class HeadlessApp<A: App> {
@@ -36,6 +46,7 @@ package final class HeadlessApp<A: App> {
     private let renderer: RenderLoop<A>
     private let inputHandler: InputHandler
     private let tuiContext: TUIContext
+    private let animationScheduler = AnimationScheduler()
 
     /// Whether every frame starts from an EMPTY render cache — every memo
     /// missing, every kept size and buffer gone. `@State` survives, as it does
@@ -76,7 +87,9 @@ package final class HeadlessApp<A: App> {
     /// Renders one frame at `nanos` on the monotonic clock's scale.
     package func frame(atNanos nanos: Int64) {
         if clearsRenderCacheEachFrame { tuiContext.renderCache.clearAll() }
-        renderer.render(frameNowNanos: nanos)
+        animationScheduler.beginFrame()
+        renderer.render(animationScheduler: animationScheduler, frameNowNanos: nanos)
+        animationScheduler.endFrame()
     }
 
     /// Delivers a key through the five-layer chain, as a keypress is.

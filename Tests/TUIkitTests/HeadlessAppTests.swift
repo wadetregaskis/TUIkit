@@ -35,6 +35,29 @@ private struct TypingPage: View {
     }
 }
 
+/// A marker that a button moves ten cells across inside `withAnimation`.
+private struct SlidingApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup { SlidingPage() }
+    }
+}
+
+private struct SlidingPage: View {
+    @State private var isAcross = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button("go") {
+                withAnimation(.linear(duration: 1)) { isAcross.toggle() }
+            }
+            Text("@").padding(.leading, isAcross ? 10 : 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
 /// Whether some line of `screen`, with its styling stripped, contains `text`.
 private func shows(_ text: String, on screen: [String]) -> Bool {
     screen.contains { $0.stripped.contains(text) }
@@ -52,6 +75,35 @@ struct HeadlessAppTests {
         app.frame(atNanos: 16_666_667)
         #expect(shows("echo: hello", on: app.screen))
         #expect(app.bytesWritten > 0)
+    }
+
+    /// The harness exists to watch what an app draws, and what an app draws
+    /// under `withAnimation` is every frame between the two values. Without a
+    /// scheduler fencing the frame nothing could animate, and the marker
+    /// arrived at its end on the frame after the key.
+    @Test("A change made inside withAnimation is drawn part-way on the frames between")
+    func animatedChangesPlayOut() {
+        let app = HeadlessApp(SlidingApp(), width: 40, height: 10)
+        app.frame(atNanos: 0)
+        func column() -> Int? {
+            for line in app.screen.map(\.stripped) {
+                if let range = line.range(of: "@") {
+                    return line.distance(from: line.startIndex, to: range.lowerBound)
+                }
+            }
+            return nil
+        }
+        let start = column()
+        #expect(start != nil, "precondition: the marker is drawn")
+        guard let start else { return }
+
+        #expect(app.send(KeyEvent(key: .enter)), "precondition: the button took the key")
+        app.frame(atNanos: 16_666_667)
+        #expect(column() == start, "the change did not start from where it was")
+        app.frame(atNanos: 516_666_667)
+        #expect(column() == start + 5, "not half-way across half-way through")
+        app.frame(atNanos: 1_100_000_000)
+        #expect(column() == start + 10)
     }
 
     @Test("A resize lays the next frame out at the new size")
