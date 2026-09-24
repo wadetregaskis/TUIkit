@@ -70,6 +70,27 @@ struct PulseRampTests {
         }
     }
 
+    /// …but a fade ASKED to reach black keeps it. Red Sands' focus wash breathes
+    /// away from its brick page, from a dark brown (`3D1916`) to near-black
+    /// (`000005`); the cube draws that as `5F0000` to black, and with the black
+    /// dropped as a lost hue the ramp held one colour — a focused list's cursor
+    /// row that did not breathe on a 256-colour terminal. The black is the colour
+    /// the breath was asked for, and the dim end that DOES lose its hue
+    /// (`noGreyFrames` above) is still dropped.
+    @Test("A fade whose visible end is black keeps that end")
+    func achromaticBrightEndIsKept() throws {
+        let redSands = try #require(PaletteRegistry.palette(withName: "Red Sands"))
+        let (dim, bright) = redSands.focusWashPulse()
+        #expect(
+            bright.rendered(at: .palette256).isAchromatic,
+            "the premise: the far end renders black, \(bright.rendered(at: .palette256))")
+        let rendered = Color.pulseRamp(from: dim, to: bright, depth: .palette256)
+            .map { $0.rendered(at: .palette256) }
+        #expect(
+            rendered.count >= 2 && rendered.last == bright.rendered(at: .palette256),
+            "Red Sands' wash breath holds \(rendered) on 256 colours")
+    }
+
     @Test("The ramp is never empty, so a pulse always has something to show")
     func neverEmpty() {
         for palette in statedPalettes {

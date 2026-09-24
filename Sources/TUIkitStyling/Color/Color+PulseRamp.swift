@@ -9,7 +9,7 @@ import Foundation
 extension Color {
 
     /// The colours a `dim`…`bright` fade can actually PRODUCE on this terminal,
-    /// in order, with the off-hue ones removed.
+    /// in order, with the off-hue ones removed — all but `bright`'s own.
     ///
     /// A pulse is written as a continuous lerp sampled on an even time grid,
     /// which is right on a truecolor terminal and wrong everywhere else. On a
@@ -26,6 +26,15 @@ extension Color {
     /// screen time, so the animation is as smooth as the palette permits and
     /// never off-hue. Truecolor callers should keep the continuous lerp — there
     /// the ramp is effectively infinite.
+    ///
+    /// The one achromatic entry kept is `bright`'s own rendering. A fade whose
+    /// visible end is black or grey was asked for that colour, so showing it is
+    /// no hue lost on the way: Red Sands' focus wash breathes from a dark brown
+    /// down to near-black (`3D1916` to `000005`, away from a brick page), which
+    /// the cube draws as `5F0000` to black — and dropping the black left it one
+    /// colour, a cursor row that did not breathe. Where the grey is on the way,
+    /// or at the dim end (an accent over a near-black page, whose bottom
+    /// renders as the page itself), it is still dropped.
     ///
     /// - Parameters:
     ///   - dim: The recessive endpoint.
@@ -83,6 +92,9 @@ extension Color {
         // have colour — a grey accent (the White / Pro / Silver Aerogel
         // palettes) is *supposed* to render grey.
         let wantsHue = dim.hasHue(depth: depth) || bright.hasHue(depth: depth)
+        // …and never at the end the fade is ASKED to reach: that one is the
+        // breath's own colour, not a hue the cube lost on the way. See above.
+        let brightRendered = bright.rendered(at: depth)
 
         var ramp: [Color] = []
         var seen: [Color] = []
@@ -100,7 +112,7 @@ extension Color {
             // reached; `samples` is small (64) so the linear scan is nothing.
             guard !seen.contains(rendered) else { continue }
             seen.append(rendered)
-            if wantsHue && rendered.isAchromatic { continue }
+            if wantsHue && rendered.isAchromatic && rendered != brightRendered { continue }
             ramp.append(candidate)
         }
         // Dropping the greys can empty a ramp whose whole span was off-hue.
