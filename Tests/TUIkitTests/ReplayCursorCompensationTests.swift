@@ -95,7 +95,7 @@ struct ReplayCursorCompensationTests {
             isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
         for index in run.frames.indices {
             let patched = writer.patchingAnimatedRun(
-                run, showing: run.frame(atIndex: index), in: built, bgCode: "")
+                run, showing: run.frame(atIndex: index), in: built, fields: run.groundFields(onPage: ""))
             #expect(
                 patched.contains(Self.cursorForward),
                 "frame \(index) reached the terminal with the cluster uncompensated")
@@ -198,12 +198,13 @@ struct ReplayBackgroundTests {
         let frame = "\u{1B}[0;38;5;34m" + "bb" + ANSIRenderer.reset
         let run = Self.run(frame, at: 1..<3)
 
-        let bare = writer.patchingAnimatedRun(run, showing: frame, in: row, bgCode: "")
+        let bare = writer.patchingAnimatedRun(run, showing: frame, in: row, fields: run.groundFields(onPage: ""))
         #expect(
             paintedCells(bare)[1...2].allSatisfy { $0.background.isEmpty },
             "a row built on nothing gave the frame a field: \(bare.debugDescription)")
 
-        let patched = writer.patchingAnimatedRun(run, showing: frame, in: row, bgCode: Self.page)
+        let patched = writer.patchingAnimatedRun(
+            run, showing: frame, in: row, fields: run.groundFields(onPage: Self.page))
         #expect(
             paintedCells(patched).map(\.background) == Array(repeating: Self.page, count: 5),
             "the run's frame reached the row with no background: \(patched.debugDescription)")
@@ -220,8 +221,9 @@ struct ReplayBackgroundTests {
             isTmux: false)
         let row = Self.page + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
         let frame = "\u{1B}[38;5;34m" + "bb" + ANSIRenderer.reset
+        let run = Self.run(frame, at: 1..<3)
         let patched = writer.patchingAnimatedRun(
-            Self.run(frame, at: 1..<3), showing: frame, in: row, bgCode: Self.page)
+            run, showing: frame, in: row, fields: run.groundFields(onPage: Self.page))
         #expect(
             paintedCells(patched).map(\.background) == Array(repeating: Self.page, count: 5),
             "the row resumes in the terminal's background: \(patched.debugDescription)")
@@ -256,7 +258,8 @@ struct ReplayBackgroundTests {
             panel + $0 + ANSIRenderer.reset
         }
 
-        let patched = writer.patchingAnimatedRun(run, showing: frame, in: row, bgCode: Self.page)
+        let patched = writer.patchingAnimatedRun(
+            run, showing: frame, in: row, fields: run.groundFields(onPage: Self.page))
         let cells = paintedCells(patched).map(\.background)
         #expect(patched.stripped.hasPrefix("ab ▐xx▌ z"), "the run did not land: \(patched.stripped)")
         #expect(cells.count == 12, "the splice changed the row's width")

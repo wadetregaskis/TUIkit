@@ -253,8 +253,36 @@ public struct SGRState: Sendable, Equatable {
     ///
     /// - Parameter sequence: A full escape, `ESC [ … m`.
     public mutating func apply(_ sequence: String) {
+        applyReportingBackground(sequence)
+    }
+
+    /// What an SGR sequence said about the background.
+    package enum BackgroundStatement: Sendable, Equatable {
+        /// SGR 0 (or an empty parameter): the background back to the terminal's
+        /// default, along with everything else.
+        case reset
+        /// SGR 49: the terminal's own field, stated as a field.
+        case terminalDefault
+        /// A colour: a named, 256-colour or 24-bit background.
+        case colour
+    }
+
+    /// Folds `sequence` into the state exactly as ``apply(_:)`` does, and says
+    /// what it said about the background — its LAST statement about it, since a
+    /// later parameter overrides an earlier one — or `nil` if it said nothing.
+    ///
+    /// For a caller that tracks one more background than this state holds — the
+    /// one its own output has in force — and would otherwise parse every sequence
+    /// twice to keep the two in step: after a sequence that said something the
+    /// output has exactly this state's background, and after one that said
+    /// nothing it has whatever it had.
+    ///
+    /// - Parameter sequence: A full escape, `ESC [ … m`.
+    /// - Returns: What the sequence last said about the background.
+    @discardableResult
+    package mutating func applyReportingBackground(_ sequence: String) -> BackgroundStatement? {
         let utf8 = sequence.utf8
-        guard utf8.last == 0x6D else { return }  // 'm'
+        guard utf8.last == 0x6D else { return nil }  // 'm'
         // NOT the `reserveCapacity` that measured SLOWER on `Table.alignText`:
         // that one is about String's inline small-string storage, which an
         // Array does not have, so here it is strictly fewer allocations. The
@@ -305,7 +333,7 @@ public struct SGRState: Sendable, Equatable {
             start = utf8.index(after: cursor)
             if start == end { codes.append(.number(0)); break }  // a trailing ';'
         }
-        apply(codes)
+        return apply(codes)
     }
 
     /// One parsed parameter: a number, or text this model cannot read.
@@ -321,7 +349,9 @@ public struct SGRState: Sendable, Equatable {
         }
     }
 
-    private mutating func apply(_ codes: [Parameter]) {
+    /// Folds `codes` in, and returns what they last said about the background.
+    private mutating func apply(_ codes: [Parameter]) -> BackgroundStatement? {
+        var statement: BackgroundStatement?
         var index = 0
         while index < codes.count {
             guard case .number(let value) = codes[index] else {
@@ -332,6 +362,7 @@ public struct SGRState: Sendable, Equatable {
             switch value {
             case 0:
                 self = Self()
+                statement = .reset
             case 1...9:
                 attributes |= Self.bit(value)
             case 21, 22, 23, 24, 25, 27, 28, 29:
@@ -342,24 +373,30 @@ public struct SGRState: Sendable, Equatable {
                 foreground = nil
             case 40...47, 100...107:
                 background = .named(value)
+                statement = .colour
             case 49:
                 background = nil
+                statement = .terminalDefault
             case 38, 48, 58:
-                index += applyExtendedColour(value, codes, from: index)
+                let (consumed, applied) = applyExtendedColour(value, codes, from: index)
+                if applied, value == 48 { statement = .colour }
+                index += consumed
                 continue
             default:
                 passthrough.append(String(value))
             }
             index += 1
         }
+        return statement
     }
 
     /// Folds a `38;…`, `48;…` or `58;…` parameter group, and reports how many
-    /// parameters it consumed. An incomplete group is consumed and ignored: it
-    /// cannot be read as a colour, and its digits are not attributes.
+    /// parameters it consumed and whether it was read as a colour. An incomplete
+    /// group is consumed and ignored: it cannot be read as a colour, and its
+    /// digits are not attributes.
     private mutating func applyExtendedColour(
         _ introducer: Int, _ codes: [Parameter], from index: Int
-    ) -> Int {
+    ) -> (consumed: Int, applied: Bool) {
         let span = Self.extendedColourSpan(codes, from: index)
         let parameters = codes[index..<min(codes.count, index + span)]
         let colour: Colour?
@@ -377,13 +414,13 @@ public struct SGRState: Sendable, Equatable {
         default:
             colour = nil
         }
-        guard let colour else { return span }
+        guard let colour else { return (span, false) }
         switch introducer {
         case 38: foreground = colour
         case 48: background = colour
         default: passthrough.append(parameters.map(\.text).joined(separator: ";"))
         }
-        return span
+        return (span, true)
     }
 
     private static func extendedColourSpan(_ codes: [Parameter], from index: Int) -> Int {

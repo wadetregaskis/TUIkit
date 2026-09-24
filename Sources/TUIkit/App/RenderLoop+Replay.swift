@@ -68,10 +68,44 @@ extension RenderActivity {
 @MainActor
 struct ReplayableFrame {
     var contentLines: [String]
-    var runs: [AnimatedCellRun]
+    /// Constant, as ``backgroundCode`` is, because ``runFields`` is read from them.
+    let runs: [AnimatedCellRun]
     var terminalWidth: Int
     var startRow: Int
-    var backgroundCode: String
+    let backgroundCode: String
+
+    /// The field under each cell of each run, `runFields[i]` for `runs[i]` — its
+    /// ground read on ``backgroundCode`` (``AnimatedCellRun/groundFields(onPage:)``)
+    /// — or `nil` for a run no tick has spliced since the render.
+    ///
+    /// Read at most once per run per render, by ``fields(ofRun:)``, rather than on
+    /// every tick that splices the run: the ground and the page are both fixed
+    /// until the next render, and reading them is a walk of the ground and a parse
+    /// of the page. And no sooner than the first tick that needs them, so a render
+    /// that is never replayed — every render while a view reads the phase — reads
+    /// nothing.
+    private var runFields: [[SGRState.Colour?]?]
+
+    init(
+        contentLines: [String], runs: [AnimatedCellRun], terminalWidth: Int, startRow: Int,
+        backgroundCode: String
+    ) {
+        self.contentLines = contentLines
+        self.runs = runs
+        self.terminalWidth = terminalWidth
+        self.startRow = startRow
+        self.backgroundCode = backgroundCode
+        runFields = Array(repeating: nil, count: runs.count)
+    }
+
+    /// The field under each cell of `runs[index]`, read the first time a tick
+    /// asks for it and kept until the next render.
+    mutating func fields(ofRun index: Int) -> [SGRState.Colour?] {
+        if let fields = runFields[index] { return fields }
+        let fields = runs[index].groundFields(onPage: backgroundCode)
+        runFields[index] = fields
+        return fields
+    }
 
     /// The step each clock was last *written* at, so a tick that lands on the
     /// same picture can be skipped.
@@ -181,13 +215,16 @@ extension RenderLoop {
     @discardableResult
     func replayAnimations(elapsed: [AnimationClock: Double]) -> Bool {
         guard let frame = replayable, !frame.runs.isEmpty else { return false }
-        let due = frame.runs.filter { elapsed[$0.clock] != nil }
+        // By index, so each run's fields — read once per render
+        // (`ReplayableFrame.fields(ofRun:)`) — go with it.
+        let due = frame.runs.indices.filter { elapsed[frame.runs[$0].clock] != nil }
         guard !due.isEmpty else { return false }
 
         // Skip a tick that lands on the picture already showing. A blink spends
         // most of its cycle on the same two frames, and a quantised pulse
         // repeats shades, so most ticks change nothing. See `lastSteps`.
-        let unchanged = due.allSatisfy { run in
+        let unchanged = due.allSatisfy { index in
+            let run = frame.runs[index]
             guard let last = frame.lastSteps[run.clock], let now = elapsed[run.clock] else {
                 return false  // nothing written since the render: assume it moved
             }
@@ -207,13 +244,14 @@ extension RenderLoop {
         var touched = false
         // Grouped by row, because a row's patched line depends on every run
         // sitting on it and the memo below is keyed on all of their indexes.
-        var byRow: [Int: [AnimatedCellRun]] = [:]
-        for run in due where lines.indices.contains(run.offsetY) {
-            byRow[run.offsetY, default: []].append(run)
+        var byRow: [Int: [Int]] = [:]
+        for index in due where lines.indices.contains(frame.runs[index].offsetY) {
+            byRow[frame.runs[index].offsetY, default: []].append(index)
         }
-        for (row, runs) in byRow {
-            let indexes = runs.map { run in
-                elapsed[run.clock].map { run.index(atElapsed: $0) } ?? 0
+        for (row, runIndexes) in byRow {
+            let indexes = runIndexes.map { index in
+                let run = frame.runs[index]
+                return elapsed[run.clock].map { run.index(atElapsed: $0) } ?? 0
             }
             // Nothing on this row has moved since it was last patched, so the
             // line it needs is the one already built.
@@ -224,7 +262,8 @@ extension RenderLoop {
                 }
                 continue
             }
-            for run in runs {
+            for index in runIndexes {
+                let run = frame.runs[index]
                 guard let now = elapsed[run.clock] else { continue }
                 // Through the diff writer rather than by hand: it knows how
                 // to drop a styled run into a styled line at a visible column
@@ -233,13 +272,14 @@ extension RenderLoop {
                 // it knows the host's cursor-advance model, which a frame the
                 // view rendered has never met. See `patchingAnimatedRun`.
                 //
-                // The page goes too, but only as what a cell no container
-                // painted under sits on: every other field comes from the run's
-                // ground. Restated after every reset in the frame, the page
+                // With the field under each of its cells: its ground, read on
+                // the page — so the page is what a cell no container painted
+                // under sits on, and every other cell sits on its container's
+                // field. Restated after every reset in the frame, the page
                 // painted over every container's field.
+                let fields = replayable?.fields(ofRun: index) ?? []
                 let patched = diffWriter.patchingAnimatedRun(
-                    run, showing: run.frame(atElapsed: now), in: lines[row],
-                    bgCode: frame.backgroundCode)
+                    run, showing: run.frame(atElapsed: now), in: lines[row], fields: fields)
                 if patched != lines[row] {
                     lines[row] = patched
                     touched = true

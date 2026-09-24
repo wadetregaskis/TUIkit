@@ -452,7 +452,7 @@ extension FrameDiffWriter {
     /// The animation replay used to run a run's frame through this as well, and
     /// must not — a frame is a piece of a row that sits on whatever its
     /// containers painted, which is not the page when they painted anything. See
-    /// ``patchingAnimatedRun(_:showing:in:bgCode:)``.
+    /// ``patchingAnimatedRun(_:showing:in:fields:)``.
     private static func restoringBackground(in styled: String, bgCode: String, reset: String) -> String {
         guard !bgCode.isEmpty else { return styled }
         return ANSIRenderer.restating(bgCode, afterResetsIn: styled)
@@ -663,19 +663,23 @@ extension FrameDiffWriter {
     /// cell a field of its own: a `.plain` field's block caret, drawn visible,
     /// never blinked off. See `Documentation/Terminal-compatibility.md`.
     ///
+    /// The fields come in read, not as the ground and the page to read them from:
+    /// both are fixed from one render to the next, so the run loop reads them once
+    /// per render (`ReplayableFrame.fields(ofRun:)`) rather than once per tick.
+    ///
     /// - Parameters:
-    ///   - run: The run being advanced, whose ground says what is under its cells.
+    ///   - run: The run being advanced.
     ///   - frame: The run's picture for this tick, as the view rendered it.
     ///   - line: The row `run` sits on, as `buildOutputLines` produced it.
-    ///   - bgCode: The page that row was built on — what a cell no container
-    ///     painted under sits on.
+    ///   - fields: The field under each of the run's cells: its ground read on the
+    ///     page that row was built on, `run.groundFields(onPage:)`.
     func patchingAnimatedRun(
-        _ run: AnimatedCellRun, showing frame: String, in line: String, bgCode: String
+        _ run: AnimatedCellRun, showing frame: String, in line: String,
+        fields: [SGRState.Colour?]
     ) -> String {
         FrameBuffer.patchingAnimatedCells(
             in: line, with: frame, atColumn: run.offsetX, width: run.width,
-            fields: run.groundFields(onPage: bgCode),
-            compensating: compensatingCursorAdvance)
+            fields: fields, compensating: compensatingCursorAdvance)
     }
 
     private func reuseCache(for region: OutputRegion) -> LineReuseCache {

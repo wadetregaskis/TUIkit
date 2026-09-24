@@ -55,12 +55,15 @@ extension String {
     func paintedOver(fields: [SGRState.Colour?]) -> String {
         guard fields.contains(where: { $0 != nil }) else { return self }
 
-        // What the frame itself states, and what the output has in force: the
-        // two differ only in the background, and only by the fields put in
-        // here — every sequence of the frame's goes to both, so one that
-        // clears or names a background does so in each.
+        // What the frame itself states, and the field the OUTPUT has in force:
+        // the two differ only by the fields put in here. So the output's field
+        // is the one thing tracked beside the frame's state, and each of the
+        // frame's sequences is parsed once — into the frame's state, which says
+        // whether it spoke about the background. One that named, cleared or
+        // reset it leaves the output with exactly the frame's field; one that
+        // said nothing about it leaves the output with what it had.
         var own = SGRState()
-        var inForce = SGRState()
+        var inForce: SGRState.Colour?
         var column = 0
         var result = ""
         // Room for four truecolour restatements, which covers a frame of
@@ -72,9 +75,9 @@ extension String {
         func restate() {
             guard !own.namesBackground, column < fields.count else { return }
             let field = fields[column]
-            guard inForce.backgroundColour != field else { return }
+            guard inForce != field else { return }
             result += SGRState.backgroundEscape(field)
-            inForce.setBackground(field)
+            inForce = field
         }
 
         let scalars = unicodeScalars
@@ -108,8 +111,7 @@ extension String {
             index = end
             result += text
             guard isSGR else { continue }
-            own.apply(text)
-            inForce.apply(text)
+            if own.applyReportingBackground(text) != nil { inForce = own.backgroundColour }
             restate()
         }
         flushVisible()

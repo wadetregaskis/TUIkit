@@ -115,7 +115,8 @@ struct ReplayedEraseFieldTests {
         #expect(rendered.allSatisfy { $0.background == field }, "the render erased off its field: \(rendered)")
 
         for frame in run.frames {
-            let patched = writer.patchingAnimatedRun(run, showing: frame, in: built, bgCode: Self.page)
+            let patched = writer.patchingAnimatedRun(
+                run, showing: frame, in: built, fields: run.groundFields(onPage: Self.page))
             let replayed = erasures(patched)
             #expect(
                 replayed == rendered,
