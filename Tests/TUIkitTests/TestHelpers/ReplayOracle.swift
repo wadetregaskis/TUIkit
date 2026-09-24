@@ -60,13 +60,34 @@ enum ReplayOracle {
         /// frame asked for fell due, as the run loop would — so a test can tell
         /// a replay that went right from one that never happened.
         var scheduledRenders = 0
+        /// How many compared rows a replay had moved a glyph on since the render
+        /// it patched — the ticks that actually tested something.
+        var movedGlyphs = 0
+    }
+
+    /// Where the truth for a replayed cell's COLOURS comes from. Its glyph always
+    /// comes from a render at the replayed instant.
+    enum ColourTruth {
+        /// The same render: right wherever nothing but the runs changes between
+        /// one render and the next.
+        case renderedThen
+        /// A render at the instant the replaying loop last rendered, for an app
+        /// whose colours move on a LATTICE rather than in runs — a transition's
+        /// fade, which renders every 2 ticks. Between two of those renders the
+        /// run loop draws nothing but the runs, so every colour on screen, the
+        /// runs' included, is the last render's, while a run's glyph moves on; a
+        /// render at the replayed instant has faded further, on every cell. Only
+        /// for runs whose frames differ in their glyph alone — a spinner.
+        case lastRendered
     }
 
     /// Replays every run of `make`'s app at each focus stop and compares each
-    /// replayed row with a render at the same instant.
+    /// replayed row with a render at the same instant — its colours with a render
+    /// where `colours` says.
     ///
     /// - Parameters:
-    ///   - make: Builds the app. Called twice, once per loop.
+    ///   - make: Builds the app. Called once per loop: twice, or three times for
+    ///     ``ColourTruth/lastRendered``.
     ///   - focusSteps: How many times the focus moves on before the first stop.
     ///   - stops: How many focus stops to walk, the focus moving on once between
     ///     each; the walk wraps like Tab does.
@@ -77,12 +98,17 @@ enum ReplayOracle {
     ///   - size: The terminal.
     ///   - reportOncePerRow: Keep only the first disagreement on each row, for a
     ///     walk that would otherwise report one fault at every tick of every stop.
+    ///   - colours: Where a replayed cell's colours are checked against.
     static func compare<A: App>(
         _ make: () -> A, focusSteps: Int = 0, stops: Int = 1, ticks: Int = 24,
-        size: (width: Int, height: Int) = (80, 30), reportOncePerRow: Bool = false
+        size: (width: Int, height: Int) = (80, 30), reportOncePerRow: Bool = false,
+        colours: ColourTruth = .renderedThen
     ) -> Findings {
         let replaying = Driven(make(), focusSteps: focusSteps, size: size)
         let rendering = Driven(make(), focusSteps: focusSteps, size: size)
+        // A third loop for `.lastRendered`, rendering only where the replaying one
+        // did, so the rendering loop's clocks never run backwards.
+        let colouring = colours == .lastRendered ? Driven(make(), focusSteps: focusSteps, size: size) : nil
         let tick = AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: 1))
         let step = Int64(AnimationClock.standardFrameTicks) * tick
         var findings = Findings()
@@ -91,10 +117,10 @@ enum ReplayOracle {
             // Each stop begins a step past the last instant the one before used.
             let base = start + Int64(stop * (ticks + 1)) * step
             if stop > 0 {
-                replaying.moveFocus()
-                rendering.moveFocus()
-                replaying.render(at: base)
-                rendering.render(at: base)
+                for driven in [replaying, rendering] + (colouring.map { [$0] } ?? []) {
+                    driven.moveFocus()
+                    driven.render(at: base)
+                }
             }
             guard let first = replaying.loop.replayable, !first.runs.isEmpty else { continue }
             let cursorAtBase = replaying.timer.elapsed(for: .cursor)
@@ -108,15 +134,26 @@ enum ReplayOracle {
                     ])
                 else { continue }
                 rendering.render(at: now)
+                if let colouring, colouring.renderedAt != replaying.renderedAt {
+                    colouring.render(at: replaying.renderedAt)
+                }
                 guard let replayed = replaying.loop.replayable, let rendered = rendering.loop.replayable
                 else { continue }
+                let coloured = colouring?.loop.replayable
                 // The rows of the frame being replayed: a render since the stop began
                 // may have moved a run.
                 let rows = Set(replayed.runs.map(\.offsetY)).sorted()
                 for row in rows where replayed.contentLines.indices.contains(row) {
                     findings.compared += 1
                     let shown = paintedCells(replayed.lastPatched[row]?.line ?? replayed.contentLines[row])
-                    let expected = paintedCells(rendered.contentLines[row])
+                    if shown.map(\.glyph) != paintedCells(replayed.contentLines[row]).map(\.glyph) {
+                        findings.movedGlyphs += 1
+                    }
+                    var expected = paintedCells(rendered.contentLines[row])
+                    if let coloured, coloured.contentLines.indices.contains(row) {
+                        let colours = paintedCells(coloured.contentLines[row])
+                        expected = zip(expected, colours).map { PaintedCell(glyph: $0.glyph, state: $1.state) }
+                    }
                     guard let column = firstDifference(shown, expected) else { continue }
                     guard !reportOncePerRow || reported.insert(row).inserted else { continue }
                     func describe(_ cells: [PaintedCell]) -> String {
@@ -173,7 +210,7 @@ enum ReplayOracle {
         let focusManager: FocusManager
         let scheduler = AnimationScheduler()
         /// The instant of the last render, which the next firing is counted after.
-        private var renderedAt = start
+        private(set) var renderedAt = start
 
         /// A loop over `app` that has rendered at ``start`` with the focus moved on
         /// `focusSteps` times.

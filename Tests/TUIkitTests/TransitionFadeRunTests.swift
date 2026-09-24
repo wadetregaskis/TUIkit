@@ -12,6 +12,10 @@
 //  rewrite only the lines, so each of those ticks drew the spinner at full
 //  strength, on its unfaded field, in the middle of a view half faded out.
 //
+//  Pinned twice: at the effect, where the drawn frame replayed over its ground has
+//  to be the faded row; and through the run loop (`ReplayOracle`), where the loop
+//  renders on the transition's lattice and replays the spinner's steps between.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -21,9 +25,46 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
+/// A spinner on a colour of its own, arriving under a one-second `.opacity`
+/// transition as the app first appears.
+private struct ArrivingSpinner: View {
+    @State private var shown = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Arriving")
+            if shown {
+                HStack(spacing: 0) { Text("Busy "); Spinner(style: .dots) }
+                    .background(Color.rgb(40, 40, 200))
+                    .transition(.opacity)
+            }
+        }
+        .onAppear { withAnimation(.linear(duration: 1)) { shown = true } }
+    }
+}
+
+private struct ArrivingSpinnerApp: App {
+    init() {}
+    var body: some Scene { WindowGroup { ArrivingSpinner() } }
+}
+
 @MainActor
 @Suite("A transition's fade fades the runs it covers")
 struct TransitionFadeRunTests {
+
+    /// Every replayed tick of the arrival against a render — its glyph at the
+    /// replayed instant, its colours at the instant the loop last rendered, which
+    /// is what the screen shows between two of the transition's renders
+    /// (`ReplayOracle.ColourTruth.lastRendered`).
+    @Test("Through the run loop, a spinner arriving under a fade replays faded as its render drew it")
+    func arrivalReplaysFaded() {
+        let found = ReplayOracle.compare({ ArrivingSpinnerApp() }, ticks: 24, colours: .lastRendered)
+        // Not vacuous: the loop rendered on the transition's lattice, and between
+        // those renders a replay moved the spinner on.
+        #expect(found.scheduledRenders > 0, "the loop never rendered on the transition's lattice")
+        #expect(found.movedGlyphs > 0, "no replay moved the spinner between two renders")
+        for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
+    }
 
     @Test("The drawn frame, replayed over its ground, is the faded row", arguments: [0.25, 0.5, 0.75])
     func replayIsTheFadedRow(phase: Double) throws {

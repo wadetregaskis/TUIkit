@@ -4340,7 +4340,10 @@ no render is due. Each of those replays drew the spinner at full strength, on
 its unfaded field, in a view half faded out. The ink was never faded; the field
 went wrong when the replay began reading the ground. The fade now puts the runs
 through the rewrite it puts the lines through (`FrameBuffer.restyleRuns`).
-Pinned at three phases by `TransitionFadeRunTests`.
+Pinned at three phases by `TransitionFadeRunTests`, and there through the run
+loop as well: `ReplayOracle` renders on the transition's lattice and replays
+between, checking each replayed cell's colours against the render the loop last
+made, which is what the screen shows between two of them.
 
 **2026-09-24, later: and so does a fade's blend.** `.opacity(_:)` blends each
 run's frames where it blends the lines (`OpacityResolution.faded`), and blends a
