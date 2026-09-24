@@ -416,6 +416,10 @@ public final class RenderCache: @unchecked Sendable {
     /// (``forgetPassMeasures()``).
     private var measureEntries: [MeasureKey: MeasureEntry] = [:]
 
+    /// How many answers this pass's measure memo holds — what a test counts
+    /// to see what a measure left behind.
+    var measureEntryCount: Int { measureEntries.count }
+
     /// The memory policy for the two per-pass scratch dictionaries above — one
     /// each, because they are sized by different things. See ``ScratchTrimmer``.
     private var measureScratch = ScratchTrimmer()

@@ -993,20 +993,45 @@ public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> Child
 /// - Returns: The size this view needs.
 @MainActor
 public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: RenderContext) -> ViewSize {
-    memoizedMeasure(view, proposal: proposal, context: context)
+    memoizedMeasure(view, proposal: proposal, context: context, remembersDescendants: true)
 }
 
-/// The body of ``measureChild(_:proposal:context:)``: the deep-nesting guard,
-/// this pass's measure memo, and the measure itself.
+/// ``measureChild(_:proposal:context:)`` for a question nothing else in the
+/// pass will ask: this pass's memo keeps the answer, and none of the answers
+/// the measure found on the way to it.
 ///
-/// A function of its own so a second way into the memo can share it rather
-/// than copy it; inlined, because `measureChild` is on the path deep nesting
-/// recurses through, and a call or a larger frame there is paid by every
-/// measured node.
+/// For a probe — a measure made to learn one thing about a subtree that is
+/// drawn, and so measured, somewhere else, at another identity or from a
+/// view value built afresh. Every node a measure visits leaves an entry in
+/// the per-pass memo, and a probe's are dead weight: nothing but the probe
+/// measures there, and the probe's own entry already answers a repeat of it.
+/// They are not free, either. The memo is one dictionary, emptied every pass
+/// with its capacity kept, so what a probe adds to the biggest pass is paid
+/// until the scratch trimmer next looks, and enough of it tips the table past
+/// a power of two — a doubled table kept for hundreds of frames, and the old
+/// one alive beside the new one while it rehashes.
+///
+/// Lookups still read the memo: an answer another measure stored is as good
+/// here as anywhere. Nothing beneath the probe reads or stores the memo: it is
+/// detached for the measure below, which a probe inside a probe finds too.
+@MainActor
+package func measureChildRememberingOnlyItself<V: View>(
+    _ view: V, proposal: ProposedSize, context: RenderContext
+) -> ViewSize {
+    memoizedMeasure(view, proposal: proposal, context: context, remembersDescendants: false)
+}
+
+/// The body of ``measureChild(_:proposal:context:)`` and its probe twin
+/// ``measureChildRememberingOnlyItself(_:proposal:context:)``: the
+/// deep-nesting guard, this pass's measure memo, and the measure itself.
+///
+/// Inlined into both, so the flag is a constant each folds away:
+/// `measureChild` is on the path deep nesting recurses through, and a branch
+/// or a larger frame there is paid by every measured node.
 @inline(__always)
 @MainActor
 private func memoizedMeasure<V: View>(
-    _ view: V, proposal: ProposedSize, context: RenderContext
+    _ view: V, proposal: ProposedSize, context: RenderContext, remembersDescendants: Bool
 ) -> ViewSize {
     // Deep-nesting guard: if the recursion is about to overflow the stack, stop
     // descending and report the (untruncated part of the) subtree as zero-size
@@ -1082,7 +1107,20 @@ private func memoizedMeasure<V: View>(
         // declares a render side effect or reads a per-frame-volatile value is
         // measured, but not remembered.
         let unsafeBefore = tracker.cacheUnsafeCount
-        let size = measureChildUncached(view, proposal: proposal, context: context)
+        let size: ViewSize
+        if remembersDescendants {
+            size = measureChildUncached(view, proposal: proposal, context: context)
+        } else {
+            // The memo detached from everything beneath: the probe's subtree
+            // neither reads nor stores it, and this measure's own store below
+            // is the one entry a probe keeps. Detached rather than held by a
+            // count every store would test: that check, on the store path every
+            // measured node takes, cost `churn` 2.1% and `gradients` 1.2% with
+            // no probe in the tree at all.
+            cache.volatileReadTracker = nil
+            size = measureChildUncached(view, proposal: proposal, context: context)
+            cache.volatileReadTracker = tracker
+        }
         if tracker.cacheUnsafeCount == unsafeBefore {
             cache.storeMeasure(
                 key: key,
