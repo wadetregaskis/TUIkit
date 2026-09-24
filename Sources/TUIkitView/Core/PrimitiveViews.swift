@@ -228,14 +228,18 @@ extension ConditionalView: ChildViewProvider {
 /// view comes and goes, and flattening `nil` to *no children at all* meant the
 /// instant the condition went false there was no slot left to draw into: such
 /// views animated in and jumped out. So a `nil` that something is still leaving
-/// from keeps one slot, drawn by ``Optional`` itself, until the removal has
-/// played out — and then goes back to contributing nothing.
+/// from keeps one slot — a `DepartureSlot`, drawing the picture that view left
+/// behind — until the removal has played out, and then goes back to
+/// contributing nothing.
 ///
 /// The slot borrows `Wrapped`'s identity rather than `Optional`'s, so it lands
 /// on exactly the address the present view rendered at and finds what that view
 /// left behind. It is claimed only when the store confirms a live departure at
-/// that address, which is what keeps every `nil` in every app that animates
-/// nothing costing exactly what it did before: one dictionary-empty check.
+/// that address, LEFT BY a view of that type — the transition must be the view
+/// the `if` held, or the picture would be drawn without what stood around it
+/// (see `DepartureStore.departing(at:ofType:nowNanos:frameAnimation:)`). The
+/// store's emptiness is checked first, which is what keeps every `nil` in every
+/// app that animates nothing costing exactly what it did before.
 extension Optional: ChildViewProvider where Wrapped: View {
     public func childViews(context: RenderContext) -> [ChildView] {
         switch self {
@@ -254,7 +258,9 @@ extension Optional: ChildViewProvider where Wrapped: View {
             // `childIndex` is provisional: the enclosing container rebases it to
             // the flattened position, which is the same position the present
             // view held as long as nothing before it also came or went.
-            return [ChildView(self, identityType: Wrapped.self, childIndex: 0)]
+            return [
+                ChildView(DepartureSlot(viewType: Wrapped.self), identityType: Wrapped.self, childIndex: 0)
+            ]
         }
     }
 }

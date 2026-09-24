@@ -48,6 +48,15 @@ extension View {
     /// *several* children, which has no single address to claim: those still
     /// jump.
     ///
+    /// The picture a removal plays is the transitioning view's alone, so the
+    /// transition has to be the view the `if` holds: `X.transition(t)`, or
+    /// `X.padding().transition(t)`, which plays padding and all. Written
+    /// before a modifier — `X.transition(t).padding()` — the transition's
+    /// picture lacks the padding, and drawing it would move the view; that
+    /// removal snaps instead. So, for now, does one before a modifier that
+    /// draws nothing of its own, `X.transition(t).foregroundStyle(.red)`: the
+    /// slot cannot tell the two kinds apart. Write the transition last.
+    ///
     /// - Parameter transition: How to come and go.
     /// - Returns: A view that transitions.
     public func transition(_ transition: AnyTransition) -> some View {
@@ -113,7 +122,7 @@ extension _TransitionView: Renderable {
         let arrival = min(1, max(0, phase))
         storage.departures.present(
             DepartureStore.Departure(
-                width: buffer.width, height: buffer.lines.count,
+                viewType: Self.self, width: buffer.width, height: buffer.lines.count,
                 explicitAnimation: transition.explicitAnimation,
                 render: { departurePhase in
                     removal.apply(to: buffer, phase: departurePhase * arrival, context: context)

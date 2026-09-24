@@ -23,6 +23,53 @@ private struct Host: View {
     }
 }
 
+/// A transition with something drawn around it, inside the `if`.
+enum WrappedTransition: String, CaseIterable, Sendable {
+    /// `X.transition(t).padding(.leading, 3)`, beside a sibling.
+    case paddedBesideSibling
+    /// `X.transition(t).frame(width: 6, alignment: .trailing)`, beside one.
+    case framedBesideSibling
+    /// `X.transition(t).padding(.leading, 3)` as a view's whole body: the
+    /// optional rendered directly, with no stack to flatten it.
+    case paddedAlone
+
+    /// The rows drawn while the view is there.
+    var shown: [String] {
+        switch self {
+        case .paddedBesideSibling: ["   XX ", "------"]
+        case .framedBesideSibling: ["    XX", "------"]
+        case .paddedAlone: ["   XX"]
+        }
+    }
+
+    /// The rows drawn once it has gone.
+    var gone: [String] { self == .paddedAlone ? [] : ["------"] }
+}
+
+private struct WrappedHost: View {
+    let showing: Bool
+    let wrapped: WrappedTransition
+
+    var body: some View {
+        switch wrapped {
+        case .paddedBesideSibling:
+            VStack(alignment: .leading, spacing: 0) {
+                if showing { Text("XX").transition(.move(edge: .trailing)).padding(.leading, 3) }
+                Text("------")
+            }
+        case .framedBesideSibling:
+            VStack(alignment: .leading, spacing: 0) {
+                if showing {
+                    Text("XX").transition(.move(edge: .trailing)).frame(width: 6, alignment: .trailing)
+                }
+                Text("------")
+            }
+        case .paddedAlone:
+            if showing { Text("XX").transition(.move(edge: .trailing)).padding(.leading, 3) }
+        }
+    }
+}
+
 @MainActor
 @Suite("Transitions")
 struct TransitionTests {
@@ -326,6 +373,27 @@ struct TransitionTests {
         // …it is removed. The first departing frame must show the view where
         // it WAS — half arrived — not popped to full presence.
         #expect(draw(false, atMillis: 500).first == "  XX")
+    }
+
+    /// The picture a removal plays is the transitioning view's alone. With
+    /// something drawn around the transition inside the `if` — a padding, a
+    /// frame that places it — the slot found that picture at the view's
+    /// address and drew it without the padding: the view jumped to the slot's
+    /// edge on the first frame of its removal and slid out from there. Such a
+    /// removal now snaps, which is drawn right; playing it would need the
+    /// picture to carry what stood around the transition.
+    @Test("A removal is not played without what was drawn around the transition",
+        arguments: WrappedTransition.allCases)
+    func removalIsNotPlayedWithoutItsSurroundings(wrapped: WrappedTransition) {
+        let screen = RemovalScreen(animation: .linear(duration: 1)) {
+            WrappedHost(showing: $0, wrapped: wrapped)
+        }
+        _ = screen.draw(true, atMillis: 0)
+        #expect(screen.draw(true, atMillis: 1100) == wrapped.shown, "precondition: it arrived")
+        #expect(
+            screen.draw(false, atMillis: 1100) == wrapped.gone,
+            "the removal played without what surrounds the transition")
+        #expect(screen.draw(false, atMillis: 1600) == wrapped.gone)
     }
 
     @Test("An unanimated removal is instant")

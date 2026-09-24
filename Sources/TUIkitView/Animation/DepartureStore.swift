@@ -52,11 +52,17 @@ public final class DepartureStore: @unchecked Sendable {
         /// this, or the transaction of the change that removed it.
         public let explicitAnimation: Animation?
 
+        /// The type of the view that left this picture — the view carrying the
+        /// transition. A slot plays the picture only if the view it held WAS
+        /// that view; see ``departing(at:ofType:nowNanos:frameAnimation:)``.
+        public let viewType: ObjectIdentifier
+
         /// Creates a departure record.
         public init(
-            width: Int, height: Int, explicitAnimation: Animation?,
+            viewType: Any.Type, width: Int, height: Int, explicitAnimation: Animation?,
             render: @escaping (Double) -> FrameBuffer
         ) {
+            self.viewType = ObjectIdentifier(viewType)
             self.width = width
             self.height = height
             self.explicitAnimation = explicitAnimation
@@ -113,10 +119,27 @@ extension DepartureStore {
     /// on the frame simply snaps. The resolved answer is stored, because the
     /// transaction applies to exactly one pass and the removal plays over
     /// many.
+    ///
+    /// ## Only the picture of the view the slot held
+    ///
+    /// `type` is the view the slot stands in for, and the picture is drawn only
+    /// if that view is the one that left it (``Departure/viewType``). The
+    /// picture is the transitioning view's alone: whatever stood between it
+    /// and the slot is not in it. With `X.transition(t).padding(.leading, 3)`
+    /// in the `if`, the padding renders at the transition's identity, so the
+    /// slot found the transition's picture — and drew it without the padding:
+    /// on the first frame of its removal the view jumped three cells to the
+    /// slot's edge, the slot shrank to the picture, and the removal played
+    /// there. Such a removal snaps instead: the end state, drawn right. The
+    /// record is left alone and dropped at the end of the pass, like any other
+    /// that nothing plays.
     public func departing(
-        at identity: ViewIdentity, nowNanos: Int64, frameAnimation: Animation?
+        at identity: ViewIdentity, ofType type: Any.Type, nowNanos: Int64,
+        frameAnimation: Animation?
     ) -> FrameBuffer? {
-        guard var entry = entries[identity], !entry.presentThisPass else { return nil }
+        guard var entry = entries[identity], !entry.presentThisPass,
+            entry.departure.viewType == ObjectIdentifier(type)
+        else { return nil }
         guard
             let animation = entry.animation
                 ?? entry.departure.explicitAnimation ?? frameAnimation
@@ -152,10 +175,15 @@ extension DepartureStore {
     /// `leftAtNanos` is still `nil` — insisting on it collapsed the slot to
     /// nothing exactly when the transition needed it most, and the first frame
     /// of every departure was drawn into no rows.
+    ///
+    /// Of `type`, as ``departing(at:ofType:nowNanos:frameAnimation:)`` is: a
+    /// slot that will not draw a picture must not hold its size open either.
     public func departingSize(
-        at identity: ViewIdentity, nowNanos: Int64, frameAnimation: Animation?
+        at identity: ViewIdentity, ofType type: Any.Type, nowNanos: Int64,
+        frameAnimation: Animation?
     ) -> (width: Int, height: Int)? {
         guard let entry = entries[identity],
+            entry.departure.viewType == ObjectIdentifier(type),
             entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil,
             !isFinished(entry, at: nowNanos)
         else { return nil }
@@ -179,7 +207,10 @@ extension DepartureStore {
     /// into *several* children has no single type to match, finds nothing here,
     /// and contributes nothing — the same instant removal as before, rather
     /// than an empty child that would push its siblings apart by a stack's
-    /// spacing.
+    /// spacing. And the view registered there must be the one that LEFT the
+    /// picture, not merely the one at its address — a slot the `nil` would
+    /// draw without what stood around the transition is one it cannot draw;
+    /// see ``departing(at:ofType:nowNanos:frameAnimation:)``.
     ///
     /// The empty check is the whole point of the fast path: almost every tree
     /// has no departures at all, and this is asked once per `nil` optional per
@@ -189,12 +220,12 @@ extension DepartureStore {
     ///
     /// A finished removal is dropped HERE, because nothing else would drop it. A
     /// slot host that finds the removal finished stops drawing the slot, so
-    /// ``departing(at:nowNanos:frameAnimation:)`` — which drops a finished record
-    /// when it is asked for one — is never asked again, and ``endRenderPass()``
-    /// keeps every record whose removal has started. Left in place, one removal
-    /// that had played out in a stack kept the store non-empty for the rest of
-    /// the session, and every `nil` optional in every stack paid this loop on
-    /// every walk instead of the empty check above.
+    /// ``departing(at:ofType:nowNanos:frameAnimation:)`` — which drops a
+    /// finished record when it is asked for one — is never asked again, and
+    /// ``endRenderPass()`` keeps every record whose removal has started. Left
+    /// in place, one removal that had played out in a stack kept the store
+    /// non-empty for the rest of the session, and every `nil` optional in every
+    /// stack paid this loop on every walk instead of the empty check above.
     ///
     /// Safe on the measure walk, which runs before the frame's presence marks:
     /// a removal that has finished stays finished, and a view that comes back
@@ -219,7 +250,9 @@ extension DepartureStore {
             guard
                 entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil
             else { continue }
-            guard let leaf = identity.leafType, ObjectIdentifier(leaf) == wanted else { continue }
+            guard entry.departure.viewType == wanted, let leaf = identity.leafType,
+                ObjectIdentifier(leaf) == wanted
+            else { continue }
             if identity.parent == parent { return true }
         }
         return false
@@ -251,8 +284,8 @@ extension DepartureStore {
 
     /// Ends a pass: drops the entries of views that vanished without anything
     /// starting their removal. (A removal that started and has finished is
-    /// dropped by whichever of ``departing(at:nowNanos:frameAnimation:)`` and
-    /// ``hasDeparture(directlyUnder:ofType:nowNanos:frameAnimation:)`` next
+    /// dropped by whichever of ``departing(at:ofType:nowNanos:frameAnimation:)``
+    /// and ``hasDeparture(directlyUnder:ofType:nowNanos:frameAnimation:)`` next
     /// sees it finished; this has no clock to tell.)
     ///
     /// The parting picture is recorded on EVERY frame a transitioning view

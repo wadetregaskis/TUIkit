@@ -45,7 +45,7 @@ extension Optional: Renderable where Wrapped: View {
             // and this slot is the only thing left of it: the view is gone from
             // the tree, so nothing else can play out its removal transition.
             // See ``DepartureStore``.
-            return context.departingPicture() ?? FrameBuffer()
+            return context.departingPicture(of: Self.heldViewType) ?? FrameBuffer()
         }
     }
 }
@@ -61,40 +61,91 @@ extension Optional: Layoutable where Wrapped: View {
             // A view on its way out still holds its slot open, or the page
             // would close up around it on the first frame of the removal and
             // the transition would play in a space that had already gone.
-            guard let leaving = context.departingSize() else { return ViewSize.fixed(0, 0) }
+            guard let leaving = context.departingSize(of: Self.heldViewType) else {
+                return ViewSize.fixed(0, 0)
+            }
             return ViewSize.fixed(leaving.width, leaving.height)
         }
     }
 }
 
+/// An optional view, seen from where it is rendered: the view a `nil` of it
+/// stands in for.
+///
+/// Rendered directly — a page's body, a modifier's content — an optional hands
+/// its view its OWN identity, and so does every optional inside it, so the
+/// view that left a picture where a `nil` now stands is the innermost one:
+/// `X` for `if a { if b { X } }`, not `Optional<X>`.
+private protocol HeldViewTyped {
+    static var heldViewType: Any.Type { get }
+}
+
+extension Optional: HeldViewTyped where Wrapped: View {
+    fileprivate static var heldViewType: Any.Type {
+        (Wrapped.self as? any HeldViewTyped.Type)?.heldViewType ?? Wrapped.self
+    }
+}
+
+// MARK: - The slot a removal plays in
+
+/// What a `nil` in a stack keeps in the slot its view left, while that view's
+/// removal plays: the picture the view left behind, part-way gone, at the size
+/// it had.
+///
+/// A view of its own rather than the `nil` itself, because the flattening
+/// claim has already established WHICH view left from here (`viewType`) and
+/// the `nil`'s own type need not say so — see `Optional`'s
+/// `ChildViewProvider` conformance.
+struct DepartureSlot: View {
+    /// The view that left: only a picture it left behind is drawn.
+    let viewType: Any.Type
+
+    var body: Never {
+        fatalError("DepartureSlot renders via Renderable")
+    }
+}
+
+extension DepartureSlot: Renderable {
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        context.departingPicture(of: viewType) ?? FrameBuffer()
+    }
+}
+
+extension DepartureSlot: Layoutable {
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        guard let leaving = context.departingSize(of: viewType) else { return ViewSize.fixed(0, 0) }
+        return ViewSize.fixed(leaving.width, leaving.height)
+    }
+}
+
 extension RenderContext {
-    /// The picture a view left at this identity, drawn part-way gone, or `nil`
-    /// when nothing is leaving from here — what a `nil` optional draws.
+    /// The picture a view of `type` left at this identity, drawn part-way gone,
+    /// or `nil` when nothing of that type is leaving from here.
     ///
     /// Asked of every `nil` on every walk, so the store's emptiness comes
-    /// first: a `nil` in an app that animates nothing pays one check rather
-    /// than hashing its identity to look for a record that cannot be there.
-    func departingPicture() -> FrameBuffer? {
+    /// first, and `type` is only worked out when something might be leaving:
+    /// a `nil` in an app that animates nothing pays one check.
+    func departingPicture(of type: @autoclosure () -> Any.Type) -> FrameBuffer? {
         guard let store = stateStorage?.departures, !store.isEmpty else { return nil }
         // One read for both halves — see `AnimatableResolution`.
         let frame = environment.animationFrame
         guard
             let picture = store.departing(
-                at: identity, nowNanos: frame.nowNanos,
+                at: identity, ofType: type(), nowNanos: frame.nowNanos,
                 frameAnimation: frame.canAnimate ? environment.transaction.effectiveAnimation : nil)
         else { return nil }
         declaresDepartureInFlight()
         return picture
     }
 
-    /// The size a departing view is still holding open here, or `nil` — the
-    /// measure walk's half of ``departingPicture()``.
-    func departingSize() -> (width: Int, height: Int)? {
+    /// The size a departing view of `type` is still holding open here, or
+    /// `nil` — the measure walk's half of ``departingPicture(of:)``.
+    func departingSize(of type: @autoclosure () -> Any.Type) -> (width: Int, height: Int)? {
         guard let store = stateStorage?.departures, !store.isEmpty else { return nil }
         let frame = environment.animationFrame
         guard
             let size = store.departingSize(
-                at: identity, nowNanos: frame.nowNanos,
+                at: identity, ofType: type(), nowNanos: frame.nowNanos,
                 frameAnimation: frame.canAnimate ? environment.transaction.effectiveAnimation : nil)
         else { return nil }
         declaresDepartureInFlight()
