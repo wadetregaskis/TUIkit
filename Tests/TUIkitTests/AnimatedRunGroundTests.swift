@@ -168,6 +168,22 @@ struct AnimatedRunGroundTests {
         }
     }
 
+    /// A view that paints a field under its own run must declare the run INSIDE
+    /// that painter, or nothing records the field: the run is attached after the
+    /// paint. A colour swatch's focused bullet is the shape — ink over the
+    /// swatch's own fill — and declared on the whole swatch it recorded nothing.
+    @Test("A colour swatch's focused bullet records the swatch under it")
+    func aSwatchBulletRecordsTheSwatch() throws {
+        let context = makeRenderContext(width: Self.width, height: 3)
+        let buffer = ColorDepth.withCurrent(.truecolor) {
+            renderToScreen(ColorPicker("Colour", selection: .constant(.rgb(200, 40, 40))), context: context)
+        }
+        let run = try #require(
+            buffer.animatedCells.first { $0.frames.contains { $0.contains("●") } },
+            "the focused swatch left no bullet run")
+        #expect(run.groundFields(onPage: Self.page).map(spelled) == ["\u{1B}[48;2;200;40;40m"])
+    }
+
     // MARK: - The ground itself
 
     @Test("A run nothing painted under has no ground, and sits on the page")

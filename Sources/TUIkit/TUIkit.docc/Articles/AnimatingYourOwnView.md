@@ -173,6 +173,14 @@ var body: some View {
 Offsets are relative to the view's own top-left and travel with it: padding,
 borders and stacks shift the runs along with the cells they describe.
 
+Declare a run *inside* anything that paints under its cells. A frame that
+leaves a cell without a background of its own is drawn over what the views
+around it painted there, and each of those records it on the run as it paints
+— so `.animatedCells(_:)` belongs inside `.background(_:)`, not outside it: a
+fill painted before the run exists has no run to record itself on. For the same
+reason, a field your own ``Renderable`` draws beneath its own run belongs in the
+run's frames.
+
 ## Getting it wrong looks like a win
 
 A run is spliced over cells *by position*, without consulting your view again.

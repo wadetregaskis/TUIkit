@@ -76,15 +76,19 @@ struct _ColorSwatchCells: View {
         let bullet = indicator(on: fill, cycle: cycle)
         return HStack(spacing: 0) {
             Text("█").foregroundStyle(fill).background(fill)
+            // The bullet's run is declared on the CENTRE cell, inside the fill
+            // it is drawn on, so the `.background` records that fill as what the
+            // run's cells sit on (`AnimatedCellRun.ground`). Declared on the
+            // whole swatch, after the fill had painted, the run recorded nothing
+            // beneath it. Composition, not a `Renderable` core, so the run is
+            // declared rather than written onto a buffer — see
+            // ``View/animatedCells(_:)``.
             Text(bullet == nil ? "█" : "●")
                 .foregroundStyle(bullet ?? fill)
+                .animatedCells(bulletRuns(on: fill, cycle: cycle))
                 .background(fill)
             Text("█").foregroundStyle(fill).background(fill)
         }
-        // The bullet is the CENTRE cell, hence offset 1. Composition, not a
-        // `Renderable` core, so the runs are declared rather than written onto
-        // a buffer — see ``View/animatedCells(_:)``.
-        .animatedCells(bulletRuns(on: fill, cycle: cycle))
     }
 
     /// The bullet's colour for the current state, or `nil` for no bullet — an
@@ -123,8 +127,9 @@ struct _ColorSwatchCells: View {
         palette.readableText(on: fill).breathEnds(dimmedTo: ViewConstants.focusPulseMin, over: fill)
     }
 
-    /// The run that breathes the centre cell, or none when the swatch is not
-    /// focused (nothing moves) or the indicator style does not animate.
+    /// The run that breathes the centre cell — declared on that cell, so at offset
+    /// 0 — or none when the swatch is not focused (nothing moves) or the indicator
+    /// style does not animate.
     private func bulletRuns(on fill: Color, cycle: SelectionEmphasisCycle) -> [AnimatedCellRun] {
         guard isFocused else { return [] }
         let (dim, bright) = pulseEndpoints(on: fill)
@@ -136,7 +141,7 @@ struct _ColorSwatchCells: View {
         // (§29.2), or nothing at all for a fill at alpha 0. Stating `fill` here raw
         // put a translucent swatch's colour into the emitter whatever the palette;
         // stating its opaque spelling would have painted black behind a `.clear` one.
-        return [cycle.run("●", dim: dim, bright: bright, offsetX: 1, offsetY: 0)].compactMap { $0 }
+        return [cycle.run("●", dim: dim, bright: bright, offsetX: 0, offsetY: 0)].compactMap { $0 }
     }
 }
 
