@@ -2413,7 +2413,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // runs are the only statement a several-alpha border makes about its cells
         // (§69.3), so leaving them behind whole drew a held row's border at full
         // strength for as long as it was held (§69.4).
-        faint.opacityRegions += buffer.animatedCells.flatMap(Self.leftBehind(by:))
+        faint.opacityRegions += buffer.animatedCells.flatMap(\.alphaLeftBehind)
         return faint
     }
 
@@ -2435,7 +2435,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // And, after them, what its runs said about alpha — for `dimmed(_:)`'s
             // reasons. A dimmed buffer has no runs left, so nothing is counted twice.
             if !buffer.animatedCells.isEmpty {
-                block.opacityRegions += buffer.animatedCells.flatMap(Self.leftBehind(by:))
+                block.opacityRegions += buffer.animatedCells.flatMap(\.alphaLeftBehind)
                     .map { $0.shifted(byX: 0, y: top) }
             }
             top += buffer.lines.count
@@ -3385,11 +3385,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // It used to ask for a 20 Hz grid instead: a whole-screen render twenty
         // times a second for a 7-tick spinner that changes under nine times, on a phase
         // anchored at whichever frame first asked rather than at the run's steps.
-        if !childRuns.isEmpty, !context.isMeasuring {
-            context.requestWake(
-                token: "list-dropped-run-\(context.identity.path)",
-                atNanos: Self.nextStepNanos(of: childRuns, context: context))
-        }
+        context.requestWake(
+            token: "list-dropped-run-\(context.identity.path)",
+            forNextStepOf: childRuns.map { ($0.clock, $0.frameTicks) })
         // Transposed to line-major, because that is how the runs are asked for:
         // one run per LINE, carrying that line at every point of the cycle.
         let perStep = cycle.colors(dim: dim, bright: bright).map { lines(over: $0) }
@@ -3482,7 +3480,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             guard run.width > 0, 1 + run.offsetX + run.width <= rowWidth,
                 !(skippingBadgeLine && run.offsetY == 0)
             else {
-                droppedClaims += Self.leftBehind(by: run)
+                droppedClaims += run.alphaLeftBehind
                 continue
             }
             runs.append(
@@ -3492,43 +3490,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     ground: run.ground, groundUnderStatedDefault: run.groundUnderStatedDefault))
         }
         return (runs, droppedClaims)
-    }
-
-    /// When the soonest of `runs` next steps, as an instant on the frame clock: the
-    /// render a breathing row owes the runs it dropped.
-    ///
-    /// Each run is asked on its own clock. ``AnimationClock/content`` is the frame
-    /// clock itself. ``AnimationClock/cursor`` counts from the focus epoch the cursor
-    /// timer keeps, or from zero without one, which is where the row's breath is
-    /// drawn from too. Counted in whole nanoseconds through
-    /// `AnimationClock.stepEndNanos`, so the wake is never a nanosecond before the
-    /// step it is for.
-    @MainActor
-    private static func nextStepNanos(of runs: [RowRun], context: RenderContext) -> Int64 {
-        let now = context.environment.frameNowNanos
-        let content = Double(now) / 1_000_000_000
-        let cursor = context.environment.cursorTimer?.elapsed(for: .cursor) ?? 0
-        let untilSoonest: Int64 =
-            runs.lazy.map { run -> Int64 in
-                let elapsed =
-                    switch run.clock {
-                    case .content: content
-                    case .cursor: cursor
-                    }
-                return AnimationClock.stepEndNanos(atElapsed: elapsed, frameTicks: run.frameTicks)
-                    - AnimationClock.nanoseconds(elapsed)
-            }.min() ?? 0
-        return now &+ untilSoonest
-    }
-
-    /// What `run` said about its cells' ALPHA at the frame its lines were drawn at, as
-    /// ordinary regions in its own buffer's coordinates — for a site that keeps those
-    /// lines and discards the run (§69.4). Right at that frame, frozen after. Empty for
-    /// a run that is not animating, which no row carries either, and for one with no
-    /// payload.
-    private static func leftBehind(by run: AnimatedCellRun) -> [OpacityRegion] {
-        guard run.isAnimating, let alpha = run.alpha else { return [] }
-        return alpha.drawnRegions(forRunAt: run.offsetX, offsetY: run.offsetY)
     }
 
     /// `runs`, the row's own content's, with their grounds painted as a still row
