@@ -45,16 +45,7 @@ extension Optional: Renderable where Wrapped: View {
             // and this slot is the only thing left of it: the view is gone from
             // the tree, so nothing else can play out its removal transition.
             // See ``DepartureStore``.
-            // One read for both halves — see `AnimatableResolution`.
-            let frame = context.environment.animationFrame
-            guard
-                let leaving = context.stateStorage?.departures.departing(
-                    at: context.identity, nowNanos: frame.nowNanos,
-                    frameAnimation: frame.canAnimate
-                        ? context.environment.transaction.effectiveAnimation : nil)
-            else { return FrameBuffer() }
-            context.declaresDepartureInFlight()
-            return leaving
+            return context.departingPicture() ?? FrameBuffer()
         }
     }
 }
@@ -70,20 +61,42 @@ extension Optional: Layoutable where Wrapped: View {
             // A view on its way out still holds its slot open, or the page
             // would close up around it on the first frame of the removal and
             // the transition would play in a space that had already gone.
-            let frame = context.environment.animationFrame
-            guard
-                let leaving = context.stateStorage?.departures.departingSize(
-                    at: context.identity, nowNanos: frame.nowNanos,
-                    frameAnimation: frame.canAnimate
-                        ? context.environment.transaction.effectiveAnimation : nil)
-            else { return ViewSize.fixed(0, 0) }
-            context.declaresDepartureInFlight()
+            guard let leaving = context.departingSize() else { return ViewSize.fixed(0, 0) }
             return ViewSize.fixed(leaving.width, leaving.height)
         }
     }
 }
 
 extension RenderContext {
+    /// The picture a view left at this identity, drawn part-way gone, or `nil`
+    /// when nothing is leaving from here — what a `nil` optional draws.
+    func departingPicture() -> FrameBuffer? {
+        guard let store = stateStorage?.departures else { return nil }
+        // One read for both halves — see `AnimatableResolution`.
+        let frame = environment.animationFrame
+        guard
+            let picture = store.departing(
+                at: identity, nowNanos: frame.nowNanos,
+                frameAnimation: frame.canAnimate ? environment.transaction.effectiveAnimation : nil)
+        else { return nil }
+        declaresDepartureInFlight()
+        return picture
+    }
+
+    /// The size a departing view is still holding open here, or `nil` — the
+    /// measure walk's half of ``departingPicture()``.
+    func departingSize() -> (width: Int, height: Int)? {
+        guard let store = stateStorage?.departures else { return nil }
+        let frame = environment.animationFrame
+        guard
+            let size = store.departingSize(
+                at: identity, nowNanos: frame.nowNanos,
+                frameAnimation: frame.canAnimate ? environment.transaction.effectiveAnimation : nil)
+        else { return nil }
+        declaresDepartureInFlight()
+        return size
+    }
+
     /// Tells any value memo enclosing this `nil` that it is drawing a removal
     /// part-way through, so the subtree it is in must not be stored.
     ///
@@ -104,7 +117,7 @@ extension RenderContext {
     /// otherwise keep the held-open row's height past the end of the removal.
     /// Only while a removal is in flight: a `nil` nothing is leaving from
     /// declares nothing, and its subtree is stored exactly as before.
-    func declaresDepartureInFlight() {
+    private func declaresDepartureInFlight() {
         environment.volatileReadTracker?.recordRenderSideEffect()
     }
 }
