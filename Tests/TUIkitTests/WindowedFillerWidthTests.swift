@@ -459,6 +459,9 @@ enum FillerListParent: CaseIterable, Sendable, CustomStringConvertible {
     case cappedBesideText
     /// Rows capped at 30, in a vertical scroll view in a horizontal one.
     case cappedVerticalInHorizontal
+    /// A vertical scroll view in a horizontal one: the inner one is asked its
+    /// ideal size by the outer one's probe, and measures its content for it.
+    case verticalInHorizontal
 
     var description: String {
         switch self {
@@ -467,6 +470,7 @@ enum FillerListParent: CaseIterable, Sendable, CustomStringConvertible {
         case .fixedSizeBesideText: "fixed-size, beside a text"
         case .cappedBesideText: "capped, beside a text"
         case .cappedVerticalInHorizontal: "capped, vertical in horizontal"
+        case .verticalInHorizontal: "vertical in horizontal"
         }
     }
 }
@@ -518,6 +522,8 @@ private struct FillerParentPage: View {
             }
         case .cappedVerticalInHorizontal:
             ScrollView(.horizontal) { ScrollView { FillerParentList(row: .capped(30)) } }
+        case .verticalInHorizontal:
+            ScrollView(.horizontal) { ScrollView { FillerParentList(row: .fills) } }
         }
     }
 }

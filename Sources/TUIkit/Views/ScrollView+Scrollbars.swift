@@ -74,7 +74,7 @@ extension _ScrollViewCore {
             !wantsHorizontal && proposal.width == nil && proposal.height == nil
             && mayDrawVerticalBar && environment.verticalScrollIndicatorVisibility == .automatic
             && context.availableHeight < Int.max
-        var contentContext = context.withChildIdentity(type: Content.self)
+        var contentContext = idealContentContext(context)
         if probesOverflow { contentContext.availableHeight += 1 }
         let measured = ChildView(content).measure(proposal: proposal, context: contentContext)
         let overflows = probesOverflow && measured.height > context.availableHeight
@@ -120,6 +120,30 @@ extension _ScrollViewCore {
             height: heightens && bars.horizontal ? viewportHeight : content.height)
     }
 
+    /// The context the ideal-size questions measure the content in.
+    ///
+    /// A windowed stack's width means every row exactly when the view it is
+    /// laid out in scrolls horizontally (`asksWholeContentWidth`), which is how
+    /// `contentExtents` asks it. A vertical view inside a horizontal one
+    /// inherited the outer view's mark here, so its stack answered the
+    /// whole-content question — its rows' content, 11 cells — where
+    /// `contentExtents` asked the prefix question, 59: one measure key, two
+    /// answers, and the pass's memo served the first to the second. So the
+    /// inherited mark is cleared on a view that does not scroll horizontally.
+    ///
+    /// It is NOT set on one that does. There a lazy stack answers the
+    /// whole-content question only from a kept width record, and before one is
+    /// filed it answers the prefix — so the view's ideal width would depend on
+    /// what earlier frames drew, and a horizontally scrolling list of filling
+    /// rows shrank to its prefix's width from its third frame.
+    func idealContentContext(_ context: RenderContext) -> RenderContext {
+        var contentContext = context.withChildIdentity(type: Content.self)
+        if !axes.contains(.horizontal) && contentContext.environment.asksWholeContentWidth {
+            contentContext.environment.asksWholeContentWidth = false
+        }
+        return contentContext
+    }
+
     /// Whether the content, which reported `reported` under a stated height, is
     /// taller than `viewportHeight` — the question ``idealSize(proposal:context:)``
     /// answers from its own measure when no height is stated.
@@ -146,7 +170,7 @@ extension _ScrollViewCore {
         viewportHeight: Int, reported: Int, context: RenderContext
     ) -> Bool {
         guard reported >= viewportHeight, viewportHeight < Int.max else { return false }
-        var probe = context.withChildIdentity(type: Content.self)
+        var probe = idealContentContext(context)
         probe.availableHeight = viewportHeight + 1
         return ChildView(content).measure(
             proposal: ProposedSize(width: nil, height: nil), context: probe

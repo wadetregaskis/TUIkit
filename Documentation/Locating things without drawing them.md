@@ -660,6 +660,20 @@ answered over every row by `_VStackCore.contentWidthOverAllRows`
 section describes, which is what keeps `WindowedStackWidthTests` green. It is
 Ω(rows), and §12 records what makes that affordable.
 
+Only a view that scrolls horizontally asks it of its own content
+(`asksWholeContentWidth`), and it is not inherited: a vertical `ScrollView`
+inside a horizontal one asks its stack the prefix question, when it is asked
+its ideal size (`_ScrollViewCore.idealContentContext`) as when it lays its
+content out (`contentExtents`). The ideal-size measure only clears an inherited
+mark; it never sets one, because there a lazy stack answers the whole-content
+question only from a kept width record, and before one is filed it answers the
+prefix — a horizontally scrolling list of filling rows sized by a `TabView`
+shrank to its prefix's width from its third frame when it did. Until 2026-09-23 the ideal-size measure inherited the outer
+view's mark, the stack answered it with its rows' content — 11 cells for rows
+that fill 59 — and the pass's measure memo, which keys a measure by the view
+and its widths rather than by the environment, served that answer to the
+extents' ask at the same widths.
+
 ---
 
 ## 6. Worked examples
