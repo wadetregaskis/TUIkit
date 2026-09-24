@@ -407,8 +407,9 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     ///
     /// Measuring the natural height at the same single per-tab measure the width
     /// uses makes this free. It is a safe panel height: the selected content is
-    /// rendered at the (widest-tab) panel width, which is at least each tab's
-    /// natural width, so it wraps no taller than its natural height.
+    /// rendered at the (widest-tab) panel width, or at its own natural width
+    /// when it fills its width (`selectedTabWidths`) — never narrower than its
+    /// natural width — so it wraps no taller than its natural height.
     private func tallestContentHeight(
         insets: EdgeInsets, available: Int, context: RenderContext
     ) -> Int {
@@ -419,18 +420,61 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         return tabs.map { cache[AnyHashable($0.value)]?.height ?? 0 }.max() ?? 0
     }
 
-    /// The selected tab's natural (unconstrained) content width — what its ink
-    /// actually occupies. The content is *rendered* at the full panel width (so a
-    /// `ViewThatFits` editor reliably picks its wide single-row candidate rather
-    /// than tipping onto a stacked fallback at a tight width), then clamped to
-    /// this natural width and block-centred. A tab narrower than the panel — e.g.
-    /// a slim channel editor in a panel widened by the 256-swatch grid — is thus
-    /// centred; a tab as wide as the panel clamps to the panel and fills it.
-    private func naturalSelectedWidth(insets: EdgeInsets, available: Int, context: RenderContext) -> Int {
-        max(1, measureChild(
+    /// The selected tab's two widths in a panel `panelWidth` wide: the width it
+    /// is RENDERED at, and the width it is then clamped to and centred as — its
+    /// natural (unconstrained) content width, what its ink actually occupies,
+    /// capped at the panel.
+    ///
+    /// Content that does not fill its width is rendered at the full panel width
+    /// (so a `ViewThatFits` editor reliably picks its wide single-row candidate
+    /// rather than tipping onto a stacked fallback at a tight width), then
+    /// clamped to its natural width and block-centred. A tab narrower than the
+    /// panel — e.g. a slim channel editor in a panel widened by the 256-swatch
+    /// grid — is thus centred; a tab as wide as the panel clamps to the panel
+    /// and fills it.
+    ///
+    /// Content that FILLS its width is rendered at its natural width instead.
+    /// Rendered at the panel's, it filled the panel — a `Divider` across it, a
+    /// title centred in it, a scroll view's bar in its last column — and the
+    /// clamp back to the natural width cut away whatever was drawn past it: a
+    /// scroll view's bar, clamped off on every frame; a title and body either
+    /// side of a `Divider`, both gone, the rule left alone in the middle of the
+    /// panel; a text field's closing cap. At its natural width it fills exactly
+    /// that, and the clamp has nothing to take.
+    ///
+    /// The natural width is measured in the height the tab is drawn in. That
+    /// is `tabContentSizes`' own measure, served from this pass's memo —
+    /// except under a `.toContentWidth` strip that folds onto more rows than
+    /// that measure allowed for (``contentMeasureHeight(available:context:)``).
+    /// There a scroll view measured as fitting eleven rows answered no column
+    /// for a bar, and rendered at that width in the four rows eight strip rows
+    /// left, its bar took the column out of the rows: "row 10" wrapped onto two
+    /// lines.
+    ///
+    /// Neither rule applies where the natural width says nothing the panel
+    /// should hold the content to — content that took all the width it was
+    /// measured in, and any content when the panel is wider than that width: a
+    /// strip wider than the space, as a bordered panel's one-tab row is in a
+    /// very narrow terminal. Such content is rendered at the panel's width and
+    /// not clamped. Measured in the six cells inside an eight-cell box under a
+    /// seven-cell strip, an `HStack` of "a", a spacer and "b" reported the one
+    /// cell it could squeeze into and a `List` the two it was given: rendered
+    /// at those widths, the `HStack` lost its "b" and the `List` its right
+    /// border.
+    private func selectedTabWidths(
+        insets: EdgeInsets, available: Int, panelWidth: Int, drawnHeight: Int,
+        context: RenderContext
+    ) -> (render: Int, natural: Int) {
+        var measureContext = tabMeasureContext(selectedIndex, available: available, context: context)
+        measureContext.availableHeight = drawnHeight
+        let size = measureChild(
             tabs[selectedIndex].content.padding(insets),
-            proposal: ProposedSize(width: nil, height: nil),
-            context: tabMeasureContext(selectedIndex, available: available, context: context)).width)
+            proposal: ProposedSize(width: nil, height: nil), context: measureContext)
+        guard size.width < available, panelWidth <= available else {
+            return (render: panelWidth, natural: panelWidth)
+        }
+        let natural = min(max(1, size.width), panelWidth)
+        return (render: size.isWidthFlexible ? natural : panelWidth, natural: natural)
     }
 
     /// The wrap budget for the header strip: the content width when folding
@@ -685,15 +729,19 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let boxWidth = interior + 2
 
         // Render the content at the full interior width (so a ViewThatFits editor
-        // reliably picks its wide layout), then clamp it to its own natural width
-        // so the per-line padding below centres it as a block; a tab as wide as
-        // the interior clamps to it and fills. (See the compact path.)
+        // reliably picks its wide layout) — or, when it fills its width, at its
+        // natural width (see `selectedTabWidths`) — then clamp it to its own
+        // natural width so the per-line padding below centres it as a block; a
+        // tab as wide as the interior clamps to it and fills. (See the compact
+        // path.)
         var contentCtx = contentContext(context, stripHeight: chrome)
-        contentCtx.availableWidth = interior
-        let natural = naturalSelectedWidth(insets: insets, available: avail, context: context)
+        let widths = selectedTabWidths(
+            insets: insets, available: avail, panelWidth: interior,
+            drawnHeight: contentCtx.availableHeight, context: context)
+        contentCtx.availableWidth = widths.render
         let full = TUIkit.renderToBuffer(
             tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
-        let content = full.clamped(toWidth: min(natural, interior), height: full.height)
+        let content = full.clamped(toWidth: widths.natural, height: full.height)
 
         let strip = folderStripRows(
             rows: rows, selectedIndex: selectedIndex, chip: chip,
@@ -964,16 +1012,20 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
 
         // Render the content at the full panel width (so a ViewThatFits editor
         // reliably picks its wide single-row layout rather than tipping onto a
-        // stacked fallback at a tight width), then clamp it to its own natural
-        // width so the leftPad below centres it as a block. A tab as wide as the
-        // panel clamps to the panel and fills it (leftPad 0). Clamp preserves the
-        // content's hit regions, so its controls stay clickable once centred.
+        // stacked fallback at a tight width) — or, when it fills its width, at
+        // its natural width (see `selectedTabWidths`) — then clamp it to its own
+        // natural width so the leftPad below centres it as a block. A tab as
+        // wide as the panel clamps to the panel and fills it (leftPad 0). Clamp
+        // preserves the content's hit regions, so its controls stay clickable
+        // once centred.
         var contentCtx = contentContext(context, stripHeight: rows.count)
-        contentCtx.availableWidth = panelWidth
-        let natural = naturalSelectedWidth(insets: insets, available: context.availableWidth, context: context)
+        let widths = selectedTabWidths(
+            insets: insets, available: context.availableWidth, panelWidth: panelWidth,
+            drawnHeight: contentCtx.availableHeight, context: context)
+        contentCtx.availableWidth = widths.render
         let full = TUIkit.renderToBuffer(
             tabs[selectedIndex].content.padding(insets).background(surface), context: contentCtx)
-        let content = full.clamped(toWidth: min(natural, panelWidth), height: full.height)
+        let content = full.clamped(toWidth: widths.natural, height: full.height)
 
         let strip = compactStripLines(
             rows: rows, selectedIndex: selectedIndex,
