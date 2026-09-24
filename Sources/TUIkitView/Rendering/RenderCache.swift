@@ -215,38 +215,6 @@ public final class RenderCache: @unchecked Sendable {
         }
     }
 
-    /// Where a subtree's registrations were recorded, which is where a hit
-    /// replaying them has to be too — or the served buffer and the replayed
-    /// registrations describe a render that did not happen there.
-    ///
-    /// Neither half is in the memo's key, because both are written straight
-    /// into the environment and nothing notices them change. So they are
-    /// compared here, for an entry that has registrations, and only there: a
-    /// subtree that registers nothing draws no control and no focus.
-    package struct EffectScope: Equatable {
-        /// The focus section the registrations were filed in.
-        package var section: String?
-
-        /// Whether the subtree was drawn as a backdrop
-        /// (`EnvironmentValues.drawsBackdrop`). Its controls registered with a
-        /// manager that focuses nothing, so the buffer shows none of them
-        /// focused. Served to the live page after a sheet with no focusables of
-        /// its own was dismissed, it would show the control the focus returned
-        /// to as unfocused: no focused id moved, so nothing would invalidate
-        /// it. That used to be prevented by never storing a backdrop render at
-        /// all, and so everything behind a modal, or under a navigation stack's
-        /// pushed screen, was drawn afresh on every frame it was up.
-        package var isBackdrop: Bool
-
-        /// No registrations, or a lookup made without a scope.
-        package static let none = Self(section: nil, isBackdrop: false)
-
-        package init(section: String?, isBackdrop: Bool) {
-            self.section = section
-            self.isBackdrop = isBackdrop
-        }
-    }
-
     /// Cached entries keyed by the view identity's STRUCTURAL HASH.
     ///
     /// The hash, not the identity — the bargain ``MeasureKey`` documents and
