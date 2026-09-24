@@ -2,9 +2,9 @@
 //  ScrollView+Scrollbars.swift
 //
 //  The ScrollView's two scrollbars: attaching their mouse handlers (arrows,
-//  track, thumb drag, auto-repeat) and drawing them onto the windowed viewport.
-//  Split out of `ScrollView.swift` purely for file length — these five methods
-//  are one coherent unit and nothing else in the core calls between them.
+//  track, thumb drag, auto-repeat) and drawing them onto the windowed viewport,
+//  and the cell they add to the view's ideal size. Split out of
+//  `ScrollView.swift` purely for file length.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -12,6 +12,147 @@
 import TUIkitCore
 
 extension _ScrollViewCore {
+    /// The size this scroll view answers along an axis it was offered no extent
+    /// on: its content's, plus the bar the render will draw across it.
+    ///
+    /// A bar is chrome the content knows nothing about — the vertical one takes
+    /// a column out of the viewport, the horizontal one a row — so whenever one
+    /// is drawn, the content's ideal size is a cell short of the scroll view's.
+    /// Answered with the content's alone, a parent that sizes to the answer
+    /// handed exactly the content's size back, and the bar took its cell out of
+    /// the content on every frame: a `TabView` panel squeezed six-cell rows into
+    /// five, and a lazy stack's row cut a horizontal strip's bar off.
+    ///
+    /// Whether a bar is drawn is asked of the viewport this view gets if the
+    /// parent takes the answer: the proposal where there is one, else the
+    /// content's extent with room for a bar that could be drawn at all, capped
+    /// at what is available. Only `.automatic` has to find out; `.visible`,
+    /// `.hidden` and the `.text` style, which takes lines rather than a column,
+    /// are read off the environment.
+    ///
+    /// A proposed extent is never grown: the bar comes out of it, as it always
+    /// has. Nor is an answer grown past the available extent — a parent clamps
+    /// it there, and content that already fills it gives the bar a cell of its
+    /// own, as it does under a proposal — so an axis the content fills is
+    /// answered without asking at all.
+    ///
+    /// A view that also scrolls horizontally asks
+    /// ``resolveScrollbars(viewportWidth:viewportHeight:horizontal:textLines:context:)``,
+    /// the render's own fixpoint, since there each bar can tip the other. A
+    /// vertical one has only the one bar, which leaves its content exactly as
+    /// wide either way (the column is what the answer adds), so the question is
+    /// only whether the content overflows — and what that costs is the point,
+    /// because an eager stack answers it by walking every row. Asked with no
+    /// height proposed, which is how a stack and a `TabView` ask, the content is
+    /// measured ONCE, as it always was, but offered one row more than is
+    /// available: content that comes back past the available height is taller
+    /// than any viewport this view can be given, and content that comes back
+    /// within it reported the height it chose. So the one measure answers the
+    /// size and the bar together. Asked a stated height, the content's answer is
+    /// shaped by that height and cannot say, and
+    /// ``contentOverflowsVertically(viewportHeight:reported:context:)`` asks
+    /// again, only when the content reached it.
+    ///
+    /// A second measure for the bar every time (the first version of this) was
+    /// a whole extra walk of the content wherever the answer is not taken —
+    /// which is most places, since a `VStack` lays this view out across its
+    /// width whatever width it answers: `scrolleager` (400 eager rows under a
+    /// heading) +22.6% per frame, `scrollfollow` +7.2%.
+    func idealSize(proposal: ProposedSize, context: RenderContext) -> (width: Int, height: Int) {
+        let wantsHorizontal = axes.contains(.horizontal)
+        let environment = context.environment
+        // Asked at `overflowing: true`: could a bar be drawn at all? That needs
+        // no measure, and a view that can draw neither — the common vertical
+        // view offered a width — is answered without one.
+        let mayDrawVerticalBar = environment.verticalScrollIndicators(overflowing: true).bar
+        let mayDrawHorizontalBar =
+            wantsHorizontal && environment.showsHorizontalScrollbar(overflowing: true)
+        // Whether the content's own measure also asks whether it overflows (see
+        // above): a vertical view asked its width with no height stated, whose
+        // bar comes and goes with overflow.
+        let probesOverflow =
+            !wantsHorizontal && proposal.width == nil && proposal.height == nil
+            && mayDrawVerticalBar && environment.verticalScrollIndicatorVisibility == .automatic
+            && context.availableHeight < Int.max
+        var contentContext = context.withChildIdentity(type: Content.self)
+        if probesOverflow { contentContext.availableHeight += 1 }
+        let measured = ChildView(content).measure(proposal: proposal, context: contentContext)
+        let overflows = probesOverflow && measured.height > context.availableHeight
+        // The size is the one the available height alone gives: the extra row
+        // asked a question, it is not room the content may take. A report of
+        // exactly the offer is what a clamp at the extra row looks like, so it
+        // is the clamp at the available height; a report past the offer was
+        // never clamped, and stands.
+        let content = (
+            width: measured.width,
+            height: overflows && measured.height == contentContext.availableHeight
+                ? context.availableHeight : measured.height)
+        let widens =
+            proposal.width == nil && mayDrawVerticalBar && content.width < context.availableWidth
+        let heightens =
+            proposal.height == nil && mayDrawHorizontalBar && content.height < context.availableHeight
+        guard widens || heightens else { return content }
+        let viewportWidth =
+            proposal.width
+            ?? min(content.width + (mayDrawVerticalBar ? 1 : 0), context.availableWidth)
+        let viewportHeight =
+            proposal.height
+            ?? min(content.height + (mayDrawHorizontalBar ? 1 : 0), context.availableHeight)
+        let bars: (vertical: Bool, horizontal: Bool)
+        if wantsHorizontal {
+            let resolved = resolveScrollbars(
+                viewportWidth: viewportWidth, viewportHeight: viewportHeight,
+                horizontal: true, textLines: TextIndicatorLines(environment), context: context)
+            bars = (resolved.vertical, resolved.horizontal)
+        } else {
+            // Only `widens` reaches here, so the content is `content.width`
+            // wide with the bar and without it.
+            let vertical = environment.verticalScrollIndicators(
+                overflowing: probesOverflow
+                    ? overflows
+                    : contentOverflowsVertically(
+                        viewportHeight: viewportHeight, reported: content.height, context: context)
+            ).bar
+            bars = (vertical, false)
+        }
+        return (
+            width: widens && bars.vertical ? viewportWidth : content.width,
+            height: heightens && bars.horizontal ? viewportHeight : content.height)
+    }
+
+    /// Whether the content, which reported `reported` under a stated height, is
+    /// taller than `viewportHeight` — the question ``idealSize(proposal:context:)``
+    /// answers from its own measure when no height is stated.
+    ///
+    /// A report below the viewport is a height the content chose, so it fits,
+    /// and nothing is measured. A report that reaches it is what a clamp looks
+    /// like, and the content is asked once more, offered one row past the
+    /// viewport — and UNPROPOSED along the height, as the render lays it out
+    /// (``contentExtents(contentWidth:viewportHeight:horizontal:context:)``): a
+    /// view that fills a stated height, `.frame(maxHeight: .infinity)`, would
+    /// fill a stated `viewportHeight + 1` too and read as overflowing, where the
+    /// render sees it report its content. The width is asked as the first
+    /// measure asked it, so rows this pass has measured are served from the
+    /// memo.
+    ///
+    /// That is not the render's question in one respect: the render measures
+    /// against the natural-extent ladder, thousands of rows, where this offers
+    /// one row more than the viewport. The two agree for content whose layout
+    /// does not depend on how much height it is offered, and a lazy stack keeps
+    /// them agreeing by reporting the budget when it runs past it. Content that
+    /// chooses a different layout for a larger budget — `ViewThatFits(in:
+    /// .vertical)` — can be judged by a layout the render does not draw.
+    func contentOverflowsVertically(
+        viewportHeight: Int, reported: Int, context: RenderContext
+    ) -> Bool {
+        guard reported >= viewportHeight, viewportHeight < Int.max else { return false }
+        var probe = context.withChildIdentity(type: Content.self)
+        probe.availableHeight = viewportHeight + 1
+        return ChildView(content).measure(
+            proposal: ProposedSize(width: nil, height: nil), context: probe
+        ).height > viewportHeight
+    }
+
     /// Registers a mouse handler over the scrollbar's single column so the arrows
     /// step by one, a track click pages or jumps, and the thumb drags. Inserted at
     /// the front of the regions array *before* the viewport handler's own

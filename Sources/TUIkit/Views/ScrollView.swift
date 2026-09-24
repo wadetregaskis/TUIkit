@@ -235,14 +235,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // *ideal* size (an unproposed axis) is its content's size, not the whole
         // viewport — so a parent that sizes to fit (a TabView, a Dialog) sizes to
         // the content it wraps and only scrolls when space is actually short.
-        // Matches SwiftUI, where a ScrollView's ideal size is its content's.
-        let childSize: ViewSize? =
-            (proposal.width == nil || proposal.height == nil)
-            ? ChildView(content).measure(
-                proposal: proposal, context: context.withChildIdentity(type: Content.self)) : nil
+        // Matches SwiftUI, where a ScrollView's ideal size is its content's —
+        // plus, here, the cell a scrollbar takes out of it (`idealSize`).
+        let ideal =
+            proposal.width == nil || proposal.height == nil
+            ? idealSize(proposal: proposal, context: context) : nil
         return ViewSize(
-            width: proposal.width ?? (childSize?.width ?? context.availableWidth),
-            height: proposal.height ?? (childSize?.height ?? context.availableHeight),
+            width: proposal.width ?? (ideal?.width ?? context.availableWidth),
+            height: proposal.height ?? (ideal?.height ?? context.availableHeight),
             isWidthFlexible: true,
             isHeightFlexible: true
         )
@@ -914,7 +914,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// - Parameter textLines: The "N more" pair's claim on the height, so each
     ///   round measures at the content window the render will publish — the
     ///   viewport less the bar's row AND the two lines `.visible` reserves.
-    private func resolveScrollbars(
+    ///
+    /// Internal rather than private for ``idealSize(proposal:context:)``,
+    /// which asks a horizontally scrolling view the same question on the
+    /// measure side.
+    func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool,
         textLines: TextIndicatorLines, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
