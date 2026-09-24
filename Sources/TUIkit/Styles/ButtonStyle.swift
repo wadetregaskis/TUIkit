@@ -743,17 +743,26 @@ private struct _ButtonStyleBody: View, Renderable {
         return buffer
     }
 
-    /// Renders a `@ViewBuilder` button label (``ButtonStyleConfiguration/labelView``)
-    /// by composing TUIkit views, so the label's own styling and structure are
-    /// preserved. A plain `Text` label still picks up the style's tint because it
-    /// is rendered under a `.foregroundStyle(_:)` the explicit colours override.
-    /// The procedural string path above is left untouched for string labels.
-    private func renderViewLabel(_ labelView: AnyView, context: RenderContext) -> FrameBuffer {
+    /// What a `@ViewBuilder` label is drawn in: the palette and the surface
+    /// under the button, and the two colours the style resolves for it.
+    private struct ViewLabelInk {
+        let palette: any Palette
+        /// What the ink lands on, which is not the page wherever a container
+        /// painted one.
+        let surface: Color
+        /// The label's colour.
+        let label: Color
+        /// The standard variant's face. The plain variant draws none.
+        let face: Color
+    }
+
+    /// The colours a `@ViewBuilder` label is drawn in under `context`, by the
+    /// string path's rules.
+    private func viewLabelInk(context: RenderContext) -> ViewLabelInk {
         let palette = context.environment.palette
         // …as in the string path: what the ink lands on, not the page.
         let surface = context.environment.enclosingSurface
         let isDisabled = !configuration.isEnabled
-        let isFocused = configuration.isFocused
         // Both, for the reason given in the string path above.
         let isHovered = configuration.isHovered
 
@@ -803,6 +812,19 @@ private struct _ButtonStyleBody: View, Renderable {
                 .ensuringRenderedContrast(atLeast: ViewConstants.labelContrastFloor, against: buttonBg)
             labelFg = isHovered ? palette.hoveredLabel(ink) : ink
         }
+        return ViewLabelInk(palette: palette, surface: surface, label: labelFg, face: buttonBg)
+    }
+
+    /// Renders a `@ViewBuilder` button label (``ButtonStyleConfiguration/labelView``)
+    /// by composing TUIkit views, so the label's own styling and structure are
+    /// preserved. A plain `Text` label still picks up the style's tint because it
+    /// is rendered under a `.foregroundStyle(_:)` the explicit colours override.
+    /// The procedural string path above is left untouched for string labels.
+    private func renderViewLabel(_ labelView: AnyView, context: RenderContext) -> FrameBuffer {
+        let ink = viewLabelInk(context: context)
+        let (palette, surface, labelFg) = (ink.palette, ink.surface, ink.label)
+        let isDisabled = !configuration.isEnabled
+        let isFocused = configuration.isFocused
 
         // Plain: focus-indicator prefix + the label, no caps or background.
         if appearance.isPlain {
@@ -871,14 +893,29 @@ private struct _ButtonStyleBody: View, Renderable {
         }
 
         // Standard: half-block caps around the background-tinted, padded label.
-        // Full accent at the bright end, and the tertiary tier at rest on a face
-        // the terminal decides — see ``ButtonCapCycle``.
-        let caps = ButtonCapCycle(
-            isFocused: isFocused && !isDisabled,
-            background: buttonBg, palette: palette, context: context)
+        let row = standardRow(labelView, ink: ink, context: context)
+        return drawStandardRow(row.view, caps: row.caps, context: context)
+    }
 
-        let composed = standardRow(labelView, caps: caps.colorNow, label: labelFg, face: buttonBg)
-        var buffer = TUIkit.renderToBuffer(composed, context: context)
+    /// The standard variant's row for a `@ViewBuilder` label in `ink`, and the
+    /// cycle its caps breathe on: full accent at the bright end, and the
+    /// tertiary tier at rest on a face the terminal decides — see
+    /// ``ButtonCapCycle``.
+    private func standardRow(
+        _ labelView: AnyView, ink: ViewLabelInk, context: RenderContext
+    ) -> (view: some View, caps: ButtonCapCycle) {
+        let caps = ButtonCapCycle(
+            isFocused: configuration.isFocused && configuration.isEnabled,
+            background: ink.face, palette: ink.palette, context: context)
+        return (standardRow(labelView, caps: caps.colorNow, label: ink.label, face: ink.face), caps)
+    }
+
+    /// Draws the standard variant's row, and hands its caps' breath to the run
+    /// loop when there is one.
+    private func drawStandardRow<Row: View>(
+        _ row: Row, caps: ButtonCapCycle, context: RenderContext
+    ) -> FrameBuffer {
+        var buffer = TUIkit.renderToBuffer(row, context: context)
         guard !context.isMeasuring, caps.isAnimating else { return buffer }
 
         // A run has to name the row it sits on, and these caps are single-line
@@ -1026,11 +1063,7 @@ extension _ButtonStyleBody: Layoutable {
     private func labelFills(
         _ labelView: AnyView, proposal: ProposedSize, context: RenderContext
     ) -> Bool {
-        var probeContext = context
-        probeContext.isMeasuring = true
-        probeContext.hasExplicitWidth = false
-        if let width = proposal.width { probeContext.availableWidth = width }
-        if let height = proposal.height { probeContext.availableHeight = height }
+        let probeContext = fixedMeasureContext(proposal: proposal, context: context)
         // At the width the render draws at, stated: a nil width under the
         // ideal-width mark would ask a different question.
         if appearance.isPlain {

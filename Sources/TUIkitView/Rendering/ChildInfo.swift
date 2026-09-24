@@ -833,6 +833,19 @@ private func measureCompositeBody<V: View>(
 /// - Returns: The view's size, always reported as fixed.
 @MainActor
 public func measureFixedByRendering<V: View>(_ view: V, proposal: ProposedSize, context: RenderContext) -> ViewSize {
+    let buffer = renderToBuffer(view, context: fixedMeasureContext(proposal: proposal, context: context))
+    return ViewSize.fixed(buffer.width, buffer.height)
+}
+
+/// The context ``measureFixedByRendering(_:proposal:context:)`` draws in:
+/// measuring, with no explicit width, and the proposal, where there is one, as
+/// the space.
+///
+/// For a view that draws to measure and then asks a second question of what
+/// it drew, which has to be asked under the same context for the two answers
+/// to be about one drawing.
+@MainActor
+package func fixedMeasureContext(proposal: ProposedSize, context: RenderContext) -> RenderContext {
     var measureContext = context
     measureContext.isMeasuring = true
     // Clear hasExplicitWidth so the view reports its natural (minimum) size
@@ -844,8 +857,7 @@ public func measureFixedByRendering<V: View>(_ view: V, proposal: ProposedSize, 
     if let height = proposal.height {
         measureContext.availableHeight = height
     }
-    let buffer = renderToBuffer(view, context: measureContext)
-    return ViewSize.fixed(buffer.width, buffer.height)
+    return measureContext
 }
 
 /// Renders a child view with a specific size allocation.
