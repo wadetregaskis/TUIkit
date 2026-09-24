@@ -4215,8 +4215,8 @@ cells, recorded by each painter as it paints — a `.background` (flat or ramp),
 compositing and a floating layer made opaque, a `List` row's fill, a menu row's
 bar — with the very function it paints the lines with; and rewritten by every
 pass that rewrites the fields of lines already painted, with the function it
-rewrites them with — the flatten `.dimmed()` and a modal's backdrop go through
-(see the later note below). The replay reads it on
+rewrites them with — the flatten `.dimmed()` and a modal's backdrop go through,
+and the colour effects (see the later notes below). The replay reads it on
 the row's page, exactly as `buildLine` reads a row (the page in front, restated
 after every reset: `AnimatedCellRun.groundFields(onPage:)`), so a cell no painter
 reached sits on the page and every other cell on its innermost painter's field.
@@ -4313,6 +4313,21 @@ there: 3 rows, and the `ZStack` and `.overlay` painters. The record states the
 anywhere in a frame: no painter's answer depends on where in its row the 49 is
 stated. The same test splices a second probe, which leaves its first cell bare
 and states 49 under its second, inside every painter.
+
+**2026-09-24, later: the colour effects rewrite the runs too.** `.colorInvert()`,
+`.grayscale(_:)`, `.hueRotation(_:)`, `.brightness(_:)`, `.contrast(_:)`,
+`.saturation(_:)` and `.colorMultiply(_:)` rewrite every colour a subtree's
+lines name (`SGRColorRewrite`) and left its runs alone. The ground still held
+the field from before the effect, so a `Spinner().background(.blue)
+.colorInvert()` replayed on blue where the render drew yellow. The frames still
+held the ink from before the effect, so the glyph replayed in its old colour.
+The ink was already wrong before grounds existed; the field went wrong when the
+replay began reading the ground. Measured through the run loop
+(`ReplayedRunFieldTests`, the catalogue on a colour, inverted), 22 rows, e.g.
+`replayed '⠦' in "…38;2;102;255;102m" on "…48;2;90;20;120m", rendered '⠦' in
+"…38;2;153;0;153m" on "…48;2;165;235;135m"`. The effect now puts every run's
+frames and both of its records through the same rewrite as the lines
+(`FrameBuffer.restyleRuns`). Pinned per effect by `ColorEffectRunTests`.
 
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the

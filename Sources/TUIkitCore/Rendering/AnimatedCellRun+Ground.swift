@@ -27,9 +27,11 @@
 //
 //  A pass that REWRITES the fields of lines already painted owes the ground the
 //  same rewrite, for the same reason: the flatten behind a modal and under
-//  `.dimmed()` washes every line, every frame and every ground. A pass that
-//  rewrote the lines and the frames and not the ground left the replay drawing
-//  a frame's bare cells on a field the row no longer has.
+//  `.dimmed()` washes every line, every frame and every ground, and a colour
+//  effect recolours them all (`FrameBuffer.restyleRuns`). A pass that rewrote
+//  the lines and the frames and not the ground left the replay drawing a frame's
+//  bare cells on a field the row no longer has; one that rewrote the lines alone
+//  replayed the glyphs in their old ink too.
 //
 //  A frame can also STATE the terminal's own field, `ESC[49m` — a tab chip's
 //  label and a block caret do on a `Color.default` palette, and every frame the
@@ -228,5 +230,24 @@ extension FrameBuffer {
     package mutating func paintRunGrounds(_ paint: (AnimatedCellRun, String) -> String) {
         guard !animatedCells.isEmpty else { return }
         animatedCells = animatedCells.map { run in run.paintingGround { paint(run, $0) } }
+    }
+
+    /// Restyles every run this buffer carries as a pass restyles its lines: each
+    /// frame, and both of each run's records, through the same `restyle`.
+    ///
+    /// For a pass that rewrites the colours of lines already painted — a colour
+    /// effect — and so owes the runs the same rewrite. The
+    /// frames, because the replay draws them in place of the cells the pass
+    /// rewrote; the records, because the replay draws a frame over them wherever
+    /// the frame names no field (or states `ESC[49m`), and those fields are the
+    /// ones the pass rewrote in the lines. A run's alpha rides through unchanged:
+    /// such a pass leaves the lines' opacity regions standing too.
+    ///
+    /// - Parameter restyle: The pass's rewrite of a line.
+    package mutating func restyleRuns(_ restyle: (String) -> String) {
+        guard !animatedCells.isEmpty else { return }
+        animatedCells = animatedCells.map { run in
+            run.replacingFrames(run.frames.map(restyle), alpha: run.alpha).paintingGround(restyle)
+        }
     }
 }

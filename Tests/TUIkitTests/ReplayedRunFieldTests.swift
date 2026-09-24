@@ -3,14 +3,15 @@
 //
 //  Every run a catalogue of controls leaves behind, replayed through the run
 //  loop on several grounds — the page, a tab's surface, a colour of the app's
-//  own, a ramp, the terminal's own page (`Color.default`), and a colour on it —
-//  painted as a `.background`, composited under a `ZStack`, dimmed and behind a
-//  sheet — and every replayed tick compared with a render at the same instant
-//  (`ReplayOracle`): each cell's glyph and field, and the ink a glyph is drawn
-//  in. The class `ReplayedTabChipBackgroundTests` is one case of,
-//  and the class `ReplayedCaretBlinkTests` is another: whatever a frame leaves
-//  bare has to land on the field its containers painted beneath it, and nothing
-//  else on the row may move.
+//  own, the same colour inverted, a ramp, the terminal's own page
+//  (`Color.default`), and a colour on it — painted as a `.background`, composited
+//  under a `ZStack`, dimmed and behind a sheet — and every replayed tick compared
+//  with a render at the same instant (`ReplayOracle`): each cell's glyph and
+//  field, and the ink a glyph is drawn in. The class
+//  `ReplayedTabChipBackgroundTests` is one case of, and the class
+//  `ReplayedCaretBlinkTests` is another: whatever a frame leaves bare has to land
+//  on the field its containers painted beneath it, and nothing else on the row
+//  may move.
 //
 //  The replay used to put the PAGE's background back after each reset in a
 //  frame, and a frame that names a background is one the splice leaves alone.
@@ -130,6 +131,15 @@ private struct OnAColourApp: App {
     }
 }
 
+/// The same colour under a colour effect, which recolours every field and ink
+/// the catalogue drew — its runs' frames and grounds included.
+private struct InvertedColourApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup { catalogue().padding(1).background(Color.rgb(90, 20, 120)).colorInvert() }
+    }
+}
+
 /// The terminal's own page: every field the palette names for the page — the
 /// page itself, a tab's surface, a chip's label, the wash a dim or a backdrop
 /// flattens everything to — is `Color.default`, spelled `ESC[49m`, and nothing
@@ -207,7 +217,7 @@ private struct OnARampApp: App {
 struct ReplayedRunFieldTests {
 
     enum Ground: String, CaseIterable, Sendable {
-        case page, tabSurface, colour, ramp, terminalPage
+        case page, tabSurface, colour, invertedColour, ramp, terminalPage
         case colourOnTerminalPage, composedOnTerminalPage, dimmed, backdrop
     }
 
@@ -225,6 +235,7 @@ struct ReplayedRunFieldTests {
             case .page: walk { OnThePageApp() }
             case .tabSurface: walk { InATabApp() }
             case .colour: walk { OnAColourApp() }
+            case .invertedColour: walk { InvertedColourApp() }
             case .ramp: walk { OnARampApp() }
             case .terminalPage: walk { OnTheTerminalPageApp() }
             case .colourOnTerminalPage: walk { ColourOnTheTerminalPageApp() }

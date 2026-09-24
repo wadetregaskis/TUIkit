@@ -319,8 +319,11 @@ extension AnimationClock {
 /// framework records that field on the run as it paints it: `.background(_:)`,
 /// flat or ramped; compositing (a `ZStack`, an `.overlay`, a layer made opaque); a
 /// `List` row's fill; a menu row's bar. A pass that repaints the fields of
-/// something already drawn repaints the record too, such as the wash that
-/// `.dimmed()` and a modal's backdrop flatten everything to. A frame that
+/// something already drawn repaints the record too, as it repaints the frames:
+/// the wash that `.dimmed()` and a modal's backdrop flatten everything to, and
+/// a colour effect (`.colorInvert()`, `.grayscale(_:)`, `.hueRotation(_:)`,
+/// `.brightness(_:)`, `.contrast(_:)`, `.saturation(_:)`, `.colorMultiply(_:)`).
+/// A frame that
 /// states the terminal's own field for a cell (SGR 49, which `Color.default` as
 /// a background is spelled as) is replayed as each of those containers drew it:
 /// a `.background` lets it through, and compositing fills it.
@@ -392,7 +395,8 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// exactly as wide as the run, spaces on each cell's field, painted by every
     /// painter the run has passed through exactly as it painted the lines, and
     /// rewritten by every pass that rewrote those lines' fields afterwards exactly
-    /// as it rewrote them (the flatten behind a modal and under `.dimmed()`) — or
+    /// as it rewrote them (the flatten behind a modal and under `.dimmed()`, a
+    /// colour effect) — or
     /// `nil` while none has, which is a run on whatever the row is built on.
     ///
     /// A frame that states no background for a cell is drawn over the field under

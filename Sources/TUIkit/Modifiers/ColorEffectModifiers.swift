@@ -248,17 +248,24 @@ extension _ColorEffectView {
         // width is carried rather than re-measured in the other case too — a
         // rewrite changes escapes and never a visible character, so the buffer's
         // own width claims stay true, including a width a displaced child set.
+        func recoloured(_ line: String) -> String {
+            SGRColorRewrite.rewriting(
+                line, defaultForeground: foreground, defaultBackground: surface
+            ) { effect.applied(to: $0, amount: amount) }
+        }
         var result =
             rewrites && !buffer.isEmpty
             ? buffer.replacingLines(
-                buffer.lines.map { line in
-                    SGRColorRewrite.rewriting(
-                        line, defaultForeground: foreground, defaultBackground: surface
-                    ) { effect.applied(to: $0, amount: amount) }
-                },
+                buffer.lines.map(recoloured),
                 width: buffer.width, uniformWidth: buffer.linesAreUniformWidth,
                 lineWidths: buffer.lineWidths)
             : buffer
+        // And the runs, by the same rewrite: their frames are drawn in place of the
+        // cells just recoloured, and their records say what the fields just
+        // recoloured were. Left alone, a `Spinner().background(.blue).colorInvert()`
+        // replayed its glyph in its old ink on the blue it had before the inversion
+        // (`FrameBuffer.restyleRuns`).
+        if rewrites { result.restyleRuns(recoloured) }
         if let layerFade {
             // Through `_OpacityView.fading` rather than a bare append, and the order
             // is the point. The resolution takes the LAYER from the FIRST region
