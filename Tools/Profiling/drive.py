@@ -291,21 +291,28 @@ def main():
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         time.sleep(2.0)  # let xctrace begin sampling before we drive
 
+    def play(steps):
+        """Send each `(delay, payload)`: wait `delay` draining, then write.
+
+        Stops at the first write the child can no longer receive.
+        """
+        for delay, payload in steps:
+            if delay:
+                end = time.time() + delay
+                while time.time() < end:
+                    if drain(min(0.01, max(0.0, end - time.time()))) < 0:
+                        break
+            if payload:
+                try:
+                    os.write(master, payload)
+                except OSError:
+                    return
+
     script = []
     for _ in range(args.loops):
         script.extend(build_scenario(args.scenario, args.rows, args.cols))
 
-    for delay, payload in script:
-        if delay:
-            end = time.time() + delay
-            while time.time() < end:
-                if drain(min(0.01, max(0.0, end - time.time()))) < 0:
-                    break
-        if payload:
-            try:
-                os.write(master, payload)
-            except OSError:
-                break
+    play(script)
 
     end = time.time() + 0.4
     while time.time() < end:
