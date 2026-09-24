@@ -1472,6 +1472,25 @@ public func resolveChildInfos<V: View>(from content: V, context: RenderContext) 
 @MainActor
 public func resolveChildViews<V: View>(from content: V, context: RenderContext) -> [ChildView] {
     guard let provider = content as? ChildViewProvider else { return [ChildView(content)] }
+    return resolveChildViews(from: content, as: provider, context: context)
+}
+
+/// ``resolveChildViews(from:context:)`` for content the caller has already
+/// cast: `provider` is `content`, as a ``ChildViewProvider``.
+///
+/// For a caller that needed the cast for a decision of its own first, so the
+/// conformance is looked up once rather than twice — an optional deciding
+/// whether its present view flattens at all is one, on every walk.
+///
+/// - Parameters:
+///   - content: The content view.
+///   - provider: `content`, as a provider.
+///   - context: The rendering context.
+/// - Returns: An array of ``ChildView``.
+@MainActor
+package func resolveChildViews<V: View>(
+    from content: V, as provider: ChildViewProvider, context: RenderContext
+) -> [ChildView] {
     // An `if`/`else` handed over WHOLE: a container's only content, which
     // `buildBlock` passes through bare, so no tuple splice ran to apply the
     // branch step (``ChildViewProvider/identityBranchLabel``). Without it both
