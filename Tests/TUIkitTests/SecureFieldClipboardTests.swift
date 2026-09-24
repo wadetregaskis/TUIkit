@@ -17,24 +17,6 @@ import Testing
 
 @Suite("secure field clipboard refusal")
 struct SecureFieldClipboardTests {
-    /// Records what a field hands the clipboard, and answers reads from the
-    /// same store. Per handler, so these run in parallel with everything else
-    /// without a shared pasteboard to race over.
-    private final class FakeClipboard: @unchecked Sendable {
-        var contents: String?
-        var writes: [String] = []
-
-        var access: ClipboardAccess {
-            ClipboardAccess(
-                write: { [self] in
-                    writes.append($0)
-                    contents = $0
-                },
-                read: { [self] in contents }
-            )
-        }
-    }
-
     private final class TextBox: @unchecked Sendable {
         var text: String
         init(_ text: String) { self.text = text }

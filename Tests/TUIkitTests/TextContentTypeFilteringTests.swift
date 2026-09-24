@@ -18,14 +18,6 @@ import Testing
 @Suite("Text content type filtering, from the view down")
 struct TextContentTypeFilteringTests {
 
-    private final class FakeClipboard: @unchecked Sendable {
-        var contents: String?
-
-        var access: ClipboardAccess {
-            ClipboardAccess(write: { [self] in contents = $0 }, read: { [self] in contents })
-        }
-    }
-
     private final class TextBox: @unchecked Sendable {
         var text: String
         init(_ text: String) { self.text = text }
