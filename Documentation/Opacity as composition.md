@@ -3370,8 +3370,9 @@ The fix is NOT the fill's opaque spelling. `.background` paints nothing at alpha
 opaque-spelled `.clear` would have painted black behind the bullet on every tick, with no
 claim to catch it. The frame now states no field at all: a spliced frame is painted over
 the background the line already has, and the resolver takes a run frame's field from the
-line it replaces — so the frame gets exactly what `.background(fill)` drew, the same in
-every frame, or nothing.
+field painted beneath the run — its ground, which `.background(fill)` records (§93; it was
+the line the frame replaces until 2026-09-24) — so the frame gets exactly what
+`.background(fill)` drew, the same in every frame, or nothing.
 
 ### 48.3 What stays approximate
 
@@ -5806,3 +5807,23 @@ mixed-width `Spinner` until §66 moved a declined run's frame onto `frameNowNano
 last test in the file asserts that condition plainly, so the next animation to ask the
 scheduler for its frames meets the rule before it meets the symptom: asking the scheduler
 keeps no clock running, so nothing that asks may read one.
+
+## 93. A faded run's bare cells blend over the field beneath them (2026-09-24)
+
+A run's frame that states no field for a cell is drawn over whatever the containers
+painted there, so `faded` (the resolution's pass over a covered run's frames) gives each
+such cell a field before blending it. It took that field from the line the render drew,
+and the line is the one place that cannot say: where the frame the render drew gave the
+cell a field of its own, the line shows that field. A `.plain` `TextField` — a field with
+no background of its own — draws a block caret visible in the caret's colour and invisible
+on nothing, so under `.opacity(0.5)` the invisible frame's cell was given the caret's
+colour and blended with it. Both frames then blended to the same picture
+(`ESC[38;2;54;133;54;48;2;54;133;54m ` on the one cell), the run stopped animating, the
+run loop — which keeps only runs that animate — kept none, and the caret froze visible: a
+caret that never blinked off, with no animation clock left running for it.
+
+The field now comes from the run's ground (`AnimatedCellRun.ground`): what the containers
+inside the fade painted beneath the run's cells, recorded as they painted it, and never
+the drawn frame. `ReplayedCaretBlinkTests` replays that caret under the fade against a
+render at each instant; before, it had nothing to replay (`compared → 0`), after, every
+tick of both halves matches.

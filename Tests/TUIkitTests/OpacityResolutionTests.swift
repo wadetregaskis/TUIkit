@@ -735,15 +735,18 @@ struct OpacityForeignRunTests {
     }
 
     /// A frame from `colorize(glyph, foreground:)` states no background: the
-    /// splice gives it the LINE's. Blended against what is behind the layer
-    /// alone it took the destination's field unblended — or the bare surface
-    /// — and then stated it, so a run on a backgrounded row inside `.opacity`
-    /// repainted the wrong field on every tick.
-    @Test("A faded run keeps the LINE's field, not the destination's")
-    func fadedRunKeepsTheLinesField() throws {
-        var buffer = FrameBuffer(lines: [
-            ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0), background: .rgb(0, 0, 255))
-        ])
+    /// splice gives it the field its container painted beneath it. Blended
+    /// against what is behind the layer alone it took the destination's field
+    /// unblended — or the bare surface — and then stated it, so a run on a
+    /// backgrounded row inside `.opacity` repainted the wrong field on every
+    /// tick.
+    ///
+    /// The row is painted as a `.background` paints it — the fill over the line,
+    /// and the same fill on the run's ground (`AnimatedCellRun.ground`), which is
+    /// where the field is read from. Not from the line: see the next test.
+    @Test("A faded run keeps the field painted under it, not the destination's")
+    func fadedRunKeepsItsContainersField() throws {
+        var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .rgb(0, 255, 0))])
         buffer.animatedCells = [
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: 5,
@@ -753,6 +756,11 @@ struct OpacityForeignRunTests {
                 ],
                 clock: .cursor)
         ]
+        func fill(_ line: String) -> String {
+            ANSIRenderer.applyPersistentBackground(line, color: .rgb(0, 0, 255)) + ANSIRenderer.reset
+        }
+        buffer.lines = buffer.lines.map(fill)
+        buffer.paintRunGrounds { _, ground in fill(ground) }
         buffer.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 0.5)]
         let behind = FrameBuffer(lines: [
             ANSIRenderer.colorize("xxxxx", foreground: .rgb(255, 255, 255), background: .rgb(255, 0, 0))
@@ -762,6 +770,30 @@ struct OpacityForeignRunTests {
         let lineField = Color.rgb(0, 0, 255).opacity(0.5, over: .rgb(255, 0, 0))
         #expect(frame.contains(backgroundCodes(lineField)), "frame: \(frame.debugDescription)")
         #expect(!frame.contains(backgroundCodes(.rgb(255, 0, 0))), "the destination's field, unblended")
+    }
+
+    /// The line is the one place the field under a run CANNOT be read from: where
+    /// the frame the render drew gave a cell a field of its own, the line shows
+    /// that. A block caret drawn visible is exactly that — and read off the line,
+    /// its invisible frame blended over the caret's own colour, the two frames
+    /// came out one picture, and the caret froze visible under every fade.
+    @Test("A faded run's bare cell does not take the field its drawn frame gave it")
+    func fadedRunIgnoresTheDrawnFramesField() throws {
+        let visible = ANSIRenderer.colorize("a", foreground: .rgb(0, 0, 0), background: .rgb(255, 0, 0))
+        let hidden = ANSIRenderer.colorize("a", foreground: .rgb(0, 255, 0))
+        var buffer = FrameBuffer(lines: [visible])
+        buffer.animatedCells = [
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 1, frames: [visible, hidden], clock: .cursor)
+        ]
+        buffer.opacityRegions = [OpacityRegion(offsetX: 0, offsetY: 0, width: 1, height: 1, opacity: 0.5)]
+        let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
+        let run = try #require(resolved.animatedCells.first)
+        let caretField = backgroundCodes(Color.rgb(255, 0, 0).opacity(0.5, over: .black))
+        #expect(run.frames[0].contains(caretField), "the visible frame lost its own field: \(run.frames[0].debugDescription)")
+        #expect(
+            !run.frames[1].contains(caretField),
+            "the hidden frame took the visible one's field: \(run.frames[1].debugDescription)")
+        #expect(run.isAnimating, "both frames blended to one picture")
     }
 
     /// A region is stamped as wide as its buffer — the longest line — over

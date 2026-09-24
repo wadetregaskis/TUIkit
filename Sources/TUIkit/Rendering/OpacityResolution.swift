@@ -230,7 +230,7 @@ extension FrameBuffer {
         // full render per tick.
         result.animatedCells = result.animatedCells.compactMap { run in
             Self.faded(
-                run, covering: regionsForRuns, ownLines: lines, destination: destination,
+                run, covering: regionsForRuns, destination: destination,
                 position: position, surface: resolvedSurface,
                 defaultForeground: resolvedForeground)
         }
@@ -312,12 +312,9 @@ extension FrameBuffer {
     ///   - covering: What covers the run from OUTSIDE it, and only that. A run's own
     ///     per-frame statement must not be in this list or every frame would be folded
     ///     with the drawn frame's alpha as well as its own.
-    ///   - ownLines: The carrying buffer's lines — where a frame's cells inherit their
-    ///     FIELD from, a frame stating none.
     private static func faded(
         _ run: AnimatedCellRun,
         covering regions: [OpacityRegion],
-        ownLines lines: [String],
         destination: FrameBuffer,
         position: (x: Int, y: Int),
         surface resolvedSurface: Color,
@@ -373,14 +370,23 @@ extension FrameBuffer {
         // own columns, where the per-column alpha and the destination line
         // expect them.
         let prefix = String(repeating: " ", count: max(0, run.offsetX))
-        // The frame's cells inherit their FIELD from the line they replace
-        // — a frame from `colorize(glyph, foreground:)` states none, and
-        // the splice relies on the line's background applying under it.
-        // Blended against what is behind the layer alone, such a cell took
-        // the destination's field unblended (or the bare surface) and then
-        // STATED it, so an indeterminate bar inside `.background(.blue)
-        // .opacity(0.5)` drew its tint once and replayed it plain.
-        let ownLine = lines.indices.contains(run.offsetY) ? lines[run.offsetY] : ""
+        // A frame's cell that states no field inherits one from what the
+        // containers inside this fade painted under it — a frame from
+        // `colorize(glyph, foreground:)` states none, and the splice relies on
+        // that field applying under it. Blended against what is behind the
+        // layer alone, such a cell took the destination's field unblended (or
+        // the bare surface) and then STATED it, so an indeterminate bar inside
+        // `.background(.blue).opacity(0.5)` drew its tint once and replayed it
+        // plain.
+        //
+        // From the run's GROUND, not from the line: the line under a cell is
+        // whatever the render drew there, and where the drawn frame gave the
+        // cell a field of its own the line shows that one. A `.plain` field's
+        // block caret, drawn visible, put the caret's colour under its own off
+        // frame, the two frames blended to one picture, and the run — not
+        // animating any more — was dropped: under a fade the caret froze on.
+        // See ``AnimatedCellRun/ground``.
+        let groundLine = run.ground.map { prefix + $0 }
         let columns = run.offsetX..<(run.offsetX + run.width)
         // The SAME fold the line took, not `covering.first`. A run is spliced
         // over cells the lines already answered for, so taking one region here
@@ -406,7 +412,7 @@ extension FrameBuffer {
                 destination: behindLine,
                 columns: columns,
                 destinationShift: position.x,
-                fieldsFrom: ownLine,
+                fieldsFrom: groundLine,
                 alpha: { perColumn[$0 - columns.lowerBound] },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground)

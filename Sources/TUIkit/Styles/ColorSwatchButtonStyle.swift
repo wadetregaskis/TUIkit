@@ -135,10 +135,11 @@ struct _ColorSwatchCells: View {
         let (dim, bright) = pulseEndpoints(on: fill)
         // The bullet alone, and NO field in the frame. A spliced frame is painted
         // over the background the line already has (`patchingAnimatedCells`
-        // restates it), and the resolver takes a run frame's field from the line it
-        // replaces — so the frame gets exactly what `.background(fill)` drew: the
-        // fill's opaque spelling and its field claim, the same in every frame
-        // (§29.2), or nothing at all for a fill at alpha 0. Stating `fill` here raw
+        // restates it), and the resolver blends a run frame's bare cells over the
+        // field recorded beneath the run (its ground, which the `.background(fill)`
+        // around it records) — so the frame gets exactly what `.background(fill)`
+        // drew: the fill's opaque spelling and its field claim, the same in every
+        // frame (§29.2), or nothing at all for a fill at alpha 0. Stating `fill` here raw
         // put a translucent swatch's colour into the emitter whatever the palette;
         // stating its opaque spelling would have painted black behind a `.clear` one.
         return [cycle.run("●", dim: dim, bright: bright, offsetX: 0, offsetY: 0)].compactMap { $0 }
