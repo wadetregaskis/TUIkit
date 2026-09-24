@@ -324,27 +324,54 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         return seek
     }
 
-    /// Whether the "N more above / below" lines are this view's vertical
-    /// indicator — the other half of ``ScrollIndicatorVisibility``'s question,
-    /// and the reason a `.hidden` scroll view now draws nothing at all rather
-    /// than falling back to these.
+    /// The "N more above / below" pair's claim on the viewport's height: read
+    /// from the environment once a frame, then asked of each candidate
+    /// horizontal bar.
     ///
-    /// Asked at `overflowing: true`: the indicators gate themselves on whether
-    /// there IS content above or below, so what is being decided here is which
-    /// indicator this view uses — and deciding it must not trigger the content
-    /// measure `.automatic` would otherwise need.
+    /// Asked of the bar because the three-line floor is asked of the area the
+    /// pair would be drawn in — the viewport less a horizontal bar's row, and
+    /// NOT less the two lines `.visible` reserves. That reservation is what the
+    /// floor decides, so it cannot also be an input to it. Under
+    /// `ResolvedScrollIndicators.minimumTextHeight` the answer is no, through
+    /// the `fitting(contentHeight:)` `List` and `Table` resolve theirs with.
     ///
-    /// `contentHeight` is the area the pair would be drawn in: the viewport less
-    /// a horizontal bar's row, and NOT less the two lines `.visible` reserves.
-    /// That reservation is what this answer decides, so it cannot also be an
-    /// input to it. Under `ResolvedScrollIndicators.minimumTextHeight` the answer
-    /// is no, through the `fitting(contentHeight:)` `List` and `Table` resolve
-    /// theirs with. Asked once, in `resolveChrome`; everything after reads
-    /// `ScrollChrome.textIndicators`, because the environment alone cannot know
-    /// the viewport is too short.
-    private func drawsTextIndicators(_ context: RenderContext, contentHeight: Int) -> Bool {
-        context.environment.verticalScrollIndicators(overflowing: true)
-            .fitting(contentHeight: contentHeight).text
+    /// Asked by every round of `resolveScrollbars` as well as by
+    /// `resolveChrome`, and that is the point of it being one value. The rounds
+    /// measure the content to decide the bars, and hand their extents to the
+    /// render as already settled; they used to measure at the viewport less the
+    /// bar's row alone, while the render published a window two lines shorter.
+    /// A `Spacer` or a `.frame(maxHeight: .infinity)` then filled a canvas two
+    /// lines taller than the window it scrolled through, and a zoomed
+    /// `.viewport` picture, measured two lines taller and so wider than it was
+    /// drawn, was given a horizontal bar for columns it never had.
+    struct TextIndicatorLines {
+        /// This view's vertical indicator before the floor — whether the pair
+        /// is the indicator at all. Asked at `overflowing: true`: the pair
+        /// gates itself on whether there IS content above or below, so this
+        /// decides only which indicator this view uses, and deciding it must
+        /// not trigger the content measure `.automatic` would otherwise need.
+        /// It is also the reason a `.hidden` scroll view draws nothing at all
+        /// rather than falling back to the pair.
+        let indicators: ResolvedScrollIndicators
+        /// Drawn at every offset, and so reserved out of the content window —
+        /// ``EnvironmentValues/alwaysShowsVerticalTextIndicators``.
+        let alwaysShown: Bool
+
+        init(_ environment: EnvironmentValues) {
+            indicators = environment.verticalScrollIndicators(overflowing: true)
+            alwaysShown = indicators.text && environment.alwaysShowsVerticalTextIndicators
+        }
+
+        /// Whether the pair is drawn, whether it is reserved rather than written
+        /// over the edge lines, and the content window that leaves.
+        func fitted(
+            viewportHeight: Int, horizontalBar: Bool
+        ) -> (drawn: Bool, reserved: Bool, contentHeight: Int) {
+            let area = viewportHeight - (horizontalBar ? 1 : 0)
+            let drawn = indicators.fitting(contentHeight: area).text
+            let reserved = drawn && alwaysShown
+            return (drawn, reserved, max(1, area - (reserved ? 2 : 0)))
+        }
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
@@ -647,16 +674,16 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         chrome: ScrollChrome, contentWidth: Int, contentViewportHeight: Int,
         settled: (width: Int, height: Int)?
     ) {
+        let textLines = TextIndicatorLines(context.environment)
         let bars = resolveScrollbars(
             viewportWidth: viewportWidth, viewportHeight: viewportHeight,
-            horizontal: wantsHorizontal, context: context)
-        // Fitted to the viewport BEFORE the reservation below takes anything out
-        // of it. The floor used to be applied afterwards, at the draw site, to the
+            horizontal: wantsHorizontal, textLines: textLines, context: context)
+        // Fitted to the viewport BEFORE the reservation takes anything out of
+        // it. The floor used to be applied afterwards, at the draw site, to the
         // content window, which under `.visible` the reservation had already made
         // two lines shorter. A four-line view reserved two lines, found two left,
         // declined to draw the pair, and never gave the two lines back.
-        let textIndicators = drawsTextIndicators(
-            context, contentHeight: viewportHeight - (bars.horizontal ? 1 : 0))
+        //
         // Under `.visible` both "N more" lines are drawn at EVERY offset, so
         // they are chrome and come out of the viewport once — the way a
         // horizontal bar's row does, and the way `List` and `Table` take them
@@ -665,13 +692,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // a neighbouring offset; that path still writes over the edge lines. See
         // `reservingScrollIndicators(around:…)` for what went wrong when
         // `.visible` wrote over them too.
-        let reserves = textIndicators && context.environment.alwaysShowsVerticalTextIndicators
-        let contentViewportHeight = max(
-            1, viewportHeight - (bars.horizontal ? 1 : 0) - (reserves ? 2 : 0))
+        let text = textLines.fitted(viewportHeight: viewportHeight, horizontalBar: bars.horizontal)
+        let contentViewportHeight = text.contentHeight
         handler.viewportHeight = contentViewportHeight
         let chrome = ScrollChrome(
             verticalBar: bars.vertical, horizontalBar: bars.horizontal,
-            textIndicators: textIndicators, reservesIndicatorLines: reserves)
+            textIndicators: text.drawn, reservesIndicatorLines: text.reserved)
         // …and NOT counted twice: the inset is what tells `pageDistance` that an
         // indicator eats into the viewport it can see. Reserved, the lines are
         // already outside it. That is the whole of `ScrollChrome.edgeInset`'s
@@ -884,14 +910,20 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// loop ran out of rounds with the flags still moving (its extents then
     /// describe dimensions that are no longer the answer), and on the
     /// non-`.automatic` path, which measures nothing.
+    ///
+    /// - Parameter textLines: The "N more" pair's claim on the height, so each
+    ///   round measures at the content window the render will publish — the
+    ///   viewport less the bar's row AND the two lines `.visible` reserves.
     private func resolveScrollbars(
-        viewportWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
+        viewportWidth: Int, viewportHeight: Int, horizontal: Bool,
+        textLines: TextIndicatorLines, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
         let verticalPolicy = context.environment.verticalScrollIndicatorVisibility
         let horizontalPolicy = context.environment.horizontalScrollIndicatorVisibility
-        // Only the scrollbar style reserves anything on the vertical axis; the
-        // text indicators replace a viewport line rather than a column, and
-        // decide themselves, after the render, from what is actually hidden.
+        // Only the scrollbar style reserves a COLUMN on the vertical axis; the
+        // text indicators take lines, not a column — written over the edge lines
+        // and decided after the render from what is actually hidden, or under
+        // `.visible` reserved, which `textLines` answers for in the probe below.
         // The horizontal axis has no text form, so its bar stands whatever the
         // style says.
         let verticalBar = context.environment.scrollIndicatorStyle == .scrollbar
@@ -911,7 +943,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // ≤2 reservations (one per axis) ⇒ converges in ≤3 measure rounds.
         for _ in 0..<3 {
             let probeWidth = max(1, viewportWidth - (wantsScrollbar ? 1 : 0))
-            let probeHeight = max(1, viewportHeight - (wantsHorizontalBar ? 1 : 0))
+            // What `resolveChrome` will leave the content at these bars, and not
+            // just the bar's row: a round that changes nothing hands its extents
+            // to the render, which fills them.
+            let probeHeight = textLines.fitted(
+                viewportHeight: viewportHeight, horizontalBar: wantsHorizontalBar
+            ).contentHeight
             let extents = contentExtents(
                 contentWidth: probeWidth, viewportHeight: probeHeight,
                 horizontal: horizontal, context: context)
