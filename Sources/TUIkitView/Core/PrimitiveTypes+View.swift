@@ -70,8 +70,12 @@ extension Optional: Layoutable where Wrapped: View {
 extension RenderContext {
     /// The picture a view left at this identity, drawn part-way gone, or `nil`
     /// when nothing is leaving from here — what a `nil` optional draws.
+    ///
+    /// Asked of every `nil` on every walk, so the store's emptiness comes
+    /// first: a `nil` in an app that animates nothing pays one check rather
+    /// than hashing its identity to look for a record that cannot be there.
     func departingPicture() -> FrameBuffer? {
-        guard let store = stateStorage?.departures else { return nil }
+        guard let store = stateStorage?.departures, !store.isEmpty else { return nil }
         // One read for both halves — see `AnimatableResolution`.
         let frame = environment.animationFrame
         guard
@@ -86,7 +90,7 @@ extension RenderContext {
     /// The size a departing view is still holding open here, or `nil` — the
     /// measure walk's half of ``departingPicture()``.
     func departingSize() -> (width: Int, height: Int)? {
-        guard let store = stateStorage?.departures else { return nil }
+        guard let store = stateStorage?.departures, !store.isEmpty else { return nil }
         let frame = environment.animationFrame
         guard
             let size = store.departingSize(

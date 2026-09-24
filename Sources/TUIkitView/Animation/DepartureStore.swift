@@ -84,6 +84,10 @@ public final class DepartureStore: @unchecked Sendable {
 
     /// How many departures are being tracked (tests, diagnostics).
     public var count: Int { entries.count }
+
+    /// Whether nothing is tracked at all — the one check a `nil` optional in an
+    /// app that animates nothing pays.
+    public var isEmpty: Bool { entries.isEmpty }
 }
 
 extension DepartureStore {
