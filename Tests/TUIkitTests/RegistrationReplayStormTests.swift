@@ -412,20 +412,18 @@ private final class StormRun {
 /// edge never arrives, so a stuck refresh reads as a stuck refresh.
 @MainActor
 private func settle(_ cached: StormRun, _ uncached: StormRun, reaching expected: (Int, Int)) async {
-    let started = ContinuousClock.now
-    let deadline = started + .seconds(60)
-    var polls = 0
+    var wait = HangBreaker(timeout: .seconds(60))
     while cached.log.count < expected.0 || uncached.log.count < expected.1 {
-        guard ContinuousClock.now < deadline else {
+        guard !wait.hasTripped else {
             Issue.record(
                 """
                 a refresh never ran: \(cached.log.count)/\(expected.0) cached and \
-                \(uncached.log.count)/\(expected.1) uncached, after \(polls) polls \
-                in \(started.duration(to: .now))
+                \(uncached.log.count)/\(expected.1) uncached, after \(wait.turns) polls \
+                in \(wait.elapsed)
                 """)
             return
         }
-        polls += 1
+        wait.nextTurn()
         try? await Task.sleep(for: .milliseconds(1))
     }
 }

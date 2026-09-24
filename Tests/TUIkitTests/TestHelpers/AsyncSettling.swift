@@ -56,20 +56,16 @@ import Testing
 func settle(
     until condition: @MainActor () -> Bool, timeout: Duration = .seconds(60)
 ) async {
-    let started = ContinuousClock.now
-    let deadline = started + timeout
-    var iterations = 0
+    var wait = HangBreaker(timeout: timeout)
     while !condition() {
-        guard ContinuousClock.now < deadline else {
+        guard !wait.hasTripped else {
             // Say so. The caller's `#expect` reports what was not true; only
             // this knows whether the wait was served slowly, spun without being
             // served, or never really ran at all.
-            Issue.record(
-                "settle(until:) gave up after \(iterations) iterations in \(started.duration(to: .now))")
+            Issue.record("settle(until:) gave up after \(wait.turns) iterations in \(wait.elapsed)")
             return
         }
-        iterations += 1
-        if iterations.isMultiple(of: 50) {
+        if wait.nextTurn().isMultiple(of: 50) {
             try? await Task.sleep(for: .milliseconds(1))
         } else {
             await Task.yield()
@@ -87,4 +83,38 @@ func settle(
 @MainActor
 func yieldToSpawnedWork() async {
     for _ in 0..<20 { await Task.yield() }
+}
+
+// MARK: - The hang-breaker
+
+/// When a wait in these tests gives up, and what it can say when it does.
+///
+/// ``settle(until:timeout:)`` and the registration storm's poll suspend
+/// differently — one mostly yields, the other only naps, each for a reason its
+/// own documentation gives — but both are waits with a hang-breaker, and when
+/// to break is one rule, so it is kept in one place.
+struct HangBreaker {
+    private let started = ContinuousClock.now
+    private let deadline: ContinuousClock.Instant
+
+    /// How many times the wait has suspended.
+    private(set) var turns = 0
+
+    init(timeout: Duration) {
+        deadline = started + timeout
+    }
+
+    /// Whether the wait should give up rather than suspend again.
+    var hasTripped: Bool { ContinuousClock.now >= deadline }
+
+    /// How long the wait has been waiting.
+    var elapsed: Duration { started.duration(to: .now) }
+
+    /// Counts the suspension the wait is about to make, and returns its
+    /// number, counting from 1.
+    @discardableResult
+    mutating func nextTurn() -> Int {
+        turns += 1
+        return turns
+    }
 }
