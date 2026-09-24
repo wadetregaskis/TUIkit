@@ -3594,7 +3594,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // the keys says where they go wherever its cursor is. A reversal
                 // where the wash cannot be measured — the same answer `Table` takes
                 // for the same row, from the same place.
-                return .focused(in: context, palette: palette)
+                return .focused(
+                    in: context, palette: palette,
+                    hasSelection: singleSelection != nil || multiSelection != nil)
             } else if isSelected {
                 // Selected row while the list itself doesn't have
                 // focus. Controlled by the

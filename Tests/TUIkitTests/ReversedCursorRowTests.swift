@@ -131,6 +131,21 @@ struct ReversedCursorRowTests {
                 }
             }
         }
+
+        /// The control with no selection binding at all.
+        @MainActor @ViewBuilder
+        func viewWithoutSelection() -> some View {
+            switch self {
+            case .list:
+                List {
+                    ForEach(0..<3, id: \.self) { Text("row \($0)") }
+                }
+            case .table:
+                Table(ReversedCursorRowTests.rows) {
+                    TableColumn("Name") { $0.name }
+                }
+            }
+        }
     }
 
     /// Which colour of the fill the terminal decides.

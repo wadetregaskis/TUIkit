@@ -54,9 +54,13 @@ always had.
 Worth being exact about what the mark means, because it is not what the title of
 this document assumes: **it marks SELECTION, not focus.** Which row the cursor is
 on is said by the background, which breathes. A row merely under the cursor has
-not been chosen and shows a still highlight and no glyph, so a control with no
-selection draws no glyph anywhere — which is what a plain `List` looked like
-before and still looks like now.
+not been chosen and shows no glyph — its background breathes too, in the neutral
+focus wash rather than the accent, since 2026-09-24: while the control has the
+keys, the breath says where they go wherever the cursor is. (Under
+`.rowSelectionIndicator(.hidden)`, a control that has a selection holds that
+row's wash still, so motion tells the selected cursor row from the unselected
+one.) A control with no selection draws no glyph anywhere — which is what a plain
+`List` looked like before and still looks like now.
 
 The other apparent variety — caps, arrows, bullets — is not arbitrariness. It is
 one idea meeting different geometry: a control marks the cell it has, and a

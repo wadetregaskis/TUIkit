@@ -84,13 +84,17 @@ enum RowBackground {
     /// Colors and Pro, whose accent and wash come from one selection colour or are
     /// both grey. Two breaths of one hue read as one: on Green the two dim ends stand
     /// 1.03:1 apart. So motion says it instead — the selected cursor row breathes, the
-    /// unselected one does not — as it did before every cursor row breathed.
+    /// unselected one does not — as it did before every cursor row breathed. Only
+    /// for a control that HAS a selection, though: `.hidden` is an environment
+    /// value, so an app that sets it at its root reaches every list, and a list
+    /// with no selection binding has nothing for motion to tell apart — its
+    /// cursor row breathes as everywhere else.
     ///
     /// Here rather than at the two call sites for the reason ``focusedSelection(in:palette:)``
     /// is: the twins ask one question in one place.
     @MainActor
-    static func focused(in context: RenderContext, palette: any Palette) -> Self {
-        guard context.environment.rowSelectionIndicator != .hidden else {
+    static func focused(in context: RenderContext, palette: any Palette, hasSelection: Bool) -> Self {
+        guard !(hasSelection && context.environment.rowSelectionIndicator == .hidden) else {
             return still(palette.focusWashFill())
         }
         return breathing(

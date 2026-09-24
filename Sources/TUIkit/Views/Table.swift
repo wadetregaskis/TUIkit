@@ -4214,7 +4214,7 @@ where Value.ID: Hashable {
                 // in the neutral focus wash rather than the accent. A reversal where
                 // the wash cannot be measured — the same answer `_ListCore` takes for
                 // the same row, from the same place.
-                .focused(in: context, palette: palette)
+                .focused(in: context, palette: palette, hasSelection: hasSelection)
             } else {
                 // A selected row while the table itself does not have focus
                 // draws its mark and no fill; `.hidden` suppresses both, and

@@ -52,6 +52,8 @@ private struct CursorRowBreathApp: App {
     var indicator = Visibility.automatic
     var palette: any Palette = Self.palette
     var surface: Color?
+    /// `false` for a control with no selection binding at all.
+    var bindsSelection = true
 
     init() {}
 
@@ -68,8 +70,17 @@ private struct CursorRowBreathApp: App {
 
     var body: some Scene {
         WindowGroup {
-            surfaced(kind.view(selection: selection).rowSelectionIndicator(indicator))
+            surfaced(control.rowSelectionIndicator(indicator))
                 .palette(palette)
+        }
+    }
+
+    @ViewBuilder
+    private var control: some View {
+        if bindsSelection {
+            kind.view(selection: selection)
+        } else {
+            kind.viewWithoutSelection()
         }
     }
 
@@ -138,6 +149,23 @@ struct CursorRowBreathTests {
         #expect(
             breath.contains(renderedBackground(of: ends.bright)),
             "the breath never reached its bright end: \(Set(breath))")
+    }
+
+    /// `.rowSelectionIndicator(.hidden)` is an environment value, so an app that sets
+    /// it at its root reaches every list. A control with no selection binding has no
+    /// selection for motion to tell its cursor row from: it breathes as everywhere.
+    @Test(
+        "Under .rowSelectionIndicator(.hidden), a control with no selection still breathes",
+        arguments: ReversedCursorRowTests.Kind.allCases)
+    func hiddenIndicatorWithoutSelectionBreathes(kind: ReversedCursorRowTests.Kind) throws {
+        var app = CursorRowBreathApp(kind: kind, selection: [], indicator: .hidden)
+        app.bindsSelection = false
+        let (_, _, _, active) = try settled(app)
+        let breath = try breath(of: active)
+        let ends = CursorRowBreathApp.palette.focusWashPulse()
+        #expect(
+            breath.contains(renderedBackground(of: ends.bright)),
+            "the cursor row stood still: \(Set(breath))")
     }
 
     /// Every palette that states its own colours, by name, so a failure names the one
