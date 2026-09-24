@@ -3805,13 +3805,24 @@ not already spent:
 | Ctrl-J | Enter | 0x0A is LF |
 | Ctrl-M | Enter | 0x0D is CR |
 | Ctrl-[ | Escape | 0x1B, outside the 0x01–0x1A range |
-| Ctrl-C, Ctrl-Z | — | taken by the shell's job control |
 
-These cannot be delivered under `.commandKey(.control)` by any means. Ask
+These four cannot be delivered under `.commandKey(.control)` by any means. Ask
 `KeyboardShortcut.isDeliverableInTerminal` (after `resolved(commandKey:)`)
 rather than wondering why one menu item is dead. `.commandKey(.option)` has no
 such collision, at the cost of Option itself being less reliable: Apple
 Terminal composes accented characters unless "Use Option as Meta key" is on.
+
+**Ctrl-C and Ctrl-Z do arrive** (corrected 2026-09-24; this table used to list
+them as "taken by the shell's job control"). That is true of a cooked terminal,
+not of TUIkit's: `Terminal.enableRawMode()` clears `ISIG`, so the driver sends
+0x03 and 0x1A as bytes instead of raising SIGINT and SIGTSTP, and they decode as
+`.character("c")` and `.character("z")` with `ctrl`. What becomes of them is the
+input chain's business. Nothing binds Ctrl-C unless the app does — an app's
+⌘C under `.control`, or `QuitShortcut.ctrlC` — so by default it does nothing at
+all. An unclaimed Ctrl-Z reaches layer 4, which re-raises it as SIGTSTP, so a
+shortcut on ⌃Z (an app's ⌘Z under `.control`) takes the suspend key for as long
+as it is on screen. SIGINT itself still shuts the app down; it comes from
+`kill -INT`, not from the keyboard.
 
 #### ⌃S and ⌥⌃S: the split view's sidebar chords (recorded 2026-09-13)
 

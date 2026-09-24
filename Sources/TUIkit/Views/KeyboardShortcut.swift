@@ -209,15 +209,20 @@ public struct KeyboardShortcut: Hashable, Sendable {
     /// `false` for the Control combinations the C0 range spends on other keys:
     /// Ctrl-I is Tab, Ctrl-J and Ctrl-M are newline and Return, Ctrl-[ is
     /// Escape — `KeyEvent.parse` matches those *before* the Ctrl-letter range,
-    /// so they never arrive as a modified letter and never can. Ctrl-C and
-    /// Ctrl-Z are taken by the shell's job control. Consult it after
-    /// `resolved(commandKey:)` — that is where a ⌘ shortcut becomes a
+    /// so they never arrive as a modified letter and never can. Consult it
+    /// after `resolved(commandKey:)` — that is where a ⌘ shortcut becomes a
     /// Control one and can collide.
+    ///
+    /// Ctrl-C and Ctrl-Z are deliverable. A cooked terminal turns them into
+    /// SIGINT and SIGTSTP, but TUIkit's raw mode clears `ISIG`, so they arrive
+    /// as keys like any other Control letter. A shortcut on Ctrl-Z does take
+    /// the suspend key while it is registered: layer 4 re-raises Ctrl-Z as
+    /// SIGTSTP only when nothing before it claimed the key.
     public var isDeliverableInTerminal: Bool {
         guard case .key(let key, let modifiers) = trigger else { return true }
         if modifiers.contains(.command) { return false }
         guard modifiers.contains(.control) else { return true }
-        return !"cijmz[".contains(key.character)
+        return !"ijm[".contains(key.character)
     }
 
     private init(trigger: Trigger) {

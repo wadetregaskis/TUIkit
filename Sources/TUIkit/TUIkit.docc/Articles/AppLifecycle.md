@@ -47,7 +47,7 @@ Before the main loop starts, `run()` prepares the terminal:
 
 | Step | What | Why |
 |------|------|-----|
-| 1 | Arm the signal sources | Observe Ctrl+C (SIGINT), `kill` (SIGTERM), resize (SIGWINCH) and job control (SIGTSTP / SIGCONT), and ignore SIGPIPE |
+| 1 | Arm the signal sources | Observe SIGINT and SIGTERM (`kill`), resize (SIGWINCH) and job control (SIGTSTP / SIGCONT), and ignore SIGPIPE |
 | 2 | Enter alternate screen | Preserve the user's existing terminal content |
 | 3 | Hide cursor | Avoid cursor flicker during rendering |
 | 4 | Enable raw mode | Disable line buffering, echo, and signal processing |
@@ -62,7 +62,7 @@ In raw mode, the terminal delivers every keystroke immediately without waiting f
 
 - **No echo**: typed characters are not displayed
 - **No canonical mode**: input is byte-by-byte, not line-by-line
-- **No signal processing**: Ctrl+C is handled by TUIkit, not the OS
+- **No signal processing**: Ctrl+C and Ctrl+Z arrive as keys, not as SIGINT and SIGTSTP. Nothing binds Ctrl+C unless the app does; an unclaimed Ctrl+Z suspends the app from Layer 4
 - **Non-blocking reads**: input is drained without blocking; when nothing is pending the loop sleeps until woken rather than polling on a fixed timeout (see Main Loop)
 
 The original terminal settings are saved and restored during cleanup.
@@ -97,10 +97,10 @@ The rest set boolean flags and wake the loop; the actual rendering always happen
 
 | Signal | Trigger | Effect |
 |--------|---------|--------|
-| `SIGINT` | Ctrl+C | Sets a shutdown flag → main loop exits |
+| `SIGINT` | `kill -INT` (in raw mode Ctrl+C is a key, not this signal) | Sets a shutdown flag → main loop exits |
 | `SIGTERM` | `kill` | The same shutdown flag, so the terminal-restore teardown still runs |
 | `SIGWINCH` | Terminal resize | Sets a re-render flag → next iteration re-renders |
-| `SIGTSTP` | Ctrl+Z | Sets a suspend flag. The default stop action is suppressed on purpose: stopping the moment the signal lands would strand the user's shell in raw mode on the alternate screen, so the loop hands the terminal back and only then stops for real |
+| `SIGTSTP` | Ctrl+Z, re-raised by Layer 4 when no view claimed the key, or `kill -TSTP` | Sets a suspend flag. The default stop action is suppressed on purpose: stopping the moment the signal lands would strand the user's shell in raw mode on the alternate screen, so the loop hands the terminal back and only then stops for real |
 | `SIGCONT` | `fg`, after an *external* `SIGSTOP` | Sets a repaint flag — nothing was torn down, but the screen may have been disturbed while the process slept. The suspend path's own `fg` is swallowed instead, so it does not repaint twice |
 | `SIGPIPE` | A clipboard helper or a pty reader that went away mid-write | No source at all: `SIG_IGN`, process-wide. Nothing wants to *observe* it, only to survive it, so the write returns `EPIPE` instead of killing the app mid-raw-mode |
 
@@ -193,7 +193,7 @@ Steps 8–11 are the output optimization layer: line-level diffing reduces write
 
 ## Cleanup
 
-When the main loop exits: via Ctrl+C, the quit key, or programmatic shutdown: `cleanup()` restores the terminal:
+When the main loop exits: via SIGINT or SIGTERM, the quit key, or programmatic shutdown: `cleanup()` restores the terminal:
 
 | Step | What | Why |
 |------|------|-----|

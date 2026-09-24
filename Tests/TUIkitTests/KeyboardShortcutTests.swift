@@ -456,18 +456,22 @@ struct CommandKeySubstitutionTests {
 
     /// `KeyEvent.parse` matches Tab, Return, newline and Escape BEFORE the
     /// Ctrl-letter range, so those combinations never arrive as a modified
-    /// letter — no amount of remapping can deliver ⌘I as Ctrl-I. Ctrl-C and
-    /// Ctrl-Z belong to job control. Better to be able to ask than to wonder
-    /// why one menu item is dead.
+    /// letter — no amount of remapping can deliver ⌘I as Ctrl-I. Better to be
+    /// able to ask than to wonder why one menu item is dead.
+    ///
+    /// Ctrl-C and Ctrl-Z are not among them. They used to be reported as
+    /// "taken by job control", which is what a cooked terminal does with them;
+    /// raw mode clears `ISIG`, so they arrive as keys (and
+    /// `InputHandlerTests` fires a ⌘C shortcut on one).
     @Test("The C0 collisions are reported, not silently dead")
     func c0CollisionsAreQueryable() {
-        for key: KeyEquivalent in ["i", "j", "m", "c", "z", "["] {
+        for key: KeyEquivalent in ["i", "j", "m", "["] {
             let resolved = KeyboardShortcut(key).resolved(commandKey: .control)
             #expect(
                 resolved?.isDeliverableInTerminal == false,
-                "Ctrl-\(key.character) is spoken for by the C0 range or job control")
+                "Ctrl-\(key.character) is spoken for by the C0 range")
         }
-        for key: KeyEquivalent in ["s", "o", "n", "1"] {
+        for key: KeyEquivalent in ["s", "o", "n", "1", "c", "z"] {
             let resolved = KeyboardShortcut(key).resolved(commandKey: .control)
             #expect(resolved?.isDeliverableInTerminal == true)
         }

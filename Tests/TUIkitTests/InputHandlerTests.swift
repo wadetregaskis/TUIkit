@@ -195,6 +195,38 @@ struct InputHandlerTests {
         #expect(fixture.probe.suspendCount == 0, "the view's binding won")
     }
 
+    /// Raw mode clears ISIG for Ctrl-C too, so it is a key and not SIGINT —
+    /// and, unlike Ctrl-Z, nothing gives it a meaning of its own. It falls
+    /// through every layer, quits nothing, and is reported unconsumed.
+    @Test("An unclaimed Ctrl-C is an ordinary key that nothing binds")
+    func unclaimedCtrlCDoesNothing() {
+        let fixture = makeFixture()
+
+        let consumed = fixture.handler.handle(KeyEvent(key: .character("c"), ctrl: true))
+
+        #expect(!consumed)
+        #expect(fixture.probe.quitCount == 0)
+        #expect(fixture.probe.suspendCount == 0)
+    }
+
+    /// Because Ctrl-C is a key, it can be bound: an app's ⌘C under the default
+    /// command key, or the opt-in quit shortcut, and the shortcut comes first.
+    @Test("Ctrl-C fires an app's ⌘C shortcut, and quits under quitShortcut .ctrlC")
+    func ctrlCCanBeBound() throws {
+        let fixture = makeFixture()
+        fixture.statusBar.quitShortcut = .ctrlC
+        #expect(fixture.handler.handle(KeyEvent(key: .character("c"), ctrl: true)))
+        #expect(fixture.probe.quitCount == 1)
+
+        var copied = 0
+        let copy = KeyboardShortcut("c").resolved(commandKey: .control)
+        #expect(copy?.isDeliverableInTerminal == true)
+        fixture.shortcuts.register(try #require(copy)) { copied += 1 }
+        #expect(fixture.handler.handle(KeyEvent(key: .character("c"), ctrl: true)))
+        #expect(copied == 1)
+        #expect(fixture.probe.quitCount == 1, "the shortcut, layer 3.5, came before quit")
+    }
+
     @Test("Layer 4 't' cycles the palette when the theme item is shown")
     func themeKeyCyclesPalette() {
         let fixture = makeFixture()

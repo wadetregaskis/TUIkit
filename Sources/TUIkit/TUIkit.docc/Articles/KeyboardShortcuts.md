@@ -10,7 +10,7 @@ Three additional stages refine the layer sequence. When an open drop-down (e.g. 
 
 @Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the keyboard dispatch: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField/TextEditor). Without text focus, an ESC-claimed-by-an-open-surface check pre-routes Escape through the focus system so an open drop-down closes before any page-level handler. Layer 0.5 Drag Navigators (while a drag is in flight, arrows and paging scroll whatever the pointer is over). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 3.5 Semantic Shortcuts (Return fires the default button, Escape the cancel button). Layer 4 Default Bindings (q quit and ? help always; t theme and a appearance gated while a modal grabs input). Unmatched events are dropped.")
 
-Additionally, `Ctrl+C` (SIGINT) is handled at the OS signal level **before** any of these layers: it always terminates the application.
+`Ctrl+C` is an ordinary key here. A terminal normally turns it into SIGINT, but TUIkit's raw mode switches that off, so it reaches these layers as `c` held with Control like any other chord, and nothing binds it unless you do: a ⌘C shortcut under the default ``EnvironmentValues/commandKey``, or ``QuitShortcut/ctrlC``. `Ctrl+Z` arrives the same way, and Layer 4 suspends the app on it only when nothing earlier claimed it (see Default Bindings).
 
 ## Available Keys
 
