@@ -23,8 +23,10 @@ import TUIkitCore
 /// is enough: a removal transition does not need the view, it needs the cells.
 /// So a transitioning view leaves a closure behind on every frame it renders —
 /// "if I vanish, here is what I look like part-way gone" — and whatever occupies
-/// its slot in the tree (an `Optional` that has become `nil`, a
-/// ``ConditionalView`` branch that flipped) plays it out.
+/// its slot in the tree plays it out. That is the `nil` an `Optional` became,
+/// and only that: an `if`/`else` whose branch flips hands the slot to the other
+/// branch at once, so nothing is left there to play the leaving branch's
+/// removal, and it is dropped at the end of the pass.
 ///
 /// The closure is why this type is here rather than beside `AnyTransition`: the
 /// hosts live in this module and the transitions live above it. A closure from

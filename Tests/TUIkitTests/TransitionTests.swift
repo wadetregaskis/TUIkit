@@ -403,6 +403,25 @@ struct TransitionTests {
         #expect(screen.draw(false, .opacity, atMillis: 0).count == 1)
     }
 
+    /// What `DepartureStore` and ``View/transition(_:)`` say about an
+    /// `if`/`else`: the other branch takes the slot on the frame the condition
+    /// flips, so nothing is left standing where the leaving branch was to play
+    /// its removal, and the branch is simply replaced. Pinned so that the day
+    /// it plays, the docs that say otherwise are noticed.
+    @Test("The branch an if/else leaves is replaced at once, its removal unplayed")
+    func leavingBranchIsReplacedAtOnce() {
+        let screen = RemovalScreen(animation: .linear(duration: 1)) { showing in
+            VStack(alignment: .leading, spacing: 0) {
+                if showing { Text("XXXX").transition(.move(edge: .trailing)) } else { Text("YY") }
+                Text("----")
+            }
+        }
+        _ = screen.draw(true, atMillis: 0)
+        #expect(screen.draw(true, atMillis: 1100) == ["XXXX", "----"], "precondition: it arrived")
+        #expect(screen.draw(false, atMillis: 1100) == ["YY  ", "----"])
+        #expect(screen.draw(false, atMillis: 1600) == ["YY  ", "----"])
+    }
+
     // MARK: - Composition
 
     @Test("Slide is asymmetric on purpose")
