@@ -102,7 +102,8 @@ public protocol Palette: Cyclable {
     ///
     /// Where the list has the keys the row breathes up from this colour
     /// (``focusWashPulse()``); where it does not — its window has lost the
-    /// terminal's focus — the row holds still in it.
+    /// terminal's focus — the row holds still in it, as it does under
+    /// `.rowSelectionIndicator(.hidden)`, where only a selected cursor row breathes.
     var focusBackground: Color { get }
 
     /// Text cursor color for TextField and SecureField.
@@ -1004,7 +1005,10 @@ extension Palette {
     /// The two ends the focus wash breathes between: the cursor row of a list or
     /// table that has the keys, on a row the selection does not include. The
     /// neutral counterpart of ``accentFillPulse(over:)``, which a selected cursor
-    /// row breathes in, so the two rows breathe alike and differ in hue alone.
+    /// row breathes in, so the two rows breathe alike. Not necessarily in another
+    /// hue: a palette's wash is its own choice, and on most shipped palettes it is the
+    /// accent's hue, so it is the row's selection mark that tells the two apart — and
+    /// a list that draws none holds this breath still.
     ///
     /// The dim end is the wash itself, ``focusBackground`` — the look such a row has
     /// wherever it does not breathe. The bright end is twice as far from the page:

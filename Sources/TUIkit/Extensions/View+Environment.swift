@@ -214,8 +214,10 @@ extension View {
     /// ```
     ///
     /// With the mark off, a focused control's cursor row still says whether it is
-    /// selected: it breathes the accent on a selected row and the neutral focus
-    /// wash on one that is not.
+    /// selected: it breathes the accent on a selected row and holds the neutral
+    /// focus wash still on one that is not. Motion is the difference rather than
+    /// colour: on most palettes the wash shares the accent's hue, and a breathing
+    /// wash would read as a selected row.
     ///
     /// TUI-specific: SwiftUI has no row marker to suppress. A `Table` told
     /// `.hidden` also gives back the two cells the mark would have occupied,

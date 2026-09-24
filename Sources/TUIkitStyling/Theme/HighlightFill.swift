@@ -146,10 +146,11 @@ extension Palette {
     /// The neutral counterpart of ``highlightedRowFill(appearsActive:)``, under the
     /// same rule: motion says the keys go HERE, now, so a list that has them breathes
     /// its cursor row whether or not that row is selected, and one whose window has
-    /// lost the terminal's focus holds it still in the look it always had. The hue is
-    /// what tells the two apart — accent on a selected row, neutral on one that is
-    /// not — which is all a list drawn with `.rowSelectionIndicator(.hidden)` has to
-    /// go on.
+    /// lost the terminal's focus holds it still in the look it always had. The ● is
+    /// what tells the two breathing rows apart: on most shipped palettes the wash
+    /// shares the accent's hue. A list drawn with `.rowSelectionIndicator(.hidden)`
+    /// has no ●, and does not ask this: its unselected cursor row holds the still wash,
+    /// so motion says which row is selected (`RowBackground.focused(in:palette:)`).
     ///
     /// Where the wash cannot be measured it is reversed, still, as it always was.
     ///

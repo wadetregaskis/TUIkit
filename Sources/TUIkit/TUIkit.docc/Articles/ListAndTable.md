@@ -93,16 +93,18 @@ collapses the third row of that table into the fourth — background and mark
 together — for a transient list where an ambient highlight is more noise
 than signal.
 
-The cursor row of a control that has the keys always breathes, selected or
+The cursor row of a control that has the keys breathes, selected or
 not: motion is what says where the keys go, on a list as on every other
 focused control. Selected, it breathes the accent; not selected, the neutral
 focus wash, from `focusBackground` up to twice its distance from the page
-(``Palette/focusWashPulse()``). The hue is the difference, which is all a
-control drawn with `.rowSelectionIndicator(.hidden)` has to tell the two apart
-by. A control that does not have the keys draws no breath: unfocused, it has no
-cursor row; focused in a window that has lost the terminal's focus, its cursor
-row holds still — the subtle accent on a selected row, the plain wash on one
-that is not (see <doc:FocusSystem>).
+(``Palette/focusWashPulse()``). The ● is what tells the two apart: most
+palettes' wash shares the accent's hue. A control drawn with
+`.rowSelectionIndicator(.hidden)` has no ●, so there an unselected cursor row
+holds the wash still, and motion says which row is selected: the selected one
+breathes, the other does not. A control that does not have the keys draws no
+breath: unfocused, it has no cursor row; focused in a window that has lost the
+terminal's focus, its cursor row holds still — the subtle accent on a selected
+row, the plain wash on one that is not (see <doc:FocusSystem>).
 
 A control that can never draw a mark does not keep the cells for one.
 `Table(_:columns:)` (no selection binding) and `.rowSelectionIndicator(.hidden)`

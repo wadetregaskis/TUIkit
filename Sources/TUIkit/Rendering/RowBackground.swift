@@ -75,11 +75,24 @@ enum RowBackground {
     /// view does not appear active it holds still in the plain wash, the look it has
     /// always had — `Palette.focusWashEmphasis(appearsActive:)` is the rule.
     ///
+    /// Except where the control draws no ● (``View/rowSelectionIndicator(_:)`` with
+    /// `.hidden`): there it holds the still wash throughout. With the mark off, the
+    /// highlight is the only thing that says whether the cursor row is selected, and
+    /// on most shipped palettes the wash shares the accent's hue — all six phosphor
+    /// presets by construction, and Basic, Man Page, Ocean, Silver Aerogel, Solid
+    /// Colors and Pro, whose accent and wash come from one selection colour or are
+    /// both grey. Two breaths of one hue read as one: on Green the two dim ends stand
+    /// 1.03:1 apart. So motion says it instead — the selected cursor row breathes, the
+    /// unselected one does not — as it did before every cursor row breathed.
+    ///
     /// Here rather than at the two call sites for the reason ``focusedSelection(in:palette:)``
     /// is: the twins ask one question in one place.
     @MainActor
     static func focused(in context: RenderContext, palette: any Palette) -> Self {
-        breathing(
+        guard context.environment.rowSelectionIndicator != .hidden else {
+            return still(palette.focusWashFill())
+        }
+        return breathing(
             palette.focusWashEmphasis(appearsActive: context.environment.appearsActive),
             in: context)
     }
@@ -288,10 +301,10 @@ enum SelectableRowClaims {
 /// **It marks SELECTION, not focus.** Which row the cursor is on is said by the
 /// background, which breathes while the control has the keys; a row merely
 /// under the cursor has not been chosen, and says so with no glyph, and with the
-/// neutral focus wash breathing behind it rather than the accent
-/// (``RowBackground/focused(in:palette:)``). So a control with no selection at
-/// all draws no glyph on any row, which is what a plain `List` looked like
-/// before this existed and still looks like now.
+/// neutral focus wash behind it rather than the accent — breathing, or still
+/// where the control draws no mark at all (``RowBackground/focused(in:palette:)``).
+/// So a control with no selection at all draws no glyph on any row, which is
+/// what a plain `List` looked like before this existed and still looks like now.
 struct RowSelectionIndicator: Equatable {
     /// Exactly one cell wide, always — the gutter is reserved whether or not
     /// there is anything to put in it, so a blank is a space rather than an

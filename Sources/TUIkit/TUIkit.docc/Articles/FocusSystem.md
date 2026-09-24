@@ -202,7 +202,7 @@ Custom views that implement ``Focusable`` typically do not need `FocusRegistrati
 
 ## Focus Indicator
 
-The visual indicator depends on the view type. Buttons and similar controls use a **highlight background bar** for the focused item. Text fields render as a bracketed field (`[ text ]`) and show a **visible text cursor** inside it when focused — a block, bar or underscore that pulses unless the `.textCursor(_:)` modifier says to blink or hold still. Lists and tables **breathe the background of the cursor row**: the accent when that row is selected, the neutral focus wash (``Palette/focusWashPulse()``) when it is not.
+The visual indicator depends on the view type. Buttons and similar controls use a **highlight background bar** for the focused item. Text fields render as a bracketed field (`[ text ]`) and show a **visible text cursor** inside it when focused — a block, bar or underscore that pulses unless the `.textCursor(_:)` modifier says to blink or hold still. Lists and tables **breathe the background of the cursor row**: the accent when that row is selected, the neutral focus wash (``Palette/focusWashPulse()``) when it is not — held still instead under `.rowSelectionIndicator(.hidden)`, where there is no ● and motion is what says the row is selected.
 
 The pulse runs on a shared clock so everything on screen breathes together, and
 it walks a discrete ramp of shades rather than lerping — the 256-colour cube has
