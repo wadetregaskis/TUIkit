@@ -254,6 +254,12 @@ Keyboard input is raw terminal bytes (arrows = `ESC[A/B/C/D`, page jumps
 = the `ContentView` shortcut chars). Mouse input is SGR 1006 reports
 (`ESC[<button;col;row;M/m`). It quits the app with `q`.
 
+The app runs with `TUIKIT_CONFIG_DIR` set to a fresh temporary directory,
+deleted when the run ends, so a profile neither reads nor writes your own
+settings and every run starts from the defaults. Set `TUIKIT_CONFIG_DIR`
+yourself to profile against a particular saved state; that directory is used
+as given and kept. `python3 Tools/Profiling/test_drive.py` checks both.
+
 ### `analyze_timeprofile.py` — trace → hot functions
 
 > **`--blame` is usually the one you want.** Self time says where the CPU was,

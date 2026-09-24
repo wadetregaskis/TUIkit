@@ -273,6 +273,15 @@ jobs:
       - name: Smoke — drive both apps in a real PTY (${{ matrix.smoke }})
         run: ./Tools/Smoke/ci-pty-smoke.sh ${{ matrix.smoke }}
 
+      # The profiling driver hands the app it drives a configuration directory
+      # of its own, never the user's preferences domain — which is where a
+      # run without one writes on macOS, and where a profiling tour once left
+      # its keystrokes as the owner's saved settings. A stub app in a PTY: no
+      # build, ~9 s, so once per run rather than per lane.
+      - name: Profiling driver tests
+        if: matrix.smoke == 'full'
+        run: python3 -m unittest discover -s Tools/Profiling -p 'test_*.py'
+
   # ── Linux ──────────────────────────────────────────────────────────────────
   linux:
     name: ${{ matrix.name }}

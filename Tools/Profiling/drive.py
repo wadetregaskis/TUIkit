@@ -23,15 +23,23 @@ Usage:
 
 Quits the app cleanly with 'q' (TUIkit's default quit shortcut), falling
 back to SIGTERM/SIGKILL.
+
+The app never sees the user's own settings: it runs with `TUIKIT_CONFIG_DIR`
+pointing at a fresh temporary directory, deleted afterwards, unless the caller
+set `TUIKIT_CONFIG_DIR` itself (then that directory is used and kept). See
+`config_directory`.
 """
 import argparse
+import atexit
 import os
 import pty
 import select
+import shutil
 import signal
 import struct
 import subprocess
 import sys
+import tempfile
 import termios
 import fcntl
 import time
@@ -165,6 +173,35 @@ def build_scenario(name, rows, cols):
     raise SystemExit(f"unknown scenario: {name}")
 
 
+def config_directory():
+    """Where the driven app keeps its `@AppStorage` for this run.
+
+    Never where it keeps it for the user. With `TUIKIT_CONFIG_DIR` unset, a
+    TUIkit app on macOS stores its settings in the real preferences domain
+    (`~/Library/Preferences/Example.plist`) — and UserDefaults ignores a
+    `$HOME` override, so the variable is the only thing that isolates it. This
+    driver used to pass its own environment straight through, so every
+    profiling run read and wrote the developer's settings: the `tour` typed
+    page shortcuts into a text field on the Sliders page, and they were still
+    there, as that field's saved value, the next time the owner opened it.
+
+    Fresh per run rather than one fixed directory, for the profile's sake as
+    much as the user's: what one run leaves behind — a page's toggle, a
+    field's text, the language — would otherwise be part of what the next
+    run measures. A directory the caller names is used as given and left in
+    place: that caller wants the state kept.
+    """
+    chosen = os.environ.get("TUIKIT_CONFIG_DIR")
+    if chosen:
+        return chosen
+    fresh = tempfile.mkdtemp(prefix="tuikit-drive-")
+    # atexit, not a `finally` around `main`: it also runs on the SystemExit
+    # the splitdrag check raises. The forked child never runs it — it either
+    # execs or leaves through `os._exit`.
+    atexit.register(shutil.rmtree, fresh, ignore_errors=True)
+    return fresh
+
+
 def set_winsize(fd, rows, cols):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
@@ -208,6 +245,7 @@ def main():
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
+    config_dir = config_directory()
     master, slave = pty.openpty()
     set_winsize(slave, args.rows, args.cols)
 
@@ -216,7 +254,8 @@ def main():
         os.close(master)
         login_tty_compat(slave)  # setsid + TIOCSCTTY + dup2(0,1,2) + close
         env = dict(os.environ)
-        env.update(TERM="xterm-256color", COLUMNS=str(args.cols), LINES=str(args.rows))
+        env.update(TERM="xterm-256color", COLUMNS=str(args.cols), LINES=str(args.rows),
+                   TUIKIT_CONFIG_DIR=config_dir)
         os.execve(args.binary, [args.binary], env)
         os._exit(127)
 
