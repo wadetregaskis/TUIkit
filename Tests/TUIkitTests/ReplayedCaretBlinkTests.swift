@@ -61,7 +61,7 @@ struct ReplayedCaretBlinkTests {
 
     @Test("Every tick shows what a render at that instant draws", arguments: Ground.allCases)
     func everyTickMatchesARender(ground: Ground) throws {
-        let (mismatches, compared) = ReplayOracle.compare(
+        let (mismatches, compared, _) = ReplayOracle.compare(
             { CaretApp(on: ground) }, focusSteps: 1, ticks: 30, size: (40, 6))
         // Both halves of the blink: a caret that left no run to replay is frozen,
         // not blinking, whatever it froze on.

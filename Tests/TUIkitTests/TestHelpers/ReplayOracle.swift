@@ -14,8 +14,20 @@
 //  step; the row the replay starts from is what it patches, and asking it would
 //  only check that the replay reads what it reads.
 //
+//  The replaying loop keeps the run loop's schedule, not just its ticks: a render
+//  may ask for another at a given instant (a wake, `RenderContext.requestWake`)
+//  or on a lattice (`requestAnimation`), and the run loop renders when one falls
+//  due (`AnimationScheduler.nextFiring(after:)`, `FramePacer`), so this one
+//  renders there too before it replays the instant after. That is not a
+//  nicety: a view can hand an animation to a wake instead of leaving it in a
+//  run — a breathing `List` cursor row drops its row's own runs, which its
+//  whole-row breath would paint over, and asks for a render at their next step
+//  — and replayed straight through, such a row held the glyph it was drawn
+//  with where the app draws the next one.
+//
 //  Fast by construction: each loop is built once, and each instant costs one
-//  render of the one app and one replay of the other.
+//  render of the one app and one replay of the other, plus a render of the
+//  replaying one for each firing its last frame asked for.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -59,28 +71,35 @@ enum ReplayOracle {
         compare(make, focusSteps: focusSteps, ticks: ticks, size: size).compared
     }
 
-    /// Both answers from one walk.
+    /// Both answers from one walk, and how many times the replaying loop rendered
+    /// because a firing its last frame asked for fell due, as the run loop would —
+    /// so a test can tell a replay that went right from one that never happened.
     static func compare<A: App>(
         _ make: () -> A, focusSteps: Int, ticks: Int, size: (width: Int, height: Int)
-    ) -> (mismatches: [String], compared: Int) {
-        let (replaying, replayTimer) = loop(make(), focusSteps: focusSteps, size: size)
-        let (rendering, renderTimer) = loop(make(), focusSteps: focusSteps, size: size)
-        guard let first = replaying.replayable, !first.runs.isEmpty else { return ([], 0) }
-        let rows = Set(first.runs.map(\.offsetY)).sorted()
-        let cursorAtStart = replayTimer.elapsed(for: .cursor)
+    ) -> (mismatches: [String], compared: Int, scheduledRenders: Int) {
+        let replaying = Driven(make(), focusSteps: focusSteps, size: size)
+        let rendering = Driven(make(), focusSteps: focusSteps, size: size)
+        guard let first = replaying.loop.replayable, !first.runs.isEmpty else { return ([], 0, 0) }
+        let cursorAtStart = replaying.timer.elapsed(for: .cursor)
         let tick = AnimationClock.nanoseconds(AnimationClock.seconds(forTicks: 1))
         var mismatches: [String] = []
         var compared = 0
+        var scheduledRenders = 0
         for step in 1...max(1, ticks) {
             let now = start + Int64(step * AnimationClock.standardFrameTicks) * tick + tick / 2
             let since = Double(now - start) / 1_000_000_000
+            scheduledRenders += replaying.renderWhatFellDue(by: now)
             guard
-                replaying.replayAnimations(elapsed: [
+                replaying.loop.replayAnimations(elapsed: [
                     .content: Double(now) / 1_000_000_000, .cursor: cursorAtStart + since,
                 ])
             else { continue }
-            rendering.render(cursorTimer: renderTimer, frameNowNanos: now)
-            guard let replayed = replaying.replayable, let rendered = rendering.replayable else { continue }
+            rendering.render(at: now)
+            guard let replayed = replaying.loop.replayable, let rendered = rendering.loop.replayable
+            else { continue }
+            // The rows of the frame being replayed: a render since the walk began
+            // may have moved a run.
+            let rows = Set(replayed.runs.map(\.offsetY)).sorted()
             for row in rows where replayed.contentLines.indices.contains(row) {
                 let shown = paintedCells(replayed.lastPatched[row]?.line ?? replayed.contentLines[row])
                 let expected = paintedCells(rendered.contentLines[row])
@@ -99,21 +118,53 @@ enum ReplayOracle {
                     "tick \(step), row \(row), column \(column): replayed \(describe(shown)), rendered \(describe(expected))")
             }
         }
-        return (mismatches, compared)
+        return (mismatches, compared, scheduledRenders)
     }
 
-    /// A loop over `app` that has rendered at ``start`` with the focus moved on
-    /// `focusSteps` times, and the cursor timer it renders with.
-    private static func loop<A: App>(
-        _ app: A, focusSteps: Int, size: (width: Int, height: Int)
-    ) -> (RenderLoop<A>, CursorTimer) {
-        let harness = RenderLoopHarness()
-        harness.terminal.size = (size.width, size.height)
-        let loop = harness.loop(app)
-        let timer = CursorTimer(renderNotifier: harness.appState)
-        loop.render(cursorTimer: timer, frameNowNanos: start)
-        for _ in 0..<focusSteps { harness.focusManager.focusNext() }
-        loop.render(cursorTimer: timer, frameNowNanos: start)
-        return (loop, timer)
+    /// A loop over an app, and what it renders with: the cursor timer, and an
+    /// animation scheduler fenced around every render as the run loop fences it
+    /// (`AppRunner.renderFrame`), so what the last frame asked for is what is
+    /// live. Without a scheduler a render asks for nothing at all.
+    @MainActor
+    private final class Driven<A: App> {
+        let loop: RenderLoop<A>
+        let timer: CursorTimer
+        let scheduler = AnimationScheduler()
+        /// The instant of the last render, which the next firing is counted after.
+        private var renderedAt = start
+
+        /// A loop over `app` that has rendered at ``start`` with the focus moved on
+        /// `focusSteps` times.
+        init(_ app: A, focusSteps: Int, size: (width: Int, height: Int)) {
+            let harness = RenderLoopHarness()
+            harness.terminal.size = (size.width, size.height)
+            loop = harness.loop(app)
+            timer = CursorTimer(renderNotifier: harness.appState)
+            render(at: start)
+            for _ in 0..<focusSteps { harness.focusManager.focusNext() }
+            render(at: start)
+        }
+
+        func render(at instant: Int64) {
+            scheduler.beginFrame()
+            loop.render(cursorTimer: timer, animationScheduler: scheduler, frameNowNanos: instant)
+            scheduler.endFrame()
+            renderedAt = instant
+        }
+
+        /// Renders at each firing the frames so far asked for — a wake, or a
+        /// lattice's next multiple — that falls due by `instant`, each at its own
+        /// instant, as the run loop's pacer does (`AppRunner.renderFrame`: the
+        /// deadline is `nextFiring(after:)` the frame's own instant).
+        ///
+        /// - Returns: How many renders that took.
+        func renderWhatFellDue(by instant: Int64) -> Int {
+            var renders = 0
+            while let due = scheduler.nextFiring(after: renderedAt), due <= instant {
+                render(at: due)
+                renders += 1
+            }
+            return renders
+        }
     }
 }
