@@ -211,64 +211,82 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
     }
 
     // Priority 2: Composite view — bind this view's @State to its own identity,
-    // resolve its @Environment, then recurse into body.
-    //
-    // `@State` binds here (not at construction): keyed by THIS view's render
-    // identity, so conditionally-swapped views don't alias each other's state.
-    // The body is then evaluated with the environment published for @Environment.
+    // resolve its @Environment, then recurse into body, which renders one
+    // identity step further in (the body's type).
     if V.Body.self != Never.self {
         let childContext = context.withChildIdentity(type: V.Body.self)
-
-        // Resolve this view's @Environment properties against the environment it
-        // renders in, storing each into its (reference) box. The box is shared
-        // with any closure `body` creates that captures the view, so @Environment
-        // reads correctly inside event handlers / actions, not just during body.
-        resolveEnvironmentProperties(of: view, in: context.environment)
-
-        // Bind this view's @State to its OWN render identity (not the scope it
-        // was constructed in), so views swapped by a conditional don't alias
-        // each other's state. Mirrored in `measureChild`.
-        bindStateProperties(
-            of: view, identity: context.identity, storage: context.stateStorage!)
-
-        // Wrap body evaluation in observation tracking so that any @Observable
-        // property accessed during body triggers a re-render when mutated.
-        // No environment hydration here: `resolveEnvironmentProperties` above has
-        // already filled every `@Environment` (and `@FocusState`) box on this
-        // view, so publishing the environment as well was pure overhead on the
-        // single most-executed operation in the framework.
-        //
-        // The change invalidates THIS view's identity — its subtree and the
-        // ancestors whose buffers contain it — through the sink a `@State`
-        // write uses, not the whole cache. It used to clear everything: a
-        // model that changes every frame (a clock, a progress counter, a
-        // download's byte count) then made every frame a cold render of the
-        // entire tree, and the memo machinery never served a single buffer
-        // while it did. Measured on `Stress` under autopilot, every scenario
-        // cost its `--bench --cold` price, not its warm one — `fanout` 113 ms
-        // a frame for 12.8 ms of work. The tracking is per body, so the
-        // identity whose body read the value is exactly the one to drop; an
-        // ancestor that did not read it keeps a buffer that never held it.
-        // The whole-cache clear remains only where there is no cache to scope
-        // to (a headless render with no `RenderCache` in the environment).
-        let body = withObservationTracking {
-            view.body
-        } onChange: { [sink = context.renderCache, identity = context.identity] in
-            if let sink {
-                sink.invalidateRender(for: identity)
-            } else {
-                AppState.shared.setNeedsRenderWithCacheClear()
-            }
-        }
-
-        context.stateStorage!.markActive(context.identity)
-
+        let body = evaluateCompositeBody(of: view, context: context)
         return TUIkitView.renderToBuffer(body, context: childContext)
     }
 
     // Priority 3: No rendering path — return empty buffer silently.
     // This happens for types with body: Never that forgot Renderable conformance.
     return FrameBuffer()
+}
+
+// MARK: - Evaluating a composite's body
+
+/// A composite view's `body`, evaluated exactly as the render walk evaluates it
+/// before descending into it: `@Environment` resolved, `@State` bound to the
+/// view's OWN identity, the evaluation observed, and the identity marked active.
+///
+/// `context` is the context the view itself renders in. The body it returns is
+/// drawn one identity step further in — `context.withChildIdentity(type:
+/// V.Body.self)` — and that step is the caller's to take, as the render walk
+/// takes it.
+///
+/// A function of its own so that anything needing a composite's body without
+/// drawing it evaluates that body exactly as a render would. A body evaluated
+/// any other way would bind the view's `@State` somewhere else, or read an
+/// `@Environment` it was never handed, or be one no change to an `@Observable`
+/// it read could ever invalidate.
+///
+/// - `@Environment` is resolved against the environment the view renders in,
+///   into its (reference) box. The box is shared with any closure `body`
+///   creates that captures the view, so an `@Environment` read inside an event
+///   handler or an action is correct, not just one during `body`.
+/// - `@State` binds here, not at construction: keyed by THIS view's render
+///   identity, so views a conditional swaps between don't alias each other's
+///   state. Mirrored in `measureChild`.
+/// - The evaluation is observed, so an `@Observable` property `body` read
+///   re-renders the view when it changes. No environment hydration: the
+///   `@Environment` step has already filled every `@Environment` (and
+///   `@FocusState`) box on this view, so publishing the environment as well
+///   was pure overhead on the single most-executed operation in the framework.
+///
+///   The change invalidates THIS view's identity — its subtree and the
+///   ancestors whose buffers contain it — through the sink a `@State` write
+///   uses, not the whole cache. It used to clear everything: a model that
+///   changes every frame (a clock, a progress counter, a download's byte
+///   count) then made every frame a cold render of the entire tree, and the
+///   memo machinery never served a single buffer while it did. Measured on
+///   `Stress` under autopilot, every scenario cost its `--bench --cold` price,
+///   not its warm one — `fanout` 113 ms a frame for 12.8 ms of work. The
+///   tracking is per body, so the identity whose body read the value is exactly
+///   the one to drop; an ancestor that did not read it keeps a buffer that
+///   never held it. The whole-cache clear remains only where there is no cache
+///   to scope to (a headless render with no `RenderCache` in the environment).
+///
+/// `@inline(__always)` so the render walk's own copy compiles to what it was
+/// before this was a function: it runs once per composite per frame, and it
+/// must not become a call there.
+@inline(__always)
+@MainActor
+package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) -> V.Body {
+    resolveEnvironmentProperties(of: view, in: context.environment)
+    bindStateProperties(
+        of: view, identity: context.identity, storage: context.stateStorage!)
+    let body = withObservationTracking {
+        view.body
+    } onChange: { [sink = context.renderCache, identity = context.identity] in
+        if let sink {
+            sink.invalidateRender(for: identity)
+        } else {
+            AppState.shared.setNeedsRenderWithCacheClear()
+        }
+    }
+    context.stateStorage!.markActive(context.identity)
+    return body
 }
 
 // MARK: - Static witnesses

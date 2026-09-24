@@ -201,8 +201,10 @@ func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
     // resolve @Environment, then recurse into body.
     if V.Body.self != Never.self {
         let childContext = context.withChildIdentity(type: V.Body.self)
-        bindStateProperties(of: view, identity: context.identity, storage: storage)
-        // ... resolve @Environment, evaluate view.body, mark identity active ...
+        // Resolve @Environment, bind @State to this view's own identity,
+        // evaluate view.body under observation tracking, mark the identity
+        // active.
+        let body = evaluateCompositeBody(of: view, context: context)
         return renderToBuffer(body, context: childContext)
     }
 
