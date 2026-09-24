@@ -747,9 +747,9 @@ the same probe, and so does `EmptyView().padding(20)`. In TUIkit `EmptyView`
 is a view that draws nothing rather than content with no members — it is not
 a `ChildViewProvider` — so a frame on it is an ordinary `FlexibleFrameView`,
 whose minimum height keeps its 5 rows, and a padding on it pads its empty
-buffer as `PaddingModifier` pads any other: `EmptyView().padding(2)` is 3
-blank rows (a padding keeps back one row of what it is offered for its
-content, out of the inset after it, and the empty content draws none). Left open rather than closed: making `EmptyView` flatten to
+buffer as `PaddingModifier` pads any other: `EmptyView().padding(2)` is 4
+blank rows, the two insets (it drew 3 until 2026-09-24, keeping back a row
+for content that draws nothing, though it measured 4). Left open rather than closed: making `EmptyView` flatten to
 nothing would change it in every container that counts what it is given,
 and the framework gives a modifier on one a meaning of its own —
 `EmptyView().overlay { … }` draws the overlay whole (`OverlayModifier`).

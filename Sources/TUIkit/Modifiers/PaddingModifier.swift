@@ -177,9 +177,20 @@ public struct PaddingModifier: ViewModifier {
     /// went empty: not clipped, erased. So the leading inset stops one cell
     /// short of the space, and what it gives up the trailing inset cannot
     /// claim — the content is what wins the cell back.
+    ///
+    /// Unless the content drew nothing on the axis. Then there is no content to
+    /// push past the edge and none to keep a cell for, so both insets are drawn
+    /// as far as the space goes — which is what the measure said: an empty
+    /// content's size plus the insets, where a stack hands the view exactly
+    /// that. Kept back anyway, `VStack { Text("A"); EmptyView().padding(2);
+    /// Text("B") }` measured six rows and drew five.
     private static func drawnInsets(
-        _ before: Int, _ after: Int, in available: Int
+        _ before: Int, _ after: Int, in available: Int, contentIsEmpty: Bool
     ) -> (before: Int, after: Int) {
+        if contentIsEmpty {
+            let drawnBefore = min(before, max(0, available))
+            return (drawnBefore, min(after, max(0, available - drawnBefore)))
+        }
         let total = max(0, available - remaining(available, less: before + after))
         let drawnBefore = min(before, max(0, available - 1), total)
         return (drawnBefore, total - drawnBefore)
@@ -187,9 +198,11 @@ public struct PaddingModifier: ViewModifier {
 
     public func modify(buffer: FrameBuffer, context: RenderContext) -> FrameBuffer {
         let horizontal = Self.drawnInsets(
-            insets.leading, insets.trailing, in: context.availableWidth)
+            insets.leading, insets.trailing, in: context.availableWidth,
+            contentIsEmpty: buffer.width == 0)
         let vertical = Self.drawnInsets(
-            insets.top, insets.bottom, in: context.availableHeight)
+            insets.top, insets.bottom, in: context.availableHeight,
+            contentIsEmpty: buffer.height == 0)
 
         var result: [String] = []
         result.reserveCapacity(vertical.before + buffer.lines.count + vertical.after)

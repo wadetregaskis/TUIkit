@@ -61,12 +61,29 @@ struct EmptyContentLayoutTests {
     /// SwiftUI: 32 — `EmptyView().padding(20)` adds nothing either. TUIkit
     /// pads the empty buffer like any other, so padding rows are there: the
     /// same divergence as the frame's, through `PaddingModifier` rather than
-    /// `FlexibleFrameView`. Three rows, not four: a padding always keeps back
-    /// a row of what it is offered for its content, out of the inset after
-    /// it, and the empty content draws nothing in it.
+    /// `FlexibleFrameView`. Four rows, the two insets, which is what it
+    /// measures: it drew three while a padding kept back a row for content
+    /// that draws nothing, and the stack below it moved up a row.
     @Test("A padding on EmptyView keeps rows, where SwiftUI's keeps none")
     func paddingOnEmptyViewKeepsRows() {
-        #expect(rows(between: EmptyView().padding(2), spacing: 0) == ["A", "", "", "", "B"])
+        #expect(rows(between: EmptyView().padding(2), spacing: 0) == ["A", "", "", "", "", "B"])
+    }
+
+    /// What a stack of it measures is what it draws: the padding's insets drawn
+    /// in full around content that draws nothing, on both axes.
+    @Test("A padding on EmptyView draws what it measures")
+    func paddingOnEmptyViewDrawsWhatItMeasures() {
+        let context = makeRenderContext(width: 8, height: 12)
+        let stack = VStack(alignment: .leading, spacing: 0) {
+            Text("A")
+            EmptyView().padding(2)
+            Text("B")
+        }
+        let measured = measureChild(stack, proposal: ProposedSize(width: 8, height: nil), context: context)
+        let drawn = renderToBuffer(stack, context: context)
+        #expect(measured.height == 6)
+        #expect(drawn.height == measured.height, "measured \(measured.height) rows, drew \(drawn.height)")
+        #expect(renderToBuffer(EmptyView().padding(2), context: context).width == 4)
     }
 
     /// SwiftUI: 52 points against 42 — the empty stack is a child, and has the
