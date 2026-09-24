@@ -143,10 +143,11 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
 
     /// Memoizes an already-built row.
     ///
-    /// For callers that must construct the view anyway — `List`, which reads
-    /// the row's `.badge(_:)` off the unwrapped view before rendering it —
-    /// and for tests. The identity builder captures nothing, so it is a static
-    /// thunk, not an allocation.
+    /// For a caller that already holds the built row — which, in the framework,
+    /// none does: `ForEach` and `List`'s row extraction both use
+    /// ``init(element:source:build:)``, so a served row never builds its view.
+    /// Tests construct rows this way. The identity builder captures nothing, so
+    /// it is a static thunk, not an allocation.
     public init(element: Element, content: Content) where Source == Content {
         self.init(element: element, source: content, build: { $0 })
     }
