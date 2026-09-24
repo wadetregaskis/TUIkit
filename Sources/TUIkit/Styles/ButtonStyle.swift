@@ -827,8 +827,7 @@ private struct _ButtonStyleBody: View, Renderable {
                     // glyphs breathe. See ``PictureInkHold``.
                     TUIkit.renderToBuffer(
                         labelView.breathingForegroundStyle(colour, holdingPicturesAt: ends.bright),
-                        context: context.withChildIdentity(
-                            erasedType: type(of: labelView), index: 0))
+                        context: plainLabelContext(labelView, context: context))
                 }
             }
 
@@ -839,14 +838,9 @@ private struct _ButtonStyleBody: View, Renderable {
             let prefixes = cycle.colors(dim: ends.dim, bright: ends.bright).map {
                 BorderRenderer.focusIndicatorPrefix(isFocused: indicating, color: $0)
             }
-            // Under a child identity: the plain path renders the caller's
-            // label directly (the standard path's HStack pushes one
-            // implicitly), and at the core's identity a composite label's
-            // @State landed on the focusID/isHovered slots — 778699f5's
-            // collision class, missed here.
             let body = TUIkit.renderToBuffer(
                 labelView.foregroundStyle(labelFg),
-                context: context.withChildIdentity(erasedType: type(of: labelView), index: 0))
+                context: plainLabelContext(labelView, context: context))
             var buffer = FrameBuffer(
                 lines: body.lines.map { prefixes[cycle.step % prefixes.count] + $0 })
             guard !context.isMeasuring else { return buffer }
@@ -899,6 +893,25 @@ private struct _ButtonStyleBody: View, Renderable {
             context.environment.volatileReadTracker?.recordVolatileRead()
         }
         return buffer
+    }
+
+    /// Where a plain variant draws a `@ViewBuilder` label, and at what width.
+    ///
+    /// Under a child identity: the plain path renders the caller's label
+    /// directly (the standard path's HStack pushes one implicitly), and at the
+    /// core's identity a composite label's @State landed on the
+    /// focusID/isHovered slots — 778699f5's collision class, missed here.
+    ///
+    /// Offered what the chrome leaves (``chromeWidth(for:)``), as the string
+    /// path's `fitLabel` offers its text. Offered the whole width, a label as
+    /// wide as that — one that fills it, or a long `Text` truncated to it —
+    /// was drawn with the focus prefix in front and lost its last two cells to
+    /// the parent's clip: `Text`, `Spacer`, `Text` lost the end of its second
+    /// text, and a truncated one its ellipsis.
+    private func plainLabelContext(_ labelView: AnyView, context: RenderContext) -> RenderContext {
+        var labelContext = context.withChildIdentity(erasedType: type(of: labelView), index: 0)
+        labelContext.availableWidth = max(0, context.availableWidth - Self.chromeWidth(for: appearance))
+        return labelContext
     }
 
     /// The standard variant's row for a `@ViewBuilder` label: the label,

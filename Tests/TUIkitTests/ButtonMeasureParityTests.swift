@@ -68,6 +68,36 @@ struct ButtonMeasureParityTests {
             #expect(measured.height == rendered.height, "at \(width)")
         }
     }
+
+    /// The plain style draws its focus prefix in front of the label, so the
+    /// label has the width less the prefix to draw in, as a string label has.
+    /// Offered the whole width, a label as wide as that was drawn two cells
+    /// past it and clipped by the parent: `left … right` came out
+    /// `left … rig`, and a long text lost its ellipsis.
+    @Test("a @ViewBuilder label is drawn whole inside the chrome", arguments: [ButtonStyleCase.default, .plain])
+    func viewBuilderLabelFitsInsideTheChrome(style: ButtonStyleCase) {
+        for width in [16, 20, 40] {
+            let filling = style.apply(
+                to: Button(
+                    action: {},
+                    label: {
+                        HStack(spacing: 1) {
+                            Text(verbatim: "left")
+                            Spacer()
+                            Text(verbatim: "right")
+                        }
+                    }))
+            let drawn = renderToBuffer(filling, context: context(width: width))
+            let row = drawn.lines.first?.stripped ?? ""
+            #expect(row.hasSuffix("right") || row.hasSuffix("right ▌"), "\(style) at \(width): |\(row)|")
+            #expect(drawn.width == width, "\(style) at \(width): |\(row)|")
+
+            let long = style.apply(
+                to: Button(action: {}, label: { Text(verbatim: String(repeating: "x", count: 60)) }))
+            let truncated = renderToBuffer(long, context: context(width: width)).lines.first?.stripped ?? ""
+            #expect(truncated.contains("…"), "\(style) at \(width): |\(truncated)|")
+        }
+    }
 }
 
 /// The built-in styles, as a value a test can iterate.
