@@ -157,7 +157,7 @@ Skipped when text input has focus (Layer 0 already ran). Otherwise, `focusManage
 
 ### Layer 3.5: Semantic Shortcut Actions
 
-If the focused control let the key fall through, Return fires the default button and Escape fires the cancel button — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
+If the focused control let the key fall through, an app's `.keyboardShortcut` fires: Return the default button and Escape the cancel button — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)` — and any other key equivalent on its key. A chord Layer 0 did not offer a focused text control, because it is an editing command that gives way to an app shortcut registered on it, arrives here too.
 
 ### Layer 4: Default Bindings
 

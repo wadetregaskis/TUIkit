@@ -80,9 +80,8 @@
 /// - A field reads Option before Control, so Option+Ctrl+B and F move by a
 ///   word here, and by a character in the editor.
 /// - Each field keeps its own kill, apart from the editor's and from the
-///   clipboard, and a field's kill, yank and transpose are undoable. A
-///   ``SecureField`` keeps no kill, and its word motions go one character
-///   (see ``isSecure``).
+///   clipboard. A ``SecureField`` keeps no kill, and its word motions go one
+///   character (see ``isSecure``).
 ///
 /// An app's keyboard shortcut on the same chord takes all of these but
 /// Option+Ctrl+A from the field; Home, End, Left, Right, Delete and

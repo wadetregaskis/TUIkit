@@ -38,11 +38,14 @@
 ///   off-screen drop destination is reached without letting go, and every layer
 ///   below would spend the key on the focused control instead (`6df636cd`,
 ///   2026-07-31).
-/// - **Layer 3.5**, between the focus system and the default bindings: Return
-///   fires the default button and Escape the cancel button, à la SwiftUI's
-///   `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
-///   Reached only when the focused control let the key fall through
-///   (`2a106663`, 2026-07-09).
+/// - **Layer 3.5**, between the focus system and the default bindings: an
+///   app's `.keyboardShortcut` fires — Return the default button and Escape the
+///   cancel button, à la SwiftUI's `.keyboardShortcut(.defaultAction)` /
+///   `.keyboardShortcut(.cancelAction)`, and any other key equivalent the
+///   app registered. Reached only when the focused control let the key fall
+///   through (`2a106663`, 2026-07-09) — or when layer 0 skipped a focused text
+///   control because the chord is an editing command that gives way to an app
+///   shortcut on it (``KeyboardShortcutRegistry/hasAppShortcut(for:)``).
 internal struct InputHandler {
     /// The status bar state for item-level event handling.
     let statusBar: StatusBarState
@@ -59,8 +62,11 @@ internal struct InputHandler {
     /// The appearance manager for appearance cycling (`a` key).
     let appearanceManager: ThemeManager
 
-    /// The semantic-shortcut registry (default / cancel buttons), consulted
-    /// after the focused control declines a Return/Escape.
+    /// The app's keyboard shortcuts — default and cancel buttons and any other
+    /// key equivalent. Fired at layer 3.5, after the focused control declines
+    /// the key; asked BEFORE layer 0 too, without firing, whether an app
+    /// shortcut is on a chord a focused text control would take, so the
+    /// control can give way to it.
     let keyboardShortcuts: KeyboardShortcutRegistry
 
     /// The drag-and-drop session, consulted before every other layer while a

@@ -6,7 +6,7 @@ How keyboard input flows through TUIkit: from raw terminal bytes to your view ha
 
 TUIkit uses a layered event dispatch system. When a key is pressed, it passes through up to five layers. The first layer that consumes the event wins: remaining layers are skipped. Layer 0 (text input) and Layer 3 (focus system) are mutually exclusive: when a text input element is focused, Layer 0 runs and Layer 3 is skipped. The one key Layer 0 does not offer the focused text control is an Emacs editing chord your own `.keyboardShortcut` is on; see <doc:KeyboardShortcuts#Your-Shortcuts-and-the-Editing-Chords>.
 
-Three additional stages refine the layer sequence. When an open drop-down (e.g. a ``Picker`` menu) has claimed Escape for the frame, ESC is pre-routed through the focus system *before* Layer 1, so the surface closes instead of a page-level handler firing. Layer 0.5 then offers the key to a drag in flight, which is how you scroll to an off-screen destination without letting go — it has to beat every layer below, all of which would otherwise spend the key on the focused control. And between Layer 3 and Layer 4, a semantic-shortcut stage (Layer 3.5) fires the default button on Return and the cancel button on Escape — à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)` — when the focused control let the key fall through.
+Three additional stages refine the layer sequence. When an open drop-down (e.g. a ``Picker`` menu) has claimed Escape for the frame, ESC is pre-routed through the focus system *before* Layer 1, so the surface closes instead of a page-level handler firing. Layer 0.5 then offers the key to a drag in flight, which is how you scroll to an off-screen destination without letting go — it has to beat every layer below, all of which would otherwise spend the key on the focused control. And between Layer 3 and Layer 4, a shortcut stage (Layer 3.5) fires your `.keyboardShortcut`s — the default button on Return and the cancel button on Escape, à la SwiftUI's `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`, and any other key equivalent on its key — when the focused control let the key fall through.
 
 @Image(source: "keyboard-event-dispatch.svg", alt: "Flowchart of the keyboard dispatch: a hasTextInputFocus check gates Layer 0 (Text Input via focusManager.dispatchKeyEvent for TextField/SecureField/TextEditor), except that an editing chord the focused control gives up to an app shortcut registered on it skips Layer 0 and continues down the chain. Without text focus, an ESC-claimed-by-an-open-surface check pre-routes Escape through the focus system so an open drop-down closes before any page-level handler. Layer 0.5 Drag Navigators (while a drag is in flight, arrows and paging scroll whatever the pointer is over). Layer 1 Status Bar Items (statusBar.handleKeyEvent). Layer 2 View Handlers (keyEventDispatcher.dispatch, deepest view first). A second hasTextInputFocus check skips Layer 3 if text input was focused. Layer 3 Focus System (focusManager.dispatchKeyEvent: focused element delegation, Tab/Shift+Tab, arrow key fallback). Layer 3.5 Semantic Shortcuts (Return fires the default button, Escape the cancel button, and a key-equivalent .keyboardShortcut fires on its key). Layer 4 Default Bindings (q quit and ? help always; t theme and a appearance gated while a modal grabs input). Unmatched events are dropped.")
 
@@ -256,6 +256,15 @@ But a SwiftUI handler only sees keys while the focus is inside its view, and a
 TUIkit one sees them wherever the focus is, so the same order here would let
 any handler on the page take typing away from a field. To take a chord from a
 focused text control, give it a `.keyboardShortcut`.
+
+A key the control lets go of does pass Layer 2 on its way, though: Ctrl-C and
+Ctrl-X with nothing selected, and an editing chord given up to your shortcut.
+An `onKeyPress` matches a key whatever its modifiers — as SwiftUI's does, whose
+`onKeyPress("c")` also fires for Control-C — so a page's
+`.onKeyPress(.character("c"))` runs on Ctrl-C from a field with nothing
+selected, ahead of your ⌘C and of a `.ctrlC` quit. Where that is not what you
+want, use the form whose handler takes the ``KeyEvent``, check its `ctrl`, and
+return `false` to let the key go on.
 
 ## Default Bindings
 
