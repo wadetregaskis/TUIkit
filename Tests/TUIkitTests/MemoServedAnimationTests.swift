@@ -31,23 +31,32 @@ private struct CatalogueRow: Identifiable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.name == rhs.name }
 }
 
-/// Spinners at four different rates in memoized rows, the Spinners page's shape.
+/// Spinners in memoized rows, the Spinners page's shape.
+private struct Catalogue: View {
+    let rows: [CatalogueRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(rows) { row in
+                HStack(spacing: 1) {
+                    Spinner(style: row.style)
+                    Text(row.name)
+                }
+            }
+        }
+    }
+}
+
+/// Spinners at four different rates.
 private struct CatalogueApp: App {
     init() {}
 
     var body: some Scene {
         WindowGroup {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach([
-                    CatalogueRow(name: "line", style: .line), CatalogueRow(name: "pie", style: .pie),
-                    CatalogueRow(name: "dots", style: .dots), CatalogueRow(name: "earth", style: .earth),
-                ]) { row in
-                    HStack(spacing: 1) {
-                        Spinner(style: row.style)
-                        Text(row.name)
-                    }
-                }
-            }
+            Catalogue(rows: [
+                CatalogueRow(name: "line", style: .line), CatalogueRow(name: "pie", style: .pie),
+                CatalogueRow(name: "dots", style: .dots), CatalogueRow(name: "earth", style: .earth),
+            ])
         }
     }
 }
@@ -57,12 +66,10 @@ private struct CatalogueApp: App {
 struct MemoServedAnimationTests {
     /// Every tick for two seconds, rendering each time — which is what an app
     /// does while something else on the page changes — against an instance
-    /// with no cache. The rows are served whenever nothing in them has moved,
-    /// so the cache still does its job.
-    @Test("Spinners in memoized rows draw what an uncached app draws at every tick")
-    func memoizedSpinnersDrawTheCurrentFrame() {
-        let warm = HeadlessApp(CatalogueApp(), width: 30, height: 8)
-        let cold = HeadlessApp(CatalogueApp(), width: 30, height: 8)
+    /// with no cache: the ticks whose screens differed, and the warm instance.
+    private func staleTicks<A: App>(_ make: () -> A) -> (ticks: [Int], warm: HeadlessApp<A>) {
+        let warm = HeadlessApp(make(), width: 30, height: 8)
+        let cold = HeadlessApp(make(), width: 30, height: 8)
         cold.clearsRenderCacheEachFrame = true
         var stale: [Int] = []
         for tick in 0..<120 {
@@ -71,8 +78,32 @@ struct MemoServedAnimationTests {
             cold.frame(atNanos: now)
             if warm.screen != cold.screen { stale.append(tick) }
         }
+        return (stale, warm)
+    }
+
+    /// The rows are served whenever nothing in them has moved, so the cache
+    /// still does its job.
+    @Test("Spinners in memoized rows draw what an uncached app draws at every tick")
+    func memoizedSpinnersDrawTheCurrentFrame() {
+        let (stale, warm) = staleTicks(CatalogueApp.init)
         #expect(stale.isEmpty, "the cache drew an old frame at ticks \(stale)")
         #expect(warm.renderCache.rowWork.served > 0, "no row was ever served, so this proved nothing")
+    }
+
+    /// Where the tests below stand the two clocks: `clock` at the instant tick
+    /// `tick` begins, as the loop reads it, in whole nanoseconds —
+    /// `seconds(forTicks:)` is the nearest Double to k/60, a nanosecond short of
+    /// the tick's first instant two ticks in three — and the OTHER clock three
+    /// ticks on, at a time that would move the run, so a check that read the
+    /// wrong one fails.
+    private static func instant(atTick tick: Int, on clock: AnimationClock) -> AnimationInstant {
+        func seconds(atTick tick: Int) -> Double {
+            Double(AnimationClock.nanoseconds(atTick: Int64(tick))) / 1_000_000_000
+        }
+        let own = seconds(atTick: tick)
+        let other = seconds(atTick: tick + 3)
+        return clock == .content
+            ? AnimationInstant(content: own, cursor: other) : AnimationInstant(content: other, cursor: own)
     }
 
     /// The cache's half on its own, on each clock. A run of two ticks a frame
@@ -89,27 +120,12 @@ struct MemoServedAnimationTests {
             AnimatedCellRun(
                 offsetX: 0, offsetY: 0, width: 1, frames: ["A", "B", "B", "C"], frameTicks: 2, clock: clock)
         ]
-        // The instant the tick begins, as the loop reads it: whole nanoseconds.
-        // `seconds(forTicks:)` is the nearest Double to k/60, a nanosecond short
-        // of the tick's first instant two ticks in three.
-        func seconds(atTick tick: Int) -> Double {
-            Double(AnimationClock.nanoseconds(atTick: Int64(tick))) / 1_000_000_000
-        }
-        func setTick(_ tick: Int) {
-            let own = seconds(atTick: tick)
-            // The OTHER clock at a time that would move this run, so a check that
-            // read the wrong one fails.
-            let other = seconds(atTick: tick + 3)
-            cache.frameInstant =
-                clock == .content
-                ? AnimationInstant(content: own, cursor: other) : AnimationInstant(content: other, cursor: own)
-        }
         func store(atTick tick: Int) {
-            setTick(tick)
+            cache.frameInstant = Self.instant(atTick: tick, on: clock)
             cache.store(identity: identity, view: 1, buffer: buffer, contextWidth: 10, contextHeight: 1)
         }
         func served(atTick tick: Int, measuring: Bool = false) -> Bool {
-            setTick(tick)
+            cache.frameInstant = Self.instant(atTick: tick, on: clock)
             return cache.lookupEntry(
                 identity: identity, view: 1, contextWidth: 10, contextHeight: 1,
                 gradientFrame: nil, surfaceBackground: nil, effectScope: .none,
