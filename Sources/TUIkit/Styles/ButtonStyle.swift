@@ -883,14 +883,7 @@ private struct _ButtonStyleBody: View, Renderable {
             isFocused: isFocused && !isDisabled,
             background: buttonBg, palette: palette, context: context)
 
-        let composed = HStack(spacing: 0) {
-            Text(String(TerminalSymbols.openCap)).foregroundStyle(caps.colorNow)
-            labelView
-                .foregroundStyle(labelFg)
-                .padding(.horizontal, appearance.horizontalPadding)
-                .background(buttonBg)
-            Text(String(TerminalSymbols.closeCap)).foregroundStyle(caps.colorNow)
-        }
+        let composed = standardRow(labelView, caps: caps.colorNow, label: labelFg, face: buttonBg)
         var buffer = TUIkit.renderToBuffer(composed, context: context)
         guard !context.isMeasuring, caps.isAnimating else { return buffer }
 
@@ -906,6 +899,21 @@ private struct _ButtonStyleBody: View, Renderable {
             context.environment.volatileReadTracker?.recordVolatileRead()
         }
         return buffer
+    }
+
+    /// The standard variant's row for a `@ViewBuilder` label: the label,
+    /// padded on the button's face, between the two half-block caps.
+    private func standardRow(
+        _ labelView: AnyView, caps: Color, label: Color, face: Color
+    ) -> some View {
+        HStack(spacing: 0) {
+            Text(String(TerminalSymbols.openCap)).foregroundStyle(caps)
+            labelView
+                .foregroundStyle(label)
+                .padding(.horizontal, appearance.horizontalPadding)
+                .background(face)
+            Text(String(TerminalSymbols.closeCap)).foregroundStyle(caps)
+        }
     }
 
     /// Truncates a button label so it fits in `availableWidth` after
