@@ -259,12 +259,15 @@ extension ConditionalView: ChildViewProvider {
 ///   `nil` claims a step below it. `VStack { if show { panel } }` did the same.
 ///
 /// Content that is itself a provider still flattens through that provider, and
-/// its members are addressed by it — so a `nil` left behind by it claims
-/// `(Wrapped, 0)`, where none of them rendered, and finds nothing. That is every
-/// `Wrapped` with several members (a tuple, a `ForEach`), and also the ones
-/// that hold a single view through a provider of their own: a `Group`, a
-/// nested `if`, an `if`/`else`. ``View/transition(_:)`` lists them among the
-/// removals that still jump.
+/// its members are addressed by it rather than by this. Where it holds ONE view
+/// with nothing drawn between — a nested `if`, a `Group` of one view, an
+/// `if`/`else` — the provider says where it put that view
+/// (`DepartingSlotAddressing`), and the `nil` claims that instead. A `Group`
+/// of one view comes back transparent, so it is pinned to `(its type, 0)` here,
+/// the step a tuple splice would give it, or as a container's only content it
+/// rendered at the container's own identity. Content with several members (a
+/// tuple, a `ForEach`) has no single slot to keep; ``View/transition(_:)``
+/// lists it among the removals that still jump.
 extension Optional: ChildViewProvider where Wrapped: View {
     public func childViews(context: RenderContext) -> [ChildView] {
         switch self {
@@ -272,23 +275,19 @@ extension Optional: ChildViewProvider where Wrapped: View {
             guard let provider = wrapped as? ChildViewProvider else {
                 return [ChildView(wrapped, childIndex: 0)]
             }
-            return resolveChildViews(from: wrapped, as: provider, context: context)
+            let children = resolveChildViews(from: wrapped, as: provider, context: context)
+            guard children.count == 1 else { return children }
+            return [children[0].addressedIfTransparent(under: context.identity)]
         case .none:
-            // One read for both halves — see `AnimatableResolution`.
-            let frame = context.environment.animationFrame
-            guard let storage = context.stateStorage,
-                storage.departures.hasDeparture(
-                    directlyUnder: context.identity, ofType: Wrapped.self,
-                    nowNanos: frame.nowNanos,
-                    frameAnimation: frame.canAnimate
-                        ? context.environment.transaction.effectiveAnimation : nil)
-            else { return [] }
-            // The present view's address, `(Wrapped, 0)` — see above. A splice
-            // keeps a positional child's inner index, so both land on the same
-            // step under the same parent.
-            return [
-                ChildView(DepartureSlot(viewType: Wrapped.self), identityType: Wrapped.self, childIndex: 0)
-            ]
+            // The fast path, and all an app that animates nothing pays.
+            guard let storage = context.stateStorage, !storage.departures.isEmpty else { return [] }
+            // The present view's address — `(Wrapped, 0)` for a plain view,
+            // wherever its provider put it otherwise. A splice keeps a
+            // positional child's inner index and a resolved child's identity,
+            // so both land on the same step under the same parent.
+            return TUIkitView.departingSlot(
+                heldAs: Wrapped.self, context: context, transparentAtScope: false
+            ).map { [$0] } ?? []
         }
     }
 }

@@ -75,3 +75,18 @@ extension Group: ListRowsPassThrough {
 
     static var listRowsContentTypes: [any View.Type] { [Content.self] }
 }
+
+// MARK: - Removal Through a Group
+
+/// `if a { Group { X } }`: the `Group` hands `X` on exactly as it got it, in the
+/// scope it was resolved in and with no step of its own, so the `nil` the `if`
+/// becomes finds `X`'s departure wherever `X` itself would have been put. A
+/// `Group` of several views finds nothing: none of them rendered as its tuple.
+extension Group: DepartingSlotAddressing {
+    package static func departingSlot(
+        context: RenderContext, transparentAtScope: Bool
+    ) -> ChildView? {
+        TUIkitView.departingSlot(
+            heldAs: Content.self, context: context, transparentAtScope: transparentAtScope)
+    }
+}

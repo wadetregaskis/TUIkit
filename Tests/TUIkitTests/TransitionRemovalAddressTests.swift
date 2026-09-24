@@ -37,30 +37,60 @@ enum RemovalSurround: String, CaseIterable, Sendable {
     case framedOnlyContent
     /// The optional is all of one branch of an `if`/`else`.
     case loneBranch
+    /// `if outer { if inner { … } }`, removed by the OUTER condition.
+    case nestedIfBesideSibling
+    /// The same as a stack's only content.
+    case nestedIfOnlyContent
+    /// `if outer { if inner { … } }` removed by the INNER condition, which the
+    /// outer optional flattens.
+    case nestedIfInnerRemoved
+    /// `if … { Group { … } }`: a provider holding one member.
+    case groupInIfBesideSibling
+    /// The same as a stack's only content.
+    case groupInIfOnlyContent
+    /// `if … { if a { … } else { … } }`, removed by the outer condition.
+    case conditionalInIfBesideSibling
+    /// The same as a stack's only content.
+    case conditionalInIfOnlyContent
+    /// `if … { if a { Group { … } } else { … } }`: the providers composed.
+    case groupInConditionalInIf
+    /// `if … { Group { … }.padding(…) }`: one view, but behind a modifier on
+    /// the structure around it, whose picture the `nil` could not draw.
+    case paddedGroupInIf
+    /// `if … { Group { … }.foregroundStyle(…) }`: a modifier on the structure
+    /// that draws nothing of its own, but re-wraps the member it reaches.
+    case styledGroupInIf
 
     /// Whether the removal still snaps in this shape — a gap on the record in
     /// ``View/transition(_:)``, pinned as a known issue so that closing it is
     /// noticed. `.id` puts an identity step of its own between the slot the
     /// `nil` claims and the view that left its picture, so the picture is one
-    /// step below where the `nil` looks for it.
-    var stillSnaps: Bool { self == .identifiedBesideSibling }
+    /// step below where the `nil` looks for it. A modifier on a `Group` hands
+    /// its member over re-wrapped, as a type the `nil` — holding only the
+    /// wrapped `Group` — has no way to name; a padded one has a picture of its
+    /// own that it could not draw either.
+    var stillSnaps: Bool {
+        self == .identifiedBesideSibling || self == .paddedGroupInIf || self == .styledGroupInIf
+    }
+
+    /// Whether the shape pads the view two cells in, beside a wider sibling.
+    private var isPadded: Bool { self == .paddedBesideSibling || self == .paddedGroupInIf }
 
     /// The rows drawn under the optional: none, or a sibling.
     var sibling: [String] {
         switch self {
-        case .onlyContent, .framedOnlyContent, .loneBranch:
+        case .onlyContent, .framedOnlyContent, .loneBranch, .nestedIfOnlyContent,
+            .groupInIfOnlyContent, .conditionalInIfOnlyContent:
             []
-        case .paddedBesideSibling:
-            ["------"]
         default:
-            ["----"]
+            isPadded ? ["------"] : ["----"]
         }
     }
 
     /// The row `core` — the view, or what is left of it part-way gone — as
     /// the shape draws it.
     func drawn(_ core: String) -> String {
-        self == .paddedBesideSibling ? "  " + core : core
+        isPadded ? "  " + core : core
     }
 }
 
@@ -123,6 +153,67 @@ private struct Surrounded: View {
         case .loneBranch:
             VStack(spacing: 0) {
                 if other { panel } else { Text("never") }
+            }
+        case .nestedIfBesideSibling:
+            VStack(spacing: 0) {
+                if showing { if other { Text("XXXX").transition(.move(edge: .trailing)) } }
+                Text("----")
+            }
+        case .nestedIfOnlyContent:
+            VStack(spacing: 0) {
+                if showing { if other { Text("XXXX").transition(.move(edge: .trailing)) } }
+            }
+        case .nestedIfInnerRemoved:
+            VStack(spacing: 0) {
+                if other { panel }
+                Text("----")
+            }
+        case .groupInIfBesideSibling:
+            VStack(spacing: 0) {
+                if showing { Group { Text("XXXX").transition(.move(edge: .trailing)) } }
+                Text("----")
+            }
+        case .groupInIfOnlyContent:
+            VStack(spacing: 0) {
+                if showing { Group { Text("XXXX").transition(.move(edge: .trailing)) } }
+            }
+        case .conditionalInIfBesideSibling:
+            VStack(spacing: 0) {
+                if showing {
+                    if other { Text("XXXX").transition(.move(edge: .trailing)) } else { Text("never") }
+                }
+                Text("----")
+            }
+        case .conditionalInIfOnlyContent:
+            VStack(spacing: 0) {
+                if showing {
+                    if other { Text("XXXX").transition(.move(edge: .trailing)) } else { Text("never") }
+                }
+            }
+        case .groupInConditionalInIf:
+            VStack(spacing: 0) {
+                if showing {
+                    if other {
+                        Group { Text("XXXX").transition(.move(edge: .trailing)) }
+                    } else {
+                        Text("never")
+                    }
+                }
+                Text("----")
+            }
+        case .paddedGroupInIf:
+            VStack(alignment: .leading, spacing: 0) {
+                if showing {
+                    Group { Text("XXXX").transition(.move(edge: .trailing)) }.padding(.leading, 2)
+                }
+                Text("------")
+            }
+        case .styledGroupInIf:
+            VStack(spacing: 0) {
+                if showing {
+                    Group { Text("XXXX").transition(.move(edge: .trailing)) }.foregroundStyle(.red)
+                }
+                Text("----")
             }
         }
     }
@@ -269,7 +360,7 @@ struct TransitionRemovalAddressTests {
             screen.draw(true, atMillis: 1100) == [surround.drawn("XXXX")] + sibling,
             "precondition: it arrived")
 
-        withKnownIssue("a removal under `.id` on the optional still snaps") {
+        withKnownIssue("this shape's removal still snaps — see `stillSnaps`") {
             #expect(
                 screen.draw(false, atMillis: 1100) == [surround.drawn("XXXX")] + sibling,
                 "gone on the frame it was removed")

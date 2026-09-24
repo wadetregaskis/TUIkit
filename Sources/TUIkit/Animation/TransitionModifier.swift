@@ -47,7 +47,11 @@ extension View {
     /// present view is given that same address, so the claim finds it wherever
     /// the `if` stands: beside siblings, as a stack's only content, or under a
     /// modifier that reaches each member of what it wraps (`.frame`,
-    /// `.opacity`, `.disabled`, `.padding`, `.background`).
+    /// `.opacity`, `.disabled`, `.padding`, `.background`). In a stack the
+    /// same holds through structure that holds one view with nothing drawn
+    /// around it — `if a { if b { X } }`, `if a { Group { X } }`, `if a { if c
+    /// { X } else { Y } }` — whose `nil` asks that structure where it put the
+    /// view.
     ///
     /// ## What still jumps
     ///
@@ -55,12 +59,17 @@ extension View {
     /// rendered at exactly that address, so these removals still happen at
     /// once, as every removal inside a stack once did:
     ///
-    /// - In a stack, an `if` whose content is itself flattened — several
-    ///   views, a `ForEach`, a `Group`, another `if`, an `if`/`else`. Its
-    ///   members are addressed by that content, not by the `if`. Where the
-    ///   optional is rendered directly, an `if` inside it plays, and a `Group`
-    ///   or an `if`/`else` inside it does not: each draws its view a step
-    ///   below the optional's own identity.
+    /// - An `if` holding several views — two or more, a `ForEach`, a `Group`
+    ///   of several — which have no one slot to keep; or one view behind a
+    ///   modifier on the structure around it, `if a { Group { X }.padding() }`
+    ///   or `.foregroundStyle(.red)` on that `Group`, whose member the `nil`
+    ///   cannot find (and, padded, could not draw).
+    /// - Where the optional is rendered directly — a view's whole `body`, or a
+    ///   modifier's content such as `.overlay { if a { … } }` — a `Group` or an
+    ///   `if`/`else` inside the `if`: `if a { Group { X } }`, `if a { if c { X }
+    ///   else { Y } }`. Each draws its view a step below the optional's own
+    ///   identity, where the `nil` does not look. In a stack both play, and a
+    ///   nested `if` plays either way.
     /// - A transition with an identity step between it and the `if`: one on
     ///   the root of a `body` — a view of your own, or a modifier built as a
     ///   view with a body, such as `.tag` or `.zIndex` — rather than on the

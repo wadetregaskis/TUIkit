@@ -208,15 +208,18 @@ extension DepartureStore {
     /// it is resolved in, and its `nil` claims that same child (see
     /// `Optional`'s `ChildViewProvider` conformance), so the index is always 0
     /// and is not compared. Nothing looser will do: a slot the `nil` cannot
-    /// actually draw is worse than no slot. A `nil` whose content flattens
-    /// through a provider of its own — several children, or one behind a
-    /// `Group`, a nested `if`, an `if`/`else` — left nothing at that address,
-    /// finds nothing here, and contributes nothing: the same instant removal as
-    /// before, rather than an empty child that would push its siblings apart by
-    /// a stack's spacing. And the view registered there must be the one that
-    /// LEFT the picture, not merely the one at its address — a slot the `nil`
-    /// would draw without what stood around the transition is one it cannot
-    /// draw; see ``departing(at:ofType:nowNanos:frameAnimation:)``.
+    /// actually draw is worse than no slot. A `nil` whose content holds one
+    /// view through structure of its own — a nested `if`, a `Group`, an
+    /// `if`/`else` — asks that structure where the view went
+    /// (`DepartingSlotAddressing`) and brings the question here or to
+    /// ``hasDeparture(at:ofType:nowNanos:frameAnimation:)``. One whose content
+    /// has several children left nothing at any single address, finds nothing,
+    /// and contributes nothing: the same instant removal as before, rather than
+    /// an empty child that would push its siblings apart by a stack's spacing.
+    /// And the view registered there must be the one that LEFT the picture, not
+    /// merely the one at its address — a slot the `nil` would draw without what
+    /// stood around the transition is one it cannot draw; see
+    /// ``departing(at:ofType:nowNanos:frameAnimation:)``.
     ///
     /// The empty check is the whole point of the fast path: almost every tree
     /// has no departures at all, and this is asked once per `nil` optional per
@@ -258,6 +261,29 @@ extension DepartureStore {
         return false
     }
 
+    /// Whether the view registered at exactly `identity` is still leaving:
+    /// ``hasDeparture(directlyUnder:ofType:nowNanos:frameAnimation:)`` for a
+    /// slot whose whole address is already known.
+    ///
+    /// That is a branch of an `if`/`else` holding one plain view, which renders
+    /// AT the branch's identity rather than a step below it — so it has no type
+    /// step of its own to match, and the identity is what tells it apart. The
+    /// view that left the picture must still be of `type`, for the reason the
+    /// other question requires it. A removal that has played out is dropped
+    /// here, for the reason the other question drops one.
+    public func hasDeparture(
+        at identity: ViewIdentity, ofType type: Any.Type, nowNanos: Int64,
+        frameAnimation: Animation?
+    ) -> Bool {
+        guard let entry = entries[identity], entry.departure.viewType == ObjectIdentifier(type)
+        else { return false }
+        guard !isFinished(entry, at: nowNanos) else {
+            entries.removeValue(forKey: identity)
+            return false
+        }
+        return willPlay(entry, frameAnimation: frameAnimation)
+    }
+
     /// Whether `entry`'s removal will actually PLAY: already resolved, named by
     /// the transition, or animated by the frame doing the removing. A slot
     /// exists only for one that will — an unanimated removal snaps, and its
@@ -292,9 +318,10 @@ extension DepartureStore {
 
     /// Ends a pass: drops the entries of views that vanished without anything
     /// starting their removal. (A removal that started and has finished is
-    /// dropped by whichever of ``departing(at:ofType:nowNanos:frameAnimation:)``
-    /// and ``hasDeparture(directlyUnder:ofType:nowNanos:frameAnimation:)`` next
-    /// sees it finished; this has no clock to tell.)
+    /// dropped by whichever of ``departing(at:ofType:nowNanos:frameAnimation:)``,
+    /// ``hasDeparture(directlyUnder:ofType:nowNanos:frameAnimation:)`` and
+    /// ``hasDeparture(at:ofType:nowNanos:frameAnimation:)`` next sees it
+    /// finished; this has no clock to tell.)
     ///
     /// The parting picture is recorded on EVERY frame a transitioning view
     /// renders, so every such view holds an entry while it is present. When

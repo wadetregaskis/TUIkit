@@ -360,6 +360,21 @@ public struct ChildView {
         reindexed(to: index, providerSlot: slot, under: nil)
     }
 
+    /// This child addressed as `(its view's type, 0)` under `parent` if it has
+    /// no address of its own — a TRANSPARENT child, the form a provider hands
+    /// back for one plain view — and unchanged otherwise.
+    ///
+    /// The step a tuple splice gives such a child anyway
+    /// (``spliced(fromSlot:under:branched:)``), given where no splice runs: an
+    /// optional that is a container's only content, whose `Group` of one view
+    /// would otherwise render at the container's own identity. Pinning it is
+    /// what lets the `nil` the optional becomes find that view's departure —
+    /// see `DepartingSlotAddressing`.
+    func addressedIfTransparent(under parent: ViewIdentity) -> Self {
+        guard identityType == nil, identityKey == nil, resolvedIdentity == nil else { return self }
+        return reindexed(to: 0, providerSlot: Int(ProviderSlot.unnamespaced), under: parent)
+    }
+
     /// ``reindexed(to:providerSlot:)`` and ``resolvingIdentity(under:)`` in one
     /// construction.
     ///
