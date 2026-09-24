@@ -333,6 +333,10 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
   test in the module target it belongs to; `Tests/TUIkitTests` is for
   integration tests and everything in the umbrella module.
   `Tools/validate-test-boundaries.sh` checks this and runs in CI.
+- `Tests/ExampleTests` holds tests of the Example app's own views
+  (`@testable import Example`), for when a test must drive what the app
+  ships rather than a copy of its shape: a copy goes on passing after the
+  app's view is changed back.
 - To run the whole suite faster while developing, see "Running the suite in
   parallel" above. CI and the merge gate still run plain `swift test`.
 

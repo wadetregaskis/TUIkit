@@ -103,6 +103,16 @@ let package = Package(
             exclude: ["__Snapshots__"]
         ),
 
+        // The Example app's own views, where a test must hold the view the
+        // app ships rather than a copy of its shape — a copy goes on passing
+        // after the app's view is changed back. `@testable import Example`: an
+        // executable target can be imported by a test target on macOS and
+        // Linux, its `main.swift` left unrun.
+        .testTarget(
+            name: "ExampleTests",
+            dependencies: ["Example", "TUIkit"]
+        ),
+
         // ── Per-module unit-test targets (compiler-enforced layering) ──────────────────────────────────────
         // Each links ONLY its module. A unit test that drifts into a sibling or
         // higher layer stops compiling here — that is the point: it keeps every
