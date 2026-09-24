@@ -506,7 +506,10 @@ the run loop's next tick: every spinner in a memoized row stepped back to where
 it stood when its row was stored, at every render. A run that is still showing
 the same picture — the same frame, a repeated shade, a whole cycle later — is
 still served, and a measure pass is served regardless, as a frame changes no
-cell's width.
+cell's width. It is paid for: a queue of memoized rows whose spinners turn at
+six speeds (`Stress --session jobs`) measures +9.4% [+8.6%, +10.4%] a frame
+against the stale serve, on an idle machine (2026-09-24) — each row whose run
+moved is drawn again rather than served.
 
 ### What Declines the Cache
 
