@@ -123,6 +123,11 @@ package final class HeadlessApp<A: App> {
     /// The app's render cache, for what its counters say about the frames: how
     /// many rows were served and how many drawn, what the memos hit.
     package var renderCache: RenderCache { tuiContext.renderCache }
+
+    /// How many views' parting pictures the app is holding — every view with a
+    /// transition that is on screen, and every removal still playing. A removal
+    /// that has played out is no longer counted.
+    package var departureCount: Int { tuiContext.stateStorage.departures.count }
 }
 
 // MARK: - In-Memory Terminal

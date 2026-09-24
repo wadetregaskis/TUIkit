@@ -66,6 +66,12 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// - `NavigationStack`, while a screen is pushed — that depth's focus
     ///   section, the Escape handler and its status-bar claim, and the
     ///   collections that read the root's and the screen's titles.
+    /// - `.transition(_:)`, twice: the view carrying one, which re-declares
+    ///   its parting picture every frame it is present, and the `nil` it
+    ///   leaves behind, for every frame it spends drawing that picture
+    ///   part-way gone. A buffer stored on the first frame of a removal was
+    ///   served on every frame after it, the view frozen where it started
+    ///   leaving until the row's value next changed.
     ///
     /// The pattern is the same each time: a **per-frame registry** the render
     /// loop empties and the view tree refills. Anything that writes to one
