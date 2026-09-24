@@ -202,8 +202,10 @@ plays it: the picture the view drew on its last frame is left behind, and the
 its width) open for as long as the removal runs, so the rest of the stack does
 not close up around it until it has finished leaving — whether the `if` has
 siblings or is the stack's only content, and with a `.frame` or an `.opacity`
-around it. Put the `.transition` on the view the `if` holds: a few shapes still
-remove at once, and ``View/transition(_:)`` lists them.
+around it. Put the `.transition` on the view the `if` holds — after anything
+that draws, though a modifier that draws nothing of its own, such as
+`.onAppear` or `.foregroundStyle`, may come after it: a few shapes still remove
+at once, and ``View/transition(_:)`` lists them.
 
 ## Springs
 

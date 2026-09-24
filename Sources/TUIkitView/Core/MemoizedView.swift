@@ -134,3 +134,9 @@ extension View {
 extension _MemoizedView: SingleContentWrapper {
     public var wrappedContent: Content { content }
 }
+
+// MARK: - Removal Transitions
+
+/// Draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension _MemoizedView: DrawsContentUnchanged {}

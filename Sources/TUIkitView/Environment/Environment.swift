@@ -292,3 +292,10 @@ extension TransformEnvironmentModifier: ContentRewrapping {
 /// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
 /// for a ``SingleContentWrapper``.
 extension TransformEnvironmentModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+// MARK: - Removal Transitions
+
+/// Each draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension EnvironmentModifier: DrawsContentUnchanged {}
+extension TransformEnvironmentModifier: DrawsContentUnchanged {}

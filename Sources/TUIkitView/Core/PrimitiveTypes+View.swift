@@ -44,8 +44,12 @@ extension Optional: Renderable where Wrapped: View {
             // An `if` without an `else` is the commonest way a view is removed,
             // and this slot is the only thing left of it: the view is gone from
             // the tree, so nothing else can play out its removal transition.
-            // See ``DepartureStore``.
-            return context.departingPicture(of: Self.heldViewType) ?? FrameBuffer()
+            // See ``DepartureStore``. Rendered directly, an optional hands its
+            // view its own identity, so the picture here was left by the
+            // innermost view through nested optionals and the wrappers that
+            // draw their content unchanged: `X` for `if a { if b { X } }`.
+            return context.departingPicture(of: departingPictureType(heldAs: Wrapped.self))
+                ?? FrameBuffer()
         }
     }
 }
@@ -61,28 +65,11 @@ extension Optional: Layoutable where Wrapped: View {
             // A view on its way out still holds its slot open, or the page
             // would close up around it on the first frame of the removal and
             // the transition would play in a space that had already gone.
-            guard let leaving = context.departingSize(of: Self.heldViewType) else {
-                return ViewSize.fixed(0, 0)
-            }
+            guard
+                let leaving = context.departingSize(of: departingPictureType(heldAs: Wrapped.self))
+            else { return ViewSize.fixed(0, 0) }
             return ViewSize.fixed(leaving.width, leaving.height)
         }
-    }
-}
-
-/// An optional view, seen from where it is rendered: the view a `nil` of it
-/// stands in for.
-///
-/// Rendered directly — a page's body, a modifier's content — an optional hands
-/// its view its OWN identity, and so does every optional inside it, so the
-/// view that left a picture where a `nil` now stands is the innermost one:
-/// `X` for `if a { if b { X } }`, not `Optional<X>`.
-private protocol HeldViewTyped {
-    static var heldViewType: Any.Type { get }
-}
-
-extension Optional: HeldViewTyped where Wrapped: View {
-    fileprivate static var heldViewType: Any.Type {
-        (Wrapped.self as? any HeldViewTyped.Type)?.heldViewType ?? Wrapped.self
     }
 }
 

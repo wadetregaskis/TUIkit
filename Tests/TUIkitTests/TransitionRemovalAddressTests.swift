@@ -244,15 +244,28 @@ enum RemovedView: String, CaseIterable, Sendable {
     /// `AnyView(X.transition(t))`: a wrapper that draws its content unchanged
     /// but does not say what that content is.
     case erased
+    /// `AnyView(X.transition(t)).onAppear { … }`: the two kinds nested, the
+    /// eraser inside.
+    case erasedThenAppearing
+    /// `AnyView(X.transition(t).onAppear { … })`: the eraser outside.
+    case appearingThenErased
+    /// `X.transition(t).disabled(false)`: an environment modifier that also
+    /// re-wraps the members of what it wraps.
+    case disabledOutside
 
     /// Whether the removal still snaps — a gap on the record in
     /// ``View/transition(_:)``, pinned as a known issue. An `.id` outside the
     /// transition, a custom view's `body`, `.tag` and `.sheet` put an identity
     /// step between the slot the `nil` claims and the transition: `.id`'s own,
-    /// and the step a `body` or a presentation's content renders at. The other
-    /// three are a wrapper between the two, which the slot will not draw
-    /// without — see `DepartureStore.departing(at:ofType:nowNanos:frameAnimation:)`.
-    var stillSnaps: Bool { self != .transitionOutermost && self != .identifiedInside }
+    /// and the step a `body` or a presentation's content renders at. The
+    /// wrappers that draw their content unchanged play: the slot looks through
+    /// them (`DrawsContentUnchanged`), or the `AnyView` vouches for its picture.
+    var stillSnaps: Bool {
+        switch self {
+        case .identifiedOutside, .customViewBody, .taggedOutside, .presentingOutside: true
+        default: false
+        }
+    }
 }
 
 /// A custom view whose body carries the transition.
@@ -288,6 +301,9 @@ private struct Held: View {
         case .styledOutside: besideSibling(sliding.foregroundStyle(.red))
         case .appearingOutside: besideSibling(sliding.onAppear {})
         case .erased: besideSibling(AnyView(sliding))
+        case .erasedThenAppearing: besideSibling(AnyView(sliding).onAppear {})
+        case .appearingThenErased: besideSibling(AnyView(sliding.onAppear {}))
+        case .disabledOutside: besideSibling(sliding.disabled(false))
         }
     }
 }
@@ -307,6 +323,15 @@ enum RenderedDirectly: String, CaseIterable, Sendable {
     /// `if a { if b { X.transition(t) } else { Y } }`, removed by the outer
     /// condition.
     case conditionalInIf
+    /// `if a { X.transition(t).onAppear { … } }`: a wrapper that draws its
+    /// content unchanged, at its own identity.
+    case appearingOutside
+    /// `if a { AnyView(X.transition(t)) }`: another, which says so only as it
+    /// draws.
+    case erased
+    /// `AnyView(a ? X.transition(t) : nil)`: the optional inside the eraser,
+    /// whose `nil` must still find the picture the eraser vouched for.
+    case optionalInsideErased
 
     /// Whether the removal still snaps — a gap on the record in
     /// ``View/transition(_:)``, pinned as a known issue. A `Group` draws its
@@ -334,6 +359,12 @@ private struct HeldDirectly: View {
             if showing {
                 if other { Text("XXXX").transition(.move(edge: .trailing)) } else { Text("never") }
             }
+        case .appearingOutside:
+            if showing { Text("XXXX").transition(.move(edge: .trailing)).onAppear {} }
+        case .erased:
+            if showing { AnyView(Text("XXXX").transition(.move(edge: .trailing))) }
+        case .optionalInsideErased:
+            AnyView(showing ? Text("XXXX").transition(.move(edge: .trailing)) : nil)
         }
     }
 }

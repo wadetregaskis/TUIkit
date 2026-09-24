@@ -159,3 +159,10 @@ extension OnSubmitModifier: SingleContentWrapper {
 extension SubmitScopeModifier: SingleContentWrapper {
     var wrappedContent: Content { content }
 }
+
+// MARK: - Removal Transitions
+
+/// Each draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension OnSubmitModifier: DrawsContentUnchanged {}
+extension SubmitScopeModifier: DrawsContentUnchanged {}

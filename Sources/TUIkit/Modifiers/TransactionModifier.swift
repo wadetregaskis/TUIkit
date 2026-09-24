@@ -162,3 +162,9 @@ extension _ValueScopedTransactionView: ChildViewProvider where Content: ChildVie
 /// Body deliberately empty: ``GridRowProviding`` has the whole implementation
 /// for a ``SingleContentWrapper``.
 extension _ValueScopedTransactionView: GridRowProviding where Content: GridRowProviding {}
+
+// MARK: - Removal Transitions
+
+/// Draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension _ValueScopedTransactionView: DrawsContentUnchanged {}

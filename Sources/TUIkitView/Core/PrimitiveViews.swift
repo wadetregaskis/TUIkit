@@ -135,7 +135,12 @@ extension AnyView {
 
 extension AnyView: Renderable {
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        TUIkitView.renderToBuffer(view, context: contentContext(noting: context))
+        let buffer = TUIkitView.renderToBuffer(view, context: contentContext(noting: context))
+        // Its content drew at this identity, unchanged: a transition in it
+        // left the picture a slot that held this `AnyView` would play. Said
+        // here, by value, because the slot knows only the type `AnyView`.
+        context.noteDepartureDrawnWhole(byErasing: type(of: view))
+        return buffer
     }
 }
 
@@ -235,9 +240,11 @@ extension ConditionalView: ChildViewProvider {
 /// The slot borrows `Wrapped`'s identity rather than `Optional`'s, so it lands
 /// on exactly the address the present view rendered at and finds what that view
 /// left behind. It is claimed only when the store confirms a live departure at
-/// that address, LEFT BY a view of that type — the transition must be the view
-/// the `if` held, or the picture would be drawn without what stood around it
-/// (see `DepartureStore.departing(at:ofType:nowNanos:frameAnimation:)`). The
+/// that address, LEFT BY a view of that type or by one inside it that it draws
+/// unchanged (`departingPictureType(heldAs:)`) — the transition must be the
+/// view the `if` held, give or take wrappers that draw nothing of their own,
+/// or the picture would be drawn without what stood around it (see
+/// `DepartureStore.departing(at:ofType:nowNanos:frameAnimation:)`). The
 /// store's emptiness is checked first, which is what keeps every `nil` in every
 /// app that animates nothing costing exactly what it did before.
 ///

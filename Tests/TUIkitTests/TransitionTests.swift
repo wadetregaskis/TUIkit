@@ -32,18 +32,29 @@ enum WrappedTransition: String, CaseIterable, Sendable {
     /// `X.transition(t).padding(.leading, 3)` as a view's whole body: the
     /// optional rendered directly, with no stack to flatten it.
     case paddedAlone
+    /// `X.transition(t).padding(.leading, 3).onAppear { … }`: the padding
+    /// behind a wrapper the slot looks through, which it must not look past.
+    case appearingPaddedBesideSibling
+    /// `AnyView(X.transition(t).padding(.leading, 3))`: the padding inside an
+    /// `AnyView`, which must not vouch for a picture its content did not draw.
+    case erasedPaddedBesideSibling
+    /// The same, as a view's whole body.
+    case erasedPaddedAlone
+
+    /// Whether the optional is rendered directly rather than in a stack.
+    private var isAlone: Bool { self == .paddedAlone || self == .erasedPaddedAlone }
 
     /// The rows drawn while the view is there.
     var shown: [String] {
         switch self {
-        case .paddedBesideSibling: ["   XX ", "------"]
         case .framedBesideSibling: ["    XX", "------"]
-        case .paddedAlone: ["   XX"]
+        case .paddedAlone, .erasedPaddedAlone: ["   XX"]
+        default: ["   XX ", "------"]
         }
     }
 
     /// The rows drawn once it has gone.
-    var gone: [String] { self == .paddedAlone ? [] : ["------"] }
+    var gone: [String] { isAlone ? [] : ["------"] }
 }
 
 private struct WrappedHost: View {
@@ -66,6 +77,20 @@ private struct WrappedHost: View {
             }
         case .paddedAlone:
             if showing { Text("XX").transition(.move(edge: .trailing)).padding(.leading, 3) }
+        case .appearingPaddedBesideSibling:
+            VStack(alignment: .leading, spacing: 0) {
+                if showing {
+                    Text("XX").transition(.move(edge: .trailing)).padding(.leading, 3).onAppear {}
+                }
+                Text("------")
+            }
+        case .erasedPaddedBesideSibling:
+            VStack(alignment: .leading, spacing: 0) {
+                if showing { AnyView(Text("XX").transition(.move(edge: .trailing)).padding(.leading, 3)) }
+                Text("------")
+            }
+        case .erasedPaddedAlone:
+            if showing { AnyView(Text("XX").transition(.move(edge: .trailing)).padding(.leading, 3)) }
         }
     }
 }

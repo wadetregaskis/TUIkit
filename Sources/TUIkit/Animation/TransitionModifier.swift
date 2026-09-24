@@ -53,6 +53,14 @@ extension View {
     /// { X } else { Y } }` — whose `nil` asks that structure where it put the
     /// view.
     ///
+    /// The picture a removal plays is the transitioning view's, so a wrapper
+    /// written outside the transition may stand between it and the `if` only
+    /// if it draws nothing of its own: environment and style modifiers
+    /// (`.foregroundStyle`, `.tint`, `.disabled`, `.environment`), lifecycle
+    /// and event modifiers (`.onAppear`, `.task`, `.onChange`, `.onKeyPress`,
+    /// `.onHover`), focus modifiers (`.focusable`, `.focused`), and `AnyView`.
+    /// `if show { Toast().transition(.opacity).onAppear { … } }` plays.
+    ///
     /// ## What still jumps
     ///
     /// The claim finds a departure only where the view carrying the transition
@@ -77,15 +85,15 @@ extension View {
     ///   `.alert`, `.popover`, `.contextMenu`); or one with an `.id` outside
     ///   it — `X.transition(t).id(k)`, or `.id` written on the `if` itself.
     ///   `X.id(k).transition(t)` plays.
-    /// - A transition with a modifier outside it in the `if`:
-    ///   `X.transition(t).padding()`. The picture the removal would play is the
+    /// - A transition with a modifier outside it in the `if` that moves,
+    ///   resizes or draws: `X.transition(t).padding()`, and so `.frame`,
+    ///   `.offset`, `.position`, `.background`, `.overlay`, `.border`,
+    ///   `.opacity`, `.hidden()`, `.help`, a colour effect, a list row's insets
+    ///   or colours — inside an `AnyView` or behind a wrapper that draws
+    ///   nothing as much as bare. The picture the removal would play is the
     ///   transition's alone, so drawing it would drop the padding and move the
-    ///   view; it snaps instead. So does one inside a wrapper that draws
-    ///   nothing of its own — `X.transition(t).foregroundStyle(.red)`,
-    ///   `.onAppear { … }`, `AnyView(X.transition(t))` — whose picture would
-    ///   have been right: the slot cannot yet tell the two kinds apart.
-    ///   `X.padding().transition(t)` plays, padding and all — write the
-    ///   transition last.
+    ///   view; it snaps instead. `X.padding().transition(t)` plays, padding and
+    ///   all — write the transition after anything that draws.
     /// - The branch an `if`/`else` leaves. The other branch takes the slot at
     ///   once, and nothing is left standing to play the removal.
     ///

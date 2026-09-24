@@ -286,3 +286,11 @@ extension OnDisappearModifier: SingleContentWrapper {
 extension TaskModifier: SingleContentWrapper {
     var wrappedContent: Content { content }
 }
+
+// MARK: - Removal Transitions
+
+/// Each draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension OnAppearModifier: DrawsContentUnchanged {}
+extension OnDisappearModifier: DrawsContentUnchanged {}
+extension TaskModifier: DrawsContentUnchanged {}

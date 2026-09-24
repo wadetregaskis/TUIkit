@@ -210,3 +210,9 @@ extension TintModifier: ChildViewProvider where Content: ChildViewProvider {}
 /// Body deliberately empty: ``GridRowProviding`` has the whole implementation
 /// for a ``SingleContentWrapper``.
 extension TintModifier: GridRowProviding where Content: GridRowProviding {}
+
+// MARK: - Removal Transitions
+
+/// Draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension TintModifier: DrawsContentUnchanged {}

@@ -87,3 +87,9 @@ extension ObjectEnvironmentModifier: ContentRewrapping {
 /// Body deliberately empty: ``ChildViewProvider`` has the whole implementation
 /// for a ``SingleContentWrapper``.
 extension ObjectEnvironmentModifier: ChildViewProvider where Content: ChildViewProvider {}
+
+// MARK: - Removal Transitions
+
+/// Draws its content unchanged, at its own identity, so a removal transition
+/// written inside it plays — see `DrawsContentUnchanged`.
+extension ObjectEnvironmentModifier: DrawsContentUnchanged {}
