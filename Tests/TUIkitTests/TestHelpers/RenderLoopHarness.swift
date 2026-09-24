@@ -27,6 +27,21 @@ final class RenderLoopHarness {
     let paletteManager: ThemeManager
     let appearanceManager: ThemeManager
 
+    /// What every loop built here has published about the terminal's colours,
+    /// in order.
+    ///
+    /// Kept here rather than assigned to `TerminalColors.current`, which every
+    /// suite in the process reads: a colour answer one wiring test fed its loop
+    /// stayed the terminal's background, and a later suite's translucent ground
+    /// came out blended over it.
+    var publishedColors: [TerminalColors] { colourRecord.published }
+
+    /// A class so the loop's closure and this harness share one record.
+    private final class ColourRecord {
+        var published: [TerminalColors] = []
+    }
+    private let colourRecord = ColourRecord()
+
     /// - Parameter tuiContext: The context the loop renders with. A test that
     ///   drives an `AppRunner` seam — a terminal focus report, say — passes the
     ///   runner's own, so what the seam changes is what the loop draws.
@@ -44,6 +59,9 @@ final class RenderLoopHarness {
     /// `isTmux` is the seam `Terminal.askColors(isTmux:)` already uses:
     /// `TerminalHost.isTmux` is read from the environment once per process, so a
     /// test that needs the tmux branch has to say so rather than set it.
+    ///
+    /// What the loop publishes about the terminal's colours goes to
+    /// ``publishedColors``.
     func loop<A: App>(_ app: A, isTmux: Bool = false) -> RenderLoop<A> {
         RenderLoop(
             app: app,
@@ -54,6 +72,7 @@ final class RenderLoopHarness {
             paletteManager: paletteManager,
             appearanceManager: appearanceManager,
             tuiContext: tuiContext,
-            isTmux: isTmux)
+            isTmux: isTmux,
+            publishTerminalColors: { [colourRecord] in colourRecord.published.append($0) })
     }
 }

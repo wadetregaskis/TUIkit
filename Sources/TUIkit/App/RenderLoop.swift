@@ -275,11 +275,14 @@ internal final class RenderLoop<A: App> {
     /// been spelled or blended from the colours before the report, and the diff
     /// writer's idea of what is on screen is not reached by the generation that
     /// clears the render cache.
+    ///
+    /// What it publishes goes to ``publishTerminalColors``.
     /// Not private, alone among this type's stored properties, because the seam
     /// that reads it lives in `RenderLoop+TerminalColors.swift` — and `private`
     /// is file scope. The type itself is internal, so this is visible no further
     /// than it already was.
     lazy var terminalColors = TerminalColorRefresher(
+        publish: publishTerminalColors,
         onChange: { [diffWriter] in
             diffWriter.invalidate()
             AppState.shared.setNeedsRender()
@@ -329,6 +332,15 @@ internal final class RenderLoop<A: App> {
     /// a test that needs the other branch has no way to say so otherwise.
     private let isTmux: Bool
 
+    /// Where ``terminalColors`` publishes what the terminal says about its
+    /// colours: `TerminalColors.current` in an app, through
+    /// `TerminalColorRefresher.publishProcessWide(_:)`.
+    ///
+    /// Taken at init, as ``isTmux`` is, so a test driving the loop can keep what
+    /// it publishes to itself. The process-wide value is read by everything that
+    /// renders in the process, and outlives the test that assigned it.
+    private let publishTerminalColors: (TerminalColors) -> Void
+
     init(
         app: A,
         terminal: any TerminalProtocol,
@@ -338,9 +350,12 @@ internal final class RenderLoop<A: App> {
         paletteManager: ThemeManager,
         appearanceManager: ThemeManager,
         tuiContext: TUIContext,
-        isTmux: Bool = TerminalHost.isTmux
+        isTmux: Bool = TerminalHost.isTmux,
+        publishTerminalColors: @escaping (TerminalColors) -> Void =
+            TerminalColorRefresher.publishProcessWide
     ) {
         self.isTmux = isTmux
+        self.publishTerminalColors = publishTerminalColors
         self.app = app
         self.terminal = terminal
         self.statusBar = statusBar

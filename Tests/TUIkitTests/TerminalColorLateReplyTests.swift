@@ -231,17 +231,16 @@ private struct LateReplyProbeApp: App {
 /// changes the record repaints the whole screen rather than waiting for a
 /// keypress.
 ///
-/// Serialized because it assigns the process-wide colours and reads
-/// `AppState.shared`, which `AppRunner` binds itself to — the same reason
-/// `RunLoopFoldTests` is.
+/// Serialized because it reads `AppState.shared`, which `AppRunner` binds
+/// itself to — the same reason `RunLoopFoldTests` is. What the loop publishes
+/// goes to the harness, not to the process-wide colours: those are what the
+/// next test grounds its palette on.
 @MainActor
 @Suite("The run loop applies what the parser siphoned", .serialized)
 struct TerminalColorReplyWiringTests {
 
     @Test("A reply handed to the loop is published, and the next frame is a full repaint")
     func loopPublishesAndRepaints() {
-        let saved = TerminalColors.current
-        defer { TerminalColors.current = saved }
         AppState.shared.didRender()
 
         let harness = RenderLoopHarness()
@@ -256,7 +255,7 @@ struct TerminalColorReplyWiringTests {
 
         let reply = TerminalColorLateReplyTests.reply("11", TerminalColorLateReplyTests.ghosttyBackground)
         loop.noteVolunteeredColorReplies(Array(reply.utf8), sawStatusFence: false)
-        #expect(TerminalColors.current.background == TerminalColorLateReplyTests.ghosttyBackground)
+        #expect(harness.publishedColors.map(\.background) == [TerminalColorLateReplyTests.ghosttyBackground])
         #expect(AppState.shared.needsRender, "the loop was not asked for a frame")
 
         let beforeRepaint = harness.terminal.writtenOutput.joined().count

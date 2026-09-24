@@ -69,17 +69,27 @@ internal final class TerminalColorRefresher {
     /// "did this change anything?" is answered by what this class did.
     private var inForce: TerminalColors
 
-    /// Where a changed record goes. The process-wide colours in an app.
+    /// Where a changed record goes: ``publishProcessWide(_:)`` in an app.
     private let publish: (TerminalColors) -> Void
 
     /// Runs when a report changed the record: the owner invalidates the whole
     /// screen and asks for a frame.
     private let onChange: @MainActor () -> Void
 
+    /// Assigns `colours` to `TerminalColors.current`, which every frame in the
+    /// process reads: where an app's record goes.
+    ///
+    /// Named rather than written as a closure where it is the default, because
+    /// `RenderLoop` takes the same default for the refresher it builds, and a test
+    /// driving a loop passes something else there.
+    nonisolated static func publishProcessWide(_ colours: TerminalColors) {
+        TerminalColors.current = colours
+    }
+
     init(
         known: TerminalColors = .current,
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        publish: @escaping (TerminalColors) -> Void = { TerminalColors.current = $0 },
+        publish: @escaping (TerminalColors) -> Void = publishProcessWide,
         onChange: @escaping @MainActor () -> Void
     ) {
         self.known = known

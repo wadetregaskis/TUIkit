@@ -86,8 +86,9 @@ struct TerminalColorsTests {
 }
 
 /// These read or write the PROCESS-wide colours, so they are serialized, the
-/// same treatment `TerminalWidthTraitsProcessTests` gets. Nothing outside this
-/// suite assigns the process value.
+/// same treatment `TerminalWidthTraitsProcessTests` gets. Outside this suite only
+/// `TerminalColorLatePublicationTests` assigns the process value, and puts it
+/// back; a run loop a test drives publishes to its harness instead.
 @Suite("What the terminal reported about its colours, process-wide", .serialized)
 struct TerminalColorsProcessTests {
 
