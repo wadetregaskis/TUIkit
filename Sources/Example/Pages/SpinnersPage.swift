@@ -84,15 +84,14 @@ struct SpinnersPage: View {
             HStack(alignment: .top, spacing: 3) {
                 ForEach(dealt) { column in
                     VStack(alignment: .leading, spacing: 0) {
+                        // Each row sets its own speed, the catalogue's or its
+                        // override — see `spinnerRow(_:color:)`.
                         ForEach(column.entries) { entry in
                             spinnerRow(entry, color: color)
                         }
                     }
                 }
             }
-            // The catalogue's speed, set once around every row; a row with an
-            // override sets its own inside this, and the nearer setting wins.
-            .indicatorAnimationSpeed(settings.catalogueSpeed, for: .spinners)
         }
     }
 
@@ -306,9 +305,17 @@ struct SpinnersPage: View {
             toleranceHundredths: speedToleranceHundredths, frameOverrides: frameOverrides)
     }
 
-    /// One row of the style catalogue. Its `id` carries everything the
-    /// customiser can change about it, so a change moves it — see
-    /// `stylesCatalogue(columns:)`.
+    /// One row of the style catalogue. Its `==` compares everything the
+    /// customiser can change about it, so a change re-renders it — see
+    /// `stylesCatalogue(columns:)` — and its `id` is only which row it is.
+    ///
+    /// Two things, where they used to be one string: the id carried the whole
+    /// signature, so every change made the row a NEW row, at a new identity, and
+    /// its spinner a new spinner. A spinner keeps its place in its cycle at its
+    /// identity, and a new one starts from the shared clock's phase instead, so
+    /// every click of the Frame stepper jumped the spinner it was changing to
+    /// wherever the new speed landed rather than carrying it on from the frame
+    /// it was showing.
     private struct CatalogueEntry: Identifiable, Equatable {
         let name: String
         /// The built-in style this row shows; `nil` for the custom row.
@@ -318,7 +325,9 @@ struct SpinnersPage: View {
         let colorKey: String
         /// The speed this row sets for itself, inside the catalogue's.
         let overrideSpeed: IndicatorAnimationSpeed?
-        /// The speed its spinner reads, whoever set it.
+        /// The speed its spinner reads: its override, or the catalogue's.
+        let speed: IndicatorAnimationSpeed
+        /// That speed, and who set it, as the signature spells it.
         let speedKey: String
         /// How many 1/60 s ticks it shows each frame for, as its spinner will
         /// work it out.
@@ -334,32 +343,39 @@ struct SpinnersPage: View {
             self.label = label
             self.colorKey = colorKey
             overrideSpeed = settings.overrideSpeed(for: choice)
-            let speed = overrideSpeed ?? settings.catalogueSpeed
+            speed = overrideSpeed ?? settings.catalogueSpeed
             speedKey = "\(overrideSpeed == nil ? "catalogue" : "row")@\(speed.rate)±\(speed.tolerance)"
             frameTicks = settings.frameTicks(style, choice: choice)
         }
 
-        // The speed and the duration are in it too: a speed is an environment
-        // value the row's spinner reads, and a memo keyed on anything less would
-        // serve the row drawn at the old speed.
-        var id: String { "\(name)|\(label ?? "")|\(colorKey)|\(speedKey)|\(frameTicks)" }
+        /// Which row this is: the built-in style's name, or `custom` for the one
+        /// row the frame field edits, whatever sequence it holds.
+        var id: String { choice?.rawValue ?? "custom" }
 
-        /// The row is what its id says it is — which is what lets the value
-        /// memo tell a changed row from an unchanged one.
-        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+        /// Everything about the row that reaches what it draws. The speed and the
+        /// duration are in it too: a speed is an environment value the row's
+        /// spinner reads, and a memo keyed on anything less would serve the row
+        /// drawn at the old speed.
+        var signature: String { "\(name)|\(label ?? "")|\(colorKey)|\(speedKey)|\(frameTicks)" }
+
+        /// The row is what its signature says it is — which is what lets the
+        /// value memo tell a changed row from an unchanged one.
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.signature == rhs.signature }
     }
 
     /// One column of the catalogue, carrying its own rows.
     ///
     /// The column has to BE its contents rather than an index into them: an
     /// index never changes, so a memo keyed on one serves the column it built
-    /// the first time, whatever the rows have become since.
+    /// the first time, whatever the rows have become since. That is what `==`
+    /// compares; the `id` is the index, so the column, like its rows, keeps its
+    /// identity when a row in it changes.
     private struct CatalogueColumn: Identifiable, Equatable {
         let index: Int
         let entries: [CatalogueEntry]
-        var id: String { "\(index)|\(entries.map(\.id).joined(separator: ","))" }
+        var id: Int { index }
 
-        static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.index == rhs.index && lhs.entries == rhs.entries }
     }
 
     /// A `[duration  spinner  style-name]` row for the style catalogue, in the
@@ -370,9 +386,15 @@ struct SpinnersPage: View {
     /// whatever the spinner's width, and the style's name stays the word to
     /// the spinner's right, which is what `Tools/Profiling/animation_rate.py`
     /// reads. It is in the accent colour when the row has an override.
-    @ViewBuilder
+    ///
+    /// The row sets its spinner's speed whether it has an override or not — the
+    /// catalogue's own, when it has none, which is what it would inherit anyway.
+    /// It used to set one only for an override, in an `if`, and a row that gained
+    /// its first override or lost its last moved from one branch of that `if` to
+    /// the other: a different view, whose spinner is a new spinner and starts from
+    /// the shared clock's phase rather than carrying on from the frame showing.
     private func spinnerRow(_ entry: CatalogueEntry, color: Color?) -> some View {
-        let row = HStack(spacing: 1) {
+        HStack(spacing: 1) {
             // Milliseconds here, beside the spinner, for reading at a glance; the
             // exact tick counts are in the line under the page.
             Text(verbatim: "\(SpinnerSpeedSettings.milliseconds(ticks: entry.frameTicks)) ms")
@@ -382,10 +404,6 @@ struct SpinnersPage: View {
             Spinner(entry.label, style: entry.style, color: color)
             Text(entry.name).foregroundStyle(.palette.foregroundSecondary)
         }
-        if let speed = entry.overrideSpeed {
-            row.indicatorAnimationSpeed(speed, for: .spinners)
-        } else {
-            row
-        }
+        .indicatorAnimationSpeed(entry.speed, for: .spinners)
     }
 }
