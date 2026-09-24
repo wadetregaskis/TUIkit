@@ -66,3 +66,10 @@ extension Group: ChildInfoProvider {
         resolveChildInfos(from: content, context: context)
     }
 }
+
+// The same transparency for a `List` or a `Section` asking what its content
+// IS: flattening alone hands it the rows, but not which `ForEach` made them,
+// and that is what keys them by element and carries `.onDelete` / `.onMove`.
+extension Group: ListRowsPassThrough {
+    var listRowsContent: any View { content }
+}

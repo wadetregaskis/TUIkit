@@ -140,6 +140,66 @@ protocol WindowedListRowExtractor {
     var listRowsAreSections: Bool { get }
 }
 
+// MARK: - Seeing Through a Group
+
+/// A view that stands between a `List` (or a `Section`) and its rows without
+/// being any part of them — no row, no identity step and no effect of its own —
+/// so the list asks its questions of the content instead: what the rows are,
+/// which selection value each one answers to, and which `ForEach` owns them for
+/// `.onDelete`, `.onMove` and `dropDestination(for:action:)`.
+///
+/// `Group` is the one conformer, and SwiftUI looks through it the same way: a
+/// `Group` around the `ForEach` of a `List`, or of one of its `Section`s, leaves
+/// every row deletable, and deleting one removes the element that row draws.
+/// Asked of the `Group` itself, every one of those questions stopped at the
+/// wrapper. The rows came from the flattening child walk instead, which cannot
+/// say which loop made a row, so they were keyed by position rather than by
+/// element — answering to no `String` or `UUID` selection at all — and no
+/// `.onDelete` or `.onMove` reached any of them.
+///
+/// A lone `if` needs no conformance. `as?` looks through an `Optional`'s `some`
+/// by itself — a rule of the language, not of anything written here — which is
+/// why an `if` around the loop always worked where a `Group` did not.
+///
+/// NOT conformers, and not by oversight:
+/// - A modifier, even a cosmetic one. `.foregroundStyle(.red)` written after
+///   `.onDelete` has to reach each row, which only the child walk does, so the
+///   rows still come from there and still cannot be attributed; an action found
+///   by looking through the modifier would be handed offsets it cannot be
+///   matched to, the guess `ListUnownedEditActionTests` refuses.
+/// - An `if`/`else`. Its rows take the branch step the child walk gives them
+///   (`ChildViewProvider.identityBranchLabel`), and a list looking through it
+///   would have to take the same step or move every row's `@State`.
+/// - `AnyView`, which draws its content only after telling the render cache
+///   what type it erased (`AnyView.contentContext(noting:)`). It is a hole of
+///   its own, and a larger one: no container sees through an `AnyView`, so
+///   `List { AnyView(ForEach(…)) }` draws the whole loop as ONE row.
+@MainActor
+protocol ListRowsPassThrough {
+    /// The view whose rows these are.
+    var listRowsContent: any View { get }
+}
+
+/// The nearest `T` at or inside `view`, looking through any number of
+/// ``ListRowsPassThrough`` wrappers — how a `List` and a `Section` ask what
+/// their content IS.
+///
+/// `throughWrappers(_:as:)`'s shape over a much narrower set of wrappers, and
+/// the narrowness is load-bearing: see the protocol for what is not looked
+/// through, and why.
+///
+/// The view is asked first as the generic it arrives as, so content wrapped in
+/// nothing — nearly all of it — answers with the one cast it always paid, plus
+/// one failed conformance check, and is never boxed. Each step after that moves
+/// strictly inward through a statically nested generic type, which is finite by
+/// construction.
+@MainActor
+func throughListPassThroughs<V: View, T>(_ view: V, as type: T.Type = T.self) -> T? {
+    if let found = view as? T { return found }
+    guard let passThrough = view as? any ListRowsPassThrough else { return nil }
+    return throughListPassThroughs(passThrough.listRowsContent, as: type)
+}
+
 // MARK: - ForEach Conformance
 
 extension ForEach: ListRowExtractor, WindowedListRowExtractor {

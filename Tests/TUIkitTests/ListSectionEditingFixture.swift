@@ -6,10 +6,11 @@
 //  a row's collection — Delete, and the Ctrl-R pick-up — driven the way the
 //  run loop drives them.
 //
-//  Shared rather than duplicated because the three suites that sit on it ask
+//  Shared rather than duplicated because the four suites that sit on it ask
 //  the same list the same questions from different sides (what the wiring
-//  does, what it refuses, where it leaves the cursor), and each copy of a
-//  harness is a place they can drift apart about what they are testing.
+//  does, what it refuses, what a `Group` in the way changes, where it leaves
+//  the cursor), and each copy of a harness is a place they can drift apart
+//  about what they are testing.
 //
 //  Created by Wade Tregaskis
 //  License: MIT

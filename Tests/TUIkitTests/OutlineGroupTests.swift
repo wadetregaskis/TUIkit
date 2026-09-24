@@ -453,6 +453,30 @@ struct OutlineGroupTests {
         #expect(selection.value == "Sources", "…without disturbing the selection")
     }
 
+    /// A `Group` adds no rows of its own, so the list looks through it
+    /// (`ListRowsPassThrough`): the NODES are still its rows, and the outline
+    /// is still what opens one. Asked of the `Group`, the list flattened the
+    /// outline in by position — no row answered to a node's id — and found
+    /// nothing to disclose with.
+    @Test("a Group around the outline leaves its nodes the list's rows")
+    func groupedOutlineKeepsItsNodesAsRows() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let selection = Selection()
+        let view = List(selection: selection.binding) {
+            Group {
+                OutlineGroup(tree, children: \.children) { node in Text(verbatim: node.id) }
+            }
+        }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "Sources", "the first node, by its own id")
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .enter))
+        let rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "Return disclosed it: \(rendered)")
+    }
+
     /// The tree's own keys, which is what keeps disclosure reachable when an
     /// app claims Return with its own `.onRowActivate`.
     @Test("Right expands and Left collapses the focused branch")

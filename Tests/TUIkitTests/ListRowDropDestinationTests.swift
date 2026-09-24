@@ -616,4 +616,54 @@ struct ListRowDropDestinationTests {
         #expect(log.inserted.count == 1)
         #expect(log.inserted.first?.1 == ["zzz"])
     }
+
+    /// A `Group` adds no rows of its own, so the list looks through it for the
+    /// loop that owns the gaps (`ListRowsPassThrough`) — the same look that
+    /// finds its `.onDelete` and `.onMove`, in `ListGroupEditingTests`. It used
+    /// to ask the `Group`, find no drop action, and let the drag fly home.
+    @Test("A Group around the ForEach still takes a drop between its rows")
+    func groupedRowsStillAcceptDrops() {
+        final class Log: @unchecked Sendable {
+            var inserted: [(Int, [String])] = []
+        }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 10, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = List {
+                Group {
+                    ForEach(["a", "b", "c", "d"], id: \.self) { Text($0) }
+                        .dropDestination(for: String.self) { index, values in
+                            log.inserted.append((index, values))
+                        }
+                }
+            }
+            .frame(height: 8)
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let rowY = render().lines.firstIndex { $0.stripped.contains("c") } ?? -1
+        #expect(rowY > 0, "found row c")
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 2, y: rowY)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        _ = render()
+        tui.dragAndDropSession.dragMoved()
+        _ = render()
+        #expect(tui.dragAndDropSession.performDrop(), "the grouped rows take it")
+        #expect(log.inserted.first?.0 == 2, "at row c's index: \(log.inserted)")
+        #expect(log.inserted.first?.1 == ["zzz"])
+    }
 }

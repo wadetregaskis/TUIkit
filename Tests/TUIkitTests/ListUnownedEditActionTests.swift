@@ -15,8 +15,10 @@
 //  outer array — so the assertions are on the collection afterwards, and the
 //  key is pressed on EVERY row, which needs no claim about which row is which.
 //
-//  The arrangements that ARE wired are in `ListSectionEditingTests`; the
-//  harness is `ListSectionEditingFixture`.
+//  The arrangements that ARE wired are in `ListSectionEditingTests`, and a
+//  `ForEach` behind a `Group` — which is not a refusal: a `Group` adds no rows
+//  of its own, so the loop is still its container's whole content — in
+//  `ListGroupEditingTests`; the harness is `ListSectionEditingFixture`.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -155,6 +157,39 @@ struct ListUnownedEditActionTests {
         }
         #expect(handler.itemCount == 5, "header + four rows, got \(handler.itemCount)")
 
+        for row in 0..<handler.itemCount {
+            handler.focusedIndex = row
+            #expect(
+                handler.handleKeyEvent(KeyEvent(key: .delete)) == false,
+                "row \(row) claimed Delete")
+        }
+        #expect(items.value == ["alpha", "beta", "gamma"], "nothing was deleted: \(items.value)")
+    }
+
+    /// A `Group` is looked through (`ListGroupEditingTests`), and this pins
+    /// where that stops: one holding a hand-written row beside the loop is
+    /// the arrangement above with a wrapper round it. Seeing through the
+    /// `Group` reaches the same flattened pair, so the refusal must survive it.
+    @Test("A Group mixing a ForEach with a hand-written row still refuses Delete on every row")
+    func mixedGroupRefusesEveryDelete() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = ListSectionEditingFixture()
+        fixture.render(
+            List(selection: .constant(Int?.none)) {
+                Section("Items") {
+                    Group {
+                        Text("All items")
+                        ForEach(items.value, id: \.self) { Text($0) }
+                            .onDelete { items.value.remove(atOffsets: $0) }
+                    }
+                }
+            }
+            .frame(height: 10))
+        guard let handler = fixture.handler(Int.self) else {
+            Issue.record("the list took focus")
+            return
+        }
+        #expect(handler.itemCount == 5, "header + four rows, got \(handler.itemCount)")
         for row in 0..<handler.itemCount {
             handler.focusedIndex = row
             #expect(

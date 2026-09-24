@@ -835,7 +835,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 visibleRowYRanges: visibleRowYRanges,
                 visibleRows: visibleRows,
                 dropInsertion: (source.allContent
-                    ? content as? DynamicViewContentActions : nil)?.dropInsertionAction,
+                    ? throughListPassThroughs(content, as: (any DynamicViewContentActions).self)
+                    : nil)?.dropInsertionAction,
                 scrollbarColumn: scrollbarColumn,
                 scrollbarHeight: scrollbarHeight,
                 rowContentWidth: rowContentWidth,
@@ -893,7 +894,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             visibleRowYRanges: [],
             visibleRows: [],
             dropInsertion: (source.allContent
-                ? content as? DynamicViewContentActions : nil)?.dropInsertionAction
+                ? throughListPassThroughs(content, as: (any DynamicViewContentActions).self)
+                : nil)?.dropInsertionAction
         )
     }
 
@@ -1168,8 +1170,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.multiSelection = multiSelection
         // A hierarchical list's rows come from an `OutlineGroup`, which is what
         // knows how to open one — reached the same way `.onMove` / `.onDelete`
-        // are, by asking the content.
-        let outline = content as? any OutlineRowActivating
+        // are, by asking the content, and through the same `Group`s.
+        let outline = throughListPassThroughs(content, as: (any OutlineRowActivating).self)
         handler.outlineActivation = outline
         // Return ACTIVATES the focused row, and for a branch with no other
         // action the activation is to disclose it. An app's own
@@ -2792,6 +2794,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     // MARK: - Row Extraction
 
     private func extractRows<V: View>(from content: V, context: RenderContext) -> RowSource<SelectionValue> {
+        // A `Group` contributes exactly its content's rows, so it is taken off
+        // before anything is asked (see ``ListRowsPassThrough``). Left on, every
+        // question below was answered by the wrapper: a `ForEach` inside it came
+        // out of the child walk, keyed by position rather than by element, with
+        // its `.onDelete` / `.onMove` owning none of its rows. No identity moves:
+        // a `Group` takes no step of its own, so the rows land where the child
+        // walk put them.
+        if let passThrough = content as? any ListRowsPassThrough {
+            return extractRows(from: passThrough.listRowsContent, context: context)
+        }
+
         // Section first (it conforms to both Section- and List-RowExtractor, and
         // its row set — header/content/footer — is small and built eagerly).
         if let section = content as? SectionRowExtractor {
