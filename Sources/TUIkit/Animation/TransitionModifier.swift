@@ -94,6 +94,12 @@ extension View {
     ///   transition's alone, so drawing it would drop the padding and move the
     ///   view; it snaps instead. `X.padding().transition(t)` plays, padding and
     ///   all — write the transition after anything that draws.
+    /// - A transition behind one of four wrappers that draw nothing but are
+    ///   not yet looked through: `.onPreferenceChange`, `.appHeader`, and the
+    ///   two status-bar item modifiers. `X.transition(t).onPreferenceChange(…)`
+    ///   snaps — it played until 2026-09-24, when a removal began checking the
+    ///   type of the view that left its picture; write the transition after
+    ///   them.
     /// - The branch an `if`/`else` leaves. The other branch takes the slot at
     ///   once, and nothing is left standing to play the removal.
     ///

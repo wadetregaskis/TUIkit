@@ -328,7 +328,8 @@ Tests/                    ~6,300 tests across ~900 suites in ~680 files
 ├── TUIkitCoreTests/      One suite per library module, so a module's tests
 ├── TUIkitStylingTests/   cannot lean on the umbrella's API — the boundary is
 ├── TUIkitViewTests/      enforced by Tools/validate-test-boundaries.sh
-└── TUIkitImageTests/
+├── TUIkitImageTests/
+└── ExampleTests/         The Example app's own views, driven whole (@testable import Example)
 
 Tools/
 ├── BuildDocs/            Builds the DocC reference as ONE archive covering every

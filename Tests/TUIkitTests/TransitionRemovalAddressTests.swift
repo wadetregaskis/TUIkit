@@ -252,6 +252,10 @@ enum RemovedView: String, CaseIterable, Sendable {
     /// `X.transition(t).disabled(false)`: an environment modifier that also
     /// re-wraps the members of what it wraps.
     case disabledOutside
+    /// `X.transition(t).onPreferenceChange(…)`: a wrapper that draws nothing
+    /// of its own but is not yet looked through (not a single-content
+    /// wrapper), with `.appHeader` and the two status-bar item modifiers.
+    case preferenceObservedOutside
 
     /// Whether the removal still snaps — a gap on the record in
     /// ``View/transition(_:)``, pinned as a known issue. An `.id` outside the
@@ -262,10 +266,18 @@ enum RemovedView: String, CaseIterable, Sendable {
     /// them (`DrawsContentUnchanged`), or the `AnyView` vouches for its picture.
     var stillSnaps: Bool {
         switch self {
-        case .identifiedOutside, .customViewBody, .taggedOutside, .presentingOutside: true
+        case .identifiedOutside, .customViewBody, .taggedOutside, .presentingOutside,
+            .preferenceObservedOutside:
+            true
         default: false
         }
     }
+}
+
+/// A preference nothing sets, for `.onPreferenceChange` to observe.
+private struct ObservedPreference: PreferenceKey {
+    static let defaultValue = 0
+    static func reduce(value: inout Int, nextValue: () -> Int) { value = nextValue() }
 }
 
 /// A custom view whose body carries the transition.
@@ -304,6 +316,8 @@ private struct Held: View {
         case .erasedThenAppearing: besideSibling(AnyView(sliding).onAppear {})
         case .appearingThenErased: besideSibling(AnyView(sliding.onAppear {}))
         case .disabledOutside: besideSibling(sliding.disabled(false))
+        case .preferenceObservedOutside:
+            besideSibling(sliding.onPreferenceChange(ObservedPreference.self) { _ in })
         }
     }
 }
