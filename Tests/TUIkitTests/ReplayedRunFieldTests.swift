@@ -3,10 +3,11 @@
 //
 //  Every run a catalogue of controls leaves behind, replayed through the run
 //  loop on several grounds — the page, a tab's surface, a colour of the app's
-//  own, a ramp, the terminal's own page (`Color.default`), and a colour on it
-//  dimmed and behind a sheet — and every replayed tick compared with a render at
-//  the same instant (`ReplayOracle`): each cell's glyph and field, and the ink a
-//  glyph is drawn in. The class `ReplayedTabChipBackgroundTests` is one case of,
+//  own, a ramp, the terminal's own page (`Color.default`), and a colour on it —
+//  painted as a `.background`, composited under a `ZStack`, dimmed and behind a
+//  sheet — and every replayed tick compared with a render at the same instant
+//  (`ReplayOracle`): each cell's glyph and field, and the ink a glyph is drawn
+//  in. The class `ReplayedTabChipBackgroundTests` is one case of,
 //  and the class `ReplayedCaretBlinkTests` is another: whatever a frame leaves
 //  bare has to land on the field its containers painted beneath it, and nothing
 //  else on the row may move.
@@ -141,6 +142,29 @@ private struct OnTheTerminalPageApp: App {
     var body: some Scene { WindowGroup { catalogue() }.palette(terminalPagePalette) }
 }
 
+/// A colour of the app's own on the terminal's page, as a `.background`: which
+/// paints its field only where content states none, so a tab chip's label — on
+/// the page's field, `ESC[49m` — shows the terminal's own through it.
+private struct ColourOnTheTerminalPageApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup { catalogue().padding(1).background(Color.rgb(90, 20, 120)) }
+            .palette(terminalPagePalette)
+    }
+}
+
+/// The same colour UNDER the catalogue in a `ZStack`: compositing reads a stated
+/// `ESC[49m` as no field and fills it, so the chip's label is on the colour.
+private struct ComposedOnTheTerminalPageApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup {
+            ZStack(alignment: .topLeading) { Color.rgb(90, 20, 120); catalogue() }
+        }
+        .palette(terminalPagePalette)
+    }
+}
+
 /// A colour of the app's own on the terminal's page, flattened by `.dimmed()`:
 /// every line and every frame of every run washed to the terminal's own field.
 private struct DimmedApp: App {
@@ -183,7 +207,8 @@ private struct OnARampApp: App {
 struct ReplayedRunFieldTests {
 
     enum Ground: String, CaseIterable, Sendable {
-        case page, tabSurface, colour, ramp, terminalPage, dimmed, backdrop
+        case page, tabSurface, colour, ramp, terminalPage
+        case colourOnTerminalPage, composedOnTerminalPage, dimmed, backdrop
     }
 
     /// The walk every ground takes: more stops than the catalogue has focusables,
@@ -202,6 +227,8 @@ struct ReplayedRunFieldTests {
             case .colour: walk { OnAColourApp() }
             case .ramp: walk { OnARampApp() }
             case .terminalPage: walk { OnTheTerminalPageApp() }
+            case .colourOnTerminalPage: walk { ColourOnTheTerminalPageApp() }
+            case .composedOnTerminalPage: walk { ComposedOnTheTerminalPageApp() }
             case .dimmed: walk { DimmedApp() }
             case .backdrop: walk { BehindASheetApp() }
             }

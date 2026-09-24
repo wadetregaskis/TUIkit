@@ -31,7 +31,7 @@ extension FrameBuffer {
     ) -> String {
         patchingAnimatedCells(
             in: line, with: run.frame(atIndex: index), atColumn: run.offsetX, width: run.width,
-            fields: run.groundFields(onPage: ""))
+            fields: run.fields(onPage: ""))
     }
 
     /// `line` with `frame` redrawn over the `width` cells starting at `column`,
@@ -67,7 +67,9 @@ extension FrameBuffer {
     ///
     /// Where the fields come from is the caller's, and the whole of what makes a
     /// replay right: the field the containers painted beneath each cell, which is
-    /// what ``AnimatedCellRun/groundFields(onPage:)`` reads. Not the field the row
+    /// what ``AnimatedCellRun/fields(onPage:)`` reads — and, under a cell the frame
+    /// puts on the terminal's own field by stating `ESC[49m`, what the containers
+    /// made of THAT, which differs between them. Not the field the row
     /// shows there, which is the drawn frame's own wherever that frame named one.
     /// Taken off the row, a block caret drawn visible put the caret's colour under
     /// its own hidden frame and never blinked off; and before that, when the field
@@ -79,8 +81,8 @@ extension FrameBuffer {
     ///   - frame: The run's picture for this tick, as the view rendered it.
     ///   - column: The run's first visible column.
     ///   - width: How many cells the run covers.
-    ///   - fields: The field under each of the frame's columns, `nil` for the
-    ///     terminal's own.
+    ///   - fields: The fields under each of the frame's columns — under a cell it
+    ///     leaves bare, and under a stated `ESC[49m` — `nil` for the terminal's own.
     ///   - compensate: The host's cursor-advance compensation, applied to the
     ///     frame AFTER its fields are restated and before it is spliced in. A
     ///     host that erases under a glyph it advances too little over writes that
@@ -91,7 +93,7 @@ extension FrameBuffer {
     ///     Identity by default, for a caller with no host.
     package static func patchingAnimatedCells(
         in line: String, with frame: String, atColumn column: Int, width: Int,
-        fields: [SGRState.Colour?], compensating compensate: (String) -> String = { $0 }
+        fields: AnimatedCellRun.GroundFields, compensating compensate: (String) -> String = { $0 }
     ) -> String {
         // The cells about to be replaced may carry a host's cursor-advance
         // compensation, put there by `buildLine` when the row was rendered. The

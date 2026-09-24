@@ -81,7 +81,10 @@ struct AnimatedRunPatchGoldenTests {
                     let frame = Self.frames[fi]
                     let patched = FrameBuffer.patchingAnimatedCells(
                         in: line, with: frame, atColumn: column, width: width,
-                        fields: Self.fields(of: line, from: column, count: frame.strippedLength))
+                        fields: AnimatedCellRun.GroundFields(
+                            bare: Self.fields(of: line, from: column, count: frame.strippedLength),
+                            // No frame here states `ESC[49m`, so nothing reads these.
+                            underStatedDefault: []))
                     let spliced = FrameBuffer.splicing(frame, into: line, atColumn: column)
                     #expect(Self.fnv1a(patched) == hashes[cursor], "patch line \(li) frame \(fi) col \(column) w \(width): \(patched.debugDescription)")
                     #expect(Self.fnv1a(spliced) == hashes[cursor + 1], "splice line \(li) frame \(fi) col \(column) w \(width): \(spliced.debugDescription)")

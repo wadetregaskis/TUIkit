@@ -116,7 +116,7 @@ struct ReplayedEraseFieldTests {
 
         for frame in run.frames {
             let patched = writer.patchingAnimatedRun(
-                run, showing: frame, in: built, fields: run.groundFields(onPage: Self.page))
+                run, showing: frame, in: built, fields: run.fields(onPage: Self.page))
             let replayed = erasures(patched)
             #expect(
                 replayed == rendered,

@@ -218,7 +218,7 @@ struct CursorAdvanceConservationTests {
             let run = AnimatedCellRun(
                 offsetX: 1, offsetY: 0, width: width, frames: [frame, glyph], clock: .content)
             let patched = writer.patchingAnimatedRun(
-                run, showing: frame, in: rendered, fields: run.groundFields(onPage: ""))
+                run, showing: frame, in: rendered, fields: run.fields(onPage: ""))
 
             let claim = landing(rendered, on: program)
             #expect(

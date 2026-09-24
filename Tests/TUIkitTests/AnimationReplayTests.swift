@@ -138,7 +138,7 @@ struct AnimatedRunSplicingTests {
     ) -> String {
         let run = AnimatedCellRun(offsetX: column, offsetY: 0, width: width, frames: [frame, ""], clock: .cursor)
         return FrameBuffer.patchingAnimatedCells(
-            in: line, with: frame, atColumn: column, width: width, fields: run.groundFields(onPage: page))
+            in: line, with: frame, atColumn: column, width: width, fields: run.fields(onPage: page))
     }
 
     @Test("A foreground-only frame keeps the background it was drawn over")

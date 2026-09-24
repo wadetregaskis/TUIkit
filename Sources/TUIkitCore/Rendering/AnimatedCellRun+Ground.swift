@@ -31,6 +31,20 @@
 //  rewrote the lines and the frames and not the ground left the replay drawing
 //  a frame's bare cells on a field the row no longer has.
 //
+//  A frame can also STATE the terminal's own field, `ESC[49m` — a tab chip's
+//  label and a block caret do on a `Color.default` palette, and every frame the
+//  flatten washes in `Color.default` does — and the painters do not agree about
+//  a stated 49. One that restates its field only after a reset (a `.background`,
+//  flat or ramp, a `List` row, a menu row's bar, the page) lets it through, so
+//  the cell shows the terminal's own; compositing (`String.paintedOver(background:)`)
+//  reads it as no field and fills it. No one rule for a stated 49 matches all of them — measured through the run
+//  loop, reading it as no field put a chip's label on a `.background`'s colour
+//  where the render showed the terminal's own, and reading it as a field of its
+//  own did the reverse under a `ZStack`. So a run carries a SECOND record,
+//  `groundUnderStatedDefault`: painted by the same painters with the same
+//  functions, from a row that states `ESC[49m` in front of its cells, so each
+//  painter answers for a stated 49 as it did in the lines.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -38,7 +52,8 @@
 
 extension AnimatedCellRun {
 
-    /// A copy whose ``ground`` has been painted by `paint`.
+    /// A copy whose ``ground`` and ``groundUnderStatedDefault`` have been painted
+    /// by `paint`.
     ///
     /// `paint` must be what the painter does to the lines under the run — the same
     /// function, over the same colour — so the ground takes exactly what those
@@ -47,24 +62,75 @@ extension AnimatedCellRun {
     /// painted one only where nothing inside it painted first, because the inner
     /// painter's escapes follow its restatement; a compositor's
     /// `paintedOver(background:)` fills only the cells stating no field. Either
-    /// way the field the lines show is the one the ground records.
+    /// way the field the lines show is the one the ground records. The record under
+    /// a stated `ESC[49m` is painted by the same function, so it takes whatever the
+    /// painter did to a stated 49 in the lines: a persistent background leaves it,
+    /// a compositor fills it.
     ///
-    /// A run no painter has reached has no ground yet, and is painted from a bare
-    /// row of spaces, which is what its cells are over before anything paints.
+    /// A run no painter has reached has no records yet, and is painted from a bare
+    /// row of spaces — what its cells are over before anything paints — and from
+    /// the same row stating `ESC[49m` in front of it.
     ///
     /// - Parameter paint: The painter's transformation of a line.
-    /// - Returns: The run, with the ground painted.
+    /// - Returns: The run, with both records painted.
     package func paintingGround(_ paint: (String) -> String) -> Self {
         var copy = self
-        copy.ground = Self.painted(ground, width: width, by: paint)
+        (copy.ground, copy.groundUnderStatedDefault) = Self.painted(
+            (ground, groundUnderStatedDefault), width: width, by: paint)
         return copy
     }
 
-    /// `ground` — a run's, `width` cells wide, `nil` for one nothing has painted
+    /// A run's two records — `width` cells wide, `nil` for one nothing has painted
     /// yet — painted by `paint`: what ``paintingGround(_:)`` does, for a caller
     /// that carries a run's properties in a type of its own until it can place it.
-    package static func painted(_ ground: String?, width: Int, by paint: (String) -> String) -> String {
-        paint(ground ?? String(repeating: " ", count: max(0, width)))
+    package static func painted(
+        _ grounds: (bare: String?, underStatedDefault: String?), width: Int, by paint: (String) -> String
+    ) -> (bare: String, underStatedDefault: String) {
+        let cells = String(repeating: " ", count: max(0, width))
+        return (paint(grounds.bare ?? cells), paint(grounds.underStatedDefault ?? statedDefault + cells))
+    }
+
+    /// `ESC[49m`: the terminal's own field, stated.
+    private static let statedDefault = "\u{1B}[49m"
+
+    /// The fields a replayed frame's cells are drawn over, read on a row's page:
+    /// one list for a cell whose frame states no field, one for a cell whose frame
+    /// states the terminal's own (`ESC[49m`), each one field per cell of the run,
+    /// `nil` for the terminal's own.
+    ///
+    /// Both fixed from one render to the next, so the run loop reads them once per
+    /// render (`ReplayableFrame.fields(ofRun:)`) and hands them to every tick.
+    package struct GroundFields: Sendable, Equatable {
+        /// Under a cell whose frame states no field: ``groundFields(onPage:)``.
+        package var bare: [SGRState.Colour?]
+        /// Under a cell whose frame states `ESC[49m`: ``groundUnderStatedDefault``
+        /// read the same way.
+        package var underStatedDefault: [SGRState.Colour?]
+
+        package init(bare: [SGRState.Colour?], underStatedDefault: [SGRState.Colour?]) {
+            self.bare = bare
+            self.underStatedDefault = underStatedDefault
+        }
+
+        /// Whether no cell has a field to restate, whatever its frame states: the
+        /// splice can leave the frame as it is.
+        var restateNothing: Bool {
+            !bare.contains { $0 != nil } && !underStatedDefault.contains { $0 != nil }
+        }
+    }
+
+    /// Both lists of fields this run's cells are drawn over on a row built on
+    /// `page`. See ``GroundFields``.
+    ///
+    /// - Parameter page: The row's own background escape, or `""`.
+    /// - Returns: The fields under a bare cell and under a stated `ESC[49m`.
+    package func fields(onPage page: String) -> GroundFields {
+        GroundFields(
+            bare: groundFields(onPage: page),
+            // Nothing painted: a stated 49 is the terminal's own whatever the page
+            // is, because the row builder restates the page only after a reset.
+            underStatedDefault: groundUnderStatedDefault.map { Self.fields(of: $0, cells: width, onPage: page) }
+                ?? Array(repeating: nil, count: max(0, width)))
     }
 
     /// The field under each of this run's cells, left to right, on a row built on
@@ -84,14 +150,24 @@ extension AnimatedCellRun {
     ///   built on nothing — a buffer read before the writer has seen it.
     /// - Returns: One field per cell of the run, `width` of them.
     package func groundFields(onPage page: String) -> [SGRState.Colour?] {
+        guard let ground else {
+            var onPage = SGRState()
+            if !page.isEmpty { onPage.apply(page) }
+            return Array(repeating: onPage.backgroundColour, count: max(0, width))
+        }
+        return Self.fields(of: ground, cells: width, onPage: page)
+    }
+
+    /// `record` — a ground, or the record under a stated 49 — read cell by cell on
+    /// a row built on `page`, as ``groundFields(onPage:)`` describes.
+    private static func fields(of record: String, cells width: Int, onPage page: String) -> [SGRState.Colour?] {
         var onPage = SGRState()
         if !page.isEmpty { onPage.apply(page) }
         let cells = max(0, width)
-        guard let ground else { return Array(repeating: onPage.backgroundColour, count: cells) }
         var fields: [SGRState.Colour?] = []
         fields.reserveCapacity(cells)
         var state = onPage
-        for segment in ground.ansiSegments() {
+        for segment in record.ansiSegments() {
             switch segment {
             case .ansi(let sequence, isSGR: true):
                 state = Self.restatingPage(onPage, after: sequence, in: state)
@@ -136,8 +212,9 @@ extension AnimatedCellRun {
 
 extension FrameBuffer {
 
-    /// Paints the ``AnimatedCellRun/ground`` of every run this buffer carries, as
-    /// a painter paints the lines under them.
+    /// Paints the ``AnimatedCellRun/ground`` of every run this buffer carries, and
+    /// its ``AnimatedCellRun/groundUnderStatedDefault``, as a painter paints the
+    /// lines under them.
     ///
     /// Call it wherever lines are painted with a field that the content's own
     /// cells do not state — a background restated after every reset, a compositor

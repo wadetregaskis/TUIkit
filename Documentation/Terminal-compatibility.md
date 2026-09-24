@@ -4254,8 +4254,9 @@ The passes that REWRITE the fields of lines already painted were left out, and
 each left every run's ground as it was while the lines moved on. The flatten
 behind a modal and under `.dimmed()` repaints every line and every frame of every
 run it keeps in its wash. When the wash is `Color.default` every frame states
-`ESC[49m`, which names no field of its own to the splice, so every cell was drawn
-over a ground that still held what was painted beneath the dim. Measured through
+`ESC[49m`, which then named no field of its own to the splice (the note after
+this one gives a stated 49 a record of its own), so every cell was drawn over a
+ground that still held what was painted beneath the dim. Measured through
 the run loop (`ReplayedRunFieldTests`: a catalogue of controls on a colour, on a
 `Color.default` palette, dimmed and behind a sheet), three rows per ground:
 `replayed '⠦' … on "…48;2;90;20;120m", rendered '⠦' … on ""`. The flatten now
@@ -4263,6 +4264,55 @@ washes each kept run's ground with its frames. A ground no painter had reached i
 washed too, so a fill painted OUTSIDE the dim finds the wash in front of it, as the
 row does. Pinned per placement and wash by `AnimatedRunGroundTests`. Washing only
 a ground that already existed fails a fill outside the dim on both washes.
+
+**2026-09-24, later: a frame that STATES the terminal's own field.** A frame
+can put a cell on the terminal's own field by stating `ESC[49m`. Scanning every
+run that the replay suites and the catalogue keep turned up three sources:
+- the flatten on a `Color.default` wash (above);
+- a tab chip's label on a `Color.default` palette
+  (`ESC[1;38;2;230;120;40;49m Gamma`);
+- a `.plain` block caret, reversed over the terminal's own
+  (`ESC[7;38;2;220;220;220;49m `).
+
+A `.background(Color.default)` puts its 49 in the ground, not in a frame. The
+painters disagree about a stated 49:
+- One that restates its field only after a reset lets it through, and the cell
+  shows the terminal's own. That is a `.background`, a `List` row, a menu row's
+  bar, and the page in `buildLine`. A ramp is a `.background` here too: each of
+  its pieces puts its own colour in front of a slice of the row that opens with
+  the row's styling so far (`BackgroundModifier`, `ansiAwareSlicedRuns`), a
+  stated 49 included, so the 49 lasts until the frame's next reset, as it does
+  under a flat one.
+- Compositing (`String.paintedOver(background:)`: a `ZStack`, an `.overlay`, a
+  layer made opaque) reads it as no field and fills it.
+
+Neither blanket rule matches the render. Measured through the run loop (a
+compact chip and a block caret on a `Color.default` palette, focus walked):
+
+| inside | 49 = no field (round 3) | 49 = the frame's own field |
+|---|---|---|
+| `.background(.blue)` | chip and caret replay on blue, render on the terminal's own | match |
+| a `ZStack` over blue, an `.overlay` on blue | match | replay on the terminal's own, render on blue |
+
+So the answer is recorded rather than chosen. A run carries a second record,
+`AnimatedCellRun.groundUnderStatedDefault`. It is painted by every painter with
+the function it paints the lines with, starting from a row that states `ESC[49m`
+in front of its cells, so it holds whatever each painter did to a stated 49. The
+splice (`String.paintedOver(fields:)`) draws a cell over that record from the
+frame's `ESC[49m` until the frame next resets or names a colour, and over the
+ground otherwise. `AnimatedRunGroundTests` holds the drawn frame of a probe that
+states `ESC[49m`, spliced over its row, to that row inside every painter. Before
+this change it failed seven of the nine painters: none (the page), a background, a
+background around padding, nested backgrounds, a ramp, a `List` row's fill, and a
+tab's surface. It passed the two compositors. `ReplayedRunFieldTests` gains the
+catalogue on a colour on `Color.default`, painted as a `.background` (3 rows
+failed before: the caret and both chips) and composited under a `ZStack`.
+Reading a stated 49 as the frame's own field instead fails the compositors
+there: 3 rows, and the `ZStack` and `.overlay` painters. The record states the
+49 once, in front of the run's first cell, and that answers for a 49 stated
+anywhere in a frame: no painter's answer depends on where in its row the 49 is
+stated. The same test splices a second probe, which leaves its first cell bare
+and states 49 under its second, inside every painter.
 
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the

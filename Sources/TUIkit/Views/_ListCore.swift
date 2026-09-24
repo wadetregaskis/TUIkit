@@ -1550,6 +1550,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 frames: run.frames, frameTicks: run.frameTicks, clock: run.clock,
                 alpha: run.alpha)
             placed.ground = run.ground
+            placed.groundUnderStatedDefault = run.groundUnderStatedDefault
             return placed
         }
     }
@@ -3488,7 +3489,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 RowRun(
                     y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
                     frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha,
-                    ground: run.ground))
+                    ground: run.ground, groundUnderStatedDefault: run.groundUnderStatedDefault))
         }
         return (runs, droppedClaims)
     }
@@ -3570,11 +3571,16 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// is beneath them too (``AnimatedCellRun/ground``).
         var ground: String?
 
-        /// The same run with its ground painted by `paint`, as the row painted the
-        /// line under it.
+        /// The same, under a cell whose frame states the terminal's own field
+        /// (``AnimatedCellRun/groundUnderStatedDefault``).
+        var groundUnderStatedDefault: String?
+
+        /// The same run with both records painted by `paint`, as the row painted
+        /// the line under it.
         func paintingGround(_ paint: (String) -> String) -> Self {
             var copy = self
-            copy.ground = AnimatedCellRun.painted(ground, width: width, by: paint)
+            (copy.ground, copy.groundUnderStatedDefault) = AnimatedCellRun.painted(
+                (ground, groundUnderStatedDefault), width: width, by: paint)
             return copy
         }
 

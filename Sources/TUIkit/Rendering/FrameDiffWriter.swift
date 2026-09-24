@@ -641,7 +641,7 @@ extension FrameDiffWriter {
     /// view drew it over whatever its containers painted; the splice paints each
     /// cell the frame leaves bare in the field the containers painted beneath THAT
     /// cell — the run's ground, on this row's page (``AnimatedCellRun/ground``,
-    /// ``AnimatedCellRun/groundFields(onPage:)``) — restated straight after every
+    /// ``AnimatedCellRun/fields(onPage:)``) — restated straight after every
     /// reset in the frame, collapsed `ESC[0;…m` spellings included
     /// (`String.paintedOver(fields:)`). It does that BEFORE the compensation, which
     /// is why the compensation is handed to it rather than applied here first: on
@@ -671,11 +671,11 @@ extension FrameDiffWriter {
     ///   - run: The run being advanced.
     ///   - frame: The run's picture for this tick, as the view rendered it.
     ///   - line: The row `run` sits on, as `buildOutputLines` produced it.
-    ///   - fields: The field under each of the run's cells: its ground read on the
-    ///     page that row was built on, `run.groundFields(onPage:)`.
+    ///   - fields: The fields under the run's cells: its records read on the page
+    ///     that row was built on, `run.fields(onPage:)`.
     func patchingAnimatedRun(
         _ run: AnimatedCellRun, showing frame: String, in line: String,
-        fields: [SGRState.Colour?]
+        fields: AnimatedCellRun.GroundFields
     ) -> String {
         FrameBuffer.patchingAnimatedCells(
             in: line, with: frame, atColumn: run.offsetX, width: run.width,

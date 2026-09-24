@@ -320,7 +320,10 @@ extension AnimationClock {
 /// flat or ramped; compositing (a `ZStack`, an `.overlay`, a layer made opaque); a
 /// `List` row's fill; a menu row's bar. A pass that repaints the fields of
 /// something already drawn repaints the record too, such as the wash that
-/// `.dimmed()` and a modal's backdrop flatten everything to.
+/// `.dimmed()` and a modal's backdrop flatten everything to. A frame that
+/// states the terminal's own field for a cell (SGR 49, which `Color.default` as
+/// a background is spelled as) is replayed as each of those containers drew it:
+/// a `.background` lets it through, and compositing fills it.
 ///
 /// A `Renderable` of your own has no way to record a field. If it paints one
 /// beneath a run's cells and the run's frames leave those cells bare, the
@@ -397,6 +400,19 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// cannot say: where the drawn frame gave a cell a field of its own, the row
     /// shows that field and not the one beneath it. See `AnimatedCellRun+Ground.swift`.
     package var ground: String?
+
+    /// The same record for a cell whose frame STATES the terminal's own field
+    /// (`ESC[49m`) rather than stating none: painted by the same painters, from a
+    /// row that states `ESC[49m` before its first cell — or `nil` while none has,
+    /// which is the terminal's own under every such cell.
+    ///
+    /// A second record because the painters disagree about a stated 49, and the
+    /// render is whatever each did. One that restates its field only after a
+    /// reset — a `.background`, flat or ramp, a `List` row, a menu row's bar, the
+    /// page — lets it through; compositing reads it as no field and fills it.
+    /// Painted by each of them as the row was, this records the answer each gave.
+    /// See `AnimatedCellRun+Ground.swift`.
+    package var groundUnderStatedDefault: String?
 
     /// Creates a run.
     ///
@@ -583,6 +599,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
             offsetX: offsetX, offsetY: offsetY, width: width, frames: frames,
             frameTicks: frameTicks, clock: clock, alpha: alpha)
         copy.ground = ground
+        copy.groundUnderStatedDefault = groundUnderStatedDefault
         return copy
     }
 
@@ -614,6 +631,7 @@ public struct AnimatedCellRun: Sendable, Equatable {
         // And the ground, by the same cut: it is a row of the run's width like any
         // frame, and the piece's cells sit on exactly the fields those columns had.
         piece.ground = ground.map(cut)
+        piece.groundUnderStatedDefault = groundUnderStatedDefault.map(cut)
         return piece
     }
 }

@@ -74,9 +74,9 @@ struct ReplayableFrame {
     var startRow: Int
     let backgroundCode: String
 
-    /// The field under each cell of each run, `runFields[i]` for `runs[i]` — its
-    /// ground read on ``backgroundCode`` (``AnimatedCellRun/groundFields(onPage:)``)
-    /// — or `nil` for a run no tick has spliced since the render.
+    /// The fields under each cell of each run, `runFields[i]` for `runs[i]` — its
+    /// records read on ``backgroundCode`` (``AnimatedCellRun/fields(onPage:)``) —
+    /// or `nil` for a run no tick has spliced since the render.
     ///
     /// Read at most once per run per render, by ``fields(ofRun:)``, rather than on
     /// every tick that splices the run: the ground and the page are both fixed
@@ -84,7 +84,7 @@ struct ReplayableFrame {
     /// of the page. And no sooner than the first tick that needs them, so a render
     /// that is never replayed — every render while a view reads the phase — reads
     /// nothing.
-    private var runFields: [[SGRState.Colour?]?]
+    private var runFields: [AnimatedCellRun.GroundFields?]
 
     init(
         contentLines: [String], runs: [AnimatedCellRun], terminalWidth: Int, startRow: Int,
@@ -98,11 +98,11 @@ struct ReplayableFrame {
         runFields = Array(repeating: nil, count: runs.count)
     }
 
-    /// The field under each cell of `runs[index]`, read the first time a tick
-    /// asks for it and kept until the next render.
-    mutating func fields(ofRun index: Int) -> [SGRState.Colour?] {
+    /// The fields under each cell of `runs[index]`, read the first time a tick
+    /// asks for them and kept until the next render.
+    mutating func fields(ofRun index: Int) -> AnimatedCellRun.GroundFields {
         if let fields = runFields[index] { return fields }
-        let fields = runs[index].groundFields(onPage: backgroundCode)
+        let fields = runs[index].fields(onPage: backgroundCode)
         runFields[index] = fields
         return fields
     }
@@ -277,7 +277,7 @@ extension RenderLoop {
                 // under sits on, and every other cell sits on its container's
                 // field. Restated after every reset in the frame, the page
                 // painted over every container's field.
-                let fields = replayable?.fields(ofRun: index) ?? []
+                let fields = replayable?.fields(ofRun: index) ?? run.fields(onPage: frame.backgroundCode)
                 let patched = diffWriter.patchingAnimatedRun(
                     run, showing: run.frame(atElapsed: now), in: lines[row], fields: fields)
                 if patched != lines[row] {

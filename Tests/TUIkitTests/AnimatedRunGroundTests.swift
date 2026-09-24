@@ -41,6 +41,28 @@ private struct GroundProbe: View, Renderable {
     }
 }
 
+/// A two-cell run whose drawn frame STATES the terminal's own field (`ESC[49m`) —
+/// under both its cells, as a tab chip's label does on a `Color.default` palette,
+/// or, `late`, under its second cell only, after a first it leaves bare — and
+/// whose other frame states none.
+private struct DefaultFieldProbe: View, Renderable {
+    var late = false
+    var body: Never { fatalError("renders via Renderable") }
+
+    var frames: [String] {
+        late ? ["a\u{1B}[49mb\u{1B}[0m", "cd"] : ["\u{1B}[49mab\u{1B}[0m", "cd"]
+    }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        var buffer = FrameBuffer(lines: [frames[0]])
+        guard !context.isMeasuring else { return buffer }
+        buffer.animatedCells = [
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 2, frames: frames, clock: .content)
+        ]
+        return buffer
+    }
+}
+
 /// Alternating rows, so a list paints a still fill of its own under a row that is
 /// neither selected nor under the cursor.
 private struct ZebraListStyle: ListStyle {
@@ -80,7 +102,7 @@ struct AnimatedRunGroundTests {
         case tabSurface
 
         @MainActor @ViewBuilder
-        fileprivate func view(_ probe: GroundProbe) -> some View {
+        fileprivate func view(_ probe: some View) -> some View {
             switch self {
             case .none:
                 probe
@@ -184,6 +206,46 @@ struct AnimatedRunGroundTests {
         #expect(run.groundFields(onPage: Self.page).map(spelled) == ["\u{1B}[48;2;200;40;40m"])
     }
 
+    // MARK: - A frame that states the terminal's own field
+
+    /// A frame may state `ESC[49m` — the terminal's own field — as a field of its
+    /// own, and the painters disagree about it: a painter that restates its field
+    /// only after a reset (a `.background`, flat or ramp, a `List` row, a menu
+    /// row's bar, the page) lets it through, and compositing reads it as no field
+    /// and fills it. Whatever each does, the replay has to draw what the render
+    /// drew, so the drawn frame spliced over the row the render built is that row
+    /// — for a 49 stated in front of the frame's cells, and for one stated after a
+    /// cell it leaves bare, which the one record has to answer for too.
+    @Test(
+        "A frame that states the terminal's own field replays as each painter drew it",
+        arguments: Painter.allCases, [false, true])
+    func aStatedTerminalFieldReplaysAsDrawn(painter: Painter, late: Bool) throws {
+        let probe = DefaultFieldProbe(late: late)
+        let context = makeRenderContext(width: Self.width, height: 12)
+        let buffer = ColorDepth.withCurrent(.truecolor) {
+            renderToScreen(painter.view(probe), context: context)
+        }
+        let writer = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
+        let rows = writer.buildOutputLines(
+            buffer: buffer, terminalWidth: Self.width, terminalHeight: buffer.lines.count,
+            bgCode: Self.page, reset: ANSIRenderer.reset)
+        let runs = buffer.animatedCells.filter { $0.frames == probe.frames }
+        try #require(!runs.isEmpty, "\(painter) carried no run up")
+        for run in runs {
+            let row = rows[run.offsetY]
+            let replayed = FrameBuffer.patchingAnimatedCells(
+                in: row, with: run.frame(atIndex: 0), atColumn: run.offsetX, width: run.width,
+                fields: run.fields(onPage: Self.page))
+            let columns = run.offsetX..<(run.offsetX + run.width)
+            let shown = paintedCells(row)
+            let drawn = paintedCells(replayed)
+            #expect(
+                columns.map { drawn[$0].background } == columns.map { shown[$0].background },
+                "\(painter)\(late ? ", late" : ""): the render drew \(columns.map { shown[$0].background })")
+        }
+    }
+
     // MARK: - A pass that repaints every field
 
     /// Where the fill sits relative to the dim.
@@ -199,9 +261,10 @@ struct AnimatedRunGroundTests {
     enum Wash: String, CaseIterable, Sendable {
         /// A palette whose backdrop is a colour: every frame names it.
         case colour
-        /// `Color.default`: every frame states `ESC[49m`, which names no field
-        /// of its own to the splice, so every cell of every frame is drawn over
-        /// the ground.
+        /// `Color.default`: every frame states `ESC[49m`, so every cell of every
+        /// frame is drawn over the record of what the painters made of a stated
+        /// 49 (`AnimatedCellRun.groundUnderStatedDefault`), which the wash has to
+        /// reach as it reaches the ground.
         case terminalsOwn
     }
 
