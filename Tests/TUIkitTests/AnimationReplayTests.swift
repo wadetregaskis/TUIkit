@@ -129,14 +129,22 @@ struct AnimatedRunSplicingTests {
         "\(background)\u{1B}[2K\u{1B}[38;5;46m□\u{1B}[0m\(background) Enable\u{1B}[0m\(background)   "
     }
 
-    /// The splice an animation tick performs, for a run nothing painted under on a
-    /// row built on `page` — so the field under each of its cells is the page, as
-    /// `FrameDiffWriter.patchingAnimatedRun` reads it off the run's ground.
+    /// The splice an animation tick performs, for a run whose container painted
+    /// `surface` under it — recorded on the run's ground, as a `.background`
+    /// records it — on a row built on a `page` of ANOTHER colour.
+    ///
+    /// Different on purpose. These tests used to hand the splice a run with no
+    /// ground on a page equal to the row's own surface, and so could not tell
+    /// where a restated field came from: a splice that restated the page, or read
+    /// the line, passed them all, and one that ignored every ground did (checked
+    /// 2026-09-24 by making the reader return the page for every run). The row's
+    /// surface can only reach the patched cells from the ground now.
     private func patching(
         _ line: String, with frame: String, atColumn column: Int, width: Int,
-        page: String = "\u{1B}[48;5;16m"
+        surface: String? = "\u{1B}[48;5;16m", page: String = "\u{1B}[48;5;52m"
     ) -> String {
-        let run = AnimatedCellRun(offsetX: column, offsetY: 0, width: width, frames: [frame, ""], clock: .cursor)
+        var run = AnimatedCellRun(offsetX: column, offsetY: 0, width: width, frames: [frame, ""], clock: .cursor)
+        if let surface { run = run.paintingGround { surface + $0 } }
         return FrameBuffer.patchingAnimatedCells(
             in: line, with: frame, atColumn: column, width: width, fields: run.fields(onPage: page))
     }
@@ -263,7 +271,7 @@ struct AnimatedRunSplicingTests {
         // invent one, or every unstyled app would grow a black box.
         let plain = "\u{1B}[38;5;46m□\u{1B}[0m rest"
         let patched = patching(
-            plain, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1, page: "")
+            plain, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1, surface: nil, page: "")
         #expect(!patched.contains("\u{1B}[4"), "\(patched.debugDescription)")
     }
 }
