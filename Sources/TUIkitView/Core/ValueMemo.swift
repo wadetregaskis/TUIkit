@@ -75,7 +75,9 @@ func renderValueMemoized<Key: Equatable>(
         contextWidth: context.availableWidth, contextHeight: context.availableHeight,
         gradientFrame: context.gradientFrame,
         surfaceBackground: context.environment.surfaceBackground,
-        effectScope: context.effectScope)
+        effectScope: context.effectScope,
+        // A measure draws nothing, and a run's frames are all one width.
+        animationMustBeCurrent: !context.isMeasuring)
     {
         // Keep the cached subtree's state alive for GC — the WHOLE subtree, not
         // just this identity: nothing below is visited on a hit, so a `@State`
@@ -123,7 +125,10 @@ func renderValueMemoized<Key: Equatable>(
     //     the handler behind it is registered again from the journal below;
     //   • never a time-varying subtree (a pulse-phase read or an animation
     //     request means the next frame differs even though the value compares
-    //     equal — a cached Spinner would freeze, issue #1);
+    //     equal — a cached Spinner would freeze, issue #1). A subtree whose
+    //     motion is all in animated cell runs IS stored: the loop moves the runs
+    //     on without it. Its buffer shows each run at the instant it was drawn,
+    //     though, so the lookup above misses once any run shows something else;
     //   • never a subtree that made a per-frame registration this memo cannot
     //     make again. One it CAN (`recordReplayableEffect`) was recorded in the
     //     effect journal while this render ran, and is stored with the buffer.

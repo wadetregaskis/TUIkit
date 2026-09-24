@@ -163,6 +163,23 @@ public final class RenderCache: @unchecked Sendable {
         /// lookup from anywhere else misses.
         package let effectScope: EffectScope
 
+        /// Where the animation clocks stood when the buffer was drawn, for a
+        /// buffer that carries animated cell runs; `nil` for every other, and for
+        /// one drawn where nothing said (``RenderCache/frameInstant``).
+        ///
+        /// A run's cells in the buffer show the frame of THIS instant, so a hit
+        /// at a later one is right only while every run would show the same
+        /// thing then — see ``showsItsAnimations(asAt:)``.
+        package let drawnAt: AnimationInstant?
+
+        /// Whether the buffer shows each of its runs as the run would show at
+        /// `instant` — trivially so for an entry with no runs, or when either
+        /// instant is unknown, which is how an entry behaved before it kept one.
+        package func showsItsAnimations(asAt instant: AnimationInstant?) -> Bool {
+            guard let drawnAt, let instant, drawnAt != instant else { return true }
+            return buffer.animatedCells.allSatisfy { $0.showsTheSame(at: instant, asAt: drawnAt) }
+        }
+
         public convenience init(
             identity: ViewIdentity,
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
@@ -176,12 +193,14 @@ public final class RenderCache: @unchecked Sendable {
                 effects: [], effectScope: .none)
         }
 
-        /// Creates an entry that carries recorded registrations.
+        /// Creates an entry that carries recorded registrations, and the instant
+        /// its animated cells were drawn at.
         package init(
             identity: ViewIdentity,
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
             gradientFrame: GradientFrame?, surfaceBackground: Color?,
-            effects: [EffectJournal.Entry], effectScope: EffectScope
+            effects: [EffectJournal.Entry], effectScope: EffectScope,
+            drawnAt: AnimationInstant? = nil
         ) {
             self.identity = identity
             self.viewSnapshot = viewSnapshot
@@ -192,6 +211,7 @@ public final class RenderCache: @unchecked Sendable {
             self.surfaceBackground = surfaceBackground
             self.effects = effects
             self.effectScope = effectScope
+            self.drawnAt = buffer.animatedCells.isEmpty ? nil : drawnAt
         }
     }
 
@@ -526,6 +546,20 @@ public final class RenderCache: @unchecked Sendable {
     /// it reads the cache.
     public var rowWork = RowWork()
 
+    /// Where the animation clocks stand at the frame being drawn: the instant an
+    /// entry stored now draws its animated cells at, and the one a lookup asks
+    /// whether they still show — see
+    /// ``lookupEntry(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:effectScope:animationMustBeCurrent:)``.
+    ///
+    /// Set by `RenderLoop` at the start of every render, from the same readings the
+    /// views draw from: the frame's own timestamp for the content clock, and the
+    /// cursor timer's focus-relative clock (0 without one, as a view reads it then).
+    /// `nil` for a cache nothing draws frames with — a snapshot render, a bench
+    /// harness — whose entries then keep no instant and are served as they always
+    /// were. Not cleared by ``beginRenderPass()``: the loop replaces it every frame,
+    /// and a harness that opens passes without it never set one.
+    package var frameInstant: AnimationInstant?
+
     /// Reports `@State` written mid-walk, when `TUIKIT_DIAGNOSE_BODY_MUTATION=1`
     /// asked for it. `nil` otherwise, which is the whole of its cost.
     public var bodyMutationDiagnostic: BodyMutationDiagnostic? =
@@ -598,7 +632,8 @@ extension RenderCache {
     ) -> FrameBuffer? {
         lookupEntry(
             identity: identity, view: view, contextWidth: contextWidth, contextHeight: contextHeight,
-            gradientFrame: gradientFrame, surfaceBackground: surfaceBackground, effectScope: .none
+            gradientFrame: gradientFrame, surfaceBackground: surfaceBackground, effectScope: .none,
+            animationMustBeCurrent: true
         )?.buffer
     }
 
@@ -613,6 +648,17 @@ extension RenderCache {
     /// so nothing notices it change. An autoclosure, read only for an entry that
     /// has registrations.
     ///
+    /// And, when `animationMustBeCurrent`, one more: an entry whose buffer shows an
+    /// animated cell run at a different frame from the one that run shows at
+    /// ``frameInstant`` misses. A run's cells hold the frame of the instant the
+    /// buffer was drawn, and the run loop moves them on only at its next tick, so
+    /// such a hit put the OLD frame back on screen until then: every spinner in a
+    /// memoized row stepped back to wherever it stood when the row was stored, at
+    /// every render — the Spinners page's catalogue "shuddered" whenever a click
+    /// rendered it. Nothing else in the key can see it: the view, the size and the
+    /// place are all unchanged, and only time has moved. A measure pass passes
+    /// `false`, as a frame changes no cell's width and a measure draws nothing.
+    ///
     /// One caller, the value memo.
     package func lookupEntry<V: Equatable>(
         identity: ViewIdentity,
@@ -621,7 +667,8 @@ extension RenderCache {
         contextHeight: Int,
         gradientFrame: GradientFrame?,
         surfaceBackground: Color?,
-        effectScope: @autoclosure () -> EffectScope
+        effectScope: @autoclosure () -> EffectScope,
+        animationMustBeCurrent: Bool
     ) -> CacheEntry? {
         // Read at most once, and only for an entry that has registrations.
         var scopeRead: EffectScope?
@@ -665,6 +712,11 @@ extension RenderCache {
         guard oldView == view else {
             stats.misses += 1
             logDebug("MISS (view changed) \(identity.path)")
+            return nil
+        }
+        guard !animationMustBeCurrent || entry.showsItsAnimations(asAt: frameInstant) else {
+            stats.misses += 1
+            logDebug("MISS (animation moved on) \(identity.path)")
             return nil
         }
         // Replaying would file the registrations in the section they were
@@ -773,7 +825,8 @@ extension RenderCache {
             gradientFrame: gradientFrame,
             surfaceBackground: surfaceBackground,
             effects: recorded.effects,
-            effectScope: recorded.scope
+            effectScope: recorded.scope,
+            drawnAt: frameInstant
         )
         logDebug("STORE \(identity.path)")
     }

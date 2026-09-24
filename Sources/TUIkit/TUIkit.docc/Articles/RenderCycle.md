@@ -491,6 +491,20 @@ adding another such slot.
 
 Between these events — for example during ``Spinner`` animation frames — the cache is fully active. Static subtrees are rendered once and reused for every subsequent frame (the run loop renders only when a frame is actually due, capped at `App.maxFrameRate`).
 
+One more thing moves a stored buffer out of date, and it is not an event: time.
+A subtree whose motion is all in animated cell runs (a ``Spinner`` in a
+`ForEach` row, say) is stored, since the run loop moves its runs on without
+it — but its buffer shows each run at the frame of the instant it was drawn.
+So every entry whose buffer carries runs keeps that instant
+(`RenderCache.frameInstant`, which the loop sets before every render walks the
+tree), and a lookup misses once any of its runs would show a different picture
+now. Served anyway, the render put the old frame back on screen until
+the run loop's next tick: every spinner in a memoized row stepped back to where
+it stood when its row was stored, at every render. A run that is still showing
+the same picture — the same frame, a repeated shade, a whole cycle later — is
+still served, and a measure pass is served regardless, as a frame changes no
+cell's width.
+
 ### What Declines the Cache
 
 A buffer is only *stored* when serving it again would be safe. The render
@@ -501,8 +515,10 @@ declines when it:
   size);
 - contains an **overlay** (a layer the buffer has not composited yet: what it
   draws, and where, is settled by the frame rather than by the subtree);
-- **read a time-varying value** or requested an animation (a cached ``Spinner``
-  would freeze);
+- **read a time-varying value** or requested an animation (a view that builds
+  its picture from the phase as it renders would freeze — an animation carried
+  in cell runs does not decline, and is served only while its frames are
+  current: see above);
 - **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
   registration, a preference write. A cache hit skips the body that registers
   them, so the frame the cache answers is a frame on which the effect does not

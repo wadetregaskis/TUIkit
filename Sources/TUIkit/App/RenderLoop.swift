@@ -1211,7 +1211,8 @@ extension RenderLoop {
 
     /// Publishes everything this frame's animations are a function of: the two
     /// clocks, the scheduler they declare their rates to, this frame's `now`,
-    /// and the transaction the pending change was made under.
+    /// and the transaction the pending change was made under — and tells the
+    /// render cache where the clocks stand.
     ///
     /// `frameNowNanos` is the instant a wake declared this frame is measured from,
     /// and the one the loop asks for the next firing after, so the two agree
@@ -1243,6 +1244,14 @@ extension RenderLoop {
             nowNanos: frameNowNanos,
             step: cursorTimer?.steps(for: .content) ?? 0,
             canAnimate: animationScheduler != nil)
+        // The same instant, for the render cache, read as the views read it: a
+        // spinner or a bar indexes the frame's own timestamp, and a focus breath or
+        // a caret the cursor timer's focus clock, 0 without a timer. The cache stamps
+        // what it stores with it, and serves a stored buffer only while its animated
+        // cells would show the same frames now — see `RenderCache.frameInstant`.
+        tuiContext.renderCache.frameInstant = AnimationInstant(
+            content: Double(frameNowNanos) / 1_000_000_000,
+            cursor: cursorTimer?.elapsed(for: .cursor) ?? 0)
         // Consumed, not merely read, so it applies to exactly one pass: the one
         // that first shows the change. A frame that renders for some other
         // reason must not restart animations that already began.
