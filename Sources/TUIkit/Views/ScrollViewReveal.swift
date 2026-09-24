@@ -270,15 +270,15 @@ extension _ScrollViewCore {
     func reglueToRefinedTail(
         handler: ScrollViewHandler, fullBuffer: inout FrameBuffer,
         contentSlice: inout (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
-        contentWidth: Int, viewportHeight: Int,
+        drawnLines: inout Range<Int>?, contentWidth: Int, viewportHeight: Int,
         horizontal: Bool, context: RenderContext
     ) {
         for _ in 0..<Self.reglueLimit {
             handler.scrollOffset = handler.maxOffset
             coverSnappedViewport(
                 handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
-                contentWidth: contentWidth, viewportHeight: viewportHeight,
-                horizontal: horizontal, context: context)
+                drawnLines: &drawnLines, contentWidth: contentWidth,
+                viewportHeight: viewportHeight, horizontal: horizontal, context: context)
             if handler.scrollOffset >= handler.maxOffset { return }
         }
     }
@@ -320,22 +320,30 @@ extension _ScrollViewCore {
     /// frame show the revealed row. One frame of blank viewport is not an
     /// acceptable alternative: with no new event arriving, the render loop
     /// would not redraw, and the blank would simply stay.
+    ///
+    /// The band is the slice when there is one, and otherwise the lines a
+    /// full-height canvas drew for real (`drawnLines`): the full walk under 256
+    /// rows draws only the rows around the offset it was given, so a move past
+    /// its one row of margin — the bottom re-glue on a terminal that shrank, or
+    /// on several rows arriving at once — landed on placeholders just as a
+    /// slice's gap does. Eager content reports neither, and is all drawn.
     func coverSnappedViewport(
         handler: ScrollViewHandler,
         fullBuffer: inout FrameBuffer,
         contentSlice: inout (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
-        contentWidth: Int, viewportHeight: Int, horizontal: Bool,
+        drawnLines: inout Range<Int>?, contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         context: RenderContext
     ) {
-        guard !context.isMeasuring, let slice = contentSlice else { return }
-        let bandEnd = slice.originY + fullBuffer.height
+        guard !context.isMeasuring,
+            let band = contentSlice.map({ $0.originY..<$0.originY + fullBuffer.height }) ?? drawnLines
+        else { return }
         let visibleEnd = min(handler.scrollOffset + viewportHeight, handler.contentHeight)
-        guard handler.scrollOffset < slice.originY || visibleEnd > bandEnd else { return }
+        guard handler.scrollOffset < band.lowerBound || visibleEnd > band.upperBound else { return }
         let recovered = renderedContent(
             contentWidth: contentWidth, viewportHeight: viewportHeight,
             horizontal: horizontal, verticalScrollOffset: handler.scrollOffset,
             context: context)
-        (fullBuffer, contentSlice) = (recovered.buffer, recovered.slice)
+        (fullBuffer, contentSlice, drawnLines) = (recovered.buffer, recovered.slice, recovered.drawnLines)
         handler.contentHeight = contentSlice?.totalHeight ?? fullBuffer.height
         handler.contentHeightIsEstimate = contentSlice?.totalIsEstimate ?? false
         handler.clampScrollOffset()

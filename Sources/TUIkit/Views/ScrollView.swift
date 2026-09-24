@@ -411,10 +411,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // its offset is still 0, so move it to the tail BEFORE the content
         // renders, as End does — the height is known, because the app's first
         // frame measured the page before drawing it. Rendered at 0 and re-glued
-        // afterwards, the jump was the whole content: the windowed paths repair
-        // that in `coverSnappedViewport`, but a lazy stack under 256 rows draws
-        // only the rows around the offset it is given and returns no slice to
-        // repair, so the frame showed blank lines where the newest rows belong.
+        // afterwards, the jump is the whole content: the band drawn at 0 covers
+        // none of the tail, and `coverSnappedViewport` has to render it again
+        // there. Until the full walk under 256 rows reported the lines it drew,
+        // nothing could see that, and the frame showed blank lines where the
+        // newest rows belong; now it is the second render this placement spares.
         // With no walk beforehand (a view rendered directly) the height is
         // still 0, so is `maxOffset`, and this changes nothing.
         if wasGluedToBottom, !handler.hasOpened, !context.isMeasuring {
@@ -430,7 +431,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // draw landed its row one line down.
         let pendingSeek = consumedSeek(
             handler: handler, edgeInset: chrome.edgeInset, context: context)
-        var (fullBuffer, contentSlice, seekOffset, contentExtent) = renderedContent(
+        var (fullBuffer, contentSlice, seekOffset, contentExtent, drawnLines) = renderedContent(
             contentWidth: contentWidth, viewportHeight: contentViewportHeight,
             horizontal: wantsHorizontal, verticalScrollOffset: handler.scrollOffset,
             seek: pendingSeek, edgeInset: chrome.edgeInset,
@@ -451,9 +452,12 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             // expressed programmatically.)
             handler.jumpProgrammatically(to: seekOffset)
         } else if wasGluedToBottom {
-            // Re-glue against the REAL rendered height (the pre-render
-            // number was an estimate); the band's margin absorbs small
-            // differences and the next frame lands exactly.
+            // Re-glue against the REAL rendered height: the content rendered
+            // at the offset the frame began with — for a followed view, the
+            // tail as last drawn — and this frame's tail is further down by
+            // whatever arrived, grew taller, or the viewport lost. The band's
+            // margin absorbs a row of that; `coverSnappedViewport` below draws
+            // the band again at the new tail when it does not.
             handler.scrollOffset = handler.maxOffset
         }
         syncHorizontalAxis(
@@ -490,13 +494,13 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             context: context)
         coverSnappedViewport(
             handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
-            contentWidth: contentWidth, viewportHeight: contentViewportHeight,
-            horizontal: wantsHorizontal, context: context)
+            drawnLines: &drawnLines, contentWidth: contentWidth,
+            viewportHeight: contentViewportHeight, horizontal: wantsHorizontal, context: context)
         if wasGluedToBottom, seekOffset == nil {
             reglueToRefinedTail(
                 handler: handler, fullBuffer: &fullBuffer, contentSlice: &contentSlice,
-                contentWidth: contentWidth, viewportHeight: contentViewportHeight,
-                horizontal: wantsHorizontal, context: context)
+                drawnLines: &drawnLines, contentWidth: contentWidth,
+                viewportHeight: contentViewportHeight, horizontal: wantsHorizontal, context: context)
         }
         // Settle the pursuit AFTER coverage/re-glue, when the frame's offset
         // is final — see the helper.

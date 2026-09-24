@@ -108,7 +108,11 @@ extension _ScrollViewCore {
         /// its width would lose every row outside it. `settledExtents` cannot
         /// serve — it is `nil` for the direct callers (tests, and the
         /// non-`.automatic` scrollbar path).
-        extents: (width: Int, height: Int)
+        extents: (width: Int, height: Int),
+        /// The lines of a full-height buffer that hold real rows, when it holds
+        /// placeholders elsewhere (``ScrollContentReply/drawnLines``); `nil`
+        /// when every line it holds is drawn — a slice, or eager content.
+        drawnLines: Range<Int>?
     ) {
         let extents =
             settledExtents
@@ -170,9 +174,9 @@ extension _ScrollViewCore {
         if let reply, let origin = reply.sliceOriginY, let total = reply.sliceTotalHeight {
             return (
                 buffer, (origin, total, reply.sliceTotalIsEstimate), reply.seekResolvedOffset,
-                extents)
+                extents, nil)
         }
-        return (buffer, nil, reply?.seekResolvedOffset, extents)
+        return (buffer, nil, reply?.seekResolvedOffset, extents, reply?.drawnLines)
     }
 
     // MARK: Windowing

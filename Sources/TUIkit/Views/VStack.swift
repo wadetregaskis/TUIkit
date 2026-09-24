@@ -841,10 +841,10 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // shrank this frame, and the ScrollView clamps only after this
         // render returns. An unclamped window then intersects no slot and
         // the whole buffer comes out as blank placeholders — which the
-        // ScrollView cannot repair, because this classic full-height path
-        // has no slice metadata for coverSnappedViewport to check. Clamp
-        // to the real extent so the tail rows render at their true y; the
-        // ScrollView's own clamp then lands the clip exactly on them.
+        // ScrollView could repair only by rendering again, from the drawn
+        // band reported below. Clamp to the real extent so the tail rows
+        // render at their true y the first time; the ScrollView's own clamp
+        // then lands the clip exactly on them.
         let walkedTotal = slots.last.map { $0.y + $0.height } ?? 0
         let top = min(window.offset, max(0, walkedTotal - window.viewportHeight))
         let bottom = top + window.viewportHeight
@@ -873,6 +873,10 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         if let last = rendersRow.lastIndex(of: true), last < slots.count - 1 {
             rendersRow[last + 1] = true
         }
+        // What the ScrollView may show of this canvas without drawing it again:
+        // it moves its offset after this returns (the bottom re-glue, a focus
+        // snap), and a move past this band lands on placeholders.
+        window.reply?.drawnLines = Self.drawnLines(of: slots, renders: rendersRow)
         if let focusManager = context.environment.focusManager {
             for target in [focusManager.currentFocusedID, focusManager.pendingFocusID] {
                 guard let index = rowIndex(addressedBy: target, slots: slots, context: childContext)

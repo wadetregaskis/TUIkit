@@ -77,6 +77,23 @@ extension _VStackCore {
         return slots
     }
 
+    /// The content lines drawn for real when the rows `renders` marks are the
+    /// only ones drawn and the rest are placeholders — from the top of the
+    /// first slot (its spacing included) to the bottom of the last row, or
+    /// open-ended when that last row is the stack's last, since nothing below
+    /// it needs drawing. `nil` when no row is drawn.
+    ///
+    /// Asked of a CONTIGUOUS run: the full walk asks before it adds the rows
+    /// it draws out of line (the focused row and a pending focus target, with
+    /// their neighbours), which sit elsewhere with placeholders between.
+    static func drawnLines(of slots: [RowSlot], renders: [Bool]) -> Range<Int>? {
+        guard let first = renders.firstIndex(of: true), let last = renders.lastIndex(of: true)
+        else { return nil }
+        let top = slots[first].y - slots[first].spacingBefore
+        let bottom = last == slots.count - 1 ? Int.max : slots[last].y + slots[last].height
+        return top..<bottom
+    }
+
     /// A placement-query context: the stack's own context with any scroll
     /// window cleared, so geometry answers are window-independent.
     private func placementContext(_ context: RenderContext) -> RenderContext {

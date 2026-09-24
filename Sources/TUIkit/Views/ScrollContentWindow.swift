@@ -132,6 +132,23 @@ final class ScrollContentReply: @unchecked Sendable, Hashable {
     /// found (an unknown id is a no-op, as in SwiftUI).
     var seekResolvedOffset: Int?
 
+    /// The content lines a FULL-HEIGHT reply drew for real, when it drew only
+    /// some: the full walk under 256 rows (`renderViewportWindow`) returns the
+    /// whole canvas, but only the rows around the offset it was given are
+    /// drawn and the rest are blank placeholders. A slice needs no such
+    /// report — its buffer IS the band — so this is set only when
+    /// ``sliceOriginY`` is not.
+    ///
+    /// What lets the ScrollView see that an offset it moved AFTER the render —
+    /// the bottom re-glue on a terminal that shrank, a focus snap — shows lines
+    /// the canvas never drew, and draw them (`coverSnappedViewport`). Without
+    /// it that frame showed blank lines where the rows belong, and no later
+    /// frame came to draw them unless something else changed.
+    ///
+    /// Open-ended past the last row (`Int.max`): below it there is nothing to
+    /// draw, so a line there is drawn correctly by being blank.
+    var drawnLines: Range<Int>?
+
     static func == (lhs: ScrollContentReply, rhs: ScrollContentReply) -> Bool { lhs === rhs }
     func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }

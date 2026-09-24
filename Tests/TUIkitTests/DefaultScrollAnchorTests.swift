@@ -10,6 +10,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Observation
 import Testing
 
 @testable import TUIkit
@@ -52,6 +53,56 @@ private struct TailApp: App {
             Text("line \(index)").frame(height: shape == .lazyUnequal ? index % 3 + 1 : 1, alignment: .top)
         }
     }
+}
+
+/// How many messages a ``ConversationApp`` holds; more arrive by raising it.
+@Observable
+@MainActor
+private final class MessageCount {
+    var value: Int
+    init(_ value: Int) { self.value = value }
+}
+
+/// The Stress `chat` session's shape as a whole app: bordered messages of
+/// unequal lengths, each wrapping at the width it is drawn at, in a lazy stack
+/// under 256 rows anchored at its end — the full walk, which draws only the
+/// rows around the offset it is given.
+private struct ConversationApp: App {
+    let count: MessageCount
+
+    init() { count = MessageCount(120) }
+    init(count: MessageCount) { self.count = count }
+
+    var body: some Scene {
+        WindowGroup {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(0..<count.value, id: \.self) { index in
+                        Text(String(repeating: "word ", count: index % 7 * 3) + "#\(index)").border()
+                    }
+                }
+            }
+            .defaultScrollAnchor(.bottom)
+        }
+    }
+}
+
+/// A terminal shrinking under a ``ConversationApp`` opened at 60 × 30. Each
+/// moves the tail further down than the one row the full walk draws past its
+/// window: a shorter viewport by the lines it lost, a narrower one by the
+/// lines its messages gained by wrapping.
+enum ConversationShrink: String, CaseIterable, Sendable, CustomTestStringConvertible {
+    case shorter, narrower, both
+
+    var size: (width: Int, height: Int) {
+        switch self {
+        case .shorter: (60, 12)
+        case .narrower: (30, 30)
+        case .both: (30, 12)
+        }
+    }
+
+    var testDescription: String { rawValue }
 }
 
 @MainActor
@@ -264,6 +315,49 @@ struct DefaultScrollAnchorTests {
         app.frame(atNanos: 0)
         let screen = app.screen.map(\.stripped)
         #expect(screen.contains { $0.contains("line 199") }, "opened at: \(screen)")
+    }
+
+    /// A terminal that shrinks under a followed conversation. The glued frame
+    /// renders at the offset it has — the tail as last drawn — and re-glues to
+    /// the new tail afterwards, which a shorter or narrower terminal moves down
+    /// by more than the one row the full walk draws past its window. The
+    /// windowed paths re-render a band that does not cover the viewport
+    /// (`coverSnappedViewport`); the full walk reported no band, so the frame
+    /// showed blank lines where the newest messages belong, and no later frame
+    /// came to draw them. Found by the Stress `chat` session under
+    /// `--resize-every 25`: steps 75, 150 and 375, each a shrink.
+    @Test("A terminal that shrinks keeps a followed conversation's newest message on screen",
+          arguments: ConversationShrink.allCases)
+    func aShrinkKeepsTheNewestMessage(shrink: ConversationShrink) {
+        let count = MessageCount(120)
+        let app = HeadlessApp(ConversationApp(count: count), width: 60, height: 30)
+        app.frame(atNanos: 0)
+        let opened = app.screen.map(\.stripped)
+        #expect(opened.contains { $0.contains("#119") }, "opened at: \(opened)")
+
+        app.resize(width: shrink.size.width, height: shrink.size.height)
+        app.frame(atNanos: 16_666_667)
+        let shrunk = app.screen.map(\.stripped)
+        #expect(shrunk.contains { $0.contains("#119") }, "the shrink's frame lost the tail: \(shrunk)")
+
+        count.value += 1
+        app.frame(atNanos: 33_333_334)
+        let next = app.screen.map(\.stripped)
+        #expect(next.contains { $0.contains("#120") }, "the follow let go after the shrink: \(next)")
+    }
+
+    /// Several messages arriving in one frame: the same jump, made by the
+    /// content rather than the terminal. Only the first of them was the row
+    /// drawn past the window; the rest were blank until something redrew.
+    @Test("Several messages arriving at once all land on the screen")
+    func severalArrivalsLandOnTheScreen() {
+        let count = MessageCount(120)
+        let app = HeadlessApp(ConversationApp(count: count), width: 60, height: 30)
+        app.frame(atNanos: 0)
+        count.value += 6
+        app.frame(atNanos: 16_666_667)
+        let screen = app.screen.map(\.stripped)
+        #expect(screen.contains { $0.contains("#125") }, "the newest arrival is not on the screen: \(screen)")
     }
 
     /// A burst of rows that wrap, landing under a glued view on the anchored
