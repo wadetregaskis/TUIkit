@@ -282,6 +282,49 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         return child
     }
 
+    /// The context tab `index`'s content is MEASURED in: its own branch
+    /// identity, `available` across, and the height the render lays it out in
+    /// (``contentMeasureHeight(available:context:)``).
+    ///
+    /// One builder for every measure of a tab, so the panel's size and the
+    /// selected tab's natural width are the same question, and a pass answers
+    /// the second from the memo the first filled.
+    private func tabMeasureContext(
+        _ index: Int, available: Int, context: RenderContext
+    ) -> RenderContext {
+        var branch = context.withBranchIdentity("tab-\(tabs[index].value)")
+        branch.availableWidth = available
+        branch.availableHeight = contentMeasureHeight(available: available, context: context)
+        return branch
+    }
+
+    /// The height a tab's content is measured against: what the TabView has,
+    /// less the strip's chrome — the height the render lays it out in
+    /// (``contentContext(_:stripHeight:)``), not the whole of it.
+    ///
+    /// Measured against the whole, content within the strip's height of it was
+    /// sized for rows the strip then took back. A scroll view there measured as
+    /// fitting, so its ideal width had no column for a bar; drawn in the shorter
+    /// height it overflowed, and its bar took that column out of the rows. A
+    /// `ViewThatFits(in: .vertical)` sized the panel for the candidate that fits
+    /// the whole height and was drawn as the one that fits what is left.
+    ///
+    /// Under the default wrap the strip folds at `available`, the width it is
+    /// laid out in, so its rows are known before any content is measured. Under
+    /// `.toContentWidth` it folds at the widest tab — which is what this measure
+    /// finds — so the strip is taken at its one-row minimum there, and a strip
+    /// that folds onto more rows still measures its content a row too tall per
+    /// extra row (two in the bordered style).
+    private func contentMeasureHeight(available: Int, context: RenderContext) -> Int {
+        let rows =
+            context.environment.tabViewHeaderWrap == .toContentWidth
+            ? 1 : stripRowGroups(style: .compact, available: available).count
+        // Each strip row, and under `.bordered` each row's tops plus the box's
+        // content border and bottom — the render's own `chrome`.
+        let chrome = context.environment.tabViewStyle.resolved == .bordered ? 2 * rows + 2 : rows
+        return max(0, context.availableHeight - chrome)
+    }
+
     /// Each tab's natural (unconstrained) content size, memoised per tab.
     ///
     /// Only the *selected* tab is measured each pass; the others reuse their last
@@ -311,11 +354,10 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         insets: EdgeInsets, available: Int, context: RenderContext
     ) -> [AnyHashable: ViewSize] {
         func measureTab(_ index: Int) -> ViewSize {
-            var branch = context.withBranchIdentity("tab-\(tabs[index].value)")
-            branch.availableWidth = available
-            return measureChild(
+            measureChild(
                 tabs[index].content.padding(insets),
-                proposal: ProposedSize(width: nil, height: nil), context: branch)
+                proposal: ProposedSize(width: nil, height: nil),
+                context: tabMeasureContext(index, available: available, context: context))
         }
         guard let stateStorage = context.stateStorage else {
             return [AnyHashable(tabs[selectedIndex].value): measureTab(selectedIndex)]
@@ -323,9 +365,9 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.sizeCache)
         let box: StateBox<TabSizeCache> = stateStorage.storage(for: key, default: TabSizeCache())
         var cache = box.value
-        // The space `measureTab` measures in: `available` across, and the
-        // height it inherits.
-        let extent = TabSizeCache.Extent(width: available, height: context.availableHeight)
+        // The space `measureTab` measures in.
+        let extent = TabSizeCache.Extent(
+            width: available, height: contentMeasureHeight(available: available, context: context))
         var entry = cache[extent] ?? [:]
         entry[AnyHashable(tabs[selectedIndex].value)] = measureTab(selectedIndex)
         for (i, tab) in tabs.enumerated() where entry[AnyHashable(tab.value)] == nil {
@@ -385,11 +427,10 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     /// a slim channel editor in a panel widened by the 256-swatch grid — is thus
     /// centred; a tab as wide as the panel clamps to the panel and fills it.
     private func naturalSelectedWidth(insets: EdgeInsets, available: Int, context: RenderContext) -> Int {
-        var branch = context.withBranchIdentity("tab-\(tabs[selectedIndex].value)")
-        branch.availableWidth = available
-        return max(1, measureChild(
+        max(1, measureChild(
             tabs[selectedIndex].content.padding(insets),
-            proposal: ProposedSize(width: nil, height: nil), context: branch).width)
+            proposal: ProposedSize(width: nil, height: nil),
+            context: tabMeasureContext(selectedIndex, available: available, context: context)).width)
     }
 
     /// The wrap budget for the header strip: the content width when folding
@@ -682,12 +723,13 @@ struct _TabViewCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
         // the end), so any content beyond this budget could only survive by
         // displacing the bottom border — GitHub issue #13's missing `╰─╯`, with
         // stray interior rows where it should have been. Two ways past the
-        // budget, both capped here: a height-flexible tab (a ScrollView, a
-        // Spacer) measures its NATURAL height against the full available
-        // height, chrome not yet subtracted, so `tallestContentHeight` padded
-        // the panel one strip past what fits; and a tab genuinely taller than
-        // the terminal. Either way the content clips INSIDE the border, like
-        // any other bordered container.
+        // budget, both capped here: a tab genuinely taller than the terminal;
+        // and, under `.toContentWidth`, a height-flexible tab (a ScrollView, a
+        // Spacer) measured against a strip of fewer rows than the one drawn —
+        // its rows are not known until the tabs are measured
+        // (`contentMeasureHeight`), so `tallestContentHeight` can pad the panel
+        // a strip row past what fits. Either way the content clips INSIDE the
+        // border, like any other bordered container.
         let contentPad = max(0, (interior - content.width) / 2)
         let contentStartY = box.count
         let (visibleContent, panelContentHeight) = borderedPanelContent(
