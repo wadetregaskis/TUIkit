@@ -295,9 +295,10 @@ private struct _ButtonCore: View, Renderable, Layoutable {
     /// `menu` -48.4%, `paneled` -31.1%, `form` -9.0%, all 9 of 9 paired reps,
     /// and nothing on the six trees with no buttons in them.
     ///
-    /// A style whose body is procedural (`_ButtonStyleBody`, which is
-    /// `Renderable` with no `Layoutable`) still reaches `measureFixedByRendering`
-    /// one level further down, so it costs what it always did. A style whose
+    /// A style whose body is procedural (`_ButtonStyleBody`) answers one level
+    /// further down: a string label by the render's own arithmetic, a
+    /// `@ViewBuilder` one by drawing it (and, when it drew its whole offer, by
+    /// asking the view it drew the label in whether that fills). A style whose
     /// body is structural — `_MenuItemButtonStyle`, whose `_MenuItemRowBar`
     /// answers `sizeThatFits` with `measureChild(row)` — never paints at all.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {

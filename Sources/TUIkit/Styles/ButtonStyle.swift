@@ -1018,8 +1018,9 @@ extension _ButtonStyleBody: Layoutable {
     /// A `@ViewBuilder` label is deliberately left to render: measuring it would
     /// go through `AnyView`, where a flexible child measures to the whole
     /// available width rather than to what it draws. The SIZE is left to it,
-    /// that is; the flexibility is the label's (``labelFills(_:proposal:context:)``),
-    /// as `_ToggleCore` and `_CollapsingLabel` take theirs. A label that fills
+    /// that is (``viewLabelSize(_:proposal:context:)``); the flexibility is the
+    /// label's (``drawnViewFills(_:width:proposal:context:)``), as `_ToggleCore`
+    /// and `_CollapsingLabel` take theirs. A label that fills
     /// — a `Spacer` between two texts, which is every navigation row — makes
     /// the button fill too, and reported rigid at the width it happened to be
     /// offered, it could not be told from a button that wide: a windowed stack
@@ -1030,11 +1031,7 @@ extension _ButtonStyleBody: Layoutable {
     /// for no second measure.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
         if let labelView = configuration.labelView {
-            let size = measureFixedByRendering(self, proposal: proposal, context: context)
-            guard size.width >= (proposal.width ?? context.availableWidth) else { return size }
-            return ViewSize(
-                width: size.width, height: size.height,
-                isWidthFlexible: labelFills(labelView, proposal: proposal, context: context))
+            return viewLabelSize(labelView, proposal: proposal, context: context)
         }
         let chrome = Self.chromeWidth(for: appearance)
         let label = Self.fitLabel(
@@ -1042,42 +1039,64 @@ extension _ButtonStyleBody: Layoutable {
         return ViewSize.fixed(chrome + label.strippedLength, 1)
     }
 
-    /// Whether a `@ViewBuilder` label grows with its offer, asked of the view
-    /// the style draws it in, at the identity the render draws that at — so a
-    /// label whose filling depends on its own `@State` is asked with the
-    /// state it is drawn with. The standard variant draws its label inside an
-    /// `HStack` (``standardRow(_:caps:label:face:)``), which gives it a child
-    /// identity of its own; probing the label at any other identity bound its
-    /// `@State` afresh, and a label that fills only once its state says so
-    /// was reported rigid while it was drawn filling. The row's colours are
-    /// not the render's: a colour sizes nothing, and the probe keeps no memo
-    /// entry the render could be served. Under the context
-    /// `measureFixedByRendering` renders the size with, so both answers are to
-    /// one question.
+    /// A `@ViewBuilder` label's button: drawn under the context
+    /// `measureFixedByRendering` draws in (``fixedMeasureContext(proposal:context:)``)
+    /// for its size, and, when it drew its whole offer, asked whether it fills
+    /// of the view it drew the label in.
     ///
-    /// A probe, and measured as one: the pass's measure memo keeps its answer
-    /// and nothing from inside the label, which nothing else reads — the plain
-    /// variant draws its label here but builds the label's body afresh to do
-    /// it, and the memo keys a view by its bytes. See
-    /// `measureChildRememberingOnlyItself`.
-    private func labelFills(
+    /// The standard variant is drawn here rather than through
+    /// `measureFixedByRendering` — the same row, resolved from the same ink,
+    /// drawn by the same function its render uses — so that the row it drew
+    /// is the row it asks. Every child of that row is then a view the drawing
+    /// has just laid out, byte for byte, and the pass's memo serves the probe
+    /// all of them: the probe measures the row and nothing in it. It used to
+    /// ask a copy of the row in placeholder colours, whose caps and label
+    /// wrappers the memo had never seen, and measured them all again.
+    private func viewLabelSize(
         _ labelView: AnyView, proposal: ProposedSize, context: RenderContext
-    ) -> Bool {
-        let probeContext = fixedMeasureContext(proposal: proposal, context: context)
-        // At the width the render draws at, stated: a nil width under the
-        // ideal-width mark would ask a different question.
+    ) -> ViewSize {
+        let measureContext = fixedMeasureContext(proposal: proposal, context: context)
+        let width = measureContext.availableWidth
         if appearance.isPlain {
-            let labelContext = plainLabelContext(labelView, context: probeContext)
-            return measureChildRememberingOnlyItself(
-                labelView,
-                proposal: ProposedSize(width: labelContext.availableWidth, height: proposal.height),
-                context: labelContext
-            ).isWidthFlexible
+            let size = measureFixedByRendering(self, proposal: proposal, context: context)
+            guard size.width >= width else { return size }
+            let labelContext = plainLabelContext(labelView, context: measureContext)
+            return ViewSize(
+                width: size.width, height: size.height,
+                isWidthFlexible: drawnViewFills(
+                    labelView, width: labelContext.availableWidth, proposal: proposal,
+                    context: labelContext))
         }
-        return measureChildRememberingOnlyItself(
-            standardRow(labelView, caps: .primary, label: .primary, face: .primary),
-            proposal: ProposedSize(width: probeContext.availableWidth, height: proposal.height),
-            context: probeContext
+        let row = standardRow(labelView, ink: viewLabelInk(context: measureContext), context: measureContext)
+        // Clamped as `renderToBuffer` clamps a `Renderable`'s buffer.
+        let drawn = drawStandardRow(row.view, caps: row.caps, context: measureContext)
+            .clamped(toWidth: width, height: measureContext.availableHeight)
+        guard drawn.width >= width else { return ViewSize.fixed(drawn.width, drawn.height) }
+        return ViewSize(
+            width: drawn.width, height: drawn.height,
+            isWidthFlexible: drawnViewFills(row.view, width: width, proposal: proposal, context: measureContext))
+    }
+
+    /// Whether `drawn` — the view the style drew a `@ViewBuilder` label in,
+    /// under `context`, at `width` — grows with its offer.
+    ///
+    /// Asked of the view the label is drawn in, at the identity it is drawn
+    /// at, so a label whose filling depends on its own `@State` is asked with
+    /// the state it is drawn with: the standard variant draws its label inside
+    /// an `HStack` (``standardRow(_:ink:context:)``), which gives it a child
+    /// identity of its own, and a label probed at any other identity bound its
+    /// `@State` afresh and was reported rigid while it was drawn filling. At
+    /// the width it was drawn at, stated: a nil width under the ideal-width
+    /// mark would ask a different question.
+    ///
+    /// A probe, and measured as one (`measureChildRememberingOnlyItself`): the
+    /// pass's measure memo keeps its answer and nothing it finds on the way,
+    /// and serves it what the drawing just measured.
+    private func drawnViewFills(
+        _ drawn: some View, width: Int, proposal: ProposedSize, context: RenderContext
+    ) -> Bool {
+        measureChildRememberingOnlyItself(
+            drawn, proposal: ProposedSize(width: width, height: proposal.height), context: context
         ).isWidthFlexible
     }
 }

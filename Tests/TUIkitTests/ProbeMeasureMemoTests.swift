@@ -229,6 +229,26 @@ struct ProbeMeasureMemoTests {
         #expect(size.isWidthFlexible, "precondition: the filling label's button probed")
         #expect(counter.measures == drawing, "\(style): drawn \(drawing), measured \(counter.measures)")
     }
+
+    /// The standard variants draw a row — cap, label on its face, cap — and
+    /// the probe asks the row it drew: the same value, so every child of it is
+    /// one the drawing has just laid out, and the memo serves them all. What
+    /// the probe measures beneath itself is the row's own layout — `HStack` is
+    /// a composite, and its body, `_HStackCore`, is one measure — and nothing
+    /// in the row: no cap, no wrapper of the label, nothing of the label's own.
+    /// In every colour the row can be drawn in, which is what its children's
+    /// values carry.
+    @Test(
+        "A standard button's probe measures its row's layout and nothing in the row",
+        arguments: [ButtonStyleCase.default, .primary, .success, .destructive], [false, true])
+    func standardProbeMeasuresOnlyTheRow(style: ButtonStyleCase, disabled: Bool) throws {
+        let context = probeMemoisedContext(width: Self.width)
+        let cache = try #require(context.renderCache)
+        let button = style.apply(to: Button(action: {}, label: { ProbedFillingLabel() }))
+        let size = measureChild(AnyView(button.disabled(disabled)), proposal: Self.proposal, context: context)
+        #expect(size.isWidthFlexible, "precondition: the filling label's button probed")
+        #expect(cache.measuresBeneathProbes == 1)
+    }
 }
 
 /// How often a ``CountedLeaf`` has been measured — a class, so the count
