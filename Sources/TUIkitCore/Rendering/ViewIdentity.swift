@@ -215,23 +215,28 @@ extension ViewIdentity {
     /// - Returns: `true` when every step from `ancestor` down to this
     ///   identity is a single-child descent.
     public func isDirectDescent(from ancestor: ViewIdentity) -> Bool {
-        let ancestorDepth = ancestor.node.depth
-        guard node.depth >= ancestorDepth else { return false }
+        guard let candidate = singleChildAncestor(atDepth: ancestor.node.depth) else { return false }
+        return IdentityNode.structurallyEqual(candidate, ancestor.node)
+    }
+
+    /// The node at `ancestorDepth` on this chain, when every step below it
+    /// down to this identity is a single-child descent; else `nil`.
+    private func singleChildAncestor(atDepth ancestorDepth: Int) -> IdentityNode? {
+        guard node.depth >= ancestorDepth else { return nil }
 
         var cursor: IdentityNode? = node
         while let n = cursor, n.depth > ancestorDepth {
             switch n.step {
             case .typed(_, let index):
-                guard index == nil else { return false }
+                guard index == nil else { return nil }
             case .branch:
                 break
             case .keyed, .raw:
-                return false
+                return nil
             }
             cursor = n.parent
         }
-        guard let candidate = cursor else { return false }
-        return IdentityNode.structurallyEqual(candidate, ancestor.node)
+        return cursor
     }
 
     /// One routing step below a container on a target's identity chain:

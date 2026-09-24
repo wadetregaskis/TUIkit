@@ -785,36 +785,14 @@ extension _VStackCore {
             : contentWidthOverAllRows(
                 children, widthLimit: widthLimit, ask: ask, state: state, context: context)
 
-        var estimate = state.estimatedPitch(spacing: spacing)
-        var sampleTotal = 0
-        var sampled: [ViewSize] = []
-        sampled.reserveCapacity(sampleSize)
-        for (ordinal, child) in sampleChildren.enumerated() {
-            let size = child.measure(proposal: sampleProposal, context: measureContext)
-            // Sample rows are measured but never rendered — keep their memo
-            // entries alive (see `AnchoredWindowFrame.pitch`).
-            measureContext.renderCache?.markActive(child.identity(under: measureContext))
-            sampleTotal += max(1, size.height) + (ordinal < count - 1 ? spacing : 0)
-            sampled.append(size)
-        }
-        if state.measuredPitchCount < 1, sampleSize > 0 {
-            estimate = max(1, sampleTotal / sampleSize)
-        }
+        let (counted, height) = sampledRows(
+            sampleChildren, count: count, state: state, proposal: sampleProposal,
+            heightLimit: heightLimit, context: measureContext)
 
-        // The PITCH is a property of the content, so it averages the whole
-        // sample. The WIDTH is not: this stack hugs the rows it draws, and at
-        // this budget it draws the ones the exact walk would have reached —
-        // so only those may widen it. Sampling sixteen rows for a width the
-        // budget has room for eight of made the same stack answer 24 wide to
-        // the natural-size ask on its first frame and 2 wide from its second
-        // (once the render's own band-derived hypothesis took over), for a
-        // tree nothing had changed.
-        let prefix = min(sampleSize, Self.walkedRowCount(
-            budget: heightLimit, pitch: estimate, spacing: spacing, count: count))
         var maxWidth = 0
         var widthFlexible = false
         var heightFlexible = false
-        for size in sampled.prefix(prefix) {
+        for size in counted {
             // With the exact answer in hand a row counts as the walk counts it
             // — a filler its flexibility, not the budget it was measured under
             // (`wholeContentWidth(of:limit:)`) — so that this arm and the walk
@@ -836,10 +814,47 @@ extension _VStackCore {
                 widthFlexible || exact.isWidthFlexible, width: maxWidth, limit: widthLimit)
         }
 
-        let total = count * estimate - spacing
         return ViewSize(
-            width: maxWidth, height: min(total, max(0, heightLimit)),
+            width: maxWidth, height: height,
             isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+    }
+
+    /// The estimate: the first sixteen rows measured, the pitch averaged over
+    /// them (or the running average the windowed render keeps), and every row
+    /// priced at it — capped at the budget. Returns the sampled rows whose
+    /// widths count, and the height.
+    private func sampledRows(
+        _ sample: [ChildView], count: Int, state: StackWindowState, proposal: ProposedSize,
+        heightLimit: Int, context: RenderContext
+    ) -> (counted: ArraySlice<ViewSize>, height: Int) {
+        var estimate = state.estimatedPitch(spacing: spacing)
+        var sampleTotal = 0
+        var sampled: [ViewSize] = []
+        sampled.reserveCapacity(sample.count)
+        for (ordinal, child) in sample.enumerated() {
+            let size = child.measure(proposal: proposal, context: context)
+            // Sample rows are measured but never rendered — keep their memo
+            // entries alive (see `AnchoredWindowFrame.pitch`).
+            context.renderCache?.markActive(child.identity(under: context))
+            sampleTotal += max(1, size.height) + (ordinal < count - 1 ? spacing : 0)
+            sampled.append(size)
+        }
+        if state.measuredPitchCount < 1, !sample.isEmpty {
+            estimate = max(1, sampleTotal / sample.count)
+        }
+
+        // The PITCH is a property of the content, so it averages the whole
+        // sample. The WIDTH is not: this stack hugs the rows it draws, and at
+        // this budget it draws the ones the exact walk would have reached —
+        // so only those may widen it. Sampling sixteen rows for a width the
+        // budget has room for eight of made the same stack answer 24 wide to
+        // the natural-size ask on its first frame and 2 wide from its second
+        // (once the render's own band-derived hypothesis took over), for a
+        // tree nothing had changed.
+        let prefix = min(sample.count, Self.walkedRowCount(
+            budget: heightLimit, pitch: estimate, spacing: spacing, count: count))
+        let total = count * estimate - spacing
+        return (sampled.prefix(prefix), min(total, max(0, heightLimit)))
     }
 
     /// How many rows a walk of this stack touches under `budget`: the ones

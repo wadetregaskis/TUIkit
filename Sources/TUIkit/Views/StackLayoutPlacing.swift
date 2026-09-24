@@ -53,12 +53,25 @@ extension _VStackCore {
     /// stack holds. An eager stack draws every row, so the render marks them.
     func naturalRowSlots(width: Int?, context: RenderContext, keepsMeasuresLive: Bool = false) -> [RowSlot] {
         let children = resolveChildViews(from: content, context: context)
+        return rowSlots(
+            count: children.count, childAt: { children[$0] }, width: width, context: context,
+            keepsMeasuresLive: keepsMeasuresLive)
+    }
+
+    /// The one slot rule, walked over `count` children in order, each fetched
+    /// by ordinal from `childAt` — so a caller holding a lazily built
+    /// collection hands out only the rows the walk actually takes.
+    private func rowSlots(
+        count: Int, childAt: (Int) -> ChildView, width: Int?, context: RenderContext,
+        keepsMeasuresLive: Bool
+    ) -> [RowSlot] {
         let proposal = ProposedSize(width: width, height: nil)
         let liveMarks = keepsMeasuresLive ? context.renderCache : nil
         var slots: [RowSlot] = []
-        slots.reserveCapacity(children.count)
+        slots.reserveCapacity(count)
         var runningY = 0
-        for child in children {
+        for ordinal in 0..<count {
+            let child = childAt(ordinal)
             // Measured before the gap is decided, because the gap depends on it:
             // a row of no lines earns none (see `linearSpacing(before:…)`).
             // Charged per index, every row below an `EmptyView` sat one line
