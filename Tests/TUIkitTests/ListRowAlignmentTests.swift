@@ -218,16 +218,17 @@ struct ListRowAlignmentTests {
     /// its focus wash on every line of it; and the wash's claims on the lines cut
     /// stayed behind, past the rows, on the "N more below" line and the border (§54).
     ///
-    /// In a window that has lost the terminal's focus: there the cursor row holds the
-    /// plain wash, which is translucent here and so claims. While active it breathes,
-    /// and a breath spends the wash's alpha against the page at both ends and claims
-    /// nothing (`Palette.focusWashPulse()`) — true, and no test of the clip.
+    /// Under `.rowSelectionIndicator(.hidden)`: there the cursor row holds the plain
+    /// wash, which is translucent here and so claims. Anywhere else it breathes, or
+    /// holds the breath's bottom in an inactive window, and both spend the wash's alpha
+    /// against the page and claim nothing (`Palette.focusWashPulse()`) — true, and no
+    /// test of the clip.
     @Test("A reorder frame clipped from the back takes the cut lines' claims with it")
     func backClipTakesTheListsOwnClaims() throws {
         let fixture = ListReorderFixture(items: (0..<12).map { "row\($0)" }, feedback: .live)
         fixture.tallRows = ["row5": 3]
         fixture.env.palette = FadedFocus()
-        fixture.env.appearsActive = false
+        fixture.env.rowSelectionIndicator = .hidden
         let resting = fixture.render()
         let line = fixture.rowY(resting, "row5")
         try #require(line >= 0, "the tall row is on screen: \(resting.lines.map(\.stripped))")

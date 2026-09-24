@@ -72,8 +72,9 @@ enum RowBackground {
     ///
     /// It breathes for the reason the selected cursor row does: motion says the keys
     /// go here, now, and a list that has them says so wherever its cursor is. Where the
-    /// view does not appear active it holds still in the plain wash, the look it has
-    /// always had — `Palette.focusWashEmphasis(appearsActive:)` is the rule.
+    /// view does not appear active it holds still at the bottom of that breath, the
+    /// plain wash, the look it has always had — `Palette.focusWashEmphasis(appearsActive:)`
+    /// is the rule, and says why a translucent wash is held spent over the page.
     ///
     /// Except where the control draws no ● (``View/rowSelectionIndicator(_:)`` with
     /// `.hidden`): there it holds the still wash throughout. With the mark off, the

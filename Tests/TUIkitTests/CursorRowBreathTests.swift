@@ -26,8 +26,24 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitStyling
 
+/// A dark page whose focus wash is translucent, as the Example's faded palette makes
+/// every wash (`TUIKIT_EXAMPLE_PALETTE_ALPHA`).
+private struct TranslucentWashPalette: Palette {
+    let id = "cursor-row-translucent-wash"
+    let name = "Translucent wash"
+    let background = Color.rgb(10, 10, 20)
+    let foreground = Color.rgb(230, 230, 240)
+    let accent = Color.rgb(0, 180, 200)
+    let success = Color.rgb(40, 200, 40)
+    let warning = Color.rgb(220, 200, 40)
+    let error = Color.rgb(220, 40, 40)
+    let info = Color.rgb(40, 120, 220)
+    let border = Color.rgb(120, 120, 130)
+    let focusBackground = Color.rgb(60, 60, 200).opacity(0.5)
+}
+
 /// A `List` or a `Table` with `selection` selected, whose cursor lands on row 0 once
-/// it takes the focus.
+/// it takes the focus — on the page, or on `surface` where one is given.
 private struct CursorRowBreathApp: App {
     static var palette: any Palette { PaletteRegistry.all[0] }
 
@@ -35,24 +51,34 @@ private struct CursorRowBreathApp: App {
     var selection: Set<Int> = []
     var indicator = Visibility.automatic
     var palette: any Palette = Self.palette
+    var surface: Color?
 
     init() {}
 
     init(
         kind: ReversedCursorRowTests.Kind, selection: Set<Int>, indicator: Visibility = .automatic,
-        palette: any Palette = Self.palette
+        palette: any Palette = Self.palette, surface: Color? = nil
     ) {
         self.kind = kind
         self.selection = selection
         self.indicator = indicator
         self.palette = palette
+        self.surface = surface
     }
 
     var body: some Scene {
         WindowGroup {
-            kind.view(selection: selection)
-                .rowSelectionIndicator(indicator)
+            surfaced(kind.view(selection: selection).rowSelectionIndicator(indicator))
                 .palette(palette)
+        }
+    }
+
+    @ViewBuilder
+    private func surfaced(_ content: some View) -> some View {
+        if let surface {
+            ZStack { surface; content }
+        } else {
+            content
         }
     }
 }
@@ -173,5 +199,33 @@ struct CursorRowBreathTests {
         runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)
         let back = try frame(loop, timer)
         #expect(back.runs.contains { $0.offsetY == line }, "focus-in did not bring the breath back")
+    }
+
+    // MARK: - A translucent wash
+
+    /// A wash the palette states translucent is spent over the page by the breath, at
+    /// both ends. Held still while the window has lost the terminal's focus, the row
+    /// has to stop where the breath starts — or it changes colour as the focus goes,
+    /// rather than stopping — on the page and on any surface the list is drawn on.
+    @Test(
+        "A translucent wash holds, while inactive, the colour its breath starts from",
+        arguments: ReversedCursorRowTests.Kind.allCases, [false, true])
+    func translucentWashHoldsTheBreathsBottom(kind: ReversedCursorRowTests.Kind, onASurface: Bool) throws {
+        let palette = TranslucentWashPalette()
+        let (runner, loop, timer, active) = try settled(
+            CursorRowBreathApp(
+                kind: kind, selection: [2], palette: palette,
+                surface: onASurface ? Color.rgb(90, 30, 30) : nil))
+        let bottom = renderedBackground(of: palette.focusWashPulse().dim)
+        #expect(
+            try breath(of: active).contains(bottom),
+            "the premise: the breath starts from the wash spent over the page")
+
+        runner.terminalFocusChanged(isFocused: false, cursorTimer: timer, renderer: loop)
+        let inactive = try frame(loop, timer)
+        let held = try #require(sgrState(of: "row 0", in: inactive.lines)).renderedBackground
+        #expect(
+            held == bottom,
+            "the inactive cursor row holds \(held.debugDescription), not the \(bottom.debugDescription) its breath starts from")
     }
 }

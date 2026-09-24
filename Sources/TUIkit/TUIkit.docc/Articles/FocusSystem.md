@@ -310,7 +310,8 @@ vanished with the window read as the focus having been lost.
 - **A cursor row that is not selected** holds still in the plain focus wash,
   ``Palette/focusBackground`` — the bottom of the breath it draws while the
   window is active (``Palette/focusWashPulse()``), and the look it has always
-  had.
+  had. A translucent wash is held spent over the page, as the breath spends it,
+  so the row stops where it was on whatever it is drawn over.
 - **Nothing else changes.** The bold, the recoloured arrows and values: they
   were still to begin with, and they stay.
 

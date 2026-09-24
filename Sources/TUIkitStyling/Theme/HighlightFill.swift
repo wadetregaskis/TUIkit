@@ -141,7 +141,7 @@ extension Palette {
 
     /// What the cursor row of a list or table paints on a row the selection does not
     /// include: the focus wash breathing (``focusWashPulse()``), and where the row's
-    /// view does not appear active, the still wash (``focusWashFill()``) in its place.
+    /// view does not appear active, the bottom of that breath, still — the plain wash.
     ///
     /// The neutral counterpart of ``highlightedRowFill(appearsActive:)``, under the
     /// same rule: motion says the keys go HERE, now, so a list that has them breathes
@@ -154,13 +154,25 @@ extension Palette {
     ///
     /// Where the wash cannot be measured it is reversed, still, as it always was.
     ///
+    /// Held at the breath's own bottom rather than at ``focusWashFill()``. For an
+    /// opaque wash — every shipped palette's — the two are one colour. A translucent
+    /// one (the Example's faded palette) the breath spends over the page at both ends,
+    /// and `focusWashFill()` carries: its alpha is claimed and resolved against what
+    /// is actually behind the row. Over a view drawn behind the list — a panel in a
+    /// `ZStack` — the row then changed colour as the window lost the terminal's focus
+    /// instead of stopping, from the wash over the page to the wash over the panel. Spent
+    /// over the page awake and held, as a selected row's breath and its held tint
+    /// (``selectedRowFill()``) both are, it stops where it was. The limit is the
+    /// accent's too: on a surface other than the page, a translucent wash shows the
+    /// page's composite rather than that surface's.
+    ///
     /// - Parameter appearsActive: Whether the row's view appears active
     ///   (`EnvironmentValues.appearsActive`).
     package func focusWashEmphasis(appearsActive: Bool) -> HighlightFill {
         let still = focusWashFill()
         guard case .fill = still else { return still }
         let (dim, bright) = focusWashPulse()
-        return HighlightFill.pulse(dim: dim, bright: bright).stilled(to: still, unless: appearsActive)
+        return HighlightFill.pulse(dim: dim, bright: bright).stilled(to: .fill(dim), unless: appearsActive)
     }
 }
 
