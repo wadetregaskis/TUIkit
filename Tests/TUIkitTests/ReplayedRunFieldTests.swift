@@ -2,12 +2,13 @@
 //  ReplayedRunFieldTests.swift
 //
 //  Every run a catalogue of controls leaves behind, replayed through the run
-//  loop on three grounds — the page, a tab's surface, a colour of the app's own —
-//  and every replayed tick compared with a render at the same instant
-//  (`ReplayOracle`). The class `ReplayedTabChipBackgroundTests` is one case of,
-//  and the class `ReplayedCaretBlinkTests` is another: whatever a frame leaves
-//  bare has to land on the field its containers painted beneath it, and nothing
-//  else on the row may move.
+//  loop on several grounds — the page, a tab's surface, a colour of the app's
+//  own, a ramp — and every replayed tick compared with a render at the same
+//  instant (`ReplayOracle`): each cell's glyph and field, and the ink a glyph is
+//  drawn in. The class `ReplayedTabChipBackgroundTests` is one case of, and the
+//  class `ReplayedCaretBlinkTests` is another: whatever a frame leaves bare has
+//  to land on the field its containers painted beneath it, and nothing else on
+//  the row may move.
 //
 //  The replay used to put the PAGE's background back after each reset in a
 //  frame, and a frame that names a background is one the splice leaves alone.
@@ -58,6 +59,18 @@ private func catalogue() -> some View {
             Button("Second") {}
         }
         .menuStyle(.inline)
+        // A menu row's bar over a label that animates on its own: the bar paints
+        // under the label's run (`_MenuItemRowBar`, which records it). Still, so
+        // the bar leaves no run of its own: a breathing bar's run spans the row
+        // and replays the label as it was drawn, so a spinner under it holds the
+        // glyph it rendered with until the next render — a limit of runs that
+        // overlap, not of what is under them.
+        Menu("Tasks") {
+            Button(action: {}, label: { HStack(spacing: 0) { Text("Busy "); Spinner() } })
+            Button("Idle") {}
+        }
+        .menuStyle(.inline)
+        .selectionIndicatorStyle(.none)
         TabView(selection: .constant(0)) {
             Tab("Alpha", value: 0) { Text("a") }
             Tab("Beta", value: 1) { Text("b") }
@@ -115,23 +128,44 @@ private struct OnAColourApp: App {
     }
 }
 
+/// A ramp: a different field under each column of a run, painted by the ramp's
+/// own row painter.
+private struct OnARampApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup {
+            catalogue().padding(1)
+                .background(
+                    LinearGradient(
+                        colors: [Color.rgb(200, 40, 40), Color.rgb(40, 40, 200)],
+                        startPoint: .leading, endPoint: .trailing))
+        }
+    }
+}
+
 @MainActor
 @Suite("A replayed run draws what a render draws, on every ground")
 struct ReplayedRunFieldTests {
 
     enum Ground: String, CaseIterable, Sendable {
-        case page, tabSurface, colour
+        case page, tabSurface, colour, ramp
+    }
+
+    /// The walk every ground takes: more stops than the catalogue has focusables,
+    /// so it wraps; eight ticks a stop reach both halves of a caret's blink and
+    /// half a breath.
+    private func walk<A: App>(_ make: () -> A) -> ReplayOracle.Findings {
+        ReplayOracle.compare(make, stops: 23, ticks: 8, size: (80, 64), reportOncePerRow: true)
     }
 
     @Test("Every replayed tick of every run shows what a render at that instant draws", arguments: Ground.allCases)
     func everyTickMatchesARender(ground: Ground) {
-        // More stops than the catalogue has focusables, so the walk wraps; eight
-        // ticks a stop reach both halves of a caret's blink and half a breath.
         let found =
             switch ground {
-            case .page: ReplayOracle.compare({ OnThePageApp() }, stops: 22, ticks: 8, size: (80, 60), reportOncePerRow: true)
-            case .tabSurface: ReplayOracle.compare({ InATabApp() }, stops: 22, ticks: 8, size: (80, 60), reportOncePerRow: true)
-            case .colour: ReplayOracle.compare({ OnAColourApp() }, stops: 22, ticks: 8, size: (80, 60), reportOncePerRow: true)
+            case .page: walk { OnThePageApp() }
+            case .tabSurface: walk { InATabApp() }
+            case .colour: walk { OnAColourApp() }
+            case .ramp: walk { OnARampApp() }
             }
         // Enough that the walk reached the catalogue, not just its first stop.
         #expect(found.compared >= 200, "only \(found.compared) rows were replayed")

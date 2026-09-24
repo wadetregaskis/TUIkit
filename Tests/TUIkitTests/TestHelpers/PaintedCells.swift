@@ -23,6 +23,11 @@ struct PaintedCell {
     /// The background escape in force (`""` for the terminal's own) — two
     /// spellings of one background read the same.
     var background: String { state.renderedBackground }
+
+    /// The foreground in force, `nil` for the terminal's own: the colour the
+    /// glyph is drawn in. Only a glyph shows it — a blank cell's ink is
+    /// invisible unless an underline or a strike draws it.
+    var ink: SGRState.Colour? { state.foregroundColour }
 }
 
 /// `line` as the columns it paints, left to right.

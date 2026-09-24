@@ -505,6 +505,10 @@ public struct SGRState: Sendable, Equatable {
     /// cell by cell and would otherwise build a `String` per cell to do it.
     var backgroundColour: Colour? { background }
 
+    /// The foreground in force, or `nil` for the terminal's default — the ink
+    /// twin of ``backgroundColour``, for the same kind of caller.
+    var foregroundColour: Colour? { foreground }
+
     /// `colour` as the escape that puts it in force as the background: what
     /// ``renderedBackground`` spells for a state holding it, and `ESC[49m` for
     /// `nil`, which the rendered form spells as nothing because it starts from

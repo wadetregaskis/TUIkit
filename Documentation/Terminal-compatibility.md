@@ -4248,8 +4248,14 @@ instant); per host by `ReplayedEraseFieldTests`; the record by
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the
 splice, so a run inside a reversed row replays unreversed; a persistent dim is
-neither recorded nor restated (both inferred, not measured —
-`Opacity as composition.md`, the reversed rows' limits).
+neither recorded nor restated (`Opacity as composition.md`, the reversed rows'
+limits). The reversal was inferred when this was written and is measured since
+2026-09-24: a `Spinner` in the focused row of an inline `Menu` on a
+`Color.default` palette, whose bar is a reversal because there is no RGB to
+breathe between, replays `⠹` in `ESC[38;2;220;220;220m` where a render at the
+same instant draws it in `ESC[7;38;2;220;220;220m`. The dim is still inferred.
+`ReplayOracle` compares each cell's glyph and field and a glyph's ink, not its
+attributes, so neither shows there.
 
 #### The animation replay compensates a second time — FIXED 2026-08-29
 
