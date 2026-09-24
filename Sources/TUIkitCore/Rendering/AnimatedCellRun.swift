@@ -529,6 +529,30 @@ public struct AnimatedCellRun: Sendable, Equatable {
         return copy
     }
 
+    /// A copy showing `frames` instead of its own, with `alpha` as what they owe,
+    /// and everything else — where it sits, how wide it is, its rate and its clock
+    /// — carried over.
+    ///
+    /// For a pass that restyles a run's frames the way it restyles the lines under
+    /// them: a fade blending them, a backdrop flattening them, a link wrapping them.
+    /// A copy rather than a run rebuilt field by field, because a rebuild names every
+    /// property it keeps and drops every one it does not name — which is how a
+    /// spinner inside a `List` once lost its rate (`_ListCore.RowRun`).
+    ///
+    /// `alpha` has no default. Some passes spend it into the frames and must drop
+    /// it; others leave the frames' cells as they were and must keep it; each says
+    /// which.
+    ///
+    /// - Parameters:
+    ///   - frames: The restyled cycle, one frame per frame of this one, each as wide
+    ///     as this run.
+    ///   - alpha: What the restyled frames' cells owe per frame, or `nil`.
+    package func replacingFrames(_ frames: [String], alpha: AnimatedRunAlpha?) -> Self {
+        Self(
+            offsetX: offsetX, offsetY: offsetY, width: width, frames: frames,
+            frameTicks: frameTicks, clock: clock, alpha: alpha)
+    }
+
     /// The part of this run inside `columns`, or `nil` if that is none of it.
     ///
     /// Every frame is cut to the same window by ``String/ansiAwareSlice(visibleStart:visibleCount:)``,

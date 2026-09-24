@@ -294,10 +294,7 @@ private struct TerminalHyperlinkModifier: ViewModifier {
         // is also the only statement of what those cells owe, so rebuilt without
         // it, a caret over a faded well inside a link replayed at full strength.
         result.animatedCells = result.animatedCells.map { run in
-            AnimatedCellRun(
-                offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-                frames: run.frames.map(linked), frameTicks: run.frameTicks, clock: run.clock,
-                alpha: run.alpha)
+            run.replacingFrames(run.frames.map(linked), alpha: run.alpha)
         }
         return result
     }

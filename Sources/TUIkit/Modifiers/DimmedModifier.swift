@@ -158,10 +158,9 @@ extension FrameBuffer {
         // and anything still waiting to be drawn above it must not vanish.
         result.overlays = overlays
         result.animatedCells = animatedCells.compactMap { run in
-            let dimmed = AnimatedCellRun(
-                offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-                frames: run.frames.map { wrap($0, toWidth: run.width) },
-                frameTicks: run.frameTicks, clock: run.clock)
+            // The payload is consumed, not lost — see the note above.
+            let dimmed = run.replacingFrames(
+                run.frames.map { wrap($0, toWidth: run.width) }, alpha: nil)
             return dimmed.isAnimating ? dimmed : nil
         }
         // One rectangle, over everything the wash covers — the runs included, whose

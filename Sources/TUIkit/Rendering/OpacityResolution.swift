@@ -443,10 +443,7 @@ extension FrameBuffer {
         // further would fade them a second time wherever the buffer is resolved
         // again (a floating surface resolves, then the root resolves what it landed
         // on). Same reason the regions themselves are cleared.
-        return AnimatedCellRun(
-            offsetX: run.offsetX, offsetY: run.offsetY, width: run.width,
-            frames: fadedFrames, frameTicks: run.frameTicks, clock: run.clock,
-            alpha: nil)
+        return run.replacingFrames(fadedFrames, alpha: nil)
     }
 
     private static func foldedAlphas(
