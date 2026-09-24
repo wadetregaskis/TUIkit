@@ -72,4 +72,6 @@ extension Group: ChildInfoProvider {
 // and that is what keys them by element and carries `.onDelete` / `.onMove`.
 extension Group: ListRowsPassThrough {
     var listRowsContent: any View { content }
+
+    static var listRowsContentTypes: [any View.Type] { [Content.self] }
 }

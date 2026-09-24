@@ -236,10 +236,12 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
 /// takes it.
 ///
 /// A function of its own so that anything needing a composite's body without
-/// drawing it evaluates that body exactly as a render would. A body evaluated
-/// any other way would bind the view's `@State` somewhere else, or read an
-/// `@Environment` it was never handed, or be one no change to an `@Observable`
-/// it read could ever invalidate.
+/// drawing it evaluates that body exactly as a render would — a `List` or a
+/// `Section` asking a view of the app's own which rows its body holds
+/// (`listRowsBody(of:context:)`, in `TUIkit`) is the other caller. A body
+/// evaluated any other way would bind the view's `@State` somewhere else, or
+/// read an `@Environment` it was never handed, or be one no change to an
+/// `@Observable` it read could ever invalidate.
 ///
 /// - `@Environment` is resolved against the environment the view renders in,
 ///   into its (reference) box. The box is shared with any closure `body`

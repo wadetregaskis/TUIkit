@@ -334,13 +334,12 @@ struct SectionContentRows<RowID: Hashable> {
     var rows: [ListRow<RowID>]
 
     /// The row-mutation actions the content carries, when the content IS an
-    /// editable `ForEach`, or a `Group` or an `if`/`else` around one (any
-    /// number deep) — `nil` otherwise.
+    /// editable `ForEach`, or a `Group`, an `if`/`else` or a view of the app's
+    /// own whose `body` is one (any number deep) — `nil` otherwise.
     ///
-    /// A `Group` or an `if`/`else` is not one of the exceptions below: each
-    /// contributes exactly its content's rows, so a `ForEach` alone inside one
-    /// is still the whole of what the section draws, and every row is still
-    /// that loop's.
+    /// None of those wrappers is one of the exceptions below: each contributes
+    /// exactly its content's rows, so a `ForEach` alone inside one is still the
+    /// whole of what the section draws, and every row is still that loop's.
     ///
     /// `nil` for a section of statically-written rows, and also whenever the
     /// `ForEach` is not the section's WHOLE content — beside a hand-written
@@ -455,6 +454,11 @@ extension Section: ListRowExtractor {
         if let passThrough = content as? any ListRowsPassThrough {
             return listRows(
                 of: passThrough.listRowsContent, context: passThrough.listRowsContext(context))
+        }
+        // And a view of the app's own whose `body` is rows, by the same rule
+        // and for the same reason (see `listRowsBody(of:context:)`).
+        if let body = listRowsBody(of: content, context: context) {
+            return listRows(of: body.content, context: body.context)
         }
         // Only when the content IS the `ForEach`, seen through those wrappers:
         // `resolveChildViews` flattens a `ForEach` sitting among static rows,

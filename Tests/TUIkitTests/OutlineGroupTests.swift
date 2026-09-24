@@ -477,6 +477,34 @@ struct OutlineGroupTests {
         #expect(rendered.contains { $0.contains("TUIkit") }, "Return disclosed it: \(rendered)")
     }
 
+    /// A view of the app's own whose body is the outline.
+    private struct OutlineRows: View {
+        let tree: [Node]
+
+        var body: some View {
+            OutlineGroup(tree, children: \.children) { node in Text(verbatim: node.id) }
+        }
+    }
+
+    /// The same look through a view of the app's own whose `body` is the
+    /// outline: the list evaluates that body, as a render would, and asks the
+    /// outline inside it — the one its rows came from — what opens a node.
+    /// Drawn as one row, Space selected nothing and Return disclosed nothing.
+    @Test("a view of your own around the outline leaves its nodes the list's rows")
+    func outlineInAViewOfYourOwnKeepsItsNodesAsRows() throws {
+        let (tui, context) = harness(width: 40, height: 20)
+        let selection = Selection()
+        let view = List(selection: selection.binding) { OutlineRows(tree: tree) }
+        frame(view, tui: tui, context: context)
+        let focus = try #require(context.environment.focusManager)
+
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .space))
+        #expect(selection.value == "Sources", "the first node, by its own id")
+        _ = focus.dispatchKeyEvent(KeyEvent(key: .enter))
+        let rendered = lines(frame(view, tui: tui, context: context))
+        #expect(rendered.contains { $0.contains("TUIkit") }, "Return disclosed it: \(rendered)")
+    }
+
     /// The tree's own keys, which is what keeps disclosure reachable when an
     /// app claims Return with its own `.onRowActivate`.
     @Test("Right expands and Left collapses the focused branch")

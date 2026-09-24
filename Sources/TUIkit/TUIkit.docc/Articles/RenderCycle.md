@@ -203,7 +203,8 @@ func renderToBuffer<V: View>(_ view: V, context: RenderContext) -> FrameBuffer {
         let childContext = context.withChildIdentity(type: V.Body.self)
         // Resolve @Environment, bind @State to this view's own identity,
         // evaluate view.body under observation tracking, mark the identity
-        // active.
+        // active. (A `List` asking a view of your own which rows its body
+        // holds evaluates that body through this same function.)
         let body = evaluateCompositeBody(of: view, context: context)
         return renderToBuffer(body, context: childContext)
     }

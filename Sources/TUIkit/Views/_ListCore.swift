@@ -72,7 +72,9 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 
     /// The view these rows were extracted from, once every wrapper that only
     /// passes its content's rows through was taken off (see
-    /// ``ListRowsPassThrough``) — `nil` only until `extractRows` has landed.
+    /// ``ListRowsPassThrough``) and every view of the app's own whose body is
+    /// rows was looked into (``listRowsBody(of:context:)``) — `nil` only until
+    /// `extractRows` has landed.
     ///
     /// What the list asks, rather than its own content, which `ForEach` owns
     /// the rows' `dropDestination(for:action:)` and which `OutlineGroup` opens
@@ -192,11 +194,13 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 /// NEGATIVE — range -80 in ``StateStorage/StateKey``'s table — because a List
 /// draws some of its caller's content at its OWN identity: a lone row that is
 /// the whole content (`List { Counter() }`), and a lone `Section`'s content,
-/// both through the single-row fallback of the row extraction. A view of the
-/// app's own drawn there binds its `@State` from index 0, and these were 0 and
-/// 1: the first `@State` and the handler replaced each other's box on every
-/// frame, the types differing, so the row's state and the list's cursor both
-/// came back at their defaults each time. (The rows of a `ForEach` do sit under
+/// both through the single-row fallback of the row extraction; and a view of
+/// the app's own whose body the list looks into for its rows
+/// (`listRowsBody(of:context:)`) is bound there too, exactly where drawing it
+/// would bind it. A view of the app's own binds its `@State` from index 0, and
+/// these were 0 and 1: the first `@State` and the handler replaced each
+/// other's box on every frame, the types differing, so the row's state and the
+/// list's cursor both came back at their defaults each time. (The rows of a `ForEach` do sit under
 /// child identities, which is what this comment used to claim of every row.)
 /// `_TableCore` keeps `0...`: a table draws no caller content at its own
 /// identity. At file scope rather than nested, because `_ListCore` is generic
@@ -2824,6 +2828,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if let passThrough = content as? any ListRowsPassThrough {
             return extractRows(
                 from: passThrough.listRowsContent, context: passThrough.listRowsContext(context))
+        }
+        // A view of the app's own whose `body` is rows — `List { Rows() }` —
+        // contributes its body's rows, looked through the same way: every
+        // question below is asked of the body, evaluated as a render would
+        // and extracted one identity step in, where drawing the view would
+        // have put its rows (see `listRowsBody(of:context:)`). Anything else
+        // is `nil` here, decided from its type, and draws as one row below.
+        if let body = listRowsBody(of: content, context: context) {
+            return extractRows(from: body.content, context: body.context)
         }
         let source = extractRows(ofUnwrapped: content, context: context)
         source.rowsContent = content

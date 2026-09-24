@@ -138,8 +138,8 @@ protocol WindowedListRowExtractor {
     /// Answered from the row TYPE, never by building a row, so a 50,000-row
     /// flat `List` pays one `is` check and keeps its windowed path — the same
     /// trick `viewTypeCarriesBadge(_:)` plays for `.badge(_:)`. A `Section`
-    /// reached only through a `Group` or an `if`/`else` is therefore not seen,
-    /// exactly as a badge under one is not.
+    /// reached only through a `Group`, an `if`/`else` or a view of the app's
+    /// own is therefore not seen, exactly as a badge under one is not.
     var listRowsAreSections: Bool { get }
 }
 
@@ -181,6 +181,10 @@ protocol WindowedListRowExtractor {
 ///   what type it erased (`AnyView.contentContext(noting:)`). It is a hole of
 ///   its own, and a larger one: no container sees through an `AnyView`, so
 ///   `List { AnyView(ForEach(…)) }` draws the whole loop as ONE row.
+///
+/// A view of the app's own whose `body` is rows is looked through as well, but
+/// not as a conformer: its rows are its body's, which only an evaluation —
+/// with its `@State` bound — can produce. See ``listRowsBody(of:context:)``.
 @MainActor
 protocol ListRowsPassThrough {
     /// The view whose rows these are.
@@ -191,6 +195,11 @@ protocol ListRowsPassThrough {
     /// would have taken on the way through this wrapper — so looking through it
     /// moves no row's `@State`. Only an `if`/`else` takes one.
     func listRowsContext(_ context: RenderContext) -> RenderContext
+
+    /// Every type ``listRowsContent`` can be — a `Group`'s content, both arms
+    /// of an `if`/`else` — for the walk that decides from a view's TYPE
+    /// whether its body is list rows (``viewTypeHoldsListRowsInBody(_:)``).
+    static var listRowsContentTypes: [any View.Type] { get }
 }
 
 extension ListRowsPassThrough {
@@ -214,6 +223,8 @@ extension ConditionalView: ListRowsPassThrough {
     func listRowsContext(_ context: RenderContext) -> RenderContext {
         identityBranchLabel.map { context.withBranchIdentity($0) } ?? context
     }
+
+    static var listRowsContentTypes: [any View.Type] { [TrueContent.self, FalseContent.self] }
 }
 
 // MARK: - ForEach Conformance

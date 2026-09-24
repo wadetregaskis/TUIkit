@@ -666,4 +666,60 @@ struct ListRowDropDestinationTests {
         #expect(log.inserted.first?.0 == 2, "at row c's index: \(log.inserted)")
         #expect(log.inserted.first?.1 == ["zzz"])
     }
+
+    /// `groupedRowsStillAcceptDrops`' loop as the body of a view of the app's
+    /// own.
+    private struct DroppableRows: View {
+        let accept: (Int, [String]) -> Void
+
+        var body: some View {
+            ForEach(["a", "b", "c", "d"], id: \.self) { Text($0) }
+                .dropDestination(for: String.self) { index, values in accept(index, values) }
+        }
+    }
+
+    /// The same look through a view of the app's own whose `body` is the
+    /// loop: the list asks the loop its rows came from for the drop action,
+    /// so the rows and the gaps between them come from one `ForEach`. Drawn as
+    /// one row, the list found no drop action and the drag flew home.
+    @Test("A view of your own whose body is the ForEach still takes a drop between its rows")
+    func rowsOfAViewOfYourOwnStillAcceptDrops() {
+        final class Log: @unchecked Sendable {
+            var inserted: [(Int, [String])] = []
+        }
+        let log = Log()
+        let tui = TUIContext()
+        var env = EnvironmentValues()
+        env.focusManager = FocusManager()
+        env.applyRuntimeServices(from: tui)
+        tui.mouseEventDispatcher.setActiveSupport(.full)
+        let context = RenderContext(
+            availableWidth: 20, availableHeight: 10, environment: env, tuiContext: tui)
+
+        func render() -> FrameBuffer {
+            tui.mouseEventDispatcher.beginRenderPass()
+            tui.dragAndDropSession.beginFrame()
+            let view = List {
+                DroppableRows { index, values in log.inserted.append((index, values)) }
+            }
+            .frame(height: 8)
+            var inner = context
+            inner.hasExplicitHeight = true
+            let buffer = renderToBuffer(view, context: inner)
+            tui.mouseEventDispatcher.setRegions(buffer.hitTestRegions)
+            return buffer
+        }
+
+        let rowY = render().lines.firstIndex { $0.stripped.contains("c") } ?? -1
+        #expect(rowY > 0, "found row c")
+        tui.dragAndDropSession.lastAbsoluteEvent = MouseEvent(
+            button: .left, phase: .dragged, x: 2, y: rowY)
+        tui.dragAndDropSession.begin(payload: "zzz", preview: FrameBuffer(text: "zzz"))
+        _ = render()
+        tui.dragAndDropSession.dragMoved()
+        _ = render()
+        #expect(tui.dragAndDropSession.performDrop(), "the rows take it")
+        #expect(log.inserted.first?.0 == 2, "at row c's index: \(log.inserted)")
+        #expect(log.inserted.first?.1 == ["zzz"])
+    }
 }
