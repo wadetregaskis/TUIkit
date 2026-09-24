@@ -140,11 +140,17 @@ final class TextEditorHandler: PersistedFocusable {
         }
 
         // Ctrl-modified keys map to the macOS/Emacs text-editing bindings (the
-        // Cocoa `StandardKeyBinding.dict`). Ctrl+letter arrives as
+        // Cocoa `StandardKeyBinding.dict`), and Option-B / Option-F to
+        // readline's word motions. Ctrl+letter arrives as
         // `.character(letter, ctrl: true)`; Ctrl-H / Ctrl-I / Ctrl-M are
-        // pre-parsed to Backspace / Tab / Enter and handled below.
-        if event.ctrl, case .character(let character) = event.key {
-            return handleControlCharacter(character, alt: event.alt)
+        // pre-parsed to Backspace / Tab / Enter and handled below. An unbound
+        // Control chord propagates.
+        if event.ctrl || event.alt, case .character = event.key {
+            if let command = editingCommand(for: event) {
+                perform(command)
+                return true
+            }
+            if event.ctrl { return false }
         }
         // Option/Alt-modified keys map to word-wise motion and deletion.
         if event.alt, handleAltKey(event) {
@@ -232,35 +238,47 @@ final class TextEditorHandler: PersistedFocusable {
             || character.isSymbol || character.isWhitespace
     }
 
-    /// Handles a Ctrl+letter chord (the Emacs-style Cocoa bindings). Returns
-    /// `false` for an unbound chord so it can propagate.
-    private func handleControlCharacter(_ character: Character, alt: Bool) -> Bool {
-        switch character {
-        // Option-Ctrl-A selects the whole document; plain Ctrl-A is
-        // start-of-line, as it has always been here and as it now is in
-        // `TextFieldHandler` too. Cmd-A cannot reach a terminal app, so
-        // select-all needs *some* chord — this is the nearest one to it that
-        // does not take a motion key away.
-        case "a":
-            if alt { selectAll() } else { moveToStartOfLine() }
-        case "e": moveToEndOfLine()  // end of line
-        case "b": moveLeft()  // back one character
-        case "f": moveRight()  // forward one character
-        case "p": moveVertical(by: -1)  // previous line
-        case "n": moveVertical(by: 1)  // next line
-        case "d": deleteForward()  // delete forward
-        case "k": killToEndOfLine()  // kill to end of line
-        case "y": yank()  // yank the last kill
-        case "t": transpose()  // transpose characters
-        case "o": openLine()  // open a line after the cursor
-        case "v": movePage(by: 1)  // page down
-        default: return false
-        }
-        return true
+    /// The command an Emacs chord names in the editor, from
+    /// ``TextEditingCommand``, the table every text control shares: a
+    /// Ctrl+letter chord (the Emacs-style Cocoa bindings), or Option-B or
+    /// Option-F. Control is read first, so Option-Ctrl-B is Ctrl-B, back a
+    /// character. `nil` for any other key.
+    private func editingCommand(for event: KeyEvent) -> TextEditingCommand? {
+        guard case .character(let character) = event.key else { return nil }
+        if event.ctrl { return TextEditingCommand(control: character, alt: event.alt) }
+        if event.alt { return TextEditingCommand(option: character, shift: event.shift) }
+        return nil
     }
 
-    /// Handles an Option/Alt chord: word-wise motion and deletion. Returns
-    /// `false` for an unbound chord so it can propagate.
+    /// Carries out an Emacs-chord command on the editor's lines. The editor
+    /// has every line a command can name, so it carries out all of them.
+    ///
+    /// The editor has no keyboard selection (a drag's selection goes with the
+    /// next key), so the Shift forms of the word motions move as the plain
+    /// ones do.
+    private func perform(_ command: TextEditingCommand) {
+        switch command {
+        case .moveToStartOfLine: moveToStartOfLine()
+        case .moveToEndOfLine: moveToEndOfLine()
+        case .moveBackward: moveLeft()
+        case .moveForward: moveRight()
+        case .moveToPreviousLine: moveVertical(by: -1)
+        case .moveToNextLine: moveVertical(by: 1)
+        case .deleteForward: deleteForward()
+        case .killToEndOfLine: killToEndOfLine()
+        case .yank: yank()
+        case .transpose: transpose()
+        case .openLine: openLine()
+        case .pageDown: movePage(by: 1)
+        case .selectAll: selectAll()
+        case .moveWordBackward, .moveWordBackwardAndModifySelection: moveWordLeft()
+        case .moveWordForward, .moveWordForwardAndModifySelection: moveWordRight()
+        }
+    }
+
+    /// Handles an Option/Alt chord on a key that is not a letter: word-wise
+    /// motion and deletion, and a literal tab. Returns `false` for an unbound
+    /// chord so it can propagate.
     private func handleAltKey(_ event: KeyEvent) -> Bool {
         switch event.key {
         case .tab:
@@ -278,12 +296,6 @@ final class TextEditorHandler: PersistedFocusable {
             deleteWordBackward()
         case .delete:
             deleteWordForward()
-        case .character(let character):
-            switch Character(character.lowercased()) {
-            case "b": moveWordLeft()
-            case "f": moveWordRight()
-            default: return false
-            }
         default:
             return false
         }
@@ -544,19 +556,12 @@ final class TextEditorHandler: PersistedFocusable {
 
     /// Ctrl-T: transposes the two characters around the cursor and steps
     /// forward; at the end of a line it transposes the last two characters.
+    /// The swap itself is ``TextEditingCommand/transpose(in:at:)``.
     private func transpose() {
         var lines = readLines()
-        var line = lines[cursorLine]
-        guard line.count >= 2, cursorColumn > 0 else { return }
-        if cursorColumn >= line.count {
-            line.swapAt(line.count - 2, line.count - 1)
-            lines[cursorLine] = line
-            cursorColumn = line.count
-        } else {
-            line.swapAt(cursorColumn - 1, cursorColumn)
-            lines[cursorLine] = line
-            cursorColumn += 1
-        }
+        guard let column = TextEditingCommand.transpose(in: &lines[cursorLine], at: cursorColumn)
+        else { return }
+        cursorColumn = column
         writeLines(lines)
         syncDesiredColumn()
     }
