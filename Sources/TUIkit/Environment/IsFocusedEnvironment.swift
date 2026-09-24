@@ -34,12 +34,19 @@ extension EnvironmentValues {
     ///     @Environment(\.palette) private var palette
     ///
     ///     var body: some View {
+    ///         let ends = palette.accent.breathEnds(
+    ///             dimmedTo: ViewConstants.focusBorderDim, over: palette.background)
     ///         Text("Right-click me")
-    ///             .border(emphasis(isFocused).color(
-    ///                 dim: palette.border, bright: palette.accent))
+    ///             .border(isFocused
+    ///                 ? emphasis(true).color(dim: ends.dim, bright: ends.bright)
+    ///                 : palette.border)
     ///     }
     /// }
     /// ```
+    ///
+    /// The dim end is a faded accent, not the unfocused `palette.border`: the
+    /// bottom of the breath has to be distinguishable from not being focused,
+    /// or every breath blinks the focus out.
     ///
     /// This value stays `true` while the view does not appear active (see
     /// ``EnvironmentValues/appearsActive``), because it answers a question about
