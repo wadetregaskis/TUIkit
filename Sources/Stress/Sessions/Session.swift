@@ -120,6 +120,10 @@ final class DrivenSession {
     /// What `TUIKIT_VERIFY_MEASURE_MEMO` found: each served size, from either
     /// size memo, that a fresh measure disagreed with. Empty unless it is set.
     let staleSizes: () -> [String]
+    /// The render cache's own counts so far: what the value memos served, missed
+    /// and stored, and the memoized rows composed against those served. Counts
+    /// of work done, not of time, so a run tells the same story on a busy machine.
+    let cacheCounts: () -> (stats: RenderCache.Stats, rows: RenderCache.RowWork)
 
     /// Plays `session` against its own ``HeadlessApp`` of `width` × `height`
     /// cells, clearing its render cache before every frame when `cold`.
@@ -139,6 +143,7 @@ final class DrivenSession {
         check = { session.check($0, after: $1) }
         staleServes = { app.renderCache.renderMemoMismatches }
         staleSizes = { app.renderCache.measureMemoMismatches }
+        cacheCounts = { (app.renderCache.stats, app.renderCache.rowWork) }
     }
 }
 

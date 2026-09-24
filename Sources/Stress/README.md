@@ -155,7 +155,11 @@ the app's five-layer input chain to the focused control, and a frame is the
 loop's own — header, status bar and diff writer included — at an instant the
 runner supplies, so two runs of one script draw the same pictures. Its report
 prices each KIND of step separately (mean, p50, p95, max, bytes emitted), since
-a keystroke and a page-down are different frames. The real loop matters: its
+a keystroke and a page-down are different frames, and counts what the render
+cache did over the steps: memoized rows composed and served, value-memo hits,
+misses and stores. Those are counts of work, not of time, and the same script
+does the same work, so two builds' counts can be compared on a busy machine
+where their timings cannot. The real loop matters: its
 first frame runs a measuring walk to size the app header before it draws, which
 no direct render does, and that walk was why every app opened a
 `defaultScrollAnchor(.bottom)` view at its top — found by the `chat` session,

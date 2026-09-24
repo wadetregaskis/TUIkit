@@ -88,6 +88,13 @@ enum SessionRunner {
         /// A step whose twin chose a different action: the SCRIPT is not
         /// deterministic, and nothing it found can be trusted.
         var scriptMismatch: String?
+        /// What the warm instance's render cache did over the steps, the page's
+        /// opening frame left out: the value memos' hits, misses and stores, and
+        /// the memoized rows composed against those served. Deterministic — the
+        /// same script at the same instants does the same work — so, unlike the
+        /// timings, two builds' counts can be compared on any machine.
+        var cacheStats = RenderCache.Stats()
+        var rowWork = RenderCache.RowWork()
 
         /// Whether the run found nothing wrong: no divergence from the twin, no
         /// frame that failed the session's own check, and a deterministic script.
@@ -130,6 +137,7 @@ enum SessionRunner {
         cold?.frame(0)
         if options.checks { checkFrame(of: warm, after: -1, action: "open", into: &report) }
 
+        let countsAtOpen = warm.cacheCounts()
         var staleSoFar = warm.staleServes().count
         var staleSizesSoFar = warm.staleSizes().count
         for index in 0..<options.steps {
@@ -189,6 +197,9 @@ enum SessionRunner {
             }
         }
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
+        let counts = warm.cacheCounts()
+        report.cacheStats = counts.stats.delta(since: countsAtOpen.stats)
+        report.rowWork = counts.rows.delta(since: countsAtOpen.rows)
         report.memoVerified = RenderCache.verifiesRenderMemo
         report.staleServes = warm.staleServes()
         report.sizesVerified = RenderCache.verifiesMeasureMemo
@@ -280,6 +291,14 @@ enum SessionRunner {
                     cost.count, mean, cost.quantileMicros(0.5), cost.quantileMicros(0.95),
                     cost.quantileMicros(1), Double(cost.bytes) / Double(max(1, cost.count))))
         }
+        let rows = report.rowWork
+        let stats = report.cacheStats
+        Swift.print(
+            String(
+                format: "  memoized rows: %d composed, %d served (%.1f/step, %.1f/step); "
+                    + "value memos: %d hits, %d misses, %d stores",
+                rows.rendered, rows.served, Double(rows.rendered) / steps, Double(rows.served) / steps,
+                stats.hits, stats.misses, stats.stores))
         if !report.lastScreen.isEmpty {
             Swift.print("  last frame:")
             for line in report.lastScreen { Swift.print("  | " + line) }
