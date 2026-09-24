@@ -1084,39 +1084,9 @@ private func memoizedMeasure<V: View>(
             context.environment.volatileReadTracker === tracker,
             "the pass's volatile-read tracker was installed without mirroring it onto the render "
                 + "cache — install one with EnvironmentValues.installVolatileReadTracker(_:)")
-        let key = RenderCache.MeasureKey(
-            identityHash: measureIdentityHash(context),
-            effectiveWidth: proposal.width ?? context.availableWidth,
-            availableWidth: context.availableWidth,
-            hasExplicitWidth: context.hasExplicitWidth,
-            hasExplicitHeight: context.hasExplicitHeight,
-            viewType: ObjectIdentifier(V.self),
-            valueHash: viewValueHash(view))
-        let widthWasSpecified = proposal.width != nil
-        // What this query can accept without a clamp — the gate a stored
-        // ``ViewSize/isNaturalSize`` answer has to clear to serve it.
-        let verticalBudget = min(proposal.height ?? Int.max, context.availableHeight)
-        if let cached = cache.lookupMeasure(
-            key: key,
-            proposalWidthWasSpecified: widthWasSpecified,
-            proposalHeight: proposal.height,
-            availableHeight: context.availableHeight,
-            verticalBudget: verticalBudget)
-        {
-            if RenderCache.verifiesMeasureMemo {
-                // The fresh size, not the served one: a debugging aid the layout
-                // shows, as the render verifier draws its fresh render.
-                let fresh = measureChildUncached(view, proposal: proposal, context: context)
-                if fresh != cached {
-                    cache.noteMeasureMemoMismatch(
-                        viewType: String(describing: V.self), served: cached, fresh: fresh,
-                        proposal: proposal, availableWidth: context.availableWidth,
-                        availableHeight: context.availableHeight,
-                        identity: context.identity.path)
-                }
-                return fresh
-            }
-            return cached
+        let key = measureKey(for: view, proposal: proposal, context: context)
+        if let served = servedMeasure(view, key: key, proposal: proposal, context: context, cache: cache) {
+            return served
         }
         // The same gate `EquatableView`/`_MemoizedRow` use: a subtree that
         // declares a render side effect or reads a per-frame-volatile value is
@@ -1139,7 +1109,7 @@ private func memoizedMeasure<V: View>(
         if tracker.cacheUnsafeCount == unsafeBefore {
             cache.storeMeasure(
                 key: key,
-                proposalWidthWasSpecified: widthWasSpecified,
+                proposalWidthWasSpecified: proposal.width != nil,
                 proposalHeight: proposal.height,
                 availableHeight: context.availableHeight,
                 size: size)
@@ -1147,6 +1117,60 @@ private func memoizedMeasure<V: View>(
         return size
     }
     return measureChildUncached(view, proposal: proposal, context: context)
+}
+
+/// This pass's measure-memo key for `view` asked `proposal` in `context`.
+@inline(__always)
+@MainActor
+private func measureKey<V: View>(
+    for view: V, proposal: ProposedSize, context: RenderContext
+) -> RenderCache.MeasureKey {
+    RenderCache.MeasureKey(
+        identityHash: measureIdentityHash(context),
+        effectiveWidth: proposal.width ?? context.availableWidth,
+        availableWidth: context.availableWidth,
+        hasExplicitWidth: context.hasExplicitWidth,
+        hasExplicitHeight: context.hasExplicitHeight,
+        viewType: ObjectIdentifier(V.self),
+        valueHash: viewValueHash(view))
+}
+
+/// What this pass's measure memo holds at `key` for this query, or `nil` when
+/// it holds nothing that can serve it.
+///
+/// Under ``RenderCache/verifiesMeasureMemo`` a hit is measured afresh and the
+/// fresh size returned, with any difference from the served one noted.
+@inline(__always)
+@MainActor
+private func servedMeasure<V: View>(
+    _ view: V, key: RenderCache.MeasureKey, proposal: ProposedSize, context: RenderContext,
+    cache: RenderCache
+) -> ViewSize? {
+    // What this query can accept without a clamp — the gate a stored
+    // ``ViewSize/isNaturalSize`` answer has to clear to serve it.
+    let verticalBudget = min(proposal.height ?? Int.max, context.availableHeight)
+    guard
+        let cached = cache.lookupMeasure(
+            key: key,
+            proposalWidthWasSpecified: proposal.width != nil,
+            proposalHeight: proposal.height,
+            availableHeight: context.availableHeight,
+            verticalBudget: verticalBudget)
+    else { return nil }
+    if RenderCache.verifiesMeasureMemo {
+        // The fresh size, not the served one: a debugging aid the layout
+        // shows, as the render verifier draws its fresh render.
+        let fresh = measureChildUncached(view, proposal: proposal, context: context)
+        if fresh != cached {
+            cache.noteMeasureMemoMismatch(
+                viewType: String(describing: V.self), served: cached, fresh: fresh,
+                proposal: proposal, availableWidth: context.availableWidth,
+                availableHeight: context.availableHeight,
+                identity: context.identity.path)
+        }
+        return fresh
+    }
+    return cached
 }
 
 /// The identity half of a ``RenderCache/MeasureKey``: the identity's structural
