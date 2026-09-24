@@ -462,7 +462,8 @@ the one worth remembering:
   field recorded beneath it — the run's ground, which `BackgroundModifier` and
   every other container that paints under a run records on it as it paints,
   and which every pass that repaints fields already drawn (the flatten behind a
-  modal and under `.dimmed()`, the colour effects) repaints with the lines.
+  modal and under `.dimmed()`, the colour effects, a transition's fade)
+  repaints with the lines.
   Replaying the wrong one accuses every focus cap inside a `.background()` of
   dropping its surface — which reads exactly like a real bug, right down to a
   plausible mechanism, and is not one. `patchingAnimatedCells` exists precisely

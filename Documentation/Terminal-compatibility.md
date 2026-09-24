@@ -4216,10 +4216,11 @@ compositing and a floating layer made opaque, a `List` row's fill, a menu row's
 bar — with the very function it paints the lines with; and rewritten by every
 pass that rewrites the fields of lines already painted, with the function it
 rewrites them with — the flatten `.dimmed()` and a modal's backdrop go through,
-and the colour effects (see the later notes below). The replay reads it on
-the row's page, exactly as `buildLine` reads a row (the page in front, restated
-after every reset: `AnimatedCellRun.groundFields(onPage:)`), so a cell no painter
-reached sits on the page and every other cell on its innermost painter's field.
+the colour effects, and a transition's fade (see the later notes below). The
+replay reads it on the row's page, exactly as `buildLine` reads a row (the page
+in front, restated after every reset: `AnimatedCellRun.groundFields(onPage:)`),
+so a cell no painter reached sits on the page and every other cell on its
+innermost painter's field.
 `String.paintedOver(fields:)` puts that field under each cell the frame leaves
 bare: at the start, after every SGR that leaves the frame naming no field of its
 own (a reset in either spelling included), and before a cell whose field
@@ -4328,6 +4329,18 @@ replay began reading the ground. Measured through the run loop
 "…38;2;153;0;153m" on "…48;2;165;235;135m"`. The effect now puts every run's
 frames and both of its records through the same rewrite as the lines
 (`FrameBuffer.restyleRuns`). Pinned per effect by `ColorEffectRunTests`.
+
+**2026-09-24, later: so does a transition's fade.** `.transition(.opacity)`
+fades a view's lines by the same colour rewrite (`OpacityFade.fading`) and left
+its runs unfaded. A transition renders on the view-animation lattice, every 2
+ticks, and a run's step that lands between two renders is replayed onto the
+frame the last one left. Driven through the loop, a `.dots` spinner (7 ticks a
+step) inserted with a one-second `.opacity` transition changes at 4 ticks where
+no render is due. Each of those replays drew the spinner at full strength, on
+its unfaded field, in a view half faded out. The ink was never faded; the field
+went wrong when the replay began reading the ground. The fade now puts the runs
+through the rewrite it puts the lines through (`FrameBuffer.restyleRuns`).
+Pinned at three phases by `TransitionFadeRunTests`.
 
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the

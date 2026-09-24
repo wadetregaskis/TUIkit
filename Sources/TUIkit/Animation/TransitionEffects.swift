@@ -192,6 +192,15 @@ extension AnyTransition.Effect {
     /// cell has no alpha, so the only thing that can dissolve is the colour.
     /// Over the terminal's page before it has reported it, that is a cut at ½
     /// in the glyphs as well, as it is there (`OpacityFade`).
+    ///
+    /// The buffer's runs are faded by the same rewrite: every frame, and what the
+    /// containers inside the transition painted beneath them
+    /// (`FrameBuffer.restyleRuns`). A transition renders on the view-animation
+    /// lattice, every 2 ticks, and a run's tick that falls between two renders is
+    /// replayed onto the frame the last one left, so the frames have to be what
+    /// that render faded. A `.dots` spinner steps every 7 ticks, and four of its
+    /// steps in a one-second transition were replayed at full strength, on its
+    /// unfaded field, in a view half faded out.
     @MainActor
     private static func faded(
         _ buffer: FrameBuffer, by factor: Double, context: RenderContext
@@ -199,11 +208,12 @@ extension AnyTransition.Effect {
         let palette = context.environment.palette
         let surface = palette.background.resolve(with: palette)
         let defaultForeground = palette.foreground.resolve(with: palette)
-        return buffer.replacingLines(
-            buffer.lines.map {
-                OpacityFade.fading(
-                    $0, by: factor, over: surface, defaultForeground: defaultForeground)
-            })
+        func fading(_ line: String) -> String {
+            OpacityFade.fading(line, by: factor, over: surface, defaultForeground: defaultForeground)
+        }
+        var faded = buffer.replacingLines(buffer.lines.map(fading))
+        faded.restyleRuns(fading)
+        return faded
     }
 
     /// The buffer moved by whole cells within its own frame, with whatever
