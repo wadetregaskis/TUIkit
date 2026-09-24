@@ -244,6 +244,7 @@ struct TextInputPage: View {
                             "page.textInput.editorKeys.words",
                             "page.textInput.editorKeys.kill",
                             "page.textInput.editorKeys.selectAll",
+                            "page.textInput.editorKeys.undoClipboard",
                         ])
                 }
             }

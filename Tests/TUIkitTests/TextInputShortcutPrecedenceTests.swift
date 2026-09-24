@@ -197,9 +197,13 @@ private func play(
     harness.statusBar.quitShortcut = quitShortcut
     let page = PrecedencePage(host: host, text: text, log: log, shortcut: shortcut)
     harness.frame(page)
-    // Never the real pasteboard: a field's Ctrl-C, X and V reach it.
+    // Never the real pasteboard: a field's Ctrl-C, X and V reach it, and an
+    // editor's Ctrl-C and X.
     if let field = harness.focusManager.currentFocused as? TextFieldHandler {
         field.clipboard = board.access
+    }
+    if let editor = harness.focusManager.currentFocused as? TextEditorHandler {
+        editor.clipboard = board.access
     }
     harness.frame(page)
     var unconsumed: [Int] = []
@@ -481,6 +485,28 @@ struct TextInputShortcutPrecedenceTests {
         #expect(all.text == "X")
     }
 
+    /// The editor's copy, cut and undo stand in for ⌘C, ⌘X and ⌘Z, as a
+    /// field's do, so they keep the key as a field's do: copy and cut while
+    /// text is selected, undo always.
+    @Test("The editor keeps its copy and cut of a selection, and its undo")
+    func editorKeepsItsStandIns() {
+        let copy = play(
+            [optionCtrl("a"), ctrl("c")], into: .textEditor, from: "ab\ncd", shortcut: .command("c"))
+        #expect(copy.fired.isEmpty)
+        #expect(copy.clipboardWrites == ["ab\ncd"])
+
+        let cut = play(
+            [optionCtrl("a"), ctrl("x")], into: .textEditor, from: "ab\ncd", shortcut: .command("x"))
+        #expect(cut.fired.isEmpty)
+        #expect(cut.text.isEmpty)
+        #expect(cut.clipboardWrites == ["ab\ncd"])
+
+        let undo = play(
+            [typed("X"), ctrl("z")], into: .textEditor, from: "ab\ncd", shortcut: .command("z"))
+        #expect(undo.fired.isEmpty)
+        #expect(undo.text == "ab\ncd")
+    }
+
     // MARK: - Copy and cut with nothing selected
 
     /// With nothing selected there is nothing for Ctrl-C or Ctrl-X to copy or
@@ -489,14 +515,15 @@ struct TextInputShortcutPrecedenceTests {
     /// (see ``fieldKeepsItsChords(host:keeping:)``).
     @Test(
         "With nothing selected, Ctrl-C and Ctrl-X reach the app's ⌘C and ⌘X",
-        arguments: PrecedenceHost.fields)
+        arguments: PrecedenceHost.allCases)
     func copyAndCutWithNothingSelectedPassOn(host: PrecedenceHost) {
         for letter: Character in ["c", "x"] {
             let played = play(
-                [home, right, ctrl(letter), typed("X")], into: host, from: "abcd",
+                [home, right, ctrl(letter), typed("X")], into: host, from: GivingWayCase.initial(host),
                 shortcut: .command(letter), clipboard: "BOARD")
             #expect(played.fired == [String(letter)], "\(host): Ctrl-\(letter) did not reach ⌘\(letter)")
-            #expect(played.text == "aXbcd", "\(host): Ctrl-\(letter) edited")
+            #expect(
+                played.text == (host.isEditor ? "aXb\ncd" : "aXbcd"), "\(host): Ctrl-\(letter) edited")
             #expect(played.clipboardWrites.isEmpty, "\(host): Ctrl-\(letter) wrote the clipboard")
         }
     }
@@ -504,18 +531,19 @@ struct TextInputShortcutPrecedenceTests {
     /// `QuitShortcut.ctrlC` is layer 4. A field that took Ctrl-C with nothing
     /// selected kept the app from quitting for as long as it had the focus,
     /// and a field has the focus from the first frame of many an app.
-    @Test("With nothing selected, Ctrl-C quits under quitShortcut .ctrlC", arguments: PrecedenceHost.fields)
-    func ctrlCQuitsFromAField(host: PrecedenceHost) {
-        let idle = play([ctrl("c")], into: host, from: "abcd", shortcut: nil, quitShortcut: .ctrlC)
+    @Test("With nothing selected, Ctrl-C quits under quitShortcut .ctrlC", arguments: PrecedenceHost.allCases)
+    func ctrlCQuitsFromATextControl(host: PrecedenceHost) {
+        let initial = GivingWayCase.initial(host)
+        let idle = play([ctrl("c")], into: host, from: initial, shortcut: nil, quitShortcut: .ctrlC)
         #expect(idle.quits == 1, "\(host): Ctrl-C did not quit")
-        #expect(idle.text == "abcd")
+        #expect(idle.text == initial)
 
-        // With a selection Ctrl-C is the field's copy, and the app stays.
+        // With a selection Ctrl-C is the control's copy, and the app stays.
         let copying = play(
-            [optionCtrl("a"), ctrl("c")], into: host, from: "abcd", shortcut: nil,
+            [optionCtrl("a"), ctrl("c")], into: host, from: initial, shortcut: nil,
             quitShortcut: .ctrlC)
         #expect(copying.quits == 0, "\(host): Ctrl-C quit while text was selected")
-        #expect(copying.clipboardWrites == (host.isSecure ? [] : ["abcd"]), "\(host)")
+        #expect(copying.clipboardWrites == (host.isSecure ? [] : [initial]), "\(host)")
     }
 
     // MARK: - The registry's question

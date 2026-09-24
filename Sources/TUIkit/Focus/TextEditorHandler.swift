@@ -40,7 +40,7 @@ final class TextEditorHandler: PersistedFocusable {
     var tabWidth: TabWidth = .periodic(4)
 
     /// Remembers the cursor's display column for vertical motion.
-    private func syncDesiredColumn(_ lines: [[Character]]? = nil) {
+    func syncDesiredColumn(_ lines: [[Character]]? = nil) {
         let lines = lines ?? readLines()
         guard cursorLine < lines.count else {
             // Out-of-bounds cursor (stale state, normalised elsewhere): fall
@@ -64,6 +64,13 @@ final class TextEditorHandler: PersistedFocusable {
     /// (Ctrl-Y) — a single-slot kill ring, matching the macOS text system.
     private var killRing = ""
 
+    /// The clipboard Ctrl-C and Ctrl-X write. Injectable, as a field's is, so
+    /// a test never touches the real pasteboard; see ``ClipboardAccess``.
+    var clipboard: ClipboardAccess = .system
+
+    /// The text and caret before each key that changed the text, for Ctrl-Z.
+    var undoHistory = TextUndoHistory<TextEditorPosition>()
+
     init(focusID: String, text: Binding<String>, canBeFocused: Bool = true) {
         self.focusID = focusID
         self.text = text
@@ -73,7 +80,7 @@ final class TextEditorHandler: PersistedFocusable {
     // MARK: - Line access
 
     /// The bound text as per-line character arrays (always at least one line).
-    private func readLines() -> [[Character]] {
+    func readLines() -> [[Character]] {
         let parts = text.wrappedValue
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { Array($0) }
@@ -81,7 +88,16 @@ final class TextEditorHandler: PersistedFocusable {
     }
 
     private func writeLines(_ lines: [[Character]]) {
-        text.wrappedValue = lines.map { String($0) }.joined(separator: "\n")
+        write(lines.map { String($0) }.joined(separator: "\n"))
+    }
+
+    /// Writes `newText` to the bound text. Every edit the editor makes goes
+    /// through here, so the undo history knows which text the editor produced
+    /// and can tell it from a replacement by the app (see
+    /// ``TextUndoHistory``).
+    func write(_ newText: String) {
+        text.wrappedValue = newText
+        undoHistory.noteWritten(text.wrappedValue)
     }
 
     /// The number of logical lines.
@@ -128,6 +144,37 @@ final class TextEditorHandler: PersistedFocusable {
 
     func handleKeyEvent(_ event: KeyEvent) -> Bool {
         normalizeStaleState()
+        // Before anything writes: a history of text the app has since
+        // replaced is forgotten, so undo never brings that text back.
+        undoHistory.forgetIfReplaced(current: text.wrappedValue)
+        let standIn = standInCommand(for: event)
+        // Undo is not an edit to record: it takes the newest record back.
+        if standIn == .undo {
+            undo()
+            return true
+        }
+        // Any key that changes the text records what the text was, so Ctrl-Z
+        // takes back one key's edit at a time, as it does in a field. Compared
+        // after the fact rather than pushed by each edit, because an edit can
+        // write more than once (typing over a selection deletes, then
+        // inserts) and is still one step to take back.
+        let textBefore = text.wrappedValue
+        let caretBefore = cursor
+        let handled: Bool
+        if let standIn {
+            handled = perform(standIn)
+        } else {
+            handled = handleEditingKey(event)
+        }
+        if text.wrappedValue != textBefore {
+            undoHistory.record(text: textBefore, caret: caretBefore)
+        }
+        return handled
+    }
+
+    /// Every key but the Command-key stand-ins
+    /// (``standInCommand(for:)``).
+    private func handleEditingKey(_ event: KeyEvent) -> Bool {
         // A drag/Shift-click selection is consumed by the next edit (delete, or
         // delete-then-insert) and cleared by any other key. This lets mouse
         // selection drive editing without the editor carrying a full
@@ -660,7 +707,7 @@ extension TextEditorHandler {
     /// `span` clamped into `lines`: each end on a real line, at a real column.
     /// A corrupt span's clamped columns can come out inverted on one line;
     /// the callers order them.
-    private func clamped(_ span: SelectionSpan, in lines: [[Character]]) -> SelectionSpan {
+    func clamped(_ span: SelectionSpan, in lines: [[Character]]) -> SelectionSpan {
         let startLine = min(max(0, span.start.line), lines.count - 1)
         let endLine = min(max(0, span.end.line), lines.count - 1)
         return (
@@ -673,7 +720,7 @@ extension TextEditorHandler {
 
     /// Removes the selected text, placing the cursor at the span's start and
     /// clearing the selection.
-    fileprivate func deleteSelection(_ span: SelectionSpan) {
+    func deleteSelection(_ span: SelectionSpan) {
         var lines = readLines()
         let (start, end) = clamped(span, in: lines)
         let startLine = start.line

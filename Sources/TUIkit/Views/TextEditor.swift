@@ -32,6 +32,8 @@
 /// | Ctrl-T | Transpose the two characters around the cursor |
 /// | Ctrl-O | Open a new line after the cursor |
 /// | Ctrl-V | Page down |
+/// | Ctrl-C / Ctrl-X | Copy / cut the selection (with nothing selected, the key passes on) |
+/// | Ctrl-Z | Undo the last change |
 /// | Option-← / → | Move by a word |
 /// | Option-B / F | Move by a word (Emacs) |
 /// | Option-Backspace / Delete | Delete the word before / after the cursor |
@@ -39,11 +41,22 @@
 ///
 /// ``TextField`` and ``SecureField`` read the Emacs chords from the same
 /// table, and they differ where a field is one line with a keyboard selection.
-/// There, Ctrl-V pastes, and Ctrl-O, Ctrl-P and Ctrl-N do nothing. Ctrl-D
+/// There, Ctrl-V pastes, Ctrl-U erases the field, and Ctrl-O, Ctrl-P and
+/// Ctrl-N do nothing. Ctrl-D
 /// deletes a field's selection and Ctrl-Y replaces it, where the editor drops
 /// its selection before any Emacs chord and acts at the cursor. A field
 /// reads Option first, so Option-Ctrl-B and F move by a word in a field and by
 /// a character here.
+///
+/// Ctrl-C, Ctrl-X and Ctrl-Z stand in for ⌘C, ⌘X and ⌘Z, which a terminal app
+/// never receives, as they do in a field. Copy and cut act on the selection;
+/// with nothing selected they pass the key on, so an app's ⌘C or ⌘X fires, or
+/// `QuitShortcut.ctrlC` quits. Paste arrives through the terminal's own paste,
+/// since Ctrl-V is the page down here. Undo takes back one key's change at a
+/// time, from the last 50, with no grouping of a typing run as the macOS text
+/// system has; and it never brings back text the editor did not produce: when
+/// the app replaces the bound text, loading another document, the editor
+/// forgets its history.
 ///
 /// An app's own keyboard shortcut beats most of the Emacs chords. Under the
 /// default ``EnvironmentValues/commandKey`` a SwiftUI ⌘ shortcut arrives as a
@@ -53,7 +66,7 @@
 /// `.commandKey(.option)`. Ctrl-A and Ctrl-E keep the key, because Home and End
 /// go to the ends of the document here and leave them the only keys for the
 /// ends of a line, and so does Option-Ctrl-A, the only way to select
-/// everything. See <doc:KeyboardShortcuts>.
+/// everything, and so do copy, cut and undo. See <doc:KeyboardShortcuts>.
 ///
 /// Literal tabs are laid out against tab *stops* — by default every 4 columns
 /// (a tab advances to the next multiple of 4, so its visual width varies),

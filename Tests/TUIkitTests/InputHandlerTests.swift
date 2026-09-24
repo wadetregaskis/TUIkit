@@ -17,10 +17,10 @@ import Testing
 /// These tests wire each layer with a double that records whether it
 /// ran and consumes the event, then assert which layer actually fired.
 ///
-/// Layer 0 isn't exercised here: `hasTextInputFocus` is specifically
-/// `currentFocused is TextFieldHandler`, so it needs a real text-field
-/// handler focused (covered by the TextField tests); a generic focusable
-/// exercises layer 3 instead.
+/// Layer 0 is exercised by focusing a real text handler, since
+/// `hasTextInputFocus` asks for a `TextInputFocusHandler` (a field, an
+/// editor, a date picker); a generic focusable exercises layer 3 instead.
+/// `TextInputShortcutPrecedenceTests` plays whole pages through the chain.
 @MainActor
 @Suite("InputHandler dispatch chain")
 struct InputHandlerTests {
@@ -193,6 +193,30 @@ struct InputHandlerTests {
 
         #expect(consumed)
         #expect(fixture.probe.suspendCount == 0, "the view's binding won")
+    }
+
+    /// Ctrl-Z in a focused text control is undo, as it is in a field. The
+    /// editor had no Ctrl-Z of its own, so the key fell through every layer
+    /// and suspended the whole app, with the text still unsaved in it.
+    @Test("Ctrl-Z in a focused TextEditor undoes, and does not suspend the app")
+    func ctrlZInAnEditorUndoes() {
+        let fixture = makeFixture()
+        var text = "ab"
+        let editor = TextEditorHandler(
+            focusID: "editor", text: Binding(get: { text }, set: { text = $0 }))
+        fixture.focus.register(editor)
+        #expect(fixture.focus.hasTextInputFocus, "precondition: the editor holds the focus")
+
+        #expect(fixture.handler.handle(KeyEvent(key: .character("X"))))
+        #expect(text == "Xab", "precondition: the typing reached the editor")
+        #expect(fixture.handler.handle(KeyEvent(key: .character("z"), ctrl: true)))
+
+        #expect(fixture.probe.suspendCount == 0, "Ctrl-Z suspended the app")
+        #expect(text == "ab", "and it did not undo the typing")
+
+        // Nothing left to undo: still the editor's key, still no suspend.
+        #expect(fixture.handler.handle(KeyEvent(key: .character("z"), ctrl: true)))
+        #expect(fixture.probe.suspendCount == 0, "an empty history let Ctrl-Z through to suspend")
     }
 
     /// Raw mode clears ISIG for Ctrl-C too, so it is a key and not SIGINT —

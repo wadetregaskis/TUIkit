@@ -201,8 +201,10 @@ struct TextFieldControlChordTests {
         }
     }
 
-    /// The field has an undo stack, which the editor does not, so an edit made
-    /// by a chord must land on it like an edit made by any other key.
+    /// A field's undo is per edit, so an edit made by a chord must land on
+    /// its history like an edit made by any other key. (The editor's undo
+    /// records every key that changed the text, whatever it was, and is
+    /// tested in `TextEditorUndoClipboardTests`.)
     ///
     /// Each edit is checked DONE before it is checked undone: an edit that
     /// never happened is trivially "undone", and the kill and transpose rows

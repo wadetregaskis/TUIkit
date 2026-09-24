@@ -3850,8 +3850,8 @@ shortcuts an app is most likely to carry land on them:
 | ⌘A Select All, ⌘E | ⌃A, ⌃E | `0x01`, `0x05` | `TextEditor`: start, end of the line | the editor |
 | ⌥⌘A | ⌥⌃A | `ESC 0x01` | select all | the text control |
 | ⌘V Paste | ⌃V | `0x16` | a field: paste | the field |
-| ⌘C, ⌘X | ⌃C, ⌃X | `0x03`, `0x18` | a field: copy, cut the selection | the field while text is selected, else the app's shortcut |
-| ⌘Z | ⌃Z | `0x1A` | a field: undo | the field |
+| ⌘C, ⌘X | ⌃C, ⌃X | `0x03`, `0x18` | copy, cut the selection | the text control while text is selected, else the app's shortcut |
+| ⌘Z | ⌃Z | `0x1A` | undo | the text control |
 
 A focused text control is offered a key before the app's shortcuts (layer 0
 before layer 3.5), so a focused editor used to swallow the app's Find and move
@@ -3868,11 +3868,10 @@ each is the only way to do what it does or stands in for the ⌘ chord itself
 other route at all (see the ⌥⌃A section above); the editor's Home and End go
 to the ends of the document, so Ctrl-A and Ctrl-E are its only keys for the
 ends of a line (a field's Home and End go to the ends of its line, so there
-the pair gives way); and a field's clipboard and undo chords are what ⌘C,
-⌘X, ⌘V and ⌘Z would do anyway. A framework default,
-such as the split view's ⌃S below, never takes a key from the focused
-control. `TextInputShortcutPrecedenceTests` pins every row through
-the input chain.
+the pair gives way); and the clipboard and undo chords are what ⌘C, ⌘X, ⌘V
+and ⌘Z would do anyway. A framework default, such as the split view's ⌃S
+below, never takes a key from the focused control.
+`TextInputShortcutPrecedenceTests` pins every row through the input chain.
 
 #### ⌃S and ⌥⌃S: the split view's sidebar chords (recorded 2026-09-13)
 

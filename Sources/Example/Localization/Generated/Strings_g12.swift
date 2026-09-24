@@ -29,6 +29,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] Back / forward a word · [Opt-Bksp] [Opt-Del] Delete a word · [Opt-Tab] A literal tab",
             "page.textInput.editorKeys.kill": "[^K] Kill to end of line · [^Y] Yank it back · [^D] Delete forward",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Select all",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] Undo · [^C] [^X] Copy / cut the selection",
         ],
         "de": [
             "page.layout.resizableSection": "Selbst anpassen (.userResizable)",
@@ -43,6 +44,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] Ein Wort zurück / vor · [Opt-Rück] [Opt-Entf] Wort löschen · [Opt-Tab] Echter Tabulator",
             "page.textInput.editorKeys.kill": "[^K] Bis Zeilenende löschen · [^Y] Wieder einfügen · [^D] Vorwärts löschen",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Alles auswählen",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] Widerrufen · [^C] [^X] Auswahl kopieren / ausschneiden",
         ],
         "fr": [
             "page.layout.resizableSection": "À redimensionner soi-même (.userResizable)",
@@ -57,6 +59,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] Mot précédent / suivant · [Opt-Ret.arr.] [Opt-Suppr] Supprimer un mot · [Opt-Tab] Tabulation littérale",
             "page.textInput.editorKeys.kill": "[^K] Supprimer jusqu'à la fin · [^Y] Recoller · [^D] Supprimer en avant",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Tout sélectionner",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] Annuler · [^C] [^X] Copier / couper la sélection",
         ],
         "it": [
             "page.layout.resizableSection": "Ridimensionalo tu (.userResizable)",
@@ -71,6 +74,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] Una parola indietro / avanti · [Opt-Backsp] [Opt-Canc] Elimina una parola · [Opt-Tab] Tabulazione vera",
             "page.textInput.editorKeys.kill": "[^K] Elimina fino a fine riga · [^Y] Reincolla · [^D] Elimina in avanti",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Seleziona tutto",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] Annulla · [^C] [^X] Copia / taglia la selezione",
         ],
         "es": [
             "page.layout.resizableSection": "Cámbialo tú (.userResizable)",
@@ -85,6 +89,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] Una palabra atrás / adelante · [Opt-Retroc] [Opt-Supr] Borrar una palabra · [Opt-Tab] Tabulador literal",
             "page.textInput.editorKeys.kill": "[^K] Borrar hasta el final · [^Y] Volver a pegar · [^D] Borrar hacia delante",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] Seleccionar todo",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] Deshacer · [^C] [^X] Copiar / cortar la selección",
         ],
         "zh": [
             "page.layout.resizableSection": "自己调整大小 (.userResizable)",
@@ -99,6 +104,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] 前后移动一个词 · [Opt-退格] [Opt-Del] 删除一个词 · [Opt-Tab] 输入真正的制表符",
             "page.textInput.editorKeys.kill": "[^K] 删到行尾 · [^Y] 粘回来 · [^D] 向后删除",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] 全选",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] 撤销 · [^C] [^X] 拷贝 / 剪切所选内容",
         ],
         "ja": [
             "page.layout.resizableSection": "自分でリサイズ (.userResizable)",
@@ -113,6 +119,7 @@ extension ExampleStrings {
             "page.textInput.editorKeys.words": "[Opt-B] [Opt-F] 一語戻る／進む · [Opt-BS] [Opt-Del] 一語削除 · [Opt-Tab] 本物のタブ",
             "page.textInput.editorKeys.kill": "[^K] 行末まで削除 · [^Y] 貼り戻す · [^D] 前方削除",
             "page.textInput.editorKeys.selectAll": "[Opt-^A] すべて選択",
+            "page.textInput.editorKeys.undoClipboard": "[^Z] 取り消す · [^C] [^X] 選択部分をコピー／カット",
         ],
     ]
 }

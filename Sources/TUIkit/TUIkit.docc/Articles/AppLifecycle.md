@@ -166,7 +166,7 @@ Built-in key bindings that apply when no handler consumed the event:
 | Key | Action | Condition |
 |-----|--------|-----------|
 | `q` / `Q` | Quit application | `statusBar.isQuitAllowed` — offered even behind a modal, as its escape hatch |
-| Ctrl-Z | Suspend the app | Always. Raw mode clears `ISIG`, so the driver never turns `^Z` into SIGTSTP; reaching layer 4 means no view claimed it (a text field's undo wins), so it is re-raised as the signal |
+| Ctrl-Z | Suspend the app | Always. Raw mode clears `ISIG`, so the driver never turns `^Z` into SIGTSTP; reaching layer 4 means no view claimed it (a focused text field's or editor's undo wins), so it is re-raised as the signal |
 | `t` / `T` | Cycle to next palette | `statusBar.showThemeItem`, and no transient surface has grabbed input |
 | `a` / `A` | Cycle to next appearance | No transient surface has grabbed input — otherwise `a` would restyle the app from behind a modal the user cannot see the controls for |
 
