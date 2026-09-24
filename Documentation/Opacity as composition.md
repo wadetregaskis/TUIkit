@@ -4342,6 +4342,15 @@ Its frames are washed in two new colours, and one static claim covers them (§68
 payload describes colours that are no longer there. The resolver multiplies a payload into
 whatever covers it (§70.3), so keeping it would fade the wash's field twice.
 
+A seventh is the breathing `List` row's twin (2026-09-24). A menu row's breathing bar
+(`_MenuItemRowBar`) leaves a run per line that repaints the whole row, so it kept its
+label's runs under its own and the wider one won: a spinner in the label held the glyph it
+was drawn with, and nothing asked for the render that would have moved it. It now drops
+them as the list's cursor row does: their drawn-frame regions go after the label's own
+content regions, and one render is asked for at the soonest of their next steps. Both drop
+sites share `AnimatedCellRun.alphaLeftBehind` and
+`RenderContext.requestWake(token:forNextStepOf:)` (`DroppedAnimatedRuns.swift`).
+
 ## 70. A run left outside the buffer that carries it (2026-09-12)
 
 `OverlayLayer`'s leading cut (`cutting(_:leadingColumns:rows:)`) moves every payload

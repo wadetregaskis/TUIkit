@@ -143,13 +143,28 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             let cycle = context.environment.selectionEmphasis.cycle(true)
             let now = cycle.colorNow(dim: dim, bright: bright)
             buffer.lines = plain.map { painted($0, now) }
-            // Before the bar's own runs join them below, which ARE the bar.
+            // For a bar that holds still, whose label keeps its runs. A breathing one
+            // drops them below and leaves only its own, which ARE the bar.
             buffer.paintRunGrounds { _, ground in painted(ground, now) }
             // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
             // was already drawn above; replaying it would emit bytes per tick to
             // change nothing. Measuring passes leave no runs at all.
             guard cycle.isAnimating, !context.isMeasuring else { break }
-            buffer.animatedCells += plain.indices.compactMap { index in
+            // The bar's runs repaint the WHOLE row every tick, over the label as it
+            // was drawn, so a run the label left — a spinner beside its text — is a
+            // second animation claiming cells the bar's already claims, and the
+            // wider one wins: the spinner held the glyph it was rendered with. So
+            // the label's runs are dropped for as long as the bar breathes, and the
+            // row takes over what they did, as a `List`'s breathing cursor row does:
+            // what they said about alpha stays behind, after the label's own regions
+            // (§69.4), and the render they would have caused at their next step is
+            // asked for on their behalf.
+            let dropped = buffer.animatedCells.filter(\.isAnimating)
+            buffer.opacityRegions += dropped.flatMap(\.alphaLeftBehind)
+            context.requestWake(
+                token: "menu-row-dropped-run-\(context.identity.path)",
+                forNextStepOf: dropped.map { ($0.clock, $0.frameTicks) })
+            buffer.animatedCells = plain.indices.compactMap { index in
                 cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: index) {
                     painted(plain[index], $0)
                 }

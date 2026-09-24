@@ -62,18 +62,16 @@ private func catalogue() -> some View {
             Button("Second") {}
         }
         .menuStyle(.inline)
-        // A menu row's bar over a label that animates on its own: the bar paints
-        // under the label's run (`_MenuItemRowBar`, which records it). Still, so
-        // the bar leaves no run of its own: a breathing bar's run spans the row
-        // and replays the label as it was drawn, so a spinner under it holds the
-        // glyph it rendered with until the next render — a limit of runs that
-        // overlap, not of what is under them.
+        // A menu row's bar over a label that animates on its own. Where the bar
+        // holds still (a reversal on a `Color.default` palette), it paints under
+        // the label's run (`_MenuItemRowBar`, which records it); where it breathes,
+        // its runs repaint the whole row, so it drops the label's run and asks for
+        // a render at the spinner's next step (`MenuBreathingBarRunTests`).
         Menu("Tasks") {
             Button(action: {}, label: { HStack(spacing: 0) { Text("Busy "); Spinner() } })
             Button("Idle") {}
         }
         .menuStyle(.inline)
-        .selectionIndicatorStyle(.none)
         TabView(selection: .constant(0)) {
             Tab("Alpha", value: 0) { Text("a") }
             Tab("Beta", value: 1) { Text("b") }
