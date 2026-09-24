@@ -467,7 +467,9 @@ struct ChatApp: View {
 // MARK: - Shared pieces
 
 /// A leaf that reads the clock, so a tick invalidates a line rather than a page.
-private struct TickStamp: View {
+/// Internal rather than private: `AppShapeSidebar.swift` stamps its detail pane
+/// with it too.
+struct TickStamp: View {
     @Environment(StressClock.self) private var clock
     var body: some View { Text(clock.tick.formatted()).dim() }
 }

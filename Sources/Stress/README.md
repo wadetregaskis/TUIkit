@@ -64,7 +64,7 @@ scale live · `a` toggle autopilot.
 | `table-churn-wrapped` | the same, 250 rows wrapped: below the extent estimator's row limit, where every row is measured |
 | `table-tail` | a window over a growing sequence — rows keep their content and change position |
 | `table-api` | **a matrix**: one `Table` built every way the API allows, one variant per point (see below) |
-| `app-shapes` | **a matrix**: whole applications — file browser, log viewer, process monitor, mail client, settings form, code editor (settled and tailing), chat |
+| `app-shapes` | **a matrix**: whole applications — file browser, log viewer, process monitor, mail client, settings form, code editor (settled and tailing), chat, a sidebar source list (tagged and untagged) |
 | `tables-scroll` | **multiple** `Table`s in a `ScrollView` — N per-table column-width computations, ScrollView windowing over the combined buffer |
 | `tables-vstack` | **multiple** `Table`s in a `VStack` (no scroll) — N per-table column-width computations, VStack measure/layout over many table children |
 | `deep` | structural `ViewIdentity` chain depth, measure recursion, context propagation |
@@ -119,6 +119,12 @@ second of each pair exists because every memo keyed on the rows' data — the ro
 memo, a `Table`'s `.fit` column, a windowed stack's width over all rows — serves
 100% on the settled shape and 0% on the growing one, and a matrix that only ever
 measured the settled shape would report the memo's best day as its only day.
+`sidebar`/`sidebar-untagged` is a pair along a third axis: one hand-written
+"All projects" row above 300 looped ones, which makes the `List` walk its
+flattened children eagerly and recover each looped row's selection value from
+the `ForEach` that made it. The tagged variant names every row with the app's
+own enum, read off the BUILT row; the untagged one answers by each project's
+`id`, a key-path read — so the difference between them is the price of a tag.
 
 `table-api` is the first: 43 variants over seven axes — how a column gets its
 value (key path, closure, sort-by-one-display-another, non-`Equatable` rows,

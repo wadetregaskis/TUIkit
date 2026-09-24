@@ -234,5 +234,11 @@ enum AppShapeMatrix {
         variant("chat-eager", "the same chat in a plain VStack — every message rendered, every frame") {
             AnyView(ChatApp(count: $0.sized(1_500), seed: $0.seed, eager: true))
         },
+        variant("sidebar", "a source list: a hand-written row above 300 looped rows, each tagged with the app's enum") {
+            AnyView(ProjectSidebarApp(count: $0.sized(300), seed: $0.seed, tagged: true))
+        },
+        variant("sidebar-untagged", "the same source list answering by the projects' ids — no row built to read a tag") {
+            AnyView(ProjectSidebarApp(count: $0.sized(300), seed: $0.seed, tagged: false))
+        },
     ]
 }
