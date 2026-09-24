@@ -98,6 +98,35 @@ struct ButtonMeasureParityTests {
             #expect(truncated.contains("…"), "\(style) at \(width): |\(truncated)|")
         }
     }
+
+    /// A label that fills its width — the navigation row's `Text`, `Spacer`,
+    /// `Text` — draws the button as wide as whatever it is offered, so the
+    /// button's measure has to say so. Reported rigid at the width of one
+    /// offer, it read to a parent that keeps widths as a button exactly that
+    /// wide, and a windowed stack of navigation links answered every wider ask
+    /// with the narrower width its render had offered.
+    @Test("a @ViewBuilder label that fills makes the button fill", arguments: [ButtonStyleCase.default, .plain])
+    func fillingLabelIsFlexible(style: ButtonStyleCase) {
+        let filling = style.apply(
+            to: Button(
+                action: {},
+                label: {
+                    HStack(spacing: 1) {
+                        Text(verbatim: "note")
+                        Spacer()
+                        Text(verbatim: "#1")
+                    }
+                }))
+        let hugging = style.apply(to: Button(action: {}, label: { Text(verbatim: "note") }))
+        for width in [20, 60] {
+            let proposal = ProposedSize(width: width, height: nil)
+            let fills = measureChild(filling, proposal: proposal, context: context(width: width))
+            #expect(fills.width == renderToBuffer(filling, context: context(width: width)).width)
+            #expect(fills.isWidthFlexible, "\(style) at \(width): \(fills)")
+            let hugs = measureChild(hugging, proposal: proposal, context: context(width: width))
+            #expect(!hugs.isWidthFlexible, "\(style) at \(width): \(hugs)")
+        }
+    }
 }
 
 /// The built-in styles, as a value a test can iterate.

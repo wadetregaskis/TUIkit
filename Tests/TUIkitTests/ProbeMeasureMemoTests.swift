@@ -140,4 +140,30 @@ struct ProbeMeasureMemoTests {
         _ = measureChild(ProbedHuggingLabel(), proposal: Self.proposal, context: context)
         #expect(cache.measureEntryCount > afterProbe + 1)
     }
+
+    /// The button's own probe, end to end: a button learns whether its
+    /// `@ViewBuilder` label fills by asking it. A plain button draws its label
+    /// at the width it is offered, so the two buttons measure the same nodes
+    /// on the way to drawing — a `Spacer` is laid out, not measured — and the
+    /// only difference the memo can see is the probe the filling one makes,
+    /// which must be one entry: its answer.
+    ///
+    /// Plain only because the standard variant's chrome is an `HStack` that
+    /// gives a filling label the rest of the row and measures it again at that
+    /// width, which is layout, not probe, and differs between the two for that
+    /// reason alone. The probe is the same call for both.
+    @Test("A button whose label fills keeps one memo entry more than one whose label does not")
+    func buttonProbeCostsOneEntry() throws {
+        func entries(measuring button: Button) throws -> (count: Int, size: ViewSize) {
+            let context = probeMemoisedContext(width: Self.width)
+            let size = measureChild(
+                ButtonStyleCase.plain.apply(to: button), proposal: Self.proposal, context: context)
+            return (try #require(context.renderCache).measureEntryCount, size)
+        }
+        let filling = try entries(measuring: Button(action: {}, label: { ProbedFillingLabel() }))
+        let hugging = try entries(measuring: Button(action: {}, label: { ProbedHuggingLabel() }))
+        #expect(filling.size.isWidthFlexible, "precondition: the filling label's button probed")
+        #expect(!hugging.size.isWidthFlexible)
+        #expect(filling.count == hugging.count + 1, "filling \(filling.count), hugging \(hugging.count)")
+    }
 }

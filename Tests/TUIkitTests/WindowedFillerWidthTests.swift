@@ -45,6 +45,13 @@ enum FillerListRow: Sendable, Equatable {
     case capped(Int)
     /// A short text, with a width of its own.
     case short
+    /// A navigation link whose label is `.fills`' — the `notes` stress
+    /// session's row, which reaches the stack as a `Button` measured by
+    /// rendering its label.
+    case link
+    /// A navigation link whose label fills only once its own `@State` says
+    /// so, which it does on appearing.
+    case statefulLink
 }
 
 /// The list: how many rows, what each is, and whether it opens scrolled to
@@ -120,6 +127,10 @@ private struct FillerListRowView: View {
             FillingRowLabel(index: index).frame(maxWidth: .fixed(cap))
         case .short:
             Text(verbatim: "row \(index)")
+        case .link:
+            NavigationLink(value: index) { FillingRowLabel(index: index) }
+        case .statefulLink:
+            NavigationLink(value: index) { FillsOnAppearing(index: index) }
         }
     }
 }
@@ -134,6 +145,22 @@ struct FillingRowLabel: View {
             Spacer()
             Text(verbatim: "#\(index)")
         }
+    }
+}
+
+/// `FillingRowLabel`, but only once it has appeared: its `Spacer` is behind
+/// its own `@State`.
+private struct FillsOnAppearing: View {
+    let index: Int
+    @State private var fills = false
+
+    var body: some View {
+        HStack(spacing: 1) {
+            Text(verbatim: "note \(index)")
+            if fills { Spacer() }
+            Text(verbatim: "#\(index)")
+        }
+        .onAppear { fills = true }
     }
 }
 
@@ -170,7 +197,7 @@ func drawsScrollbarAtTheEdge(_ screen: [String]) -> Bool {
 @Suite("A windowed stack of fillers measures the width it is asked at")
 struct WindowedFillerWidthTests {
     /// The rows every test below is run over, bar the ones about one site.
-    nonisolated static let lists: [FillerListRow] = [.fills, .capped(40)]
+    nonisolated static let lists: [FillerListRow] = [.fills, .capped(40), .link]
 
     @Test(
         "The list is drawn the same from its second frame, and after a trip to another tab",
@@ -178,7 +205,7 @@ struct WindowedFillerWidthTests {
     func steadyFramesMatchTheFirst(row: FillerListRow) {
         var driver = FillerListDriver(plan: .every(row))
         let first = driver.frame()
-        if row == .fills {
+        if row != .capped(40) {
             #expect(drawsScrollbarAtTheEdge(first), "precondition: the opening frame draws the bar")
         }
         let second = driver.frame()
@@ -200,7 +227,7 @@ struct WindowedFillerWidthTests {
     /// the list's first rows and it opens at its end, so no band draws them:
     /// the first of them alone answered 70.
     nonisolated static let resized: [FillerListPlan] = [
-        .every(.fills), .every(.capped(40)),
+        .every(.fills), .every(.capped(40)), .every(.link),
         FillerListPlan(
             anchoredAtBottom: true, row: { $0 == 0 ? .capped(70) : $0 == 1 ? .capped(80) : .short }),
     ]
@@ -301,6 +328,30 @@ struct WindowedFillerWidthTests {
         #expect(scrolled.contains { $0.contains("row 299") }, "precondition: scrolled to the end")
         #expect(!scrolled.contains { $0.contains("note 17") }, "precondition: the fillers are not drawn")
         #expect(drawsScrollbarAtTheEdge(scrolled), "the records answered with the width the band was drawn at")
+    }
+
+    /// Links whose labels fill only once their own `@State` says so: the
+    /// button learns that its label fills by asking it, and the label's state
+    /// lives where the button's style DRAWS it, inside the standard variant's
+    /// row. Asked anywhere else, the label read its state fresh — not filling
+    /// — the button was recorded one column short of the ask, and the list
+    /// drawn so from then on.
+    ///
+    /// From the third frame. The labels' state changes after the first, and
+    /// the seek answers the frame after a write from what the render recorded
+    /// on the frame before it: the second frame is laid out at the labels'
+    /// old width and its rows are clipped to it. That lag is the records',
+    /// not the probe's, and is not fixed here.
+    @Test("Links whose labels fill once their state says so are counted as filling")
+    func statefulFillingLinks() {
+        var driver = FillerListDriver(plan: .every(.statefulLink))
+        _ = driver.frame()
+        _ = driver.frame()
+        let settled = driver.frame()
+        #expect(drawsScrollbarAtTheEdge(settled), "the links were recorded one column short")
+        for _ in 0..<2 {
+            #expect(driver.frame() == settled)
+        }
     }
 
     // MARK: - The seek against the walk
