@@ -51,10 +51,13 @@ import TUIkitCore
 ///   long as the terminal window is unfocused.
 ///
 /// What an inactive scene changes is how it looks, through
-/// ``EnvironmentValues/appearsActive``: focus indicators hide, a text caret
-/// holds still and dims, and anything else that breathes holds still (see
-/// <doc:FocusSystem>). To draw a view of your own that way, read
-/// `appearsActive` rather than the phase.
+/// ``EnvironmentValues/appearsActive``: the focus is parked rather than lost,
+/// so focus indicators stay on screen and hold still — a highlighted row in the
+/// still tint of an unfocused selection, everything else half-way between the
+/// two ends it breathes or blinks between — and a text caret holds still and
+/// dims (see <doc:FocusSystem>).
+/// To draw a view of your own that way, read `appearsActive` rather than the
+/// phase.
 public enum ScenePhase: Comparable, Hashable, Sendable {
     /// The scene is not visible: for a terminal app, suspended.
     case background

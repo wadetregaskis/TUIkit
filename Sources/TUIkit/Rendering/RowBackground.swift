@@ -51,9 +51,16 @@ enum RowBackground {
     /// Where the accent or the page has no RGB the pair cannot be mixed, and the row
     /// reverses the palette's pair instead of holding a colour nobody can check
     /// (``Palette/emphasisFill(over:)``).
+    ///
+    /// Where the view does not appear active (``EnvironmentValues/appearsActive`` —
+    /// the terminal window has lost focus), the row is still the cursor, and says so,
+    /// still: it takes the tint a selected row shows while its control does not hold
+    /// the keys. The focus is parked, not gone. The rule is
+    /// `Palette.highlightedRowFill(appearsActive:)`'s, shared with a menu's and a
+    /// drop-down's highlighted row.
     @MainActor
     static func focusedSelection(in context: RenderContext, palette: any Palette) -> Self {
-        let highlight = palette.emphasisFill()
+        let highlight = palette.highlightedRowFill(appearsActive: context.environment.appearsActive)
         guard case .pulse(let dim, let bright) = highlight else { return still(highlight) }
         return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
     }
@@ -333,6 +340,10 @@ struct RowSelectionIndicator {
         // else, because it is a statement about this control rather than about
         // this row's state.
         guard context.environment.rowSelectionIndicator != .hidden else { return blank }
+        // The cursor row of a focused control — in a window that has lost the
+        // terminal's focus too. Its background quietens there to the tint an
+        // unfocused selection shows (``RowBackground/focusedSelection(in:palette:)``);
+        // the mark staying at full strength is what still tells it from one.
         if isFocused { return Self(glyph: "●", color: palette.accent) }
         // Selected while the control itself does not have focus. `.hidden`
         // collapses the row's whole visual state into an unselected one — the

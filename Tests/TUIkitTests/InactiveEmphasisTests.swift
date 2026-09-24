@@ -1,12 +1,13 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  InactiveEmphasisTests.swift
 //
-//  A view that does not appear active hides its focus indication through
-//  `indicatesFocus` (see FocusEffectDisabledTests). What is still on screen
-//  and still asks the emphasis clock for a focused element — an open menu's
-//  highlight, a hovered split divider, a view of an app's own — holds still:
-//  one frame at its bright end, no run, and no read of the clock, so the loop
-//  can stop waking for it.
+//  A view that does not appear active keeps its focus indication (see
+//  FocusEffectDisabledTests and InactiveFocusIndicatorTests), and everything
+//  that asks the emphasis clock for a focused element — a control's own
+//  indication, an open menu's frame, a hovered split divider, a view of an
+//  app's own — holds still: one frame half-way through its breath, no run, and
+//  no read of the clock, so the loop can stop waking for it. A highlighted menu
+//  ROW takes the still tint of an unfocused selection instead.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -40,21 +41,33 @@ struct InactiveEmphasisTests {
         return (environment, timer, tracker)
     }
 
+    /// Two ends a breath can visibly tell apart at any depth.
+    private static let dim = Color.rgb(40, 0, 0)
+    private static let bright = Color.rgb(250, 250, 250)
+
     @Test(
-        "A focused element's cycle is one still frame, focused, at its bright end",
-        arguments: [TextCursorStyle.Animation.pulse, .blink])
+        "A focused element's cycle is one still frame, focused, half-way through its breath",
+        arguments: [TextCursorStyle.Animation.pulse, .blink, .none])
     func cycleHoldsStill(style: TextCursorStyle.Animation) {
         let (active, _, _) = environment(appearsActive: true, style: style)
-        #expect(active.selectionEmphasis.cycle(true).isAnimating, "the premise: it animates while active")
+        #expect(
+            active.selectionEmphasis.cycle(true).isAnimating == (style != .none),
+            "the premise: it animates while active, unless the style says not to")
 
         let (inactive, _, _) = environment(appearsActive: false, style: style)
         let cycle = inactive.selectionEmphasis.cycle(true)
-        #expect(cycle.frames.count == 1)
+        #expect(
+            cycle.frames == [.held(style)],
+            "`.none` too: an indication that never moved still has to say 'not now'")
+        #expect(cycle.frames[0].isHeld)
+        #expect(cycle.frames[0].animation == style, "held is not a fourth style: it reports the one in force")
         #expect(!cycle.isAnimating)
         #expect(cycle.isFocused, "held still, not unfocused: a fill still draws as focused")
-        #expect(cycle.colorNow(dim: .red, bright: .blue) == .blue)
-        #expect(cycle.colors(dim: .red, bright: .blue) == [.blue])
-        #expect(cycle.run("●", dim: .red, bright: .blue, offsetX: 0, offsetY: 0) == nil)
+        let now = cycle.colorNow(dim: Self.dim, bright: Self.bright)
+        #expect(now != Self.bright, "held at the top, where a Toggle's mark looks unfocused")
+        #expect(now != Self.dim, "held at the bottom, where a tab chip looks unfocused")
+        #expect(cycle.colors(dim: Self.dim, bright: Self.bright) == [now])
+        #expect(cycle.run("●", dim: Self.dim, bright: Self.bright, offsetX: 0, offsetY: 0) == nil)
     }
 
     @Test(
@@ -69,8 +82,20 @@ struct InactiveEmphasisTests {
         let emphasis = inactive.selectionEmphasis(true)
         #expect(!timer.didReadThisFrame)
         #expect(tracker.reads == 0)
-        #expect(emphasis == .steady(isFocused: true))
-        #expect(emphasis.color(dim: .red, bright: .blue) == .blue)
+        #expect(emphasis == .held(style))
+        #expect(emphasis.animation == style, "a held \(style) reported itself as \(emphasis.animation)")
+        #expect(emphasis.color(dim: Self.dim, bright: Self.bright) != Self.bright)
+    }
+
+    /// Where the terminal can show nothing between the two ends, half-way is the
+    /// ramp's upper entry — the bright end — as `SelectionEmphasis.held(_:)` says.
+    /// Pinned because it is the one depth at which the held look is an END.
+    @Test("A held element on a two-shade ramp sits at the bright end", arguments: [TextCursorStyle.Animation.pulse, .blink, .none])
+    func heldOnATwoShadeRamp(style: TextCursorStyle.Animation) {
+        let held = SelectionEmphasis.held(style)
+        #expect(held.color(dim: Self.dim, bright: Self.bright, ramp: [Self.dim, Self.bright]) == Self.bright)
+        let three = [Self.dim, Color.rgb(145, 125, 125), Self.bright]
+        #expect(held.color(dim: Self.dim, bright: Self.bright, ramp: three) == three[1])
     }
 
     @Test("Without a cursor clock, resolving reads no pulse phase either")
@@ -125,7 +150,9 @@ struct InactiveEmphasisTests {
         return try #require(render().overlays.first, "the popup opened").content
     }
 
-    @Test("An open menu keeps its highlight, still, as it draws with the animation off")
+    /// A right-click opens the menu with no row highlighted — the pointer has
+    /// chosen nothing yet — so what breathes is its frame.
+    @Test("An open menu keeps its frame, still and dimmed")
     func openMenuHoldsStill() throws {
         let breathing = try contextMenuPopup(phase: .active)
         #expect(!breathing.animatedCells.isEmpty, "the premise: an open menu breathes while active")
@@ -133,7 +160,8 @@ struct InactiveEmphasisTests {
         let inactive = try contextMenuPopup(phase: .inactive)
         #expect(inactive.animatedCells.isEmpty, "\(inactive.animatedCells.count) runs left")
         let still = try contextMenuPopup(phase: .active, style: .none)
-        #expect(inactive.lines == still.lines, "the highlight and the frame, at their bright ends")
+        #expect(inactive.lines != still.lines, "the frame held at its bright end, not dimmed")
+        #expect(inactive.lines.map(\.stripped) == still.lines.map(\.stripped), "the menu's cells moved")
     }
 
     // MARK: - A hovered divider

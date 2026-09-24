@@ -96,7 +96,12 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
         // page has no RGB there is nothing between them to breathe (§75), so the bar
         // reverses the palette's own pair rather than hold a colour nobody can check
         // the label against (§88) — the same answer `RowBackground` gives a cursor row.
-        let emphasis = palette.emphasisFill()
+        // And where the window has lost the terminal's focus, the bar stays, still,
+        // in the tint a `List` gives a selection it does not hold the keys for: the
+        // row is still the one the keys will reach when it comes back, and hiding it
+        // read as the focus having been lost. That rule is the palette's, asked by
+        // every highlighted row, so a menu's row and a list's cursor row agree.
+        let emphasis = palette.highlightedRowFill(appearsActive: context.environment.appearsActive)
 
         // Squared off first: the bar spans the row, and a short line would
         // otherwise be painted only as far as it happens to reach, leaving the

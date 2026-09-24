@@ -612,13 +612,19 @@ enum DropdownMenu {
         // What the highlighted row paints at each point of the cycle: the accent's tint,
         // or — where that tint cannot be measured — reverse video over the palette's own
         // pair, which is the same at every point, so the row is steady and its run is
-        // dropped below (`Documentation/Opacity as composition.md` §88).
-        let emphasis = palette.emphasisFill()
+        // dropped below (`Documentation/Opacity as composition.md` §88). And where the
+        // window has lost the terminal's focus, the still tint a `List` gives a
+        // selection it does not hold the keys for: the row is still the one Return will
+        // choose when the window comes back, so it stays, and it stops breathing. The
+        // rule is the palette's, so a `Menu`'s rows and a list's cursor row agree.
+        let emphasis = palette.highlightedRowFill(appearsActive: context.environment.appearsActive)
         let highlights: [HighlightFill] =
-            emphasis.isReversed
-            ? Array(repeating: emphasis, count: cycle.frames.count)
-            : cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
-                .map(HighlightFill.fill)
+            if case .pulse = emphasis {
+                cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
+                    .map(HighlightFill.fill)
+            } else {
+                Array(repeating: emphasis, count: cycle.frames.count)
+            }
         let borders = cycle.colors(dim: ends.border.dim, bright: ends.border.bright)
         // One alpha in every frame, or the chrome's claim — taken from the frame drawn —
         // would be wrong for the rest (§64).

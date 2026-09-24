@@ -12,8 +12,11 @@
 //  makes: are these the same picture?
 //
 //  A view that does not appear active (`\.appearsActive == false`, its window
-//  having lost the terminal's focus) asks the same question through the same
-//  gate, so every case below is checked under both suppressions.
+//  having lost the terminal's focus) is the opposite case, checked on the same
+//  sweep: the focus is parked there, not lost, so every control must STILL look
+//  focused — and must hold still, because motion is what says the keys go here
+//  now. Its baseline is the same genuinely unfocused picture, and the question
+//  is the other one: are these DIFFERENT pictures, with nothing left breathing?
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -25,14 +28,17 @@ import Testing
 @testable import TUIkitCore
 
 @MainActor
-@Suite("focusEffectDisabled and an inactive appearance suppress every control's focus indication")
+@Suite("focusEffectDisabled suppresses every control's focus indication; an inactive window keeps it, still")
 struct FocusEffectDisabledTests {
 
-    /// The two things that make a focused control stop looking focused.
+    /// The two things that change how a focused control looks: one takes the
+    /// indication away, the other only stills it.
     enum Suppression: CaseIterable, CustomStringConvertible {
-        /// `.focusEffectDisabled()` on the subject.
+        /// `.focusEffectDisabled()` on the subject: the indication goes.
         case effectDisabled
-        /// `.environment(\.appearsActive, false)` on the subject.
+        /// `.environment(\.appearsActive, false)` on the subject: the indication
+        /// stays, and holds still. Not a suppression any more — the name is the
+        /// sweep's, which applies both the same way.
         case inactive
 
         var description: String {
@@ -189,41 +195,64 @@ struct FocusEffectDisabledTests {
             active != inactive,
             "\(name) does not indicate an active section at all, so the suppression case proves nothing",
             sourceLocation: sourceLocation)
-        for suppression in Suppression.allCases {
-            let suppressed = renderedWithSections(
-                subject, activatingSubject: true, suppression: suppression, pick: pick)
-            #expect(
-                suppressed == inactive,
-                """
-                \(name) still indicates its active section \(suppression):
-                  inactive    \(inactive.map(\.debugDescription).joined(separator: "\n              "))
-                  suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
-                """,
-                sourceLocation: sourceLocation)
-        }
+        let suppressed = renderedWithSections(
+            subject, activatingSubject: true, suppression: .effectDisabled, pick: pick)
+        #expect(
+            suppressed == inactive,
+            """
+            \(name) still indicates its active section \(Suppression.effectDisabled):
+              inactive    \(inactive.map(\.debugDescription).joined(separator: "\n              "))
+              suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
+            """,
+            sourceLocation: sourceLocation)
+        expectHeldStill(
+            renderedWithSections(subject, activatingSubject: true, suppression: .inactive, pick: pick),
+            against: inactive, name, sourceLocation: sourceLocation)
     }
 
-    /// The whole contract, per control: focused-and-suppressed must be
-    /// byte-for-byte what genuinely-unfocused looks like, under each
-    /// suppression.
+    /// The inactive half of the contract: `picture` — the subject focused in a
+    /// view that does not appear active — still says it has the focus (it is
+    /// not the `unfocused` picture), and says it still (it leaves no run).
+    private func expectHeldStill(
+        _ picture: [String], against unfocused: [String], _ name: String,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        #expect(
+            picture != unfocused,
+            """
+            \(name) drew no focus indication while not appearing active, as if it had lost the focus:
+              \(picture.map(\.debugDescription).joined(separator: "\n  "))
+            """,
+            sourceLocation: sourceLocation)
+        let runs = picture.filter { $0.hasPrefix("run@") }
+        #expect(
+            runs.isEmpty,
+            "\(name) still breathes while not appearing active: \(runs)",
+            sourceLocation: sourceLocation)
+    }
+
+    /// The whole contract, per control: focused with the effect disabled must
+    /// be byte-for-byte what genuinely-unfocused looks like — and focused in a
+    /// view that does not appear active must NOT be, and must hold still.
     private func expectIndistinguishable(
         _ subject: some View, _ name: String, frames: Int = 1, height: Int = 10,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let unfocused = rendered(
             subject, focusOnSubject: false, suppression: nil, frames: frames, height: height)
-        for suppression in Suppression.allCases {
-            let suppressed = rendered(
-                subject, focusOnSubject: true, suppression: suppression, frames: frames, height: height)
-            #expect(
-                suppressed == unfocused,
-                """
-                \(name) still indicates focus \(suppression):
-                  unfocused   \(unfocused.map(\.debugDescription).joined(separator: "\n              "))
-                  suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
-                """,
-                sourceLocation: sourceLocation)
-        }
+        let suppressed = rendered(
+            subject, focusOnSubject: true, suppression: .effectDisabled, frames: frames, height: height)
+        #expect(
+            suppressed == unfocused,
+            """
+            \(name) still indicates focus \(Suppression.effectDisabled):
+              unfocused   \(unfocused.map(\.debugDescription).joined(separator: "\n              "))
+              suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
+            """,
+            sourceLocation: sourceLocation)
+        expectHeldStill(
+            rendered(subject, focusOnSubject: true, suppression: .inactive, frames: frames, height: height),
+            against: unfocused, name, sourceLocation: sourceLocation)
     }
 
     /// …and the control must ALSO still look different when it is focused and
@@ -278,8 +307,11 @@ struct FocusEffectDisabledTests {
     }
 
     /// A `List`'s cursor row is a focus indication — which row the keys will
-    /// act on — so it goes. Its SELECTION mark does not: being selected is not
-    /// being focused, and the mark is what says so (see `RowSelectionIndicator`).
+    /// act on — so it goes with the effect disabled. Its SELECTION mark does
+    /// not: being selected is not being focused, and the mark is what says so
+    /// (see `RowSelectionIndicator`). While not appearing active the cursor row
+    /// stays, in the still tint of an unfocused selection, and its ● at full
+    /// strength is what still tells it from one.
     @Test("List")
     func list() {
         let list = List(selection: .constant("a")) {
@@ -385,16 +417,17 @@ struct FocusEffectDisabledTests {
         let unfocused = rendered(editor, focusOnSubject: false, suppression: nil, skippingRows: 1)
         let focused = rendered(editor, focusOnSubject: true, suppression: nil, skippingRows: 1)
         #expect(focused != unfocused, "the editor's bar does not indicate focus, so the case below proves nothing")
-        for suppression in Suppression.allCases {
-            let suppressed = rendered(editor, focusOnSubject: true, suppression: suppression, skippingRows: 1)
-            #expect(
-                suppressed == unfocused,
-                """
-                TextEditor's scrollbar still indicates focus \(suppression):
-                  unfocused   \(unfocused.map(\.debugDescription).joined(separator: "\n              "))
-                  suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
-                """)
-        }
+        let suppressed = rendered(editor, focusOnSubject: true, suppression: .effectDisabled, skippingRows: 1)
+        #expect(
+            suppressed == unfocused,
+            """
+            TextEditor's scrollbar still indicates focus \(Suppression.effectDisabled):
+              unfocused   \(unfocused.map(\.debugDescription).joined(separator: "\n              "))
+              suppressed  \(suppressed.map(\.debugDescription).joined(separator: "\n              "))
+            """)
+        expectHeldStill(
+            rendered(editor, focusOnSubject: true, suppression: .inactive, skippingRows: 1),
+            against: unfocused, "TextEditor's scrollbar")
     }
 
     /// A colour grid's cursor swatch carries a breathing check mark while the
@@ -502,26 +535,28 @@ struct FocusEffectDisabledTests {
         expectIndistinguishable(table, "Table")
     }
 
-    /// While a list does not appear active its selection stays, in the style
-    /// it has whenever the list is unfocused — the `List` case above holds it
-    /// to exactly that picture. This pins that the picture still shows the
-    /// selection: the same list with unfocused selection hidden looks
-    /// different.
-    @Test("An inactive List keeps its selection visible")
+    /// While a list does not appear active, a selected row the cursor is NOT on
+    /// is drawn exactly as it is whenever the list is unfocused: being selected
+    /// is not being focused, and the window going quiet changes nothing about
+    /// it. The cursor row itself — "a", unselected — keeps its still focus wash.
+    @Test("An inactive List draws a selection the cursor is not on as an unfocused one")
     func inactiveListKeepsItsSelection() {
-        let list = List(selection: .constant("a")) {
+        let list = List(selection: .constant("b")) {
             ForEach(["a", "b"], id: \.self) { Text($0) }
         }
         .frame(width: 20, height: 4)
-        let shown = rendered(list, focusOnSubject: true, suppression: .inactive)
-        let hidden = rendered(
-            list.unfocusedSelectionVisibility(.hidden), focusOnSubject: true, suppression: .inactive)
-        #expect(shown != hidden, "an inactive list drew no selection at all")
+        let unfocused = rendered(list, focusOnSubject: false, suppression: nil)
+        let inactive = rendered(list, focusOnSubject: true, suppression: .inactive)
+        let rowB: ([String]) -> String? = { $0.first { $0.stripped.contains("b") } }
+        #expect(rowB(inactive) != nil && rowB(inactive) == rowB(unfocused), "\(inactive)")
+        #expect(inactive != unfocused, "the cursor row went with the window")
     }
 
-    /// …and `unfocusedSelectionVisibility(.hidden)` hides it while inactive,
-    /// exactly as it does while unfocused.
-    @Test("An inactive List honours unfocusedSelectionVisibility(.hidden)")
+    /// `unfocusedSelectionVisibility(.hidden)` hides the selection of a list
+    /// that does not hold the focus. A list that DOES, in a window that has lost
+    /// the terminal's, is not that list: its cursor row stays — which is what
+    /// the sweep's inactive half asks of every control.
+    @Test("An inactive List keeps its cursor row under unfocusedSelectionVisibility(.hidden)")
     func inactiveListHonoursHiddenSelection() {
         let list = List(selection: .constant("a")) {
             ForEach(["a", "b"], id: \.self) { Text($0) }

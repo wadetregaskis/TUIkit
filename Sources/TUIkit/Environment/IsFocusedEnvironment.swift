@@ -30,25 +30,24 @@ extension EnvironmentValues {
     /// ```swift
     /// struct RightClickTarget: View {
     ///     @Environment(\.isFocused) private var isFocused
-    ///     @Environment(\.appearsActive) private var appearsActive
     ///     @Environment(\.selectionEmphasis) private var emphasis
     ///     @Environment(\.palette) private var palette
     ///
     ///     var body: some View {
     ///         Text("Right-click me")
-    ///             .border(emphasis(isFocused && appearsActive).color(
+    ///             .border(emphasis(isFocused).color(
     ///                 dim: palette.border, bright: palette.accent))
     ///     }
     /// }
     /// ```
     ///
-    /// Gate the look on `isFocused && appearsActive`, not on `isFocused`
-    /// alone. This value stays `true` while the view does not appear active
-    /// (see ``EnvironmentValues/appearsActive``), because it answers a question
-    /// about behaviour: the focus is still here, and the keys come here when
-    /// input returns. Every built-in control hides its focus indication
-    /// meanwhile, and a view of your own that does not would be the one still
-    /// saying "focused".
+    /// This value stays `true` while the view does not appear active (see
+    /// ``EnvironmentValues/appearsActive``), because it answers a question about
+    /// behaviour: the focus is still here, and the keys come here when input
+    /// returns. The look should say the same — every built-in control keeps its
+    /// focus indication on screen meanwhile, and holds it still — and the
+    /// emphasis already does that for you: while the view does not appear active
+    /// it hands back one still frame, half-way between the two ends.
     ///
     /// That reads the clock as it renders, which costs a full render pass per
     /// tick of the pulse. See <doc:AnimatingYourOwnView> for the cheap route.

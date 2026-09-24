@@ -77,16 +77,19 @@ enum SelectionIndicator {
     @MainActor
     static func resolve(isFocused: Bool, environment: EnvironmentValues) -> SelectionEmphasis {
         let animation = environment.selectionIndicatorStyle
+        // Held still, and still focused, while the view does not appear active:
+        // every focus indicator stays on screen in an inactive window (the focus
+        // is parked there, not lost — see `RenderContext.indicatesFocus(_:)`),
+        // held half-way between its two ends (`SelectionEmphasis.held(_:)` says
+        // why there), and no clock is read, so nothing keeps the loop waking.
+        // Asked after the focus test, so an unfocused element pays for no extra
+        // environment read, and before the style's, so `.none` quietens too:
+        // an indicator that never moved still has to say "not now".
+        guard !isFocused || environment.appearsActive else { return .held(animation) }
         guard isFocused, animation != .none else {
             return SelectionEmphasis(
                 isFocused: isFocused, animation: animation, phase: 1, blinkOn: true)
         }
-        // Held still, and still focused, while the view does not appear active:
-        // what is left on screen that asks (an open menu's highlight, a hovered
-        // divider) keeps its bright end, and no clock is read, so nothing keeps
-        // the loop waking. Asked after the focus test, so an unfocused element
-        // pays for no extra environment read.
-        guard environment.appearsActive else { return .steady(isFocused: true) }
         let timer = environment.cursorTimer
         // The same speed `SelectionEmphasisClock.cycle(_:)` lays its runs out at, so
         // a render that reads the clock and a replay agree at every speed.
@@ -107,26 +110,97 @@ enum SelectionIndicator {
 /// Ask ``EnvironmentValues/selectionEmphasis`` for one and then call
 /// ``color(dim:bright:)`` with the element's own two endpoints. That single call
 /// covers every setting: a pulse lerps between them, a blink swaps between them,
-/// `.none` sits at `bright`, and an unfocused element sits at `bright` too — so a
-/// caller never has to branch on the style itself.
+/// `.none` sits at `bright`, a focused element whose view does not appear active
+/// holds still between them (``isHeld``), and an unfocused element sits at
+/// `bright` too — so a caller never has to branch on the style itself.
 public struct SelectionEmphasis: Equatable, Sendable {
     /// Whether the element this describes holds the focus.
     public let isFocused: Bool
 
-    /// The animation in force (`.none` / `.blink` / `.pulse`).
+    /// The animation in force (`.none` / `.blink` / `.pulse`) — the style, even
+    /// while ``isHeld`` stops it.
     public let animation: TextCursorStyle.Animation
 
-    /// The pulse position this frame, 0...1 (1 when not pulsing).
+    /// The pulse position this frame, 0...1 (1 when not pulsing). ½ for a pulse
+    /// held still (``isHeld``), which is where it is held.
     public let phase: Double
 
-    /// The blink state this frame (always `true` when not blinking).
+    /// The blink state this frame (always `true` when not blinking, or held).
     public let blinkOn: Bool
+
+    /// Whether this is a focused element held still because its view does not
+    /// appear active (``EnvironmentValues/appearsActive``) — its window has lost
+    /// the terminal's focus. ``color(dim:bright:)`` then answers the colour
+    /// half-way between the two ends, whatever ``animation`` is — see
+    /// "When the view does not appear active" in <doc:FocusSystem>.
+    public let isHeld: Bool
+
+    init(
+        isFocused: Bool, animation: TextCursorStyle.Animation, phase: Double, blinkOn: Bool,
+        isHeld: Bool = false
+    ) {
+        self.isFocused = isFocused
+        self.animation = animation
+        self.phase = phase
+        self.blinkOn = blinkOn
+        self.isHeld = isHeld
+    }
 
     /// A non-animated emphasis (the element sits steady at `bright`), for the
     /// given focus state. Handy when there is no clock to read.
     public static func steady(isFocused: Bool) -> Self {
         Self(isFocused: isFocused, animation: .none, phase: 1, blinkOn: true)
     }
+
+    /// A focused element whose view does not appear active
+    /// (``EnvironmentValues/appearsActive``), under `animation`: held still
+    /// half-way between its two ends, whatever that animation is. It reports
+    /// `animation` as it is — held is a state of the element, not a fourth style.
+    ///
+    /// At neither end, because indications REST at both: a `Toggle`'s mark and
+    /// a radio button's bullet breathe down from the colour they have
+    /// unfocused, and a `TabView`'s chip and a scroll view's "N more" lines
+    /// breathe up from theirs. Held at the top the first pair looked exactly as
+    /// if the focus had gone — the report this exists to answer — and held at
+    /// the bottom the second pair did. Half-way is the resting look of nothing
+    /// that rests at an end, and it is short of the peak, so it reads as quieter
+    /// than the live indication.
+    ///
+    /// Under `.pulse` it is a shade the breath passes through on every cycle, so
+    /// nothing new is drawn. Under `.blink` and `.none` it is not: a blink shows
+    /// only its two ends and `.none` only the bright one, so the held shade is one
+    /// the indication never showed while active. It is held all the same, because
+    /// the inactive look should not depend on the style — an indication that never
+    /// moved still has to say "not now", and at the end it rests on it would say
+    /// nothing.
+    ///
+    /// Half-way is taken on the ramp a breath walks (``color(dim:bright:)``), so
+    /// below truecolor it is a shade this terminal can show between the two ends.
+    /// Where that ramp has only the two ends — they quantise one step apart, as close
+    /// ends can in the 256-colour cube and far more readily in sixteen colours —
+    /// there is no shade between them to hold at, and the ramp's middle
+    /// is its upper entry: the indication is held at its bright end, exactly where
+    /// it rests at the top. A `Toggle`'s mark and a radio bullet then look as they
+    /// do unfocused on such a terminal; the chips, bars and caps that rest at the
+    /// dim end still show the focus.
+    ///
+    /// One frame: a cycle of it is still, and leaves no run.
+    static func held(_ animation: TextCursorStyle.Animation) -> Self {
+        Self(
+            isFocused: true, animation: animation, phase: animation == .pulse ? heldPhase : 1,
+            blinkOn: true, isHeld: true)
+    }
+
+    /// Where a held element sits between its two ends.
+    private static let heldPhase = 0.5
+
+    /// Whether ``color(dim:bright:ramp:)`` reads a ramp: a focused pulse, and any
+    /// held element, whose shade is taken on the ramp a breath walks.
+    ///
+    /// Both are properties of a whole CYCLE, not of one frame
+    /// (``SelectionEmphasisClock/cycle(_:)`` gives every frame the same focus state,
+    /// animation and hold), which is what lets a cycle ask its first frame.
+    var readsRamp: Bool { isFocused && (animation == .pulse || isHeld) }
 
     /// The colour this frame.
     ///
@@ -135,14 +209,15 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// - `bright`: the "on"/visible endpoint (e.g. a contrasting mark colour).
     ///
     /// An unfocused-but-selected indicator stays at `bright` (steady, visible);
-    /// a focused one animates between the two per the style.
+    /// a focused one animates between the two per the style, and one held still
+    /// (``isHeld``) sits half-way between them.
     public func color(dim: Color, bright: Color) -> Color {
-        // Asked before the ramp is BUILT, not after. Only a focused pulse reads
-        // one (see the overload below), and building one walks a couple of
-        // hundred candidate shades — so a steady or blinking emphasis used to
-        // pay for a ramp it then ignored. Same test as
+        // Asked before the ramp is BUILT, not after. Only a focused pulse and a
+        // held element read one (see the overload below), and building one walks
+        // a couple of hundred candidate shades — so a steady or blinking emphasis
+        // used to pay for a ramp it then ignored. Same test as
         // `SelectionEmphasisCycle.pulseRamp(dim:bright:)`, for the same reason.
-        guard isFocused, animation == .pulse else {
+        guard readsRamp else {
             return color(dim: dim, bright: bright, ramp: nil)
         }
         return color(dim: dim, bright: bright, ramp: Self.pulseRamp(dim: dim, bright: bright))
@@ -156,6 +231,8 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// ramp once per frame.
     func color(dim: Color, bright: Color, ramp: [Color]?) -> Color {
         guard isFocused else { return bright }
+        // Whatever the style: see `held(_:)`.
+        if isHeld { return Self.pulsed(dim: dim, bright: bright, phase: Self.heldPhase, ramp: ramp) }
         switch animation {
         case .none: return bright
         case .blink: return blinkOn ? bright : dim
@@ -209,8 +286,10 @@ public struct SelectionEmphasis: Equatable, Sendable {
 /// frame that asks for an animating emphasis schedules the next frame, and one
 /// that doesn't lets the loop idle. Nothing is read at all unless the element is
 /// focused AND the style actually animates AND the view appears active
-/// (``EnvironmentValues/appearsActive``). Where it does not, a focused element's
-/// emphasis holds still at its bright end.
+/// (``EnvironmentValues/appearsActive``). Where the style does not animate, a
+/// focused element's emphasis sits at its bright end; where the view does not
+/// appear active, it holds still half-way between its ends, whatever the style
+/// (``SelectionEmphasis/isHeld``).
 public struct SelectionEmphasisClock {
     let environment: EnvironmentValues
 
@@ -298,17 +377,15 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// coloured, and building one walks a couple of hundred candidate shades
     /// through the quantiser.
     ///
-    /// Nil for anything but a focused pulse — that is the only case
+    /// Nil for anything but a focused pulse or a held element — the only cases
     /// ``SelectionEmphasis/color(dim:bright:ramp:)`` reads it in, since a blink
     /// and a still cycle both sit on an endpoint. Both are properties of the
     /// CYCLE rather than of a frame (``SelectionEmphasisClock/cycle(_:)`` gives
-    /// every frame the same focus state and animation), so the first frame
+    /// every frame the same focus state, animation and hold), so the first frame
     /// answers for all of them — the same reasoning ``isFocused`` uses.
     @MainActor
     private func pulseRamp(dim: Color, bright: Color) -> [Color]? {
-        guard let first = frames.first, first.isFocused, first.animation == .pulse else {
-            return nil
-        }
+        guard let first = frames.first, first.readsRamp else { return nil }
         return SelectionEmphasis.pulseRamp(dim: dim, bright: bright)
     }
 
@@ -438,14 +515,23 @@ extension SelectionEmphasisClock {
     /// Every frame of the cycle for an element that is (or isn't) focused.
     ///
     /// Where the view does not appear active (``EnvironmentValues/appearsActive``
-    /// is `false`), a focused element's cycle is one still frame at its bright
-    /// end, as with the animation off. It is still focused, so a fill still
-    /// draws as focused.
+    /// is `false`), a focused element's cycle is one still frame half-way between
+    /// its ends, whatever the animation in force (``SelectionEmphasis/isHeld``). It
+    /// is still focused, so a fill still draws as focused. A highlighted ROW — a
+    /// list's or table's cursor row on a selected row, a menu's — does not draw that
+    /// frame: it takes the still tint of an unfocused selection instead, the look an
+    /// unfocused list already had.
     ///
     /// See ``SelectionEmphasisCycle``.
     @MainActor
     public func cycle(_ isFocused: Bool) -> SelectionEmphasisCycle {
         let animation = environment.selectionIndicatorStyle
+        // Held still while the view does not appear active — see
+        // `SelectionIndicator.resolve(isFocused:environment:)`, and ahead of the
+        // style's test for the reason given there.
+        guard !isFocused || environment.appearsActive else {
+            return SelectionEmphasisCycle(frames: [.held(animation)], step: 0)
+        }
         guard isFocused, animation != .none else {
             return SelectionEmphasisCycle(
                 frames: [
@@ -453,11 +539,6 @@ extension SelectionEmphasisClock {
                         isFocused: isFocused, animation: animation, phase: 1, blinkOn: true)
                 ],
                 step: 0)
-        }
-        // Held still while the view does not appear active — see
-        // `SelectionIndicator.resolve(isFocused:environment:)`.
-        guard environment.appearsActive else {
-            return SelectionEmphasisCycle(frames: [.steady(isFocused: true)], step: 0)
         }
         let layout = CursorTimer.cycleLayout(
             of: animation, speed: environment.indicatorAnimationSpeeds.speed(for: .focusEmphasis))

@@ -101,4 +101,28 @@ extension Palette {
     package func selectedRowFill() -> HighlightFill {
         highlightFill(accent.opacity(ViewConstants.selectedBackground, over: background), tint: accent)
     }
+
+    /// What a highlighted row paints — a focused list's or table's cursor row on a
+    /// selected row, a menu's, a drop-down's or a field's suggestions' highlighted
+    /// row: ``emphasisFill(over:)``, and where the row's view does not appear active
+    /// (its window has lost the terminal's focus), ``selectedRowFill()`` in place of
+    /// the breath.
+    ///
+    /// The row is still the one the keys will reach when the window comes back, so it
+    /// stays drawn; it stops breathing, because motion says the keys go here NOW; and
+    /// it takes the look a `List` gives a selection it does not hold the keys for,
+    /// which is what makes it read as "here, but not now". One rule, asked here by
+    /// every such row, so the three that draw one cannot disagree about it.
+    ///
+    /// Only a breath is swapped. A reversal — where the accent or the page has no RGB
+    /// — is already still, and the tint it would become is exactly the one that
+    /// cannot be measured there.
+    ///
+    /// - Parameter appearsActive: Whether the row's view appears active
+    ///   (`EnvironmentValues.appearsActive`).
+    package func highlightedRowFill(appearsActive: Bool) -> HighlightFill {
+        let emphasis = emphasisFill()
+        guard case .pulse = emphasis, !appearsActive else { return emphasis }
+        return selectedRowFill()
+    }
 }

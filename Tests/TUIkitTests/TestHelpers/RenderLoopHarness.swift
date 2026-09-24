@@ -23,11 +23,15 @@ final class RenderLoopHarness {
     let statusBar: StatusBarState
     let appHeader = AppHeaderState()
     let focusManager = FocusManager()
-    let tuiContext = TUIContext()
+    let tuiContext: TUIContext
     let paletteManager: ThemeManager
     let appearanceManager: ThemeManager
 
-    init() {
+    /// - Parameter tuiContext: The context the loop renders with. A test that
+    ///   drives an `AppRunner` seam — a terminal focus report, say — passes the
+    ///   runner's own, so what the seam changes is what the loop draws.
+    init(tuiContext: TUIContext = TUIContext()) {
+        self.tuiContext = tuiContext
         let appState = AppState()
         self.appState = appState
         self.statusBar = StatusBarState(appState: appState)

@@ -189,6 +189,9 @@ extension View {
     ///
     /// The selection binding itself is unaffected; only the
     /// visual indicator is suppressed when the list lacks focus.
+    /// A list that HOLDS the focus in a window that has lost the
+    /// terminal's focus does not lack it: its cursor row stays,
+    /// still, whatever this says (see "Focus system").
     /// Cascades through the environment so it can be set on a
     /// parent (e.g. a NavigationSplitView column) and inherited
     /// by every selection-bearing descendant.

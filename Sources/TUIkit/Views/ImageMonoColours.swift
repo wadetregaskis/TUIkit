@@ -118,9 +118,12 @@ struct ImageMonoColours {
 /// and the terminal kept whichever came last.
 ///
 /// So on the pixel path a picture holds ``held`` for the whole breath. The breath
-/// hands it the bright end, which is the colour a still focus draws and the
-/// colour the label rests in without the focus, so the breath starting or
-/// stopping sends nothing either.
+/// hands it the bright end, which is the colour the label rests in without the
+/// focus and the colour a focus draws under `.selectionIndicatorStyle(.none)`, so
+/// the breath starting or stopping sends nothing either. Nor does the window
+/// losing the terminal's focus: the label's glyphs then hold still half-way
+/// between the ends (`SelectionEmphasis.held(_:)`), and the picture stays at the
+/// bright end rather than being re-sent in that shade.
 ///
 /// The hold applies only while the ink in force is the breath's own ``breath``
 /// colour, compared in the 8-bit RGB the picture would bake. A picture that

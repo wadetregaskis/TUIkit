@@ -255,9 +255,9 @@ override the value you set on this view"), and the rule ``View/disabled(_:)``
 already follows here. So `false` adds no suppression rather than lifting one,
 which is what makes `.focusEffectDisabled(isQuiet)` on a leaf behave: the flag
 decides whether this subtree adds its own, and an ancestor's decision stands
-either way. ``EnvironmentValues/appearsActive`` is a plain value rather than a
-suppression, so it is not additive: a subtree that sets it back to `true` does
-get its indication back.
+either way. ``EnvironmentValues/appearsActive`` is not a suppression at all —
+an inactive view keeps its indication and holds it still (below) — and it is a
+plain value, so a subtree that sets it back to `true` gets its breath back.
 
 **Know what it costs.** A terminal has no pointer to fall back on, so a subtree
 with its focus effects off can be genuinely impossible to navigate by keyboard.
@@ -265,16 +265,56 @@ That is the same trade SwiftUI's modifier makes, and it is the caller's to make.
 
 ### When the view does not appear active
 
-A view whose ``EnvironmentValues/appearsActive`` is `false` hides its focus
-indication, as a macOS window does when another window takes input. That is
-the case whenever the scene is not ``ScenePhase/active``: while the terminal
-window, tab or pane the app runs in has lost focus, and on the frame rendered
-on the way into a suspend. It is also the case inside any subtree that sets
-`.environment(\.appearsActive, false)`. It goes through the same gate as
-``View/focusEffectDisabled(_:)``, so everything listed under "Turning it off"
-goes, the ● of an active focus section or split column included, and a
-subtree that sets `.environment(\.appearsActive, true)` gets its indication
-back.
+A view whose ``EnvironmentValues/appearsActive`` is `false` keeps its focus
+indication on screen, and holds it still. That is the case whenever the scene
+is not ``ScenePhase/active``: while the terminal window, tab or pane the app
+runs in has lost focus, and on the frame rendered on the way into a suspend. It
+is also the case inside any subtree that sets
+`.environment(\.appearsActive, false)`.
+
+The focus has not gone anywhere. It is parked on the control the user left it
+on, and the keys reach that control again the moment the window comes back — so
+the indication says where it is, and stops saying "now": motion is what means
+the keys go here right now, and right now they do not. An indication that
+vanished with the window read as the focus having been lost.
+
+- **Anything that breathes or blinks holds still, half-way between its two
+  ends**: a `Button`'s caps, a `Toggle`'s glyph, a radio button's bullet, a
+  `TabView`'s chip, a scroll bar and its "N more" lines, the ● of an active
+  focus section or split column, a split divider's or resize grip's breath, a
+  hovered divider, an open menu's frame. Whatever the indicator style — under
+  `.selectionIndicatorStyle(.none)` too, since an indication that never moved
+  still has to say "not now". Half-way, because indications rest at both
+  ends: a `Toggle`'s mark and a radio button's bullet breathe down from the
+  colour they have unfocused, a tab chip and the "N more" lines up from
+  theirs, so held at either end one pair looked exactly as if the focus had
+  gone. Half-way is the resting look of nothing that rests at an end, and it
+  is short of the peak. Under `.pulse` it is a shade every breath passes
+  through; under `.blink` and `.none` it is one the indication never showed
+  while active. Below truecolor it is taken on the shades the terminal can
+  show between the ends, and where there are none — the ends one step apart,
+  as close ends can be in 256 colours, and more readily in sixteen — it is the
+  bright end, and a `Toggle`'s mark or a radio bullet then looks as it does
+  unfocused. ``EnvironmentValues/selectionEmphasis`` gives a focused element
+  that one still frame (``SelectionEmphasis/isHeld``, reporting the style in
+  force as its ``SelectionEmphasis/animation``) and reads no clock, so an
+  inactive window does not keep the run loop waking to animate it. A view
+  that asks it for its own emphasis holds still the same way.
+- **A highlighted row** — a `List`'s or `Table`'s cursor row on a selected
+  row, the highlighted row of a `Menu` (inline or pop-up), a `Picker`'s
+  drop-down or a field's suggestions — takes the still tint a `List` gives a
+  selection it does not hold the keys for: the look an unfocused list already
+  has, which is what makes it read as "here, but not now". A selected cursor
+  row keeps its ● at full strength, which still tells it from a selection the
+  list merely remembers. A cursor row that is not selected keeps its focus
+  wash, which never breathed.
+- **Nothing else changes.** The bold, the recoloured arrows and values, the
+  focus wash: they were still to begin with, and they stay.
+
+``View/unfocusedSelectionVisibility(_:)`` with `.hidden` does not hide an
+inactive list's cursor row: the list still holds the focus, so it is not the
+unfocused selection that modifier is about. The rest of its selection follows
+the modifier as it does whenever the list is unfocused.
 
 Losing focus is noticed only where the terminal reports it. While an app runs,
 TUIkit turns on the terminal's focus reporting (DEC private mode 1004). A
@@ -284,36 +324,28 @@ reporting is turned on can be lost among the startup queries. So treat the
 inactive look as a courtesy that may never arrive, and do not build behaviour
 on it. ``ScenePhase`` has the details.
 
-What stays:
+What stays exactly as it was:
 
-- **The focus itself.** Only the look changes. `\.isFocused` is still `true`,
-  Tab and the keys behave as before, and the focus is where the user left it
-  when input returns.
+- **The focus itself.** `\.isFocused` is still `true`, Tab and the keys behave
+  as before, and the focus is where the user left it when input returns.
 - **Selection.** Being selected is not being focused. A `List`'s or `Table`'s
-  selected rows stay, drawn exactly as they are whenever the list is unfocused,
-  and ``View/unfocusedSelectionVisibility(_:)`` with `.hidden` hides them here
-  as it does there.
+  selected rows the cursor is not on are drawn exactly as they are whenever the
+  list is unfocused.
 - **A text cursor**, for the same reason it survives `focusEffectDisabled`. It
   stops moving: whatever its animation, it holds still at the dim end of its
   pulse, the cell-drawn counterpart of the hollow cursor a terminal draws in a
   window without focus. It picks its animation up again when the view appears
   active. Under `focusEffectDisabled` alone it animates as usual.
 
-What is still on screen and still breathes holds still instead: an open menu
-keeps its highlighted row and its frame, and a hovered split divider keeps its
-hover, each at its bright end, as under `.selectionIndicatorStyle(.none)`.
-``EnvironmentValues/selectionEmphasis`` gives a focused element one
-still frame there and reads no clock, so an inactive window does not keep the
-run loop waking to animate it. A view that asks it for its own emphasis holds
-still the same way.
-
 Progress does not stop. An unfocused terminal window is still on screen, so
 spinners, indeterminate progress bars and a refresh's indicator go on
 animating, where SwiftUI advises pausing timers in an inactive scene.
 
-``RenderContext/indicatesFocus(_:)`` answers for both conditions, so a view
-that already asks it needs no change. A view that reads `\.isFocused` in its
-`body` should gate its look on `isFocused && appearsActive`.
+This is not ``View/focusEffectDisabled(_:)``: that modifier removes the
+indication, and ``RenderContext/indicatesFocus(_:)`` answers `false` under it
+and only under it. A view that asks that function keeps drawing its indication
+while inactive, and a view that reads `\.isFocused` in its `body` and colours
+itself through `\.selectionEmphasis` holds still with no change at all.
 
 ## Focus in the Event Loop
 
