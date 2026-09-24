@@ -36,7 +36,12 @@
 //    and the two generations that make a colour or a width mean something
 //    different than it did.
 //  * everything the ROW settles is compared per row: the row value itself, and
-//    the two flags that decide its mark and background.
+//    whether it is selected, which decides its mark and background.
+//  * except for the one row whose look is not settled by the row at all: the
+//    CURSOR row of a focused table breathes or holds still as the indicator
+//    style and the window say, neither of which a key here carries, so it is
+//    never kept. It is one row a frame, and it was never kept while it
+//    breathed anyway.
 //
 //  What is left uncovered is global mutable state read through a computed
 //  property — a `static` formatter, a `Date()`. That hole is older than this
@@ -102,21 +107,23 @@ struct TableRowMemoLine {
     /// the text, and a line built from equal cells under an equal frame key is
     /// the same line.
     let cells: [String]
-    let isFocused: Bool
+    /// Whether the row was selected. Not whether it was the cursor: the cursor
+    /// row of a focused table is never kept (see `Table.renderRow`), so every
+    /// entry is a row the cursor was not on.
     let isSelected: Bool
     let line: String
     let claims: [OpacityRegion]
 
     /// Whether this entry answers for a row whose cells are `cells`.
-    func answers(cells other: [String], isFocused: Bool, isSelected: Bool) -> Bool {
-        self.isFocused == isFocused && self.isSelected == isSelected && cells == other
+    func answers(cells other: [String], isSelected: Bool) -> Bool {
+        self.isSelected == isSelected && cells == other
     }
 
     /// Whether this entry answers for `row` WITHOUT computing its cells — only
     /// for a table whose every column names its value, where the cells are a
     /// pure function of the row.
-    func answers(row other: AnyEquatableBox, isFocused: Bool, isSelected: Bool) -> Bool {
-        self.isFocused == isFocused && self.isSelected == isSelected && self.row == other
+    func answers(row other: AnyEquatableBox, isSelected: Bool) -> Bool {
+        self.isSelected == isSelected && self.row == other
     }
 }
 

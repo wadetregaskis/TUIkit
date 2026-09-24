@@ -260,16 +260,21 @@ struct TableFrameContractTests {
             harness.frame()
             return harness.rowWork
         }
+        // One row is composed on every frame whatever the table: the cursor row,
+        // which is never kept (see `cursorRowFollowsTheIndicatorStyle`). Its two
+        // cells are the only values a key-path table reads.
         let named = work(namesAProperty: true)
-        #expect(named.rendered == 0, "a settled key-path table composed \(named.rendered) rows")
+        #expect(named.rendered == 1, "a settled key-path table composed \(named.rendered) rows")
         #expect(named.served > 4, "a settled key-path table served only \(named.served)")
-        #expect(named.cellValues == 0, "a key-path serve still read \(named.cellValues) values")
+        #expect(
+            named.cellValues == named.rendered * 2,
+            "a key-path serve still read \(named.cellValues - named.rendered * 2) values")
 
         let computed = work(namesAProperty: false)
-        #expect(computed.rendered == 0, "a settled closure table composed \(computed.rendered)")
+        #expect(computed.rendered == 1, "a settled closure table composed \(computed.rendered)")
         #expect(computed.served > 4, "a settled closure table served only \(computed.served)")
         #expect(
-            computed.cellValues == computed.served * 2,
+            computed.cellValues == (computed.served + computed.rendered) * 2,
             "a closure serve read \(computed.cellValues) values for \(computed.served) rows")
     }
 
@@ -328,6 +333,30 @@ struct TableFrameContractTests {
         harness.pressDown(30)
         let scrolled = harness.frame()
         #expect(scrolled.lines == harness.frame(coldCache: true).lines)
+    }
+
+    /// The CURSOR row of a focused table is more than its data: whether it breathes
+    /// is the indicator style's to say, and nothing about the style is in the frame
+    /// key. Kept like any other row while it was still — under
+    /// `.selectionIndicatorStyle(.none)` — it was served still again after the
+    /// style asked it to breathe, and the cursor stopped saying where the keys go.
+    @Test("A focused cursor row follows the indicator style across frames", arguments: [true, false])
+    func cursorRowFollowsTheIndicatorStyle(namesItsValues: Bool) {
+        let harness = TableMatrixHarness(
+            TableMatrixShape(
+                rows: 8,
+                columns: [
+                    TableMatrixColumn(title: "ID", cost: .cheap, namesAProperty: namesItsValues)
+                ],
+                selection: .single(0)))
+        harness.configureEnvironment = { $0.selectionIndicatorStyle = .none }
+        harness.settle()
+        #expect(harness.frame().animatedCells.isEmpty, "the premise: nothing breathes under .none")
+
+        harness.configureEnvironment = { $0.selectionIndicatorStyle = .pulse }
+        #expect(
+            !harness.frame().animatedCells.isEmpty,
+            "the cursor row was served still after the style asked it to breathe")
     }
 
     /// And a single-line table's per-frame work is bounded by the WINDOW, not
@@ -432,25 +461,34 @@ struct TableFrameContractTests {
                         title: "ID", width: .fixed(6), cost: .cheap, namesAProperty: true),
                     TableMatrixColumn(title: "Name", cost: .formatted, namesAProperty: true),
                 ]))
+        // Beyond the cursor row, which is composed on every frame and never kept
+        // (see `cursorRowFollowsTheIndicatorStyle`): its two cells are the only
+        // values a settled key-path table builds.
+        func valuesBeyondTheCursorRow() -> Int {
+            harness.rowWork.cellValues - harness.rowWork.rendered * 2
+        }
         harness.settle()
         harness.frame()
+        #expect(harness.rowWork.rendered == 1)
         #expect(
-            harness.rowWork.cellValues == 0,
-            "a settled key-path table built \(harness.rowWork.cellValues) cell values")
+            valuesBeyondTheCursorRow() == 0,
+            "a settled key-path table built \(valuesBeyondTheCursorRow()) cell values")
 
-        // One row changes in a way nothing draws.
-        harness.touch(rowAt: 0)
+        // One row changes in a way nothing draws. Not the cursor row, which never
+        // reaches either tier.
+        harness.touch(rowAt: 1)
         harness.frame()
 
         // The frame AFTER: every row is equal to the row the kept line was last
         // proved to answer for, so nothing needs a cell built at all.
         harness.frame()
+        #expect(harness.rowWork.rendered == 1)
         #expect(
-            harness.rowWork.cellValues == 0,
-            "a row touched two frames ago still costs \(harness.rowWork.cellValues) cell values")
+            valuesBeyondTheCursorRow() == 0,
+            "a row touched two frames ago still costs \(valuesBeyondTheCursorRow()) cell values")
 
         // And it is still drawing the right thing.
         let drawn = TableMatrixHarness.drawnRowIDs(in: harness.frame())
-        #expect(drawn.first == 0, "the touched row is no longer first, got \(String(describing: drawn.first))")
+        #expect(Array(drawn.prefix(2)) == [0, 1], "the touched row is no longer second, got \(drawn.prefix(2))")
     }
 }

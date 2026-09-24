@@ -364,6 +364,12 @@ final class TableMatrixHarness {
     private var singleSelection: Int?
     private var multiSelection: Set<Int>
 
+    /// What each frame's environment says beyond the harness's own: an indicator
+    /// style, say, for a question about how a row that is not data looks across
+    /// frames. Changing it between frames is an applied environment change, as it
+    /// would be in an app.
+    var configureEnvironment: (inout EnvironmentValues) -> Void = { _ in }
+
     /// How many frames a table needs before a cross-frame question is fair.
     static let framesToSettle = 3
 
@@ -447,6 +453,7 @@ final class TableMatrixHarness {
         environment.focusManager = focusManager
         environment.scrollExtentPrecision = shape.precision
         environment.applyRuntimeServices(from: tui)
+        configureEnvironment(&environment)
         let context = RenderContext(
             availableWidth: shape.width, availableHeight: shape.height,
             environment: environment, tuiContext: tui)

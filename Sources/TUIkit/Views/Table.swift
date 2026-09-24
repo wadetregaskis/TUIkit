@@ -3708,7 +3708,17 @@ where Value.ID: Hashable {
         }
         // A ramp colours a row by its ORDINAL, which moves when the table
         // scrolls while the row does not, so a ramped table keeps nothing.
-        guard let handler, handler.tableRowMemo.isOpen, !isReturningHome, paint.ramp == nil else {
+        //
+        // Nor is the CURSOR row of a focused table ever kept or served: how it
+        // looks answers to more than the row — whether it breathes is the
+        // indicator style's to say, and nothing about the style is in the frame
+        // key — so a cursor row kept while it was still, under `.none`, was
+        // served still again once the style asked it to breathe. Every other
+        // row's look is its data and its selection. It is one row a frame, and
+        // one that was never kept while it breathed anyway.
+        guard let handler, handler.tableRowMemo.isOpen, !isReturningHome, paint.ramp == nil,
+            !isFocused
+        else {
             return compose(rowCells(for: item, count: cellCount, context: context))
         }
         let kept = handler.tableRowMemo.entry(for: item.id)
@@ -3718,7 +3728,7 @@ where Value.ID: Hashable {
         // are a pure function of the row, and an equal row needs no cells built
         // at all. Only available to a comparable row type.
         if let kept, let rowBox, handler.tableRowMemo.namesItsValues,
-            kept.answers(row: rowBox, isFocused: isFocused, isSelected: isSelected)
+            kept.answers(row: rowBox, isSelected: isSelected)
         {
             return serve(kept, item: item, paint: paint, columnWidths: columnWidths,
                 isFocused: isFocused, isSelected: isSelected, context: context, palette: palette)
@@ -3728,7 +3738,7 @@ where Value.ID: Hashable {
         // nothing can skip it — but what they produced settles the question
         // outright, for any row type and any column.
         let cells = rowCells(for: item, count: cellCount, context: context)
-        if let kept, kept.answers(cells: cells, isFocused: isFocused, isSelected: isSelected) {
+        if let kept, kept.answers(cells: cells, isSelected: isSelected) {
             // Re-point the entry at THIS row, or a row that changed in a way its
             // columns do not show would take this path for ever — see
             // `TableRowMemoStore.refresh(row:for:)`.
@@ -3750,7 +3760,7 @@ where Value.ID: Hashable {
         }
         handler.tableRowMemo.keep(
             TableRowMemoLine(
-                row: rowBox, cells: cells, isFocused: isFocused, isSelected: isSelected,
+                row: rowBox, cells: cells, isSelected: isSelected,
                 line: result.line, claims: result.claims),
             for: item.id)
         return result
