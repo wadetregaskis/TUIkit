@@ -277,6 +277,7 @@ internal final class RenderLoop<A: App> {
     /// clears the render cache.
     ///
     /// What it publishes goes to ``publishTerminalColors``.
+    ///
     /// Not private, alone among this type's stored properties, because the seam
     /// that reads it lives in `RenderLoop+TerminalColors.swift` — and `private`
     /// is file scope. The type itself is internal, so this is visible no further

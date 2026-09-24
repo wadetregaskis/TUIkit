@@ -44,9 +44,14 @@ private struct TranslucentGrounds: Palette {
 @Suite("A translucent ground")
 struct TranslucentGroundTests {
 
+    /// Grounded over an UNKNOWN terminal, pinned on this task: a palette is
+    /// grounded when it is written, over whatever terminal background the
+    /// process has been told about, and two suites assign that value (and put
+    /// it back) as the thing they test — a run in parallel that landed inside
+    /// one's window blended these grounds over its reported background.
     private func environment() -> EnvironmentValues {
         var environment = EnvironmentValues()
-        environment.palette = TranslucentGrounds()
+        TerminalColors.withCurrent(.unknown) { environment.palette = TranslucentGrounds() }
         environment.focusManager = FocusManager()
         return environment
     }

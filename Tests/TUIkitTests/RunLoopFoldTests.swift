@@ -90,7 +90,11 @@ struct RunLoopFoldTests {
                 focusManager: focusManager,
                 paletteManager: paletteManager,
                 appearanceManager: appearanceManager,
-                tuiContext: tuiContext)
+                tuiContext: tuiContext,
+                // Never the process-wide colours: a reply fed to a loop here
+                // would otherwise stay every later suite's terminal, the leak
+                // `RenderLoopHarness` records its publications to avoid.
+                publishTerminalColors: { _ in })
         }
     }
 
