@@ -45,6 +45,45 @@ func paintedCells(_ line: String) -> [PaintedCell] {
     return cells
 }
 
+/// One `ECH` (`ESC[nX`) in a line.
+struct Erasure: Equatable, CustomStringConvertible {
+    /// The column the cursor is on when it runs.
+    let column: Int
+    /// How many cells it erases.
+    let cells: Int
+    /// The background it erases them in (`""` for the terminal's own).
+    let background: String
+
+    var description: String { "\(cells) at \(column) in \(background.debugDescription)" }
+}
+
+/// Every `ECH` (`ESC[nX`) in `line`, in order.
+///
+/// An erase paints in whatever background is in force at that moment, which is
+/// the only thing that separates one from a cell that keeps the terminal's
+/// default — the cursor-advance compensation writes one in front of every glyph
+/// a host advances too little over (`String+CursorCompensation.swift`), and a
+/// column cannot show it: ``paintedCells(_:)`` skips every escape that is not SGR.
+func erasures(_ line: String) -> [Erasure] {
+    var state = SGRState()
+    var column = 0
+    var found: [Erasure] = []
+    for segment in line.ansiSegments() {
+        switch segment {
+        case .ansi(let sequence, true):
+            state.apply(sequence)
+        case .ansi(let sequence, false):
+            guard sequence.hasPrefix("\u{1B}["), sequence.hasSuffix("X"),
+                let cells = Int(sequence.dropFirst(2).dropLast())
+            else { continue }
+            found.append(Erasure(column: column, cells: cells, background: state.renderedBackground))
+        case .visible(let character):
+            column += character.terminalWidth
+        }
+    }
+    return found
+}
+
 /// `field` spelled as the background escape a painted cell reports for it —
 /// `""` for the terminal's own — so a run's ground and a painted line can be
 /// compared in one currency.

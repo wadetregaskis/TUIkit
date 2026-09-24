@@ -95,8 +95,7 @@ struct ReplayCursorCompensationTests {
             isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
         for index in run.frames.indices {
             let patched = writer.patchingAnimatedRun(
-                in: built, with: run.frame(atIndex: index), atColumn: run.offsetX,
-                width: run.width, bgCode: "")
+                run, showing: run.frame(atIndex: index), in: built, bgCode: "")
             #expect(
                 patched.contains(Self.cursorForward),
                 "frame \(index) reached the terminal with the cluster uncompensated")
@@ -169,34 +168,44 @@ struct ReplayCursorCompensationTests {
 @Suite("A replayed run keeps the row's background")
 struct ReplayBackgroundTests {
 
+    /// The page's background, as `buildLine` puts it back after every reset.
+    private static let page = "\u{1B}[48;5;16m"
+
+    /// A run over `columns` of a row, showing `frame` — nothing painted under it,
+    /// so it sits on whatever page the row was built on.
+    private static func run(_ frame: String, at columns: Range<Int>) -> AnimatedCellRun {
+        AnimatedCellRun(
+            offsetX: columns.lowerBound, offsetY: 0, width: columns.count, frames: [frame, ""],
+            clock: .content)
+    }
+
     /// The reported fault: the Animation page's breathing text drawn on a white
     /// band under Apple Terminal.
     ///
     /// Every styled fragment ends in `ESC[0m`, and a reset returns the terminal
-    /// to ITS default — white on a light profile. A rendered row has the page's
-    /// background put back after every reset by `buildLine`; a run's frame comes
-    /// straight from the view and is spliced into that row having been through
-    /// nothing, so its own cells reset to the terminal's.
-    @Test("A run's frame carries the page background into the row")
-    func theFrameCarriesTheBackground() {
+    /// to ITS default — white on a light profile. A run's frame comes straight
+    /// from the view, and this one OPENS with a reset, in the collapsed spelling
+    /// (`ESC[0;…m`) that a search for the literal `ESC[0m` does not see. The
+    /// splice restates, after every reset however it is spelled, the field under
+    /// the next cell — the page, for a run nothing painted under — so the frame
+    /// keeps the row's background.
+    @Test("A run's frame keeps the page's background through a collapsed reset")
+    func theFrameKeepsThePage() {
         let writer = FrameDiffWriter(
             isAppleTerminal: true, isITerm2: false, isGhostty: false, isWarp: false,
             isTmux: false)
-        let background = "\u{1B}[48;5;16m"
-        let row = background + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
+        let row = Self.page + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
         let frame = "\u{1B}[0;38;5;34m" + "bb" + ANSIRenderer.reset
+        let run = Self.run(frame, at: 1..<3)
 
-        let bare = writer.patchingAnimatedRun(
-            in: row, with: frame, atColumn: 1, width: 2, bgCode: "")
-        #expect(!bare.contains("48;5;16m\u{1B}[38;5;34"), "nothing to restore without a bgCode")
-
-        let patched = writer.patchingAnimatedRun(
-            in: row, with: frame, atColumn: 1, width: 2, bgCode: background)
-        // The run's OWN cells are painted with the page's background: the
-        // collapsed reset the frame opens with is split apart, the background
-        // put between the halves, and the two collapsed together again.
+        let bare = writer.patchingAnimatedRun(run, showing: frame, in: row, bgCode: "")
         #expect(
-            patched.contains("48;5;16"),
+            paintedCells(bare)[1...2].allSatisfy { $0.background.isEmpty },
+            "a row built on nothing gave the frame a field: \(bare.debugDescription)")
+
+        let patched = writer.patchingAnimatedRun(run, showing: frame, in: row, bgCode: Self.page)
+        #expect(
+            paintedCells(patched).map(\.background) == Array(repeating: Self.page, count: 5),
             "the run's frame reached the row with no background: \(patched.debugDescription)")
         // And it does not move a cell — the whole point of the splice.
         #expect(patched.strippedLength == row.strippedLength)
@@ -204,23 +213,58 @@ struct ReplayBackgroundTests {
 
     /// The trailing reset is the other half: whatever follows the run on the row
     /// must not inherit the terminal's background either.
-    @Test("The row continues in the page's background after the run")
+    @Test("The row continues in its background after the run")
     func theRowContinuesInTheBackground() {
         let writer = FrameDiffWriter(
             isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false,
             isTmux: false)
-        let background = "\u{1B}[48;5;16m"
-        let row = background + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
+        let row = Self.page + "\u{1B}[2K" + "aaaaa" + ANSIRenderer.reset
         let frame = "\u{1B}[38;5;34m" + "bb" + ANSIRenderer.reset
         let patched = writer.patchingAnimatedRun(
-            in: row, with: frame, atColumn: 1, width: 2, bgCode: background)
-        guard let end = patched.range(of: "bb") else {
-            Issue.record("the run is not in the row: \(patched.debugDescription)")
-            return
-        }
-        let after = String(patched[end.upperBound...])
+            Self.run(frame, at: 1..<3), showing: frame, in: row, bgCode: Self.page)
         #expect(
-            after.hasPrefix(ANSIRenderer.reset + background),
-            "the row resumes in the terminal's background: \(after.debugDescription)")
+            paintedCells(patched).map(\.background) == Array(repeating: Self.page, count: 5),
+            "the row resumes in the terminal's background: \(patched.debugDescription)")
+    }
+
+    /// What restating the PAGE after every reset in the frame broke: a run inside
+    /// a container that paints a background of its own.
+    ///
+    /// A compact tab chip nested in another tab's panel — `▐`, a label on the
+    /// chip's own surface, `▌` — is three fragments with a reset after each, and
+    /// both caps are ink with no field, drawn over the outer panel. Handed the
+    /// page's background after every reset, the right cap came out in the page's
+    /// colour inside the panel, while the left cap, before the first reset, kept
+    /// the panel's. The run's ground records the panel, as the panel's
+    /// `.background` recorded it (`AnimatedCellRun.ground`); the row is built by
+    /// the writer on a page of another colour.
+    @Test("A run in a container keeps the container's background after its own resets")
+    func aRunKeepsItsContainersBackground() {
+        let writer = FrameDiffWriter(
+            isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false,
+            isTmux: false)
+        let panel = "\u{1B}[48;5;22m"
+        let chip = "\u{1B}[48;5;28m"
+        let row = writer.buildOutputLines(
+            buffer: FrameBuffer(lines: ["ab" + panel + "  xx  " + ANSIRenderer.reset + "z"]),
+            terminalWidth: 12, terminalHeight: 1, bgCode: Self.page, reset: ANSIRenderer.reset)[0]
+        let frame =
+            "\u{1B}[38;5;28m▐" + ANSIRenderer.reset
+            + "\u{1B}[1;38;5;35m" + chip + "xx" + ANSIRenderer.reset
+            + "\u{1B}[38;5;28m▌" + ANSIRenderer.reset
+        let run = Self.run(frame, at: 3..<7).paintingGround {
+            panel + $0 + ANSIRenderer.reset
+        }
+
+        let patched = writer.patchingAnimatedRun(run, showing: frame, in: row, bgCode: Self.page)
+        let cells = paintedCells(patched).map(\.background)
+        #expect(patched.stripped.hasPrefix("ab ▐xx▌ z"), "the run did not land: \(patched.stripped)")
+        #expect(cells.count == 12, "the splice changed the row's width")
+        guard cells.count == 12 else { return }
+        #expect(cells[3] == panel, "the left cap left the panel: \(cells[3].debugDescription)")
+        #expect(cells[4] == chip && cells[5] == chip, "the label lost the chip's own surface")
+        #expect(cells[6] == panel, "the right cap left the panel: \(cells[6].debugDescription)")
+        #expect(cells[2] == panel && cells[7] == panel, "the panel either side of the run moved")
+        #expect(cells[0] == Self.page && cells[8] == Self.page, "the page either side of the panel moved")
     }
 }

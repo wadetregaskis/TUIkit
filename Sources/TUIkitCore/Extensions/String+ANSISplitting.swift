@@ -760,8 +760,9 @@ extension String {
     /// carries those escapes along with it), and at column 0 that makes its
     /// answer unconditionally empty.
     ///
-    /// Wanted by anything that redraws a cell in place and has to land on the
-    /// surface already under it. See ``FrameBuffer/patchingAnimatedCells(in:with:atColumn:width:)``.
+    /// Wanted by anything that asks what a cell redrawn in place landed on. (The
+    /// animation splice no longer asks the line: a run's cells are drawn over the
+    /// field recorded beneath them — see `AnimatedCellRun.ground`.)
     public func ansiSGRStateAt(visibleColumn column: Int) -> SGRState {
         sgrState(throughColumn: column, includingBoundary: true)
     }

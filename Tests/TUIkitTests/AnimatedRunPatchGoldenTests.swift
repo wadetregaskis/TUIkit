@@ -15,8 +15,31 @@ import Testing
 /// widths, to what the four-walk form produced — captured from it before the
 /// change as a 64-bit FNV-1a of each output, patch then splice, per
 /// (column, width) in order.
+///
+/// The patch no longer reads the field under a run off the line; it is handed
+/// one per cell (the run's ground, in the run loop). Handed the fields the line
+/// has under the frame's columns — which is what the four-walk form read off it —
+/// it still produces the four-walk bytes, which is what `String.paintedOver(fields:)`
+/// promises for a frame over one field.
 @Suite("The one-walk run patch and splice produce the four-walk bytes")
 struct AnimatedRunPatchGoldenTests {
+
+    /// The field `line` has under each of `count` columns from `column`, `nil` for
+    /// the terminal's own; a column past the line's end is on whatever the line
+    /// leaves in force.
+    private static func fields(of line: String, from column: Int, count: Int) -> [SGRState.Colour?] {
+        var state = SGRState()
+        var cells: [SGRState.Colour?] = []
+        for segment in line.ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, true): state.apply(sequence)
+            case .ansi: continue
+            case .visible(let character):
+                cells += Array(repeating: state.backgroundColour, count: max(1, character.terminalWidth))
+            }
+        }
+        return (column..<(column + count)).map { $0 < cells.count ? cells[$0] : state.backgroundColour }
+    }
 
     private static let esc = "\u{1B}"
     private static let lines: [String] = [
@@ -56,7 +79,9 @@ struct AnimatedRunPatchGoldenTests {
                 for width in Self.widths {
                     let line = Self.lines[li]
                     let frame = Self.frames[fi]
-                    let patched = FrameBuffer.patchingAnimatedCells(in: line, with: frame, atColumn: column, width: width)
+                    let patched = FrameBuffer.patchingAnimatedCells(
+                        in: line, with: frame, atColumn: column, width: width,
+                        fields: Self.fields(of: line, from: column, count: frame.strippedLength))
                     let spliced = FrameBuffer.splicing(frame, into: line, atColumn: column)
                     #expect(Self.fnv1a(patched) == hashes[cursor], "patch line \(li) frame \(fi) col \(column) w \(width): \(patched.debugDescription)")
                     #expect(Self.fnv1a(spliced) == hashes[cursor + 1], "splice line \(li) frame \(fi) col \(column) w \(width): \(spliced.debugDescription)")

@@ -215,8 +215,9 @@ struct CursorAdvanceConservationTests {
             // The run replaces the glyph's cells with the same glyph in another
             // colour, which is what a focus pulse is.
             let frame = "\u{1B}[38;5;35m" + glyph + "\u{1B}[0m"
-            let patched = writer.patchingAnimatedRun(
-                in: rendered, with: frame, atColumn: 1, width: width, bgCode: "")
+            let run = AnimatedCellRun(
+                offsetX: 1, offsetY: 0, width: width, frames: [frame, glyph], clock: .content)
+            let patched = writer.patchingAnimatedRun(run, showing: frame, in: rendered, bgCode: "")
 
             let claim = landing(rendered, on: program)
             #expect(

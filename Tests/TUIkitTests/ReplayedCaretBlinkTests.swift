@@ -34,6 +34,10 @@ private struct CaretApp: App {
             VStack(alignment: .leading, spacing: 0) {
                 Button("Before") {}
                 switch ground {
+                case .onThePage:
+                    field
+                case .onAColour:
+                    field.padding(1).background(Color.rgb(90, 20, 120))
                 case .inAFade:
                     field.opacity(0.5)
                 }
@@ -54,6 +58,10 @@ private struct CaretApp: App {
 struct ReplayedCaretBlinkTests {
 
     enum Ground: String, CaseIterable, Sendable {
+        /// On the page: the replay puts the page under the hidden frame's cell.
+        case onThePage
+        /// On a colour a `.background` paints: the replay puts that colour there.
+        case onAColour
         /// Under `.opacity(0.5)`: the fade blends every frame of the caret once, at
         /// render time, each frame's bare cell over the field beneath it.
         case inAFade
@@ -61,11 +69,11 @@ struct ReplayedCaretBlinkTests {
 
     @Test("Every tick shows what a render at that instant draws", arguments: Ground.allCases)
     func everyTickMatchesARender(ground: Ground) throws {
-        let (mismatches, compared, _) = ReplayOracle.compare(
-            { CaretApp(on: ground) }, focusSteps: 1, ticks: 30, size: (40, 6))
+        let found = ReplayOracle.compare({ CaretApp(on: ground) }, focusSteps: 1, ticks: 30, size: (40, 6))
         // Both halves of the blink: a caret that left no run to replay is frozen,
         // not blinking, whatever it froze on.
-        try #require(compared >= 20, "\(ground): only \(compared) rows were replayed — the caret does not animate")
-        for mismatch in mismatches { Issue.record("\(ground): \(mismatch)") }
+        try #require(
+            found.compared >= 20, "\(ground): only \(found.compared) rows were replayed — the caret does not animate")
+        for mismatch in found.mismatches { Issue.record("\(ground): \(mismatch)") }
     }
 }

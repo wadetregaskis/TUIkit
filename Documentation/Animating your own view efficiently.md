@@ -455,15 +455,21 @@ the one worth remembering:
   `ANSICellDiff.identical` — the framework's own answer to "would a terminal
   show anything different", the same judgement `FrameDiffWriter` makes.
 - **Replay with the splice the loop actually performs.**
-  `FrameBuffer.patchingAnimatedCells(in:with:atColumn:width:)`, not
+  `FrameBuffer.patchingAnimatedCells(in:replaying:atIndex:)`, not
   `composited(with:at:)`. The two differ in one load-bearing way: `composited`
   resets before an overlay, so a foreground-only frame lands on the terminal's
-  default background, while the tick paints the frame over the background the
-  line already had. Replaying the wrong one accuses every focus cap inside a
-  `.background()` of dropping its surface — which reads exactly like a real bug,
-  right down to a plausible mechanism (`BackgroundModifier` re-styles the lines
-  and carries the runs through untouched), and is not one. `patchingAnimatedCells`
-  exists precisely because that hole was real once, and was closed.
+  default background, while the tick paints each bare cell of the frame over the
+  field recorded beneath it — the run's ground, which `BackgroundModifier` and
+  every other container that paints under a run records on it as it paints.
+  Replaying the wrong one accuses every focus cap inside a `.background()` of
+  dropping its surface — which reads exactly like a real bug, right down to a
+  plausible mechanism, and is not one. `patchingAnimatedCells` exists precisely
+  because that hole was real once, and was closed. (It read the field off the
+  line under the run until 2026-09-24, which is wrong wherever the frame the
+  render drew gave a cell a field of its own: a visible block caret's colour came
+  back under its own hidden frame. Replaying through the ground also means this
+  assertion now fails for a container that paints under a run without recording
+  it.)
 
 The assertion is only as good as the step it checks, which is the step the view
 rendered at. A frame that is wrong only on the OFF half of a blink passes it —

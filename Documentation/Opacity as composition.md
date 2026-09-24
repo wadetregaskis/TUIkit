@@ -3368,11 +3368,11 @@ no focus manager, and so never built the run.
 
 The fix is NOT the fill's opaque spelling. `.background` paints nothing at alpha 0, so an
 opaque-spelled `.clear` would have painted black behind the bullet on every tick, with no
-claim to catch it. The frame now states no field at all: a spliced frame is painted over
-the background the line already has, and the resolver takes a run frame's field from the
-field painted beneath the run — its ground, which `.background(fill)` records (§93; it was
-the line the frame replaces until 2026-09-24) — so the frame gets exactly what
-`.background(fill)` drew, the same in every frame, or nothing.
+claim to catch it. The frame now states no field at all: a spliced frame is painted over,
+and the resolver takes a run frame's field from, the field painted beneath the run — its
+ground, which `.background(fill)` records (§93; until 2026-09-24 both read it off the line
+the frame replaces) — so the frame gets exactly what `.background(fill)` drew, the same in
+every frame, or nothing.
 
 ### 48.3 What stays approximate
 
@@ -5407,9 +5407,14 @@ Limits:
   draws its cells' ink reversed and its padding in the palette's ink.
 - A reversal is stated opaque and claims nothing, so a translucent ink or page on such a
   palette is spent rather than blended.
-- A run the row carries — a spinner inside a `List` row — replays without the 7, as it
-  already replays without a fill: the splice restores the page's background, not the row's
-  (`FrameDiffWriter.restoringBackground`). Inferred from that path, not measured.
+- A run the row carries — a spinner inside a `List` row — replays without the 7. The row
+  records its reversal on the run's ground as it paints it (`AnimatedCellRun.ground`), but
+  the splice restates only the ground's FIELD under each bare cell
+  (`String.paintedOver(fields:)`), and the 7 that exchanges it for the ink is not a field.
+  (Until 2026-09-24 the replay put the PAGE's background after each of the frame's resets
+  instead, so it replayed without the row's fill too — see "The animation replay reset to
+  the TERMINAL's background" in `Terminal-compatibility.md`.) Inferred from that path, not
+  measured; restating the ground's whole state rather than its field would close it.
 - A reversal closes itself with a reset, so it covers the row's own cells and no more. The
   container's right pad cell, which a persistent background left in force used to colour by
   bleed, stays bare — as its left pad always was.

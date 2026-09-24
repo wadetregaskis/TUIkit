@@ -1391,11 +1391,16 @@ extension FrameBuffer {
     /// ``insertOverlay(base:overlay:atColumn:)`` for a caller that has already
     /// split the base at the overlay's columns — the split carries the
     /// overlay's end, so nothing is measured again.
+    ///
+    /// `overlayIsPainted` is for a caller that has already put every field the
+    /// overlay needs in force, cell by cell (the animation tick); anything else is
+    /// painted over the one field where the overlay lands.
     static func insertOverlay(
         split: ANSIOverlaySplit,
         overlay: String,
         atColumn column: Int,
-        minimumTotalWidth: Int = 0
+        minimumTotalWidth: Int = 0,
+        overlayIsPainted: Bool = false
     ) -> String {
         let afterOverlayColumn = split.suffixDropColumns
 
@@ -1449,7 +1454,7 @@ extension FrameBuffer {
         //
         // Nothing to do — and nothing emitted — where the base states no
         // background, which is the ordinary case.
-        let overlay = overlay.paintedOver(background: split.backgroundUnderOverlay)
+        let overlay = overlayIsPainted ? overlay : overlay.paintedOver(background: split.backgroundUnderOverlay)
 
         // Build: [prefix] + [reset] + [overlay] + [reset + base style restore] + [suffix]
         var result = prefix

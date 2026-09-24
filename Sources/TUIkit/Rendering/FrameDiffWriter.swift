@@ -446,13 +446,14 @@ extension FrameDiffWriter {
     /// `replacingOccurrences`, which bridges to `NSString` and was ~8% of the
     /// render loop in a Mode-B (live-app) profile.
     ///
-    /// Shared with the animation replay, which splices a run's frame into an
-    /// already-built row: the frame comes straight from the view and has never
-    /// been through this, so without it a breathing run painted its own cells in
-    /// the terminal's background. That is the same fault this fixed for rendered
-    /// rows, reaching the screen by the one path that does not build a row.
-
-    static func restoringBackground(in styled: String, bgCode: String, reset: String) -> String {
+    /// For a whole ROW only, where the page's background is the right answer
+    /// after every reset: the content has already been through every container's
+    /// own fill, so a reset that reaches here is one nothing above it restated.
+    /// The animation replay used to run a run's frame through this as well, and
+    /// must not — a frame is a piece of a row that sits on whatever its
+    /// containers painted, which is not the page when they painted anything. See
+    /// ``patchingAnimatedRun(_:showing:in:bgCode:)``.
+    private static func restoringBackground(in styled: String, bgCode: String, reset: String) -> String {
         guard !bgCode.isEmpty else { return styled }
         return ANSIRenderer.restating(bgCode, afterResetsIn: styled)
     }
@@ -617,8 +618,7 @@ extension FrameDiffWriter {
         }
     }
 
-    /// One row this writer has already built, with an animated run's current
-    /// `frame` redrawn over the `width` cells starting at `column`.
+    /// One row this writer has already built, with `run` showing `frame`.
     ///
     /// The animation tick, and the reason it lives here rather than at the call
     /// site: a run's frames are *rendered content*, and rendered content
@@ -636,30 +636,46 @@ extension FrameDiffWriter {
     /// writes no visible characters — so the splice arithmetic below is
     /// unaffected by it.
     ///
+    /// The frame's FIELDS are the other half, and the order the two happen in is
+    /// this function's. The frame arrives with no field under its ink, because the
+    /// view drew it over whatever its containers painted; the splice paints each
+    /// cell the frame leaves bare in the field the containers painted beneath THAT
+    /// cell — the run's ground, on this row's page (``AnimatedCellRun/ground``,
+    /// ``AnimatedCellRun/groundFields(onPage:)``) — restated straight after every
+    /// reset in the frame, collapsed `ESC[0;…m` spellings included
+    /// (`String.paintedOver(fields:)`). It does that BEFORE the compensation, which
+    /// is why the compensation is handed to it rather than applied here first: on
+    /// a host that erases under a glyph it advances too little over, the
+    /// compensation writes an `ECH` in front of the glyph, and the erase paints in
+    /// whatever background is in force at that moment. Compensated first, a `⚙️`
+    /// after a collapsed reset is erased over the terminal's own background and
+    /// only then given its field, which the glyph covers and its second cell does
+    /// not: that cell keeps the terminal's colour on every tick — the hole the
+    /// erase exists to fill, put back by the erase.
+    ///
+    /// Until 2026-09-24 the frame was put through ``restoringBackground(in:bgCode:reset:)``
+    /// here, compensated, and spliced over the one field the row showed under the
+    /// run's first cell: the page after every reset, and before the first one
+    /// whatever the render had drawn there. The page is wrong in any container that
+    /// paints a field of its own — a compact tab chip nested in another tab
+    /// breathed with its right cap in the page's colour inside the outer tab's
+    /// surface — and what the render drew is wrong wherever the drawn frame gave a
+    /// cell a field of its own: a `.plain` field's block caret, drawn visible,
+    /// never blinked off. See `Documentation/Terminal-compatibility.md`.
+    ///
     /// - Parameters:
-    ///   - line: A row as `buildOutputLines` produced it.
+    ///   - run: The run being advanced, whose ground says what is under its cells.
     ///   - frame: The run's picture for this tick, as the view rendered it.
-    ///   - column: The run's first visible column.
-    ///   - width: How many cells the run covers.
-    ///   - bgCode: The row's own background, put back under the frame before the
-    ///     splice because the view rendered the frame without one — the comment
-    ///     in the body says why that has to come before the compensation.
+    ///   - line: The row `run` sits on, as `buildOutputLines` produced it.
+    ///   - bgCode: The page that row was built on — what a cell no container
+    ///     painted under sits on.
     func patchingAnimatedRun(
-        in line: String, with frame: String, atColumn column: Int, width: Int, bgCode: String
+        _ run: AnimatedCellRun, showing frame: String, in line: String, bgCode: String
     ) -> String {
-        // The row's background put back FIRST, then the compensation: the frame
-        // arrives from the view having been through neither, and the splice
-        // drops it into a row that has been through both. Without the
-        // restoration the run's own cells reset to the TERMINAL's background —
-        // white on Apple Terminal's light profile — which is the Animation
-        // page's breathing text drawn on a white band. See
-        // ``restoringBackground(in:bgCode:reset:)``.
         FrameBuffer.patchingAnimatedCells(
-            in: line,
-            with: compensatingCursorAdvance(
-                Self.restoringBackground(
-                    in: frame, bgCode: bgCode, reset: ANSIRenderer.reset)),
-            atColumn: column, width: width)
+            in: line, with: frame, atColumn: run.offsetX, width: run.width,
+            fields: run.groundFields(onPage: bgCode),
+            compensating: compensatingCursorAdvance)
     }
 
     private func reuseCache(for region: OutputRegion) -> LineReuseCache {

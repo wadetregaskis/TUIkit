@@ -129,6 +129,18 @@ struct AnimatedRunSplicingTests {
         "\(background)\u{1B}[2K\u{1B}[38;5;46m□\u{1B}[0m\(background) Enable\u{1B}[0m\(background)   "
     }
 
+    /// The splice an animation tick performs, for a run nothing painted under on a
+    /// row built on `page` — so the field under each of its cells is the page, as
+    /// `FrameDiffWriter.patchingAnimatedRun` reads it off the run's ground.
+    private func patching(
+        _ line: String, with frame: String, atColumn column: Int, width: Int,
+        page: String = "\u{1B}[48;5;16m"
+    ) -> String {
+        let run = AnimatedCellRun(offsetX: column, offsetY: 0, width: width, frames: [frame, ""], clock: .cursor)
+        return FrameBuffer.patchingAnimatedCells(
+            in: line, with: frame, atColumn: column, width: width, fields: run.groundFields(onPage: page))
+    }
+
     @Test("A foreground-only frame keeps the background it was drawn over")
     func patchKeepsTheLineBackground() {
         // The regression this exists for: a focus indicator's frames come from
@@ -137,8 +149,8 @@ struct AnimatedRunSplicingTests {
         // its start; the replay redraws that cell on its own, and reset the
         // background out from under it — a white box around a breathing
         // checkbox on any terminal whose default background is light.
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: styledRow(), with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
+        let patched = patching(
+            styledRow(), with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
 
         let glyph = patched.range(of: "□")!
         let before = String(patched[patched.startIndex..<glyph.lowerBound])
@@ -157,8 +169,8 @@ struct AnimatedRunSplicingTests {
         // them over would make an indicator inside a bold section header bold,
         // which is not what the render drew.
         let bolded = "\u{1B}[1;4;48;5;16m\u{1B}[38;5;46m□\u{1B}[0m rest"
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: bolded, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
+        let patched = patching(
+            bolded, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
 
         let before = String(patched[patched.startIndex..<patched.range(of: "□")!.lowerBound])
         #expect(before.contains("48;5;16"), "background: \(before.debugDescription)")
@@ -174,8 +186,8 @@ struct AnimatedRunSplicingTests {
         // their runs start at a column the prefix reaches — which changes which
         // escapes `insertOverlay` keeps, and changed nothing about the hole:
         // it resets before the overlay either way.
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: styledRow(), with: "\u{1B}[38;5;77mX\u{1B}[0m", atColumn: 3, width: 1)
+        let patched = patching(
+            styledRow(), with: "\u{1B}[38;5;77mX\u{1B}[0m", atColumn: 3, width: 1)
 
         let marker = patched.range(of: "X")!
         let before = String(patched[patched.startIndex..<marker.lowerBound])
@@ -197,8 +209,8 @@ struct AnimatedRunSplicingTests {
     func patchRestatesTheBackgroundAfterInnerResets() {
         let reset = "\u{1B}[0m"
         let frame = "\u{1B}[38;5;77m▲\(reset)\u{1B}[38;5;77m 3 more lines above \(reset)"
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: styledRow(), with: frame, atColumn: 0, width: frame.strippedLength)
+        let patched = patching(
+            styledRow(), with: frame, atColumn: 0, width: frame.strippedLength)
 
         // Every visible cell of the run must have the line's background in force.
         let runCells = patched.ansiAwarePrefix(visibleCount: frame.strippedLength)
@@ -222,8 +234,8 @@ struct AnimatedRunSplicingTests {
             isFocused: true, color: BorderRenderer.focusIndicatorEnds(palette: palette, on: palette.background).bright)
         #expect(frame.strippedLength == BorderRenderer.focusIndicatorWidth)
 
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: styledRow(), with: frame, atColumn: 0,
+        let patched = patching(
+            styledRow(), with: frame, atColumn: 0,
             width: BorderRenderer.focusIndicatorWidth)
         let runCells = patched.ansiAwarePrefix(visibleCount: BorderRenderer.focusIndicatorWidth)
         #expect(
@@ -237,8 +249,8 @@ struct AnimatedRunSplicingTests {
         // line's own styling where the suffix begins — so a background there
         // would be bytes per tick, per run, for no change on screen.
         let frame = "\u{1B}[38;5;77m□\u{1B}[0m"
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: styledRow(), with: frame, atColumn: 0, width: 1)
+        let patched = patching(
+            styledRow(), with: frame, atColumn: 0, width: 1)
         #expect(
             !patched.contains("\u{1B}[0m\u{1B}[48;5;16m\u{1B}[48;5;16m"),
             "\(patched.debugDescription)")
@@ -250,8 +262,8 @@ struct AnimatedRunSplicingTests {
         // `renderOnce` tree paints no surface at all — and the patch must not
         // invent one, or every unstyled app would grow a black box.
         let plain = "\u{1B}[38;5;46m□\u{1B}[0m rest"
-        let patched = FrameBuffer.patchingAnimatedCells(
-            in: plain, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1)
+        let patched = patching(
+            plain, with: "\u{1B}[38;5;77m□\u{1B}[0m", atColumn: 0, width: 1, page: "")
         #expect(!patched.contains("\u{1B}[4"), "\(patched.debugDescription)")
     }
 }

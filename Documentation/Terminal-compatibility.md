@@ -4185,6 +4185,72 @@ The restoration is now a shared function that `patchingAnimatedRun` applies to
 the frame before compensating it; the same capture now reads
 `ESC[0;38;5;34;48;5;16m`.
 
+**Superseded 2026-09-24: the field recorded beneath each cell, restated before
+the compensation.** The fix above answered "what is under a cell the frame
+leaves bare?" in two ways, and both were wrong somewhere:
+
+- **After a reset in the frame, the page.** Right for a row on the page, wrong
+  in any container that paints a field of its own, and a frame that names a
+  background is one the splice leaves alone — so every bare cell after the
+  frame's first reset came out in the page's colour whatever it sat on. Seen as
+  a compact tab chip nested in another tab: while the inner strip held the
+  focus, its right cap (`▌`, ink on no field, after the label's reset) was drawn
+  in the page's colour inside the outer tab's surface on every tick, and its
+  left cap, before the first reset, kept the surface. Measured live
+  (`Example --page tabViews`, a 140×60 PTY read through pyte in truecolor, eight
+  samples at each focus stop where the nested strip breathes): the right cap
+  read `050a05`, the page, at every sample, the left cap `0d1a0d`. The blank
+  beside a plain button's focus dot and an indeterminate `ProgressView`'s track
+  did the same in any container with a field.
+- **Before the first reset, the field the row showed under the run's first
+  cell.** That is whatever the render DREW there, which is the drawn frame's own
+  field wherever the frame named one. A block caret drawn visible in a `.plain`
+  `TextField` (no field of its own) was read back as the caret's colour, and the
+  blink's hidden frame, which leaves the cell bare, was painted in it: the caret
+  never blinked off.
+
+Both are replaced by one record. A run now carries its GROUND
+(`AnimatedCellRun.ground`): what the containers around it painted beneath its
+cells, recorded by each painter as it paints — a `.background` (flat or ramp),
+compositing and a floating layer made opaque, a `List` row's fill, a menu row's
+bar — with the very function it paints the lines with. The replay reads it on
+the row's page, exactly as `buildLine` reads a row (the page in front, restated
+after every reset: `AnimatedCellRun.groundFields(onPage:)`), so a cell no painter
+reached sits on the page and every other cell on its innermost painter's field.
+`String.paintedOver(fields:)` puts that field under each cell the frame leaves
+bare: at the start, after every SGR that leaves the frame naming no field of its
+own (a reset in either spelling included), and before a cell whose field
+differs. The page restoration survives for whole rows only (`buildLine`).
+
+**The order stays: fields first, then the host's compensation.** On Apple
+Terminal, iTerm2, Ghostty and Warp the compensation writes an erase (`ECH`) in
+front of a glyph the host advances too little over, and an erase paints in
+whatever background is in force when it runs. With the page restored first, a
+glyph inside a container was erased in the page's colour: rendered and replayed
+through each host's writer, a `⚙️` / `⬛︎` / `🇦` on a panel erased
+`[2 at 3 in …48;2;5;10;5m]` on replay against the render's
+`[2 at 3 in …48;2;13;26;13m]`, on all four hosts. Now the erase runs in the
+panel's field on every host, on the page and in a panel. (With the restatement
+after every SGR, the ECH the compensation puts after a reset follows the
+restated field either way round for these frames; the order is kept because it
+is the one that cannot depend on where the compensation puts its escapes.)
+
+The bytes are host-independent; the erase is where the hosts differ. Pinned end
+to end through the run loop by `ReplayedTabChipBackgroundTests` (the chip,
+top-level, nested in a bordered tab and in a compact one),
+`ReplayedCaretBlinkTests` (the caret on the page, on a colour and under a fade),
+`ReplayedWholeRowFadeTests` (a whole-row fade, on a painted page and on
+`Color.default`) and `ReplayedRunFieldTests` (every run of a catalogue of
+controls on three grounds, each replayed tick against a render at the same
+instant); per host by `ReplayedEraseFieldTests`; the record by
+`AnimatedRunGroundTests`.
+
+Still open: the replay restates the ground's field only. A reversal (SGR 7) a
+row paints over its content is recorded in the ground but not restated by the
+splice, so a run inside a reversed row replays unreversed; a persistent dim is
+neither recorded nor restated (both inferred, not measured —
+`Opacity as composition.md`, the reversed rows' limits).
+
 #### The animation replay compensates a second time — FIXED 2026-08-29
 
 A row is compensated when it is rendered. When an `AnimatedCellRun` on that row

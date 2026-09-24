@@ -505,6 +505,17 @@ public struct SGRState: Sendable, Equatable {
     /// cell by cell and would otherwise build a `String` per cell to do it.
     var backgroundColour: Colour? { background }
 
+    /// `colour` as the escape that puts it in force as the background: what
+    /// ``renderedBackground`` spells for a state holding it, and `ESC[49m` for
+    /// `nil`, which the rendered form spells as nothing because it starts from
+    /// the default and this may not.
+    static func backgroundEscape(_ colour: Colour?) -> String {
+        guard let colour else { return "\u{1B}[49m" }
+        var escape = "\u{1B}["
+        colour.append(to: &escape, introducer: 48)
+        return escape + "m"
+    }
+
     /// Just the background, as a sequence — what a padded run needs restored
     /// under it — or the empty string when the default is in force.
     public var renderedBackground: String {

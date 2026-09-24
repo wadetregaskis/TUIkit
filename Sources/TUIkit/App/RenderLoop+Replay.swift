@@ -232,9 +232,14 @@ extension RenderLoop {
                 // wrong is how a background stops halfway across a row), and
                 // it knows the host's cursor-advance model, which a frame the
                 // view rendered has never met. See `patchingAnimatedRun`.
+                //
+                // The page goes too, but only as what a cell no container
+                // painted under sits on: every other field comes from the run's
+                // ground. Restated after every reset in the frame, the page
+                // painted over every container's field.
                 let patched = diffWriter.patchingAnimatedRun(
-                    in: lines[row], with: run.frame(atElapsed: now),
-                    atColumn: run.offsetX, width: run.width, bgCode: frame.backgroundCode)
+                    run, showing: run.frame(atElapsed: now), in: lines[row],
+                    bgCode: frame.backgroundCode)
                 if patched != lines[row] {
                     lines[row] = patched
                     touched = true

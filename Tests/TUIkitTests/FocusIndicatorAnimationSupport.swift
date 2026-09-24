@@ -67,14 +67,16 @@ private func trimmedGlyphs(_ line: String) -> String {
 /// nothing — so any disagreement about where the run sits, how wide it is, or
 /// what colour it paints shows up here.
 ///
-/// Through ``FrameBuffer/patchingAnimatedCells(in:with:atColumn:width:)``,
-/// which is the splice `RenderLoop` actually performs, and NOT
-/// ``FrameBuffer/composited(with:at:)``, which this used to use. The two differ
-/// in one load-bearing way: `composited` resets before an overlay, so a
-/// foreground-only frame lands on the terminal's default background, while the
-/// tick paints the frame over the background the line already had. Replaying
-/// the wrong one made every focus cap inside a `.background()` look broken
-/// here and fine on screen.
+/// Through ``FrameBuffer/patchingAnimatedCells(in:replaying:atIndex:)``,
+/// which is the splice `RenderLoop` actually performs less the writer's page and
+/// host, and NOT ``FrameBuffer/composited(with:at:)``, which this used to use.
+/// The two differ in one load-bearing way: `composited` resets before an
+/// overlay, so a foreground-only frame lands on the terminal's default
+/// background, while the tick paints the frame over the field recorded beneath
+/// it (the run's ground). Replaying the wrong one made every focus cap inside a
+/// `.background()` look broken here and fine on screen. And through the ground,
+/// this also catches a container that paints under a run without recording it:
+/// the replayed cells would lose that container's field.
 @MainActor
 func expectReplayIsIdentity(
     _ buffer: FrameBuffer, at step: Int = 0,
@@ -87,8 +89,7 @@ func expectReplayIsIdentity(
         }
         var replayed = buffer.lines
         replayed[run.offsetY] = FrameBuffer.patchingAnimatedCells(
-            in: replayed[run.offsetY], with: run.frame(atIndex: step),
-            atColumn: run.offsetX, width: run.width)
+            in: replayed[run.offsetY], replaying: run, atIndex: step)
         #expect(
             paintsIdentically(buffer.lines, replayed),
             comment ?? "run \(run) moved the cells",
