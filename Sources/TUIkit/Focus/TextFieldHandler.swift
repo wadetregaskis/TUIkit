@@ -328,6 +328,21 @@ extension TextFieldHandler {
         cursorPosition = text.wrappedValue.count
     }
 
+    /// Moves the caret back to the previous word boundary, dropping any
+    /// selection. One definition for Option-Left and Option-B, for the same
+    /// reason as ``moveToStart()``.
+    func moveWordBackward() {
+        clearSelection()
+        moveCursorToPreviousWordBoundary()
+    }
+
+    /// Moves the caret forward to the next word boundary, dropping any
+    /// selection: Option-Right and Option-F.
+    func moveWordForward() {
+        clearSelection()
+        moveCursorToNextWordBoundary()
+    }
+
     /// Extends selection to the start of the current (or previous) word.
     ///
     /// Same boundary semantics as ``moveCursorToPreviousWordBoundary()`` —
@@ -422,24 +437,20 @@ extension TextFieldHandler {
         case left, right
     }
 
-    /// Routes a `.character(c)` event through the Option- and Ctrl-modifier
-    /// shortcut tables before falling through to insertion.
+    /// Handles a `.character(c)` event: a chord (``TextFieldChord``, where
+    /// the order Option and Control are read in is written down), else the
+    /// character typed.
     ///
     /// Extracted from ``handleKeyEvent(_:)`` to keep the top-level switch's
-    /// cyclomatic complexity manageable — the modifier shortcuts have their
-    /// own nested switches and pushed the parent function over the linter
-    /// threshold.
+    /// cyclomatic complexity manageable.
     fileprivate func handleCharacterEvent(_ char: Character, event: KeyEvent) -> Bool {
-        // Option/Alt + b / f are the historical readline word-navigation
-        // bindings, and macOS Terminal sends them as `ESC b` / `ESC f` when
-        // the user holds Option with the arrow keys (in addition to the
-        // modified-arrow CSI sequences). Handle them up-front so the letter
-        // does not fall through to `insertCharacter`.
-        if event.alt, let handled = handleAltCharacter(char, shift: event.shift) {
-            return handled
+        if let chord = TextFieldChord(event) {
+            return perform(chord)
         }
+        // A Control chord nothing binds propagates rather than typing its
+        // letter.
         if event.ctrl {
-            return handleCtrlCharacter(char, alt: event.alt)
+            return false
         }
         // Ignore control characters except printable ones.
         if char.isLetter || char.isNumber || char.isPunctuation
@@ -451,82 +462,6 @@ extension TextFieldHandler {
         return false
     }
 
-    /// Handles Option/Alt + character shortcuts. Returns `nil` when the
-    /// character is not a recognised Alt shortcut so the caller can fall
-    /// through to Ctrl-handling / insertion.
-    fileprivate func handleAltCharacter(_ char: Character, shift: Bool) -> Bool? {
-        switch char {
-        case "b", "B":
-            if shift {
-                extendSelectionToPreviousWordBoundary()
-            } else {
-                clearSelection()
-                moveCursorToPreviousWordBoundary()
-            }
-            return true
-        case "f", "F":
-            if shift {
-                extendSelectionToNextWordBoundary()
-            } else {
-                clearSelection()
-                moveCursorToNextWordBoundary()
-            }
-            return true
-        default:
-            return nil
-        }
-    }
-
-    /// Handles Ctrl + character shortcuts. Always returns a `Bool` — `false`
-    /// when the character has no Ctrl binding, so the event is dropped.
-    ///
-    /// `alt` is what distinguishes the two meanings of A. Ctrl-A is
-    /// start-of-line, as it is in readline and as it always was in
-    /// ``TextEditorHandler``; **Option**-Ctrl-A selects all. The two controls
-    /// disagreeing about one of the most-used chords in a terminal was the
-    /// defect — Ctrl-A jumped in one and selected in the other — and the
-    /// motion set is the one with a tradition to keep.
-    fileprivate func handleCtrlCharacter(_ char: Character, alt: Bool) -> Bool {
-        switch char {
-        case "a", "A":
-            if alt {
-                selectAll()
-            } else {
-                moveToStart()
-            }
-            return true
-        case "e", "E":
-            // The other half of the pair. Without it Ctrl-A would move and
-            // Ctrl-E would insert an "e", which is the asymmetry this change
-            // exists to remove — and `TextEditorHandler` has had both for as
-            // long as it has had either.
-            moveToEnd()
-            return true
-        case "c", "C":
-            copySelection()
-            return true
-        case "x", "X":
-            cutSelection()
-            return true
-        case "v", "V":
-            paste()
-            return true
-        case "z", "Z":
-            undo()
-            return true
-        case "u", "U":
-            let length = text.wrappedValue.count
-            if length > 0 {
-                deleteRange(0..<length)
-            }
-            clearSelection()
-            cursorPosition = 0
-            return true
-        default:
-            return false
-        }
-    }
-
     /// Handles `.left` / `.right` with the four modifier combinations
     /// (Shift+Option, Option, Shift, plain).
     fileprivate func handleHorizontalArrow(direction: ArrowDirection, event: KeyEvent) {
@@ -534,8 +469,7 @@ extension TextFieldHandler {
         case (.left, true, true):
             extendSelectionToPreviousWordBoundary()
         case (.left, true, false):
-            clearSelection()
-            moveCursorToPreviousWordBoundary()
+            moveWordBackward()
         case (.left, false, true):
             extendSelectionLeft()
         case (.left, false, false):
@@ -544,8 +478,7 @@ extension TextFieldHandler {
         case (.right, true, true):
             extendSelectionToNextWordBoundary()
         case (.right, true, false):
-            clearSelection()
-            moveCursorToNextWordBoundary()
+            moveWordForward()
         case (.right, false, true):
             extendSelectionRight()
         case (.right, false, false):

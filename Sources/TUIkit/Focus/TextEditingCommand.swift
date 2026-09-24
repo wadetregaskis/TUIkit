@@ -17,9 +17,10 @@
 /// Option-Right as well.
 ///
 /// What a command *does* stays with the control, because it depends on the
-/// control's shape. The previous line is one line up in a `TextEditor`, but in a
-/// single-line field it can only mean the start of the text, which is where the
-/// field's Up arrow goes.
+/// control's shape. Ctrl-K at the end of a line in a `TextEditor` kills the line
+/// break and joins the next line up, and a single-line field has no break to
+/// kill. A control may also decline a command, and then its chord propagates as
+/// one nothing binds would: a field has no line to open for Ctrl-O.
 ///
 /// Ctrl-H, Ctrl-I and Ctrl-M are missing on purpose. A terminal sends those bytes
 /// for Backspace, Tab and Return, and `KeyEvent.parse` reads them that way.
@@ -130,5 +131,40 @@ extension TextEditingCommand {
         }
         line.swapAt(column - 1, column)
         return column + 1
+    }
+}
+
+// MARK: - Command-Key Stand-Ins
+
+/// An editing command that a text control binds to a Control chord in place
+/// of the Command-key chord a terminal app never receives: ⌘C, ⌘X, ⌘V and ⌘Z
+/// are Ctrl-C, X, V and Z here, and Ctrl-U erases.
+///
+/// A separate table from ``TextEditingCommand``, because the two disagree
+/// about V: here it is paste, and in the Emacs table it is page down. A
+/// control reads this one first for the letters it binds from it.
+enum StandInEditingCommand: Equatable {
+    /// Ctrl-C: copy the selection.
+    case copy
+    /// Ctrl-X: cut the selection.
+    case cut
+    /// Ctrl-V: paste.
+    case paste
+    /// Ctrl-Z: undo.
+    case undo
+    /// Ctrl-U: erase the whole text, not only the text before the caret.
+    case erase
+
+    /// The command a Control chord names, or `nil` when it names none here.
+    /// Option held as well changes nothing.
+    init?(control character: Character) {
+        switch character {
+        case "c", "C": self = .copy
+        case "x", "X": self = .cut
+        case "v", "V": self = .paste
+        case "z", "Z": self = .undo
+        case "u", "U": self = .erase
+        default: return nil
+        }
     }
 }
