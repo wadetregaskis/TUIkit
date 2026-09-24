@@ -38,6 +38,16 @@ extension FrameBuffer {
         /// whether the blended answer needs the 7 back to be spelled at all
         /// (``spelledWithReverseWhereNeeded(_:)``).
         var isReversed = false
+        /// Whether the line STATES the terminal's own field here — an `ESC[49m`
+        /// still in force, not yet undone by a reset or a colour — rather than
+        /// naming none.
+        ///
+        /// Both read as no `background`, and to the blend they are the same cell.
+        /// Only a run's frame asks the difference, because the painters around a run
+        /// disagree about a stated 49 and each field-less cell of a frame is blended
+        /// from what they painted under it (`blendedSpan`'s `fieldsFrom` and
+        /// `fieldsUnderStatedDefault`).
+        var statesTerminalField = false
     }
 
     /// What one cell's three channels are worth, resolved from the region
@@ -69,12 +79,20 @@ extension FrameBuffer {
     /// source cell through untouched — a row can be covered in part, and a span
     /// that runs from the leftmost to the rightmost covered column is one
     /// splice instead of one per region.
+    ///
+    /// `fieldsFrom` and `fieldsUnderStatedDefault` are for a source that is a run's
+    /// FRAME: the fields its containers painted under a cell the frame states no
+    /// field for, and under one it puts on the terminal's own by stating `ESC[49m`
+    /// — a run's two records (`AnimatedCellRun.ground`,
+    /// `AnimatedCellRun.groundUnderStatedDefault`), which the splice draws those
+    /// cells over, so each is blended as the cell the splice will show.
     static func blendedSpan(
         source: String,
         destination: String,
         columns: Range<Int>,
         destinationShift: Int,
         fieldsFrom: String? = nil,
+        fieldsUnderStatedDefault: String? = nil,
         alpha: (Int) -> CellAlpha?,
         surface: Color,
         defaultForeground: Color
@@ -96,6 +114,13 @@ extension FrameBuffer {
         // a frame cell stating no background wears that row's, exactly as the
         // splice will give it, so it is blended as the cell it replaces.
         let fieldCells = fieldsFrom.map {
+            cells(in: $0, through: columns.upperBound, defaultForeground: defaultForeground, surface: surface)
+        }
+        // And under a cell the frame states the terminal's own field for, what the
+        // painters made of THAT: nothing where they let the 49 through, their field
+        // where they read it as none. Nothing painted, nothing recorded: the
+        // terminal's own.
+        let statedDefaultFieldCells = fieldsUnderStatedDefault.map {
             cells(in: $0, through: columns.upperBound, defaultForeground: defaultForeground, surface: surface)
         }
         let behindCells = cells(
@@ -124,7 +149,9 @@ extension FrameBuffer {
                     background: lastSourceCell?.background,
                     isReversed: lastSourceCell?.isReversed ?? false)
             if sourceCells[column] != nil { lastSourceCell = cell }
-            if cell.background == nil, let field = fieldCells?[column]?.background {
+            if cell.background == nil,
+                let field = (cell.statesTerminalField ? statedDefaultFieldCells : fieldCells)?[column]?.background
+            {
                 cell.background = field
                 cell.style = cell.style.settingBackground(field)
             }
@@ -548,6 +575,8 @@ extension FrameBuffer {
         var state = SGRState()
         var foreground: Color?
         var background: Color?
+        // `ESC[49m` is the one background report that is `nil`.
+        var statesTerminalField = false
         var column = 0
         line.forEachANSISegment { segment in
             switch segment {
@@ -557,8 +586,8 @@ extension FrameBuffer {
                 SGRColorRewrite.readingColors(sequence) { which, color in
                     switch which {
                     case .foreground: foreground = color
-                    case .background: background = color
-                    case .reset: foreground = nil; background = nil
+                    case .background: background = color; statesTerminalField = color == nil
+                    case .reset: foreground = nil; background = nil; statesTerminalField = false
                     }
                 }
             case .visible(let character):
@@ -585,7 +614,8 @@ extension FrameBuffer {
                 }
                 var cell = RowCell(
                     character: character, style: state,
-                    foreground: foreground, background: background)
+                    foreground: foreground, background: background,
+                    statesTerminalField: statesTerminalField)
                 if state.reversesVideo {
                     var unreversed = state
                     unreversed.apply("\u{1B}[27m")

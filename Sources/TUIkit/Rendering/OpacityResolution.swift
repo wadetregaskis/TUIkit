@@ -386,7 +386,17 @@ extension FrameBuffer {
         // frame, the two frames blended to one picture, and the run — not
         // animating any more — was dropped: under a fade the caret froze on.
         // See ``AnimatedCellRun/ground``.
+        //
+        // And a cell whose frame STATES the terminal's own field (`ESC[49m`) from
+        // the second record, which holds what the painters made of a stated 49 —
+        // the two records the splice draws a frame over, read the way it reads them
+        // (`String.paintedOver(fields:)`). From the ground alone, a tab chip's label
+        // on a `Color.default` palette inside `.background(.blue).opacity(0.6)` was
+        // blended from blue and stated it, where the row shows the terminal's own:
+        // the `.background` lets a stated 49 through. See
+        // ``AnimatedCellRun/groundUnderStatedDefault``.
         let groundLine = run.ground.map { prefix + $0 }
+        let statedDefaultLine = run.groundUnderStatedDefault.map { prefix + $0 }
         let columns = run.offsetX..<(run.offsetX + run.width)
         // The SAME fold the line took, not `covering.first`. A run is spliced
         // over cells the lines already answered for, so taking one region here
@@ -413,6 +423,7 @@ extension FrameBuffer {
                 columns: columns,
                 destinationShift: position.x,
                 fieldsFrom: groundLine,
+                fieldsUnderStatedDefault: statedDefaultLine,
                 alpha: { perColumn[$0 - columns.lowerBound] },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground)

@@ -4342,6 +4342,32 @@ went wrong when the replay began reading the ground. The fade now puts the runs
 through the rewrite it puts the lines through (`FrameBuffer.restyleRuns`).
 Pinned at three phases by `TransitionFadeRunTests`.
 
+**2026-09-24, later: and so does a fade's blend.** `.opacity(_:)` blends each
+run's frames where it blends the lines (`OpacityResolution.faded`), and blends a
+cell the frame states no field for from the field beneath it, the run's ground.
+It blended a cell the frame puts on the terminal's own field by stating
+`ESC[49m` from the ground too, where the splice draws that cell over the second
+record. So a frame stating 49 inside `.background(c).opacity(0.6)` on a
+`Color.default` palette — a tab chip's label, a `.plain` block caret — was
+blended from `c` and stated it, while the row, whose `.background` lets the 49
+through, shows the terminal's own. The blend now takes such a cell's field from
+`groundUnderStatedDefault`, telling the two apart by the frame's own statement
+as the splice does. Pinned per painter at the faded level by
+`AnimatedRunGroundTests`; before, the probe inside a `.background` and inside
+nested ones failed, e.g. `(drawn → ["…48;2;200;40;40m", …]) == (shown → ["",
+""])`.
+
+Found beside it, still open, and in the render rather than the replay: the
+opacity splice (`FrameBuffer.splicing`) paints the field under its span's first
+column beneath every cell the span spells `ESC[49m`, because it composites and
+compositing reads 49 as no field. On a `Color.default` palette every cell that
+blends to the terminal's own is spelled that way, a stated 49 included. So a
+faded row takes the colour of the cell its span starts on wherever it should
+show the terminal's own: `HStack { Text("x").background(.blue); Text("y") }
+.opacity(0.6)` draws `y` on blue, where `.opacity(1)` draws it on the terminal's
+own (measured on this tree; the splice is main's). `AnimatedRunGroundTests` holds
+the probe inside padding and a border, and on a ramp, as known issues.
+
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the
 splice, so a run inside a reversed row replays unreversed; a persistent dim is

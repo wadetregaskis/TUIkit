@@ -323,11 +323,12 @@ extension AnimationClock {
 /// the wash that `.dimmed()` and a modal's backdrop flatten everything to, and
 /// a colour effect (`.colorInvert()`, `.grayscale(_:)`, `.hueRotation(_:)`,
 /// `.brightness(_:)`, `.contrast(_:)`, `.saturation(_:)`, `.colorMultiply(_:)`),
-/// and the fade of a `.transition(.opacity)`.
-/// A frame that
-/// states the terminal's own field for a cell (SGR 49, which `Color.default` as
-/// a background is spelled as) is replayed as each of those containers drew it:
-/// a `.background` lets it through, and compositing fills it.
+/// and the fade of a `.transition(.opacity)`. A frame that states the terminal's
+/// own field for a cell (SGR 49, which `Color.default` as a background is spelled
+/// as) is replayed as each of those containers drew it: a `.background` lets it
+/// through, and compositing fills it. Inside an `.opacity(_:)`, whose blend of a
+/// run's frames reads the same records, both kinds of cell are blended from the
+/// field each was drawn over.
 ///
 /// A `Renderable` of your own has no way to record a field. If it paints one
 /// beneath a run's cells and the run's frames leave those cells bare, the
