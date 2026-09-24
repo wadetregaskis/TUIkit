@@ -21,8 +21,9 @@ Usage:
                  [--loops N] [--rows R] [--cols C] [--settle S]
                  [--trace OUT.trace] [--time-limit MS] [--dump OUT.ansi] [--quiet]
 
-Quits the app cleanly with 'q' (TUIkit's default quit shortcut), falling
-back to SIGTERM/SIGKILL.
+Quits the app cleanly with 'q' (TUIkit's default quit shortcut) from the main
+menu, falling back to SIGTERM/SIGKILL — and then exiting 2, because an app that
+did not quit was not where the scenario thought it was.
 
 The app never sees the user's own settings: it runs with `TUIKIT_CONFIG_DIR`
 pointing at a fresh temporary directory, deleted afterwards, unless the caller
@@ -62,6 +63,30 @@ def mouse_sgr(button, col, row, press):
     return f"{ESC.decode()}[<{button};{col};{row}{'M' if press else 'm'}".encode()
 
 
+# Back to the main menu from wherever a scenario left the app: TWO Escapes.
+#
+# One can be spent before the page sees it. The arrows move the focus, and on
+# the Sliders page twelve Downs walk it into the track editor's Fill field — a
+# combo box, where Down opens the suggestions and Escape closes them. With one
+# Escape the `tour` never left that page: the Steppers and Split View
+# shortcuts after it, and the closing `q`, were typed into the field, and the
+# app saved them as the Fill (see `config_directory` for whose settings that
+# was). The second Escape leaves the page; on the menu an Escape does nothing,
+# so a page that needed only one pays nothing for it.
+#
+# The second 150 ms after the first: TUIkit holds a lone ESC for two loop
+# rounds (`Terminal.bareEscStaleFrames`) to tell the Escape key from the start
+# of a sequence, and a byte that arrives inside the hold joins it — ESC ESC is
+# ONE Alt+Escape. Measured on an idle menu (debug build), the hold is under
+# 40 ms: `q` sent 0 ms after an Escape quit 0 times in 6 (it was Alt+q), 20 ms
+# after 5 in 6, 40 ms and more 6 in 6. A busy frame stretches it, so 150 ms is
+# margin, not measurement: the tour passed 10 runs of 10 at 50 ms too. It
+# costs the tour 0.15 s a page. What follows the pair is spaced the same way:
+# the quit's `q` 150 ms later, the tour's next page key 100 ms later, as it
+# always has been after its Escape.
+BACK_TO_MENU = [(0.05, ESC), (0.15, ESC)]
+
+
 def scenario_pages(page_keys, scroll=12):
     """Generic: jump to each page, scroll down then up, return to menu."""
     steps = []
@@ -71,7 +96,7 @@ def scenario_pages(page_keys, scroll=12):
             steps.append((0.02, DOWN))
         for _ in range(scroll // 2):
             steps.append((0.02, UP))
-        steps.append((0.05, ESC))
+        steps.extend(BACK_TO_MENU)
     return steps
 
 
@@ -262,6 +287,9 @@ def main():
     os.close(slave)
     total = 0
     dump = open(args.dump, "wb") if args.dump else None
+    # Off for the way out: going back to the menu and quitting redraws the menu,
+    # which is not the scenario, and counting it would move every total.
+    counting = True
 
     def drain(timeout):
         nonlocal total
@@ -275,9 +303,10 @@ def main():
                 return -1
             if not data:
                 return -1
-            total += len(data)
-            if dump:
-                dump.write(data)
+            if counting:
+                total += len(data)
+                if dump:
+                    dump.write(data)
             timeout = 0.0
 
     drain(args.settle)  # startup + first frames
@@ -324,10 +353,14 @@ def main():
         if not args.quiet:
             print("\n".join("[xctrace] " + l for l in out.strip().splitlines()[-6:]))
 
-    try:
-        os.write(master, b"q")
-    except OSError:
-        pass
+    # `q` quits from any page — unless something takes the key first, and a
+    # focused text field does (InputHandler: the quit shortcut is the layer
+    # after the focused view's). So go back to the menu first, wherever the
+    # scenario ended, where nothing can. The bytes of the way out are not
+    # counted or dumped: the menu's redraw is not the scenario.
+    counting = False
+    play(BACK_TO_MENU + [(0.15, b"q")])
+    quit_on_q = True
     deadline = time.time() + 1.5
     while time.time() < deadline:
         if drain(0.1) < 0:
@@ -335,6 +368,7 @@ def main():
         if os.waitpid(pid, os.WNOHANG)[0]:
             break
     else:
+        quit_on_q = False
         try:
             os.kill(pid, signal.SIGTERM); time.sleep(0.2); os.kill(pid, signal.SIGKILL)
         except ProcessLookupError:
@@ -346,6 +380,18 @@ def main():
 
     if dump:
         dump.close()
+
+    if not quit_on_q:
+        # An app still running after Escape, Escape, `q` is not on the menu, so
+        # the script lost track of where its keys were going — as the `tour`
+        # did on the Sliders page, and went on typing into a field for the
+        # rest of the run. Whatever that measured was not the scenario, and a
+        # byte total alone never said so.
+        print(
+            f"[drive] ERROR: {args.scenario}: the app did not quit on `q` from the menu "
+            "and had to be killed; the scenario's keys went somewhere it did not intend",
+            file=sys.stderr)
+        raise SystemExit(2)
 
     if not args.quiet:
         print(f"[drive] scenario={args.scenario} loops={args.loops} "

@@ -6,7 +6,9 @@ Tests for `drive.py`, the Mode-B PTY driver.
 
 The driven binary is a stub that reports what it was launched with, so these
 need no build and no Instruments: they are about what `drive.py` hands the
-app, not about the app.
+app, not about the app. The exception is `TestTourStaysOnItsRoute`, which is
+about where the `tour`'s keys land in the real Example, drives a built one
+(`.build/debug/Example`, or `$DRIVE_TEST_BINARY`), and is skipped without it.
 
 What they guard is where the app's persisted state goes. `record.sh` — the
 profiling flow CLAUDE.md sends everyone through — runs `drive.py`, and a
@@ -20,6 +22,7 @@ the Sliders page's track editor, which is how a Fill of `■];q];-=s.m1`
 reached the owner's screen.
 """
 
+import base64
 import json
 import os
 import shutil
@@ -100,6 +103,54 @@ class TestConfigIsolation(unittest.TestCase):
         self.assertTrue(
             os.path.exists(os.path.join(chosen, "Example", "settings.json")),
             "a directory the caller named is the caller's to delete")
+
+
+_REPO = os.path.dirname(os.path.dirname(_HERE))
+_EXAMPLE = os.environ.get("DRIVE_TEST_BINARY", os.path.join(_REPO, ".build", "debug", "Example"))
+
+
+# Local only. Its margins — 150 ms between the two Escapes and before `q` — were
+# measured on a developer's machine, and a slow shared runner can merge an ESC
+# with the key after it (Alt+q), failing the run with nothing wrong. A flaky gate
+# costs more than this check buys there; the stub test above is the CI half.
+@unittest.skipIf(os.environ.get("CI"), "local only: its key timing margins were measured on a developer's machine")
+@unittest.skipUnless(os.access(_EXAMPLE, os.X_OK), f"needs a built Example ({_EXAMPLE})")
+class TestTourStaysOnItsRoute(unittest.TestCase):
+    """The real Example, because the question is what its pages do with the keys.
+
+    The `tour` jumps to a page by its menu shortcut, scrolls with the arrows
+    and presses Escape to go back to the menu for the next one. On the
+    Sliders page the arrows walk the focus into the track editor's Fill combo
+    field, where Down opens its suggestions — so that page's Escape closed the
+    menu instead of leaving the page, and every key after it (the Steppers and
+    Split View shortcuts, then the closing `q`) was typed into the field. The
+    two last pages were never profiled, the app never quit, and the text was
+    saved as the field's value.
+    """
+
+    def test_the_tour_types_nothing_and_ends_by_quitting(self):
+        scratch = tempfile.mkdtemp(prefix="test-drive-tour-")
+        self.addCleanup(shutil.rmtree, scratch, ignore_errors=True)
+        # Named explicitly, not left to the driver: this must be isolated
+        # whichever `drive.py` it runs against.
+        env = dict(os.environ, TUIKIT_CONFIG_DIR=scratch)
+        # A long settle: in a PTY that answers none of its startup queries, a
+        # debug Example takes ~1.5 s to start reading keys, and everything
+        # sent before then is parsed as one batch — a different question.
+        result = subprocess.run(
+            [sys.executable, _DRIVE, _EXAMPLE, "--scenario", "tour", "--settle", "2.5", "--quiet"],
+            env=env, timeout=120, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # The tour only navigates and scrolls, so it has no business saving
+        # anything; what a stray keystroke saves is the evidence it went
+        # somewhere other than where the script meant.
+        settings_file = os.path.join(scratch, "Example", "settings.json")
+        saved = {}
+        if os.path.exists(settings_file):
+            with open(settings_file) as handle:
+                saved = json.load(handle)
+        decoded = {key: base64.b64decode(value).decode() for key, value in saved.items()}
+        self.assertEqual(decoded, {}, "the tour's keys changed the app's saved settings")
 
 
 if __name__ == "__main__":
