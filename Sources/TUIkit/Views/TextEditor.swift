@@ -37,6 +37,14 @@
 /// | Option-Backspace / Delete | Delete the word before / after the cursor |
 /// | Option-Tab | Insert a literal tab (plain Tab moves focus) |
 ///
+/// ``TextField`` and ``SecureField`` read the Emacs chords from the same
+/// table, and they differ where a field is one line with a keyboard selection.
+/// There, Ctrl-V pastes, and Ctrl-O, Ctrl-P and Ctrl-N do nothing. Ctrl-D
+/// deletes a field's selection and Ctrl-Y replaces it, where the editor drops
+/// its selection before any Emacs chord and acts at the cursor. A field
+/// reads Option first, so Option-Ctrl-B and F move by a word in a field and by
+/// a character here.
+///
 /// An app's own keyboard shortcut beats most of the Emacs chords. Under the
 /// default ``EnvironmentValues/commandKey`` a SwiftUI ⌘ shortcut arrives as a
 /// Control chord, so `.keyboardShortcut("f")` (Find) is Ctrl-F, and the editor

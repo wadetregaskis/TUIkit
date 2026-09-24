@@ -272,20 +272,22 @@ struct GivingWayCase: Sendable, CustomTestStringConvertible {
         // them too. The editor keeps them (see `KeepingCase`).
         control("a", hosts: PrecedenceHost.fields, edited: (field: "Xabcd", editor: "")),
         control("e", hosts: PrecedenceHost.fields, edited: (field: "abcdX", editor: "")),
-        // The editor's single-character and line chords.
-        control("b", hosts: [.textEditor], edited: (field: "", editor: "Xab\ncd")),
-        control("f", hosts: [.textEditor], edited: (field: "", editor: "abX\ncd")),
-        control("d", hosts: [.textEditor], edited: (field: "", editor: "aX\ncd")),
-        control("k", hosts: [.textEditor], edited: (field: "", editor: "aX\ncd")),
-        control("t", hosts: [.textEditor], edited: (field: "", editor: "baX\ncd")),
+        // The chords every text control carries out on the caret's line.
+        control("b", hosts: PrecedenceHost.allCases, edited: (field: "Xabcd", editor: "Xab\ncd")),
+        control("f", hosts: PrecedenceHost.allCases, edited: (field: "abXcd", editor: "abX\ncd")),
+        control("d", hosts: PrecedenceHost.allCases, edited: (field: "aXcd", editor: "aX\ncd")),
+        control("k", hosts: PrecedenceHost.allCases, edited: (field: "aX", editor: "aX\ncd")),
+        control("t", hosts: PrecedenceHost.allCases, edited: (field: "baXcd", editor: "baX\ncd")),
+        // The editor's own: a field has no other line to go to or open, and no
+        // page to go down.
         control("n", hosts: [.textEditor], edited: (field: "", editor: "ab\ncXd")),
         control("o", hosts: [.textEditor], edited: (field: "", editor: "aX\nb\ncd")),
         control("v", hosts: [.textEditor], edited: (field: "", editor: "ab\ncXd")),
         // Ctrl-K fills the kill ring first, so a yank that happened shows.
         Self(
-            name: "Ctrl-Y", chord: ctrl("y"), shortcut: .command("y"), hosts: [.textEditor],
-            prefix: [home, right, ctrl("k")], untouched: (field: "", editor: "aX\ncd"),
-            edited: (field: "", editor: "abX\ncd")),
+            name: "Ctrl-Y", chord: ctrl("y"), shortcut: .command("y"), hosts: PrecedenceHost.allCases,
+            prefix: [home, right, ctrl("k")], untouched: (field: "aX", editor: "aX\ncd"),
+            edited: (field: "abcdX", editor: "abX\ncd")),
         Self(
             name: "Ctrl-P", chord: ctrl("p"), shortcut: .command("p"), hosts: [.textEditor],
             prefix: [down, right], untouched: (field: "", editor: "ab\ncXd"),

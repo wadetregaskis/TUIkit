@@ -200,12 +200,13 @@ keeps it. The text controls are the exception, for one family of keys.
 
 Under the default ``EnvironmentValues/commandKey`` of `.control`, a SwiftUI ⌘
 shortcut arrives as a Control chord: `.keyboardShortcut("f")`, Find, is Ctrl-F.
-Ctrl-F is also an Emacs editing chord in ``TextEditor``, where it moves the
-caret forward a character. Under `.option`, ⌘B and ⌘F arrive as Option-B and
-Option-F, readline's word motions, which every text control answers. The text
-controls read those chords the way the macOS text system and readline do, and
-they are a bonus: whatever one does can be done some other way, with another
-key or by selecting and typing. So **your shortcut wins them**. Layer 0 does
+Ctrl-F is also an Emacs editing chord in ``TextField``, ``SecureField``, a
+`.searchable` field and ``TextEditor``, where it moves the caret forward a
+character. Under `.option`, ⌘B and ⌘F arrive as Option-B and Option-F,
+readline's word motions, which every text control answers. The text controls
+read those chords the way the macOS text system and readline do, and they are
+a bonus: whatever one does can be done some other way, with another key or by
+selecting and typing. So **your shortcut wins them**. Layer 0 does
 not offer the chord to the focused text control when a `.keyboardShortcut` is
 registered on it. The chord goes on down the chain as a chord the control does
 not bind would, and Layer 3.5 fires your button.
@@ -216,10 +217,10 @@ not bind would, and Layer 3.5 fires your button.
 | Ctrl-A, Ctrl-E | `TextEditor`: start, end of the line; its Home and End go to the ends of the document | The editor's |
 | Option-B, Option-F | Back, forward a word, as Option-Left and Option-Right do; with Shift, a field extends its selection | Yours |
 | Option-Ctrl-B, Option-Ctrl-F | A field: back, forward a word. `TextEditor`: back, forward a character | Yours |
-| Ctrl-B, Ctrl-F | `TextEditor`: back, forward a character | Yours |
-| Ctrl-D | `TextEditor`: delete forward | Yours |
-| Ctrl-K, Ctrl-Y | `TextEditor`: kill to the end of the line, yank it back | Yours |
-| Ctrl-T | `TextEditor`: transpose the characters around the caret | Yours |
+| Ctrl-B, Ctrl-F | Back, forward a character | Yours |
+| Ctrl-D | Delete forward | Yours |
+| Ctrl-K, Ctrl-Y | Kill to the end of the line, yank it back | Yours |
+| Ctrl-T | Transpose the characters around the caret | Yours |
 | Ctrl-P, Ctrl-N | `TextEditor`: previous, next line | Yours |
 | Ctrl-O | `TextEditor`: open a line after the caret | Yours |
 | Ctrl-V | `TextEditor`: page down | Yours |

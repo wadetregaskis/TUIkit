@@ -99,19 +99,40 @@ extension TextFieldHandler {
     /// Carries out a command from ``TextEditingCommand`` on the field's one
     /// line, and returns whether it did.
     ///
-    /// The field carries out the commands for the two ends of its line,
-    /// select-all and the word motions. It declines the rest, so each of those
-    /// chords propagates as a chord nothing binds would.
+    /// The field declines the commands about other lines: the previous and
+    /// next line, opening a line, and paging down. A field has one line, and
+    /// strips line breaks from anything pasted into it. Each of those chords
+    /// propagates as a chord nothing binds would. (Ctrl-V never gets here,
+    /// because the field reads it as paste first.)
     ///
-    /// The two ends go together. With Ctrl-A moving and Ctrl-E typing an "e",
-    /// a field would have half of readline's pair, which is the asymmetry that
-    /// made Ctrl-A mean the same in the field as in the editor.
+    /// The field has a keyboard selection, and the commands follow the field's
+    /// own keys in how they treat it. Ctrl-D is the Delete key, so it deletes a
+    /// selection. Ctrl-Y inserts, as a paste does, so it replaces one. Ctrl-K
+    /// and Ctrl-T start from the caret, as the motions do, so they drop the
+    /// selection first. ``TextEditorHandler`` drops its selection before any
+    /// Emacs chord, so there Ctrl-D and Ctrl-Y act at the caret.
+    ///
+    /// The two ends of the line go together. With Ctrl-A moving and Ctrl-E
+    /// typing an "e", a field would have half of readline's pair, which is the
+    /// asymmetry that made Ctrl-A mean the same in the field as in the editor.
     func perform(_ command: TextEditingCommand) -> Bool {
         switch command {
         case .moveToStartOfLine:
             moveToStart()
         case .moveToEndOfLine:
             moveToEnd()
+        case .moveBackward:
+            moveBackward()
+        case .moveForward:
+            moveForward()
+        case .deleteForward:
+            deleteForward()
+        case .killToEndOfLine:
+            killToEnd()
+        case .yank:
+            yank()
+        case .transpose:
+            transpose()
         case .selectAll:
             selectAll()
         case .moveWordBackward:
@@ -122,11 +143,46 @@ extension TextFieldHandler {
             extendSelectionToPreviousWordBoundary()
         case .moveWordForwardAndModifySelection:
             extendSelectionToNextWordBoundary()
-        case .moveBackward, .moveForward, .moveToPreviousLine, .moveToNextLine, .deleteForward,
-            .killToEndOfLine, .yank, .transpose, .openLine, .pageDown:
+        case .moveToPreviousLine, .moveToNextLine, .openLine, .pageDown:
             return false
         }
         return true
+    }
+
+    /// Ctrl-K: kills from the caret to the end of the field into
+    /// ``killRing``, as one undoable edit. At the end there is nothing to
+    /// kill, and the ring keeps what it had.
+    private func killToEnd() {
+        clearSelection()
+        let length = text.wrappedValue.count
+        guard cursorPosition < length else { return }
+        resetSuggestionNavigation()
+        let current = text.wrappedValue
+        let start = current.index(current.startIndex, offsetBy: cursorPosition)
+        killRing = String(current[start...])
+        deleteRange(cursorPosition..<length)
+    }
+
+    /// Ctrl-Y: inserts the last kill at the caret. It goes the way a paste
+    /// goes, so it replaces a selection, respects the field's content type,
+    /// and is one undoable edit.
+    private func yank() {
+        guard !killRing.isEmpty else { return }
+        insertText(killRing)
+    }
+
+    /// Ctrl-T: swaps the characters on either side of the caret and steps the
+    /// caret on, or swaps the last two at the end of the field. The swap is
+    /// the one the editor makes, ``TextEditingCommand/transpose(in:at:)``.
+    private func transpose() {
+        clearSelection()
+        var characters = Array(text.wrappedValue)
+        guard let caret = TextEditingCommand.transpose(in: &characters, at: cursorPosition)
+        else { return }
+        resetSuggestionNavigation()
+        pushUndoState()
+        text.wrappedValue = String(characters)
+        cursorPosition = caret
     }
 
     /// Ctrl-U: erases the field, all of it, as one undoable edit, and leaves

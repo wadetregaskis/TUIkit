@@ -35,12 +35,19 @@
 /// | Right | Move cursor right |
 /// | Home / Ctrl+A | Move cursor to start |
 /// | End / Ctrl+E | Move cursor to end |
+/// | Ctrl+B / Ctrl+F | Back / forward one character |
+/// | Ctrl+D | Delete forward |
+/// | Ctrl+K / Ctrl+Y | Kill to the end / yank it back, inside the field |
+/// | Ctrl+T | Transpose the two characters around the cursor |
 /// | Option+Ctrl+A | Select all |
 /// | Ctrl+C / Ctrl+X | Nothing — see below. With nothing selected they pass on to the app |
 /// | Ctrl+V | Paste at cursor |
+/// | Ctrl+Z | Undo |
+/// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
 ///
-/// The chords give way to an app's keyboard shortcut as ``TextField``'s do.
+/// The Control chords are the ones ``TextField`` answers, and give way to an
+/// app's keyboard shortcut the same way; the table there has the rest.
 ///
 /// ## The contents never leave the field
 ///
@@ -50,6 +57,8 @@
 /// drawn at render time and the field holds the real string, so a copy would
 /// have handed the password to `pbcopy`. Paste still works — the promise is
 /// one-directional, and pasting in is how a password manager fills the field.
+/// Ctrl+K and Ctrl+Y do not touch the clipboard either: the kill goes into the
+/// field's own buffer, and only that field's Ctrl+Y reads it.
 ///
 /// # Basic Example
 ///

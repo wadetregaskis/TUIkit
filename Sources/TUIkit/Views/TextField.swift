@@ -36,22 +36,39 @@
 /// | Home / End | Move cursor to start / end of text |
 /// | Shift+Left / Shift+Right | Extend selection one character |
 /// | Shift+Option+Left / Right | Extend selection to the previous / next word boundary |
-/// | Ctrl+A | Start of line |
-/// | Ctrl+E | End of line |
+/// | Ctrl+A / Ctrl+E | Start / end of line |
+/// | Ctrl+B / Ctrl+F | Back / forward one character |
+/// | Ctrl+D | Delete forward (the selection, if there is one) |
+/// | Ctrl+K | Kill to the end (yank with Ctrl+Y) |
+/// | Ctrl+Y | Yank the last kill (replacing the selection) |
+/// | Ctrl+T | Transpose the two characters around the cursor |
 /// | Option+Ctrl+A | Select all |
 /// | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut the selection, paste (with nothing selected, Ctrl+C and Ctrl+X pass on to the app) |
 /// | Ctrl+Z | Undo |
 /// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
 ///
-/// An app's own keyboard shortcut on Ctrl+A, Ctrl+E, Option+B or Option+F wins
-/// the chord: under the default ``EnvironmentValues/commandKey``,
-/// `.keyboardShortcut("e")` is Ctrl+E, and pressing it in a focused field runs
-/// the shortcut and leaves the field alone. Home, End and Option+Left / Right
-/// do what those chords do. The field keeps Option+Ctrl+A, which has no other
-/// key, and its clipboard, undo and erase chords; Ctrl+C and Ctrl+X only while
-/// text is selected, so with nothing selected an app's ⌘C and ⌘X fire, and
-/// `QuitShortcut.ctrlC` quits. See <doc:KeyboardShortcuts>.
+/// The Emacs-style Control chords name the same commands as in ``TextEditor``,
+/// read from one table, but a field is a single line with a keyboard
+/// selection, so some do something else:
+///
+/// - Ctrl+V pastes, where the editor pages down. Ctrl+O, Ctrl+P and Ctrl+N,
+///   the editor's open a line, previous line and next line, do nothing in a
+///   field and pass on to the rest of the app.
+/// - Ctrl+D deletes a selection, as Delete does, and Ctrl+Y replaces one, as a
+///   paste does. The editor drops its selection first and acts at the cursor.
+/// - Option is read before Control, so Option+Ctrl+B and F move by a word,
+///   as Option+B and F do. In the editor they move by a character.
+///
+/// An app's own keyboard shortcut on Ctrl+A, E, B, F, D, K, Y or T, or on
+/// Option+B or F, wins the chord: under the default
+/// ``EnvironmentValues/commandKey``, `.keyboardShortcut("f")` (Find) is Ctrl+F,
+/// and pressing it in a focused field runs Find and leaves the field alone.
+/// The keys and arrows do what those chords do, and a kill, yank or transpose
+/// can be done by selecting and typing. The field keeps Option+Ctrl+A, which
+/// has no other key, and its clipboard, undo and erase chords; Ctrl+C and
+/// Ctrl+X only while text is selected, so with nothing selected an app's ⌘C
+/// and ⌘X fire, and `QuitShortcut.ctrlC` quits. See <doc:KeyboardShortcuts>.
 ///
 /// ## The selection and the caret where the terminal decides the colours
 ///

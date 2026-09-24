@@ -49,8 +49,13 @@
 /// | Shift+Down | Select to end of text |
 /// | Shift+Home | Select to start of text |
 /// | Shift+End | Select to end of text |
-/// | Ctrl+A | Start of line |
-/// | Ctrl+E | End of line |
+/// | Ctrl+A | Start of line (clears selection) |
+/// | Ctrl+E | End of line (clears selection) |
+/// | Ctrl+B / Ctrl+F | Back / forward a character, as Left / Right |
+/// | Ctrl+D | Delete forward, as Delete (a selection goes with it) |
+/// | Ctrl+K | Kill from the caret to the end (clears selection) |
+/// | Ctrl+Y | Yank the last kill at the caret (replaces selection) |
+/// | Ctrl+T | Transpose the characters around the caret (clears selection) |
 /// | Ctrl+U | Erase the field — ALL of it, not just back to the caret |
 /// | Option+Ctrl+A | Select all text |
 /// | Ctrl+C | Copy selection to clipboard; with nothing selected the key passes on |
@@ -59,9 +64,26 @@
 /// | Ctrl+Z | Undo last change |
 /// | Enter | Trigger the submit action — with no `onSubmit` the field declines Return, so a dialog's default button fires |
 ///
-/// An app's keyboard shortcut on the same chord takes Ctrl+A, Ctrl+E and the
-/// Alt+b / Alt+f word motions from the field; Home, End and Option+Left /
-/// Right do the same things. See
+/// Ctrl+A, E, B, F, D, K, Y and T, Option+Ctrl+A and Alt+b / Alt+f come from
+/// ``TextEditingCommand``, the table ``TextEditorHandler`` reads too, so the
+/// same chord names the same command in both. What the command does can
+/// differ, because a field is one line with a keyboard selection:
+///
+/// - Ctrl+V is paste here, and the editor's page down. Ctrl+O, Ctrl+P and
+///   Ctrl+N are the editor's open-a-line, previous line and next line; a
+///   field declines them and they propagate.
+/// - The editor drops its selection before any Emacs chord and acts at the
+///   caret. A field's Ctrl+D deletes the selection, as its Delete key does, and
+///   its Ctrl+Y replaces it, as a paste does. Ctrl+K and Ctrl+T drop it in both.
+/// - A field reads Option before Control, so Option+Ctrl+B and F move by a
+///   word here, and by a character in the editor.
+/// - Each field keeps its own kill, apart from the editor's and from the
+///   clipboard, and a field's kill, yank and transpose are undoable.
+///
+/// An app's keyboard shortcut on the same chord takes all of these but
+/// Option+Ctrl+A from the field; Home, End, Left, Right, Delete and
+/// Option+Left / Right do the same things, and a kill, yank or transpose can
+/// be done by selecting and typing. See
 /// ``TextEditingCommand/givesWayToKeyboardShortcuts(homeAndEndReachLineEnds:)``.
 ///
 /// Option+Left and Alt+b are one binding, not two — likewise Option+Right and
@@ -111,6 +133,11 @@ final class TextFieldHandler: PersistedFocusable {
 
     /// Callback triggered when the user presses Enter.
     var onSubmit: (() -> Void)?
+
+    /// The last text Ctrl-K killed, for Ctrl-Y to yank back: a single-slot
+    /// kill ring, as ``TextEditorHandler`` keeps. It belongs to this field
+    /// alone and is never the clipboard.
+    var killRing = ""
 
     /// The text content type used for input character filtering.
     ///
@@ -333,6 +360,21 @@ extension TextFieldHandler {
         cursorPosition = text.wrappedValue.count
     }
 
+    /// Steps the caret back a character, dropping any selection. One
+    /// definition for plain Left and Ctrl-B, for the same reason as
+    /// ``moveToStart()``.
+    func moveBackward() {
+        clearSelection()
+        moveCursorLeft()
+    }
+
+    /// Steps the caret forward a character, dropping any selection: plain
+    /// Right, and Ctrl-F.
+    func moveForward() {
+        clearSelection()
+        moveCursorRight()
+    }
+
     /// Moves the caret back to the previous word boundary, dropping any
     /// selection. One definition for Option-Left and Option-B, for the same
     /// reason as ``moveToStart()``.
@@ -478,8 +520,7 @@ extension TextFieldHandler {
         case (.left, false, true):
             extendSelectionLeft()
         case (.left, false, false):
-            clearSelection()
-            moveCursorLeft()
+            moveBackward()
         case (.right, true, true):
             extendSelectionToNextWordBoundary()
         case (.right, true, false):
@@ -487,8 +528,7 @@ extension TextFieldHandler {
         case (.right, false, true):
             extendSelectionRight()
         case (.right, false, false):
-            clearSelection()
-            moveCursorRight()
+            moveForward()
         }
     }
 }

@@ -105,6 +105,26 @@ struct SecureFieldClipboardTests {
         #expect(cutAll(secure: false).isEmpty, "a TextField performs it, so the keys did arrive")
     }
 
+    /// Kill and yank are a cut and a paste in all but name, so they are the
+    /// other way a password could reach the pasteboard. They never do: the
+    /// kill goes into the field's own buffer, which only that field's Ctrl-Y
+    /// reads — the text system's kill ring, not the clipboard.
+    @Test("Ctrl-K and Ctrl-Y keep a secure field's text inside the field")
+    func secureKillAndYankStayInTheField() {
+        let board = FakeClipboard()
+        let (handler, box) = makeHandler("hunter2", secure: true, clipboard: board)
+        handler.clearSelection()
+        handler.cursorPosition = 6
+
+        #expect(handler.handleKeyEvent(KeyEvent(key: .character("k"), ctrl: true)))
+        #expect(box.text == "hunter", "the kill happened, so the check below is not vacuous")
+        handler.cursorPosition = 0
+        #expect(handler.handleKeyEvent(KeyEvent(key: .character("y"), ctrl: true)))
+        #expect(box.text == "2hunter", "and the yank put it back from the field's own buffer")
+        #expect(board.writes.isEmpty, "the kill reached the clipboard: \(board.writes)")
+        #expect(board.contents == nil, "the clipboard was written")
+    }
+
     @Test("Pasting INTO a secure field still works")
     func securePasteIsAllowed() {
         // The promise is one-directional: SwiftUI's list bars cutting and

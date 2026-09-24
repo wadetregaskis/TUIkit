@@ -3836,12 +3836,12 @@ shortcuts an app is most likely to carry land on them:
 
 | ⌘ shortcut | Arrives as | Byte | The editing chord there | Who gets the key |
 |---|---|---|---|---|
-| ⌘F Find | ⌃F | `0x06` | `TextEditor`: forward a character | the app's shortcut |
-| ⌘D Duplicate | ⌃D | `0x04` | `TextEditor`: delete forward | the app's shortcut |
-| ⌘B Bold | ⌃B | `0x02` | `TextEditor`: back a character | the app's shortcut |
-| ⌘K | ⌃K | `0x0B` | `TextEditor`: kill to the end of the line | the app's shortcut |
-| ⌘T | ⌃T | `0x14` | `TextEditor`: transpose | the app's shortcut |
-| ⌘Y | ⌃Y | `0x19` | `TextEditor`: yank | the app's shortcut |
+| ⌘F Find | ⌃F | `0x06` | forward a character | the app's shortcut |
+| ⌘D Duplicate | ⌃D | `0x04` | delete forward | the app's shortcut |
+| ⌘B Bold | ⌃B | `0x02` | back a character | the app's shortcut |
+| ⌘K | ⌃K | `0x0B` | kill to the end of the line | the app's shortcut |
+| ⌘T | ⌃T | `0x14` | transpose | the app's shortcut |
+| ⌘Y | ⌃Y | `0x19` | yank | the app's shortcut |
 | ⌘N New, ⌘O Open, ⌘P Print | ⌃N, ⌃O, ⌃P | `0x0E`, `0x0F`, `0x10` | `TextEditor`: next line, open a line, previous line | the app's shortcut |
 | ⌘V Paste | ⌃V | `0x16` | `TextEditor`: page down | the app's shortcut |
 | ⌘A Select All, ⌘E | ⌃A, ⌃E | `0x01`, `0x05` | a field: start, end of the line | the app's shortcut |
@@ -3855,7 +3855,8 @@ shortcuts an app is most likely to carry land on them:
 
 A focused text control is offered a key before the app's shortcuts (layer 0
 before layer 3.5), so a focused editor used to swallow the app's Find and move
-its caret instead. The owner's decision (2026-09-23): the app's shortcut wins,
+its caret instead, and a field would have done the same once it took the Emacs
+chords too. The owner's decision (2026-09-23): the app's shortcut wins,
 because the Emacs chords are a bonus, and whatever one does can be done some
 other way. `InputHandler` does not offer the focused text control a chord it
 gives way on (`TextInputFocusHandler.givesWayToKeyboardShortcut(_:)`, answered
