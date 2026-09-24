@@ -251,6 +251,10 @@ struct GivingWayCase: Sendable, CustomTestStringConvertible {
     var untouched: (field: String, editor: String) = (field: "aXbcd", editor: "aXb\ncd")
     /// The text when the chord edited.
     let edited: (field: String, editor: String)
+    /// What a SecureField leaves when the chord edits, where that differs from
+    /// the other fields: it keeps no kill to yank, and moves one character for
+    /// each word motion, as `NSSecureTextField` does.
+    var secureEdited: String?
 
     var testDescription: String { name }
 
@@ -287,7 +291,7 @@ struct GivingWayCase: Sendable, CustomTestStringConvertible {
         Self(
             name: "Ctrl-Y", chord: ctrl("y"), shortcut: .command("y"), hosts: PrecedenceHost.allCases,
             prefix: [home, right, ctrl("k")], untouched: (field: "aX", editor: "aX\ncd"),
-            edited: (field: "abcdX", editor: "abX\ncd")),
+            edited: (field: "abcdX", editor: "abX\ncd"), secureEdited: "aX"),
         Self(
             name: "Ctrl-P", chord: ctrl("p"), shortcut: .command("p"), hosts: [.textEditor],
             prefix: [down, right], untouched: (field: "", editor: "ab\ncXd"),
@@ -301,12 +305,14 @@ struct GivingWayCase: Sendable, CustomTestStringConvertible {
         Self(
             name: "Option-F", chord: option("f"),
             shortcut: AppShortcut(key: "f", modifiers: .command, commandKey: .option),
-            hosts: PrecedenceHost.allCases, edited: (field: "abcdX", editor: "abX\ncd")),
+            hosts: PrecedenceHost.allCases, edited: (field: "abcdX", editor: "abX\ncd"),
+            secureEdited: "abXcd"),
         // With Shift they extend a field's selection, so the X replaces it.
         Self(
             name: "Option-Shift-F", chord: option("F"),
             shortcut: AppShortcut(key: "F", modifiers: .option),
-            hosts: PrecedenceHost.allCases, edited: (field: "aX", editor: "abX\ncd")),
+            hosts: PrecedenceHost.allCases, edited: (field: "aX", editor: "abX\ncd"),
+            secureEdited: "aXcd"),
         // A field reads Option first, so these are its word motions, and the
         // editor reads Control first, so they are its character motions. Both
         // give way: they used to disagree about that too.
@@ -317,7 +323,8 @@ struct GivingWayCase: Sendable, CustomTestStringConvertible {
         Self(
             name: "Option-Ctrl-F", chord: optionCtrl("f"),
             shortcut: AppShortcut(key: "f", modifiers: [.command, .option]),
-            hosts: PrecedenceHost.allCases, edited: (field: "abcdX", editor: "abX\ncd")),
+            hosts: PrecedenceHost.allCases, edited: (field: "abcdX", editor: "abX\ncd"),
+            secureEdited: "abXcd"),
     ]
 
     func untouched(in host: PrecedenceHost) -> String {
@@ -325,7 +332,8 @@ struct GivingWayCase: Sendable, CustomTestStringConvertible {
     }
 
     func edited(in host: PrecedenceHost) -> String {
-        host.isEditor ? edited.editor : edited.field
+        if host.isSecure, let secureEdited { return secureEdited }
+        return host.isEditor ? edited.editor : edited.field
     }
 
     /// Every host each chord applies to, paired with it.
@@ -405,10 +413,10 @@ struct TextInputShortcutPrecedenceTests {
     @Test("A shortcut on another chord does not take this one", arguments: PrecedenceHost.allCases)
     func unrelatedShortcutLeavesTheChord(host: PrecedenceHost) {
         let played = play(
-            [home, right, option("f"), typed("X")], into: host,
+            [home, right, ctrl("f"), typed("X")], into: host,
             from: GivingWayCase.initial(host), shortcut: .command("g"))
         #expect(played.fired.isEmpty)
-        #expect(played.text == (host.isEditor ? "abX\ncd" : "abcdX"))
+        #expect(played.text == (host.isEditor ? "abX\ncd" : "abXcd"))
     }
 
     /// A disabled button registers no shortcut, so it takes nothing.

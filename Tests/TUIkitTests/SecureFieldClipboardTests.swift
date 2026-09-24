@@ -106,23 +106,36 @@ struct SecureFieldClipboardTests {
     }
 
     /// Kill and yank are a cut and a paste in all but name, so they are the
-    /// other way a password could reach the pasteboard. They never do: the
-    /// kill goes into the field's own buffer, which only that field's Ctrl-Y
-    /// reads — the text system's kill ring, not the clipboard.
-    @Test("Ctrl-K and Ctrl-Y keep a secure field's text inside the field")
-    func secureKillAndYankStayInTheField() {
+    /// other way part of a password could be kept or moved. A secure field
+    /// keeps no kill at all: Ctrl-K deletes to the end and Ctrl-Y has nothing
+    /// to yank. That is AppKit's `NSSecureTextField` (measured on macOS 15.8:
+    /// Ctrl-K deleted "part" from "SECRETpart", and the next Ctrl-Y, in that
+    /// field or another, yanked the kill made before it, never "part").
+    @Test("Ctrl-K in a secure field deletes without keeping the kill, so Ctrl-Y yanks nothing")
+    func secureKillKeepsNothing() {
         let board = FakeClipboard()
         let (handler, box) = makeHandler("hunter2", secure: true, clipboard: board)
         handler.clearSelection()
         handler.cursorPosition = 6
 
         #expect(handler.handleKeyEvent(KeyEvent(key: .character("k"), ctrl: true)))
-        #expect(box.text == "hunter", "the kill happened, so the check below is not vacuous")
+        #expect(box.text == "hunter", "the kill happened, so the checks below are not vacuous")
+        #expect(handler.killRing.isEmpty, "the field kept the killed part: \(handler.killRing)")
         handler.cursorPosition = 0
         #expect(handler.handleKeyEvent(KeyEvent(key: .character("y"), ctrl: true)))
-        #expect(box.text == "2hunter", "and the yank put it back from the field's own buffer")
+        #expect(box.text == "hunter", "Ctrl-Y yanked the killed part back")
         #expect(board.writes.isEmpty, "the kill reached the clipboard: \(board.writes)")
         #expect(board.contents == nil, "the clipboard was written")
+
+        // The control case: a TextField keeps its kill, so the keys and the
+        // positions above are the ones that yank it.
+        let (plain, plainBox) = makeHandler("hunter2", secure: false, clipboard: FakeClipboard())
+        plain.clearSelection()
+        plain.cursorPosition = 6
+        _ = plain.handleKeyEvent(KeyEvent(key: .character("k"), ctrl: true))
+        plain.cursorPosition = 0
+        _ = plain.handleKeyEvent(KeyEvent(key: .character("y"), ctrl: true))
+        #expect(plainBox.text == "2hunter")
     }
 
     @Test("Pasting INTO a secure field still works")

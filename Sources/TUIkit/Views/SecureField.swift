@@ -33,11 +33,14 @@
 /// | Delete | Delete character at cursor |
 /// | Left | Move cursor left |
 /// | Right | Move cursor right |
+/// | Option+Left / Right, Option+B / F | Move one character — never a word |
+/// | Option+Backspace / Delete | Delete one character — never a word |
 /// | Home / Ctrl+A | Move cursor to start |
 /// | End / Ctrl+E | Move cursor to end |
 /// | Ctrl+B / Ctrl+F | Back / forward one character |
 /// | Ctrl+D | Delete forward |
-/// | Ctrl+K / Ctrl+Y | Kill to the end / yank it back, inside the field |
+/// | Ctrl+K | Delete to the end, keeping nothing for Ctrl+Y |
+/// | Ctrl+Y | Nothing: the field keeps no kill |
 /// | Ctrl+T | Transpose the two characters around the cursor |
 /// | Option+Ctrl+A | Select all |
 /// | Ctrl+C / Ctrl+X | Nothing — see below. With nothing selected they pass on to the app |
@@ -57,8 +60,13 @@
 /// drawn at render time and the field holds the real string, so a copy would
 /// have handed the password to `pbcopy`. Paste still works — the promise is
 /// one-directional, and pasting in is how a password manager fills the field.
-/// Ctrl+K and Ctrl+Y do not touch the clipboard either: the kill goes into the
-/// field's own buffer, and only that field's Ctrl+Y reads it.
+///
+/// Two more things differ from ``TextField``, both as `NSSecureTextField` does
+/// them (measured on macOS 15.8). Ctrl+K deletes to the end without keeping
+/// what it deleted, so no part of a password waits in the field for a Ctrl+Y.
+/// And the word commands (Option with the arrows, B and F, Backspace and
+/// Delete) go one character at a time, so none of them shows where the words of
+/// the hidden text break.
 ///
 /// # Basic Example
 ///

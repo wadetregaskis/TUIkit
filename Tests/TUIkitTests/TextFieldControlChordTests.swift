@@ -35,6 +35,11 @@ enum ChordHost: String, CaseIterable, Sendable {
 
     /// The single-line fields — everything but the reference.
     static let fields: [Self] = [.textField, .secureField, .suggestionsField, .searchField]
+
+    /// Whether Ctrl-K keeps what it kills for Ctrl-Y. A SecureField keeps
+    /// nothing, as AppKit's `NSSecureTextField` does (see
+    /// `SecureFieldClipboardTests`), so its Ctrl-Y has nothing to yank.
+    var keepsAKill: Bool { self != .secureField }
 }
 
 /// One control on an otherwise empty page, so it takes the focus on the first
@@ -127,8 +132,14 @@ struct ChordScript: Sendable, CustomTestStringConvertible {
     let initial: String
     let keys: [KeyEvent]
     let expected: String
+    /// What a SecureField leaves instead, where it differs: it keeps no kill.
+    var secureExpected: String?
 
     var testDescription: String { name }
+
+    func expected(in host: ChordHost) -> String {
+        host.keepsAKill ? expected : (secureExpected ?? expected)
+    }
 
     static let all: [Self] = [
         Self(
@@ -147,7 +158,7 @@ struct ChordScript: Sendable, CustomTestStringConvertible {
             name: "Ctrl-Y yanks the kill back at the caret, and the caret follows it",
             initial: "abcd",
             keys: [ctrl("a"), ctrl("f"), ctrl("k"), ctrl("a"), ctrl("y"), typed("X")],
-            expected: "bcdXa"),
+            expected: "bcdXa", secureExpected: "Xa"),
         Self(
             name: "Ctrl-T swaps the characters around the caret and steps on",
             initial: "abcd", keys: [ctrl("a"), ctrl("f"), ctrl("t"), typed("X")], expected: "baXcd"),
@@ -171,7 +182,7 @@ struct TextFieldControlChordTests {
           arguments: ChordHost.allCases, ChordScript.all)
     func chordEditsTheLine(host: ChordHost, script: ChordScript) {
         let played = play(script.keys, into: host, from: script.initial)
-        #expect(played.text == script.expected, "\(host): \(script.name)")
+        #expect(played.text == script.expected(in: host), "\(host): \(script.name)")
         #expect(played.unconsumed.isEmpty, "\(host) let keys \(played.unconsumed) fall through the chain")
     }
 
@@ -210,6 +221,8 @@ struct TextFieldControlChordTests {
             play(swap + [ctrl("z")], into: host, from: "abcd").text == "abcd",
             "the transpose was not undoable")
 
+        // A secure field keeps no kill, so it has no yank to undo.
+        guard host.keepsAKill else { return }
         let yank = kill + [ctrl("y")]
         #expect(play(yank, into: host, from: "abcd").text == "abcd", "precondition: the yank")
         #expect(
@@ -236,7 +249,8 @@ struct TextFieldControlChordTests {
         let select = [ctrl("a"), shiftRight, shiftRight]
         #expect(play(select + [ctrl("k"), typed("X")], into: host, from: "abcd").text == "abX")
         #expect(
-            play(select + [ctrl("k"), ctrl("a"), ctrl("y")], into: host, from: "abcd").text == "cdab")
+            play(select + [ctrl("k"), ctrl("a"), ctrl("y")], into: host, from: "abcd").text
+                == (host.keepsAKill ? "cdab" : "ab"))
     }
 
     /// Ctrl-T starts from the caret too: with "ab" selected and the caret
@@ -254,7 +268,9 @@ struct TextFieldControlChordTests {
     /// Ctrl-Y inserts, as a paste does, so it replaces a selection. The kill
     /// ring holds "bcd", and "xy" of "axyz" is selected: the yank leaves
     /// "abcdz", with the caret after the yanked text.
-    @Test("Ctrl-Y replaces a selection, as a paste does", arguments: ChordHost.fields)
+    @Test(
+        "Ctrl-Y replaces a selection, as a paste does",
+        arguments: ChordHost.fields.filter(\.keepsAKill))
     func yankReplacesTheSelection(host: ChordHost) {
         let fill = [ctrl("a"), ctrl("f"), ctrl("k"), typed("x"), typed("y"), typed("z")]
         let select = [ctrl("a"), ctrl("f"), shiftRight, shiftRight]

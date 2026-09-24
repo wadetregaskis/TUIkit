@@ -215,11 +215,11 @@ not bind would, and Layer 3.5 fires your button.
 |-------|------------------------------------|--------------------------|
 | Ctrl-A, Ctrl-E | A field: start, end of the line, as Home and End do | Yours |
 | Ctrl-A, Ctrl-E | `TextEditor`: start, end of the line; its Home and End go to the ends of the document | The editor's |
-| Option-B, Option-F | Back, forward a word, as Option-Left and Option-Right do; with Shift, a field extends its selection | Yours |
+| Option-B, Option-F | Back, forward a word, as Option-Left and Option-Right do (a character in a `SecureField`); with Shift, a field extends its selection | Yours |
 | Option-Ctrl-B, Option-Ctrl-F | A field: back, forward a word. `TextEditor`: back, forward a character | Yours |
 | Ctrl-B, Ctrl-F | Back, forward a character | Yours |
 | Ctrl-D | Delete forward | Yours |
-| Ctrl-K, Ctrl-Y | Kill to the end of the line, yank it back | Yours |
+| Ctrl-K, Ctrl-Y | Kill to the end of the line, yank it back (a `SecureField` keeps no kill to yank) | Yours |
 | Ctrl-T | Transpose the characters around the caret | Yours |
 | Ctrl-P, Ctrl-N | `TextEditor`: previous, next line | Yours |
 | Ctrl-O | `TextEditor`: open a line after the caret | Yours |

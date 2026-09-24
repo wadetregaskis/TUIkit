@@ -151,15 +151,19 @@ extension TextFieldHandler {
 
     /// Ctrl-K: kills from the caret to the end of the field into
     /// ``killRing``, as one undoable edit. At the end there is nothing to
-    /// kill, and the ring keeps what it had.
+    /// kill, and the ring keeps what it had. A ``SecureField`` deletes the
+    /// same text and keeps none of it, as `NSSecureTextField` does, so no part
+    /// of a password waits in the field for a Ctrl-Y.
     private func killToEnd() {
         clearSelection()
         let length = text.wrappedValue.count
         guard cursorPosition < length else { return }
         resetSuggestionNavigation()
-        let current = text.wrappedValue
-        let start = current.index(current.startIndex, offsetBy: cursorPosition)
-        killRing = String(current[start...])
+        if !isSecure {
+            let current = text.wrappedValue
+            let start = current.index(current.startIndex, offsetBy: cursorPosition)
+            killRing = String(current[start...])
+        }
         deleteRange(cursorPosition..<length)
     }
 

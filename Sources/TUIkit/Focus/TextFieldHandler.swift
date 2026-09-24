@@ -80,7 +80,9 @@
 /// - A field reads Option before Control, so Option+Ctrl+B and F move by a
 ///   word here, and by a character in the editor.
 /// - Each field keeps its own kill, apart from the editor's and from the
-///   clipboard, and a field's kill, yank and transpose are undoable.
+///   clipboard, and a field's kill, yank and transpose are undoable. A
+///   ``SecureField`` keeps no kill, and its word motions go one character
+///   (see ``isSecure``).
 ///
 /// An app's keyboard shortcut on the same chord takes all of these but
 /// Option+Ctrl+A from the field; Home, End, Left, Right, Delete and
@@ -117,7 +119,13 @@ final class TextFieldHandler: PersistedFocusable {
     /// not do it: the bullets are drawn at render time and the handler holds
     /// the real string, so a copy would have put the password on the system
     /// pasteboard. Pasting IN stays allowed — the promise is one-directional.
-    /// Synced by the field's render pass.
+    ///
+    /// It changes two more things, both as `NSSecureTextField` does them
+    /// (measured on macOS 15.8, through a window's key path): Ctrl-K deletes
+    /// without keeping the kill, so there is nothing for Ctrl-Y to yank; and
+    /// every word motion and word deletion goes one character (see
+    /// ``wordBoundary(forward:)``), so none shows where the hidden text's words
+    /// break. Synced by the field's render pass.
     var isSecure: Bool = false
 
     /// The clipboard this field reads and writes. Injectable so a test can
@@ -138,7 +146,8 @@ final class TextFieldHandler: PersistedFocusable {
 
     /// The last text Ctrl-K killed, for Ctrl-Y to yank back: a single-slot
     /// kill ring, as ``TextEditorHandler`` keeps. It belongs to this field
-    /// alone and is never the clipboard.
+    /// alone and is never the clipboard. A ``SecureField`` keeps nothing here
+    /// (see ``isSecure``).
     var killRing = ""
 
     /// The text content type used for input character filtering.
@@ -745,28 +754,29 @@ extension TextFieldHandler {
         text.wrappedValue = current
     }
 
-    /// Option-Backspace: deletes back to the word boundary Option-Left moves
-    /// to (``WordBoundary``, which the editor's Option-Backspace uses too), as
+    /// Option-Backspace: deletes back to where Option-Left moves
+    /// (``wordBoundary(forward:)``: the word boundary the editor's
+    /// Option-Backspace uses too, or one character in a ``SecureField``), as
     /// one undoable edit. A selection goes instead, as for plain Backspace.
     func deleteWordBackward() {
         guard !hasSelection else {
             deleteBackward()
             return
         }
-        let target = WordBoundary.previous(in: Array(text.wrappedValue), from: cursorPosition)
+        let target = wordBoundary(forward: false)
         guard target < cursorPosition else { return }
         resetSuggestionNavigation()
         deleteRange(target..<cursorPosition)
     }
 
-    /// Option-Delete: deletes forward to the word boundary Option-Right moves
-    /// to, as one undoable edit. A selection goes instead, as for plain Delete.
+    /// Option-Delete: deletes forward to where Option-Right moves, as one
+    /// undoable edit. A selection goes instead, as for plain Delete.
     func deleteWordForward() {
         guard !hasSelection else {
             deleteForward()
             return
         }
-        let target = WordBoundary.next(in: Array(text.wrappedValue), from: cursorPosition)
+        let target = wordBoundary(forward: true)
         guard target > cursorPosition else { return }
         resetSuggestionNavigation()
         deleteRange(cursorPosition..<target)
@@ -797,14 +807,35 @@ extension TextFieldHandler {
     /// underscore characters separated by anything else. See ``WordBoundary``,
     /// which `TextEditor` shares.
     func moveCursorToPreviousWordBoundary() {
-        cursorPosition = WordBoundary.previous(
-            in: Array(text.wrappedValue), from: cursorPosition)
+        cursorPosition = wordBoundary(forward: false)
     }
 
     /// Moves the cursor to the end of the current word, or, if the cursor is
     /// already at the end of a word, to the end of the next word.
     func moveCursorToNextWordBoundary() {
-        cursorPosition = WordBoundary.next(in: Array(text.wrappedValue), from: cursorPosition)
+        cursorPosition = wordBoundary(forward: true)
+    }
+
+    /// Where a word motion or a word deletion from the caret stops: the
+    /// previous or next word boundary (``WordBoundary``), or, in a
+    /// ``SecureField``, one character along.
+    ///
+    /// AppKit's `NSSecureTextField` goes one character for every word command,
+    /// so a word motion cannot show where the words of the hidden text break.
+    /// Measured on macOS 15.8 through an `NSWindow`'s key path, from the end of
+    /// "hunter2 abc.def ghi": Option-Left stopped at 18 where a plain field
+    /// stopped at 16, Option-Right from 0 at 1 not 7, Option-Backspace and
+    /// Option-Delete removed one character, and `moveWordBackward:` sent to the
+    /// field editor directly moved one.
+    func wordBoundary(forward: Bool) -> Int {
+        let count = text.wrappedValue.count
+        if isSecure {
+            return forward ? min(cursorPosition + 1, count) : max(cursorPosition - 1, 0)
+        }
+        let characters = Array(text.wrappedValue)
+        return forward
+            ? WordBoundary.next(in: characters, from: cursorPosition)
+            : WordBoundary.previous(in: characters, from: cursorPosition)
     }
 
     /// Ensures the cursor position and selection anchor are within valid bounds.
