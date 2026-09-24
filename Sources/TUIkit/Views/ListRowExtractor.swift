@@ -167,9 +167,12 @@ protocol WindowedListRowExtractor {
 /// rows and the actions they are edited by cannot have looked through two
 /// different sets of wrappers.
 ///
-/// A lone `if` needs no conformance. `as?` looks through an `Optional`'s `some`
-/// by itself — a rule of the language, not of anything written here — which is
-/// why an `if` around the loop always worked where a `Group` did not.
+/// A lone `if` needs no conformance HERE. `as?` looks through an `Optional`'s
+/// `some` by itself — a rule of the language, not of anything written here —
+/// which is why an `if` around the loop always worked where a `Group` did not.
+/// The walk that decides from a view's TYPE whether its body is rows asks of a
+/// type, not a value, and has no `some` to look through: it needs
+/// `ListRowsOptional`.
 ///
 /// NOT conformers, and not by oversight:
 /// - A modifier, even a cosmetic one. `.foregroundStyle(.red)` written after
