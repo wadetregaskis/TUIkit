@@ -113,11 +113,13 @@ private struct LoneTupleBranchHost: View {
 /// `Tagged` with its telling `@State` at declaration index 2, for `List`.
 ///
 /// A `List` renders a lone row at its OWN identity, where `_ListCore` keeps two
-/// slots of its own: its handler at index 0, its focus id at 1. A row whose
-/// state sat at 0 would lose its box to the list's on every frame (a type
-/// mismatch replaces it) and read a fresh initial value whether or not the
-/// branches were told apart — the test would pass for the wrong reason. Index 2
-/// is nobody's but the row's.
+/// slots of its own. They sat at indices 0 and 1 until they moved to the
+/// reserved negative range (`ListContentStateSlotTests`), and a row whose state
+/// shared one lost its box to the list's on every frame (a type mismatch
+/// replaces it), reading a fresh initial value whether or not the branches were
+/// told apart — this test would have passed for the wrong reason. The two
+/// padding slots keep it from depending on that fix: index 2 is nobody's but
+/// the row's.
 private struct ListTagged: View {
     @State private var handlerSlot = 0
     @State private var focusIDSlot = 0

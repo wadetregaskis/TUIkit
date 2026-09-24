@@ -170,26 +170,33 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 
 // MARK: - List Core (Internal Rendering)
 
-/// `_ListCore`'s `StateStorage` slots, by name — the same two, in the same
-/// order, as `_TableCore`'s.
+/// `_ListCore`'s `StateStorage` slots, by name — the same two as `_TableCore`'s,
+/// though not at the same indices.
 ///
 /// Required of every `_*Core` ("never use bare integer literals for
 /// `propertyIndex`"), and written out as `propertyIndex: 1  // focusID` at three
 /// call sites until now, where a comment is the only thing saying which slot
 /// that is and nothing checks it.
 ///
-/// `0...`, not the negative reserved range: a List renders its caller's rows
-/// under CHILD identities, never at its own, so these cannot alias a composite
-/// content view's first `@State`. At file scope rather than nested, because
-/// `_ListCore` is generic and a nested type inherits that generic context, where
-/// a `static let` is not allowed (`_ImageCore` and `_UserResizableCore` do the
-/// same).
+/// NEGATIVE — range -80 in ``StateStorage/StateKey``'s table — because a List
+/// draws some of its caller's content at its OWN identity: a lone row that is
+/// the whole content (`List { Counter() }`), and a lone `Section`'s content,
+/// both through the single-row fallback of the row extraction. A view of the
+/// app's own drawn there binds its `@State` from index 0, and these were 0 and
+/// 1: the first `@State` and the handler replaced each other's box on every
+/// frame, the types differing, so the row's state and the list's cursor both
+/// came back at their defaults each time. (The rows of a `ForEach` do sit under
+/// child identities, which is what this comment used to claim of every row.)
+/// `_TableCore` keeps `0...`: a table draws no caller content at its own
+/// identity. At file scope rather than nested, because `_ListCore` is generic
+/// and a nested type inherits that generic context, where a `static let` is not
+/// allowed (`_ImageCore` and `_UserResizableCore` do the same).
 private enum StateIndex {
     /// The persisted ``ItemListHandler`` — selection, cursor, scroll offset.
-    static let handler = 0
+    static let handler = -80
     /// The focus id, persisted so it survives a frame where the declaration is
     /// momentarily absent (see `FocusRegistration.persistFocusID`).
-    static let focusID = 1
+    static let focusID = -81
 }
 
 /// Internal core view that handles list rendering inside a
