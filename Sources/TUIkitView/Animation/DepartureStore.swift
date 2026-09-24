@@ -186,7 +186,7 @@ extension DepartureStore {
     ) -> (width: Int, height: Int)? {
         guard let entry = entries[identity],
             entry.departure.viewType == ObjectIdentifier(type),
-            entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil,
+            willPlay(entry, frameAnimation: frameAnimation),
             !isFinished(entry, at: nowNanos)
         else { return nil }
         return (entry.departure.width, entry.departure.height)
@@ -249,19 +249,21 @@ extension DepartureStore {
                 finished.append(identity)
                 continue
             }
-            // A slot exists only for a removal that will actually PLAY:
-            // already resolved, named by the transition, or animated by the
-            // frame doing the removing. An unanimated removal snaps, and its
-            // slot must close up on the same frame.
-            guard
-                entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil
-            else { continue }
+            guard willPlay(entry, frameAnimation: frameAnimation) else { continue }
             guard entry.departure.viewType == wanted, let leaf = identity.leafType,
                 ObjectIdentifier(leaf) == wanted
             else { continue }
             if identity.parent == parent { return true }
         }
         return false
+    }
+
+    /// Whether `entry`'s removal will actually PLAY: already resolved, named by
+    /// the transition, or animated by the frame doing the removing. A slot
+    /// exists only for one that will — an unanimated removal snaps, and its
+    /// slot must close up on the same frame.
+    private func willPlay(_ entry: Entry, frameAnimation: Animation?) -> Bool {
+        entry.animation ?? entry.departure.explicitAnimation ?? frameAnimation != nil
     }
 
     /// Whether `entry`'s removal has played out. An entry that has not started
