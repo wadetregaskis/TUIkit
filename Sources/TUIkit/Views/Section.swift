@@ -452,6 +452,7 @@ extension Section: ListRowExtractor {
         // came from the child walk: keyed by position rather than by element,
         // and owned by no loop's `.onDelete` / `.onMove`.
         if let passThrough = content as? any ListRowsPassThrough {
+            passThrough.noteLookedThrough(in: context)
             return listRows(
                 of: passThrough.listRowsContent, context: passThrough.listRowsContext(context))
         }

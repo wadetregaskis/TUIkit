@@ -196,6 +196,11 @@ protocol ListRowsPassThrough {
     /// moves no row's `@State`. Only an `if`/`else` takes one.
     func listRowsContext(_ context: RenderContext) -> RenderContext
 
+    /// Does what rendering the wrapper would have done on the way through,
+    /// beyond the identity step — called once where the list takes it off,
+    /// with the wrapper's own context. Only an `if`/`else` does anything.
+    func noteLookedThrough(in context: RenderContext)
+
     /// Every type ``listRowsContent`` can be — a `Group`'s content, both arms
     /// of an `if`/`else` — for the walk that decides from a view's TYPE
     /// whether its body is list rows (``viewTypeHoldsListRowsInBody(_:)``).
@@ -205,6 +210,9 @@ protocol ListRowsPassThrough {
 extension ListRowsPassThrough {
     /// No step: the wrapper renders its content at its own identity.
     func listRowsContext(_ context: RenderContext) -> RenderContext { context }
+
+    /// Nothing: a `Group` does nothing on the way through.
+    func noteLookedThrough(in context: RenderContext) {}
 }
 
 // An `if`/`else` contributes its live arm's rows, and one thing more: the
@@ -222,6 +230,24 @@ extension ConditionalView: ListRowsPassThrough {
 
     func listRowsContext(_ context: RenderContext) -> RenderContext {
         identityBranchLabel.map { context.withBranchIdentity($0) } ?? context
+    }
+
+    /// Records which arm is live, and drops the other arm's `@State` when it
+    /// flipped — what `renderToBuffer` does, which a list looking through the
+    /// conditional never calls. Without it the arm a flip left kept its
+    /// state: every identity under a list is retained, so an expanded row
+    /// came back expanded after a flip away and back, where a conditional
+    /// drawn any other way starts it afresh, as SwiftUI does.
+    func noteLookedThrough(in context: RenderContext) {
+        guard !context.isMeasuring, let stateStorage = context.stateStorage else { return }
+        let isTrueBranch: Bool
+        switch self {
+        case .trueContent: isTrueBranch = true
+        case .falseContent: isTrueBranch = false
+        }
+        if stateStorage.recordConditionalBranch(context.identity, isTrueBranch: isTrueBranch) {
+            stateStorage.invalidateDescendants(of: context.identity.branch(isTrueBranch ? "false" : "true"))
+        }
     }
 
     static var listRowsContentTypes: [any View.Type] { [TrueContent.self, FalseContent.self] }

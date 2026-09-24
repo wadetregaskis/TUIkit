@@ -2826,6 +2826,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // walk took through the wrapper — none for a `Group`, the branch for an
         // `if`/`else` — so the rows land where the walk put them.
         if let passThrough = content as? any ListRowsPassThrough {
+            passThrough.noteLookedThrough(in: context)
             return extractRows(
                 from: passThrough.listRowsContent, context: passThrough.listRowsContext(context))
         }
