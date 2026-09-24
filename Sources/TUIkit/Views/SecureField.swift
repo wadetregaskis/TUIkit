@@ -36,7 +36,7 @@
 /// | Home / Ctrl+A | Move cursor to start |
 /// | End / Ctrl+E | Move cursor to end |
 /// | Option+Ctrl+A | Select all |
-/// | Ctrl+C / Ctrl+X | Nothing — see below |
+/// | Ctrl+C / Ctrl+X | Nothing — see below. With nothing selected they pass on to the app |
 /// | Ctrl+V | Paste at cursor |
 /// | Enter | Trigger onSubmit action |
 ///

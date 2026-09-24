@@ -60,30 +60,40 @@ extension TextFieldHandler {
         return command
     }
 
-    /// Carries out `chord`, and returns whether the field took the key.
-    ///
-    /// Every stand-in is taken, whether or not it had anything to act on:
-    /// Ctrl-C with nothing selected still does not type a "c". A shared command
-    /// can be declined, and then its chord propagates.
+    /// Carries out `chord`, and returns whether the field took the key. A
+    /// chord the field declines propagates, as one nothing binds would.
     func perform(_ chord: TextFieldChord) -> Bool {
         switch chord {
         case .standIn(let command):
-            perform(command)
-            return true
+            return perform(command)
         case .shared(let command):
             return perform(command)
         }
     }
 
-    /// Carries out one of the chords that stand in for the Command-key ones.
-    private func perform(_ command: StandInEditingCommand) {
+    /// Carries out one of the chords that stand in for the Command-key ones,
+    /// and returns whether the field took the key.
+    ///
+    /// Copy and cut act on the selection, and with nothing selected they
+    /// decline, so the chord goes on to the app: to its ⌘C or ⌘X, which
+    /// arrive as these chords, or to `QuitShortcut.ctrlC`. With a selection
+    /// they take the key, a ``SecureField``'s too, although it refuses to copy
+    /// or cut its contents. Paste, undo and erase always take it. Undo with
+    /// nothing to undo must not decline: an unclaimed Ctrl-Z reaches layer 4,
+    /// which suspends the app.
+    private func perform(_ command: StandInEditingCommand) -> Bool {
         switch command {
-        case .copy: copySelection()
-        case .cut: cutSelection()
+        case .copy:
+            guard hasSelection else { return false }
+            copySelection()
+        case .cut:
+            guard hasSelection else { return false }
+            cutSelection()
         case .paste: paste()
         case .undo: undo()
         case .erase: eraseAll()
         }
+        return true
     }
 
     /// Carries out a command from ``TextEditingCommand`` on the field's one

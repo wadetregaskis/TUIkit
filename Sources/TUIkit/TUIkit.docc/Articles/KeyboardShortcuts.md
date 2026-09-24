@@ -224,7 +224,8 @@ not bind would, and Layer 3.5 fires your button.
 | Ctrl-O | `TextEditor`: open a line after the caret | Yours |
 | Ctrl-V | `TextEditor`: page down | Yours |
 | Option-Ctrl-A | Select all | The control's |
-| Ctrl-C, Ctrl-X, Ctrl-V, Ctrl-Z, Ctrl-U | A field's copy, cut, paste, undo and erase | The field's |
+| Ctrl-C, Ctrl-X | A field's copy and cut of the selection | The field's while text is selected; with nothing selected, yours |
+| Ctrl-V, Ctrl-Z, Ctrl-U | A field's paste, undo and erase | The field's |
 
 A chord gives way when what it does can be done some other way in that
 control, and keeps the key when it is the only way. Select-all has no other key
@@ -233,7 +234,10 @@ ends of its line, so its Ctrl-A and Ctrl-E give way. The editor's Home and End
 go to the ends of the whole document, which leaves Ctrl-A and Ctrl-E its only
 keys for the ends of a line, so there they stay. A field's clipboard and undo
 chords stand in for ⌘C, ⌘X, ⌘V and ⌘Z and do what those would, and its Ctrl-U
-erases it; those stay too.
+erases it; those stay too, except that copy and cut have nothing to act on
+without a selection. Then Ctrl-C and Ctrl-X are not the field's at all: they
+go on down the chain whether or not you have a shortcut on them, so your ⌘C
+fires, and so does ``QuitShortcut/ctrlC``.
 
 Only your shortcuts take a chord this way, and only one that is registered: an
 enabled button on screen, not on a page behind a modal. A framework default,
@@ -325,6 +329,8 @@ statusBar.quitShortcut = QuitShortcut(
 ```
 
 This changes both the Layer 4 quit binding and the displayed system item.
+`.ctrlC` quits from a focused text field too, unless text is selected there:
+then Ctrl-C copies it.
 
 ### Overriding `q` in a local view context
 

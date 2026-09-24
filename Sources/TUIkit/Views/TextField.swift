@@ -39,7 +39,7 @@
 /// | Ctrl+A | Start of line |
 /// | Ctrl+E | End of line |
 /// | Option+Ctrl+A | Select all |
-/// | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut / paste |
+/// | Ctrl+C / Ctrl+X / Ctrl+V | Copy / cut the selection, paste (with nothing selected, Ctrl+C and Ctrl+X pass on to the app) |
 /// | Ctrl+Z | Undo |
 /// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
@@ -49,7 +49,9 @@
 /// `.keyboardShortcut("e")` is Ctrl+E, and pressing it in a focused field runs
 /// the shortcut and leaves the field alone. Home, End and Option+Left / Right
 /// do what those chords do. The field keeps Option+Ctrl+A, which has no other
-/// key, and its clipboard, undo and erase chords. See <doc:KeyboardShortcuts>.
+/// key, and its clipboard, undo and erase chords; Ctrl+C and Ctrl+X only while
+/// text is selected, so with nothing selected an app's ⌘C and ⌘X fire, and
+/// `QuitShortcut.ctrlC` quits. See <doc:KeyboardShortcuts>.
 ///
 /// ## The selection and the caret where the terminal decides the colours
 ///

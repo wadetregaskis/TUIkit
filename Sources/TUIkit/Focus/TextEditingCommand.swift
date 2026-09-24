@@ -137,7 +137,9 @@ extension TextEditingCommand {
     /// The chords that stand in for the Command-key ones, for the clipboard,
     /// undo and erase (``StandInEditingCommand``), are not in this table and
     /// keep the key: they are what the app's ⌘ shortcut would ask the focused
-    /// text for anyway.
+    /// text for anyway. Copy and cut keep it only while there is a selection
+    /// to act on; with none the control declines them, and the chord goes on
+    /// to the app as one the control does not bind would.
     ///
     /// - Parameter homeAndEndReachLineEnds: Whether the control's Home and End
     ///   keys go to the ends of the line the caret is on.

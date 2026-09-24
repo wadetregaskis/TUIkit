@@ -36,6 +36,11 @@ private final class FireLog: @unchecked Sendable {
     var fired: [String] = []
 }
 
+/// How many times the input chain asked the app to quit.
+private final class QuitCount: @unchecked Sendable {
+    var count = 0
+}
+
 /// Every way text is edited on a page.
 enum PrecedenceHost: String, CaseIterable, Sendable {
     case textField, secureField, suggestionsField, searchField, textEditor
@@ -125,6 +130,7 @@ private final class Harness {
     let tui = TUIContext()
     let focusManager = FocusManager()
     let statusBar = StatusBarState()
+    let quits = QuitCount()
     let context: RenderContext
     let handler: InputHandler
 
@@ -144,7 +150,7 @@ private final class Harness {
             appearanceManager: ThemeManager(items: AppearanceRegistry.all, renderTrigger: {}),
             keyboardShortcuts: tui.keyboardShortcuts,
             dragAndDropSession: tui.dragAndDropSession,
-            onQuit: {}, onSuspend: {})
+            onQuit: { [quits] in quits.count += 1 }, onSuspend: {})
     }
 
     func frame(_ view: some View) {
@@ -172,6 +178,8 @@ private struct Played {
     let clipboardWrites: [String]
     /// The positions in the script of keys no layer of the input chain took.
     let unconsumed: [Int]
+    /// How many times the chain quit the app.
+    let quits: Int
 }
 
 /// Plays `keys` into `host`, starting from `initial`, with a button carrying
@@ -180,12 +188,13 @@ private struct Played {
 @MainActor
 private func play(
     _ keys: [KeyEvent], into host: PrecedenceHost, from initial: String,
-    shortcut: AppShortcut?, clipboard: String? = nil
+    shortcut: AppShortcut?, clipboard: String? = nil, quitShortcut: QuitShortcut = .q
 ) -> Played {
     let text = BoundText(initial)
     let log = FireLog()
     let board = FakeClipboard(contents: clipboard)
     let harness = Harness()
+    harness.statusBar.quitShortcut = quitShortcut
     let page = PrecedencePage(host: host, text: text, log: log, shortcut: shortcut)
     harness.frame(page)
     // Never the real pasteboard: a field's Ctrl-C, X and V reach it.
@@ -199,7 +208,8 @@ private func play(
         harness.frame(page)
     }
     return Played(
-        text: text.value, fired: log.fired, clipboardWrites: board.writes, unconsumed: unconsumed)
+        text: text.value, fired: log.fired, clipboardWrites: board.writes, unconsumed: unconsumed,
+        quits: harness.quits.count)
 }
 
 private func ctrl(_ letter: Character) -> KeyEvent {
@@ -459,6 +469,43 @@ struct TextInputShortcutPrecedenceTests {
             shortcut: AppShortcut(key: "a", modifiers: [.command, .option]))
         #expect(all.fired.isEmpty)
         #expect(all.text == "X")
+    }
+
+    // MARK: - Copy and cut with nothing selected
+
+    /// With nothing selected there is nothing for Ctrl-C or Ctrl-X to copy or
+    /// cut, so a field passes the chord on, and the app's ⌘C or ⌘X, which
+    /// arrive as those chords, fire. With a selection the field keeps them
+    /// (see ``fieldKeepsItsChords(host:keeping:)``).
+    @Test(
+        "With nothing selected, Ctrl-C and Ctrl-X reach the app's ⌘C and ⌘X",
+        arguments: PrecedenceHost.fields)
+    func copyAndCutWithNothingSelectedPassOn(host: PrecedenceHost) {
+        for letter: Character in ["c", "x"] {
+            let played = play(
+                [home, right, ctrl(letter), typed("X")], into: host, from: "abcd",
+                shortcut: .command(letter), clipboard: "BOARD")
+            #expect(played.fired == [String(letter)], "\(host): Ctrl-\(letter) did not reach ⌘\(letter)")
+            #expect(played.text == "aXbcd", "\(host): Ctrl-\(letter) edited")
+            #expect(played.clipboardWrites.isEmpty, "\(host): Ctrl-\(letter) wrote the clipboard")
+        }
+    }
+
+    /// `QuitShortcut.ctrlC` is layer 4. A field that took Ctrl-C with nothing
+    /// selected kept the app from quitting for as long as it had the focus,
+    /// and a field has the focus from the first frame of many an app.
+    @Test("With nothing selected, Ctrl-C quits under quitShortcut .ctrlC", arguments: PrecedenceHost.fields)
+    func ctrlCQuitsFromAField(host: PrecedenceHost) {
+        let idle = play([ctrl("c")], into: host, from: "abcd", shortcut: nil, quitShortcut: .ctrlC)
+        #expect(idle.quits == 1, "\(host): Ctrl-C did not quit")
+        #expect(idle.text == "abcd")
+
+        // With a selection Ctrl-C is the field's copy, and the app stays.
+        let copying = play(
+            [optionCtrl("a"), ctrl("c")], into: host, from: "abcd", shortcut: nil,
+            quitShortcut: .ctrlC)
+        #expect(copying.quits == 0, "\(host): Ctrl-C quit while text was selected")
+        #expect(copying.clipboardWrites == (host.isSecure ? [] : ["abcd"]), "\(host)")
     }
 
     // MARK: - The registry's question

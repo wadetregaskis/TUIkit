@@ -53,8 +53,8 @@
 /// | Ctrl+E | End of line |
 /// | Ctrl+U | Erase the field — ALL of it, not just back to the caret |
 /// | Option+Ctrl+A | Select all text |
-/// | Ctrl+C | Copy selection to clipboard |
-/// | Ctrl+X | Cut selection to clipboard |
+/// | Ctrl+C | Copy selection to clipboard; with nothing selected the key passes on |
+/// | Ctrl+X | Cut selection to clipboard; with nothing selected the key passes on |
 /// | Ctrl+V | Paste from clipboard |
 /// | Ctrl+Z | Undo last change |
 /// | Enter | Trigger the submit action — with no `onSubmit` the field declines Return, so a dialog's default button fires |

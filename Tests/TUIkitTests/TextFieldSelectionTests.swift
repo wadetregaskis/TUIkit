@@ -495,7 +495,10 @@ struct TextFieldSelectionTests {
         // Actual paste result depends on clipboard content
     }
 
-    @Test("Ctrl+C without selection does nothing")
+    /// With nothing to act on, the chord is not the field's: it passes on to
+    /// the app, whose ⌘C arrives as Ctrl+C (see
+    /// `TextInputShortcutPrecedenceTests`).
+    @Test("Ctrl+C without selection does nothing, and passes the key on")
     func ctrlCWithoutSelectionDoesNothing() {
         var text = "Hello"
         let binding = Binding(get: { text }, set: { text = $0 })
@@ -504,11 +507,14 @@ struct TextFieldSelectionTests {
 
         let handled = handler.handleKeyEvent(KeyEvent(key: .character("c"), ctrl: true))
 
-        #expect(handled == true)
+        #expect(handled == false)
         #expect(text == "Hello")  // Unchanged
     }
 
-    @Test("Ctrl+X without selection does nothing")
+    /// With nothing to act on, the chord is not the field's: it passes on to
+    /// the app, whose ⌘X arrives as Ctrl+X (see
+    /// `TextInputShortcutPrecedenceTests`).
+    @Test("Ctrl+X without selection does nothing, and passes the key on")
     func ctrlXWithoutSelectionDoesNothing() {
         var text = "Hello"
         let binding = Binding(get: { text }, set: { text = $0 })
@@ -517,7 +523,7 @@ struct TextFieldSelectionTests {
 
         let handled = handler.handleKeyEvent(KeyEvent(key: .character("x"), ctrl: true))
 
-        #expect(handled == true)
+        #expect(handled == false)
         #expect(text == "Hello")  // Unchanged
     }
 }
