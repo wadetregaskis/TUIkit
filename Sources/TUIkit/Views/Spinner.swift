@@ -162,7 +162,11 @@ public enum SpinnerStyle: Sendable {
     }
 
     /// How long each frame of this style is shown at the standard speed, in
-    /// seconds: a whole number of 1/60 s ticks, from 5 (83.3 ms) to 9 (150 ms).
+    /// seconds: a whole number of 1/60 s ticks, from 4 (66.7 ms) to 18 (300 ms).
+    ///
+    /// Each style's own pace, chosen by watching every style run on the Example's
+    /// Spinners page, whose Frame stepper sets any one of them in ticks, rather
+    /// than derived from one rule, which is why they span a factor of four.
     ///
     /// Whole ticks because a terminal's paint is shown on a display that refreshes
     /// 60 times a second: a frame of any other length is held for an uneven number
@@ -188,20 +192,20 @@ public enum SpinnerStyle: Sendable {
         switch self {
         case .dots: return AnimationClock.seconds(forTicks: 7)
         case .line: return AnimationClock.seconds(forTicks: 8)
-        case .dancingLine: return AnimationClock.seconds(forTicks: 7)
-        case .bouncing: return AnimationClock.seconds(forTicks: 6)
-        case .pie: return AnimationClock.seconds(forTicks: 7)
-        case .beachball: return AnimationClock.seconds(forTicks: 8)
-        case .box: return AnimationClock.seconds(forTicks: 8)
-        case .curve: return AnimationClock.seconds(forTicks: 7)
+        case .dancingLine: return AnimationClock.seconds(forTicks: 14)
+        case .bouncing: return AnimationClock.seconds(forTicks: 4)
+        case .pie: return AnimationClock.seconds(forTicks: 18)
+        case .beachball: return AnimationClock.seconds(forTicks: 18)
+        case .box: return AnimationClock.seconds(forTicks: 18)
+        case .curve: return AnimationClock.seconds(forTicks: 12)
         case .column: return AnimationClock.seconds(forTicks: 5)
         case .bar: return AnimationClock.seconds(forTicks: 5)
         case .shade: return AnimationClock.seconds(forTicks: 8)
-        case .blockWedge: return AnimationClock.seconds(forTicks: 7)
-        case .spinningTriangle: return AnimationClock.seconds(forTicks: 7)
+        case .blockWedge: return AnimationClock.seconds(forTicks: 18)
+        case .spinningTriangle: return AnimationClock.seconds(forTicks: 12)
         case .moon: return AnimationClock.seconds(forTicks: 7)
-        case .earth: return AnimationClock.seconds(forTicks: 9)
-        case .clock: return AnimationClock.seconds(forTicks: 5)
+        case .earth: return AnimationClock.seconds(forTicks: 18)
+        case .clock: return AnimationClock.seconds(forTicks: 15)
         case .custom: return AnimationClock.seconds(forTicks: 7)
         }
     }
@@ -352,7 +356,7 @@ extension SpinnerStyle {
 /// |-------|--------|----------|
 /// | `.dots` | `⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏` | 116.7ms (7 ticks of 1/60 s) |
 /// | `.line` | `\| / - \\` | 133.3ms (8 ticks) |
-/// | `.bouncing` | `■■▇▇▇▇■■■` (with fade trail) | 100ms (6 ticks) |
+/// | `.bouncing` | `■■▇▇▇▇■■■` (with fade trail) | 66.7ms (4 ticks) |
 ///
 /// Three of many, not the set: ``SpinnerStyle`` carries the rest, each with its
 /// own frames and interval, and ``SpinnerStyle/custom(_:)`` takes a sequence of

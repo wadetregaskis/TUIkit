@@ -139,9 +139,10 @@ struct SpinnerSpeedSettings {
     /// The tolerance picker's choices, in hundredths of the rate unit. All are
     /// below the smallest rate, 0.25, as a tolerance must be.
     static let tolerances = [0, 2, 5, 10, 20]
-    /// The most 1/60 s ticks an override offers: 18, 300 ms, twice the slowest
-    /// standard interval (`.earth`'s 9 ticks).
-    static let maximumTicks = 18
+    /// The most 1/60 s ticks an override offers: 36, 600 ms, twice the slowest
+    /// standard interval (18 ticks: `.pie`, `.beachball`, `.box`, `.blockWedge` and
+    /// `.earth`), so the stepper still reaches past every style's own duration.
+    static let maximumTicks = 36
 
     let choice: SpinnerSpeedChoice
     let ratePercent: Int

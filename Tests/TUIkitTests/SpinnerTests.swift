@@ -322,6 +322,34 @@ struct SpinnerRenderingTests {
         .column, .bar, .shade, .blockWedge, .spinningTriangle, .moon, .earth, .clock,
     ]
 
+    /// The standard frame durations the owner chose, 2026-09-23, by watching every
+    /// style on the Example's Spinners page with its Frame stepper: milliseconds as
+    /// they were chosen, and the whole 1/60 s ticks each one is, spelled out here
+    /// rather than read back from the table under test.
+    ///
+    /// The styles the choice did not name keep what they had: dots, line, column,
+    /// bar, shade, moon and custom.
+    private static let chosenFrames: [(style: SpinnerStyle, milliseconds: Double, ticks: Int)] = [
+        (.dots, 116.7, 7), (.line, 133.3, 8), (.dancingLine, 233.3, 14),
+        (.bouncing, 66.7, 4), (.pie, 300, 18), (.beachball, 300, 18), (.box, 300, 18),
+        (.curve, 200, 12), (.column, 83.3, 5), (.bar, 83.3, 5), (.shade, 133.3, 8),
+        (.blockWedge, 300, 18), (.spinningTriangle, 200, 12), (.moon, 116.7, 7),
+        (.earth, 300, 18), (.clock, 250, 15), (.custom("ab"), 116.7, 7),
+    ]
+
+    @Test("Each style shows its frames for the duration chosen for it")
+    func chosenFrameDurations() {
+        for chosen in Self.chosenFrames {
+            #expect(
+                chosen.style.interval == AnimationClock.seconds(forTicks: chosen.ticks),
+                "\(chosen.style) is \(chosen.style.interval * 60) ticks, not \(chosen.ticks)")
+            // The ticks are the milliseconds, to the tenth they were chosen to.
+            #expect(
+                abs(chosen.style.interval * 1000 - chosen.milliseconds) < 0.05,
+                "\(chosen.style) is \(chosen.style.interval * 1000) ms, not \(chosen.milliseconds)")
+        }
+    }
+
     @Test("A custom spinner cycles each character of its sequence")
     func customStyleFrames() {
         #expect(SpinnerStyle.custom("123432").frames == ["1", "2", "3", "4", "3", "2"])

@@ -114,9 +114,9 @@ public struct IndicatorAnimationSpeed: Hashable, Sendable, ExpressibleByFloatLit
     /// Inside that band a spinner's or a blink's frame may move onto a tick count
     /// divisible by 2 or 3 when there is one, so indicators on one screen step
     /// together and the run loop wakes once for them. At the standard durations
-    /// that moves none of them: every spinner interval is 5 to 9 ticks and the blink
-    /// half is 21, and of those, the 5- and 7-tick ones have no such count within
-    /// 0.05 of their rate while the others are such a count already. Use
+    /// that moves none of them: every spinner interval is 4 to 18 ticks and the
+    /// blink half is 21, and of those, the 5- and 7-tick ones have no such count
+    /// within 0.05 of their rate while the others are such a count already. Use
     /// ``standard`` for no tolerance.
     public static let automatic = Self(1, tolerance: 0.05)
 

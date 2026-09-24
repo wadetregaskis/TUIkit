@@ -231,13 +231,13 @@ struct IndicatorAnimationSpeedSpinnerTests {
         #expect(runTicks(Spinner(style: .dots)) == [7])
     }
 
-    /// `.pie` was 120 ms, which `.automatic` moved to 125 ms. It is 7 ticks now, which
-    /// `.automatic` leaves alone, as it leaves every standard interval.
-    @Test("Unset, a .pie spinner is its style's 116,666,667 ns at .automatic and at .standard")
+    /// `.pie` was 120 ms, which `.automatic` moved to 125 ms. It is 18 ticks now, 300 ms,
+    /// which `.automatic` leaves alone, as it leaves every standard interval.
+    @Test("Unset, a .pie spinner is its style's 18 ticks, 300 ms, at .automatic and at .standard")
     func automaticMovesNoStandardInterval() {
         #expect(IndicatorAnimationSpeed.automatic == IndicatorAnimationSpeed(1, tolerance: 0.05))
-        #expect(runTicks(Spinner(style: .pie)) == [7])
-        #expect(runTicks(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [7])
+        #expect(runTicks(Spinner(style: .pie)) == [18])
+        #expect(runTicks(Spinner(style: .pie).indicatorAnimationSpeed(.standard, for: .spinners)) == [18])
     }
 
     /// 7 ticks at twice the speed are 3.5, and a half rounds up.

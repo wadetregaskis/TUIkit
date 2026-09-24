@@ -254,10 +254,10 @@ extension View {
   counts bars, breaths and the framework's 50 ms animations step on), the one
   nearest in rate, the larger on a tie, so indicators step together. A tolerance
   of 0 is the nearest ticks. The default, `.automatic`, is `1 ± 0.05`; at the
-  standard durations that moves none of them (the spinner intervals are 5 to 9
-  ticks and the blink half 21, and the 5- and 7-tick ones have no such count
-  within 0.05 of their rate). An explicit speed has no tolerance unless it names
-  one.
+  standard durations that moves none of them (the spinner intervals are 4 to 18
+  ticks and the blink half 21; 4, 8, 12, 14, 15 and 18 are divisible by 2 or 3
+  already, and the 5- and 7-tick ones have no such count within 0.05 of their
+  rate). An explicit speed has no tolerance unless it names one.
 - **Every kind reads it.** A spinner's frames are a sequence, so each lasts its
   standard duration divided by the rate, in whole ticks. A bar's pass is a ramp: it
   takes its period divided by the rate, in frames of 2 ticks, as many as come
