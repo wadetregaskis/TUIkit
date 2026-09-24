@@ -1,13 +1,14 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ListGroupEditingTests.swift
 //
-//  `.onDelete` and `.onMove` on a `ForEach` with a `Group` between it and its
-//  container — a `Section`, or the `List` itself. A `Group` contributes exactly
-//  its content's rows, so the loop inside one is still its container's whole
-//  content and every row is still that loop's: SwiftUI deletes the element a
-//  row draws in all of these arrangements, and so does TUIkit now. It used to
-//  claim the gesture on no row at all, and key the rows by position rather
-//  than by element, so a `String` selection could not reach any of them.
+//  `.onDelete` and `.onMove` on a `ForEach` with a `Group` or an `if`/`else`
+//  between it and its container — a `Section`, or the `List` itself. Either
+//  contributes exactly its content's rows, so the loop inside one is still its
+//  container's whole content and every row is still that loop's: SwiftUI
+//  deletes the element a row draws in all of these arrangements, and so does
+//  TUIkit now. It used to claim the gesture on no row at all, and key the rows
+//  by position rather than by element, so a `String` selection could not reach
+//  any of them.
 //
 //  Not to be confused with the arrangements that ARE refused, which are in
 //  `ListUnownedEditActionTests` — a `Group` holding a hand-written row beside
@@ -16,7 +17,7 @@
 //
 //  Every assertion is on the collection afterwards, never on a count of
 //  callbacks, and every gesture first checks that its row answers to the
-//  element it draws — the element id the rows under a `Group` used to lack.
+//  element it draws — the element id the rows under a wrapper used to lack.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -28,7 +29,7 @@ import Testing
 @testable import TUIkitCore
 
 @MainActor
-@Suite("Editing a ForEach behind a Group", .rendersEnglishUI)
+@Suite("Editing a ForEach behind a Group or an if/else", .rendersEnglishUI)
 struct ListGroupEditingTests {
 
     // MARK: - Delete
@@ -140,6 +141,51 @@ struct ListGroupEditingTests {
 
         #expect(fixture.pickUpMoveAndPlace(row: 0, named: "alpha", by: 2))
         #expect(items.value == ["beta", "gamma", "alpha"], "got \(items.value)")
+    }
+
+    // MARK: - An if/else
+
+    /// The commonest way to reach the same hole: an empty state in one arm,
+    /// the loop in the other. The list looks through an `if`/`else` as it does
+    /// a `Group`, taking the arm's branch step on the way in.
+    @Test("An if/else in a Section: Delete removes the element the row draws")
+    func ifElseInASectionDeletes() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = ListSectionEditingFixture()
+        fixture.render(
+            List(selection: .constant(String?.none)) {
+                Section("Items") {
+                    if items.value.isEmpty {
+                        Text("Nothing here")
+                    } else {
+                        ForEach(items.value, id: \.self) { Text($0) }
+                            .onDelete { items.value.remove(atOffsets: $0) }
+                    }
+                }
+            }
+            .frame(height: 10))
+
+        #expect(fixture.pressDelete(onRow: 2, named: "beta") == true)
+        #expect(items.value == ["alpha", "gamma"], "got \(items.value)")
+    }
+
+    @Test("An if/else as the List's content: the pick-up reorders its collection")
+    func ifElseAsTheListsContentReorders() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = ListSectionEditingFixture()
+        fixture.render(
+            List(selection: .constant(String?.none)) {
+                if items.value.isEmpty {
+                    Text("Nothing here")
+                } else {
+                    ForEach(items.value, id: \.self) { Text($0) }
+                        .onMove { items.value.move(fromOffsets: $0, toOffset: $1) }
+                }
+            }
+            .frame(height: 10))
+
+        #expect(fixture.pickUpMoveAndPlace(row: 1, named: "beta", by: 1))
+        #expect(items.value == ["alpha", "gamma", "beta"], "got \(items.value)")
     }
 
     // MARK: - Selection

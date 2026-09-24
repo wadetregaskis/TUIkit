@@ -140,22 +140,23 @@ protocol WindowedListRowExtractor {
     var listRowsAreSections: Bool { get }
 }
 
-// MARK: - Seeing Through a Group
+// MARK: - Seeing Through a Group or an if/else
 
 /// A view that stands between a `List` (or a `Section`) and its rows without
-/// being any part of them — no row, no identity step and no effect of its own —
-/// so the list asks its questions of the content instead: what the rows are,
-/// which selection value each one answers to, and which `ForEach` owns them for
-/// `.onDelete`, `.onMove` and `dropDestination(for:action:)`.
+/// being any part of them — it contributes its content's rows and none of its
+/// own — so the list asks its questions of the content instead: what the rows
+/// are, which selection value each one answers to, and which `ForEach` owns
+/// them for `.onDelete`, `.onMove` and `dropDestination(for:action:)`.
 ///
-/// `Group` is the one conformer, and SwiftUI looks through it the same way: a
-/// `Group` around the `ForEach` of a `List`, or of one of its `Section`s, leaves
-/// every row deletable, and deleting one removes the element that row draws.
-/// Asked of the `Group` itself, every one of those questions stopped at the
-/// wrapper. The rows came from the flattening child walk instead, which cannot
-/// say which loop made a row, so they were keyed by position rather than by
-/// element — answering to no `String` or `UUID` selection at all — and no
-/// `.onDelete` or `.onMove` reached any of them.
+/// `Group` and an `if`/`else` (`ConditionalView`) are the conformers, and
+/// SwiftUI looks through both the same way: either one around the `ForEach` of
+/// a `List`, or of one of its `Section`s, leaves every row deletable, and
+/// deleting one removes the element that row draws. Asked of the wrapper
+/// itself, every one of those questions stopped there. The rows came from the
+/// flattening child walk instead, which cannot say which loop made a row, so
+/// they were keyed by position rather than by element — answering to no
+/// `String` or `UUID` selection at all — and no `.onDelete` or `.onMove`
+/// reached any of them.
 ///
 /// A lone `if` needs no conformance. `as?` looks through an `Optional`'s `some`
 /// by itself — a rule of the language, not of anything written here — which is
@@ -167,9 +168,6 @@ protocol WindowedListRowExtractor {
 ///   rows still come from there and still cannot be attributed; an action found
 ///   by looking through the modifier would be handed offsets it cannot be
 ///   matched to, the guess `ListUnownedEditActionTests` refuses.
-/// - An `if`/`else`. Its rows take the branch step the child walk gives them
-///   (`ChildViewProvider.identityBranchLabel`), and a list looking through it
-///   would have to take the same step or move every row's `@State`.
 /// - `AnyView`, which draws its content only after telling the render cache
 ///   what type it erased (`AnyView.contentContext(noting:)`). It is a hole of
 ///   its own, and a larger one: no container sees through an `AnyView`, so
@@ -178,6 +176,35 @@ protocol WindowedListRowExtractor {
 protocol ListRowsPassThrough {
     /// The view whose rows these are.
     var listRowsContent: any View { get }
+
+    /// The context ``listRowsContent``'s rows are extracted under: the one the
+    /// list is extracting under, plus whatever identity step the child walk
+    /// would have taken on the way through this wrapper — so looking through it
+    /// moves no row's `@State`. Only an `if`/`else` takes one.
+    func listRowsContext(_ context: RenderContext) -> RenderContext
+}
+
+extension ListRowsPassThrough {
+    /// No step: the wrapper renders its content at its own identity.
+    func listRowsContext(_ context: RenderContext) -> RenderContext { context }
+}
+
+// An `if`/`else` contributes its live arm's rows, and one thing more: the
+// branch step `resolveChildViews` gives every one of them, which is what keeps
+// two arms that loop over the same ids from sharing a row's `@State`. The label
+// is `identityBranchLabel`'s own, so the step taken here cannot drift from the
+// one the walk takes.
+extension ConditionalView: ListRowsPassThrough {
+    var listRowsContent: any View {
+        switch self {
+        case .trueContent(let content): content
+        case .falseContent(let content): content
+        }
+    }
+
+    func listRowsContext(_ context: RenderContext) -> RenderContext {
+        identityBranchLabel.map { context.withBranchIdentity($0) } ?? context
+    }
 }
 
 /// The nearest `T` at or inside `view`, looking through any number of

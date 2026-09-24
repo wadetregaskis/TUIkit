@@ -11,7 +11,8 @@
 //
 //  The arrangements whose action no row owns — and which the `List`
 //  therefore refuses — are in `ListUnownedEditActionTests`, a `ForEach` with
-//  a `Group` between it and its container is in `ListGroupEditingTests`, and
+//  a `Group` or an `if`/`else` between it and its container is in
+//  `ListGroupEditingTests`, and
 //  where a delete leaves the cursor is in `ListEditingCursorLandingTests`; the
 //  harness all four share is `ListSectionEditingFixture`.
 //

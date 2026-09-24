@@ -16,9 +16,10 @@
 //  key is pressed on EVERY row, which needs no claim about which row is which.
 //
 //  The arrangements that ARE wired are in `ListSectionEditingTests`, and a
-//  `ForEach` behind a `Group` — which is not a refusal: a `Group` adds no rows
-//  of its own, so the loop is still its container's whole content — in
-//  `ListGroupEditingTests`; the harness is `ListSectionEditingFixture`.
+//  `ForEach` behind a `Group` or an `if`/`else` — which is not a refusal:
+//  neither adds rows of its own, so the loop is still its container's whole
+//  content — in `ListGroupEditingTests`; the harness is
+//  `ListSectionEditingFixture`.
 //
 //  Created by Wade Tregaskis
 //  License: MIT

@@ -2794,15 +2794,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     // MARK: - Row Extraction
 
     private func extractRows<V: View>(from content: V, context: RenderContext) -> RowSource<SelectionValue> {
-        // A `Group` contributes exactly its content's rows, so it is taken off
-        // before anything is asked (see ``ListRowsPassThrough``). Left on, every
-        // question below was answered by the wrapper: a `ForEach` inside it came
-        // out of the child walk, keyed by position rather than by element, with
-        // its `.onDelete` / `.onMove` owning none of its rows. No identity moves:
-        // a `Group` takes no step of its own, so the rows land where the child
-        // walk put them.
+        // A `Group` or an `if`/`else` contributes exactly its content's rows, so
+        // it is taken off before anything is asked (see ``ListRowsPassThrough``).
+        // Left on, every question below was answered by the wrapper: a `ForEach`
+        // inside it came out of the child walk, keyed by position rather than by
+        // element, with its `.onDelete` / `.onMove` owning none of its rows. No
+        // identity moves: the content is extracted under the step the child
+        // walk took through the wrapper — none for a `Group`, the branch for an
+        // `if`/`else` — so the rows land where the walk put them.
         if let passThrough = content as? any ListRowsPassThrough {
-            return extractRows(from: passThrough.listRowsContent, context: context)
+            return extractRows(
+                from: passThrough.listRowsContent, context: passThrough.listRowsContext(context))
         }
 
         // Section first (it conforms to both Section- and List-RowExtractor, and
@@ -2917,10 +2919,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// child, which splices in the rows of its own header, items and footer.
     ///
     /// Takes the content rather than the provider cast out of it, so the
-    /// children come from `resolveChildViews` — the one place a lone
-    /// `if`/`else` gets its branch step. Asking the provider directly skipped
-    /// it, and `List { if a { Row("1") } else { Row("2") } }` drew both
-    /// branches' rows at the list's own identity, one `@State` between them.
+    /// children come from `resolveChildViews`, which gives an `if`/`else` among
+    /// them its branch step. Asking the provider directly skipped it, and
+    /// `List { if a { Row("1") } else { Row("2") } }` drew both branches' rows
+    /// at the list's own identity, one `@State` between them. (That lone
+    /// `if`/`else` no longer comes here: `extractRows` takes it off first,
+    /// under the same step — see ``ListRowsPassThrough``.)
     private func extractFromChildren<V: View>(
         of content: V,
         context: RenderContext

@@ -197,6 +197,30 @@ struct NestedProviderIdentityTests {
         }
     }
 
+    /// The keyed `if`/`else` as a `List`'s WHOLE content, which the list looks
+    /// through rather than walking (`ListRowsPassThrough`): nothing splices it,
+    /// so only the step the look itself takes tells the arms apart.
+    private struct KeyedBranchesAsAList: View {
+        let compact: Bool
+        var count = 2
+
+        var body: some View {
+            List { NestedProviderIdentityTests.keyedArms(compact: compact, count: count) }
+        }
+    }
+
+    /// The `Section` twin, whose content the section looks through the same way.
+    private struct KeyedBranchesAsASection: View {
+        let compact: Bool
+        var count = 2
+
+        var body: some View {
+            List {
+                Section("S") { NestedProviderIdentityTests.keyedArms(compact: compact, count: count) }
+            }
+        }
+    }
+
     private func makeHost() -> (TUIContext, EnvironmentValues) {
         let tui = TUIContext()
         var environment = EnvironmentValues()
@@ -342,6 +366,26 @@ struct NestedProviderIdentityTests {
         expectFlipKeepsArmState(
             renderedBeforeAndAfterFlip(width: 40, height: 30) {
                 KeyedBranchesInASectionGroup(compact: $0, count: count)
+            },
+            "Section")
+    }
+
+    /// Looked through rather than walked, so the loop's rows take the windowed
+    /// path, keyed by element — and have to take the arm's step on the way in,
+    /// or both arms' rows land on `Tagged[0]`, `Tagged[1]` … under the list and
+    /// the expanded arm reads the compact arm's `@State`.
+    @Test(
+        "A keyed if/else that is a List's or a Section's whole content gives each arm its own @State",
+        arguments: [2, 20])
+    func keyedBranchFlipAsAListsContentKeepsEachArmsState(count: Int) {
+        expectFlipKeepsArmState(
+            renderedBeforeAndAfterFlip(width: 40, height: 30) {
+                KeyedBranchesAsAList(compact: $0, count: count)
+            },
+            "List")
+        expectFlipKeepsArmState(
+            renderedBeforeAndAfterFlip(width: 40, height: 30) {
+                KeyedBranchesAsASection(compact: $0, count: count)
             },
             "Section")
     }

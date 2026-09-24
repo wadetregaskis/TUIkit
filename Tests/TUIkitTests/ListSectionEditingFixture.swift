@@ -8,7 +8,7 @@
 //
 //  Shared rather than duplicated because the four suites that sit on it ask
 //  the same list the same questions from different sides (what the wiring
-//  does, what it refuses, what a `Group` in the way changes, where it leaves
+//  does, what it refuses, what a wrapper in the way changes, where it leaves
 //  the cursor), and each copy of a harness is a place they can drift apart
 //  about what they are testing.
 //
