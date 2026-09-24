@@ -127,15 +127,24 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             // The pair is restated after every reset inside the line, because a row is a
             // reset per styled run followed by plain padding, and a bare 7 exchanges the
             // colours IN FORCE, which after a reset are the terminal's own.
-            buffer.lines = plain.map {
+            func reversed(_ line: String) -> String {
                 ANSIRenderer.applyPersistentReverse(
-                    $0, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+                    line, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
             }
+            buffer.lines = plain.map(reversed)
+            // The label's own runs sit on the bar wherever their frames leave a
+            // cell bare, so their grounds take the same paint as the lines do
+            // (`AnimatedCellRun.ground`) — here, and in the two cases below.
+            buffer.paintRunGrounds { _, ground in reversed(ground) }
         case .fill(let color):
             buffer.lines = plain.map { painted($0, color) }
+            buffer.paintRunGrounds { _, ground in painted(ground, color) }
         case .pulse(let dim, let bright):
             let cycle = context.environment.selectionEmphasis.cycle(true)
-            buffer.lines = plain.map { painted($0, cycle.colorNow(dim: dim, bright: bright)) }
+            let now = cycle.colorNow(dim: dim, bright: bright)
+            buffer.lines = plain.map { painted($0, now) }
+            // Before the bar's own runs join them below, which ARE the bar.
+            buffer.paintRunGrounds { _, ground in painted(ground, now) }
             // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
             // was already drawn above; replaying it would emit bytes per tick to
             // change nothing. Measuring passes leave no runs at all.

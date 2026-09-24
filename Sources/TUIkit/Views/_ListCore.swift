@@ -1545,10 +1545,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 y = moved.yStart
             }
             guard !run.frames.isEmpty else { return nil }
-            return AnimatedCellRun(
+            var placed = AnimatedCellRun(
                 offsetX: run.x, offsetY: y + topOffset, width: run.width,
                 frames: run.frames, frameTicks: run.frameTicks, clock: run.clock,
                 alpha: run.alpha)
+            placed.ground = run.ground
+            return placed
         }
     }
 
@@ -3363,7 +3365,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // takes the colour (``RowBackground/stillLines(_:)``).
             return RenderedRow(
                 lines: background.stillLines { lines(over: $0) },
-                pulseFrames: nil, childRuns: childRuns,
+                pulseFrames: nil, childRuns: Self.grounding(childRuns, on: background),
                 claims: claims(over: fill), droppedRunClaims: droppedRunClaims)
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
@@ -3485,7 +3487,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             runs.append(
                 RowRun(
                     y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
-                    frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha))
+                    frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha,
+                    ground: run.ground))
         }
         return (runs, droppedClaims)
     }
@@ -3527,6 +3530,20 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return alpha.drawnRegions(forRunAt: run.offsetX, offsetY: run.offsetY)
     }
 
+    /// `runs`, the row's own content's, with their grounds painted as a still row
+    /// painted the line under them.
+    ///
+    /// The row's fill is under those runs' cells too, wherever their frames leave a
+    /// cell bare, and a replay has no line to read it off (``AnimatedCellRun/ground``).
+    /// ``RowBackground/painting(_:)`` is ``RowBackground/stillLines(_:)``'s own paint,
+    /// less the closing reset `terminatedBackground` adds after the last cell; a row
+    /// with no background paints nothing, and its runs keep what they had.
+    @MainActor
+    private static func grounding(_ runs: [RowRun], on background: RowBackground) -> [RowRun] {
+        if case .none = background { return runs }
+        return runs.map { run in run.paintingGround { background.painting($0) } }
+    }
+
     private struct RowRun {
         var y: Int
         var x: Int
@@ -3547,6 +3564,19 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// alpha, so a `TextField`'s caret over a faded well inside a List row would
         /// render at full strength while the same field outside one did not.
         var alpha: AnimatedRunAlpha?
+
+        /// What the row's content painted beneath the run's cells, carried for the
+        /// reason `alpha` is — and then painted with the row's own fill, which
+        /// is beneath them too (``AnimatedCellRun/ground``).
+        var ground: String?
+
+        /// The same run with its ground painted by `paint`, as the row painted the
+        /// line under it.
+        func paintingGround(_ paint: (String) -> String) -> Self {
+            var copy = self
+            copy.ground = AnimatedCellRun.painted(ground, width: width, by: paint)
+            return copy
+        }
 
         /// What this run said about ALPHA at its drawn frame, in the ROW BUFFER's
         /// coordinates — for a run the row carried this far and then drops. `x` counts

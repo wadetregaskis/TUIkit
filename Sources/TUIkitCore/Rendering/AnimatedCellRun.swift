@@ -367,6 +367,17 @@ public struct AnimatedCellRun: Sendable, Equatable {
     /// cannot drift apart.
     public var alpha: AnimatedRunAlpha?
 
+    /// What the containers around this run painted beneath its cells: a styled row
+    /// exactly as wide as the run, spaces on each cell's field, painted by every
+    /// painter the run has passed through exactly as it painted the lines — or
+    /// `nil` while none has, which is a run on whatever the row is built on.
+    ///
+    /// A frame that states no background for a cell is drawn over the field under
+    /// that cell, and the replay has to know what that was. The row the render drew
+    /// cannot say: where the drawn frame gave a cell a field of its own, the row
+    /// shows that field and not the one beneath it. See `AnimatedCellRun+Ground.swift`.
+    package var ground: String?
+
     /// Creates a run.
     ///
     /// - Parameters:
@@ -530,8 +541,8 @@ public struct AnimatedCellRun: Sendable, Equatable {
     }
 
     /// A copy showing `frames` instead of its own, with `alpha` as what they owe,
-    /// and everything else — where it sits, how wide it is, its rate and its clock
-    /// — carried over.
+    /// and everything else — where it sits, how wide it is, its rate, its clock and
+    /// its ``ground`` — carried over.
     ///
     /// For a pass that restyles a run's frames the way it restyles the lines under
     /// them: a fade blending them, a backdrop flattening them, a link wrapping them.
@@ -548,9 +559,11 @@ public struct AnimatedCellRun: Sendable, Equatable {
     ///     as this run.
     ///   - alpha: What the restyled frames' cells owe per frame, or `nil`.
     package func replacingFrames(_ frames: [String], alpha: AnimatedRunAlpha?) -> Self {
-        Self(
+        var copy = Self(
             offsetX: offsetX, offsetY: offsetY, width: width, frames: frames,
             frameTicks: frameTicks, clock: clock, alpha: alpha)
+        copy.ground = ground
+        return copy
     }
 
     /// The part of this run inside `columns`, or `nil` if that is none of it.
@@ -568,16 +581,20 @@ public struct AnimatedCellRun: Sendable, Equatable {
         guard !window.isEmpty else { return nil }
         guard window != offsetX..<(offsetX + width) else { return self }
         let kept = (window.lowerBound - offsetX)..<(window.upperBound - offsetX)
-        return Self(
+        func cut(_ cells: String) -> String {
+            cells.ansiAwareSlice(visibleStart: kept.lowerBound, visibleCount: kept.count)
+        }
+        var piece = Self(
             offsetX: window.lowerBound, offsetY: offsetY, width: window.count,
-            frames: frames.map {
-                $0.ansiAwareSlice(
-                    visibleStart: window.lowerBound - offsetX, visibleCount: window.count)
-            },
+            frames: frames.map(cut),
             frameTicks: frameTicks, clock: clock,
             // Sliced in the same breath as the frames, and to the same window, so a cut
             // run's spans describe the cells the cut actually kept.
             alpha: alpha?.sliced(toRunColumns: kept))
+        // And the ground, by the same cut: it is a row of the run's width like any
+        // frame, and the piece's cells sit on exactly the fields those columns had.
+        piece.ground = ground.map(cut)
+        return piece
     }
 }
 

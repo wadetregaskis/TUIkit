@@ -108,6 +108,10 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             {
                 filledBuffer.opacityRegions.append(claim)
             }
+            // The content's runs are drawn on this fill wherever a frame leaves a
+            // cell bare, and a replay has no line to read that off: the same fill
+            // on their grounds (`AnimatedCellRun.ground`).
+            filledBuffer.paintRunGrounds { _, ground in filled(ground, with: resolved.opaqueSpelling) }
             return filledBuffer
         }
 
@@ -167,7 +171,7 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             return built
         }
         /// `cells` — `width` of them — cut at `runs`' boundaries and each piece
-        /// filled with its entry.
+        /// filled with its entry: a row of the content, or a run's ground.
         ///
         /// The cut carries the styling that was in force where it fell, so the
         /// content's own colours survive being divided; the pieces are joined and
@@ -235,6 +239,21 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         ramped.opacityRegions += Self.fieldClaims(
             for: alphaShape, width: width, rows: buffer.lines.count, rowAlphas: rowFieldAlphas,
             sampler: sampler)
+        // And each run's ground, painted as its row was over the run's columns —
+        // the ramp's cells differ across a row, so each piece gets its own entry,
+        // exactly as the row's did (`AnimatedCellRun.ground`).
+        ramped.paintRunGrounds { run, ground in
+            guard sampler.variesAcrossRow else {
+                return filled(ground, with: sampler.colour(row: run.offsetY).resolve(with: palette).opaqueSpelling)
+            }
+            let columns = run.offsetX..<(run.offsetX + run.width)
+            let under = sampler.runs(row: run.offsetY, cells: width).compactMap { piece -> (columns: Range<Int>, entry: Int)? in
+                let kept = piece.columns.clamped(to: columns)
+                guard !kept.isEmpty else { return nil }
+                return ((kept.lowerBound - run.offsetX)..<(kept.upperBound - run.offsetX), piece.entry)
+            }
+            return painted(ground, over: under, width: run.width)
+        }
         return ramped
     }
 

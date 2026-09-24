@@ -500,6 +500,11 @@ public struct SGRState: Sendable, Equatable {
     /// Whether a background colour is in force (as opposed to the default).
     public var namesBackground: Bool { background != nil }
 
+    /// The background in force, or `nil` for the terminal's default — the value
+    /// ``renderedBackground`` spells, for a caller that compares backgrounds
+    /// cell by cell and would otherwise build a `String` per cell to do it.
+    var backgroundColour: Colour? { background }
+
     /// Just the background, as a sequence — what a padded run needs restored
     /// under it — or the empty string when the default is in force.
     public var renderedBackground: String {

@@ -716,9 +716,13 @@ extension FrameBuffer {
         // every width this buffer already knows is still true. Letting
         // `FrameBuffer(lines:)` re-measure would walk every line of every
         // floating layer, every frame, to arrive at the numbers above.
-        return replacingLines(
+        var painted = replacingLines(
             storage.map { $0.paintedOver(background: background) },
             width: width, uniformWidth: linesAreUniformWidth, lineWidths: lineWidths)
+        // The runs' cells were painted over it too, wherever their frames leave
+        // them bare: the same painting, on their grounds.
+        painted.paintRunGrounds { _, ground in ground.paintedOver(background: background) }
+        return painted
     }
 
     /// Creates a new buffer with another buffer composited on top at the specified position.
@@ -778,6 +782,9 @@ extension FrameBuffer {
         let resultHeight = max(height, position.y + overlay.height)
 
         var result: [String] = []
+        // The field each overlay row was painted over, for the overlay's runs to
+        // record — kept only when it carries any. See `shiftedRuns(groundedOn:byX:y:)`.
+        var fields = overlay.animatedCells.isEmpty ? nil : [String](repeating: "", count: overlay.lines.count)
 
         for row in 0..<resultHeight {
             var baseLine =
@@ -791,11 +798,13 @@ extension FrameBuffer {
                 let overlayLine = overlay.lines[overlayRow]
                 if !overlayLine.isEmpty {
                     // Insert overlay content at the x position
-                    baseLine = Self.insertOverlay(
+                    let inserted = Self.insertOverlay(
                         base: baseLine,
                         overlay: overlayLine,
                         atColumn: position.x
                     )
+                    baseLine = inserted.line
+                    fields?[overlayRow] = inserted.field
                 }
             }
 
@@ -822,7 +831,7 @@ extension FrameBuffer {
         // under a popover froze). The in-place twin below defers here.
         composited.animatedCells =
             animatedCellsPunched(by: overlay, at: position)
-            + overlay.shiftedAnimatedCells(byX: position.x, y: position.y)
+            + overlay.shiftedRuns(groundedOn: fields, byX: position.x, y: position.y)
         // BOTH sides. The result is built from a bare `Self(lines:)`, so the
         // DESTINATION's own regions are as easy to drop here as the overlay's
         // — and dropping them un-fades a faded buffer the moment anything is
@@ -899,15 +908,19 @@ extension FrameBuffer {
             }
         }
 
+        // As in the copying twin: the field each overlay row was painted over.
+        var fields = overlay.animatedCells.isEmpty ? nil : [String](repeating: "", count: overlay.lines.count)
         for overlayRow in overlay.lines.indices {
             let row = position.y + overlayRow
             guard row >= 0, row < storage.count else { continue }
             let overlayLine = overlay.lines[overlayRow]
             guard !overlayLine.isEmpty else { continue }
-            storage[row] = Self.insertOverlay(
+            let inserted = Self.insertOverlay(
                 base: storage[row].padToVisibleWidth(resultWidth),
                 overlay: overlayLine,
                 atColumn: position.x)
+            storage[row] = inserted.line
+            fields?[overlayRow] = inserted.field
         }
 
         width = resultWidth
@@ -921,7 +934,7 @@ extension FrameBuffer {
         // runs were repainting.
         animatedCells = animatedCellsPunched(by: overlay, at: position)
         animatedCells.append(
-            contentsOf: overlay.shiftedAnimatedCells(byX: position.x, y: position.y))
+            contentsOf: overlay.shiftedRuns(groundedOn: fields, byX: position.x, y: position.y))
         opacityRegions = opacityRegionsPunched(by: overlay, at: position)
         opacityRegions.append(
             contentsOf: overlay.shiftedOpacityRegions(byX: position.x, y: position.y))
@@ -1141,6 +1154,26 @@ extension FrameBuffer {
         return animatedCells.map { $0.shifted(byX: dx, y: dy) }
     }
 
+    /// This buffer's runs as compositing it at `(dx, dy)` leaves them: shifted,
+    /// and each one's ground painted over the field its row was composited onto.
+    ///
+    /// Compositing paints an overlay cell that states no field of its own over the
+    /// base's field where the overlay lands (`String.paintedOver(background:)`), so
+    /// that is what a run's bare cells are drawn over — `ZStack { Color.red; … }`
+    /// puts a breathing caret on the red. The same painting goes on the ground, so
+    /// the run records it (``AnimatedCellRun/ground``).
+    ///
+    /// - Parameter fields: The field each of this buffer's rows was painted over, as
+    ///   `insertOverlay` reported it (`""` for none), or `nil` to shift only.
+    fileprivate func shiftedRuns(groundedOn fields: [String]?, byX dx: Int, y dy: Int) -> [AnimatedCellRun] {
+        guard let fields else { return shiftedAnimatedCells(byX: dx, y: dy) }
+        return animatedCells.map { run in
+            let field = fields.indices.contains(run.offsetY) ? fields[run.offsetY] : ""
+            let grounded = field.isEmpty ? run : run.paintingGround { $0.paintedOver(background: field) }
+            return grounded.shifted(byX: dx, y: dy)
+        }
+    }
+
     /// This buffer's ``opacityRegions``, each shifted by `(dx, dy)`.
     ///
     /// Mirrors ``shiftedAnimatedCells(byX:y:)`` — and for the same reason: a
@@ -1314,12 +1347,15 @@ extension FrameBuffer {
     ///     the width of the row being built.
     ///   - overlay: The overlay text to insert (may contain ANSI codes).
     ///   - column: The column position (0-based, in visible characters).
-    /// - Returns: The composited line with base styling preserved around the overlay.
+    /// - Returns: The composited line with base styling preserved around the overlay,
+    ///   and the field the overlay's bare cells were painted over there
+    ///   (`ANSIOverlaySplit.backgroundUnderOverlay`, `""` for none) — which the
+    ///   overlay's runs record as their ground (``AnimatedCellRun/ground``).
     fileprivate static func insertOverlay(
         base: String,
         overlay: String,
         atColumn column: Int
-    ) -> String {
+    ) -> (line: String, field: String) {
         // An overlay starting LEFT of the base is cut to the part that is on it and
         // inserted at column 0 — the answer both composite twins already give a negative
         // ROW, which they skip. It used to pass straight through: the split has no prefix
@@ -1336,7 +1372,7 @@ extension FrameBuffer {
         // they call: the run splice and the opacity splice share the split-taking overload
         // below, and every column reaching them is already clamped non-negative.
         guard column >= 0 else {
-            guard column + overlay.strippedLength > 0 else { return base }
+            guard column + overlay.strippedLength > 0 else { return (base, "") }
             return insertOverlay(
                 base: base, overlay: overlay.ansiAwareCuttingLeadingColumns(-column), atColumn: 0)
         }
@@ -1346,7 +1382,10 @@ extension FrameBuffer {
         // preserving all ANSI codes in both segments.
         let split = base.ansiOverlaySplit(
             prefixColumns: column, suffixDropColumns: column + overlayVisibleWidth)
-        return insertOverlay(split: split, overlay: overlay, atColumn: column)
+        return (
+            insertOverlay(split: split, overlay: overlay, atColumn: column),
+            split.backgroundUnderOverlay
+        )
     }
 
     /// ``insertOverlay(base:overlay:atColumn:)`` for a caller that has already
