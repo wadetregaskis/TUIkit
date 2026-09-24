@@ -166,6 +166,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "底部锚定的 ScrollView，N 行可变高度；每个 tick 追加一行。",
         "stress.scenario.scrollfollow.stresses": "窗口化条带渲染 · 锚点推进 · 尾部估算 · 任意 N 均为 O(窗口)",
         "stress.scenario.scrollfollow.heading": "滚动跟随 — {0} 行，底部锚定（每帧追加一行）",
+        "stress.scenario.scrolleager.title": "非惰性滚动",
+        "stress.scenario.scrolleager.blurb": "纵向 ScrollView，内含 N 行非惰性 VStack，每个 tick 文本都会变化。",
+        "stress.scenario.scrolleager.stresses": "遍历整个内容的测量 · 滚动条预留 · 理想尺寸查询 · 每帧 O(N)",
+        "stress.scenario.scrolleager.heading": "非惰性滚动 — 非惰性 VStack 中的 {0} 行（每帧每行都变化）",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "菜单栏",

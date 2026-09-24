@@ -57,6 +57,7 @@ scale live · `a` toggle autopilot.
 |---|---|
 | `megalist` | `List`/`ForEach` windowing, row-id resolution, lazy row content, per-row memo |
 | `scrollfollow` | bottom-anchored `ScrollView` over variable-height rows with one appended per tick — windowed band render, anchor advance, tail estimate, O(window) at any N |
+| `scrolleager` | the eager twin of `scrollfollow`: a vertical `ScrollView` over an eager `VStack` of rows whose text changes every tick — every walk of the content (the enclosing stack's ideal-size ask, scrollbar reservation, the natural-extent ladder, the render) touches every row, so an added walk shows at full size |
 | `table` | `Table` column-width computation, row windowing, per-cell value closures |
 | `table-multiline` | multi-line cell wrapping, lazy row sizing (visible window + bottom suffix only), variable-height windowing |
 | `truncate` | ANSI-aware clipping, all three truncation modes, per-cell measure/pad |

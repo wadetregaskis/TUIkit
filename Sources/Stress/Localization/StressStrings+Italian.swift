@@ -168,6 +168,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "ScrollView ancorata in basso su N righe di altezza variabile; una riga aggiunta a ogni tick.",
         "stress.scenario.scrollfollow.stresses": "rendering a banda finestrata · avanzamento dell'àncora · stima della coda · O(finestra) per ogni N",
         "stress.scenario.scrollfollow.heading": "Scorrimento ancorato — {0} righe, ancorato in basso (una riga aggiunta per frame)",
+        "stress.scenario.scrolleager.title": "Scorrimento non pigro",
+        "stress.scenario.scrolleager.blurb": "ScrollView verticale su un VStack non pigro di N righe il cui testo cambia a ogni tick.",
+        "stress.scenario.scrolleager.stresses": "passaggi di misura sull'intero contenuto · riserva della barra di scorrimento · richiesta della dimensione ideale · O(N) per frame",
+        "stress.scenario.scrolleager.heading": "Scorrimento non pigro — {0} righe in un VStack non pigro (ogni riga cambia a ogni frame)",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "Barra dei menu",

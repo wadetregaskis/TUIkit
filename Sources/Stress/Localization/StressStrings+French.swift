@@ -168,6 +168,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "ScrollView ancrée en bas sur N lignes de hauteur variable ; une ligne ajoutée à chaque tick.",
         "stress.scenario.scrollfollow.stresses": "rendu de bande fenêtré · avance de l'ancre · estimation de fin · O(fenêtre) pour tout N",
         "stress.scenario.scrollfollow.heading": "Suivi du défilement — {0} lignes, ancré en bas (une ligne ajoutée par image)",
+        "stress.scenario.scrolleager.title": "Défilement non paresseux",
+        "stress.scenario.scrolleager.blurb": "ScrollView verticale sur un VStack non paresseux de N lignes dont le texte change à chaque tick.",
+        "stress.scenario.scrolleager.stresses": "parcours de mesure du contenu entier · réservation de la barre de défilement · demande de taille idéale · O(N) par image",
+        "stress.scenario.scrolleager.heading": "Défilement non paresseux — {0} lignes dans un VStack non paresseux (chaque ligne change à chaque image)",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "Barre de menus",

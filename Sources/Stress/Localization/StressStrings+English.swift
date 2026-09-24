@@ -179,6 +179,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "Bottom-anchored ScrollView over N variable-height rows; a row appends every tick.",
         "stress.scenario.scrollfollow.stresses": "windowed band render · anchor advance · tail estimate · O(window) at any N",
         "stress.scenario.scrollfollow.heading": "Scroll Follow — {0} rows, bottom-anchored (a row appends every frame)",
+        "stress.scenario.scrolleager.title": "Scroll Eager",
+        "stress.scenario.scrolleager.blurb": "Vertical ScrollView over an eager VStack of N rows whose text changes every tick.",
+        "stress.scenario.scrolleager.stresses": "whole-content measure walks · scrollbar reservation · ideal-size ask · O(N) per frame",
+        "stress.scenario.scrolleager.heading": "Scroll Eager — {0} rows in an eager VStack (every row changes every frame)",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "Menu Bar",

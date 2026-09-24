@@ -166,6 +166,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "下部アンカーの ScrollView、可変高さの N 行。tick ごとに 1 行追加。",
         "stress.scenario.scrollfollow.stresses": "ウィンドウ化バンド描画 · アンカー前進 · 末尾推定 · どの N でも O(ウィンドウ)",
         "stress.scenario.scrollfollow.heading": "スクロール追従 — {0} 行、下部アンカー（毎フレーム 1 行追加）",
+        "stress.scenario.scrolleager.title": "非遅延スクロール",
+        "stress.scenario.scrolleager.blurb": "テキストが tick ごとに変わる N 行の非遅延 VStack を持つ縦 ScrollView。",
+        "stress.scenario.scrolleager.stresses": "コンテンツ全体の計測走査 · スクロールバーの確保 · 理想サイズの問い合わせ · フレームごとに O(N)",
+        "stress.scenario.scrolleager.heading": "非遅延スクロール — 非遅延 VStack に {0} 行（毎フレームすべての行が変化）",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "メニューバー",

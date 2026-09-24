@@ -168,6 +168,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "Unten verankerte ScrollView über N Zeilen variabler Höhe; pro Tick kommt eine Zeile hinzu.",
         "stress.scenario.scrollfollow.stresses": "gefensterte Band-Darstellung · Anker-Fortschreibung · End-Schätzung · O(Fenster) bei jedem N",
         "stress.scenario.scrollfollow.heading": "Scroll-Verfolgung — {0} Zeilen, unten verankert (pro Frame kommt eine Zeile hinzu)",
+        "stress.scenario.scrolleager.title": "Eager-Scrollen",
+        "stress.scenario.scrolleager.blurb": "Vertikale ScrollView über einem nicht-lazy VStack mit N Zeilen, deren Text sich bei jedem Tick ändert.",
+        "stress.scenario.scrolleager.stresses": "Messdurchläufe über den ganzen Inhalt · Scrollleisten-Reservierung · Frage nach der Idealgröße · O(N) pro Frame",
+        "stress.scenario.scrolleager.heading": "Eager-Scrollen — {0} Zeilen in einem nicht-lazy VStack (jede Zeile ändert sich in jedem Frame)",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "Menüleiste",

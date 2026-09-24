@@ -168,6 +168,10 @@ extension StressStrings {
         "stress.scenario.scrollfollow.blurb": "ScrollView anclado abajo sobre N filas de altura variable; se añade una fila por tick.",
         "stress.scenario.scrollfollow.stresses": "renderizado de banda en ventana · avance del ancla · estimación de cola · O(ventana) para cualquier N",
         "stress.scenario.scrollfollow.heading": "Seguimiento de desplazamiento — {0} filas, anclado abajo (se añade una fila por fotograma)",
+        "stress.scenario.scrolleager.title": "Desplazamiento no perezoso",
+        "stress.scenario.scrolleager.blurb": "ScrollView vertical sobre un VStack no perezoso de N filas cuyo texto cambia en cada tick.",
+        "stress.scenario.scrolleager.stresses": "recorridos de medición del contenido completo · reserva de la barra de desplazamiento · consulta del tamaño ideal · O(N) por fotograma",
+        "stress.scenario.scrolleager.heading": "Desplazamiento no perezoso — {0} filas en un VStack no perezoso (cada fila cambia en cada fotograma)",
 
         // MARK: kitchensink
         "stress.scenario.menus.title": "Barra de menús",

@@ -53,6 +53,7 @@ enum Scenarios {
     static let all: [Scenario] = [
         MegaListScenario.descriptor,
         ScrollFollowScenario.descriptor,
+        ScrollEagerScenario.descriptor,
         WideTableScenario.descriptor,
         MultiLineTableScenario.descriptor,
         TruncatingTableScenario.descriptor,
