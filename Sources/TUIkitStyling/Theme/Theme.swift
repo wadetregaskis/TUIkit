@@ -1027,10 +1027,16 @@ extension Palette {
     /// has always been.
     ///
     /// Twice as far is clamped to what an sRGB channel can hold, and floored so the
-    /// row's text stays readable on it — ``ViewConstants/labelContrastFloor``, the
-    /// floor a Terminal profile's stated wash is held to — which on a palette whose
-    /// wash is already near that floor leaves little room to breathe.
-    /// `PaletteContrastAuditTests` measures the bright end.
+    /// row's text stays readable on it — ``ViewConstants/rowBreathPeakContrastFloor``,
+    /// the floor the top of the accent's breath is held to, since the two tops are the
+    /// same moment of the same cycle. Not the 3:1 a label resting on a face gets, which
+    /// is what this was floored at first: it squeezed the breath on the palettes whose
+    /// wash already sits near their text. Novel's moved 1.04:1 and Ocean's held one
+    /// colour on 256 colours; at the accent's floor they breathe 1.54:1 and 1.34:1,
+    /// and of the sixteen shipped palettes only Novel's top is floored at all.
+    /// `PaletteContrastAuditTests` measures the bright end, in truecolor and — as the
+    /// terminal draws the breath, through ``Color/pulseRamp(from:to:depth:samples:)`` —
+    /// on 256 colours.
     ///
     /// Where the wash or the page has no RGB, both ends are the wash: there is no
     /// distance to double, and a breath between two equal ends is still.
@@ -1049,7 +1055,9 @@ extension Palette {
             twiceAsFar(wash.red, from: page.red),
             twiceAsFar(wash.green, from: page.green),
             twiceAsFar(wash.blue, from: page.blue))
-        return (dim, bright.ensuringContrast(atLeast: ViewConstants.labelContrastFloor, against: foreground))
+        return (
+            dim, bright.ensuringContrast(atLeast: ViewConstants.rowBreathPeakContrastFloor, against: foreground)
+        )
     }
 }
 

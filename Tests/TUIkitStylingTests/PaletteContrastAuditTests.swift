@@ -185,7 +185,7 @@ struct PaletteContrastAuditTests {
             AuditedPair(
                 name: "foreground/focusWashPulseBright",
                 foreground: palette.foreground, background: washPulseBright,
-                minimum: ViewConstants.labelContrastFloor),
+                minimum: ViewConstants.rowBreathPeakContrastFloor),
         ]
     }
 
@@ -246,6 +246,55 @@ struct PaletteContrastAuditTests {
             #expect(
                 brightFromPage > dimFromPage,
                 "\(palette.name): the bright end \(Self.hex(ends.bright)) is no further from the page than the wash")
+
+            // …and on a 256-colour terminal, where the floor bites (as the hover tests
+            // below ask it). The breath the terminal draws is the ramp the accent's own
+            // breath walks, `Color.pulseRamp`, which keeps only the shades the cube can
+            // show and drops the ones that lost their hue: it must hold two, and none
+            // of them may be the page's own entry, where the cursor would go out once
+            // a cycle. Ocean's held one colour (#0087FF), and Red Sands' dropped its
+            // black and held #5F0000. Not "no nearer the page" by contrast, as above:
+            // the cube moves hue as well as lightness, and Grass's red wash breathes
+            // #D70000 to #FF0000 on its green page, 1.19:1 and 1.13:1 off it by
+            // luminance while plainly further from it.
+            let page = palette.background.downsampledToPalette256()
+            let shades = Color.pulseRamp(from: ends.dim, to: ends.bright, depth: .palette256)
+                .map { $0.downsampledToPalette256() }
+            #expect(
+                shades.count >= 2,
+                "\(palette.name): on 256 colours the wash breath holds one colour, \(shades.map(Self.hex))")
+            #expect(
+                !shades.contains(page),
+                "\(palette.name): on 256 colours the wash breath passes through the page's \(Self.hex(page)): \(shades.map(Self.hex))")
+        }
+    }
+
+    /// The top of the wash's breath is floored where the row's text would be hard to
+    /// read on it, and no harder than the top of the accent's breath, which is the
+    /// same moment of the same cycle. Floored at a label's 3:1 instead, the breath was
+    /// squeezed wherever the wash sits near the text: Novel's moved 1.04:1 (its top
+    /// #858509 where the accent's floor gives #696907), Ocean's held one colour on 256
+    /// colours (#0397FF for #27A6FF), and Pro's top came in from #A4A4A4 to #8D8D8D.
+    @Test("The wash's breath is floored no harder than the accent's")
+    func focusWashFlooredLikeTheAccent() {
+        for palette in Self.statedPalettes {
+            let ends = palette.focusWashPulse()
+            guard let wash = ends.dim.rgbComponents,
+                let page = palette.background.rgbComponents
+            else { continue }
+            // Twice the wash's distance from the page, per channel and clamped: the
+            // top before any floor (`Palette.focusWashPulse()`).
+            func twiceAsFar(_ wash: UInt8, _ page: UInt8) -> UInt8 {
+                UInt8(clamping: 2 * Int(wash) - Int(page))
+            }
+            let unfloored = Color.rgb(
+                twiceAsFar(wash.red, page.red), twiceAsFar(wash.green, page.green),
+                twiceAsFar(wash.blue, page.blue))
+            let floored = unfloored.ensuringContrast(
+                atLeast: ViewConstants.rowBreathPeakContrastFloor, against: palette.foreground)
+            #expect(
+                ends.bright == floored,
+                "\(palette.name): the top is \(Self.hex(ends.bright)); at the accent's floor it is \(Self.hex(floored))")
         }
     }
 
