@@ -554,8 +554,13 @@ extension _VStackCore {
             if slotY > cursor {
                 result.appendVertically(FrameBuffer(emptyWithHeight: slotY - cursor), spacing: 0)
             }
+            // At the height it was measured at, not the viewport's: the pitch
+            // walk measured it at its ideal height, and a row taller than the
+            // viewport drawn at the viewport's was cut to its first screenful
+            // and padded out with blank lines — the rest of it never drawn,
+            // however far the scroll view moved over it.
             var rendered = frame.child(at: ordinal).render(
-                width: width, height: window.viewportHeight,
+                width: width, height: rowHeight,
                 context: context.placingGradientChild(
                     gradientFrame,
                     x: Self.gradientX(
