@@ -390,9 +390,11 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
 /// a power of two — a doubled table kept for hundreds of frames, and the old
 /// one alive beside the new one while it rehashes.
 ///
-/// Lookups still read the memo: an answer another measure stored is as good
-/// here as anywhere. Nothing beneath the probe reads or stores the memo: it is
-/// detached for the measure below, which a probe inside a probe finds too.
+/// Lookups still read the memo, the probe's own and every one beneath it: an
+/// answer another measure stored is as good here as anywhere, and the subtree
+/// a probe asks about has usually just been measured by the render that laid
+/// it out. Only storing stops — beneath the probe a miss is measured and kept
+/// nowhere, which a probe inside a probe finds too (``RenderCache/isProbing``).
 @MainActor
 package func measureChildRememberingOnlyItself<V: View>(
     _ view: V, proposal: ProposedSize, context: RenderContext
@@ -460,14 +462,19 @@ private func memoizedMeasure<V: View>(
         if remembersDescendants {
             size = measureChildUncached(view, proposal: proposal, context: context)
         } else {
-            // The memo detached from everything beneath: the probe's subtree
-            // neither reads nor stores it, and this measure's own store below
-            // is the one entry a probe keeps. Detached rather than held by a
-            // count every store would test: that check, on the store path every
-            // measured node takes, cost `churn` 2.1% and `gradients` 1.2% with
-            // no probe in the tree at all.
+            // The memo detached from everything beneath, and read-only there:
+            // the probe's subtree reads it (below) but stores nothing, and this
+            // measure's own store below is the one entry a probe keeps.
+            // Detached rather than held by a count every store would test:
+            // that check, on the store path every measured node takes, cost
+            // `churn` 2.1% and `gradients` 1.2% with no probe in the tree at
+            // all. Put back as found, for a tracker installed beneath a probe
+            // (`withVolatileReadTracker`) with a probe of its own under it.
+            let wasProbing = cache.isProbing
             cache.volatileReadTracker = nil
+            cache.isProbing = true
             size = measureChildUncached(view, proposal: proposal, context: context)
+            cache.isProbing = wasProbing
             cache.volatileReadTracker = tracker
         }
         if tracker.cacheUnsafeCount == unsafeBefore {
@@ -480,6 +487,30 @@ private func memoizedMeasure<V: View>(
         }
         return size
     }
+    // Beneath a probe: asked only where the gate above found no tracker, so an
+    // ordinary measure in the render loop, which always has one, never reads it.
+    if let cache = context.renderCache, cache.isProbing {
+        return measureBeneathProbe(view, proposal: proposal, context: context, cache: cache)
+    }
+    return measureChildUncached(view, proposal: proposal, context: context)
+}
+
+/// A measure beneath a probe: served from this pass's memo when it can be, and
+/// measured and kept nowhere when it cannot. See
+/// ``measureChildRememberingOnlyItself(_:proposal:context:)``.
+///
+/// Out of line, so the path an ordinary measure takes is only the call to it,
+/// behind a test it never passes.
+@inline(never)
+@MainActor
+private func measureBeneathProbe<V: View>(
+    _ view: V, proposal: ProposedSize, context: RenderContext, cache: RenderCache
+) -> ViewSize {
+    let key = measureKey(for: view, proposal: proposal, context: context)
+    if let served = servedMeasure(view, key: key, proposal: proposal, context: context, cache: cache) {
+        return served
+    }
+    cache.measuresBeneathProbes += 1
     return measureChildUncached(view, proposal: proposal, context: context)
 }
 

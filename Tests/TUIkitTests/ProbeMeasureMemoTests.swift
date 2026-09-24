@@ -6,7 +6,8 @@
 //  probe passed through, though nothing else in the pass measures there — dead
 //  entries in a dictionary that keeps its capacity from pass to pass. A probe
 //  keeps its own answer, which a repeat of it is served, and nothing it found
-//  on the way.
+//  on the way — but it READS what the pass stored, all the way down: the
+//  subtree it asks about has usually just been measured where it is drawn.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -116,6 +117,46 @@ struct ProbeMeasureMemoTests {
         #expect(cache.measureMemoTotals.hits == before.hits + 1)
     }
 
+    /// A probe asks about a subtree that is drawn somewhere else, and so
+    /// measured there — often earlier in the same pass, where the render laid
+    /// it out. What that measure stored answers the probe's subtree as it
+    /// answers anyone: only STORING stops at a probe.
+    @Test("Beneath a probe, what an ordinary measure stored is served, not measured again")
+    func probeSubtreeReadsTheMemo() throws {
+        let context = probeMemoisedContext(width: Self.width)
+        let cache = try #require(context.renderCache)
+        // Where `Prober` measures its content: one child identity in.
+        let measured = measureChild(
+            ProbedFillingLabel(), proposal: Self.proposal,
+            context: context.withChildIdentity(type: ProbedFillingLabel.self))
+        let entries = cache.measureEntryCount
+        let before = cache.measureMemoTotals
+        let probed = measureChildRememberingOnlyItself(
+            Prober(content: ProbedFillingLabel()), proposal: Self.proposal, context: context)
+        #expect(probed == measured)
+        // The prober itself misses and keeps its answer; its content is served.
+        #expect(cache.measureMemoTotals.misses == before.misses + 1)
+        #expect(cache.measureMemoTotals.hits == before.hits + 1, "the probe's subtree was measured again")
+        #expect(cache.measuresBeneathProbes == 0)
+        #expect(cache.measureEntryCount == entries + 1)
+    }
+
+    /// The other half of the rule: beneath a probe, a miss is measured and
+    /// NOT kept — a probe inside a probe, which reads the memo too, stores
+    /// nothing either.
+    @Test("Beneath a probe, a miss is measured and kept nowhere")
+    func probeSubtreeStoresNothing() throws {
+        let context = probeMemoisedContext(width: Self.width)
+        let cache = try #require(context.renderCache)
+        _ = measureChildRememberingOnlyItself(
+            Prober(content: Prober(content: ProbedFillingLabel())), proposal: Self.proposal,
+            context: context)
+        #expect(cache.measureEntryCount == 1)
+        // Measured, though: the inner prober, the label, and what is in it.
+        #expect(cache.measuresBeneathProbes > 2)
+        #expect(!cache.isProbing, "the memo was left read-only")
+    }
+
     @Test("A probe inside a probe keeps nothing: only the outer answer is kept")
     func nestedProbeKeepsOnlyTheOuterAnswer() throws {
         let nested = probeMemoisedContext(width: Self.width)
@@ -165,5 +206,48 @@ struct ProbeMeasureMemoTests {
         #expect(filling.size.isWidthFlexible, "precondition: the filling label's button probed")
         #expect(!hugging.size.isWidthFlexible)
         #expect(filling.count == hugging.count + 1, "filling \(filling.count), hugging \(hugging.count)")
+    }
+
+    /// What drawing a button measures inside its label, and what measuring it
+    /// does: the same leaves, the same number of times. A button that fills
+    /// its offer measures by drawing and then probes its label, and the probe
+    /// is asked about a label the drawing has just laid out — so everything
+    /// inside it is the memo's to serve, and the probe measures none of it
+    /// again.
+    @Test(
+        "A button's probe measures nothing inside its label that drawing it measured",
+        arguments: [ButtonStyleCase.default, .plain])
+    func buttonProbeMeasuresNoLeafAgain(style: ButtonStyleCase) {
+        let counter = LeafMeasureCounter()
+        let button = style.apply(
+            to: Button(action: {}, label: { HStack(spacing: 1) { CountedLeaf(counter: counter); Spacer() } }))
+        _ = measureFixedByRendering(button, proposal: Self.proposal, context: probeMemoisedContext(width: Self.width))
+        let drawing = counter.measures
+        #expect(drawing > 0, "precondition: drawing the button measures its leaf")
+        counter.measures = 0
+        let size = measureChild(button, proposal: Self.proposal, context: probeMemoisedContext(width: Self.width))
+        #expect(size.isWidthFlexible, "precondition: the filling label's button probed")
+        #expect(counter.measures == drawing, "\(style): drawn \(drawing), measured \(counter.measures)")
+    }
+}
+
+/// How often a ``CountedLeaf`` has been measured — a class, so the count
+/// survives the view values the walk copies.
+@MainActor
+private final class LeafMeasureCounter {
+    var measures = 0
+}
+
+/// A four-cell leaf that counts its measures.
+private struct CountedLeaf: View, Renderable, Layoutable {
+    let counter: LeafMeasureCounter
+
+    var body: Never { fatalError("CountedLeaf renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer { FrameBuffer(text: "leaf") }
+
+    func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
+        counter.measures += 1
+        return ViewSize.fixed(4, 1)
     }
 }

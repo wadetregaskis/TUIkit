@@ -488,6 +488,25 @@ public final class RenderCache: @unchecked Sendable {
     /// memo shipped inert once already (§27).
     public internal(set) var volatileReadTracker: VolatileReadTracker?
 
+    /// Whether a probe (`measureChildRememberingOnlyItself`) is measuring,
+    /// with ``volatileReadTracker`` detached for the subtree beneath it.
+    ///
+    /// Beneath a probe the measure memo is READ, and nothing is stored: what
+    /// an ordinary measure stored this pass — the render that laid the probed
+    /// subtree out, most often — serves the probe's subtree as it serves
+    /// anyone, and the probe keeps only its own answer.
+    ///
+    /// A flag of its own rather than a count on the store path: it is asked
+    /// only where there is no tracker, which in the render loop is only
+    /// beneath a probe, so an ordinary measure never reads it. A check that
+    /// every store takes cost `churn` 2.1% with no probe in the tree.
+    package internal(set) var isProbing = false
+
+    /// How many measures probes have made beneath themselves that the memo
+    /// could not serve, over every pass — what the probes cost beyond their
+    /// own answers. Counted on the probe's path only.
+    package internal(set) var measuresBeneathProbes = 0
+
     /// The width-traits generation this cache's contents were measured under.
     ///
     /// The claim is part of what a measurement means, so memos taken under one
