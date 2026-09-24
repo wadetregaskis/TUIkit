@@ -282,6 +282,12 @@ final class StackWindowState {
         /// never move what's on screen — only the scrollbar.
         var lastDerivedOffset = 0
 
+        /// The content height the anchored path last reported
+        /// (``ScrollContentReply/sliceTotalHeight``) — the total the scroll
+        /// view's offset is clamped against, and so the one an offset at the
+        /// very bottom is measured from. `nil` before the first anchored render.
+        var lastReportedTotal: Int?
+
         /// Running average of measured row pitches (row + spacing), the
         /// extent estimate for rows never measured. Refined as rows are
         /// touched; drives the scrollbar and big-jump seeks only.

@@ -151,7 +151,20 @@ private final class AnchoredWindowFrame {
         var anchor = min(state.anchorOrdinal, count - 1)
         var within = state.anchorOffsetWithin
         let delta = offset - state.lastDerivedOffset
-        if abs(delta) > viewportHeight * 4 {
+        if abs(delta) > viewportHeight * 4, let reported = state.lastReportedTotal,
+            offset + viewportHeight >= reported
+        {
+            // A jump to the very bottom of what this stack last reported — End,
+            // a tail glue re-asserted after the total refined, a scrollbar
+            // dragged down — means the LAST rows, whatever the running pitch
+            // says. Mapped through the average instead, a tail of rows taller
+            // than the rest (groups that grow down the list) lands short: the
+            // average the tail itself raised divides the offset into an ordinal
+            // far above it, and End showed the last row for a frame and then
+            // settled mid-list. So the bottom is placed exactly, from the last
+            // row up — the estimate is exact at the endpoints.
+            (anchor, within) = tailAnchor(viewportHeight: viewportHeight)
+        } else if abs(delta) > viewportHeight * 4 {
             let estimate = state.estimatedPitch(spacing: spacing)
             anchor = min(count - 1, max(0, offset / estimate))
             within = max(0, offset - anchor * estimate)
@@ -177,6 +190,20 @@ private final class AnchoredWindowFrame {
         state.anchorOrdinal = anchor
         state.anchorOffsetWithin = within
         state.lastDerivedOffset = offset
+    }
+
+    /// The anchor that puts the last row's bottom at the viewport's: walking up
+    /// from the last row by exact pitches until the viewport is covered, the
+    /// row reached and how many of its lines sit above the viewport's top.
+    /// O(the rows one viewport shows).
+    func tailAnchor(viewportHeight: Int) -> (ordinal: Int, within: Int) {
+        var ordinal = children.count - 1
+        var covered = pitch(of: ordinal)
+        while covered < viewportHeight, ordinal > 0 {
+            ordinal -= 1
+            covered += pitch(of: ordinal)
+        }
+        return (ordinal, max(0, covered - viewportHeight))
     }
 
     /// Fills outward from the anchor: the anchor row sits exactly at
@@ -631,6 +658,7 @@ extension _VStackCore {
         let total =
             max(cursor, bottomY) + max(0, remaining) * estimate
             - (remaining > 0 ? spacing : 0)
+        state.lastReportedTotal = total
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = total
