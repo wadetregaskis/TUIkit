@@ -1170,7 +1170,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.multiSelection = multiSelection
         // A hierarchical list's rows come from an `OutlineGroup`, which is what
         // knows how to open one — reached the same way `.onMove` / `.onDelete`
-        // are, by asking the content, and through the same `Group`s.
+        // are, by asking the content, and through the same `Group`s and
+        // `if`/`else`s.
         let outline = throughListPassThroughs(content, as: (any OutlineRowActivating).self)
         handler.outlineActivation = outline
         // Return ACTIVATES the focused row, and for a branch with no other

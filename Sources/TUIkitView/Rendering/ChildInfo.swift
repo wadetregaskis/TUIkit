@@ -736,14 +736,16 @@ public protocol ChildViewProvider {
     /// on one identity and shared a `@State` box, so flipping the condition
     /// carried the old branch's state into the new one.
     ///
-    /// Honoured in exactly two places, and a caller must go through one of
+    /// Honoured in exactly three places, and a caller must go through one of
     /// them: the tuple splice (`TupleView.appendChildViews`, a conditional with
-    /// siblings) and ``resolveChildViews(from:context:)`` (a conditional that
-    /// is a container's ONLY content, which `buildBlock` hands over bare). The
-    /// second was missing, so `VStack { if a { Row("1") } else { Row("2") } }`
-    /// kept both branches at the stack's own identity. Asking a provider for
-    /// `childViews(context:)` directly bypasses both — `List` and `Section`
-    /// did, and had the same hole.
+    /// siblings), ``resolveChildViews(from:context:)`` (a conditional that is a
+    /// container's ONLY content, which `buildBlock` hands over bare), and the
+    /// `List`'s and `Section`'s look-through (`ConditionalView.listRowsContext`
+    /// in TUIkit, a conditional around a list's loop). The second was missing,
+    /// so `VStack { if a { Row("1") } else { Row("2") } }` kept both branches at
+    /// the stack's own identity. Asking a provider for `childViews(context:)`
+    /// directly bypasses all three — `List` and `Section` did, and had the same
+    /// hole.
     ///
     /// A label on the provider rather than a field on `ChildView`, because
     /// `ChildView` is built and copied per child per pass and its size is
