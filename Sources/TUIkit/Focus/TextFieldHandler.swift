@@ -63,7 +63,7 @@
 /// | Ctrl+C | Copy selection to clipboard; with nothing selected the key passes on |
 /// | Ctrl+X | Cut selection to clipboard; with nothing selected the key passes on |
 /// | Ctrl+V | Paste from clipboard |
-/// | Ctrl+Z | Undo last change |
+/// | Ctrl+Z | Undo last change (see ``TextUndoHistory``: one step per key, forgotten when the app replaces the text) |
 /// | Enter | Trigger the submit action — with no `onSubmit` the field declines Return, so a dialog's default button fires |
 ///
 /// Ctrl+A, E, B, F, D, K, Y and T, Option+Ctrl+A and Alt+b / Alt+f come from
@@ -319,7 +319,7 @@ extension TextFieldHandler {
         let startIndex = current.index(current.startIndex, offsetBy: range.lowerBound)
         let endIndex = current.index(current.startIndex, offsetBy: range.upperBound)
         current.removeSubrange(startIndex..<endIndex)
-        text.wrappedValue = current
+        write(current)
         cursorPosition = range.lowerBound
     }
 
@@ -650,7 +650,7 @@ extension TextFieldHandler {
     func acceptSuggestion(at index: Int) {
         guard suggestionCompletions.indices.contains(index) else { return }
         pushUndoState()
-        text.wrappedValue = suggestionCompletions[index]
+        write(suggestionCompletions[index])
         cursorPosition = text.wrappedValue.count
         clearSelection()
         suggestionHighlight = nil
@@ -694,7 +694,7 @@ extension TextFieldHandler {
         var updated = current
         let index = updated.index(updated.startIndex, offsetBy: min(cursorPosition, updated.count))
         updated.insert(char, at: index)
-        text.wrappedValue = updated
+        write(updated)
         cursorPosition += 1
 
         // Diagnostic (TUIKIT_DEBUG_FOCUS=1): identify which @State
@@ -726,7 +726,7 @@ extension TextFieldHandler {
         var current = text.wrappedValue
         let index = current.index(current.startIndex, offsetBy: cursorPosition - 1)
         current.remove(at: index)
-        text.wrappedValue = current
+        write(current)
         cursorPosition -= 1
     }
 
@@ -748,7 +748,7 @@ extension TextFieldHandler {
         pushUndoState()
         let index = current.index(current.startIndex, offsetBy: cursorPosition)
         current.remove(at: index)
-        text.wrappedValue = current
+        write(current)
     }
 
     /// Option-Backspace: deletes back to where Option-Left moves
@@ -869,16 +869,31 @@ extension TextFieldHandler {
 // MARK: - Undo
 
 extension TextFieldHandler {
-    /// Pushes the current state onto the undo stack.
+    /// Writes `newText` to the bound text. Every edit the field makes goes
+    /// through here, so the undo history knows which text the field produced
+    /// and can tell it from a replacement by the app (see
+    /// ``TextUndoHistory``).
+    func write(_ newText: String) {
+        text.wrappedValue = newText
+        undoHistory.noteWritten(text.wrappedValue)
+    }
+
+    /// Pushes the current state onto the undo stack, after forgetting the
+    /// history if the app has replaced the text since the field last wrote it.
+    /// Every edit calls this before it writes.
     func pushUndoState() {
+        undoHistory.forgetIfReplaced(current: text.wrappedValue)
         undoHistory.record(text: text.wrappedValue, caret: cursorPosition)
     }
 
-    /// Restores the previous text state from the undo stack.
+    /// Restores the previous text state from the undo stack. After the app has
+    /// replaced the text there is nothing to restore: the history described
+    /// the text that was replaced.
     func undo() {
+        undoHistory.forgetIfReplaced(current: text.wrappedValue)
         guard let previous = undoHistory.popLast() else { return }
         resetSuggestionNavigation()
-        text.wrappedValue = previous.text
+        write(previous.text)
         cursorPosition = min(previous.caret, previous.text.count)
         clearSelection()
     }

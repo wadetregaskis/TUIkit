@@ -185,7 +185,7 @@ extension TextFieldHandler {
         else { return }
         resetSuggestionNavigation()
         pushUndoState()
-        text.wrappedValue = String(characters)
+        write(String(characters))
         cursorPosition = caret
     }
 

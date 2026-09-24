@@ -49,6 +49,12 @@
 /// | Ctrl+U | Erase the entire field |
 /// | Enter | Trigger onSubmit action |
 ///
+/// Undo takes back one key's change at a time, from the last 50. It has no
+/// grouping of a typing run, as the macOS text system has, so a typed word
+/// takes as many undos as it has letters. It never brings back text the field
+/// did not produce: when the app replaces the bound text, clearing the field
+/// in `onSubmit` or loading other text into it, the field forgets its history.
+///
 /// The Emacs-style Control chords name the same commands as in ``TextEditor``,
 /// read from one table, but a field is a single line with a keyboard
 /// selection, so some do something else:
