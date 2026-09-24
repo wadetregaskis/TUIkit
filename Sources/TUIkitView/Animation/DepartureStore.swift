@@ -320,11 +320,15 @@ extension DepartureStore {
     ///
     /// Only a picture recorded this pass: the view is present, and the next
     /// frame it is not is the one whose slot asks.
+    ///
+    /// `type` is an autoclosure, asked only where an entry is present at
+    /// `identity`: working it out is a walk of existential-metatype casts, and
+    /// while any transition is on screen every `AnyView` render asks.
     public func noteDrawnUnchanged(
-        at identity: ViewIdentity, leftBy type: Any.Type, byErasing eraser: Any.Type
+        at identity: ViewIdentity, leftBy type: @autoclosure () -> Any.Type, byErasing eraser: Any.Type
     ) {
         guard var entry = entries[identity], entry.presentThisPass,
-            entry.wasLeft(by: ObjectIdentifier(type))
+            entry.wasLeft(by: ObjectIdentifier(type()))
         else { return }
         entry.erasedBy = ObjectIdentifier(eraser)
         entries[identity] = entry
