@@ -106,7 +106,7 @@ protocol WindowedListRowExtractor {
 
     /// The id of the row at `index`, resolved cheaply (a key-path read or the
     /// index) without building content. Returns `nil` if the element's id can't
-    /// be expressed as `ID` (the same rows the eager path would drop) — the
+    /// be expressed as `ID` (the rows the eager path draws unselectable) — the
     /// caller then falls back to eager extraction. A row's own `.tag(_:)` is
     /// preferred, then element-natural ids, with the row index as the fallback
     /// (matching ``ListRowExtractor/extractListRows``). Only a row type that
@@ -231,14 +231,19 @@ func throughListPassThroughs<V: View, T>(_ view: V, as type: T.Type = T.self) ->
 
 extension ForEach: ListRowExtractor, WindowedListRowExtractor {
     func extractListRows<RowID: Hashable>(context: RenderContext) -> [ListRow<RowID>] {
-        (0..<data.count).compactMap { index -> ListRow<RowID>? in
+        (0..<data.count).map { index -> ListRow<RowID> in
             // Resolve the row's selection ID up front — it's cheap (a key-path
             // read or the index) and the scroll / selection handler needs it for
             // EVERY row, on- or off-screen. Building and rendering the row view,
             // by contrast, is deferred into the lazy box below so a long List
             // only pays for the rows in its visible window.
-            guard let rowID: RowID = rowID(at: index) else { return nil }
-            return ListRow(id: rowID, content: makeListRowContent(at: index, context: context))
+            //
+            // A row whose id the selection cannot hold is drawn unselectable,
+            // as a static row without a usable tag is (see `ListRow.id`) and as
+            // SwiftUI draws it — `Int` ids in a `String`-selection list. It used
+            // to be dropped, which showed a section of them as its bare header
+            // and a list of nothing else as the empty placeholder.
+            ListRow(id: rowID(at: index), content: makeListRowContent(at: index, context: context))
         }
     }
 
@@ -247,8 +252,8 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
     // `RowID`, not `ID` — `ForEach`'s own `ID` generic parameter is in scope here.
     // Resolves one row's id lazily (the windowed `List` asks only for the visible
     // window + the focused row). `nil` when the element's id can't be expressed
-    // as `RowID` — that's exactly the row `extractListRows` would drop; the list
-    // probes row 0 and bails to the eager path when it's `nil`.
+    // as `RowID` — exactly the row `extractListRows` draws unselectable; the
+    // list probes row 0 and bails to the eager path when it's `nil`.
     func listRowID<RowID: Hashable>(at index: Int) -> RowID? {
         rowID(at: index)
     }

@@ -2864,9 +2864,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     SelectableListRow(
                         type: $0.id.map { .content(id: $0) } ?? .unselectable, content: $0.content)
                 },
-                // One row per element here too — `extractListRows` drops only
-                // rows whose id will not cast, and this path is reached exactly
-                // when row 0's did not, so in practice it is all or nothing.
+                // One row per element here too: `extractListRows` keeps a row
+                // whose id will not cast, as an unselectable one.
                 editOwners: Self.editOwner(of: content, rows: 0..<rows.count).map { [$0] } ?? [])
         }
 
