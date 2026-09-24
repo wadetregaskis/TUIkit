@@ -83,4 +83,22 @@ extension Palette {
         let (dim, bright) = accentFillPulse(over: surface)
         return .pulse(dim: dim, bright: bright)
     }
+
+    /// The still tint a selected row shows while the list it is in does not hold the
+    /// keys: the accent at ``ViewConstants/selectedBackground`` over the page, or
+    /// reverse video where that tint cannot be measured.
+    ///
+    /// The quiet counterpart of ``emphasisFill(over:)``: the same accent, about half
+    /// the strength of its peak, and still. `PaletteContrastAuditTests` measures the
+    /// row's text against it as `foreground/selectedRowFill`, which is where the name
+    /// comes from — not to be confused with a text input's selection, which is the
+    /// accent at ``ViewConstants/selectionIndicator``.
+    ///
+    /// Over the page only: every row that shows it sits on the page. A caller that must
+    /// not draw a second cursor where the tint cannot be measured asks
+    /// `RowBackground.tint(_:)` for it, which leaves such a row unfilled rather than
+    /// reversed.
+    package func selectedRowFill() -> HighlightFill {
+        highlightFill(accent.opacity(ViewConstants.selectedBackground, over: background), tint: accent)
+    }
 }
