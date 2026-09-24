@@ -47,22 +47,49 @@ typealias UniformBandRow = (ordinal: Int, child: ChildView, width: Int, fills: B
 /// measure one width on its first frame (an arm that walks the prefix) and
 /// another on its second (the seek, answering from a global maximum).
 struct RowWidthRecords {
-    private var records: [(ordinal: Int, width: Int)] = []
+    /// Running maxima over rows filed by ordinal: records in increasing ordinal
+    /// order whose widths strictly increase, so ``maximum(forFirst:)`` is the
+    /// widest noted among the first `k`.
+    struct RunningMaxima {
+        private(set) var records: [(ordinal: Int, width: Int)] = []
+
+        /// The widest noted among the first `count`, or 0 when none is.
+        func maximum(forFirst count: Int) -> Int {
+            var result = 0
+            // Widths increase with ordinal, so the last record before the fold
+            // is the maximum; the array holds only record-setting rows, so this
+            // is a handful of steps even for a stack of millions.
+            for record in records {
+                guard record.ordinal < count else { break }
+                result = record.width
+            }
+            return result
+        }
+
+        /// Files a width, keeping only what changes an answer.
+        mutating func note(ordinal: Int, width measured: Int) {
+            guard measured > maximum(forFirst: ordinal + 1) else { return }
+            let index = records.firstIndex { $0.ordinal >= ordinal } ?? records.count
+            if index < records.count, records[index].ordinal == ordinal {
+                records[index].width = measured
+            } else {
+                records.insert((ordinal, measured), at: index)
+            }
+            // A wider row earlier makes every narrower record after it unreachable.
+            while index + 1 < records.count, records[index + 1].width <= measured {
+                records.remove(at: index + 1)
+            }
+        }
+    }
+
+    private var widths = RunningMaxima()
 
     /// Whether any row has been recorded yet — distinct from "widest is zero".
     private(set) var isSeeded = false
 
     /// The widest row known among the first `count`, or 0 when none is.
     func width(forFirst count: Int) -> Int {
-        var result = 0
-        // Widths increase with ordinal, so the last record before the fold is
-        // the maximum; the array holds only record-setting rows, so this is a
-        // handful of steps even for a stack of millions.
-        for record in records {
-            guard record.ordinal < count else { break }
-            result = record.width
-        }
-        return result
+        widths.maximum(forFirst: count)
     }
 
     /// Marks the records seeded even when no row set one (an empty stack, or
@@ -73,17 +100,7 @@ struct RowWidthRecords {
 
     /// Records a measured row, keeping only what changes an answer.
     mutating func note(ordinal: Int, width measured: Int) {
-        guard measured > width(forFirst: ordinal + 1) else { return }
-        let index = records.firstIndex { $0.ordinal >= ordinal } ?? records.count
-        if index < records.count, records[index].ordinal == ordinal {
-            records[index].width = measured
-        } else {
-            records.insert((ordinal, measured), at: index)
-        }
-        // A wider row earlier makes every narrower record after it unreachable.
-        while index + 1 < records.count, records[index + 1].width <= measured {
-            records.remove(at: index + 1)
-        }
+        widths.note(ordinal: ordinal, width: measured)
     }
 }
 
