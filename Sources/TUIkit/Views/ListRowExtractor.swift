@@ -403,14 +403,18 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
     /// on every frame, so a row type that cannot carry one pays a cached `is`
     /// check and keeps its bare key-path read.
     private func rowID<RowID: Hashable>(at index: Int) -> RowID? {
-        let element = element(at: index)
+        selectionID(of: element(at: index)) ?? (index as? RowID)
+    }
+
+    /// The selection value `element`'s row names itself by: its own
+    /// `.tag(_:)`, else the element's id — ``rowID(at:)`` without the index
+    /// fallback, which is a position in THIS collection rather than anything
+    /// the row says about itself.
+    private func selectionID<RowID: Hashable>(of element: Data.Element) -> RowID? {
         if viewTypeCarriesTag(Content.self),
             let tagged: RowID = extractTagValue(from: content(element), as: RowID.self) {
             return tagged
         }
-        let elementID = element[keyPath: idKeyPath]
-        if let id = elementID as? RowID { return id }
-        if let id = index as? RowID { return id }
-        return nil
+        return element[keyPath: idKeyPath] as? RowID
     }
 }
