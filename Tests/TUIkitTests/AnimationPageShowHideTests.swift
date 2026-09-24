@@ -11,7 +11,7 @@ import Testing
 
 /// The Example's Animation page "Coming and going" demo, reduced to what it is
 /// built from and nothing else: a button that toggles the panel inside
-/// `withAnimation`, and the panel — an optional mapped through `.transition`,
+/// `withAnimation`, and the panel — an `if` with a `.transition`, in a stack
 /// under one `.frame(height:)` that is `nil` unless the space is kept — in a
 /// page that scrolls, as every Example page does.
 ///
@@ -35,14 +35,16 @@ private struct PanelPage: View {
         .scrollIndicators(.automatic)
     }
 
-    @ViewBuilder private var panelSlot: some View {
-        let panel = (showsPanel ? Text("PANEL") : nil)
-            .map {
-                $0.padding(1)
+    private var panelSlot: some View {
+        VStack(spacing: 0) {
+            if showsPanel {
+                Text("PANEL")
+                    .padding(1)
                     .border(.palette.accent)
                     .transition(transition)
             }
-        panel.frame(height: reservesSpace ? 5 : nil, alignment: .top)
+        }
+        .frame(height: reservesSpace ? 5 : nil, alignment: .top)
     }
 }
 
@@ -224,6 +226,33 @@ struct AnimationPageShowHideTests {
 
             page.advance(byMillis: 1000)
             #expect(page.position(of: "PANEL") == nil, "still drawn after the removal ended")
+        }
+    }
+
+    /// What the toggle is for. Kept, the slot is the panel's five rows whether
+    /// the panel is there or not — before it is ever shown, while it is, and
+    /// after it has gone — so nothing below it ever moves. Given back, the page
+    /// closes up once the panel has gone: five rows and the stack's spacing.
+    @Test("With the space kept nothing below the panel moves; without it the page closes up",
+        arguments: [false, true])
+    func spaceIsKeptOrGivenBack(reservesSpace: Bool) {
+        let page = PanelDriver(reservesSpace: reservesSpace, transition: .opacity)
+        let before = page.belowRow
+        #expect(page.pressToggle(), "precondition: the button took the key")
+        page.advance(byMillis: 1200)
+        let shown = page.belowRow
+        #expect(page.pressToggle(), "precondition: the button took the key")
+        page.advance(byMillis: 1200)
+        let after = page.belowRow
+        #expect(before != nil && shown != nil, "precondition: the page is drawn")
+        guard let before, let shown else { return }
+
+        if reservesSpace {
+            #expect(before == shown, "showing the panel moved what is below it")
+            #expect(after == shown, "hiding the panel gave its space back")
+        } else {
+            #expect(before == shown - 6)
+            #expect(after == before, "the page did not close up after the panel went")
         }
     }
 }

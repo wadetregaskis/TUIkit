@@ -728,6 +728,37 @@ or measured rather than assumed:
   Measured: `.frame(width: 80)` on a two-member `Group` gives frames
   byte-identical to writing the frame on each member.
 
+Content with NO members gets nothing, which is the rule's other edge and the
+one that bites: an `Optional` that is `nil` — an `if` whose condition is
+false — has no members, so a `.frame(height: 5)` written on it keeps no rows,
+and nor does one on a `Group` whose only content is such an `if`. SwiftUI
+agrees, measured with the same `NSHostingView` probe (macOS 15.8, 2026-09-24):
+in a `VStack(spacing: 0)` of two `Text`s, `(nil as Text?).frame(height: 50)`
+and `Group { nil }.frame(height: 50)` each add 0 to the stack's 32-point
+height, while `VStack { nil }.frame(height: 50)` adds 50. A slot that must
+keep its space whether or not its view is there frames a container that is
+always there, with the `if` inside it; the Example's Animation page ("Keep the
+space") is written that way, and was not until this distribution reached
+`.frame` and took its reserved rows away.
+
+**`EmptyView` does not follow it, and there the two diverge.** SwiftUI treats
+`EmptyView` as it treats the `nil`: `EmptyView().frame(height: 50)` adds 0 in
+the same probe, and so does `EmptyView().padding(20)`. In TUIkit `EmptyView`
+is a view that draws nothing rather than content with no members — it is not
+a `ChildViewProvider` — so a frame on it is an ordinary `FlexibleFrameView`,
+whose minimum height keeps its 5 rows, and a padding on it pads its empty
+buffer as `PaddingModifier` pads any other: `EmptyView().padding(2)` is 3
+blank rows (a padding keeps back one row of what it is offered for its
+content, out of the inset after it, and the empty content draws none). Left open rather than closed: making `EmptyView` flatten to
+nothing would change it in every container that counts what it is given,
+and the framework gives a modifier on one a meaning of its own —
+`EmptyView().overlay { … }` draws the overlay whole (`OverlayModifier`).
+Nothing in the framework or the Example writes a frame or a padding on an
+`EmptyView` itself; write a kept slot as a stack, as above, and it is right
+in both. Pinned by
+`EmptyContentLayoutTests`, which holds the halves that match beside the two
+that do not.
+
 **Every other wrapper is still opaque to child resolution** — `.badge` builds
 `BadgeModifier`, `.position` builds `PositionView`, `.tag` builds `_TaggedView`,
 and so on. The scale is dozens, not a handful — walking
@@ -765,6 +796,30 @@ be handed to each member of a group.
 `GroupRenderTests.modifiedGroupKeepsStackSpacing` and
 `GridTests.modifiedRowKeepsTheLattice` now assert the rule directly for
 `.foregroundStyle`; they were `withKnownIssue` until it forwarded.
+
+### A child with no extent takes no stack spacing
+
+SwiftUI charges a stack's spacing on both sides of every child that is a view,
+whatever its size. Measured with the `NSHostingView` probe above (macOS 15.8,
+2026-09-24): a `VStack(spacing: 10)` of two `Text`s is 42 points; an empty
+`VStack { if false { … } }` between them makes it 52, and so does
+`Color.clear.frame(height: 0)`. A `nil` or an `EmptyView` in the same place
+adds nothing, because neither is a child at all.
+
+TUIkit's stacks charge spacing only between children that take a row (a
+column, in an `HStack`) or are spacers — `totalLinearSpacing(occupiedChildren:
+spacing:)`, which counts what the render charges: it appends a zero-height
+child without a gap, and the measure has to agree with it. So the empty stack
+adds nothing here, exactly as the `nil` does. Pinned by
+`EmptyContentLayoutTests.emptyStackTakesNoSpacing`.
+
+The Example's Animation page leans on it. Its slot, with the space not kept,
+is an empty stack between two siblings of a `VStack(spacing: 1)`, and the page
+closes up completely once the panel has gone; under SwiftUI's rule a blank row
+would be left where the panel was. Matching SwiftUI means charging spacing to
+every child except one that is nothing. A `nil` already contributes no child;
+an `EmptyView` does, and would have to be told apart from a view of no size,
+which a child's measured size cannot do.
 
 ### Closed: `foregroundStyle` takes `some ShapeStyle`
 
@@ -984,15 +1039,20 @@ fixed-`frame` alignment, `@Observable`-only state (and with it `.onReceive`,
 whose parameter type is a Combine protocol — §2.3), the `palette`/`appearance`
 theming model, and the absence of fonts/animation/shapes/sub-cell-geometry are
 the honest consequences of rendering to a grid of character cells rather than a
-bitmap. §3 holds one open divergence: a modifier reaches the members of
-multi-view content only when it builds a `ModifiedView` or a conforming
-`SingleContentWrapper`, which eighteen wrappers now do — so `.environment`,
-`.foregroundStyle`, `.opacity`, `.frame`, `.offset` and `.disabled` on a
-`Group` apply per member, while the wrappers that perform an EFFECT rather than
-an adjustment (`.onAppear`, `.focusable`, `.onHover`, …) are deliberately left
-opaque, because SwiftUI fires those once and distributing them would fire them
-per member. (The divergence that used to stand there —
-`foregroundStyle` taking `Color?` — is closed, and gradients ship.) §4a — additive SwiftUI features a terminal can express — is now
+bitmap. §3 holds three open divergences. First, a modifier reaches the
+members of multi-view content only when it builds a `ModifiedView` or a
+conforming `SingleContentWrapper`, which eighteen wrappers now do — so
+`.environment`, `.foregroundStyle`, `.opacity`, `.frame`, `.offset` and
+`.disabled` on a `Group` apply per member, while the wrappers that perform an
+EFFECT rather than an adjustment (`.onAppear`, `.focusable`, `.onHover`, …)
+are deliberately left opaque, because SwiftUI fires those once and
+distributing them would fire them per member. Second, within that section, a
+frame or a padding on `EmptyView` keeps its rows here, where SwiftUI treats
+`EmptyView` as content with no members and keeps none. Third, a stack charges
+its spacing only around children that take a row or are spacers, where
+SwiftUI charges it around every child that is a view, an empty stack
+included. (The divergence that used to stand there — `foregroundStyle` taking
+`Color?` — is closed, and gradients ship.) §4a — additive SwiftUI features a terminal can express — is now
 **clear on the API side but for one item**: `pinnedViews:` on the lazy stacks.
 It reads like an init parameter and is not one — see §2.8 for what it actually
 costs.

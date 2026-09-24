@@ -407,24 +407,38 @@ struct AnimationPage: View {
     /// holds the panel's rows open until the transition has finished. The
     /// toggle is about what happens *after* that: reclaimed, and the page
     /// closes up; reserved, and the gap stays so nothing below ever moves.
-    @ViewBuilder private var panelSlot: some View {
-        let panel = (showsPanel ? Text("page.animation.panel") : nil)
-            .map {
-                $0.padding(1)
-                    .border(.palette.accent)
-                    .transition(Self.transitions[transition].transition)
-            }
+    private var panelSlot: some View {
+        // The frame is on a stack that is always there, and the `if` is inside
+        // it. On the `if` itself — `(showsPanel ? panel : nil).frame(…)`, which
+        // this used to be — the frame reaches only what the `if` has, as a
+        // frame on a `Group` reaches only its members, and with the panel gone
+        // that is nothing: no rows were kept at all. SwiftUI does the same,
+        // measured: a `nil` framed 50 tall adds no height to its stack, the
+        // same `nil` in a `VStack` framed 50 tall adds 50.
+        //
         // One frame either way, with a height of `nil` when the space is not
-        // reserved — NOT `if reserved { panel.frame(…) } else { panel }`.
+        // reserved — NOT `if reserved { slot.frame(…) } else { slot }`.
         // Swapping the wrapper is a change of view IDENTITY: every `@State`
         // below it is recreated at its initial value the moment the toggle
         // flips, which is a bug this page would have been an unusually good
-        // place to demonstrate accidentally.
+        // place to demonstrate accidentally. Unreserved and empty, the stack
+        // is no rows and takes no spacing, so the page closes up as before —
+        // TUIkit's rule, not SwiftUI's, which would leave a spacing's gap
+        // (`Documentation/SwiftUI-compatibility.md`, "A child with no extent
+        // takes no stack spacing").
         //
         // Five rows, which is what the panel IS: a text row, a row of padding
         // each side of it, and the border's two. Reserving three left the
         // padding fighting the border for one row.
-        panel.frame(height: reservesSpace ? 5 : nil, alignment: .top)
+        VStack(spacing: 0) {
+            if showsPanel {
+                Text("page.animation.panel")
+                    .padding(1)
+                    .border(.palette.accent)
+                    .transition(Self.transitions[transition].transition)
+            }
+        }
+        .frame(height: reservesSpace ? 5 : nil, alignment: .top)
     }
 
     /// One Bézier control-point coordinate. Named rather than localized: these
