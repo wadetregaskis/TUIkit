@@ -149,68 +149,49 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // what `band`'s own note measured as the entire cost of
         // `.gradientExtent(.subtree)`.
         var escapes: [String?] = []
-        let lines = buffer.lines.enumerated().map { row, line -> String in
-            let padded = line.padToVisibleWidth(width)
-            guard sampler.variesAcrossRow else {
-                // One colour for the whole row: the same single persistent-fill
-                // this modifier has always emitted, and no per-cell work at all.
-                let colour = sampler.colour(row: row).resolve(with: palette)
-                rowFieldAlphas.append(colour.alpha)
-                return filled(
-                    padded, with: colour.opaqueSpelling)
-            }
-            // Otherwise the row is cut at the ramp's own boundaries and each
-            // piece filled. The cut carries the styling that was in force where
-            // it fell, so the content's own colours survive being divided; the
-            // pieces are joined and closed once at the end.
-            //
-            // All the cuts at once: a smooth ramp changes colour at nearly every
-            // column, and slicing one run at a time rebuilt this row's segment
-            // list and rescanned it from the first byte for each of them.
-            let runs = sampler.runs(row: row, cells: width)
+        /// The background escape for ramp entry `entry`, from the table above —
+        /// reused by every later run, and every later ROW, that lands on the same
+        /// entry.
+        func escape(forEntry entry: Int) -> String {
             if escapes.isEmpty {
                 escapes = [String?](repeating: nil, count: sampler.ramp.count)
             }
+            // Bound with `if let` rather than tested for `nil` and then read
+            // again with `??`: this runs once per run, and each `[String?]`
+            // subscript is a retain and release of the cached string, so the
+            // two-read spelling gives back part of what the table saves.
+            if let cached = escapes[entry] { return cached }
+            let colour = sampler.ramp[entry].resolve(with: palette)
+            let built = ANSIRenderer.backgroundCode(for: colour.opaqueSpelling)
+            escapes[entry] = built
+            return built
+        }
+        /// `cells` — `width` of them — cut at `runs`' boundaries and each piece
+        /// filled with its entry.
+        ///
+        /// The cut carries the styling that was in force where it fell, so the
+        /// content's own colours survive being divided; the pieces are joined and
+        /// closed once at the end.
+        ///
+        /// All the cuts at once: a smooth ramp changes colour at nearly every
+        /// column, and slicing one run at a time rebuilt this row's segment list
+        /// and rescanned it from the first byte for each of them.
+        func painted(_ cells: String, over runs: [(columns: Range<Int>, entry: Int)], width: Int) -> String {
             var result = ""
             // What THIS path emits, which is not two bytes a cell: a run per
             // cell, each an SGR introducer (~19 bytes at truecolor) plus a
             // reset, on top of whatever escapes the content already carried.
             // `band` reserves 25 bytes a CELL for the same shape
             // (PaintRenderer.swift:180); the cell count here is `width`, not
-            // `padded.utf8.count`, because `padded` already contains the
+            // `cells.utf8.count`, because `cells` already contains the
             // content's own escapes and multiplying those by 25 would reserve
             // tens of kilobytes for a heavily styled row.
-            result.reserveCapacity(width * 25 + padded.utf8.count + 16)
-            padded.ansiAwareSlicedRuns(
+            result.reserveCapacity(width * 25 + cells.utf8.count + 16)
+            cells.ansiAwareSlicedRuns(
                 runCount: runs.count,
                 width: { runs[$0].columns.count },
                 receive: { index, slice in
-                    let entry = runs[index].entry
-                    // One background escape per ramp ENTRY, reused by every
-                    // later run — and every later ROW — that lands on the same
-                    // one. `PaintRenderer.band`'s `sequences` table on the
-                    // background side, for the same reason: an escape is not a
-                    // lookup. `backgroundEscape()` re-quantises the colour,
-                    // spells it as an array of up to five parameter strings,
-                    // joins them, concatenates twice, and evaluates
-                    // `ColorDepth.current` — two task-local reads — as its
-                    // default argument. A block fill walks every entry once per
-                    // ROW, so all of that was asked once per run.
-                    //
-                    // Bound with `if let` rather than tested for `nil` and then
-                    // read again with `??`: this runs once per run, and each
-                    // `[String?]` subscript is a retain and release of the
-                    // cached string, so the two-read spelling gives back part
-                    // of what the table saves.
-                    let escape: String
-                    if let cached = escapes[entry] {
-                        escape = cached
-                    } else {
-                        let colour = sampler.ramp[entry].resolve(with: palette)
-                        escape = ANSIRenderer.backgroundCode(
-                            for: colour.opaqueSpelling)
-                        escapes[entry] = escape
-                    }
+                    let escape = escape(forEntry: runs[index].entry)
                     // `applyPersistentBackground` spelled out rather than
                     // called: it IS `escape + restating(escape,
                     // afterResetsIn:)`, and it built that sum as one more heap
@@ -227,6 +208,20 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 })
             return result + ANSIRenderer.reset
         }
+        let lines = buffer.lines.enumerated().map { row, line -> String in
+            let padded = line.padToVisibleWidth(width)
+            guard sampler.variesAcrossRow else {
+                // One colour for the whole row: the same single persistent-fill
+                // this modifier has always emitted, and no per-cell work at all.
+                let colour = sampler.colour(row: row).resolve(with: palette)
+                rowFieldAlphas.append(colour.alpha)
+                return filled(
+                    padded, with: colour.opaqueSpelling)
+            }
+            // Otherwise the row is cut at the ramp's own boundaries and each
+            // piece filled.
+            return painted(padded, over: sampler.runs(row: row, cells: width), width: width)
+        }
 
         // Background colouring is a styling pass — content stays in
         // place (no horizontal or vertical shift), so overlays and
@@ -234,13 +229,13 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         // FrameBuffer(lines:) initializer here would silently drop
         // the child's regions, breaking clicks on any control with a
         // .background() modifier applied to it.
-        var painted = buffer.replacingLines(lines)
+        var ramped = buffer.replacingLines(lines)
         // FIELD claims only, as the flat arm makes: the content's own ink is
         // already in these lines and a background says nothing about it.
-        painted.opacityRegions += Self.fieldClaims(
+        ramped.opacityRegions += Self.fieldClaims(
             for: alphaShape, width: width, rows: buffer.lines.count, rowAlphas: rowFieldAlphas,
             sampler: sampler)
-        return painted
+        return ramped
     }
 
     /// The FIELD claims a ramp of this shape owes over a `width` × `rows` block.
