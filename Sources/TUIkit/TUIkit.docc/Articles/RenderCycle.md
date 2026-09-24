@@ -689,3 +689,34 @@ Set `TUIKIT_DEBUG_RENDER=1` to enable per-frame cache statistics on stderr:
 ```
 
 Redirect with `2>render.log` to capture without interfering with the TUI.
+
+### Checking What the Cache Serves
+
+When a view does not update, one question splits the search in two: is the
+cache serving it a picture drawn from stale state, or is the new state not
+reaching it at all? Two debugging switches answer it:
+
+```sh
+TUIKIT_VERIFY_RENDER_MEMO=/tmp/memo.log TUIKIT_VERIFY_MEASURE_MEMO=/tmp/memo.log swift run MyApp
+```
+
+With them on, every buffer and size the cache serves is rendered or measured
+again, and the fresh result is what is drawn. So:
+
+- **The view updates with them on.** The cache was serving it stale, and the
+  log names the view's type and where it sits in the tree, with the first line
+  that differed. Something that changes what the view draws is invisible to
+  the cache: typically an `==` that ignores a field the view draws, or a value
+  read in `body` that no state tracks — a global, a plain class, the clock.
+  Route that value through `@State`, `@Environment`, an `@Observable` model or
+  the view's own stored properties, and the cache will see it. If the log names
+  a framework view with nothing of yours in it, that is a TUIkit bug: please
+  report it with the log line.
+- **It still does not update.** The cache is not the problem: the state is not
+  reaching the view, and the log stays empty.
+
+The switches are a diagnostic, never a fix. They re-render everything the cache
+serves, which costs more than the cache saves, and every difference they draw
+they also report. Set without a path (`=1`), they keep the findings in memory
+instead (`RenderCache.renderMemoMismatches`, `measureMemoMismatches`); the
+Stress harness fails a run on any.

@@ -1047,6 +1047,8 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
             verticalBudget: verticalBudget)
         {
             if RenderCache.verifiesMeasureMemo {
+                // The fresh size, not the served one: a debugging aid the layout
+                // shows, as the render verifier draws its fresh render.
                 let fresh = measureChildUncached(view, proposal: proposal, context: context)
                 if fresh != cached {
                     cache.noteMeasureMemoMismatch(
@@ -1055,6 +1057,7 @@ public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: Re
                         availableHeight: context.availableHeight,
                         identity: context.identity.path)
                 }
+                return fresh
             }
             return cached
         }

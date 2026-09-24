@@ -870,6 +870,10 @@ extension RenderCache {
     /// as well as `MeasureMemoEquivalenceTests`: an unsound serve only changes
     /// the picture when the wrong size reaches a place that draws differently
     /// for it, so a corpus can miss a real one. This catches the serve itself.
+    ///
+    /// Where a served size disagrees, the layout uses the FRESH one, as
+    /// ``verifiesRenderMemo`` draws its fresh render — see there for why that
+    /// makes it a debugging aid and never a fix.
     @MainActor public static var verifiesMeasureMemo =
         ProcessInfo.processInfo.environment["TUIKIT_VERIFY_MEASURE_MEMO"] != nil
 
@@ -910,6 +914,16 @@ extension RenderCache {
     ///
     /// Set by `TUIKIT_VERIFY_RENDER_MEMO`, or assigned directly by a test.
     /// ``renderMemoMismatches`` collects what it finds.
+    ///
+    /// Where a served buffer disagrees, the FRESH render is drawn. That makes
+    /// it a debugging aid for a view that fails to update: if it updates with
+    /// the verifier on, the cache was serving it stale, and the report names
+    /// the view and where it sits. It is not a way to make an app work. It
+    /// re-renders everything the cache serves, costing more than the cache
+    /// saves; every difference it draws, it also reports; and a view that
+    /// still fails to update under it is not being served stale at all — its
+    /// state is not reaching it (the Render Cycle article's "Checking What the
+    /// Cache Serves" has the recipe).
     @MainActor public static var verifiesRenderMemo =
         ProcessInfo.processInfo.environment["TUIKIT_VERIFY_RENDER_MEMO"] != nil
 

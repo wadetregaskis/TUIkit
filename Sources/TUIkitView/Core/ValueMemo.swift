@@ -103,7 +103,7 @@ func renderValueMemoized<Key: Equatable>(
         // served subtree is a row a control did not have to compose.
         cache.rowWork.served += 1
         if RenderCache.verifiesRenderMemo {
-            verifyServe(entry, viewType: viewType, context: context, cache: cache, render: render)
+            return verifyServe(entry, viewType: viewType, context: context, cache: cache, render: render)
         } else if !entry.effects.isEmpty, !context.isMeasuring {
             // A measure pass registers nothing when it renders, so it replays
             // nothing when it is served.
@@ -215,18 +215,25 @@ private func replayEffects(_ effects: [EffectJournal.Entry], context: RenderCont
     for effect in effects { journal.append(effect.retagged(token)) }
 }
 
-/// A hit under `TUIKIT_VERIFY_RENDER_MEMO`: renders the subtree fresh and
-/// compares it with what was served.
+/// A hit under `TUIKIT_VERIFY_RENDER_MEMO`: renders the subtree fresh,
+/// compares it with what was stored, and returns the FRESH render.
 ///
 /// The fresh render registers for real, so the stored registrations are NOT
 /// replayed here, or every handler would be there twice. Instead the fresh
 /// render's registrations are recorded and compared with the stored ones by kind
 /// and count, the only comparison opaque closures allow.
+///
+/// Returning the fresh render makes the verifier a debugging aid you can SEE:
+/// under it the screen is what a frame drawn without the cache would show, so a
+/// view that fails to update and starts updating under the verifier was being
+/// served stale, and the report names it. It is not a way to make anything
+/// work — it re-renders every serve, which costs more than the cache saves,
+/// and every difference it draws, it also reports.
 @MainActor
 private func verifyServe(
     _ entry: RenderCache.CacheEntry, viewType: () -> Any.Type, context: RenderContext,
     cache: RenderCache, render: (RenderContext) -> FrameBuffer
-) {
+) -> FrameBuffer {
     let journal = cache.effectJournal
     let start = journal.beginRecording()
     defer { journal.endRecording() }
@@ -238,7 +245,7 @@ private func verifyServe(
             viewType: String(describing: viewType()), served: entry.buffer,
             fresh: fresh, identity: context.identity.path)
     }
-    guard !context.isMeasuring else { return }
+    guard !context.isMeasuring else { return fresh }
     // A fresh render that declined — it made a registration that cannot be
     // replayed — leaves no journal to compare with: the declined registrations
     // were made, just not recorded. That is the focus-reach probe, which renders
@@ -247,7 +254,7 @@ private func verifyServe(
     // the fresh render would. The picture is still compared above, and would
     // catch the case that matters here, a control that now holds the focus
     // drawn as it looked without it.
-    guard (tracker?.unreplayableCount ?? 0) == unreplayableBefore else { return }
+    guard (tracker?.unreplayableCount ?? 0) == unreplayableBefore else { return fresh }
     let freshKinds = ownChannelEffects(journal, since: start, context: context).map(\.kind)
     let servedKinds = entry.effects.map(\.kind)
     if freshKinds != servedKinds {
@@ -255,10 +262,12 @@ private func verifyServe(
             viewType: String(describing: viewType()), served: servedKinds,
             fresh: freshKinds, identity: context.identity.path)
     }
+    return fresh
 }
 
-/// Re-measures what a served cross-frame size stands for, and reports a
-/// disagreement — ``RenderCache/verifiesMeasureMemo``'s check, for this table.
+/// Re-measures what a served cross-frame size stands for, reports a
+/// disagreement — ``RenderCache/verifiesMeasureMemo``'s check, for this table —
+/// and returns the FRESH size, as the render verifier returns the fresh render.
 ///
 /// The per-pass memo's serves were checked and these were not: a size served
 /// here was returned as it stood, so an entry that outlived what it measured
@@ -270,13 +279,14 @@ private func verifyServe(
 private func verifyServedSize<Key>(
     _ served: ViewSize, of _: Key.Type, proposal: ProposedSize, context: RenderContext,
     measure: (RenderContext) -> ViewSize
-) {
+) -> ViewSize {
     let fresh = context.withVolatileReadTracker(VolatileReadTracker()) { measure($0) }
-    guard fresh != served else { return }
+    guard fresh != served else { return fresh }
     context.renderCache?.noteMeasureMemoMismatch(
         viewType: "\(Key.self) (cross-frame)", served: served, fresh: fresh, proposal: proposal,
         availableWidth: context.availableWidth, availableHeight: context.availableHeight,
         identity: context.identity.path)
+    return fresh
 }
 
 /// The size half: the same memo keyed by proposal as well as value.
@@ -318,7 +328,7 @@ func measureValueMemoized<Key: Equatable>(
         measureGeneration: context.measureGeneration)
     if let cached = cache.lookupSize(key: sizeKey, view: key) {
         if RenderCache.verifiesMeasureMemo {
-            verifyServedSize(cached, of: Key.self, proposal: proposal, context: context, measure: measure)
+            return verifyServedSize(cached, of: Key.self, proposal: proposal, context: context, measure: measure)
         }
         return cached
     }
