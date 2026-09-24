@@ -306,8 +306,9 @@ struct ContentWidthNaturalAskTests {
             "a capped answer called flexible stops the ladder at its first rung")
     }
 
-    /// The band's flexibility flag is sticky — set the first time any drawn
-    /// row filled, never cleared — so the uniform arm, which OR'd it into its
+    /// What a band records of a filler outlives it — the records only grow,
+    /// and the band's once was a flag, set the first time any drawn row
+    /// filled and never cleared — so the uniform arm, which OR'd it into its
     /// answer, went on calling the stack flexible after the last filler had
     /// left the data, where the walk (over every row, now) said not. With the
     /// exact answer in hand, its flexibility stands alone.
@@ -331,13 +332,16 @@ struct ContentWidthNaturalAskTests {
         // What a band that once drew a filler leaves behind.
         let state = stack.uniformWindowState(context: context)
         state.hypothesisExtent = 1
+        let departed = ViewSize(width: 4_096, height: 1, isWidthFlexible: true)
+        state.rowWidths.note(ordinal: 0, size: departed)
         state.rowWidths.markSeeded()
-        state.hypothesisWidthFlexible = true
+        state.bandFillers = [0]
+        state.bandFillReach = departed.width
         let size = stack.uniformSeekSizeThatFits(
             resolveChildViewCollection(from: stack.content, context: context),
             proposal: ProposedSize(width: nil, height: nil), context: context)
         #expect(size?.width == Self.wideRowWidth)
-        #expect(size?.isWidthFlexible == false, "the sticky flag outlived the filler")
+        #expect(size?.isWidthFlexible == false, "the filler's record outlived the filler")
     }
 
     /// A filler with an alignment guide, in the arm that answers for guided

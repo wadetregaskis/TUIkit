@@ -628,6 +628,20 @@ genuinely changes reported width under this rule (it stops shrink-wrapping
 to its widest visited row). `ScrollView`'s horizontal axis needs the same
 statement when horizontal windowing arrives (§12).
 
+**Rows that fill, 2026-09-23.** The prefix answer the seek gives comes from
+the widths the render measured its rows at (`RowWidthRecords`), and a row that
+FILLS its offer — a `Spacer` between two texts, a `.frame(maxWidth: 40)` offered
+less than 40 — measures as that offer: a width the render chose, not one the
+row has. A `ScrollView` measures its content at its own width and renders it a
+column narrower, the scrollbar's, so a list of such rows answered every later
+ask one column short — a `TabView`, which sizes its panel to it, cut the bar off
+from the second frame — and after a resize it answered with the old width.
+Counted as filling any width instead, a capped row answered the whole ask. A
+row that reports itself width-flexible — it fills its offer, or is squeezed
+below what it wants and a column or two short of it — is recorded as filling:
+as wide as any ask up to how far it filled, and measured at a wider one, as
+the walk that answers the first frame measures it (`StackFillerWidth.swift`).
+
 **One exception, closed 2026-09-22.** §5j answers "how wide should you lay
 out", and for that it is right. It is the wrong answer to a different question,
 which a **two-axis `ScrollView`** asks and nothing else does: *how far right can
