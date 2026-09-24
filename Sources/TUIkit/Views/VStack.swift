@@ -534,6 +534,18 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         if let window = consumableScrollWindow(context: context), !context.isMeasuring {
             let collection = resolveChildViewCollection(from: content, context: context)
             if collection.isUniformlyKeyed {
+                // Both windowed paths refine the pitch this stack's measure
+                // estimates unmeasured rows at, so a measure the pass memoized
+                // before this render is no longer what a fresh one says. Moved
+                // is rare — the rounded average of the rows touched — and then
+                // the pass's sizes are dropped rather than served stale.
+                let state = uniformWindowState(context: context)
+                let estimateBefore = state.measuredEstimate(spacing: spacing)
+                defer {
+                    if state.measuredEstimate(spacing: spacing) != estimateBefore {
+                        context.renderCache?.forgetPassMeasures()
+                    }
+                }
                 if let fast = renderUniformSeekWindow(collection, window: window, context: context) {
                     return fast
                 }

@@ -207,6 +207,20 @@ final class StackWindowState {
             measuredPitchCount += 1
         }
 
+        /// What a measure of the stack reads from this state that its render
+        /// writes: the pitch rows it never measured are estimated at, and
+        /// whether that pitch came from rows the render measured (the measure
+        /// estimates from its own sample until one has). A render that moves it
+        /// has changed the stack's answer mid-pass — see `renderWindow`.
+        struct MeasuredEstimate: Equatable {
+            var pitch: Int
+            var fromRenderedRows: Bool
+        }
+
+        func measuredEstimate(spacing: Int) -> MeasuredEstimate {
+            MeasuredEstimate(pitch: estimatedPitch(spacing: spacing), fromRenderedRows: measuredPitchCount > 0)
+        }
+
         /// The estimated pitch: measured average (rounded, not truncated —
         /// truncation systematically over-shoots seeks), else the uniform
         /// seed, else one line. Never below 1 (division safety).

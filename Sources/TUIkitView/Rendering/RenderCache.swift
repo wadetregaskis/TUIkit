@@ -367,6 +367,23 @@ public final class RenderCache: @unchecked Sendable {
         for key in staleMeasures { measureEntries.removeValue(forKey: key) }
     }
 
+    /// Forgets every size this pass has memoized.
+    ///
+    /// For state a render writes and a measure reads, which breaks the premise
+    /// the per-pass memo rests on — that within one pass the tree, the state and
+    /// the environment are fixed. A windowed stack's measure answers from the
+    /// running pitch its own render refines as it touches rows, so a measure
+    /// taken before the render and one asked after it, at the same key, have
+    /// different answers, and the memo served the first to the second: a chat
+    /// of 257 messages measured 1,284 lines tall where a fresh measure said
+    /// 1,027, the pitch having moved from five to four in between. The caller
+    /// says when its state moved, which is rare, and everything goes: the
+    /// stale answer is in the entries of every ancestor that measured the
+    /// stack, and those are not reachable from the stack's identity.
+    package func forgetPassMeasures() {
+        measureEntries.removeAll(keepingCapacity: true)
+    }
+
     /// One measurement under one vertical budget: what ``MeasureKey`` leaves out.
     ///
     /// A key holds at most one of these. The pattern the memo exists for is a
@@ -394,7 +411,9 @@ public final class RenderCache: @unchecked Sendable {
     /// an unkeyed-by-value memo defensible where the cross-frame one was not —
     /// within one pass the tree, the state and the environment are fixed, so a
     /// repeat measurement of the same view at the same proposal is a repeat of
-    /// work already done, not a guess about a different frame.
+    /// work already done, not a guess about a different frame. A render that
+    /// moves state a measure reads says so, and the pass's entries are dropped
+    /// (``forgetPassMeasures()``).
     private var measureEntries: [MeasureKey: MeasureEntry] = [:]
 
     /// The memory policy for the two per-pass scratch dictionaries above — one
