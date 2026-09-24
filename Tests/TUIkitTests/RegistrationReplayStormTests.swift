@@ -409,7 +409,11 @@ private final class StormRun {
 /// budget a healthy refresh can miss, and missing it produced a divergence
 /// report about the picture rather than about the wait — the failure blaming
 /// the wrong thing. It now waits for the edge it named, and says so if the
-/// edge never arrives, so a stuck refresh reads as a stuck refresh.
+/// edge never arrives, so a stuck refresh reads as a stuck refresh. It gives up
+/// by ``HangBreaker``'s rule, the one `settle(until:)` uses: a poll that comes
+/// back past the deadline from behind a saturated main actor has had its turn,
+/// but the refresh queued behind it has not, so the deadline starts a grace of
+/// turns rather than ending the wait.
 @MainActor
 private func settle(_ cached: StormRun, _ uncached: StormRun, reaching expected: (Int, Int)) async {
     var wait = HangBreaker(timeout: .seconds(60))
@@ -418,8 +422,7 @@ private func settle(_ cached: StormRun, _ uncached: StormRun, reaching expected:
             Issue.record(
                 """
                 a refresh never ran: \(cached.log.count)/\(expected.0) cached and \
-                \(uncached.log.count)/\(expected.1) uncached, after \(wait.turns) polls \
-                in \(wait.elapsed)
+                \(uncached.log.count)/\(expected.1) uncached, after \(wait.report())
                 """)
             return
         }
