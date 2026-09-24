@@ -39,17 +39,9 @@ extension _ScrollViewCore {
     func contentExtents(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> (width: Int, height: Int) {
-        var measureContext = context.withChildIdentity(type: Content.self)
-        // Publish the visible viewport so descendants can fit to it instead of the
-        // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
-        measureContext.environment.scrollViewportSize = ScrollViewportSize(
-            width: contentWidth, height: viewportHeight)
-        // A windowed stack's width means every row here exactly when this
-        // scrolls horizontally — see `asksWholeContentWidth`. Written only when
-        // it differs, since most scroll views are vertical inside nothing.
-        if measureContext.environment.asksWholeContentWidth != horizontal {
-            measureContext.environment.asksWholeContentWidth = horizontal
-        }
+        var measureContext = contentCanvasContext(
+            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            horizontal: horizontal, context: context)
         measureContext.availableHeight = naturalExtentStartingBudget(forVisible: viewportHeight)
 
         let renderWidth: Int
@@ -76,6 +68,32 @@ extension _ScrollViewCore {
             context: measureContext,
             startingBudget: naturalExtentStartingBudget(forVisible: viewportHeight))
         return (width: renderWidth, height: max(viewportHeight, natural.height))
+    }
+
+    /// The context the content is laid out in at a candidate viewport: its own
+    /// child identity (see ``contentExtents(contentWidth:viewportHeight:horizontal:context:)``),
+    /// the visible viewport published, and the whole-content-width mark as the
+    /// axes say.
+    ///
+    /// One builder for the measure and the render. They wrote these out
+    /// separately, and the canvas they describe has to be the same one: content
+    /// measured on one canvas and drawn on another is sized for a picture it is
+    /// not drawn as.
+    func contentCanvasContext(
+        contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
+    ) -> RenderContext {
+        var canvas = context.withChildIdentity(type: Content.self)
+        // Publish the visible viewport so descendants can fit to it instead of the
+        // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
+        canvas.environment.scrollViewportSize = ScrollViewportSize(
+            width: contentWidth, height: viewportHeight)
+        // A windowed stack's width means every row here exactly when this
+        // scrolls horizontally — see `asksWholeContentWidth`. Written only when
+        // it differs, since most scroll views are vertical inside nothing.
+        if canvas.environment.asksWholeContentWidth != horizontal {
+            canvas.environment.asksWholeContentWidth = horizontal
+        }
+        return canvas
     }
 
     /// Renders the content to its full (unwindowed) buffer, sized via
@@ -122,12 +140,10 @@ extension _ScrollViewCore {
         // A committed render never carries the ideal-width mark: under it a
         // filler reports its content rather than filling, which is a measure's
         // question and never a drawn frame's.
-        var measureContext = context.withChildIdentity(type: Content.self).askingIdealWidth(false)
-        measureContext.environment.scrollViewportSize = ScrollViewportSize(
-            width: contentWidth, height: viewportHeight)
-        if measureContext.environment.asksWholeContentWidth != horizontal {
-            measureContext.environment.asksWholeContentWidth = horizontal
-        }
+        var measureContext = contentCanvasContext(
+            contentWidth: contentWidth, viewportHeight: viewportHeight,
+            horizontal: horizontal, context: context
+        ).askingIdealWidth(false)
         // Publish the visible vertical slice so a direct `LazyVStack` renders only
         // the rows intersecting the viewport (true windowing) rather than every
         // row into the tall canvas. The offset is this frame's already-clamped
