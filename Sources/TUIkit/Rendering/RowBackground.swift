@@ -72,13 +72,7 @@ enum RowBackground {
     /// is: the twins ask one question in one place.
     @MainActor
     static func focused(palette: any Palette) -> Self {
-        // The default wash is the tertiary tier at 30% over the page, and a share below
-        // half of a colour the terminal decides is the page itself (Opacity as
-        // composition §75): it measures, and shows nothing. So where the palette has not
-        // stated a wash of its own, the tier it is built from is asked as well.
-        let fill = palette.focusBackground
-        let tint = fill == palette.derivedFocusBackground() ? palette.foregroundTertiary : nil
-        return still(palette.highlightFill(fill, tint: tint))
+        still(palette.focusWashFill())
     }
 
     /// The fill of a highlight that only ever TINTS — a selected row that is not the

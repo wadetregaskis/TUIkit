@@ -84,6 +84,20 @@ extension Palette {
         return .pulse(dim: dim, bright: bright)
     }
 
+    /// The wash a row merely under the cursor shows — the cursor row of a focused list
+    /// or table, on a row the selection does not include: ``focusBackground``, or
+    /// reverse video where that wash cannot be measured.
+    ///
+    /// The default wash is the tertiary tier at 30% over the page, and a share below
+    /// half of a colour the terminal decides is the page itself (Opacity as
+    /// composition §75): it measures, and shows nothing. So where the palette has not
+    /// stated a wash of its own, the tier it is built from is asked as well.
+    package func focusWashFill() -> HighlightFill {
+        let fill = focusBackground
+        let tint = fill == derivedFocusBackground() ? foregroundTertiary : nil
+        return highlightFill(fill, tint: tint)
+    }
+
     /// The still tint a selected row shows while the list it is in does not hold the
     /// keys: the accent at ``ViewConstants/selectedBackground`` over the page, or
     /// reverse video where that tint cannot be measured.
