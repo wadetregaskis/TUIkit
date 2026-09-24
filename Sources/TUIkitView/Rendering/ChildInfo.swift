@@ -993,6 +993,21 @@ public func makeChildInfo<V: View>(for view: V, context: RenderContext) -> Child
 /// - Returns: The size this view needs.
 @MainActor
 public func measureChild<V: View>(_ view: V, proposal: ProposedSize, context: RenderContext) -> ViewSize {
+    memoizedMeasure(view, proposal: proposal, context: context)
+}
+
+/// The body of ``measureChild(_:proposal:context:)``: the deep-nesting guard,
+/// this pass's measure memo, and the measure itself.
+///
+/// A function of its own so a second way into the memo can share it rather
+/// than copy it; inlined, because `measureChild` is on the path deep nesting
+/// recurses through, and a call or a larger frame there is paid by every
+/// measured node.
+@inline(__always)
+@MainActor
+private func memoizedMeasure<V: View>(
+    _ view: V, proposal: ProposedSize, context: RenderContext
+) -> ViewSize {
     // Deep-nesting guard: if the recursion is about to overflow the stack, stop
     // descending and report the (untruncated part of the) subtree as zero-size
     // rather than crashing with SIGSEGV. See StackGuard — this measures the real
