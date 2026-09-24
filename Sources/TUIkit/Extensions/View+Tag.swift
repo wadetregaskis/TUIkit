@@ -12,8 +12,9 @@
 /// It renders transparently as its wrapped content; the tag is metadata
 /// consumed by container views — ``Picker``, through ``PickerOptionProvider``,
 /// and a ``List``'s rows, through `staticListRowID(of:ordinal:as:)` for a
-/// statically-built one and `ForEach`'s own `rowID(at:)` for a looped one —
-/// to associate a view with a selection value.
+/// statically-built one and `ForEach`'s own `rowID(at:)` for a looped one (by
+/// way of `FlattenedRowIDs` when the loop shares its container with other
+/// rows) — to associate a view with a selection value.
 ///
 /// - Important: Framework infrastructure. Created by
 ///   ``View/tag(_:includeOptional:)``; do not instantiate directly.
@@ -85,9 +86,14 @@ extension View {
     /// the binding receives and does not make the row a second scroll target.
     /// An untagged loop row is unchanged: its `id` is its selection value.
     ///
-    /// A `ForEach` that is the `List`'s content or a `Section`'s is reached; a
-    /// `ForEach` flattened in beside hand-written rows is not, that path keying
-    /// every flattened row by ordinal (it answers to no `id` there either).
+    /// This holds wherever a `List` can see the `ForEach`: as the `List`'s
+    /// content or a `Section`'s, and flattened in beside hand-written rows or a
+    /// second `ForEach` — each looped row answers by its OWN loop's rule, tag
+    /// first, whatever the rows beside it are called. (Behind a menu style's
+    /// content, which the list cannot see into, it does not.) An untagged
+    /// hand-written row beside a loop falls back to its ordinal, and loses
+    /// even that (drawing unselectable, as SwiftUI draws every untagged row)
+    /// where a looped row already answers to the same number.
     ///
     /// The tag must be the row's OWN wrapper — `Text("a").tag("a")`, not
     /// `Text("a").tag("a").padding()`, which is `.badge(_:)`'s rule as well.
@@ -149,6 +155,27 @@ extension _TaggedView: TagCarrying {
 func extractTagValue<V: View, Value: Hashable>(from view: V, as valueType: Value.Type) -> Value? {
     guard let tag = (view as? any TagCarrying)?.carriedTag else { return nil }
     return resolveTag(tag.value, includeOptional: tag.includeOptional, as: valueType)
+}
+
+/// ``extractTagValue(from:as:)`` for a row a child walk holds, seeing past
+/// `ForEach`'s value memo — `extractRowBadgeValue(from:)`'s shape, for the same
+/// wrapper.
+///
+/// A looped row of an `Equatable` element reaches a flattening walk wrapped in
+/// `_MemoizedRow`, which is `Renderable` and so opaque to the plain cast: its
+/// tag was simply not there. `FlattenedRowIDs` asks the row's loop instead
+/// wherever it can place the row, and asks this for a looped row it could not.
+///
+/// The memo's TYPE is asked before its content, and only a `.tag(_:)`-outermost
+/// row type is built — ``_ValueMemoWrapping/memoizedContent`` BUILDS the row,
+/// and the memo exists so that most rows are not.
+@MainActor
+func extractRowTagValue<Value: Hashable>(from view: any View, as valueType: Value.Type) -> Value? {
+    if let tag = extractTagValue(from: view, as: valueType) { return tag }
+    guard let memo = view as? any _ValueMemoWrapping,
+        viewTypeCarriesTag(memo.memoizedContentType)
+    else { return nil }
+    return extractTagValue(from: memo.memoizedContent, as: valueType)
 }
 
 /// Whether ``extractTagValue(from:as:)`` could ever answer for a view of

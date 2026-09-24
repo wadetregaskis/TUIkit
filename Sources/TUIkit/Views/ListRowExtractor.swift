@@ -68,7 +68,10 @@ struct ListRow<ID: Hashable> {
 /// One function because both the flat `List` (`_ListCore.extractFromChildren`
 /// and its single-row fallback) and `Section.extractListRows` key static rows,
 /// and a row inside a Section is a row of the enclosing List — the two must not
-/// drift into different rules.
+/// drift into different rules. The two child walks ask through
+/// ``FlattenedRowIDs``, which answers a LOOPED row among the static ones by its
+/// `ForEach`'s rule instead, applies this rule to every other row, and withholds
+/// an ordinal that a looped row beside it already answers to.
 @MainActor
 func staticListRowID<ID: Hashable>(of view: some View, ordinal: Int, as idType: ID.Type) -> ID? {
     extractTagValue(from: view, as: idType) ?? (ordinal as? ID)
@@ -416,5 +419,31 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
             return tagged
         }
         return element[keyPath: idKeyPath] as? RowID
+    }
+}
+
+// MARK: - ForEach's rows among other rows
+
+extension ForEach: KeyedRowProvider, KeyedLoop {
+    /// This loop's rows, as the flattening emits them: one per element, in
+    /// order — see ``FlattenedRowIDs``.
+    func appendKeyedRowRuns(to runs: inout [KeyedRowRun]) {
+        runs.append(.loop(self))
+    }
+
+    var keyedRowCount: Int { data.count }
+
+    /// Keyed as `makeChild(for:)` keys the row's identity.
+    func keyedRowKey(at offset: Int) -> String {
+        identityKey(element(at: offset)[keyPath: idKeyPath])
+    }
+
+    /// Through `selectionID(of:)`, so without `rowID(at:)`'s index
+    /// fallback: an index is a position in THIS collection, which says nothing
+    /// once the rows are among others', and a row that cannot name itself is
+    /// answered as such, so its container falls back to its own ordinal for it
+    /// — the number it had before.
+    func keyedRowSelectionID<RowID: Hashable>(at offset: Int) -> RowID? {
+        selectionID(of: element(at: offset))
     }
 }

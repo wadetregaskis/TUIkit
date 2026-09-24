@@ -303,6 +303,61 @@ struct ListUnownedEditActionTests {
         #expect(items.value == ["alpha", "beta", "gamma"], "nothing moved: \(items.value)")
     }
 
+    /// The refusal does not rest on the looped rows being out of reach. Under
+    /// a `String` selection they used to have no id at all, so the cursor
+    /// stepped over them and Delete could not be pressed on one; they now
+    /// answer to their elements (`ListLoopedRowIDTests`), and each is pressed
+    /// here BY NAME. It still refuses: an id is a selection value, not an
+    /// offset into a collection — a tag can replace it and a second loop can
+    /// share it — so knowing a row is "beta" says nothing about which
+    /// collection it is in or where. (The positional match that found the id
+    /// could say; wiring the gestures through it would be a change of its
+    /// own, and would retire these two.)
+    @Test("A Section's looped rows that answer to their elements still refuse both gestures")
+    func namedLoopedRowsInASectionStillRefuse() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = ListSectionEditingFixture()
+        fixture.render(
+            List(selection: .constant(String?.none)) {
+                Section("Items") {
+                    Text("All items").tag("all")
+                    ForEach(items.value, id: \.self) { Text($0) }
+                        .onDelete { items.value.remove(atOffsets: $0) }
+                        .onMove { items.value.move(fromOffsets: $0, toOffset: $1) }
+                }
+            }
+            .frame(height: 10))
+        for (row, name) in [(2, "alpha"), (3, "beta"), (4, "gamma")] {
+            #expect(fixture.pressDelete(onRow: row, named: name) == false, "\(name) claimed Delete")
+            #expect(
+                fixture.pickUpMoveAndPlace(row: row, named: name, by: 1) == false,
+                "\(name) claimed the pick-up chord")
+        }
+        #expect(items.value == ["alpha", "beta", "gamma"], "nothing changed: \(items.value)")
+    }
+
+    /// The flat `List`'s twin, down `_ListCore`'s own child walk.
+    @Test("A List's looped rows that answer to their elements still refuse both gestures")
+    func namedLoopedRowsInAFlatListStillRefuse() {
+        let items = MainActorBox(["alpha", "beta", "gamma"])
+        let fixture = ListSectionEditingFixture()
+        fixture.render(
+            List(selection: .constant(String?.none)) {
+                Text("All items").tag("all")
+                ForEach(items.value, id: \.self) { Text($0) }
+                    .onDelete { items.value.remove(atOffsets: $0) }
+                    .onMove { items.value.move(fromOffsets: $0, toOffset: $1) }
+            }
+            .frame(height: 10))
+        for (row, name) in [(1, "alpha"), (2, "beta"), (3, "gamma")] {
+            #expect(fixture.pressDelete(onRow: row, named: name) == false, "\(name) claimed Delete")
+            #expect(
+                fixture.pickUpMoveAndPlace(row: row, named: name, by: 1) == false,
+                "\(name) claimed the pick-up chord")
+        }
+        #expect(items.value == ["alpha", "beta", "gamma"], "nothing changed: \(items.value)")
+    }
+
     // MARK: - Two ForEaches in one container
 
     /// No hand-written row in sight and the attribution is lost just the same:

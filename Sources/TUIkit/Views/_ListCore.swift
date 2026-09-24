@@ -2936,7 +2936,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // a handful and none is deferred, so unlike the windowed path this can
         // measure them all and place every row exactly — no pitch, no estimate.
         // Measured only when a ramp is in force.
-        let children = resolveChildViews(from: content, context: context).filter { !$0.isSpacer }
+        let resolved = resolveChildViews(from: content, context: context)
+        // Asked by each child's place among ALL the children, spacers
+        // included: the place is what matches a looped row to its `ForEach`.
+        var rowIDs = FlattenedRowIDs<SelectionValue>(content: content, children: resolved)
+        let childIndices = resolved.indices.filter { !resolved[$0].isSpacer }
+        let children = childIndices.map { resolved[$0] }
         var gradientFrame: GradientFrame?
         var gradientTops: [Int] = []
         if context.gradientFrame != nil {
@@ -2982,13 +2987,17 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 continue
             }
 
-            // See `extractRows`: the row's own `.tag(_:)` first, then its
-            // index — and an index-identified row is unselectable rather than
-            // absent when the selection type cannot hold an index. The count
-            // advances over every row, tagged or not, so the ordinals stay
-            // 0, 1, 2 … for the Int case they exist for.
+            // A looped row — a `ForEach`'s, spliced in among other rows — by
+            // its own loop's rule, the row's tag or its element's id (see
+            // `FlattenedRowIDs`). Any other row as in `extractRows`: its own
+            // `.tag(_:)` first, then its index — and an index-identified row
+            // is unselectable rather than absent when the selection type
+            // cannot hold an index, or when a looped row here already answers
+            // to it. The count advances over every row, tagged, looped or
+            // neither, so the ordinals stay 0, 1, 2 … for the Int case they
+            // exist for.
             let type: ListRowType<SelectionValue> =
-                staticListRowID(of: child.wrappedView, ordinal: result.count, as: SelectionValue.self)
+                rowIDs.id(ofChildAt: childIndices[childIndex], ordinal: result.count)
                 .map { .content(id: $0) } ?? .unselectable
             // Through the row-level extractor, not `extractBadgeValue` directly:
             // a `ForEach` row arrives wrapped in `_MemoizedRow`, which is

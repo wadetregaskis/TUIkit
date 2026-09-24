@@ -336,6 +336,14 @@ protocol SectionRowExtractor {
     /// to choose between them, so a press on a row of the second edits the
     /// FIRST one's collection. The refusal is pinned by
     /// `ListUnownedEditActionTests`, against that exact guess.
+    ///
+    /// The looped rows there do know their selection ids now
+    /// (``FlattenedRowIDs``), and an id changes none of this: it says what a
+    /// row IS, not which collection it is in or where — a tag can replace it
+    /// and a second loop can share it. The POSITIONAL match that found those
+    /// ids does know which loop made each row and at what offset; wiring the
+    /// editing gestures through it (an owner per loop, with its row span) is
+    /// a change of its own, and until it is made the refusal stands.
     var sectionRowActions: (any DynamicViewContentActions)? { get }
 }
 
@@ -431,9 +439,10 @@ extension Section: ListRowExtractor {
             return extractor.extractListRows(context: context)
         }
 
-        // Static children (a TupleView of rows): one row per child, each
-        // carrying the badge of its `.badge(_:)` wrapper, if any — matching
-        // the flat List's child extraction.
+        // Static children (a TupleView of rows, perhaps with a `ForEach`
+        // among them): one row per child, each carrying the badge of its
+        // `.badge(_:)` wrapper, if any — matching the flat List's child
+        // extraction.
         if content is ChildViewProvider {
             // Through `resolveChildViews`, not the provider's `childViews`
             // directly: an `if`/`else` among the children gets its branch step
@@ -442,15 +451,19 @@ extension Section: ListRowExtractor {
             // lone one never reaches here: it is taken off above, under the
             // same step.)
             var rows: [ListRow<RowID>] = []
-            for child in resolveChildViews(from: content, context: context) where !child.isSpacer {
-                // The row's own `.tag(_:)`, else its index — through the same
-                // `staticListRowID(of:ordinal:as:)` the flat `List` keys its
-                // static rows by, because a row inside a Section is a row of
-                // the enclosing List and must not answer to a different rule.
-                // `nil` when neither can be cast into the selection type: the
-                // row draws and is simply not selectable. See `ListRow.id`.
-                let rowID = staticListRowID(
-                    of: child.wrappedView, ordinal: rows.count, as: RowID.self)
+            let children = resolveChildViews(from: content, context: context)
+            var rowIDs = FlattenedRowIDs<RowID>(content: content, children: children)
+            for (index, child) in children.enumerated() where !child.isSpacer {
+                // A looped row by its own `ForEach`'s rule, any other row by
+                // its own `.tag(_:)`, else its index — through the same
+                // `FlattenedRowIDs` the flat `List` keys its children by,
+                // because a row inside a Section is a row of the enclosing
+                // List and must not answer to a different rule. Asked by the
+                // child's place among ALL the children, spacers included: the
+                // place is what matches a looped row to its loop. `nil` when
+                // nothing can be cast into the selection type: the row draws
+                // and is simply not selectable. See `ListRow.id`.
+                let rowID = rowIDs.id(ofChildAt: index, ordinal: rows.count)
                 // See `extractRowBadgeValue(from:)`: a `ForEach` row inside
                 // this Section arrives wrapped in `_MemoizedRow`, which the
                 // plain cast cannot see through, and its badge was dropped
