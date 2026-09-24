@@ -494,7 +494,12 @@ public final class RenderCache: @unchecked Sendable {
     /// Beneath a probe the measure memo is READ, and nothing is stored: what
     /// an ordinary measure stored this pass — the render that laid the probed
     /// subtree out, most often — serves the probe's subtree as it serves
-    /// anyone, and the probe keeps only its own answer.
+    /// anyone, and the probe keeps only its own answer. Except under
+    /// ``verifiesMeasureMemo``, whose fresh re-measures of a served size run
+    /// with a tracker attached and so store what they visit, beneath a probe
+    /// too — a verifier run fills the memo a little differently from a normal
+    /// one. The cross-frame `SizeKey` memo is a separate store, and a probe
+    /// does not hold it.
     ///
     /// A flag of its own rather than a count on the store path: it is asked
     /// only where there is no tracker, which in the render loop is only
