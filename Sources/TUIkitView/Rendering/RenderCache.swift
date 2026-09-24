@@ -172,6 +172,14 @@ public final class RenderCache: @unchecked Sendable {
         /// thing then — see ``showsItsAnimations(asAt:)``.
         package let drawnAt: AnimationInstant?
 
+        /// The buffer's lines cut around its runs as drawn at ``drawnAt``, for a
+        /// buffer that can be drawn at a later instant by putting that instant's
+        /// frames in the cuts; `nil` for every other. With one, a lookup whose runs
+        /// have moved on is served STAMPED rather than missed — see
+        /// ``RenderCache/servedBuffer(of:)`` and `AnimationStencil` for when a
+        /// buffer gets one.
+        package let stencil: AnimationStencil?
+
         /// Whether the buffer shows each of its runs as the run would show at
         /// `instant` — trivially so for an entry with no runs, or when either
         /// instant is unknown, which is how an entry behaved before it kept one.
@@ -212,6 +220,7 @@ public final class RenderCache: @unchecked Sendable {
             self.effects = effects
             self.effectScope = effectScope
             self.drawnAt = buffer.animatedCells.isEmpty ? nil : drawnAt
+            stencil = self.drawnAt.flatMap { AnimationStencil(cutting: buffer, drawnAt: $0) }
         }
     }
 
@@ -549,8 +558,10 @@ public final class RenderCache: @unchecked Sendable {
     /// without racing the (otherwise single-threaded) `entries`/`sizeEntries`.
     private let pendingInvalidations = Lock(initialState: PendingInvalidations())
 
-    /// Cumulative cache performance statistics.
-    public private(set) var stats = Stats()
+    /// Cumulative cache performance statistics. Set within the module rather
+    /// than the file only because a stamping (`RenderCache+Stamping.swift`) is
+    /// counted where it happens.
+    public internal(set) var stats = Stats()
 
     /// Cumulative row-shaped work, for the controls that draw rows.
     ///
@@ -562,8 +573,9 @@ public final class RenderCache: @unchecked Sendable {
     public var rowWork = RowWork()
 
     /// Where the animation clocks stand at the frame being drawn: the instant an
-    /// entry stored now draws its animated cells at, and the one a lookup asks
-    /// whether they still show — see
+    /// entry stored now draws its animated cells at, the one a lookup asks
+    /// whether they still show, and the one a stamped serve shows them at
+    /// (``servedBuffer(of:)``) — see
     /// ``lookupEntry(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:effectScope:animationMustBeCurrent:)``.
     ///
     /// Set by `RenderLoop` at the start of every render, from the same readings the
@@ -632,7 +644,9 @@ extension RenderCache {
     ///   - surfaceBackground: The surface this view's translucent ink would be
     ///     composited against now. A cached buffer holds ink already blended,
     ///     so an entry made over a different surface has to miss.
-    /// - Returns: The cached ``FrameBuffer`` if valid, or `nil` on miss.
+    /// - Returns: The cached ``FrameBuffer`` if valid, or `nil` on miss — with
+    ///   its animated cells stamped with the frames they show at the frame being
+    ///   drawn, where they have moved on (`servedBuffer(of:)`).
     ///
     /// An entry that stored registrations is looked up as if no focus section
     /// were in force; the value memo asks `lookupEntry`, which is told the
@@ -649,7 +663,7 @@ extension RenderCache {
             identity: identity, view: view, contextWidth: contextWidth, contextHeight: contextHeight,
             gradientFrame: gradientFrame, surfaceBackground: surfaceBackground, effectScope: .none,
             animationMustBeCurrent: true
-        )?.buffer
+        ).map(servedBuffer(of:))
     }
 
     /// The whole entry for a view, under the same rules as
@@ -665,14 +679,17 @@ extension RenderCache {
     ///
     /// And, when `animationMustBeCurrent`, one more: an entry whose buffer shows an
     /// animated cell run at a different frame from the one that run shows at
-    /// ``frameInstant`` misses. A run's cells hold the frame of the instant the
-    /// buffer was drawn, and the run loop moves them on only at its next tick, so
-    /// such a hit put the OLD frame back on screen until then: every spinner in a
-    /// memoized row stepped back to wherever it stood when the row was stored, at
-    /// every render — the Spinners page's catalogue "shuddered" whenever a click
-    /// rendered it. Nothing else in the key can see it: the view, the size and the
-    /// place are all unchanged, and only time has moved. A measure pass passes
-    /// `false`, as a frame changes no cell's width and a measure draws nothing.
+    /// ``frameInstant`` misses — unless it has a ``CacheEntry/stencil``, which
+    /// draws the buffer at that instant, and then it is a hit the caller serves
+    /// through ``servedBuffer(of:)``. A run's cells hold the frame of the instant
+    /// the buffer was drawn, and the run loop moves them on only at its next tick,
+    /// so a hit served as stored put the OLD frame back on screen until then: every
+    /// spinner in a memoized row stepped back to wherever it stood when the row was
+    /// stored, at every render — the Spinners page's catalogue "shuddered" whenever
+    /// a click rendered it. Nothing else in the key can see it: the view, the size
+    /// and the place are all unchanged, and only time has moved. A measure pass
+    /// passes `false`, as a frame changes no cell's width and a measure draws
+    /// nothing, and is served the buffer as stored.
     ///
     /// One caller, the value memo.
     package func lookupEntry<V: Equatable>(
@@ -729,7 +746,7 @@ extension RenderCache {
             logDebug("MISS (view changed) \(identity.path)")
             return nil
         }
-        guard !animationMustBeCurrent || entry.showsItsAnimations(asAt: frameInstant) else {
+        guard !animationMustBeCurrent || entry.stencil != nil || entry.showsItsAnimations(asAt: frameInstant) else {
             stats.misses += 1
             logDebug("MISS (animation moved on) \(identity.path)")
             return nil
@@ -1532,8 +1549,9 @@ extension RenderCache {
     /// Writes a debug message to stderr when `TUIKIT_DEBUG_RENDER=1` is set.
     ///
     /// Uses stderr so debug output never interferes with the terminal UI
-    /// rendered on stdout. Redirect with `2>render.log` to capture.
-    fileprivate func logDebug(_ message: @autoclosure () -> String) {
+    /// rendered on stdout. Redirect with `2>render.log` to capture. Not
+    /// `fileprivate`: `RenderCache+Stamping.swift` logs its stampings too.
+    func logDebug(_ message: @autoclosure () -> String) {
         guard Self.debugEnabled else { return }
         FileHandle.standardError.write(
             Data("[RenderCache] \(message())\n".utf8)

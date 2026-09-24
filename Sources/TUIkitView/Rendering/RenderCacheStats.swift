@@ -66,19 +66,31 @@ extension RenderCache {
         /// Number of times ``clearAffected(by:keepingSizes:includingDescendants:)`` was called.
         public var subtreeClears: Int = 0
 
+        /// How many of the hits served a buffer STAMPED with the frames its
+        /// animated cells had moved on to since it was stored. See
+        /// `RenderCache.servedBuffer(of:)`.
+        ///
+        /// Not the renders stamping saved, which ``RowWork`` counts: an entry keeps
+        /// the instant it was drawn at, so it is stamped at every frame on which a
+        /// run shows something other than what it was stored with — where a miss
+        /// drew it again once and stored the new drawing.
+        public var restamps: Int = 0
+
         /// Creates a new Stats instance with default values.
         public init(
             hits: Int = 0,
             misses: Int = 0,
             stores: Int = 0,
             clears: Int = 0,
-            subtreeClears: Int = 0
+            subtreeClears: Int = 0,
+            restamps: Int = 0
         ) {
             self.hits = hits
             self.misses = misses
             self.stores = stores
             self.clears = clears
             self.subtreeClears = subtreeClears
+            self.restamps = restamps
         }
 
         /// The total number of lookups (hits + misses).
@@ -96,7 +108,8 @@ extension RenderCache {
                 misses: misses - earlier.misses,
                 stores: stores - earlier.stores,
                 clears: clears - earlier.clears,
-                subtreeClears: subtreeClears - earlier.subtreeClears
+                subtreeClears: subtreeClears - earlier.subtreeClears,
+                restamps: restamps - earlier.restamps
             )
         }
     }

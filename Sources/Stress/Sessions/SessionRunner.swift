@@ -296,9 +296,9 @@ enum SessionRunner {
         Swift.print(
             String(
                 format: "  memoized rows: %d composed, %d served (%.1f/step, %.1f/step); "
-                    + "value memos: %d hits, %d misses, %d stores",
+                    + "value memos: %d hits (%d stamped), %d misses, %d stores",
                 rows.rendered, rows.served, Double(rows.rendered) / steps, Double(rows.served) / steps,
-                stats.hits, stats.misses, stats.stores))
+                stats.hits, stats.restamps, stats.misses, stats.stores))
         if !report.lastScreen.isEmpty {
             Swift.print("  last frame:")
             for line in report.lastScreen { Swift.print("  | " + line) }

@@ -156,7 +156,8 @@ loop's own — header, status bar and diff writer included — at an instant the
 runner supplies, so two runs of one script draw the same pictures. Its report
 prices each KIND of step separately (mean, p50, p95, max, bytes emitted), since
 a keystroke and a page-down are different frames, and counts what the render
-cache did over the steps: memoized rows composed and served, value-memo hits,
+cache did over the steps: memoized rows composed and served, value-memo hits
+(and how many of them were stamped with animation frames that had moved on),
 misses and stores. Those are counts of work, not of time, and the same script
 does the same work, so two builds' counts can be compared on a busy machine
 where their timings cannot. The real loop matters: its

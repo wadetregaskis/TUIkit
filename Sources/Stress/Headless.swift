@@ -258,8 +258,8 @@ enum Headless {
         print(String(format: "  measure memo: %d hits / %d lookups (%.1f%%)",
             memo.hits, lookups, lookups > 0 ? Double(memo.hits) / Double(lookups) * 100 : 0))
         let render = cache?.stats ?? RenderCache.Stats()
-        print("  value memos (buffer + size): \(render.hits) hits / \(render.lookups) lookups, "
-            + "\(render.stores) stores; handlers (last frame): \(channels.keyHandlerCount) key, "
+        print("  value memos (buffer + size): \(render.hits) hits (\(render.restamps) stamped) / "
+            + "\(render.lookups) lookups, \(render.stores) stores; handlers (last frame): \(channels.keyHandlerCount) key, "
             + "\(channels.mouseHandlerCount) mouse")
         // What the ROWS cost, which the line above cannot say: it sums the
         // buffer memo, the size memo and the row memo together, so a control

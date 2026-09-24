@@ -500,16 +500,32 @@ A subtree whose motion is all in animated cell runs (a ``Spinner`` in a
 it — but its buffer shows each run at the frame of the instant it was drawn.
 So every entry whose buffer carries runs keeps that instant
 (`RenderCache.frameInstant`, which the loop sets before every render walks the
-tree), and a lookup misses once any of its runs would show a different picture
-now. Served anyway, the render put the old frame back on screen until
-the run loop's next tick: every spinner in a memoized row stepped back to where
-it stood when its row was stored, at every render. A run that is still showing
-the same picture — the same frame, a repeated shade, a whole cycle later — is
-still served, and a measure pass is served regardless, as a frame changes no
-cell's width. It is paid for: a queue of memoized rows whose spinners turn at
-six speeds (`Stress --session jobs`) measures +9.4% [+8.6%, +10.4%] a frame
-against the stale serve, on an idle machine (2026-09-24) — each row whose run
-moved is drawn again rather than served.
+tree). Served as stored once a run had moved on, the render put the old frame
+back on screen until the run loop's next tick: every spinner in a memoized row
+stepped back to where it stood when its row was stored, at every render. A run
+that is still showing the same picture — the same frame, a repeated shade, a
+whole cycle later — is served as stored, and a measure pass is served
+regardless, as a frame changes no cell's width.
+
+Where a run has moved on, the entry is served **stamped**, if it can be: the
+stored buffer with each run's frame for this instant put where the drawn frame
+was, which is the render the hit stands in for, byte for byte. The entry keeps
+a stencil for that (`AnimationStencil`: its lines cut around each run's drawn
+frame), made when it is stored, and only where putting another frame in the cut
+is the fresh render: the drawn frame's bytes are in the line unchanged at the
+run's column, every frame is the drawn one with other glyphs of the same widths
+(the same escapes in the same places — a spinner's frames, not a breath's), and
+nothing records which frame the lines show (a per-frame alpha, a cycling
+opacity region). An entry with no stencil misses once a run has moved on, and
+its subtree is drawn again. The difference, counted rather than timed:
+`Stress --session jobs --steps 400`, a queue of memoized rows whose spinners
+turn at six speeds, composed 6,203 rows when the old frames were served, 6,790
+once they missed, and 6,350 with stamping (1,020 serves stamped). The 147 it
+still composes beyond the stale serve are its `.bouncing` spinners' rows, whose
+frames differ in colour cell by cell: with that style swapped for a glyph one,
+it composes 6,203. The miss that stamping mostly replaces measured +9.4%
+[+8.6%, +10.4%] a frame on that session against the stale serve, on an idle
+machine (2026-09-24).
 
 ### What Declines the Cache
 
@@ -523,8 +539,8 @@ declines when it:
   draws, and where, is settled by the frame rather than by the subtree);
 - **read a time-varying value** or requested an animation (a view that builds
   its picture from the phase as it renders would freeze — an animation carried
-  in cell runs does not decline, and is served only while its frames are
-  current: see above);
+  in cell runs does not decline, and is served as stored only while its frames
+  are current, and stamped or drawn again once they are not: see above);
 - **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
   registration, a preference write. A cache hit skips the body that registers
   them, so the frame the cache answers is a frame on which the effect does not
