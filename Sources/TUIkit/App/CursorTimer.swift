@@ -488,8 +488,8 @@ extension CursorTimer {
     ///
     /// ``AnimationClock/content`` is not reset, and cannot be: it is the monotonic
     /// clock. A spinner that appears after a still stretch starts where the shared
-    /// clock is, in phase with every other spinner of its style, rather than at its
-    /// first frame. ``AnimationClock/cursor`` restarts at its bright end at the next
+    /// clock is, in phase with every other spinner of its style whose speed has not
+    /// changed, rather than at its first frame. ``AnimationClock/cursor`` restarts at its bright end at the next
     /// ``observe(nowNanos:)``.
     func stop() {
         task?.cancel()

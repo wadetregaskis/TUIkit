@@ -328,7 +328,9 @@ extension SpinnerStyle {
 ///
 /// The animation is not a task, and nothing starts or stops with the spinner
 /// appearing: the frame comes from the shared content clock, so every spinner of
-/// a style is in phase, and the spinner leaves one ``AnimatedCellRun`` over its
+/// a style at one speed is in phase — until one's speed changes, which keeps the
+/// frame it is showing rather than jumping, and so its own place in the cycle (see
+/// below) — and the spinner leaves one ``AnimatedCellRun`` over its
 /// own cells for the run loop to splice at the style's interval (at the speed set
 /// for spinners, see below) — no re-render,
 /// no re-measure, nothing asked of this view (`99b91c0f`). Only a
@@ -373,6 +375,13 @@ extension SpinnerStyle {
 /// // .dots at 233.3ms (14 ticks) a frame
 /// Spinner("Loading...").indicatorAnimationSpeed(.halfSpeed, for: .spinners)
 /// ```
+///
+/// A spinner whose speed changes while it is on screen carries on from the frame
+/// it is showing, at the new speed from its next step. It does not jump to the frame
+/// the new speed would have reached had it always been running at it, which is
+/// where the shared clock puts it — and, from then on, it keeps that turn of its
+/// own rather than the phase other spinners of its style share, until it leaves
+/// the screen.
 public struct Spinner: View {
     /// The optional label displayed after the spinner.
     let label: String?
@@ -472,6 +481,22 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
     let style: SpinnerStyle
     let color: Color?
 
+    /// The core's own state slots. `0...`: it renders no caller content at its
+    /// identity, so no composite `@State` can share them.
+    private enum StateIndex {
+        /// The ``CyclePhase`` the spinner last drew at, in a ``PhaseHolder``.
+        static let phase = 0
+    }
+
+    /// The box a spinner's phase is kept in: a class, so turning it when the speed
+    /// changes mid-render is not a `@State` write — that would invalidate the
+    /// spinner's ancestors and ask for another frame, for a value only this view
+    /// reads, and only the next time it renders.
+    private final class PhaseHolder {
+        var phase: CyclePhase
+        init(_ phase: CyclePhase) { self.phase = phase }
+    }
+
     var body: Never {
         fatalError("_SpinnerCore renders via Renderable")
     }
@@ -501,8 +526,8 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         let cycle = spinnerFrames(color: resolvedColor, context: context)
         let glyphWidths = Set(cycle.map(\.strippedLength))
 
-        // The frame clock, not a per-spinner start time: every spinner of a style is
-        // then in phase, and — much more to the point — the frame drawn is the frame
+        // The frame clock, not a per-spinner start time: every spinner of a style at a
+        // speed is then in phase, and — much more to the point — the frame drawn is the frame
         // the run loop will replay, so the first tick does not jump. The run replays on
         // the cursor timer's content clock, and every render shows the timer this
         // frame's time before the tree is walked, so here the two are one instant
@@ -518,9 +543,10 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // Through the conversion the run's own index uses, so the frame drawn here is
         // the frame the loop replays: a floor in seconds put a summed `.dots` clock one
         // step short at steps 27–40, and every render on such a wake stuttered back.
-        let step = AnimationClock.step(atElapsed: elapsed, frameTicks: frameTicks)
-        let count = Int64(max(1, cycle.count))
-        let frameIndex = cycle.isEmpty ? 0 : Int(((step % count) + count) % count)
+        // Turned by wherever this spinner's last change of speed left it, so a change
+        // carries on from the frame showing rather than jumping — see `CyclePhase`.
+        let phase = phase(frameTicks: frameTicks, atElapsed: elapsed, count: cycle.count, context: context)
+        let frameIndex = phase.index(atElapsed: elapsed, count: cycle.count)
         let coloredSpinner = cycle.isEmpty ? "" : cycle[frameIndex]
 
         let output: String
@@ -590,10 +616,37 @@ private struct _SpinnerCore: View, Renderable, Layoutable {
         // saving this whole mechanism exists for. See ``AnimatedCellRun``.
         buffer.animatedCells = [
             AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: width, frames: cycle,
+                offsetX: 0, offsetY: 0, width: width, frames: phase.turning(cycle),
                 frameTicks: frameTicks, clock: .content)
         ]
         return buffer
+    }
+
+    /// Where this spinner's cycle stands at a frame length of `frameTicks`: the
+    /// phase it last drew at, carried to that length at `elapsed`, and kept for the
+    /// next render. The shared clock's phase for a spinner that has never changed
+    /// speed, and for one rendered with nowhere to keep anything.
+    ///
+    /// A measure only reads. It runs before the render in the same frame, at the same
+    /// instant, so it carries the same phase to the same length and measures the frame
+    /// the render will draw — which matters to a `.custom` sequence whose frames are not
+    /// all one width — without creating a box at an identity that may never render.
+    private func phase(
+        frameTicks: Int, atElapsed elapsed: Double, count: Int, context: RenderContext
+    ) -> CyclePhase {
+        let shared = CyclePhase(frameTicks: frameTicks)
+        guard let storage = context.stateStorage else { return shared }
+        let key = StateStorage.StateKey(identity: context.identity, propertyIndex: StateIndex.phase)
+        if context.isMeasuring {
+            let kept: StateBox<PhaseHolder>? = storage.existingStorage(for: key)
+            return kept?.value.phase.continued(toFrameTicks: frameTicks, atElapsed: elapsed, count: count) ?? shared
+        }
+        // Kept alive: a slot whose identity no render marks is pruned at the end of
+        // the pass, and the next render would start again from the shared phase.
+        storage.markActive(context.identity)
+        let holder = storage.storage(for: key, default: PhaseHolder(shared)).value
+        holder.phase = holder.phase.continued(toFrameTicks: frameTicks, atElapsed: elapsed, count: count)
+        return holder.phase
     }
 
     /// The spinner's glyphs, styled, one per frame of the STYLE (not per tick).

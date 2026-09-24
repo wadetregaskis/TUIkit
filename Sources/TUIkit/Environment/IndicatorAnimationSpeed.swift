@@ -423,6 +423,10 @@ extension View {
     /// the rest of the screen, such as the presets, or give the speed a tolerance, so
     /// indicators step together and the run loop wakes once for all of them.
     ///
+    /// A ``Spinner`` already on screen when its speed changes carries on from the
+    /// frame it is showing, rather than jumping to the one the new speed would have
+    /// reached.
+    ///
     /// - Parameters:
     ///   - speed: The speed.
     ///   - indicators: Which kinds of indicator it applies to. Defaults to all.
