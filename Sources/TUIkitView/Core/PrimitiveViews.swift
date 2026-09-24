@@ -240,11 +240,39 @@ extension ConditionalView: ChildViewProvider {
 /// (see `DepartureStore.departing(at:ofType:nowNanos:frameAnimation:)`). The
 /// store's emptiness is checked first, which is what keeps every `nil` in every
 /// app that animates nothing costing exactly what it did before.
+///
+/// ## The present view is addressed the way the `nil` will be
+///
+/// "Exactly the address the present view rendered at" holds only if the
+/// present view is given that address outright, as `(Wrapped, 0)` under the
+/// context this is handed — the same child the `nil` below builds. Handed over
+/// as a bare child instead, its address was worked out later from whatever it
+/// had become by then, and two ordinary shapes made that something else:
+///
+/// - Under a wrapper that distributes over its content's members (`.frame`,
+///   `.opacity`, `.disabled` — ``ContentRewrapping``), the member is re-wrapped
+///   before anything addresses it, so it rendered as `FlexibleFrameView<Wrapped>`
+///   while the `nil` looked for `Wrapped`. `(show ? panel : nil).frame(…)` in a
+///   stack animated in and jumped out.
+/// - As a container's only content, or a lone branch's, a bare child is
+///   TRANSPARENT — it renders at the container's own identity — while the
+///   `nil` claims a step below it. `VStack { if show { panel } }` did the same.
+///
+/// Content that is itself a provider still flattens through that provider, and
+/// its members are addressed by it — so a `nil` left behind by it claims
+/// `(Wrapped, 0)`, where none of them rendered, and finds nothing. That is every
+/// `Wrapped` with several members (a tuple, a `ForEach`), and also the ones
+/// that hold a single view through a provider of their own: a `Group`, a
+/// nested `if`, an `if`/`else`. ``View/transition(_:)`` lists them among the
+/// removals that still jump.
 extension Optional: ChildViewProvider where Wrapped: View {
     public func childViews(context: RenderContext) -> [ChildView] {
         switch self {
         case .some(let wrapped):
-            return resolveChildViews(from: wrapped, context: context)
+            guard let provider = wrapped as? ChildViewProvider else {
+                return [ChildView(wrapped, childIndex: 0)]
+            }
+            return resolveChildViews(from: wrapped, as: provider, context: context)
         case .none:
             // One read for both halves — see `AnimatableResolution`.
             let frame = context.environment.animationFrame
@@ -255,9 +283,9 @@ extension Optional: ChildViewProvider where Wrapped: View {
                     frameAnimation: frame.canAnimate
                         ? context.environment.transaction.effectiveAnimation : nil)
             else { return [] }
-            // `childIndex` is provisional: the enclosing container rebases it to
-            // the flattened position, which is the same position the present
-            // view held as long as nothing before it also came or went.
+            // The present view's address, `(Wrapped, 0)` — see above. A splice
+            // keeps a positional child's inner index, so both land on the same
+            // step under the same parent.
             return [
                 ChildView(DepartureSlot(viewType: Wrapped.self), identityType: Wrapped.self, childIndex: 0)
             ]

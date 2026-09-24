@@ -21,6 +21,11 @@ private struct Item: Identifiable, Equatable {
 
 /// Where the view that comes and goes stands, and what memoizes it.
 enum MemoizedRemovalShape: String, CaseIterable, Sendable {
+    /// `ForEach(items) { VStack { if item.expanded { … } } }`: the `if` is the
+    /// row's whole content, which is the shape that snapped before the present
+    /// view was given the address its `nil` claims — and so the one a stored
+    /// removal would have reached first.
+    case forEachRowAlone
     /// `ForEach(items) { VStack { Text; if item.expanded { … } } }`.
     case forEachRowBesideSibling
     /// The same row in a `List`, which memoizes rows of its own.
@@ -55,6 +60,12 @@ private struct RowsPage: View {
                 withAnimation(.linear(duration: 1)) { items[0].expanded.toggle() }
             }
             switch shape {
+            case .forEachRowAlone:
+                ForEach(items) { item in
+                    VStack(alignment: .leading, spacing: 0) {
+                        if item.expanded { Text("DETAIL").transition(transition) }
+                    }
+                }
             case .forEachRowBesideSibling:
                 ForEach(items) { item in
                     VStack(alignment: .leading, spacing: 0) {

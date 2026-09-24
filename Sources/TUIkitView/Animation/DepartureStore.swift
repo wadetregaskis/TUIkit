@@ -203,16 +203,20 @@ extension DepartureStore {
     /// slot open on behalf of something departing several levels down, which is
     /// already held open by its own parent.
     ///
-    /// Of that *type*, because the caller knows the child's type but not the
-    /// index it will be flattened to, and because a slot it cannot actually
-    /// draw is worse than no slot. A `nil` whose content would have flattened
-    /// into *several* children has no single type to match, finds nothing here,
-    /// and contributes nothing — the same instant removal as before, rather
-    /// than an empty child that would push its siblings apart by a stack's
-    /// spacing. And the view registered there must be the one that LEFT the
-    /// picture, not merely the one at its address — a slot the `nil` would
-    /// draw without what stood around the transition is one it cannot draw;
-    /// see ``departing(at:ofType:nowNanos:frameAnimation:)``.
+    /// Of that *type*, because together with `parent` it is the whole address.
+    /// A present optional hands its view over as `(Wrapped, 0)` under the scope
+    /// it is resolved in, and its `nil` claims that same child (see
+    /// `Optional`'s `ChildViewProvider` conformance), so the index is always 0
+    /// and is not compared. Nothing looser will do: a slot the `nil` cannot
+    /// actually draw is worse than no slot. A `nil` whose content flattens
+    /// through a provider of its own — several children, or one behind a
+    /// `Group`, a nested `if`, an `if`/`else` — left nothing at that address,
+    /// finds nothing here, and contributes nothing: the same instant removal as
+    /// before, rather than an empty child that would push its siblings apart by
+    /// a stack's spacing. And the view registered there must be the one that
+    /// LEFT the picture, not merely the one at its address — a slot the `nil`
+    /// would draw without what stood around the transition is one it cannot
+    /// draw; see ``departing(at:ofType:nowNanos:frameAnimation:)``.
     ///
     /// The empty check is the whole point of the fast path: almost every tree
     /// has no departures at all, and this is asked once per `nil` optional per

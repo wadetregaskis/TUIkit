@@ -200,8 +200,10 @@ tree by the time anything notices. Whatever still stands in its slot is what
 plays it: the picture the view drew on its last frame is left behind, and the
 `nil` it became draws that picture part-way gone. This holds the view's row (and
 its width) open for as long as the removal runs, so the rest of the stack does
-not close up around it until it has finished leaving. See
-``View/transition(_:)``.
+not close up around it until it has finished leaving — whether the `if` has
+siblings or is the stack's only content, and with a `.frame` or an `.opacity`
+around it. Put the `.transition` on the view the `if` holds: a few shapes still
+remove at once, and ``View/transition(_:)`` lists them.
 
 ## Springs
 

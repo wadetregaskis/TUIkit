@@ -43,19 +43,42 @@ extension View {
     ///
     /// The exception is claimed by address — the enclosing identity plus the
     /// wrapped view's type — so a `nil` in a tree that is animating nothing
-    /// contributes no child and changes no spacing, exactly as before. The one
-    /// shape still left out is a `nil` whose content would have flattened into
-    /// *several* children, which has no single address to claim: those still
-    /// jump.
+    /// contributes no child and changes no spacing, exactly as before. The
+    /// present view is given that same address, so the claim finds it wherever
+    /// the `if` stands: beside siblings, as a stack's only content, or under a
+    /// modifier that reaches each member of what it wraps (`.frame`,
+    /// `.opacity`, `.disabled`, `.padding`, `.background`).
     ///
-    /// The picture a removal plays is the transitioning view's alone, so the
-    /// transition has to be the view the `if` holds: `X.transition(t)`, or
-    /// `X.padding().transition(t)`, which plays padding and all. Written
-    /// before a modifier — `X.transition(t).padding()` — the transition's
-    /// picture lacks the padding, and drawing it would move the view; that
-    /// removal snaps instead. So, for now, does one before a modifier that
-    /// draws nothing of its own, `X.transition(t).foregroundStyle(.red)`: the
-    /// slot cannot tell the two kinds apart. Write the transition last.
+    /// ## What still jumps
+    ///
+    /// The claim finds a departure only where the view carrying the transition
+    /// rendered at exactly that address, so these removals still happen at
+    /// once, as every removal inside a stack once did:
+    ///
+    /// - In a stack, an `if` whose content is itself flattened — several
+    ///   views, a `ForEach`, a `Group`, another `if`, an `if`/`else`. Its
+    ///   members are addressed by that content, not by the `if`. Where the
+    ///   optional is rendered directly, an `if` inside it plays, and a `Group`
+    ///   or an `if`/`else` inside it does not: each draws its view a step
+    ///   below the optional's own identity.
+    /// - A transition with an identity step between it and the `if`: one on
+    ///   the root of a `body` — a view of your own, or a modifier built as a
+    ///   view with a body, such as `.tag` or `.zIndex` — rather than on the
+    ///   view the `if` holds; one inside a presentation modifier (`.sheet`,
+    ///   `.alert`, `.popover`, `.contextMenu`); or one with an `.id` outside
+    ///   it — `X.transition(t).id(k)`, or `.id` written on the `if` itself.
+    ///   `X.id(k).transition(t)` plays.
+    /// - A transition with a modifier outside it in the `if`:
+    ///   `X.transition(t).padding()`. The picture the removal would play is the
+    ///   transition's alone, so drawing it would drop the padding and move the
+    ///   view; it snaps instead. So does one inside a wrapper that draws
+    ///   nothing of its own — `X.transition(t).foregroundStyle(.red)`,
+    ///   `.onAppear { … }`, `AnyView(X.transition(t))` — whose picture would
+    ///   have been right: the slot cannot yet tell the two kinds apart.
+    ///   `X.padding().transition(t)` plays, padding and all — write the
+    ///   transition last.
+    /// - The branch an `if`/`else` leaves. The other branch takes the slot at
+    ///   once, and nothing is left standing to play the removal.
     ///
     /// - Parameter transition: How to come and go.
     /// - Returns: A view that transitions.
