@@ -86,6 +86,8 @@ struct ListRowSelectionValueCostTests {
         let tui = TUIContext()
         var env = EnvironmentValues()
         let counter: Counter
+        /// The last frame's lines, stripped.
+        var lastScreen: [String] = []
 
         init(counter: Counter) {
             self.counter = counter
@@ -106,7 +108,8 @@ struct ListRowSelectionValueCostTests {
             env.focusManager?.endRenderPass()
             tui.stateStorage.endRenderPass()
             context.renderCache?.removeInactive()
-            let drawn = buffer.lines.filter { $0.stripped.contains("project ") }.count
+            lastScreen = buffer.lines.map(\.stripped)
+            let drawn = lastScreen.filter { $0.contains("project ") }.count
             return (counter.builds - before.0, counter.idReads - before.1, drawn)
         }
 
@@ -369,6 +372,85 @@ struct ListRowSelectionValueCostTests {
             "\(tagBuilds) tag builds for \(tagged.drawn) drawn rows of \(Self.rowCount)")
     }
 
+    /// The keys that move the cursor ask where it may land — the rows the
+    /// selection can name. Asked of the whole list at once, that is every
+    /// looped row's loop rule again: a build per tagged row on the first key
+    /// after each frame, for a cursor that moves one row.
+    @Test("A key that moves a mixed list's cursor asks only the rows it may land on")
+    func cursorKeysAskOnlyWhereTheyLand() {
+        let counter = Counter()
+        let projects = Self.projects(counter)
+        let frames = Frames(counter: counter)
+        var selection: Pick? = .all
+        let list = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            Text("All projects").tag(Pick.all)
+            ForEach(projects) { Self.taggedRow($0) }
+        }
+        _ = frames.steadyFrame(list)
+        guard let handler = frames.env.focusManager?.currentFocused as? ItemListHandler<Pick> else {
+            Issue.record("the list took focus")
+            return
+        }
+        let keys: [Key] = [.down, .down, .end, .home, .up, .pageDown, .pageUp, .down]
+        let before = counter.builds
+        for key in keys { _ = handler.handleKeyEvent(KeyEvent(key: key)) }
+        let keyBuilds = counter.builds - before
+        // The rows the frame drew were asked as they were drawn; a key asks at
+        // most the one row it lands on beyond them.
+        #expect(
+            keyBuilds <= keys.count,
+            "\(keys.count) keys built \(keyBuilds) rows of \(Self.rowCount) to decide where to land")
+    }
+
+    /// A bottom-anchored list follows its tail on every frame, and the follow
+    /// asks for the last row a cursor can sit on. Read off the whole landing
+    /// set, that settled the maps on every frame — every looped row's tag
+    /// built, for the one row at the end.
+    @Test("A bottom-anchored mixed list follows its tail without asking every row")
+    func bottomAnchoredFollowAsksOnlyTheTail() {
+        func steady(tagged: Bool) -> (builds: Int, drawn: Int, followed: Bool, unsettled: Bool) {
+            let counter = Counter()
+            let projects = Self.projects(counter)
+            let frames = Frames(counter: counter)
+            let cost =
+                tagged
+                ? frames.steadyFrame(
+                    List(selection: .constant(Pick?.some(.all))) {
+                        Text("All projects").tag(Pick.all)
+                        ForEach(projects) { Self.taggedRow($0) }
+                    }
+                    .defaultScrollAnchor(.bottom))
+                : frames.steadyFrame(
+                    List(selection: .constant(Int?.some(-1))) {
+                        Text("All projects").tag(-1)
+                        ForEach(projects) { Self.untaggedRow($0) }
+                    }
+                    .defaultScrollAnchor(.bottom))
+            // Each twin's handler under its own selection type: the tagged
+            // list selects a `Pick`, the untagged one an `Int`.
+            let focused = frames.env.focusManager?.currentFocused
+            let unsettled =
+                tagged
+                ? (focused as? ItemListHandler<Pick>)?.rowAnswersAreUnsettled
+                : (focused as? ItemListHandler<Int>)?.rowAnswersAreUnsettled
+            return (
+                cost.builds, cost.drawn,
+                frames.lastScreen.contains { $0.contains("project \(Self.rowCount - 1)") },
+                unsettled ?? false
+            )
+        }
+        let tagged = steady(tagged: true)
+        let untagged = steady(tagged: false)
+        let tagBuilds = tagged.builds - untagged.builds
+        #expect(tagged.followed && untagged.followed, "precondition: both lists show their last row")
+        #expect(tagged.drawn > 0 && tagged.drawn == untagged.drawn, "both lists drew their rows")
+        #expect(
+            tagBuilds <= tagged.drawn + 2,
+            "\(tagBuilds) tag builds for \(tagged.drawn) drawn rows of \(Self.rowCount)")
+        #expect(tagged.unsettled, "the follow settled the tagged list's maps")
+        #expect(untagged.unsettled, "the follow settled the untagged list's maps")
+    }
+
     // MARK: - The answers are the same answers
 
     /// The handler's row answers — the ids row by row, where each key lands,
@@ -393,6 +475,7 @@ struct ListRowSelectionValueCostTests {
             Issue.record("the list took focus")
             return
         }
+        #expect(handler.rowAnswersAreUnsettled, "precondition: nothing has read the maps yet")
         #expect(
             (0..<handler.itemCount).map { handler.id(at: $0) }
                 == [nil, "mercury", "venus", "earth", "pluto"])
@@ -410,6 +493,7 @@ struct ListRowSelectionValueCostTests {
         #expect(handler.focusedIndex == 4, "End lands on the last row")
         #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == true)
         #expect(selection == "pluto")
+        #expect(handler.rowAnswersAreUnsettled, "the keys asked row by row, and settled nothing")
 
         // And the maps, read whole, which settles them.
         #expect(handler.itemIDs == [nil, "mercury", "venus", "earth", "pluto"])
@@ -466,6 +550,7 @@ struct ListRowSelectionValueCostTests {
             Issue.record("the list took focus")
             return
         }
+        #expect(handler.rowAnswersAreUnsettled, "precondition: nothing has read the maps yet")
         #expect(
             (0..<handler.itemCount).map { handler.id(at: $0) }
                 == [nil, nil, "mercury", "venus", "earth", "pluto"])
@@ -478,8 +563,118 @@ struct ListRowSelectionValueCostTests {
         #expect(handler.focusedIndex == 2, "Down wraps back past them")
         #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == true)
         #expect(selection == "mercury")
+        #expect(handler.rowAnswersAreUnsettled, "the keys asked row by row, and settled nothing")
 
         #expect(handler.itemIDs == [nil, nil, "mercury", "venus", "earth", "pluto"])
         #expect(handler.selectableIndices == [2, 3, 4, 5], "\(handler.selectableIndices.sorted())")
+    }
+
+    /// Where each key leaves the cursor, from row `start`: asked before
+    /// anything has read the handler's whole maps (`settleFirst == false`), or
+    /// after (`true`), when the keys consult the settled landing set as they
+    /// always have.
+    private func cursorTrajectory<Value: Hashable>(
+        _ list: some View, as _: Value.Type, from start: Int, keys: [Key], settleFirst: Bool
+    ) -> [Int] {
+        let frames = Frames(counter: Counter())
+        _ = frames.steadyFrame(list)
+        guard let handler = frames.env.focusManager?.currentFocused as? ItemListHandler<Value> else {
+            Issue.record("the list took focus")
+            return []
+        }
+        if settleFirst { _ = handler.selectableIndices }
+        handler.focusedIndex = start
+        return keys.map { key in
+            _ = handler.handleKeyEvent(KeyEvent(key: key))
+            return handler.focusedIndex
+        }
+    }
+
+    /// Every key that moves the cursor, several times over, from both ends.
+    private static let cursorKeys: [Key] = [
+        .down, .down, .up, .home, .up, .down, .end, .pageUp, .pageDown, .down, .up, .up, .end,
+        .pageDown, .home, .pageUp,
+    ]
+
+    /// The landing questions are answered a row at a time until something
+    /// reads the maps whole; the cursor must land exactly where the maps would
+    /// have put it — past rows the selection cannot name, onto the first and
+    /// last rows that it can, wrapping and clamping alike.
+    @Test("The cursor steps past the rows a mixed list cannot name, as it did")
+    func cursorLandsWhereItDid() {
+        func list() -> some View {
+            List(selection: .constant(String?.none)) {
+                Text("Every planet")
+                ForEach(["mercury", "venus"], id: \.self) { Text($0) }
+                Text("Asteroids")
+                ForEach(["earth", "mars"], id: \.self) { Text($0) }
+                Text("Pluto").tag("pluto")
+                Text("Beyond")
+            }
+            .frame(height: 6)
+        }
+        let asked = cursorTrajectory(list(), as: String.self, from: 1, keys: Self.cursorKeys, settleFirst: false)
+        let settled = cursorTrajectory(list(), as: String.self, from: 1, keys: Self.cursorKeys, settleFirst: true)
+        #expect(asked.count == Self.cursorKeys.count)
+        #expect(!asked.contains(0) && !asked.contains(3) && !asked.contains(7), "never on an unnamed row: \(asked)")
+        #expect(asked == settled, "asked a row at a time: \(asked); from the settled maps: \(settled)")
+    }
+
+    /// The same, inside a `Section`, whose header is one more row the cursor
+    /// steps past.
+    @Test("The cursor steps past a mixed Section's header and unnamed rows, as it did")
+    func cursorLandsWhereItDidInASection() {
+        func list() -> some View {
+            List(selection: .constant(String?.none)) {
+                Section("Planets") {
+                    Text("Every planet")
+                    ForEach(["mercury", "venus"], id: \.self) { Text($0) }
+                    Text("Asteroids")
+                    ForEach(["earth", "mars"], id: \.self) { Text($0) }
+                    Text("Pluto").tag("pluto")
+                }
+            }
+            .frame(height: 6)
+        }
+        let asked = cursorTrajectory(list(), as: String.self, from: 2, keys: Self.cursorKeys, settleFirst: false)
+        let settled = cursorTrajectory(list(), as: String.self, from: 2, keys: Self.cursorKeys, settleFirst: true)
+        #expect(asked.count == Self.cursorKeys.count)
+        #expect(!asked.contains(0) && !asked.contains(1) && !asked.contains(4), "never on an unnamed row: \(asked)")
+        #expect(asked == settled, "asked a row at a time: \(asked); from the settled maps: \(settled)")
+    }
+
+    /// Where NO row can be named, every row is landable — the landing set is
+    /// empty, which the handler reads as "no restriction" — and must stay so.
+    @Test("The cursor walks every row of a list that can name none of them, as it did")
+    func cursorLandsWhereItDidWhenNoRowIsNamed() {
+        func list() -> some View {
+            List(selection: .constant(String?.none)) {
+                Text("Every planet")
+                Text("Asteroids")
+                Text("Comets")
+                Text("Beyond")
+            }
+            .frame(height: 5)
+        }
+        let asked = cursorTrajectory(list(), as: String.self, from: 0, keys: Self.cursorKeys, settleFirst: false)
+        let settled = cursorTrajectory(list(), as: String.self, from: 0, keys: Self.cursorKeys, settleFirst: true)
+        #expect(asked.count == Self.cursorKeys.count)
+        #expect(Set(asked).count > 2, "the cursor moved: \(asked)")
+        #expect(asked == settled, "asked a row at a time: \(asked); from the settled maps: \(settled)")
+    }
+
+    /// The all-content sidebar: every row is named, and the keys clamp and wrap
+    /// over all of them.
+    @Test("The cursor walks every row of a list that names all of them, as it did")
+    func cursorLandsWhereItDidWhenEveryRowIsNamed() {
+        let projects = Self.projects(Counter())
+        let list = List(selection: .constant(Pick?.none)) {
+            Text("All projects").tag(Pick.all)
+            ForEach(projects) { Self.taggedRow($0) }
+        }
+        let asked = cursorTrajectory(list, as: Pick.self, from: 0, keys: Self.cursorKeys, settleFirst: false)
+        let settled = cursorTrajectory(list, as: Pick.self, from: 0, keys: Self.cursorKeys, settleFirst: true)
+        #expect(asked.count == Self.cursorKeys.count)
+        #expect(asked == settled, "asked a row at a time: \(asked); from the settled maps: \(settled)")
     }
 }

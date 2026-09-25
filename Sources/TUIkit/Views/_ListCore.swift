@@ -1342,11 +1342,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // A source that does not yet know whether its rows are all content —
         // one with a flattened row, a `Section`'s included: hand-written rows,
         // alone or beside a loop, whose types are still to be asked
-        // (`EagerListRow`) — hands both answers over UNSETTLED: the ids are
-        // asked a row at a time through `idAt`, as the windowed path's are,
-        // and the whole set only when a key or a follow reads it. Deciding
-        // here would ask every looped row its loop's rule, a build per tagged
-        // row, on every frame, for the handful the frame draws.
+        // (`EagerListRow`) — hands both answers over UNSETTLED: the ids, and
+        // where a key may land, are asked a row at a time through `idAt`, as
+        // the windowed path's are, and the whole set only when select-all or
+        // a direct read of either map wants it. Deciding here would ask every
+        // looped row its loop's rule, a build per tagged row, on every frame,
+        // for the handful the frame draws.
         let idAt: (Int) -> SelectionValue? = { index in
             if case .content(let id) = source.type(at: index) { return id }
             return nil
@@ -1359,8 +1360,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             handler.idAt = nil
             handler.answerRows(Self.rowAnswers(of: source))
         case nil:
-            handler.idAt = idAt
-            handler.answerRowsWhenAsked {
+            handler.answerRowsWhenAsked(idAt: idAt) {
                 source.allContent ? ([], []) : Self.rowAnswers(of: source)
             }
         }

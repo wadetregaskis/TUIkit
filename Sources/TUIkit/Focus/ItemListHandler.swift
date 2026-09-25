@@ -1018,8 +1018,8 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// through ``id(at:)`` / ``index(of:)``, never this array directly.
     ///
     /// May be handed over UNSETTLED, with ``selectableIndices``, by
-    /// ``answerRowsWhenAsked(_:)``: then the first read of either settles both,
-    /// and so does a write, before it lands.
+    /// ``answerRowsWhenAsked(idAt:settling:)``: then the first read of either
+    /// settles both, and so does a write, before it lands.
     var itemIDs: [SelectionValue?] {
         get {
             settleRowAnswers()
@@ -1043,8 +1043,8 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// (User-initiated selection gestures ask for more: a range extension
     /// resolves its span, select-all every row — but never per-frame.) `nil`
     /// for the eager paths, which use ``itemIDs`` — except one that hands its
-    /// answers over unsettled (``answerRowsWhenAsked(_:)``), whose ids are
-    /// asked here one row at a time for the same reason.
+    /// answers over unsettled (``answerRowsWhenAsked(idAt:settling:)``), whose
+    /// ids are asked here one row at a time for the same reason.
     var idAt: ((Int) -> SelectionValue?)?
 
     /// The set of indices that can be selected and focused.
@@ -1071,8 +1071,13 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     private var settledSelectableIndices: Set<Int> = []
 
     /// This frame's ``itemIDs`` and ``selectableIndices`` while nothing has
-    /// read them yet — see ``answerRowsWhenAsked(_:)``.
+    /// read them yet — see ``answerRowsWhenAsked(idAt:settling:)``.
     private var unsettledRowAnswers: (() -> RowAnswers)?
+
+    /// The first and the last row ``idAt`` names, once asked, while the answers
+    /// are unsettled — see ``firstLandingRow(orElse:)``. `.some(nil)` is "no
+    /// row is named".
+    private var unsettledNamedRowBounds: (first: Int??, last: Int??) = (nil, nil)
 
     /// Creates an item list handler.
     ///
@@ -1144,8 +1149,9 @@ extension ItemListHandler {
     typealias RowAnswers = (itemIDs: [SelectionValue?], selectableIndices: Set<Int>)
 
     /// Sets ``itemIDs`` and ``selectableIndices`` together, dropping any
-    /// answers ``answerRowsWhenAsked(_:)`` left unsettled rather than settling
-    /// them first — what a list hands over on each frame it knows them.
+    /// answers ``answerRowsWhenAsked(idAt:settling:)`` left unsettled rather
+    /// than settling them first — what a list hands over on each frame it
+    /// knows them.
     func answerRows(_ answers: RowAnswers) {
         unsettledRowAnswers = nil
         (settledItemIDs, settledSelectableIndices) = answers
@@ -1157,16 +1163,23 @@ extension ItemListHandler {
     ///
     /// For a list whose rows' ids are costly to learn all at once, of which a
     /// frame needs only a few. One row's id is not free either: it can cost a
-    /// build of that row, or of looped rows beside it (see ``id(at:)``). The
-    /// list supplies ``idAt`` as well, which is what ``id(at:)`` and
-    /// ``index(of:)`` then ask, so a frame asks about the rows it draws and
-    /// the row it focuses — and only a key that needs the landing set whole
-    /// (Home, End, a move past a row the selection cannot name, select-all)
-    /// or a bottom-anchored follow settles the rest. The answers are the ones
-    /// `answers` would have given at hand-over; settling later asks the same
-    /// rows the same questions.
-    func answerRowsWhenAsked(_ answers: @escaping () -> RowAnswers) {
+    /// build of that row, or of looped rows beside it (see ``id(at:)``).
+    /// `idAt` becomes ``idAt``, which is what ``id(at:)`` and ``index(of:)``
+    /// ask, so a frame asks about the rows it draws and the row it focuses;
+    /// and until the answers settle, the keys that move the cursor ask it too,
+    /// a row at a time, where the cursor may land (see
+    /// ``firstLandingRow(orElse:)``), and so does a bottom-anchored follow for
+    /// the last row. It must name exactly the rows `answers` would: a row it
+    /// answers `nil` for is one `answers` leaves out of a non-empty
+    /// ``selectableIndices``. Only select-all, of the handler's own readers,
+    /// settles the rest. The answers are the ones `answers` would have given
+    /// at hand-over; settling later asks the same rows the same questions.
+    func answerRowsWhenAsked(
+        idAt: @escaping (Int) -> SelectionValue?, settling answers: @escaping () -> RowAnswers
+    ) {
+        self.idAt = idAt
         unsettledRowAnswers = answers
+        unsettledNamedRowBounds = (nil, nil)
     }
 
     /// Runs the unsettled answers, if there are any, into their storage.
@@ -1174,6 +1187,67 @@ extension ItemListHandler {
         guard let answers = unsettledRowAnswers else { return }
         unsettledRowAnswers = nil
         (settledItemIDs, settledSelectableIndices) = answers()
+    }
+
+    /// Whether ``itemIDs`` and ``selectableIndices`` were handed over unsettled
+    /// and nothing has settled them since — for the tests that pin which
+    /// readers settle them. Asking settles nothing.
+    var rowAnswersAreUnsettled: Bool { unsettledRowAnswers != nil }
+
+    // MARK: Where the cursor may land
+
+    /// The unsettled answers' ``idAt``, when there are unsettled answers to
+    /// ask — `nil` when the landing set should be read whole.
+    private var unsettledIDAt: ((Int) -> SelectionValue?)? {
+        unsettledRowAnswers == nil ? nil : idAt
+    }
+
+    /// `selectableIndices.min() ?? fallback` — the first row the cursor can
+    /// land on — answered without settling unsettled answers.
+    ///
+    /// Unsettled, it is the first row ``idAt`` names, or `fallback` if none is
+    /// named: exactly the settled answer. When every row is named the settled
+    /// set is EMPTY (all content) and the answer is `fallback`, which the
+    /// callers pass as the first row; when none is, the set is empty too and
+    /// both answer `fallback`; otherwise the set holds exactly the named rows.
+    func firstLandingRow(orElse fallback: Int) -> Int {
+        guard let idAt = unsettledIDAt else { return selectableIndices.min() ?? fallback }
+        if let known = unsettledNamedRowBounds.first { return known ?? fallback }
+        let first = (0..<itemCount).first { idAt($0) != nil }
+        unsettledNamedRowBounds.first = .some(first)
+        return first ?? fallback
+    }
+
+    /// `selectableIndices.max() ?? fallback`, answered the same way — see
+    /// ``firstLandingRow(orElse:)``.
+    func lastLandingRow(orElse fallback: Int) -> Int {
+        guard let idAt = unsettledIDAt else { return selectableIndices.max() ?? fallback }
+        if let known = unsettledNamedRowBounds.last { return known ?? fallback }
+        let last = (0..<itemCount).reversed().first { idAt($0) != nil }
+        unsettledNamedRowBounds.last = .some(last)
+        return last ?? fallback
+    }
+
+    /// `!selectableIndices.isEmpty` — whether a move has to check each row it
+    /// lands on — answered without settling: unsettled, always `true`, since
+    /// ``isInLandingSet(_:)`` then answers every row as the settled set would,
+    /// and where every row is landable the checked move lands exactly where
+    /// the unchecked one does.
+    var landingSetMayRestrict: Bool {
+        unsettledIDAt != nil || !selectableIndices.isEmpty
+    }
+
+    /// `selectableIndices.isEmpty || selectableIndices.contains(index)`,
+    /// answered without settling for a row of the list: a row ``idAt`` names,
+    /// or any row where none is named — where the settled set is empty, which
+    /// reads as "no restriction".
+    func isInLandingSet(_ index: Int) -> Bool {
+        guard let idAt = unsettledIDAt, (0..<itemCount).contains(index) else {
+            return selectableIndices.isEmpty || selectableIndices.contains(index)
+        }
+        if idAt(index) != nil { return true }
+        let fallback = -1
+        return firstLandingRow(orElse: fallback) == fallback
     }
 }
 

@@ -165,7 +165,7 @@ extension ItemListHandler {
     /// all-content list, meaning "every row" — the same fallback the End key
     /// uses.
     private var tailRowIndex: Int {
-        selectableIndices.max() ?? max(0, itemCount - 1)
+        lastLandingRow(orElse: max(0, itemCount - 1))
     }
 
     /// Drops the row-hold memo, so re-designating the same row later adopts it
