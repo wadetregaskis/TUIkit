@@ -15,7 +15,9 @@ extension String {
     ///
     /// The per-cell twin of ``paintedOver(background:)``, for the one splice that
     /// draws a piece of a row over a row already built — an animation tick
-    /// (``FrameBuffer/patchingAnimatedCells(in:with:atColumn:width:fields:compensating:)``).
+    /// (``FrameBuffer/patchingAnimatedCells(in:with:atColumn:width:fields:compensating:)``)
+    /// — and for compositing an overlay over a base with more than one field under
+    /// it (``paintedOver(fieldsUnder:)``).
     /// A run's frame comes from the view with no field under its ink, because the
     /// view drew it over whatever its containers painted; the run's ground says
     /// what that was, cell by cell (``AnimatedCellRun/groundFields(onPage:)``). One
@@ -47,7 +49,15 @@ extension String {
     /// A cell whose field is `nil` gets the terminal's own: `ESC[49m` where one
     /// of these fields would otherwise still be in force, and nothing where none
     /// is — so a frame over nothing but the terminal's own field comes back
-    /// byte-identical.
+    /// byte-identical. A replay's fields are read on the row's page, so there a
+    /// reset and a stated 49 are one field, the terminal's own.
+    ///
+    /// A compositor's are not: it paints an overlay over the base line's fields
+    /// before any page is put under them (``paintedOver(fieldsUnder:)``), and in a
+    /// row still to be written a reset puts the page back where `ESC[49m` puts the
+    /// terminal's own. So with `absentFieldIsUnstated` a bare cell over no field goes
+    /// back to NONE — a reset, and the frame's own styling restated after it — and
+    /// only a cell stating 49 over no field keeps the terminal's own.
     ///
     /// Where every field is the same, the cells come out as the single-field
     /// splice drew them — that background in front of the frame, after each
@@ -56,12 +66,25 @@ extension String {
     /// only in WHERE a restatement goes when other escapes sit between a reset
     /// and the next cell, and in restating nothing after the last cell.
     ///
-    /// - Parameter fields: The fields under each of the frame's columns — one per
-    ///   column in each list, a wide character's second included. A column past
-    ///   the end has none to restate.
+    /// - Parameters:
+    ///   - fields: The fields under each of the frame's columns — one per column
+    ///     in each list, a wide character's second included. A column past the end
+    ///     has none to restate.
+    ///   - absentFieldIsUnstated: Whether a `nil` field under a bare cell is no
+    ///     field at all, rather than the terminal's own — a compositor's reading.
     /// - Returns: The frame, each field-less cell over its own column's field.
-    func paintedOver(fields: AnimatedCellRun.GroundFields) -> String {
+    func paintedOver(fields: AnimatedCellRun.GroundFields, absentFieldIsUnstated: Bool = false) -> String {
         guard !fields.restateNothing else { return self }
+
+        /// A field the output can have in force: none, the terminal's own stated,
+        /// or a colour. Three, not two, only for a compositor (above); in a replay a
+        /// reset leaves the terminal's own in force, and `unstated` never arises.
+        enum Field: Equatable {
+            case unstated
+            case terminal
+            case colour(SGRState.Colour)
+        }
+        let afterReset: Field = absentFieldIsUnstated ? .unstated : .terminal
 
         // What the frame itself states, and the field the OUTPUT has in force:
         // the two differ only by the fields put in here. So the output's field
@@ -75,7 +98,7 @@ extension String {
         // rather than nothing: from its last `ESC[49m` to its next reset or
         // colour.
         var statesDefault = false
-        var inForce: SGRState.Colour?
+        var inForce = afterReset
         var column = 0
         var result = ""
         // Room for four truecolour restatements, which covers a frame of
@@ -88,10 +111,17 @@ extension String {
             guard !own.namesBackground else { return }
             let under = statesDefault ? fields.underStatedDefault : fields.bare
             guard column < under.count else { return }
-            let field = under[column]
-            guard inForce != field else { return }
-            result += SGRState.backgroundEscape(field)
-            inForce = field
+            let wanted: Field = under[column].map { .colour($0) } ?? (statesDefault ? .terminal : afterReset)
+            guard inForce != wanted else { return }
+            switch wanted {
+            case .colour(let colour): result += SGRState.backgroundEscape(colour)
+            case .terminal: result += SGRState.backgroundEscape(nil)
+            // Only a reset takes a field away without stating another, and it takes
+            // the frame's own styling with it: that goes straight back. `own` names
+            // no field here (the guard above), so it restates none.
+            case .unstated: result += "\u{1B}[0m" + own.rendered
+            }
+            inForce = wanted
         }
 
         let scalars = unicodeScalars
@@ -126,7 +156,12 @@ extension String {
             result += text
             guard isSGR else { continue }
             if let statement = own.applyReportingBackground(text) {
-                inForce = own.backgroundColour
+                inForce =
+                    switch statement {
+                    case .reset: afterReset
+                    case .terminalDefault: .terminal
+                    case .colour: own.backgroundColour.map { .colour($0) } ?? afterReset
+                    }
                 statesDefault = statement == .terminalDefault
             }
             restate()

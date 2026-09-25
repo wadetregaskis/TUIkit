@@ -4489,6 +4489,21 @@ on an RGB surface the bytes are unchanged. `Opacity as composition.md` §98;
 `FloatingLayerOpacityTests` (every presentation on the terminal's own page) and
 `AnimatedRunGroundTests`.
 
+**2026-09-25, later: compositing fills under each cell's own column.** The
+compositor read the field it paints an overlay over — and fills a stated 49
+with — ONCE per overlay row, under the overlay's first column, so a label over
+two colours was drawn all on the first, and the runs inside it recorded that
+one field in their grounds. Each cell now takes the field under its own column,
+a stated 49 included, and each run's ground records the same, column by column
+(`FieldsUnderOverlay`, `String.paintedOver(fieldsUnder:)`). Where the base has
+no field under a column, the overlay goes back to none with a reset and its own
+styling restated — the page, as the row builder puts it back — not with
+`ESC[49m`, which would be the terminal's own; a stated 49 over no field stays
+the terminal's own. One field under the whole overlay is painted in the same
+bytes as before. `Opacity as composition.md` §99; `CompositedFieldPerColumnTests`,
+and through the run loop `ReplayedRunFieldTests`' catalogue composited over a
+ramp.
+
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's
 focused row, on a palette whose highlight has no RGB) was carried up past the

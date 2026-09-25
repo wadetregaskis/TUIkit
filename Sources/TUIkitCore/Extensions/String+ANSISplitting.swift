@@ -815,9 +815,17 @@ extension String {
     /// - Parameters:
     ///   - prefixColumns: Visible columns to keep at the front.
     ///   - suffixDropColumns: Visible columns to drop before the suffix begins.
+    ///   - notingFields: Whether to note each column inside the span where the
+    ///     field changes (``ANSIOverlaySplit/fieldsUnderOverlay``). Only a caller
+    ///     that paints the overlay over them reads them; the two splices whose
+    ///     overlay already states every field — the animation tick's and the
+    ///     opacity resolution's — pass `false`, and the second runs once per step
+    ///     of every cycling fade.
     /// - Returns: Everything ``FrameBuffer/insertOverlay(base:overlay:atColumn:overlayIsPainted:)``
     ///   needs from this line, in one scan — see ``ANSIOverlaySplit``.
-    func ansiOverlaySplit(prefixColumns: Int, suffixDropColumns: Int) -> ANSIOverlaySplit {
+    func ansiOverlaySplit(
+        prefixColumns: Int, suffixDropColumns: Int, notingFields: Bool = true
+    ) -> ANSIOverlaySplit {
         var prefix = ""
         var prefixWidth = 0
         var prefixOpen = prefixColumns > 0
@@ -837,6 +845,13 @@ extension String {
         // children quadratic in escapes all over again, which is the very
         // thing this one-scan split exists to have fixed.
         var under: SGRState?
+        // And where that field CHANGES under the overlay: an escape between its
+        // first and its last column moves the field under every cell after it.
+        // `style` has just applied it, so noting one costs a comparison, and only
+        // an escape inside the span is noted at all. Under nearly every overlay
+        // none of them moves the field, and nothing is kept. Nor is anything
+        // noted for a caller that will not paint the overlay (`notingFields`).
+        var changes = FieldsUnderOverlay.Recorder()
         var total = 0
         // Two scans, because the two halves are cut at different columns: the
         // prefix ends at `prefixColumns` and owes a close there, the suffix
@@ -894,7 +909,11 @@ extension String {
                 suffix += text
             } else if isSGR {
                 style.apply(text)
-                if total <= prefixColumns { under = style }
+                if total <= prefixColumns {
+                    under = style
+                } else if notingFields {
+                    changes.note(style.backgroundColour, at: total, first: under?.backgroundColour)
+                }
             } else {
                 suffixLink.note(text)
             }
@@ -915,6 +934,8 @@ extension String {
             suffixWidth: suffixWidth,
             styleBeforeSuffix: style.rendered,
             backgroundUnderOverlay: under?.renderedBackground ?? "",
+            fieldsUnderOverlay: FieldsUnderOverlay(
+                column: prefixColumns, first: under?.backgroundColour, changes: changes.changes),
             totalWidth: total,
             suffixDropColumns: suffixDropColumns)
     }
@@ -924,7 +945,7 @@ extension String {
 
 /// One line cut for compositing, from a single scan.
 ///
-/// A struct rather than a tuple because there are seven answers and they are
+/// A struct rather than a tuple because there are eight answers and they are
 /// not interchangeable; the fields carry the names the call site reads.
 struct ANSIOverlaySplit {
     /// The visible columns before the overlay, with their styling.
@@ -939,8 +960,13 @@ struct ANSIOverlaySplit {
     /// The NETTED styling where the suffix begins, ready to re-emit.
     let styleBeforeSuffix: String
     /// The background in force where the overlay lands (`""` for the
-    /// terminal's own) — what an overlay cell that names none is drawn over.
+    /// terminal's own) — what an overlay cell that names none is drawn over,
+    /// where ``fieldsUnderOverlay`` is uniform.
     let backgroundUnderOverlay: String
+    /// The field under each column the overlay covers: the one it lands on, and
+    /// every column where it changes — or the first alone, uniform, for a split
+    /// asked not to note them.
+    let fieldsUnderOverlay: FieldsUnderOverlay
     /// The line's whole visible width.
     let totalWidth: Int
 

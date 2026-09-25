@@ -6423,10 +6423,11 @@ without the record rewritten, the two compositors failed at 0.4 for both frames.
 run loop by `ReplayedRunFieldTests`' faded grounds (`Terminal-compatibility.md`).
 
 Limits:
-- Compositing still paints an overlay over ONE field, the base's under the overlay's first
+- ~~Compositing still paints an overlay over ONE field, the base's under the overlay's first
   column, and that is not the fade's to change: `ZStack(alignment: .leading)` over three red
   cells then three blue ones, with `Text("abcdef")` on top, draws all six letters on red
-  (measured on this tree, truecolor).
+  (measured on this tree, truecolor).~~ Fixed 2026-09-25, §99: each cell is painted over the
+  field under its own column.
 - A run in a reversed row replays without the reversal, and under a fade that shows in
   `ReplayOracle` (`Terminal-compatibility.md`, the ground note).
 
@@ -6457,3 +6458,88 @@ page through every cell of the surface; the three that dim passed.
 magenta, agreeing with each other. And a cover and a sheet over a page of two colours, red then
 blue, on both pages: the surface shows neither at any cell (composited asking what it lands on,
 the cover on the terminal's own page was red at every cell).
+
+## 99. A composited cell keeps the field under its own column (2026-09-25)
+
+An overlay cell that states no field keeps the field it lands on (`590e71a4`), and compositing
+read that field ONCE per overlay row: the base's under the overlay's first column, painted under
+every cell of the row that named none (`String.paintedOver(background:)`) — a stated `ESC[49m`
+included, which compositing reads as naming none (§95, `Terminal-compatibility.md`, the stated-49
+note). §97 recorded it as a limit. Every compositor drew it so:
+
+- `ZStack(alignment: .leading) { HStack(spacing: 0) { Color.red.frame(width: 3, height: 1);
+  Color.blue.frame(width: 3, height: 1) }; Text("abcdef") }` drew all six letters on red, where
+  SwiftUI draws `abc` on red and `def` on blue; an `.overlay` on the same two colours did the
+  same, and a label in a `ZStack` over a ramp was drawn on the ramp's first entry throughout.
+- Where the field ends under the overlay the rest of the label still wore it, and where it begins
+  the label wore none: over `[red | nothing]` all six on red, over `[nothing | blue]` all six on
+  the page.
+- A layer with no surface (`.offset`, `.position`, the layer a transition moves a view in) over
+  a page of two colours, likewise.
+- The unfaded cells of a partly faded overlay: `HStack { Text("abc").opacity(0.6); Text("def") }`
+  over the red and blue drew `def` on red. (Wholly faded it was right: the blend reads the base
+  column by column, §9.8, and every covered cell names its field.)
+- A run inside such an overlay recorded the same one field in its ground, so the replay agreed
+  with the wrong render.
+
+A sheet, an alert and a confirmation dialog never met two fields: their backdrop washes the page
+to one first. A floating surface paints every cell of itself and is composited as painted (§98).
+
+**The rule is the cell's, as it always was: a cell that states no field — or states `ESC[49m`,
+which compositing fills — takes the base's field under ITS column.** The split that cuts the base
+around the overlay already walks it to the overlay's end and nets every escape
+(`String.ansiOverlaySplit`); it now also notes each column inside the covered span where the field
+changes (`FieldsUnderOverlay`), which costs a comparison per escape there. A base with one field
+under the whole span — nearly every overlay — notes nothing, and the overlay is painted exactly as
+before, in the same bytes. Otherwise the overlay is painted cell by cell
+(`String.paintedOver(fieldsUnder:)`, the tick's painter, `String.paintedOver(fields:)`, reading a
+field the compositor's way): each field put in force before the first cell that needs it, and a
+column with NO field under it going back to none — a reset, after which the row builder puts the
+page back, and the overlay's own styling restated behind it. Not `ESC[49m`: in a row still to be
+written, a reset is the page and a stated 49 is the terminal's own, and on a page with an RGB those
+are two colours (§94). A stated 49 over no field stays the terminal's own, as it did under one
+field. A run's ground is painted the same way, column by column, so each cell of a run records the
+field under it. And where a repeating fade folds such a run into its own (§6b.1), it splices the run's
+frame into a row the writer has yet to build, over that record read as such a row reads it: a
+cell the compositor left on no field goes back to none after a coloured one, for the page, where
+the tick's reading of a row on screen puts the terminal's own (`absentFieldIsUnstated`). Read
+that way, a spinner over `[blue | nothing]` under a fade came out on the terminal's own in its
+second cell at every step, where the row has the page. An overlay that names a colour of its own under every cell takes no field from
+the base, whatever is under it, and is asked that first in one walk that builds nothing: text
+fully painted over a ramp, over two painters or over a reversed segment is inserted as it is,
+where it would otherwise be rebuilt cell by cell to restate nothing. (Counted with temporary
+counters: `Text("abcdef").background(.green)` in a `ZStack` over red and blue is rebuilt 0 times
+where it was rebuilt once; the same text with no field of its own still is. No `Stress --bench`
+scenario reaches the cell-by-cell painter either way.)
+
+A wide glyph over a change of field is drawn on its first column's: a cell can have one field.
+
+Only a caller that paints the overlay asks for the fields. The two splices whose overlay
+already states every field — the animation tick's frame, over its ground, and the opacity
+resolution's span — split the line without noting them (`ansiOverlaySplit(…, notingFields:
+false)`): the opacity splice runs once per step of every cycling fade, and noted nothing it would
+read. Counted on `Stress --bench --scenario translucent` (30 frames and the warm-up, temporary
+counters): 1,860 notes before, none after, over the same 11,160 splits, the checksum unchanged;
+alpharamp and gradients split no line at all (the bench resolves no root), customlayout splits 620
+and notes none either way.
+
+`CompositedFieldPerColumnTests` pins each shape above against the base drawn alone or the fields
+spelled out — never against another composite, which makes the same mistake: the reported
+`ZStack`, the `.overlay`, the ramp, a field ending and one beginning under the label, a label's ink
+and weight kept across the reset, a stated 49 filled per column and one over no field left as the
+terminal's own, the partly faded label (the wholly faded one as a guard), and the offset label
+through the root compositor. Before, ten of the eleven failed. It also holds a custom `Layout`'s
+label over the two colours — composited IN PLACE, `FrameBuffer.composite(with:at:)` — with a
+spinner inside whose ground records the blue under it, the same placed two columns left of the
+canvas (cut, inserted at column 0, its run shifted onto the blue), and a wide glyph straddling
+the change, on its first column's field; each fails with the lines or the grounds painted over one
+field. `ANSIOverlaySplitTests` holds the
+fields the split notes to the state the line has in force at every column
+(`ansiSGRStateAt(visibleColumn:)`), and "one field" to exactly when it is, over the hand-written
+lines and a seeded sweep that now changes the field three ways, and a split asked not to note
+them to the same split with the first field alone. `TestHelpers/FieldPainter.swift`
+gains a `ZStack` and an `.overlay` over stripes — red, blue and no field in turn — so every suite
+that walks the painters walks them: with the grounds painted over one field and the lines per
+column, twelve cases of `AnimatedRunGroundTests` failed for the two. Through the run loop,
+`ReplayedRunFieldTests` gains the catalogue in a `ZStack` over a ramp: with the grounds over one
+field, twelve rows replayed on the ramp's first entry where the render drew the entry under them.

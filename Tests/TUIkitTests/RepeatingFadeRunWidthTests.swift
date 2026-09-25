@@ -168,14 +168,20 @@ struct RepeatingFadeRunWidthTests {
 
     /// A folded run's frames go into the row BEFORE the writer builds it, over the
     /// fields its painters left under each cell as such a row reads them: a
-    /// `.background(Color.default)`'s stated 49 is the terminal's own there. Read on a
-    /// page, as the tick reads a row already on screen, a stated 49 and a reset were
-    /// one field, and the frame's bare cells went back to none — the page, once the row
-    /// is built — so the fade's frame at the step the render drew was not the row it
-    /// drew, and every tick replayed it.
-    @Test("A folded run is spliced into its row over the fields its painters left there")
-    func aFoldedRunKeepsItsPaintersFields() throws {
-        func painted(_ cells: String) -> String { "\u{1B}[49m" + cells + "\u{1B}[0m" }
+    /// `.background(Color.default)`'s stated 49 is the terminal's own there, and a
+    /// cell a compositor left on no field is on none, for the page. Read on a page, as
+    /// the tick reads a row already on screen, a stated 49 and a reset were one field:
+    /// the frame's bare cells went back to none under the 49, and to the terminal's own
+    /// after the compositor's blue — so the fade's frame at the step the render drew
+    /// was not the row it drew, and every tick replayed it.
+    @Test(
+        "A folded run is spliced into its row over the fields its painters left there",
+        arguments: [false, true])
+    func aFoldedRunKeepsItsPaintersFields(compositor: Bool) throws {
+        let blue = SGRState.Colour.rgb(0, 0, 200)
+        func painted(_ cells: String) -> String {
+            compositor ? cells.paintedOver(fieldsUnder: [blue, nil]) : "\u{1B}[49m" + cells + "\u{1B}[0m"
+        }
         try TerminalColors.withCurrent(.unknown) {
             try ColorDepth.withCurrent(.truecolor) {
                 var buffer = FrameBuffer(lines: [painted("⠋ ")])

@@ -38,8 +38,9 @@
 //  flatten washes in `Color.default` does — and the painters do not agree about
 //  a stated 49. One that restates its field only after a reset (a `.background`,
 //  flat or ramp, a `List` row, a menu row's bar, the page) lets it through, so
-//  the cell shows the terminal's own; compositing (`String.paintedOver(background:)`)
-//  reads it as no field and fills it. No one rule for a stated 49 matches all of them — measured through the run
+//  the cell shows the terminal's own; compositing (`String.paintedOver(fieldsUnder:)`)
+//  reads it as no field and fills it, with the field under each cell. No one rule
+//  for a stated 49 matches all of them — measured through the run
 //  loop, reading it as no field put a chip's label on a `.background`'s colour
 //  where the render showed the terminal's own, and reading it as a field of its
 //  own did the reverse under a `ZStack`. So a run carries a SECOND record,
@@ -63,7 +64,8 @@ extension AnimatedCellRun {
     /// front and restated after every reset) paints a bare ground outright and a
     /// painted one only where nothing inside it painted first, because the inner
     /// painter's escapes follow its restatement; a compositor's
-    /// `paintedOver(background:)` fills only the cells stating no field. Either
+    /// `paintedOver(fieldsUnder:)` fills only the cells stating no field, each with
+    /// the field under its own column (``paintingGround(over:atColumn:)``). Either
     /// way the field the lines show is the one the ground records. The record under
     /// a stated `ESC[49m` is painted by the same function, so it takes whatever the
     /// painter did to a stated 49 in the lines: a persistent background leaves it,
@@ -181,14 +183,18 @@ extension AnimatedCellRun {
     /// Both lists of fields this run's cells are drawn over in a row the writer has
     /// yet to build — a buffer's own line, before any page is put under it: a field a
     /// painter stated as `ESC[49m` held as that statement (`.named(49)`), which the
-    /// splice restates.
+    /// splice restates, and a cell a reset left on no field as `nil`, which the page
+    /// will fill.
     ///
     /// In such a row a stated 49 and a reset are two fields — the terminal's own, and
     /// the page the writer will put back — and on a page with an RGB two colours
     /// (`Opacity as composition` §94). ``fields(onPage:)`` reads a row on its page,
     /// where they are one: the tick's reading, of a row already on screen. A splice
     /// into a row still to be built with it left a cell whose painter stated 49 on
-    /// none, which the page would fill.
+    /// none, which the page would fill, and put the terminal's own under one whose
+    /// painter left it to the page. Painted with `absentFieldIsUnstated`
+    /// (``String/paintedOver(fields:absentFieldIsUnstated:)``), each goes back to what
+    /// its painter left.
     ///
     /// - Returns: The fields under a bare cell and under a stated `ESC[49m`.
     package func fieldsInAnUnbuiltRow() -> GroundFields {

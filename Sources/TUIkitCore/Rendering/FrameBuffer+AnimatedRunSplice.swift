@@ -91,9 +91,15 @@ extension FrameBuffer {
     ///     after a reset would be erased over the terminal's default and only then
     ///     given its field, leaving a wide glyph's second cell bare on every tick.
     ///     Identity by default, for a caller with no host.
+    ///   - absentFieldIsUnstated: Whether `line` is a row the writer has yet to
+    ///     build, whose fields are read as such a row reads them
+    ///     (``AnimatedCellRun/fieldsInAnUnbuiltRow()``): a bare cell over no field
+    ///     goes back to none, which the page will fill, rather than to the terminal's
+    ///     own (``String/paintedOver(fields:absentFieldIsUnstated:)``).
     package static func patchingAnimatedCells(
         in line: String, with frame: String, atColumn column: Int, width: Int,
-        fields: AnimatedCellRun.GroundFields, compensating compensate: (String) -> String = { $0 }
+        fields: AnimatedCellRun.GroundFields, compensating compensate: (String) -> String = { $0 },
+        absentFieldIsUnstated: Bool = false
     ) -> String {
         // The cells about to be replaced may carry a host's cursor-advance
         // compensation, put there by `buildLine` when the row was rendered. The
@@ -106,11 +112,13 @@ extension FrameBuffer {
         // used to be two more walks (`ansiSGRStateAt`, `strippedLength`) and a pad
         // that walked a third time, per run, per tick, 11% of a live frame. A line
         // shorter than the run's end is padded by the insert, not here.
+        // The fields under the frame are its ground's, not the line's: the split
+        // need not note them.
         let split = base.ansiOverlaySplit(
-            prefixColumns: column, suffixDropColumns: column + frame.strippedLength)
+            prefixColumns: column, suffixDropColumns: column + frame.strippedLength, notingFields: false)
         return insertOverlay(
             split: split,
-            overlay: compensate(frame.paintedOver(fields: fields)),
+            overlay: compensate(frame.paintedOver(fields: fields, absentFieldIsUnstated: absentFieldIsUnstated)),
             atColumn: column,
             // The line used to be padded out to the run's END before the
             // split, so a frame narrower than its run left the pad's spaces
@@ -150,7 +158,8 @@ extension FrameBuffer {
         // As above: the split is the one walk; a short line is padded by the
         // insert.
         return insertOverlay(
-            split: line.ansiOverlaySplit(prefixColumns: column, suffixDropColumns: column + width),
+            split: line.ansiOverlaySplit(
+                prefixColumns: column, suffixDropColumns: column + width, notingFields: false),
             overlay: span,
             atColumn: column,
             // Every field is the span's own already, a stated 49 included —

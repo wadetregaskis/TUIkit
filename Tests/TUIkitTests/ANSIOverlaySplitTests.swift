@@ -9,6 +9,11 @@
 //  side of both boundaries, empty and past-the-end columns) rather than a
 //  handful of hand-picked strings.
 //
+//  The scan also notes the field under each column the overlay covers
+//  (`FieldsUnderOverlay`), which compositing paints the overlay over, cell by
+//  cell. That is held to the state the line has in force at each column
+//  (`ansiSGRStateAt(visibleColumn:)`), and "one field" to exactly when it is.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -54,8 +59,37 @@ struct ANSIOverlaySplitTests {
                     fused.styleBeforeSuffix == line.ansiStateBefore(visibleColumn: dropColumns),
                     "\(label) styleBeforeSuffix at \(dropColumns)")
                 #expect(fused.totalWidth == width, "\(label) totalWidth")
+                expectFieldsUnderTheOverlay(fused, line, prefixColumns..<max(prefixColumns, dropColumns), label)
+                // Asked not to note the fields — the splices whose overlay states
+                // its own — the same split, with the first field alone.
+                let unnoted = line.ansiOverlaySplit(
+                    prefixColumns: prefixColumns, suffixDropColumns: dropColumns, notingFields: false)
+                #expect(
+                    unnoted.prefix == fused.prefix && unnoted.suffix == fused.suffix
+                        && unnoted.styleBeforeSuffix == fused.styleBeforeSuffix
+                        && unnoted.backgroundUnderOverlay == fused.backgroundUnderOverlay
+                        && unnoted.totalWidth == fused.totalWidth,
+                    "\(label) split without the fields at \(prefixColumns), \(dropColumns)")
+                #expect(
+                    unnoted.fieldsUnderOverlay
+                        == FieldsUnderOverlay(
+                            column: prefixColumns, first: fused.fieldsUnderOverlay.first, changes: []),
+                    "\(label) fields noted anyway at \(prefixColumns), \(dropColumns)")
             }
         }
+    }
+
+    /// The fields the split notes under the covered columns are what the line has
+    /// in force at each of them, and it calls them uniform exactly when they are
+    /// one field.
+    private func expectFieldsUnderTheOverlay(
+        _ fused: ANSIOverlaySplit, _ line: String, _ covered: Range<Int>, _ label: String
+    ) {
+        let fields = fused.fieldsUnderOverlay.fields(over: covered)
+        let expected = covered.map { line.ansiSGRStateAt(visibleColumn: $0).backgroundColour }
+        #expect(fields == expected, "\(label) fields under \(covered)")
+        let oneField = expected.dropFirst().allSatisfy { $0 == expected[0] }
+        #expect(fused.fieldsUnderOverlay.isUniform == oneField, "\(label) uniform under \(covered)")
     }
 
     @Test("Plain text matches the helpers at every split point")
@@ -90,8 +124,11 @@ struct ANSIOverlaySplitTests {
     /// to hand-write.
     @Test("Randomised lines match the helpers")
     func randomisedSweep() {
+        // Three ways to change the field — a colour, a reset, a stated 49 — so the
+        // fields noted under the overlay meet every one.
         let pieces = [
             "a", "bb", "😀", "日", "\u{1B}[31m", "\u{1B}[0m", "\u{1B}[1m", " ", "\u{1B}[44m",
+            "\u{1B}[49m", "\u{1B}[48;5;196m",
         ]
         var seed: UInt64 = 0x5715_2025
         func next() -> Int {

@@ -872,8 +872,12 @@ Layering a fill behaves as it does in SwiftUI: `ZStack { Color.red; Text("hi") }
 draws the letters on the red. A cell's glyph and the colour behind it are two
 statements, and an overlay cell that names no background has said nothing about
 the field it lands on, so it keeps the one that is there; a cell that names its
-own background keeps that instead. Compositing is otherwise opaque per cell —
-blank cells paint, which is what dialog interiors and the modal dim depend on.
+own background keeps that instead. "The one that is there" is the one under
+that cell: a label laid over two colours is drawn on each, as SwiftUI draws it
+(since 2026-09-25; before, a whole overlay row took the colour under its first
+cell — `Opacity as composition.md` §99). Compositing is otherwise opaque per
+cell — blank cells paint, which is what dialog interiors and the modal dim
+depend on.
 
 Two deviations, both stated in the API docs. `RadialGradient`'s radii are `Int`
 cells like every other dimension here (§2.1), and — because a cell is about

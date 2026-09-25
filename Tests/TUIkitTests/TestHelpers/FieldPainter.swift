@@ -3,7 +3,8 @@
 //
 //  Every kind of container that paints a field under content it did not draw,
 //  as one list a suite can walk: a `.background` (flat, around padding and a
-//  border, nested, a ramp), compositing (a `ZStack`, an `.overlay`), a `List`
+//  border, nested, a ramp), compositing (a `ZStack`, an `.overlay`, each over
+//  one colour and over stripes of several), a `List`
 //  row's fill and a tab's surface. They do not all agree about what is under a
 //  cell — a stated `ESC[49m` is the case they split on — so a property that has
 //  to hold "inside any container" is held inside each of these.
@@ -38,6 +39,12 @@ enum FieldPainter: String, CaseIterable, Sendable {
     case zStackOverColour
     /// An `.overlay` on a view with a background.
     case overlayOnFill
+    /// A `ZStack` over stripes — a colour, another, and no field, in turn — so
+    /// no two neighbouring cells of the probe sit on one field: compositing
+    /// paints each over the field under its own column.
+    case zStackOverStripes
+    /// An `.overlay` on the same stripes.
+    case overlayOnStripes
     /// A row of a `List` that paints a fill of its own.
     case listRowFill
     /// A tab's surface, from `TabView`.
@@ -70,6 +77,10 @@ enum FieldPainter: String, CaseIterable, Sendable {
             ZStack { Color.rgb(40, 160, 40).frame(width: 6, height: 1); probe }
         case .overlayOnFill:
             Text("      ").background(Color.rgb(40, 160, 40)).overlay { probe }
+        case .zStackOverStripes:
+            ZStack { Self.stripes; probe }
+        case .overlayOnStripes:
+            Self.stripes.overlay { probe }
         case .listRowFill:
             List(selection: .constant(Int?.none)) {
                 ForEach(0..<3, id: \.self) { row in
@@ -84,6 +95,24 @@ enum FieldPainter: String, CaseIterable, Sendable {
                 Tab("Two", value: 1) { Text("two") }
             }
             .tabViewStyle(.bordered)
+        }
+    }
+
+    /// Twelve cells in one row: red, blue and no field, four times over.
+    @MainActor
+    private static var stripes: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<12, id: \.self) { column in stripe(column) }
+        }
+    }
+
+    /// The stripe at `column`.
+    @MainActor @ViewBuilder
+    private static func stripe(_ column: Int) -> some View {
+        switch column % 3 {
+        case 0: Color.rgb(200, 40, 40).frame(width: 1, height: 1)
+        case 1: Color.rgb(40, 40, 200).frame(width: 1, height: 1)
+        default: Text(" ")
         }
     }
 }

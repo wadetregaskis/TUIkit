@@ -3,9 +3,10 @@
 //
 //  Every run a catalogue of controls leaves behind, replayed through the run
 //  loop on several grounds — the page, a tab's surface, a colour of the app's
-//  own, the same colour inverted, a ramp, the terminal's own page
-//  (`Color.default`), and a colour on it — painted as a `.background`, composited
-//  under a `ZStack`, faded, dimmed and behind a sheet — and every replayed tick compared
+//  own, the same colour inverted, a ramp (painted, and under a `ZStack`), the
+//  terminal's own page (`Color.default`), and a colour on it — painted as a
+//  `.background`, composited under a `ZStack`, faded, dimmed and behind a sheet —
+//  and every replayed tick compared
 //  with a render at the same instant (`ReplayOracle`): each cell's glyph and
 //  field, and the ink a glyph is drawn in. The class
 //  `ReplayedTabChipBackgroundTests` is one case of, and the class
@@ -248,12 +249,30 @@ private struct OnARampApp: App {
     }
 }
 
+/// The same ramp UNDER the catalogue in a `ZStack`: compositing paints every cell
+/// the catalogue leaves bare over the ramp's entry at its own column, and every
+/// run records the same, cell by cell — where it once read one entry, the one
+/// under a row's first column, for the whole row.
+private struct ComposedOnARampApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup {
+            ZStack(alignment: .topLeading) {
+                LinearGradient(
+                    colors: [Color.rgb(200, 40, 40), Color.rgb(40, 40, 200)],
+                    startPoint: .leading, endPoint: .trailing)
+                catalogue()
+            }
+        }
+    }
+}
+
 @MainActor
 @Suite("A replayed run draws what a render draws, on every ground")
 struct ReplayedRunFieldTests {
 
     enum Ground: String, CaseIterable, Sendable {
-        case page, tabSurface, colour, invertedColour, ramp, terminalPage
+        case page, tabSurface, colour, invertedColour, ramp, composedOnRamp, terminalPage
         case colourOnTerminalPage, composedOnTerminalPage, fadedColourOnTerminalPage
         case fadedInsideColourOnTerminalPage, fadedInsideComposedOnTerminalPage, dimmed, backdrop
 
@@ -323,6 +342,7 @@ struct ReplayedRunFieldTests {
         case .colour: walk { OnAColourApp() }
         case .invertedColour: walk { InvertedColourApp() }
         case .ramp: walk { OnARampApp() }
+        case .composedOnRamp: walk { ComposedOnARampApp() }
         case .terminalPage: walk { OnTheTerminalPageApp() }
         case .colourOnTerminalPage: walk { ColourOnTheTerminalPageApp() }
         case .composedOnTerminalPage: walk { ComposedOnTheTerminalPageApp() }
@@ -357,6 +377,9 @@ struct ReplayedRunFieldTests {
 
     @Test("Every replayed tick matches a render, on a ramp")
     func onARamp() { check(.ramp) }
+
+    @Test("Every replayed tick matches a render, composited over a ramp")
+    func composedOnARamp() { check(.composedOnRamp) }
 
     @Test("Every replayed tick matches a render, on the terminal's own page")
     func onTheTerminalPage() { check(.terminalPage) }
@@ -415,6 +438,7 @@ struct ReplayedRunFieldTests {
         case .colour: Self.onAColour
         case .invertedColour: Self.onAnInvertedColour
         case .ramp: Self.onARamp
+        case .composedOnRamp: Self.composedOnARamp
         case .terminalPage: Self.onTheTerminalPage
         case .colourOnTerminalPage: Self.onAColourOnTheTerminalPage
         case .composedOnTerminalPage: Self.composedOnTheTerminalPage

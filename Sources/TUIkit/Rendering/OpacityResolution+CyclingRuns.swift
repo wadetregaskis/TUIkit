@@ -132,9 +132,10 @@ extension FrameBuffer {
         let steps = merged ?? cycle.phases.count
         // Each folded run's frames go into the row before it is built, over the fields
         // its painters left there as such a row reads them: a stated 49 the terminal's
-        // own. Read on a page, as the tick reads a row on screen, a stated 49 and a
-        // reset were one field, and a ground's stated 49 came out on the page. Read
-        // once: they are the same at every step.
+        // own, and a cell no painter reached on none, for the page. Read on a page, as
+        // the tick reads a row on screen, the two were one field: a ground's stated 49
+        // came out on the page and a bare cell on the terminal's own. Read once: they
+        // are the same at every step.
         let fields = merged == nil ? [] : folded.map { $0.fieldsInAnUnbuiltRow() }
         var frames: [String] = []
         frames.reserveCapacity(steps)
@@ -143,7 +144,7 @@ extension FrameBuffer {
             for (run, fields) in zip(folded, fields) {
                 source = patchingAnimatedCells(
                     in: source, with: run.frame(atIndex: step), atColumn: run.offsetX, width: run.width,
-                    fields: fields)
+                    fields: fields, absentFieldIsUnstated: true)
             }
             let rebuilt = rebuild(row, source) { region in
                 // Asked of the region itself rather than by searching the group:
