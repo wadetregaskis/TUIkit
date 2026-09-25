@@ -63,6 +63,23 @@ private struct DefaultFieldProbe: View, Renderable {
     }
 }
 
+/// A one-cell run whose first frame draws NOTHING — narrower than its run, as a
+/// blink's hidden phase can be — and whose second draws `x`, drawn as a blank.
+private struct NarrowFrameProbe: View, Renderable {
+    var body: Never { fatalError("renders via Renderable") }
+
+    static let frames = ["", "x"]
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        var buffer = FrameBuffer(lines: [" "])
+        guard !context.isMeasuring else { return buffer }
+        buffer.animatedCells = [
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 1, frames: Self.frames, clock: .cursor)
+        ]
+        return buffer
+    }
+}
+
 @MainActor
 @Suite("A run records the ground its containers painted under it")
 struct AnimatedRunGroundTests {
@@ -217,20 +234,49 @@ struct AnimatedRunGroundTests {
                     fields: run.fields(onPage: ""))
                 let columns = run.offsetX..<(run.offsetX + run.width)
                 let cells = paintedCells(row)
-                let shown = columns.map { cells[$0].background }
-                let drawn = columns.map { paintedCells(replayed)[$0].background }
+                let drawnCells = paintedCells(replayed)
                 let what = "\(painter) at \(alpha), frame \(probe.frames[probe.drawn].stripped)"
-                if columns.contains(where: { cells[$0].state.reversesVideo }) {
-                    // A list's zebra fill on a `Color.default` palette is a reversal
-                    // (`ESC[7;…;49m`), and the replay restates a ground's field without its
-                    // reversal (`Terminal-compatibility.md`, the ground note, "still open").
-                    withKnownIssue("the replay restates a reversed row's field without the reversal") {
-                        #expect(drawn == shown, "\(what): the resolved row shows \(shown)")
-                    }
-                } else {
-                    #expect(drawn == shown, "\(what): the resolved row shows \(shown)")
-                }
+                // As the cells look, not as they are spelled: a list's cursor row on
+                // this palette is a reversal (`ESC[7;…;49m`), and a frame blended as
+                // if it were not drew its field in the slot the 7 shows as ink.
+                #expect(
+                    columns.allSatisfy { drawnCells[$0].looksLike(cells[$0]) },
+                    """
+                    \(what): replayed \(columns.map { drawnCells[$0].shown }), \
+                    the resolved row shows \(columns.map { cells[$0].shown })
+                    """)
             }
+        }
+    }
+
+    /// A frame narrower than its run leaves its last cells to what is under them,
+    /// and faded, each is blended as that: the painter's field, from the ground. The
+    /// blend stands a blank in for a column no frame cell reaches, and it has said
+    /// nothing about its field — the ground's to fill. Taken as naming none, it took
+    /// the surface, and every tick of the empty frame drew the page where the faded
+    /// line has the painter's blue.
+    @Test("A faded frame narrower than its run is blended over the ground where it draws nothing")
+    func aFadedNarrowFrameIsBlendedOverTheGround() throws {
+        let context = makeRenderContext(width: 8, height: 1)
+        let buffer = ColorDepth.withCurrent(.truecolor) {
+            renderToScreen(NarrowFrameProbe().background(Color.rgb(0, 0, 200)).opacity(0.5), context: context)
+        }
+        let run = try #require(buffer.animatedCells.first { $0.width == 1 }, "the probe left no run")
+        let row = buffer.lines[run.offsetY]
+        let cells = paintedCells(row)
+        // Not vacuous: the row under the run is the blue, faded — not the page.
+        #expect(cells[run.offsetX].background != Self.page && !cells[run.offsetX].background.isEmpty)
+        for index in NarrowFrameProbe.frames.indices {
+            let replayed = FrameBuffer.patchingAnimatedCells(
+                in: row, with: run.frame(atIndex: index), atColumn: run.offsetX, width: run.width,
+                fields: run.fields(onPage: ""))
+            let drawn = paintedCells(replayed)
+            #expect(
+                drawn[run.offsetX].background == cells[run.offsetX].background,
+                """
+                frame \(index): replayed on \(drawn[run.offsetX].background.debugDescription), \
+                the faded row is on \(cells[run.offsetX].background.debugDescription)
+                """)
         }
     }
 

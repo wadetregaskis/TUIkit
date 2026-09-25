@@ -257,6 +257,46 @@ extension AnimatedCellRun {
         return Self.fields(of: ground, cells: width, onPage: page)
     }
 
+    /// What the painters restated under each of this run's cells BESIDE the field —
+    /// read off ``ground``, its state under each cell with the background taken off
+    /// — or `nil` where they restated nothing else, which is nearly every run: a
+    /// `.background`, a compositor, a ramp and the page restate a field and nothing
+    /// more.
+    ///
+    /// A row that reverses — a menu's focused row, a list's cursor row, where the
+    /// highlight has no RGB to breathe between — restates `ESC[7;<ink>;<field>m`,
+    /// so a frame drawn in it is drawn reversed: this holds the 7 and the ink, and
+    /// ``String/restatingGroundStyle(_:)`` draws a frame in them.
+    package var groundStyle: [SGRState]? {
+        // Asked before anything is built: nearly every run's painters restate a
+        // field and nothing more, and a style list for such a run would be walked
+        // and built once per fade to be found all default.
+        guard let ground, Self.restatesMoreThanAField(ground, cells: width) else { return nil }
+        var style: [SGRState] = []
+        style.reserveCapacity(max(0, width))
+        // A page is only ever a field, so any page reads the same style.
+        Self.walk(ground, cells: width, onPage: "") { state in
+            var restated = state
+            restated.setBackground(nil)
+            style.append(restated)
+            return true
+        }
+        return style
+    }
+
+    /// Whether a painter restated anything but a field under some cell of `record`:
+    /// one walk that builds nothing, and stops at the first such cell.
+    private static func restatesMoreThanAField(_ record: String, cells width: Int) -> Bool {
+        var found = false
+        walk(record, cells: width, onPage: "") { state in
+            var restated = state
+            restated.setBackground(nil)
+            found = !restated.isDefault
+            return !found
+        }
+        return found
+    }
+
     /// `record` — a ground, or the record under a stated 49 — read cell by cell on
     /// a row built on `page`, as ``groundFields(onPage:)`` describes: the field under
     /// each cell.

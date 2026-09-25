@@ -275,68 +275,18 @@ struct ReplayedRunFieldTests {
         case page, tabSurface, colour, invertedColour, ramp, composedOnRamp, terminalPage
         case colourOnTerminalPage, composedOnTerminalPage, fadedColourOnTerminalPage
         case fadedInsideColourOnTerminalPage, fadedInsideComposedOnTerminalPage, dimmed, backdrop
-
-        /// Whether the catalogue is faded here, which is where a reversed row's
-        /// replay shows in the oracle (below).
-        var isFaded: Bool {
-            switch self {
-            case .fadedColourOnTerminalPage, .fadedInsideColourOnTerminalPage, .fadedInsideComposedOnTerminalPage:
-                true
-            default:
-                false
-            }
-        }
     }
 
     /// The walk every ground takes: more stops than the catalogue has focusables,
     /// so it wraps; eight ticks a stop reach both halves of a caret's blink and
     /// half a breath.
-    private func walk<A: App>(
-        _ make: () -> A, holding: ((PaintedCell, PaintedCell) -> Bool)? = nil
-    ) -> ReplayOracle.Findings {
-        ReplayOracle.compare(make, stops: 23, ticks: 8, size: (80, 64), reportOncePerRow: true, holding: holding)
-    }
-
-    /// Faded, a reversed row's replay shows up in this oracle. The fade blends a
-    /// run's frame over the run's ground, which records the row's reversal as a
-    /// field — the bar's colour — so the frame states that field under its own ink,
-    /// unreversed; the render, blending the row itself, keeps the reversal, because
-    /// the page as ink has no spelling without it (`Opacity as composition.md` §85).
-    /// So a spinner in the focused row of an inline `Menu` and in the list's cursor
-    /// row — both reversals on a `Color.default` palette — replays in its own ink on
-    /// the bar's colour where the render draws it reversed. The limit the unfaded
-    /// rows have too (`AnimatedRunGroundTests`, the list's zebra fill); unfaded, the
-    /// replay only drops the 7, which this oracle does not compare.
-    ///
-    /// Faded INSIDE the colour, the row is resolved at the painter, whose fill has
-    /// an RGB, so the reversal's colours can be spelled without the 7 and are: the
-    /// render draws the spinner's colour as the cell's field and the reversal's ink
-    /// — the terminal's own field, spent against the colour — as its ink, and the
-    /// replay, restating the row's field unreversed, draws the spinner's colour as
-    /// its ink. The same limit, as a glyph inked in the colour the render lays under
-    /// it.
-    ///
-    /// Held cell by cell — where the render draws the cell reversed, or, faded
-    /// inside, where the replay inks the glyph in the render's field — and asserted
-    /// by row: exactly those two rows, named by what they draw. A held cell does not
-    /// stop the comparison, so anything else wrong on those rows is still reported.
-    private static let reversedRows = ["Busy", "row 0"]
-
-    /// What the walk excuses on `ground`, cell by cell: nothing, except where the
-    /// catalogue is faded (above).
-    private static func held(on ground: Ground) -> ((PaintedCell, PaintedCell) -> Bool)? {
-        switch ground {
-        case .fadedColourOnTerminalPage: { _, rendered in rendered.state.reversesVideo }
-        case .fadedInsideColourOnTerminalPage, .fadedInsideComposedOnTerminalPage:
-            { shown, rendered in shown.glyph == rendered.glyph && shown.ink == rendered.state.backgroundColour }
-        default: nil
-        }
+    private func walk<A: App>(_ make: () -> A) -> ReplayOracle.Findings {
+        ReplayOracle.compare(make, stops: 23, ticks: 8, size: (80, 64), reportOncePerRow: true)
     }
 
     /// The walk on `ground`.
     private func findings(on ground: Ground) -> ReplayOracle.Findings {
-        let holding = Self.held(on: ground)
-        return switch ground {
+        switch ground {
         case .page: walk { OnThePageApp() }
         case .tabSurface: walk { InATabApp() }
         case .colour: walk { OnAColourApp() }
@@ -346,11 +296,9 @@ struct ReplayedRunFieldTests {
         case .terminalPage: walk { OnTheTerminalPageApp() }
         case .colourOnTerminalPage: walk { ColourOnTheTerminalPageApp() }
         case .composedOnTerminalPage: walk { ComposedOnTheTerminalPageApp() }
-        case .fadedColourOnTerminalPage: walk({ FadedColourOnTheTerminalPageApp() }, holding: holding)
-        case .fadedInsideColourOnTerminalPage:
-            walk({ FadedInsideAColourOnTheTerminalPageApp() }, holding: holding)
-        case .fadedInsideComposedOnTerminalPage:
-            walk({ FadedInsideAComposedColourOnTheTerminalPageApp() }, holding: holding)
+        case .fadedColourOnTerminalPage: walk { FadedColourOnTheTerminalPageApp() }
+        case .fadedInsideColourOnTerminalPage: walk { FadedInsideAColourOnTheTerminalPageApp() }
+        case .fadedInsideComposedOnTerminalPage: walk { FadedInsideAComposedColourOnTheTerminalPageApp() }
         case .dimmed: walk { DimmedApp() }
         case .backdrop: walk { BehindASheetApp() }
         }
@@ -411,18 +359,6 @@ struct ReplayedRunFieldTests {
         // Enough that the walk reached the catalogue, not just its first stop.
         #expect(found.compared >= 200, "only \(found.compared) rows were replayed")
         for mismatch in found.mismatches { Issue.record("\(ground): \(mismatch)") }
-        guard ground.isFaded else { return }
-        // Exactly the rows named above are held, each one of them.
-        let held = found.held.values.sorted()
-        let named = Self.reversedRows.map { name in held.filter { $0.contains(name) } }
-        #expect(
-            named.allSatisfy { $0.count == 1 } && held.count == Self.reversedRows.count,
-            "\(ground): held \(held.map { $0.trimmingCharacters(in: .whitespaces) })")
-        for mismatch in found.heldMismatches {
-            withKnownIssue("the replay restates a reversed row's field without the reversal") {
-                Issue.record("\(ground): \(mismatch)")
-            }
-        }
     }
 
     /// Each ground's test. As one parameterised test, the grounds came from

@@ -436,6 +436,13 @@ extension FrameBuffer {
         // ``AnimatedCellRun/groundUnderStatedDefault``.
         let groundLine = run.ground.map { prefix + $0 }
         let statedDefaultLine = run.groundUnderStatedDefault.map { prefix + $0 }
+        // And in what else they restated there: a row that reverses restates its 7
+        // and ink after every reset, the frame's own included, so a frame is blended
+        // as the reversed cell the row draws it as — its glyph in the row's field, on
+        // its own colour. Blended unreversed, a spinner in a menu's focused row on the
+        // terminal's own page came out in the bar's colour on the bar, and on every
+        // tick the replay drew nothing where the render drew the glyph.
+        let groundStyle = run.groundStyle
         let columns = run.offsetX..<(run.offsetX + run.width)
         // The SAME fold the line took, not `covering.first`. A run is spliced
         // over cells the lines already answered for, so taking one region here
@@ -457,7 +464,7 @@ extension FrameBuffer {
         /// a payload describes and the frame it does not are blended identically.
         func blend(_ frame: String, at perColumn: [FrameBuffer.CellAlpha?]) -> String {
             Self.blendedSpan(
-                source: prefix + frame,
+                source: prefix + (groundStyle.map { frame.restatingGroundStyle($0) } ?? frame),
                 destination: behindLine,
                 columns: columns,
                 destinationShift: position.x,

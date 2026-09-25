@@ -4451,29 +4451,31 @@ stating 49, a `.plain` block caret, is §95's in `Opacity as composition.md`: it
 49 is in the slot a reversal shows as ink, and the faded frame now takes the
 record there.
 
-Still open: the replay restates the ground's field only. A reversal (SGR 7) a
-row paints over its content is recorded in the ground but not restated by the
-splice, so a run inside a reversed row replays unreversed; a persistent dim is
-neither recorded nor restated (`Opacity as composition.md`, the reversed rows'
-limits). The reversal was inferred when this was written and is measured since
-2026-09-24: a `Spinner` in the focused row of an inline `Menu` on a
-`Color.default` palette, whose bar is a reversal because there is no RGB to
-breathe between, replays `⠹` in `ESC[38;2;220;220;220m` where a render at the
-same instant draws it in `ESC[7;38;2;220;220;220m`. The dim is still inferred.
-`ReplayOracle` compares each cell's glyph and field and a glyph's ink, not its
-attributes, so neither shows there — unfaded. Faded (2026-09-24), the reversal
-does show: the fade blends a run's frame over its ground, which reads the
-row's reversal as a field, the bar's colour, so the frame states that field
-under its own ink, unreversed, while the render keeps the reversal (the page as
-ink has no spelling without it). The same spinner, and one in a list's cursor
-row, replay in their own ink on `48;2;220;220;220m` where the render draws them
-reversed. Faded INSIDE a colour, the render resolves the reversal at the painter,
-where it can be spelled without the 7, and the same two spinners replay inked in
-the colour the render draws as their field. `ReplayOracle` takes a cell-level
-excuse (`holding`) and reports the rows it held apart from its mismatches; a held
-cell does not stop the comparison, so a row's other disagreements still fail.
-`ReplayedRunFieldTests` holds, on each faded ground, exactly those two rows —
-named by what they draw, and asserted to be all it held.
+Open when this was written (2026-09-24): the replay restated the ground's field
+only. A reversal (SGR 7) a row paints over its content was recorded in the
+ground but not restated by the splice, so a run inside a reversed row replayed
+unreversed; a persistent dim was neither recorded nor restated (`Opacity as
+composition.md`, the reversed rows' limits). The reversal was inferred at first
+and measured on 2026-09-24: a `Spinner` in the focused row of an inline `Menu`
+on a `Color.default` palette, whose bar is a reversal because there is no RGB to
+breathe between, replayed `⠹` in `ESC[38;2;220;220;220m` where a render at the
+same instant drew it in `ESC[7;38;2;220;220;220m`. The dim was inferred.
+`ReplayOracle` then compared each cell's glyph and field and a glyph's ink, not
+its attributes, so neither showed there — unfaded. Faded, the reversal did show:
+the fade blended a run's frame over its ground, which read the row's reversal as
+a field, the bar's colour, so the frame stated that field under its own ink,
+unreversed, while the render kept the reversal (the page as ink has no spelling
+without it). The same spinner, and one in a list's cursor row, replayed in their
+own ink on `48;2;220;220;220m` where the render drew them reversed. Faded INSIDE
+a colour, the render resolved the reversal at the painter, where it can be
+spelled without the 7, and the same two spinners replayed inked in the colour
+the render drew as their field. For as long as that stood, `ReplayOracle` took a
+cell-level excuse (`holding`) and reported the rows it held apart from its
+mismatches — a held cell did not stop the comparison, so a row's other
+disagreements still failed — and `ReplayedRunFieldTests` held, on each faded
+ground, exactly those two rows, named by what they drew and asserted to be all
+it held. Both are gone. Closed for a faded run on 2026-09-25 (the note below
+where `holding` goes); the unfaded reversal and the dim are still open.
 
 **2026-09-25: a floating surface is composited as it is painted.** The compositor
 above fills a stated 49, and a floating surface on a palette whose page is the
@@ -4503,6 +4505,34 @@ the terminal's own. One field under the whole overlay is painted in the same
 bytes as before. `Opacity as composition.md` §99; `CompositedFieldPerColumnTests`,
 and through the run loop `ReplayedRunFieldTests`' catalogue composited over a
 ramp.
+
+**2026-09-25, later still: faded, a run in a reversed row is blended as the row
+draws it.** The reversal left open above reached the fade too, and there it
+drew something different from the unfaded replay. Measured live before the
+change: a temporary `IdleProbe` mode, an inline `Menu` whose first row is `Busy`
+and a `Spinner` and a `List` whose rows each end in one, on a palette whose page
+is `Color.default` and whose roles are RGB (the catalogue's `terminalPagePalette`);
+a 60×20 PTY, `TERM=xterm-256color`, `COLORTERM=truecolor`, read through pyte after
+every burst the app wrote, for 0.6 s after each Tab. Faded to 0.6 around a
+`.background` colour, with the menu row focused, the render drew the spinner
+reversed (`38;2;220;220;220` on the terminal's own field, SGR 7) and each of the
+five ticks after it drew the glyph in `220;220;220` on `220;220;220` — nothing to
+see; the list's cursor row the same, its spinner in `230;120;40` on
+`220;220;220`. Faded to 0.4 inside the colour, the menu's render drew
+`90;20;120` on `142;100;160` and every tick `142;100;160` on `142;100;160`; the
+list's render `90;20;120` on `146;60;88`, every tick `146;60;88` on
+`142;100;160`. The fade blended a frame over its ground and took a bare cell's
+field from the record, but a reversed row records `ESC[7;<ink>;<field>m`, and the
+blend's parse — which exchanges a reversed cell's colours — read the record's ink,
+the bar, as that field, under a frame cell it blended unreversed. The frame is
+now drawn in what the painters restated beside the field before it is blended
+(`AnimatedCellRun.groundStyle`, `String.restatingGroundStyle(_:)`: the 7 and its
+ink, in front of each cell, the frame's own statements since its last reset over
+them), and the field goes into the cell's background slot from the record's own.
+After, every burst matched the render. `ReplayedRunFieldTests` holds nothing on
+its faded grounds any more, and `ReplayOracle` loses its `holding`;
+`AnimatedRunGroundTests` drops its known issue. `Opacity as composition.md` §100.
+Unfaded, the tick still restated the field alone — the note after this one.
 
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's

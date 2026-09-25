@@ -53,6 +53,15 @@ extension FrameBuffer {
         /// run disagree about a stated 49 (`blendedSpan`'s `fieldsFrom` and
         /// `fieldsUnderStatedDefault`).
         var statesTerminalField = false
+        /// Whether the line says nothing about the background SLOT here — no
+        /// colour, no `ESC[49m` — since its last reset.
+        ///
+        /// For a run's frame, whose unsaid field the painters around it supply
+        /// (`blendedSpan`'s `fieldsFrom`). Not `background == nil`: a reversed cell
+        /// shows that slot as its ink, which the exchange has already filled in with
+        /// the terminal's page where it was unsaid, so only this can tell a reversed
+        /// glyph with no field of its own from one on the page.
+        var leavesFieldUnsaid = false
     }
 
     /// What one cell's three channels are worth, resolved from the region
@@ -157,36 +166,38 @@ extension FrameBuffer {
                     // The character's whole field, including whether it states
                     // the terminal's own: a wide glyph's second column read the
                     // ground where the first read the record under a stated 49.
-                    statesTerminalField: lastSourceCell?.statesTerminalField ?? false)
+                    statesTerminalField: lastSourceCell?.statesTerminalField ?? false,
+                    // With no character of the source before it — a frame that has
+                    // drawn nothing yet, narrower than its run — the blank has said
+                    // nothing about its field, and the splice draws it over the
+                    // ground: the ground's to fill. Taken as naming none, it took the
+                    // surface, and the faded frame put the page where the line has
+                    // the painter's field.
+                    leavesFieldUnsaid: lastSourceCell?.leavesFieldUnsaid ?? true)
             if sourceCells[column] != nil { lastSourceCell = cell }
             // A frame's stated 49 is on whatever the painters made of one — the
             // terminal's own where they let it through, which is what the cell
             // already says, and their field where they filled it — and a bare cell
             // is on what they painted.
             //
+            // In the background SLOT, both, and a reversed cell shows that slot as
+            // its ink: its field is its foreground, which no painter touches (§95).
+            // The record's own slot likewise: in a row that reverses — which the
+            // frame is drawn in, reversed, by `restatingGroundStyle` — the field the
+            // painters left under a cell is in the record's background slot, which
+            // the record, reversed too, shows as its ink.
+            //
             // And whether the field the cell then shows is the terminal's own, stated:
             // by the cell, or by the painters where it takes theirs. Not under a
             // reversal, whose 49 is in the slot it shows as ink.
             var statesTheTerminals = cell.statesTerminalField && !cell.isReversed
             if cell.statesTerminalField, let record = statedDefaultFieldCells?[column],
-                let field = record.background
+                let field = Self.fieldSlot(record)
             {
-                // The 49 is in the background SLOT, and a reversed cell shows that
-                // slot as its ink: its field is its foreground, which no painter
-                // touches (§95).
-                if cell.isReversed {
-                    cell.foreground = field
-                    cell.style = cell.style.settingForeground(field)
-                } else {
-                    cell.background = field
-                    cell.style = cell.style.settingBackground(field)
-                }
+                Self.fill(&cell, with: field)
                 statesTheTerminals = statesTheTerminals && record.statesTerminalField && !record.isReversed
-            } else if !cell.statesTerminalField, cell.background == nil, let record = fieldCells?[column],
-                let field = record.background
-            {
-                cell.background = field
-                cell.style = cell.style.settingBackground(field)
+            } else if cell.leavesFieldUnsaid, let record = fieldCells?[column], let field = Self.fieldSlot(record) {
+                Self.fill(&cell, with: field)
                 statesTheTerminals = !cell.isReversed && record.statesTerminalField && !record.isReversed
             }
             // Bounds-checked rather than trusted: a negative shift is legal —
@@ -294,6 +305,25 @@ extension FrameBuffer {
         // background would otherwise reach the cell after it.
         span += SGRState().rendered(changingFrom: emitted)
         return span
+    }
+
+    /// What `record` — a cell of one of a run's records — has in its background
+    /// SLOT: its field, or, reversed, its ink. `nil` where it says nothing there.
+    private static func fieldSlot(_ record: RowCell) -> Color? {
+        guard !record.leavesFieldUnsaid else { return nil }
+        return record.isReversed ? record.foreground : record.background
+    }
+
+    /// `cell` with `field` in its background SLOT, which a reversed cell shows as
+    /// its ink.
+    private static func fill(_ cell: inout RowCell, with field: Color) {
+        if cell.isReversed {
+            cell.foreground = field
+            cell.style = cell.style.settingForeground(field)
+        } else {
+            cell.background = field
+            cell.style = cell.style.settingBackground(field)
+        }
     }
 
     /// A colour the display cannot tell from the one it is replacing, left as
@@ -681,7 +711,8 @@ extension FrameBuffer {
                     // leaves it; the cell's own spelling keeps the 49.
                     style: statesTerminalField ? state.settingBackground(.terminalBackground) : state,
                     foreground: foreground, background: background,
-                    statesTerminalField: statesTerminalField)
+                    statesTerminalField: statesTerminalField,
+                    leavesFieldUnsaid: background == nil)
                 if state.reversesVideo {
                     var unreversed = state
                     unreversed.apply("\u{1B}[27m")

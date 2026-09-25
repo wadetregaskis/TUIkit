@@ -158,4 +158,38 @@ struct ReversedRowFadeTests {
             }
         }
     }
+
+    /// The probe faded with the label: every frame replayed over the row drawn at every
+    /// other is the row a render draws at it, as the cells look — the tick restating
+    /// nothing over a frame the row has spent.
+    @Test("A run faded inside a reversed row replays as a render draws it", arguments: Row.allCases, [0.3, 0.6])
+    func aFadedRunReplays(row: Row, alpha: Double) throws {
+        for pair in Pair.allCases {
+            try TerminalColors.withCurrent(.unknown) {
+                let frames = ReversedRowProbe.frames.indices
+                let renders = frames.map { built(row, alpha: alpha, drawn: $0, pair: pair) }
+                for drawn in frames {
+                    let (rows, run, page) = renders[drawn]
+                    let probe = try #require(run, "\(row), \(pair) at \(alpha): no run carried up")
+                    for shown in frames {
+                        let replayed = ColorDepth.withCurrent(.truecolor) {
+                            paintedCells(
+                                FrameBuffer.patchingAnimatedCells(
+                                    in: rows[probe.offsetY], with: probe.frame(atIndex: shown),
+                                    atColumn: probe.offsetX, width: probe.width, fields: probe.fields(onPage: page)))
+                        }
+                        let rendered = paintedCells(renders[shown].rows[probe.offsetY])
+                        for column in probe.offsetX..<(probe.offsetX + probe.width)
+                        where !replayed[column].looksLike(rendered[column]) {
+                            Issue.record(
+                                """
+                                \(row), \(pair) at \(alpha): frame \(shown) over frame \(drawn), column \(column): \
+                                replayed \(replayed[column].shown), rendered \(rendered[column].shown)
+                                """)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

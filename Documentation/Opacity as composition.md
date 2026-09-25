@@ -5594,8 +5594,8 @@ the glyph is dropped as §85 drops one, leaving a blank of the bar rather than a
 A run in such a row is blended there too, over its ground, which the row has just reversed. This
 was measured, with each frame replayed over the row drawn at every other: no replayed cell that
 matched the corrected render before this change fails to match it after, and 72 more match. The
-replay still draws a faded run in a reversed row unreversed, which is the reversed rows' own limit
-(§86, the run the row carries).
+replay still drew a faded run in a reversed row unreversed after this change; §100 blends it as
+the row draws it, and `ReversedRowFadeTests` replays one in each row.
 
 **What it costs where no such shape is present:** a reversed row asks its content's claims and
 its runs' alphas whether anything fades (`FrameBuffer.fadesOnWhatIsBehind`), and builds nothing
@@ -6251,7 +6251,8 @@ against its own colour), and the attach carries nothing up for that content
 (`PopulatedRenderState.contentClaims`). Only where the content has a fade to spend — asked
 first, so nearly every row does no more than before. A translucent tint is §22's case and
 still carries both claims. A reversal (the cursor row where its wash cannot be measured)
-already spends its content's fades itself, over its finished lines (§86.1).
+already spends its content's fades itself, over its finished lines (§86.1); since 2026-09-25 a
+run's frames are blended there in the row's reversal (§100).
 
 A repeating fade spent there leaves a run of its own, and nothing else: the attach carries no
 claim for it. So the row carries that run as it carries any of its content's runs, and a
@@ -6429,7 +6430,8 @@ Limits:
   (measured on this tree, truecolor).~~ Fixed 2026-09-25, §99: each cell is painted over the
   field under its own column.
 - A run in a reversed row replays without the reversal, and under a fade that shows in
-  `ReplayOracle` (`Terminal-compatibility.md`, the ground note).
+  `ReplayOracle` (`Terminal-compatibility.md`, the ground note). Faded, fixed 2026-09-25 (§100):
+  the frame is blended in the row's reversal.
 
 ## 98. A floating surface is composited as it is painted (2026-09-25)
 
@@ -6543,3 +6545,84 @@ that walks the painters walks them: with the grounds painted over one field and 
 column, twelve cases of `AnimatedRunGroundTests` failed for the two. Through the run loop,
 `ReplayedRunFieldTests` gains the catalogue in a `ZStack` over a ramp: with the grounds over one
 field, twelve rows replayed on the ramp's first entry where the render drew the entry under them.
+
+## 100. A faded run in a reversed row is blended as the row draws it (2026-09-25)
+
+A row that reverses — a menu's focused row, a `List`'s cursor row, where the highlight has no
+RGB to breathe between (§86, §88) — restates `ESC[7;<ink>;<field>m` after every reset in its
+line. A run inside it (a spinner beside a label) is drawn inside that 7: its glyph in the row's
+field, on a block of the glyph's own colour. The row paints the run's ground with the same
+function (`AnimatedCellRun.ground`), so the record holds the 7 and the ink beside the field.
+
+The fade read only the field of it. It blends each frame of a covered run over the record
+(§93), and gave a cell the frame leaves bare the record's field — through the blend's parse,
+which exchanges a reversed cell's colours (rule 6), so what it read as the record's field was
+its INK, the bar — and blended the frame's own cell unreversed: the glyph in its own ink, on
+the bar. The render blends the row itself, the 7 in force. A label's default ink is the
+palette's foreground, which is the reversal's ink, so the glyph and the field often came out
+one colour. Measured live (a temporary `IdleProbe` mode: an inline `Menu` whose first row is
+`Busy` and a `Spinner`, and a `List` whose rows each end in one, on a palette whose page is
+`Color.default` and whose roles are RGB; a 60×20 PTY in truecolor, read through pyte after
+every burst the app wrote, 0.6 s after each Tab):
+- Faded to 0.6 around a `.background(Color.rgb(90, 20, 120))`, the menu row focused: the render
+  drew the spinner reversed, `38;2;220;220;220` on the terminal's own field, and each of the
+  five ticks after it drew it in `220;220;220` on `220;220;220` — nothing to see. The list's
+  cursor row the same, its spinner in the accent `230;120;40` on `220;220;220`.
+- Faded to 0.4 inside the colour (§96, spent at its painter, where the reversal has an RGB and
+  is spelled without its 7): the menu's render drew `90;20;120` on `142;100;160` and every tick
+  `142;100;160` on `142;100;160`; the list's render `90;20;120` on `146;60;88` and every tick
+  `146;60;88` on `142;100;160`, the two colours exchanged.
+
+**The rule.** A frame is blended as the cell the row draws it as. What the painters restated
+beside the field — the ground's state under each cell with its background taken off
+(`AnimatedCellRun.groundStyle`) — is put back in the frame first (`String.restatingGroundStyle`),
+by the painters' own rule: in front of each cell, their style where the frame last reset (or
+began), with every statement of the frame since over it. So a spinner's frame is parsed as the
+reversed cell the row holds. And the field a bare cell takes from the record goes into its
+background SLOT, read from the record's own slot (`OpacityBlend`'s `fieldSlot` and `fill`): a
+reversed cell shows that slot as its ink, and a reversed record keeps its field there — the
+answer §95 already gave a stated 49 in a cell its own frame reverses, now given every record.
+Whether a cell leaves its field unsaid is read off the frame (`RowCell.leavesFieldUnsaid`), and a
+column no cell of the frame reaches — a frame narrower than its run, which has drawn nothing yet —
+stands in as a blank that has said nothing either: it takes the ground's field too, as the splice
+draws it (`AnimatedRunGroundTests`: a one-cell run whose first frame is empty, faded to 0.5 inside
+a `.background`; taken as naming none, that frame replayed on the page, `48;2;5;10;5`, where the
+faded row is on the blue, `48;2;3;5;103`).
+
+What it leaves alone: a run whose painters restate a field and nothing more — every `.background`,
+compositor, ramp and page, and so nearly every run — has no ground style, and is blended exactly
+as before. A frame that states its painters' style itself (the flatten behind a modal restyles
+every frame with the styling it paints the lines in) comes back from the restatement as it was.
+
+After, through the same probe, every burst matched the render: reversed at 0.6, and `90;20;120`
+on `142;100;160` and on `146;60;88` at 0.4. Unfaded, the replay still restated the field alone,
+and drew the spinner unreversed on every tick (§101).
+
+Failing before, each against the code this change replaces: `RowStyleReplayTests` (new: a
+two-cell probe in the shapes a spinner's frames come in — its own ink, none, a stated 49 — in
+a menu row and a list's cursor row, under the terminal's own page, an RGB page with a slot
+accent, and the terminal's own pair; every frame replayed over the row a render drew at every
+other, against the row a render draws at the replayed one, cell by cell AS THE CELLS LOOK), 114
+issues, e.g. `menu, terminalPage, around: frame 1 over frame 0, column 6: replayed '⠙' in
+rgb(220, 220, 220) on rgb(220, 220, 220), rendered '⠙' in the terminal's background on rgb(220,
+220, 220)`. Through the run loop, `ReplayedRunFieldTests` without the rows it used to hold on its
+three faded grounds: two rows each, e.g. `.fadedInsideColourOnTerminalPage: … row 44, column 9:
+replayed '⠧' in 146;60;88 on 142;100;160, rendered '⠧' in 90;20;120 on 146;60;88`.
+`AnimatedRunGroundTests`' faded probe inside a list row now compares the cells as they look, and
+drops its known issue: before, `listRowFill at 0.6, frame ab: replayed 'a' in rgb(220, 220, 220)
+on rgb(220, 220, 220), the resolved row shows 'a' in the terminal's background on …`.
+`GroundStyleRestatementTests` (TUIkitCoreTests) holds the restatement to a painter restating its
+style after every reset, read by the independent reference model: a spinner's three frames, 1,200
+seeded frames under three styles (a reversal with an ink, a bare reversal, a dim), a frame that
+already states the style (unchanged, byte for byte), a style that restates nothing, and one that
+changes under a run.
+
+A fade INSIDE the reversed row is spent at the row (§86.1), over the ground the row has just
+reversed, by the same blend, so a run there is blended in the reversal as well. `ReversedRowFadeTests`
+gains the two-cell probe faded with a label inside a list's cursor row and a menu's focused row, on
+the three pairs, at 0.3 and 0.6, with every frame replayed over the row drawn at every other,
+against renders, as the cells look. With the style left out of the blend, 180 replayed cells fail.
+
+The ground style is read in one walk that builds nothing unless the painters did restate something
+beside a field (`AnimatedCellRun.groundStyle`). Nearly every run's painters restate a field alone,
+and a style list for such a run was walked and built once per fade, only to be found all default.

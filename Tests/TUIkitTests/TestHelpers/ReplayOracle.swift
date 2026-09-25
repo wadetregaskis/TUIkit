@@ -56,15 +56,6 @@ enum ReplayOracle {
         /// One line per disagreeing row and instant, naming the focus stop, the
         /// first column that differs and what each side has there.
         var mismatches: [String] = []
-        /// The rows where the caller's `holding` excused a disagreement, each with
-        /// the text the render draws on it — so a caller can assert WHICH rows it
-        /// held, and that it held no more. A held cell is not a mismatch, and does
-        /// not stop the comparison: the row's first disagreement it does not excuse
-        /// is still one, at that instant and every later one.
-        var held: [Int: String] = [:]
-        /// One line per held disagreement, as ``mismatches`` spells them, for a
-        /// caller that records them as a known issue.
-        var heldMismatches: [String] = []
         /// How many (row, instant) pairs were replayed and compared — so a test
         /// can require that the comparison had something to compare.
         var compared = 0
@@ -110,17 +101,11 @@ enum ReplayOracle {
     ///   - size: The terminal.
     ///   - reportOncePerRow: Keep only the first disagreement on each row, for a
     ///     walk that would otherwise report one fault at every tick of every stop.
-    ///     Held disagreements are counted apart, so a held row still reports the
-    ///     first one it does not excuse.
     ///   - colours: Where a replayed cell's colours are checked against.
-    ///   - holding: A disagreement the caller knows about and excuses, cell by cell
-    ///     — given what the replay shows and what the render draws. Excused cells
-    ///     land in ``Findings/held``, and the comparison goes on past them.
     static func compare<A: App>(
         _ make: () -> A, focusSteps: Int = 0, stops: Int = 1, ticks: Int = 24,
         size: (width: Int, height: Int) = (80, 30), reportOncePerRow: Bool = false,
-        colours: ColourTruth = .renderedThen,
-        holding: ((_ shown: PaintedCell, _ expected: PaintedCell) -> Bool)? = nil
+        colours: ColourTruth = .renderedThen
     ) -> Findings {
         let replaying = Driven(make(), focusSteps: focusSteps, size: size)
         let rendering = Driven(make(), focusSteps: focusSteps, size: size)
@@ -131,7 +116,6 @@ enum ReplayOracle {
         let step = Int64(AnimationClock.standardFrameTicks) * tick
         var findings = Findings()
         var reported = Set<Int>()
-        var reportedHeld = Set<Int>()
         for stop in 0..<max(1, stops) {
             // Each stop begins a step past the last instant the one before used.
             let base = start + Int64(stop * (ticks + 1)) * step
@@ -174,9 +158,7 @@ enum ReplayOracle {
                 let moved = rendered.contentLines.indices.filter { row in
                     replayed.contentLines.indices.contains(row)
                         && firstDifference(
-                            paintedCells(rendered.contentLines[row]), paintedCells(replayed.contentLines[row]),
-                            holding: nil
-                        ).column != nil
+                            paintedCells(rendered.contentLines[row]), paintedCells(replayed.contentLines[row])) != nil
                 }
                 let rows = Set(replayed.runs.map(\.offsetY) + moved).sorted()
                 for row in rows where replayed.contentLines.indices.contains(row) {
@@ -205,14 +187,7 @@ enum ReplayOracle {
                         \(describe(shown, at: column)), rendered \(describe(expected, at: column))
                         """
                     }
-                    let (column, excused) = firstDifference(shown, expected, holding: holding)
-                    if let excused {
-                        findings.held[row] = String(expected.map(\.glyph))
-                        if !reportOncePerRow || reportedHeld.insert(row).inserted {
-                            findings.heldMismatches.append(mismatch(at: excused))
-                        }
-                    }
-                    guard let column else { continue }
+                    guard let column = firstDifference(shown, expected) else { continue }
                     guard !reportOncePerRow || reported.insert(row).inserted else { continue }
                     findings.mismatches.append(mismatch(at: column))
                 }
@@ -222,19 +197,13 @@ enum ReplayOracle {
     }
 
     /// The first column where the two rows paint a different glyph or field, or
-    /// draw a glyph in a different ink, that `holding` does not excuse — and the
-    /// first it does excuse, if any.
-    private static func firstDifference(
-        _ shown: [PaintedCell], _ expected: [PaintedCell],
-        holding: ((PaintedCell, PaintedCell) -> Bool)?
-    ) -> (column: Int?, excused: Int?) {
+    /// draw a glyph in a different ink.
+    private static func firstDifference(_ shown: [PaintedCell], _ expected: [PaintedCell]) -> Int? {
         let common = min(shown.count, expected.count)
-        var excused: Int?
-        for column in 0..<common where !looksAlike(shown[column], expected[column]) {
-            guard holding?(shown[column], expected[column]) == true else { return (column, excused) }
-            if excused == nil { excused = column }
+        if let column = (0..<common).first(where: { !looksAlike(shown[$0], expected[$0]) }) {
+            return column
         }
-        return (shown.count == expected.count ? nil : common, excused)
+        return shown.count == expected.count ? nil : common
     }
 
     /// Whether two cells show the same thing: the glyph, the field, and — where
