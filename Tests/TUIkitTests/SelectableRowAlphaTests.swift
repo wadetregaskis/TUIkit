@@ -174,7 +174,7 @@ struct SelectableRowAlphaTests {
     func listRowClaimShape() {
         let faded = Color.rgb(200, 40, 40).opacity(0.5)
         // How `_ListCore.renderRow` calls it: no cells, because a list row's content is
-        // a child buffer with its own regions that `attachRowOpacity` carries up.
+        // a child buffer with its own regions that the list's region attach carries up.
         let claims = (0..<3).flatMap { line in
             SelectableRowClaims.claims(
                 line: line, width: 12, cells: 0..<0, ink: nil,

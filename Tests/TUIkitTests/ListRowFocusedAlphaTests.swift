@@ -94,7 +94,7 @@ struct ListRowFocusedAlphaTests {
         // `SelectableRowClaims` states and what the seam test pins the shape of.
         // Exactly one cell: the mark. `offsetX == 1` and `offsetY == 1` because a
         // `List` draws itself inside a border, so the row's own column zero is the
-        // buffer's column one — which is the shift `attachRowOpacity` applies and the
+        // buffer's column one — which is the shift the list's region attach applies and the
         // seam test, working in row-local coordinates, cannot see.
         #expect(ink.count == 1, "\(ink)")
         #expect(ink.first?.width == 1, "one cell, the mark: \(ink)")
