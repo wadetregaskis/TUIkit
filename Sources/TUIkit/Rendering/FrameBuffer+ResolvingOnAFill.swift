@@ -106,6 +106,9 @@ extension FrameBuffer {
     /// span afterwards would reverse those cells a second time, so this is the last
     /// thing the painter does to them (`Opacity as composition.md` §86.1).
     ///
+    /// The runs it blends drop their ground, as every blended run does (§101): the tick
+    /// then restates no reversal over frames that already carry theirs.
+    ///
     /// - Parameters:
     ///   - ink: The reversal's ink — the colour it shows as its field.
     ///   - palette: Resolves SGR 39 and the terminal's own colours.

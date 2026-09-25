@@ -5534,14 +5534,16 @@ Limits:
   draws its cells' ink reversed and its padding in the palette's ink.
 - A reversal is stated opaque and claims nothing, so a translucent ink or page on such a
   palette is spent rather than blended.
-- A run the row carries — a spinner inside a `List` row — replays without the 7. The row
+- ~~A run the row carries — a spinner inside a `List` row — replays without the 7. The row
   records its reversal on the run's ground as it paints it (`AnimatedCellRun.ground`), but
   the splice restates only the ground's FIELD under each bare cell
   (`String.paintedOver(fields:)`), and the 7 that exchanges it for the ink is not a field.
   (Until 2026-09-24 the replay put the PAGE's background after each of the frame's resets
   instead, so it replayed without the row's fill too — see "The animation replay reset to
   the TERMINAL's background" in `Terminal-compatibility.md`.) Inferred from that path, not
-  measured; restating the ground's whole state rather than its field would close it.
+  measured; restating the ground's whole state rather than its field would close it.~~
+  Measured and fixed 2026-09-25: the tick restates the ground's style with its field (§101),
+  and a fade blends the frame in it (§100).
 - A reversal closes itself with a reset, so it covers the row's own cells and no more. The
   container's right pad cell, which a persistent background left in force used to colour by
   bleed, stays bare — as its left pad always was.
@@ -6429,9 +6431,9 @@ Limits:
   cells then three blue ones, with `Text("abcdef")` on top, draws all six letters on red
   (measured on this tree, truecolor).~~ Fixed 2026-09-25, §99: each cell is painted over the
   field under its own column.
-- A run in a reversed row replays without the reversal, and under a fade that shows in
-  `ReplayOracle` (`Terminal-compatibility.md`, the ground note). Faded, fixed 2026-09-25 (§100):
-  the frame is blended in the row's reversal.
+- ~~A run in a reversed row replays without the reversal, and under a fade that shows in
+  `ReplayOracle` (`Terminal-compatibility.md`, the ground note).~~ Fixed 2026-09-25: faded, the
+  frame is blended in the row's reversal (§100); unfaded, the tick restates it (§101).
 
 ## 98. A floating surface is composited as it is painted (2026-09-25)
 
@@ -6626,3 +6628,95 @@ against renders, as the cells look. With the style left out of the blend, 180 re
 The ground style is read in one walk that builds nothing unless the painters did restate something
 beside a field (`AnimatedCellRun.groundStyle`). Nearly every run's painters restate a field alone,
 and a style list for such a run was walked and built once per fade, only to be found all default.
+## 101. The tick draws a run in a reversed row reversed (2026-09-25)
+
+§86's limit, measured: a run the row carries replayed without the 7. The row records its
+reversal on the run's ground as it paints it, and the tick's splice restated only the ground's
+FIELD under each cell a frame leaves bare (`String.paintedOver(fields:)`) — after a reset in
+front of the frame — so the frame was drawn in its own state alone: its glyph in its own ink on
+the terminal's own field, one unreversed cell in the reversed bar, at every tick until the next
+render. Measured live on the same probe as §100, unfaded:
+- The menu row focused, on a `Color.default` page with RGB roles: the render drew the spinner
+  reversed, and each of the five ticks after it drew `38;2;220;220;220` on the terminal's own
+  field, no 7 — the bar one cell short at its end. The same on `LiveTerminalPalette` (the
+  Terminal palette the Example offers, whose ink and page are the terminal's): the glyph in
+  the terminal's foreground on its page, where the render drew it the other way round. Still
+  so with the window's focus reported lost (`ESC[O`), where the bar stays reversed.
+- The list's cursor row: a hole in the middle of the reversed row where the spinner sits, its
+  glyph in the accent on the terminal's own field. In the Example (`--page lists`, the Terminal
+  palette by F2, the multi-line list focused), the render drew the cursor row's spinner
+  reversed across a 115-cell reversal and each of the seven ticks after it drew it unreversed,
+  the row 114 cells reversed.
+- Not reached: a row that is not the cursor or not focused (it draws no reversal: §86), a list
+  that is not focused, and a breathing bar or cursor row on a palette with RGB — which drops its
+  label's runs and asks for a render at their next step instead (§96.3, `MenuBreathingBarRunTests`),
+  measured the same way and unchanged.
+
+`ReplayOracle` could not see it: it compared each cell's colours as SPELLED and no attributes,
+and the two spellings differed only by the 7. It now compares the cells as they LOOK
+(`PaintedCell.looksLike(_:)`): the glyph, the field and the ink with a reversal read as the
+exchange it shows, and the attributes a cell can show (on a blank, only those that draw on one).
+
+**The rule.** The tick draws a frame in everything its painters restated, not only the field:
+the painters' style under each cell (`AnimatedCellRun.GroundFields.style`, read with the fields,
+once per render) goes back first (`String.restatingGroundStyle(_:)`, §100's), then the field. A
+run whose painters restate a field and nothing more has no style, and its bytes are what they
+were — `AnimatedRunPatchGoldenTests` pins them. Nor does a run the flatten behind a modal or
+under `.dimmed()` keeps: it re-spells every frame in its dim and ink itself, and its records of
+what is beneath the run hold the wash's field alone. Washed with the dim and the ink too, as they
+were, every spinner behind a sheet had a style the tick restated in front of each cell at every
+step, to no effect: ten spinners behind a sheet over sixty ticks walked their frames 90 times and
+built ten style arrays a render; now none, the bytes written identical (counted with temporary
+counters through `RenderLoop`, not committed; `AnimatedRunGroundTests` pins the flattened
+run's style at none).
+
+What that costs a run with no style is nothing more than it cost before: the walk that reads
+the ground's fields for the tick notes whether its painters restated anything else, and the
+style is built on a second walk only then. Asked on a walk of its own, the question was a third
+walk of every ground, once a render — `ReplayedRunFieldTests` reads 2,351 grounds, 1,848 of them
+with a record, and walks each of those once less. A run that does have a style is drawn in it
+once per frame per render (`ReplayableFrame.frame(ofRun:atElapsed:)`): the style and the frames
+are fixed until the next render, and restyled at every tick that changed the frame, a spinner in
+a still reversed cursor row was rebuilt at every one of its steps for as long as nothing
+rendered — 103 times over a walk of 240 steps, now 10 (counted with temporary counters, not
+committed; the bytes written identical).
+
+**And a faded run's ground is spent.** §100 blends each frame of a faded run in its painters'
+style and gives each bare cell its field, and every cell of every frame is re-spelled from that:
+a covered cell in its blended colours, an uncovered one as it now stands. A reversal among them
+is spelled in its exchanged colours wherever they can be spelled without the 7 (§85). Restated
+over such a frame, the row's 7 reversed those cells a second time. So the resolution drops the
+record under a bare cell once it has blended a run (`AnimatedCellRun.ground` = `nil`): the only
+cells the tick still asks it about are ones no painter reached, which a run with no record sits
+on as well, and a painter the run meets afterwards paints it from nothing, as it paints the
+resolved line. (Without that, the faded suites below fail again.)
+
+The same rule holds where a reversed row spends its content's fades itself (§86.1). The runs are
+blended there over grounds the row has just reversed, so their frames carry the reversal (or its
+exchange) themselves, and their grounds go. Nothing later in the list or the menu paints a reversal
+into them again: a painter the run meets afterwards paints its field from nothing, which states no
+style. So the tick restates none, and the replay draws each frame as the render does. With the record
+kept after that spend instead, `ReversedRowFadeTests`' faded run replayed its colours exchanged on the
+slot accent's rows at both alphas, and on the terminal page's below one half: 30 replayed cells, e.g.
+`'⠙' in rgb(220, 220, 220) on rgb(100, 100, 106)` where the render has `rgb(100, 100, 106)` on
+`rgb(220, 220, 220)`.
+
+Failing before, each against the code this change replaces: `RowStyleReplayTests` gains the
+unfaded row: 108 issues, e.g. `menu, terminalPage, none: frame 1 over frame 0, column 5: replayed
+'⠙' in the terminal's foreground on the terminal's background, rendered '⠙' in the terminal's
+background on rgb(220, 220, 220)`. Through the run loop, `ReplayedRunFieldTests` under the oracle
+that compares what cells look like: two rows on each unfaded ground whose page is the terminal's
+own, e.g. `.terminalPage: stop 12, tick 1, row 31, column 8: replayed '⠹' in rgb(220, 220, 220)
+on the terminal's background, rendered '⠹' in the terminal's background on rgb(220, 220, 220)`,
+and `.composedOnTerminalPage`'s, where the `ZStack` fills the reversal's 49: `'⠧' in rgb(230,
+120, 40) on rgb(90, 20, 120), rendered … in rgb(90, 20, 120) on rgb(230, 120, 40)`. With the
+faded run's ground kept, 54 faded cases of `RowStyleReplayTests`, both faded-inside grounds
+of `ReplayedRunFieldTests` and `AnimatedRunGroundTests`' list row at 0.4 fail.
+
+Limits:
+- A persistent DIM (`.selectionDisabled()`, which dims its row's lines after every reset) is
+  still neither recorded in the ground nor restated, so a run in such a row replays at full
+  intensity. The restatement would carry it; nothing paints it into the ground yet.
+- A painter's style is assumed to be the same under every cell of a run — which it is for
+  every painter the framework has. Where it is not, each cell takes the style under its own
+  column, from a reset where an attribute has to go off (`GroundStyleRestatementTests`).

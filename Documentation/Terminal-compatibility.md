@@ -4474,8 +4474,8 @@ cell-level excuse (`holding`) and reported the rows it held apart from its
 mismatches — a held cell did not stop the comparison, so a row's other
 disagreements still failed — and `ReplayedRunFieldTests` held, on each faded
 ground, exactly those two rows, named by what they drew and asserted to be all
-it held. Both are gone. Closed for a faded run on 2026-09-25 (the note below
-where `holding` goes); the unfaded reversal and the dim are still open.
+it held. Both are gone. Closed 2026-09-25 for the reversal, faded and unfaded
+(the last two notes of this section); the dim is still open.
 
 **2026-09-25: a floating surface is composited as it is painted.** The compositor
 above fills a stated 49, and a floating surface on a palette whose page is the
@@ -4533,6 +4533,36 @@ After, every burst matched the render. `ReplayedRunFieldTests` holds nothing on
 its faded grounds any more, and `ReplayOracle` loses its `holding`;
 `AnimatedRunGroundTests` drops its known issue. `Opacity as composition.md` §100.
 Unfaded, the tick still restated the field alone — the note after this one.
+
+**2026-09-25, and unfaded: the tick restates a reversed row's style with its
+field.** The same probe, unfaded, measured before the change: with the menu row
+focused, the render drew the spinner reversed and each of the five ticks after
+it drew `⠹` in `38;2;220;220;220` on the terminal's own field, no 7 — the bar one
+cell short at its end; the list's cursor row with a one-cell hole where its
+spinner sits, the glyph in the accent. On the Example's own Terminal palette
+(`LiveTerminalPalette`, reached by F2 from the default; the terminal's pair and
+slots, unreported through a PTY that answers nothing), the menu row the same in
+the terminal's own pair, still so after `ESC[O` reports the window's focus lost
+(the bar stays reversed); and in the Example itself (`--page lists`, the
+multi-line list focused, 120×40), the cursor row's spinner reversed on the
+render and unreversed on each of the seven ticks after it, the row reversed at
+114 of its 115 cells. Not reached: a row that is not the cursor, a list without
+the focus, and a breathing bar or cursor row on a palette with RGB, which drops
+its label's runs and wakes for their steps instead — unchanged, measured the
+same way. `ReplayOracle` could not see it: it compared colours as spelled and no
+attributes, and the two spellings differed only by the 7; it now compares cells
+as they look (`PaintedCell.looksLike(_:)`). The tick now draws a frame in the
+painters' style under each cell (`AnimatedCellRun.GroundFields.style`, read with
+the fields once per render) before the field, and a run a fade has blended
+drops its record under a bare cell (every cell of its frames is re-spelled from
+the frame composed over it, so the 7 restated again would reverse those cells a
+second time). A run whose painters restate only a field — nearly every run — has
+no style, and its bytes are as they were (`AnimatedRunPatchGoldenTests`). After,
+every burst of every variant above matched the render: reversed on every tick,
+before and after the focus report, and the Example's cursor row reversed at all
+115 cells on every tick. `Opacity as composition.md` §101; `RowStyleReplayTests`,
+and `ReplayedRunFieldTests` under the new oracle. Still open from the paragraph
+above: a persistent dim is neither recorded nor restated.
 
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's

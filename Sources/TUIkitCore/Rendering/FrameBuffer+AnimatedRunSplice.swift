@@ -53,8 +53,12 @@ extension FrameBuffer {
     /// box around a breathing checkbox on a light-background terminal.
     ///
     /// So each cell the frame leaves bare is drawn over `fields` for THAT cell,
-    /// and *only* a field — the foreground, bold and underline in force there
-    /// belong to the glyph being replaced, not to the surface under it. The field
+    /// and *only* what the containers restate there — the foreground, bold and
+    /// underline the line has in force there belong to the glyph being replaced,
+    /// not to the surface under it. That is a field, and, in a row that reverses,
+    /// the 7 and the ink it exchanges (`fields.style`): restating the field alone
+    /// drew a spinner in a menu's focused row unreversed on every tick, until
+    /// 2026-09-25 (``String/restatingGroundStyle(_:)``). The field
     /// is restated after every reset *inside* the frame, not only in front of it,
     /// for the same reason `applyPersistentBackground` does it: a frame is often
     /// several coloured pieces (`colorize(arrow) + colorize(label)`,

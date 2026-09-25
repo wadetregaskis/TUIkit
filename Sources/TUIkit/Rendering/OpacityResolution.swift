@@ -517,9 +517,20 @@ extension FrameBuffer {
         // read under a stated 49 and nowhere else, and on a palette of colours with an
         // RGB, with no `Color.default` among the content, no blend spells one — which
         // is nearly every faded run, whose record was rewritten for nothing.
-        let faded = run.replacingFrames(fadedFrames, alpha: nil)
-        guard fadedFrames.contains(where: \.mayStateTheTerminalsField) else { return faded }
-        return faded.statingTerminalField(atBlendedColumns: alphas.indices.filter { alphas[$0] != nil })
+        var faded = run.replacingFrames(fadedFrames, alpha: nil)
+        if fadedFrames.contains(where: \.mayStateTheTerminalsField) {
+            faded = faded.statingTerminalField(atBlendedColumns: alphas.indices.filter { alphas[$0] != nil })
+        }
+        // And the ground under a bare cell is SPENT too. Every cell of every frame was
+        // re-spelled from the frame drawn over it — given its field wherever the
+        // painters left one, in their style (§100) — so the only cells the splice still
+        // asks the record about are ones no painter reached, which a run with no record
+        // sits on as well. Kept, a row's reversal was restated over a frame that already
+        // carried it (§101): a 7 put back in front of a cell the blend had spelled in its
+        // exchanged colours without one, reversing it a second time. A painter the run
+        // meets afterwards paints the record from nothing, as it paints the resolved line.
+        faded.ground = nil
+        return faded
     }
 
     private static func foldedAlphas(

@@ -336,6 +336,12 @@ struct AnimatedRunGroundTests {
             #expect(
                 run.groundFields(onPage: Self.page).map(spelled) == shown,
                 "\(placement), \(wash): the ground is not what the dimmed row shows")
+            // The field alone: the flatten re-spells every frame in its dim and ink,
+            // so a ground style would be restated in front of every cell at every
+            // tick to no effect.
+            #expect(
+                run.fields(onPage: Self.page).style == nil,
+                "\(placement), \(wash): the flatten left a ground style for every tick to restate")
         }
         // And the splice itself, which is what a tick does: the drawn frame over
         // its ground is the row as the flatten drew it.

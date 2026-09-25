@@ -66,6 +66,15 @@ extension String {
     /// only in WHERE a restatement goes when other escapes sit between a reset
     /// and the next cell, and in restating nothing after the last cell.
     ///
+    /// What the painters restated beside the field goes back first
+    /// (``restatingGroundStyle(_:)``, from `fields.style`): a row that reverses
+    /// restates `ESC[7;<ink>;<field>m` after every reset, so a spinner in it is
+    /// drawn reversed, and restating only the field drew it unreversed — its glyph
+    /// in its own ink on the terminal's own field, a one-cell hole in the bar on
+    /// every tick, where the render drew it in the row's field on a block of its
+    /// own colour. Until 2026-09-25. A run whose painters restate nothing else —
+    /// nearly every one — has no style, and its bytes are as they were.
+    ///
     /// - Parameters:
     ///   - fields: The fields under each of the frame's columns — one per column
     ///     in each list, a wide character's second included. A column past the end
@@ -74,6 +83,13 @@ extension String {
     ///     field at all, rather than the terminal's own — a compositor's reading.
     /// - Returns: The frame, each field-less cell over its own column's field.
     func paintedOver(fields: AnimatedCellRun.GroundFields, absentFieldIsUnstated: Bool = false) -> String {
+        let styled = fields.style.map { restatingGroundStyle($0) } ?? self
+        return styled.paintingFields(fields, absentFieldIsUnstated: absentFieldIsUnstated)
+    }
+
+    /// ``paintedOver(fields:absentFieldIsUnstated:)``'s fields, once the frame is
+    /// in its painters' style.
+    private func paintingFields(_ fields: AnimatedCellRun.GroundFields, absentFieldIsUnstated: Bool) -> String {
         guard !fields.restateNothing else { return self }
 
         /// A field the output can have in force: none, the terminal's own stated,

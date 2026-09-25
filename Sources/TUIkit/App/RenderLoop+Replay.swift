@@ -86,6 +86,17 @@ struct ReplayableFrame {
     /// nothing.
     private var runFields: [AnimatedCellRun.GroundFields?]
 
+    /// Each run's frames drawn in its painters' style, `runStyledFrames[i][k]` for
+    /// frame `k` of `runs[i]` — for a run whose painters restate more than a field, a
+    /// spinner in a reversed or dimmed row (`GroundFields.style`) — filled as ticks
+    /// ask, and `nil` for every other run.
+    ///
+    /// The style and the frames are fixed until the next render, as the fields are.
+    /// Restyled on every tick that changed the frame, the same few frames of a
+    /// spinner in a still reversed row were rebuilt at every one of its steps for as
+    /// long as nothing rendered.
+    private var runStyledFrames: [[String?]?]
+
     init(
         contentLines: [String], runs: [AnimatedCellRun], terminalWidth: Int, startRow: Int,
         backgroundCode: String
@@ -96,6 +107,7 @@ struct ReplayableFrame {
         self.startRow = startRow
         self.backgroundCode = backgroundCode
         runFields = Array(repeating: nil, count: runs.count)
+        runStyledFrames = Array(repeating: nil, count: runs.count)
     }
 
     /// The fields under each cell of `runs[index]`, read the first time a tick
@@ -105,6 +117,24 @@ struct ReplayableFrame {
         let fields = runs[index].fields(onPage: backgroundCode)
         runFields[index] = fields
         return fields
+    }
+
+    /// `runs[index]`'s frame at `elapsed` as the tick draws it, and the fields to
+    /// draw it over: in its painters' style, where they restate one, styled the first
+    /// time a tick shows that frame and kept until the next render — the fields then
+    /// saying nothing about a style, which the frame already has
+    /// (``String/paintedOver(fields:absentFieldIsUnstated:)``).
+    mutating func frame(ofRun index: Int, atElapsed elapsed: Double) -> (frame: String, fields: AnimatedCellRun.GroundFields) {
+        var fields = fields(ofRun: index)
+        let run = runs[index]
+        guard let style = fields.style else { return (run.frame(atElapsed: elapsed), fields) }
+        fields.style = nil
+        let frame = run.index(atElapsed: elapsed)
+        if let styled = runStyledFrames[index]?[frame] { return (styled, fields) }
+        let styled = run.frame(atIndex: frame).restatingGroundStyle(style)
+        if runStyledFrames[index] == nil { runStyledFrames[index] = Array(repeating: nil, count: run.frames.count) }
+        runStyledFrames[index]?[frame] = styled
+        return (styled, fields)
     }
 
     /// The step each clock was last *written* at, so a tick that lands on the
@@ -277,9 +307,10 @@ extension RenderLoop {
                 // under sits on, and every other cell sits on its container's
                 // field. Restated after every reset in the frame, the page
                 // painted over every container's field.
-                let fields = replayable?.fields(ofRun: index) ?? run.fields(onPage: frame.backgroundCode)
-                let patched = diffWriter.patchingAnimatedRun(
-                    run, showing: run.frame(atElapsed: now), in: lines[row], fields: fields)
+                let (shown, fields) =
+                    replayable?.frame(ofRun: index, atElapsed: now)
+                    ?? (run.frame(atElapsed: now), run.fields(onPage: frame.backgroundCode))
+                let patched = diffWriter.patchingAnimatedRun(run, showing: shown, in: lines[row], fields: fields)
                 if patched != lines[row] {
                     lines[row] = patched
                     touched = true

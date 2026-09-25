@@ -7,14 +7,17 @@
 //  Two loops over the same app, moving the focus in step. One renders once per
 //  focus stop and then REPLAYS every later tick, the way the run loop serves an
 //  animation; the other RENDERS at each of those instants. Every row a run sits
-//  on is compared cell by cell — the glyph, the field, and the ink a glyph is
-//  drawn in — so a replay that gets a field wrong anywhere on the row, under the
-//  run or beside it, or replays a frame some pass recoloured in the lines and not
-//  in the run, shows up as the first column where the two disagree. Not compared:
-//  the ink of a blank cell, which nothing shows, and the attributes (bold, dim,
-//  reverse video), which the replay does not restate — a run in a reversed row
-//  replays unreversed (`Documentation/Terminal-compatibility.md`, the ground
-//  note). The render is the oracle rather than the
+//  on is compared cell by cell AS THE CELLS LOOK (`PaintedCell.looksLike(_:)`) —
+//  the glyph, the field, the ink a glyph is drawn in, and the attributes, with a
+//  reversal read as the exchange it shows — so a replay that gets a field wrong
+//  anywhere on the row, under the run or beside it, replays a frame some pass
+//  recoloured in the lines and not in the run, or drops a row's reversal, shows up
+//  as the first column where the two disagree. Not compared: the ink of a blank
+//  cell, which nothing shows. Until 2026-09-25 the colours were compared as
+//  SPELLED and the attributes not at all, and a spinner in a reversed row, which
+//  the tick drew unreversed, passed: the two spellings differed only by the 7
+//  (`Documentation/Terminal-compatibility.md`, the ground note). The render is
+//  the oracle rather than the
 //  row the replay started from, because only a render knows what the screen
 //  should show at a later step; the row the replay starts from is what it
 //  patches, and asking it would only check that the replay reads what it reads.
@@ -173,13 +176,7 @@ enum ReplayOracle {
                         expected = zip(expected, colours).map { PaintedCell(glyph: $0.glyph, state: $1.state) }
                     }
                     func describe(_ cells: [PaintedCell], at column: Int) -> String {
-                        guard cells.indices.contains(column) else { return "nothing" }
-                        let cell = cells[column]
-                        let ink = cell.glyph == " " ? "" : " in \(spelledInk(cell.ink).debugDescription)"
-                        // Said, because the comparison reads the two colours as
-                        // spelled and a reversal exchanges what they show.
-                        let reversed = cell.state.reversesVideo ? ", reversed" : ""
-                        return "'\(cell.glyph)'\(ink) on \(cell.background.debugDescription)\(reversed)"
+                        cells.indices.contains(column) ? cells[column].shown : "nothing"
                     }
                     func mismatch(at column: Int) -> String {
                         """
@@ -196,29 +193,14 @@ enum ReplayOracle {
         return findings
     }
 
-    /// The first column where the two rows paint a different glyph or field, or
-    /// draw a glyph in a different ink.
+    /// The first column where the two rows do not look the same
+    /// (`PaintedCell.looksLike(_:)`).
     private static func firstDifference(_ shown: [PaintedCell], _ expected: [PaintedCell]) -> Int? {
         let common = min(shown.count, expected.count)
-        if let column = (0..<common).first(where: { !looksAlike(shown[$0], expected[$0]) }) {
+        if let column = (0..<common).first(where: { !shown[$0].looksLike(expected[$0]) }) {
             return column
         }
         return shown.count == expected.count ? nil : common
-    }
-
-    /// Whether two cells show the same thing: the glyph, the field, and — where
-    /// there is a glyph to draw it — the ink.
-    private static func looksAlike(_ shown: PaintedCell, _ expected: PaintedCell) -> Bool {
-        guard shown.glyph == expected.glyph, shown.background == expected.background else { return false }
-        return shown.glyph == " " || shown.ink == expected.ink
-    }
-
-    /// `ink` spelled as the foreground escape that states it, `""` for the
-    /// terminal's own — for a message.
-    private static func spelledInk(_ ink: SGRState.Colour?) -> String {
-        var state = SGRState()
-        state.setForeground(ink)
-        return state.rendered
     }
 
     /// A loop over an app, and what it renders with: the cursor timer, and an

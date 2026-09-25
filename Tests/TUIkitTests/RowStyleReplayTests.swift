@@ -99,8 +99,10 @@ struct RowStyleReplayTests {
         }
     }
 
-    /// Where a fade meets the row.
+    /// Where a fade meets the row, if one does.
     enum Fade: String, CaseIterable, Sendable, CustomTestStringConvertible {
+        /// No fade: the tick splices each frame over the row.
+        case none
         /// Around the row and a colour behind it, at 0.6: resolved at the root.
         case around
         /// Inside a colour, at 0.4: spent at the colour's painter (§96).
@@ -111,6 +113,7 @@ struct RowStyleReplayTests {
         @MainActor @ViewBuilder
         func view(_ row: some View) -> some View {
             switch self {
+            case .none: row
             case .around: row.padding(1).background(Color.rgb(90, 20, 120)).opacity(0.6)
             case .inside: row.opacity(0.4).padding(1).background(Color.rgb(90, 20, 120))
             }
@@ -149,9 +152,9 @@ struct RowStyleReplayTests {
     /// compared with the row a render draws at that frame — for each pair a
     /// reversal can exchange.
     @Test(
-        "A faded run in a reversed row replays as a render draws it",
+        "A run in a reversed row replays as a render draws it",
         arguments: Row.allCases, Fade.allCases)
-    func aFadedRunReplaysAsDrawn(row: Row, fade: Fade) throws {
+    func aRunReplaysAsDrawn(row: Row, fade: Fade) throws {
         for pair in Pair.allCases { try replays(row, pair: pair, fade: fade) }
     }
 

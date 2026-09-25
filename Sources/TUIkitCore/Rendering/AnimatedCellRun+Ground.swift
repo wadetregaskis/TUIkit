@@ -48,6 +48,16 @@
 //  functions, from a row that states `ESC[49m` in front of its cells, so each
 //  painter answers for a stated 49 as it did in the lines.
 //
+//  And a painter can restate more than a field. A row that REVERSES — a menu's
+//  focused row, a list's cursor row, where the highlight has no RGB to breathe
+//  between — restates `ESC[7;<ink>;<field>m`, so the ground records the 7 and
+//  the ink beside the field, and a frame drawn in that row is reversed with it.
+//  That is the ground's STYLE (`groundStyle`, `GroundFields.style`), which the
+//  tick and the fade restate in front of each cell before the field
+//  (`String.restatingGroundStyle(_:)`). Read for the field alone, a spinner in
+//  such a row replayed unreversed on every tick, and blended under a fade in
+//  the bar's own colour.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -143,9 +153,10 @@ extension AnimatedCellRun {
     /// The fields a replayed frame's cells are drawn over, read on a row's page:
     /// one list for a cell whose frame states no field, one for a cell whose frame
     /// states the terminal's own (`ESC[49m`), each one field per cell of the run,
-    /// `nil` for the terminal's own.
+    /// `nil` for the terminal's own — and what the painters restated there beside
+    /// the field.
     ///
-    /// Both fixed from one render to the next, so the run loop reads them once per
+    /// All fixed from one render to the next, so the run loop reads them once per
     /// render (`ReplayableFrame.fields(ofRun:)`) and hands them to every tick.
     package struct GroundFields: Sendable, Equatable {
         /// Under a cell whose frame states no field: ``groundFields(onPage:)``.
@@ -153,10 +164,17 @@ extension AnimatedCellRun {
         /// Under a cell whose frame states `ESC[49m`: ``groundUnderStatedDefault``
         /// read the same way.
         package var underStatedDefault: [SGRState.Colour?]
+        /// What the painters restated under each cell beside the field — a row's
+        /// reversal and its ink — or `nil` where they restated nothing else, which
+        /// is nearly every run: ``groundStyle``.
+        package var style: [SGRState]?
 
-        package init(bare: [SGRState.Colour?], underStatedDefault: [SGRState.Colour?]) {
+        package init(
+            bare: [SGRState.Colour?], underStatedDefault: [SGRState.Colour?], style: [SGRState]? = nil
+        ) {
             self.bare = bare
             self.underStatedDefault = underStatedDefault
+            self.style = style
         }
 
         /// Whether no cell has a field to restate, whatever its frame states: the
@@ -167,17 +185,28 @@ extension AnimatedCellRun {
     }
 
     /// Both lists of fields this run's cells are drawn over on a row built on
-    /// `page`. See ``GroundFields``.
+    /// `page`, and the style restated beside them. See ``GroundFields``.
     ///
     /// - Parameter page: The row's own background escape, or `""`.
-    /// - Returns: The fields under a bare cell and under a stated `ESC[49m`.
+    /// - Returns: The fields under a bare cell and under a stated `ESC[49m`, and
+    ///   the painters' style under each cell.
     package func fields(onPage page: String) -> GroundFields {
-        GroundFields(
-            bare: groundFields(onPage: page),
+        // The walk that reads the ground's fields says too whether its painters
+        // restated more than a field, and the style is built only then — nearly never.
+        // A style list, and the states read to make it, built for every grounded run
+        // once a render to be found all default, were most of what this cost; and
+        // asked on a walk of its own, the question was a third walk of the ground.
+        var restatesMore = false
+        let bare =
+            ground.map { Self.fields(of: $0, cells: width, onPage: page, restatingMoreThanAField: &restatesMore) }
+            ?? groundFields(onPage: page)
+        return GroundFields(
+            bare: bare,
             // Nothing painted: a stated 49 is the terminal's own whatever the page
             // is, because the row builder restates the page only after a reset.
             underStatedDefault: groundUnderStatedDefault.map { Self.fields(of: $0, cells: width, onPage: page) }
-                ?? Array(repeating: nil, count: max(0, width)))
+                ?? Array(repeating: nil, count: max(0, width)),
+            style: restatesMore ? ground.map { Self.style(of: $0, cells: width) } : nil)
     }
 
     /// Both lists of fields this run's cells are drawn over in a row the writer has
@@ -196,22 +225,35 @@ extension AnimatedCellRun {
     /// (``String/paintedOver(fields:absentFieldIsUnstated:)``), each goes back to what
     /// its painter left.
     ///
-    /// - Returns: The fields under a bare cell and under a stated `ESC[49m`.
+    /// - Returns: The fields under a bare cell and under a stated `ESC[49m`, and the
+    ///   painters' style under each cell, as ``fields(onPage:)`` gives it.
     package func fieldsInAnUnbuiltRow() -> GroundFields {
         let none = [SGRState.Colour?](repeating: nil, count: max(0, width))
+        // As on a page, the ground's walk says whether to build a style at all.
+        var restatesMore = false
+        let bare = ground.map { Self.unbuiltFields(of: $0, cells: width, restatingMoreThanAField: &restatesMore) }
+        var unasked = false
         return GroundFields(
-            bare: ground.map { Self.unbuiltFields(of: $0, cells: width) } ?? none,
-            underStatedDefault: groundUnderStatedDefault.map { Self.unbuiltFields(of: $0, cells: width) } ?? none)
+            bare: bare ?? none,
+            underStatedDefault: groundUnderStatedDefault.map {
+                Self.unbuiltFields(of: $0, cells: width, restatingMoreThanAField: &unasked)
+            } ?? none,
+            style: restatesMore ? ground.map { Self.style(of: $0, cells: width) } : nil)
     }
 
     /// `record` read cell by cell as a row still to be built reads it: the field
     /// under each of `width` cells, a stated 49 as `.named(49)`, and `nil` after a
     /// reset. A short record's last field stands under the cells it does not reach.
-    private static func unbuiltFields(of record: String, cells width: Int) -> [SGRState.Colour?] {
+    /// Whether a painter restated more than a field under a cell it reached is noted
+    /// in `restatesMore`.
+    private static func unbuiltFields(
+        of record: String, cells width: Int, restatingMoreThanAField restatesMore: inout Bool
+    ) -> [SGRState.Colour?] {
         var fields: [SGRState.Colour?] = []
         fields.reserveCapacity(max(0, width))
         var state = SGRState()
         var field: SGRState.Colour?
+        var more = false
         _ = record.forEachANSISegment { segment in
             switch segment {
             case .ansi(let sequence, isSGR: true):
@@ -224,11 +266,17 @@ extension AnimatedCellRun {
             case .ansi:
                 break
             case .visible(let character):
+                if !more {
+                    var restated = state
+                    restated.setBackground(nil)
+                    more = !restated.isDefault
+                }
                 for _ in 0..<max(1, character.terminalWidth) where fields.count < width { fields.append(field) }
             }
             return fields.count < width
         }
         while fields.count < width { fields.append(field) }
+        restatesMore = restatesMore || more
         return fields
     }
 
@@ -270,12 +318,18 @@ extension AnimatedCellRun {
     package var groundStyle: [SGRState]? {
         // Asked before anything is built: nearly every run's painters restate a
         // field and nothing more, and a style list for such a run would be walked
-        // and built once per fade to be found all default.
+        // and built once a render, and once per fade, to be found all default.
         guard let ground, Self.restatesMoreThanAField(ground, cells: width) else { return nil }
+        return Self.style(of: ground, cells: width)
+    }
+
+    /// `record`'s style under each of `width` cells: its state with the background
+    /// taken off.
+    private static func style(of record: String, cells width: Int) -> [SGRState] {
         var style: [SGRState] = []
         style.reserveCapacity(max(0, width))
         // A page is only ever a field, so any page reads the same style.
-        Self.walk(ground, cells: width, onPage: "") { state in
+        walk(record, cells: width, onPage: "") { state in
             var restated = state
             restated.setBackground(nil)
             style.append(restated)
@@ -301,12 +355,29 @@ extension AnimatedCellRun {
     /// a row built on `page`, as ``groundFields(onPage:)`` describes: the field under
     /// each cell.
     private static func fields(of record: String, cells width: Int, onPage page: String) -> [SGRState.Colour?] {
+        var unasked = false
+        return fields(of: record, cells: width, onPage: page, restatingMoreThanAField: &unasked)
+    }
+
+    /// ``fields(of:cells:onPage:)``, noting in `restatesMore` whether a painter
+    /// restated anything but a field under one of the cells — which a page, being
+    /// only ever a field, cannot change.
+    private static func fields(
+        of record: String, cells width: Int, onPage page: String, restatingMoreThanAField restatesMore: inout Bool
+    ) -> [SGRState.Colour?] {
         var fields: [SGRState.Colour?] = []
         fields.reserveCapacity(max(0, width))
+        var more = false
         walk(record, cells: width, onPage: page) { state in
             fields.append(state.backgroundColour)
+            if !more {
+                var restated = state
+                restated.setBackground(nil)
+                more = !restated.isDefault
+            }
             return true
         }
+        restatesMore = restatesMore || more
         return fields
     }
 

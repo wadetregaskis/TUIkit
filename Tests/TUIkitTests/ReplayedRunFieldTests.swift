@@ -7,8 +7,9 @@
 //  terminal's own page (`Color.default`), and a colour on it — painted as a
 //  `.background`, composited under a `ZStack`, faded, dimmed and behind a sheet —
 //  and every replayed tick compared
-//  with a render at the same instant (`ReplayOracle`): each cell's glyph and
-//  field, and the ink a glyph is drawn in. The class
+//  with a render at the same instant (`ReplayOracle`): each cell as it looks —
+//  its glyph and field, the ink a glyph is drawn in, and its attributes, a
+//  reversal read as the exchange it shows. The class
 //  `ReplayedTabChipBackgroundTests` is one case of, and the class
 //  `ReplayedCaretBlinkTests` is another: whatever a frame leaves bare has to land
 //  on the field its containers painted beneath it, and nothing else on the row

@@ -643,7 +643,10 @@ extension FrameDiffWriter {
     /// cell — the run's ground, on this row's page (``AnimatedCellRun/ground``,
     /// ``AnimatedCellRun/fields(onPage:)``) — restated straight after every
     /// reset in the frame, collapsed `ESC[0;…m` spellings included
-    /// (`String.paintedOver(fields:)`). It does that BEFORE the compensation, which
+    /// (`String.paintedOver(fields:)`), and in whatever else they restated there
+    /// beside it: a row that reverses restates its 7 and ink, and a spinner in one
+    /// drawn in the field alone came out unreversed on every tick. It does that
+    /// BEFORE the compensation, which
     /// is why the compensation is handed to it rather than applied here first: on
     /// a host that erases under a glyph it advances too little over, the
     /// compensation writes an `ECH` in front of the glyph, and the erase paints in

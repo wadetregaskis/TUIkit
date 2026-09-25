@@ -142,9 +142,14 @@ extension FrameBuffer {
     ///
     /// A kept run's two records of what is beneath its cells — its ground
     /// (`AnimatedCellRun.ground`), and the record under a stated `ESC[49m`
-    /// (`AnimatedCellRun.groundUnderStatedDefault`) — are washed with its frames,
-    /// by the same rule: every cell of each repainted in the wash, a record no
-    /// painter had reached yet included. The replay draws each cell a frame leaves
+    /// (`AnimatedCellRun.groundUnderStatedDefault`) — are washed with its frames:
+    /// every cell of each repainted in the wash's field, a record no painter had
+    /// reached yet included. The field alone — the dim and the ink the flatten
+    /// puts in front of every frame are each frame's own, re-spelled above, so a
+    /// record holding them too gave every run behind a sheet a ground STYLE the
+    /// tick restates in front of each cell of the frame at every step
+    /// (`AnimatedCellRun.groundStyle`), changing nothing: ten spinners behind a
+    /// sheet walked their frames ninety times in sixty ticks for it. The replay draws each cell a frame leaves
     /// bare over the first, and each cell it puts on the terminal's own field —
     /// which is how every frame comes out when the wash is `Color.default` — over
     /// the second. Left as they were, they still held what was painted beneath the
@@ -177,7 +182,7 @@ extension FrameBuffer {
             // washed with the frames — see the note above on the ground.
             let dimmed = run.replacingFrames(
                 run.frames.map { wrap($0, toWidth: run.width) }, alpha: nil
-            ).paintingGround { wrap($0, toWidth: run.width) }
+            ).paintingGround { _ in wrap.field(toWidth: run.width) }
             return dimmed.isAnimating ? dimmed : nil
         }
         // One rectangle, over everything the wash covers — the runs included, whose
@@ -204,6 +209,9 @@ extension FrameBuffer {
 private struct Flattening {
     private let prefix: String
     private let suffix: String
+    /// The wash's field alone, which is all a run's records of what is beneath it
+    /// take (``field(toWidth:)``).
+    private let backgroundCode: String
 
     init(foreground: Color, background: Color) {
         var style = TextStyle()
@@ -211,6 +219,7 @@ private struct Flattening {
         style.backgroundColor = background
         style.isDim = true
         let backgroundCode = ANSIRenderer.backgroundCode(for: background)
+        self.backgroundCode = backgroundCode
         // Byte-for-byte what `render(_:with:) + withPersistentBackground(_:)`
         // produced: the persistent background re-states itself after each
         // reset, and flattened text is stripped, so the only reset is the one
@@ -224,6 +233,14 @@ private struct Flattening {
             prefix = backgroundCode
             suffix = ANSIRenderer.reset
         }
+    }
+
+    /// `width` cells of the wash's field and nothing else: what a kept run's
+    /// records of what is beneath it hold. The dim and the ink are every frame's
+    /// own, so the records need not — and must not, or every tick restates them
+    /// in front of each cell to no effect — say them again.
+    func field(toWidth width: Int) -> String {
+        backgroundCode + String(repeating: " ", count: max(0, width)) + ANSIRenderer.reset
     }
 
     /// One row — or one frame of a run covering part of a row — stripped of its
