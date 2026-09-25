@@ -288,7 +288,7 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 
 /// A row of an eager source: its content, already rendered, and its type —
 /// known, or a flattened child's selection value still to be asked of the
-/// ``FlattenedRowIDs`` of the container it came from.
+/// ``FlattenedRowIDs`` of the container it came from (``AskedRowID``).
 ///
 /// A looped row's selection value is its loop's rule, and for a
 /// `.tag(_:)`-outermost row that rule BUILDS the row to read the tag. The
@@ -301,8 +301,7 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 private struct EagerListRow<SelectionValue: Hashable & Sendable> {
     private enum Kind {
         case known(ListRowType<SelectionValue>)
-        /// The `ordinal`-th row of its container, which is `child` of `rowIDs`.
-        case asked(FlattenedRowIDs<SelectionValue>, child: Int, ordinal: Int)
+        case asked(AskedRowID<SelectionValue>)
     }
 
     private let kind: Kind
@@ -314,14 +313,10 @@ private struct EagerListRow<SelectionValue: Hashable & Sendable> {
         content = row.content
     }
 
-    /// A flattened child, whose type is its selection value from `rowIDs`
-    /// (``FlattenedRowIDs/id(ofChildAt:ordinal:)``) — content when it has
-    /// one, unselectable when it has none — once someone asks.
-    init(
-        child: Int, ordinal: Int, of rowIDs: FlattenedRowIDs<SelectionValue>,
-        content: LazyListRowContent
-    ) {
-        kind = .asked(rowIDs, child: child, ordinal: ordinal)
+    /// A flattened child, whose type is its selection value — content when it
+    /// has one, unselectable when it has none — once someone asks.
+    init(asked id: AskedRowID<SelectionValue>, content: LazyListRowContent) {
+        kind = .asked(id)
         self.content = content
     }
 
@@ -336,8 +331,8 @@ private struct EagerListRow<SelectionValue: Hashable & Sendable> {
         switch kind {
         case .known(let type):
             return type
-        case .asked(let rowIDs, let child, let ordinal):
-            return rowIDs.id(ofChildAt: child, ordinal: ordinal).map { .content(id: $0) } ?? .unselectable
+        case .asked(let id):
+            return id.id.map { .content(id: $0) } ?? .unselectable
         }
     }
 
@@ -3264,7 +3259,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // measure walks every row for its width alone.
             result.append(
                 EagerListRow(
-                    child: childIndices[childIndex], ordinal: result.count, of: rowIDs,
+                    asked: rowIDs.askedID(ofChildAt: childIndices[childIndex], ordinal: result.count),
                     content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 

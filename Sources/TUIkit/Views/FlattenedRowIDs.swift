@@ -161,6 +161,12 @@ final class FlattenedRowIDs<ID: Hashable> {
         return ordinalID(ordinal)
     }
 
+    /// ``id(ofChildAt:ordinal:)``, to be asked later — by whatever holds the
+    /// row until something wants its selection value.
+    func askedID(ofChildAt index: Int, ordinal: Int) -> AskedRowID<ID> {
+        AskedRowID(rowIDs: self, child: index, ordinal: ordinal)
+    }
+
     /// What the child at `index` names itself, before any ordinal: a placed
     /// looped row's loop's answer — the row's tag, else its element's id — and
     /// any other row's own tag.
@@ -359,6 +365,26 @@ final class FlattenedRowIDs<ID: Hashable> {
     private static func isOutlineRow(_ child: ChildView) -> Bool {
         throughWrappers(child.wrappedView, as: (any OutlineRowMarking).self) != nil
     }
+}
+
+// MARK: - An answer still to be asked
+
+/// A flattened child's selection value, still to be asked of the
+/// ``FlattenedRowIDs`` of the container it came from — what a row carries
+/// until something wants its id, so a frame that never asks (a hug measure,
+/// or the rows no one draws) never builds a tagged row to answer.
+@MainActor
+struct AskedRowID<ID: Hashable> {
+    /// The answers of the container the row came from.
+    let rowIDs: FlattenedRowIDs<ID>
+    /// The row's index among that container's flattened children.
+    let child: Int
+    /// The row's ordinal among that container's rows.
+    let ordinal: Int
+
+    /// The selection value, asked now — and kept by ``rowIDs``, so a second
+    /// ask costs nothing more.
+    var id: ID? { rowIDs.id(ofChildAt: child, ordinal: ordinal) }
 }
 
 // MARK: - Where keyed rows come from
