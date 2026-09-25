@@ -42,10 +42,15 @@ extension FrameBuffer {
         /// still in force, not yet undone by a reset or a colour — rather than
         /// naming none.
         ///
-        /// Both read as no `background`, and to the blend they are the same cell.
-        /// Only a run's frame asks the difference, because the painters around a run
-        /// disagree about a stated 49 and each field-less cell of a frame is blended
-        /// from what they painted under it (`blendedSpan`'s `fieldsFrom` and
+        /// Such a cell's `background` is ``Color/terminalBackground``, and its
+        /// `style` says 49: a field of its own, which on a page with an RGB is not
+        /// the page (a row opens on the page, and 49 puts the terminal's own in its
+        /// place). Until 2026-09-24 it read as no `background`, the same cell to the
+        /// blend as one naming none, so a fade let what was behind it show at every
+        /// alpha, and passed through it was spelled however was shortest, a reset
+        /// included (`Opacity as composition` §95). What this flag still answers is
+        /// where a run's frame takes the field from, because the painters around a
+        /// run disagree about a stated 49 (`blendedSpan`'s `fieldsFrom` and
         /// `fieldsUnderStatedDefault`).
         var statesTerminalField = false
     }
@@ -95,7 +100,8 @@ extension FrameBuffer {
         fieldsUnderStatedDefault: String? = nil,
         alpha: (Int) -> CellAlpha?,
         surface: Color,
-        defaultForeground: Color
+        defaultForeground: Color,
+        fillingStatedTerminalField: Bool = false
     ) -> String {
         // Pinned rather than clamped: the span is documented as already trimmed to
         // the source's own coordinates, and the walk below indexes `sourceCells` by
@@ -153,11 +159,35 @@ extension FrameBuffer {
                     // ground where the first read the record under a stated 49.
                     statesTerminalField: lastSourceCell?.statesTerminalField ?? false)
             if sourceCells[column] != nil { lastSourceCell = cell }
-            if cell.background == nil,
-                let field = (cell.statesTerminalField ? statedDefaultFieldCells : fieldCells)?[column]?.background
+            // A frame's stated 49 is on whatever the painters made of one — the
+            // terminal's own where they let it through, which is what the cell
+            // already says, and their field where they filled it — and a bare cell
+            // is on what they painted.
+            //
+            // And whether the field the cell then shows is the terminal's own, stated:
+            // by the cell, or by the painters where it takes theirs. Not under a
+            // reversal, whose 49 is in the slot it shows as ink.
+            var statesTheTerminals = cell.statesTerminalField && !cell.isReversed
+            if cell.statesTerminalField, let record = statedDefaultFieldCells?[column],
+                let field = record.background
+            {
+                // The 49 is in the background SLOT, and a reversed cell shows that
+                // slot as its ink: its field is its foreground, which no painter
+                // touches (§95).
+                if cell.isReversed {
+                    cell.foreground = field
+                    cell.style = cell.style.settingForeground(field)
+                } else {
+                    cell.background = field
+                    cell.style = cell.style.settingBackground(field)
+                }
+                statesTheTerminals = statesTheTerminals && record.statesTerminalField && !record.isReversed
+            } else if !cell.statesTerminalField, cell.background == nil, let record = fieldCells?[column],
+                let field = record.background
             {
                 cell.background = field
                 cell.style = cell.style.settingBackground(field)
+                statesTheTerminals = !cell.isReversed && record.statesTerminalField && !record.isReversed
             }
             // Bounds-checked rather than trusted: a negative shift is legal —
             // `composited` accepts one — and would index before the start.
@@ -165,6 +195,23 @@ extension FrameBuffer {
             let behind =
                 behindCells.indices.contains(behindColumn) ? behindCells[behindColumn] : nil
             let coverage = alpha(column)
+            // A compositor reads a layer's stated 49 as naming no field, and fills it
+            // with the field under its column (`String.paintedOver(background:)`): the
+            // cell unfaded shows the base's field wherever the base has one. Faded, it
+            // is the same cell, and is blended as that field, which it is at every
+            // alpha. Read as the terminal's own, it was mixed with the terminal's page
+            // once the terminal had reported one — a label on `Color.default` faded in
+            // a `ZStack` over red came out between the two, and at one it was on the
+            // red (`Opacity as composition` §95). Over a base with no field of its own
+            // it stays the terminal's, as it does unfaded; over a reversed one, as it
+            // was.
+            if fillingStatedTerminalField, statesTheTerminals, coverage != nil, let behind, !behind.isReversed,
+                let field = behind.background
+            {
+                cell.background = field
+                cell.style = cell.style.settingBackground(field)
+                cell.statesTerminalField = false
+            }
             var blended = blend(
                 source: cell, destination: behind, alpha: coverage,
                 surface: surface, defaultForeground: defaultForeground)
@@ -200,7 +247,10 @@ extension FrameBuffer {
             //
             // Only for columns a region actually covers: an uncovered column
             // passes the source through, and the source is part of a row that
-            // has not been taken apart.
+            // has not been taken apart. (A stated 49 among them is spelled 49,
+            // the parse having put it in the cell's style: re-emitted as the
+            // shortest change, it could come out as a reset, which puts the
+            // row's page back in its place.)
             if coverage != nil, blended.background == nil {
                 blended.background = surface
                 blended.style = blended.style.settingBackground(surface)
@@ -585,7 +635,8 @@ extension FrameBuffer {
         var state = SGRState()
         var foreground: Color?
         var background: Color?
-        // `ESC[49m` is the one background report that is `nil`.
+        // `ESC[49m` is the one background report that is `nil`, and it is a
+        // field: the terminal's own, which is not the page a row opens on (§95).
         var statesTerminalField = false
         var column = 0
         line.forEachANSISegment { segment in
@@ -596,7 +647,9 @@ extension FrameBuffer {
                 SGRColorRewrite.readingColors(sequence) { which, color in
                     switch which {
                     case .foreground: foreground = color
-                    case .background: background = color; statesTerminalField = color == nil
+                    case .background:
+                        background = color ?? .terminalBackground
+                        statesTerminalField = color == nil
                     case .reset: foreground = nil; background = nil; statesTerminalField = false
                     }
                 }
@@ -623,7 +676,10 @@ extension FrameBuffer {
                     return true
                 }
                 var cell = RowCell(
-                    character: character, style: state,
+                    character: character,
+                    // The state keeps a stated 49 as no background, as a reset
+                    // leaves it; the cell's own spelling keeps the 49.
+                    style: statesTerminalField ? state.settingBackground(.terminalBackground) : state,
                     foreground: foreground, background: background,
                     statesTerminalField: statesTerminalField)
                 if state.reversesVideo {

@@ -297,12 +297,12 @@ struct OpacityTests {
         #expect(unterminated.isEmpty, "views left a colour active: \(Set(unterminated).sorted())")
     }
 
-    @Test("The default-colour codes fade to the palette's own colours")
+    @Test("The default-colour codes fade as the colours they draw")
     func defaultColourCodes() {
-        // `39`/`49` mean "whatever the terminal's default is", which here is
-        // the palette — so they have to become the FADED palette colours, not
-        // pass through and snap the run back to full strength. No shipped view
-        // emits them today, so this drives the parser directly.
+        // `39` means the terminal's default ink, which here is the palette's —
+        // so it has to become the FADED palette colour, not pass through and
+        // snap the run back to full strength. No shipped view emits it today, so
+        // this drives the parser directly.
         let foreground = Color.rgb(200, 200, 200)
         let surface = Color.rgb(0, 0, 0)
         let faded = OpacityFade.fading(
@@ -311,8 +311,14 @@ struct OpacityTests {
             foreground.opacity(0.5, over: surface).foregroundCodes()
                 .joined(separator: ";")))
         #expect(!faded.contains("[39m"))
-        #expect(!faded.contains("[49m"))
         #expect(faded.stripped == "xy")
+        // `49` is a field of its own, the terminal's — not the page, which a row
+        // opens on and which `49` replaces — and fades as `.opacity` fades it
+        // (Opacity as composition §95): with no RGB against a surface with one, it
+        // is the heavier side from one half, and the surface below.
+        #expect(faded.hasSuffix("\u{1B}[49my"), "49 at 0.5: \(faded.debugDescription)")
+        let below = OpacityFade.fading("\u{1B}[49my", by: 0.4, over: surface, defaultForeground: foreground)
+        #expect(below == "\u{1B}[" + surface.backgroundCodes().joined(separator: ";") + "my")
     }
 
     @Test("Escape sequences that are not SGR pass through untouched")

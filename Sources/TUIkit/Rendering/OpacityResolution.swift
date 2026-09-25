@@ -76,6 +76,21 @@ extension FrameBuffer {
         surface: Color,
         palette: any Palette
     ) -> Self {
+        resolvingOpacity(
+            over: destination, at: position, surface: surface, palette: palette, fillingStatedTerminalField: false)
+    }
+
+    /// ``resolvingOpacity(over:at:surface:palette:)``, saying whether a stated
+    /// `ESC[49m` is read as the field under it.
+    ///
+    /// `fillingStatedTerminalField` is a compositor's reading of the layer's stated 49:
+    /// the composite that follows fills it with the field under its column, so a covered
+    /// cell stating one is blended as that field where `destination` shows one (§95).
+    /// A root has nothing under it.
+    func resolvingOpacity(
+        over destination: Self, at position: (x: Int, y: Int), surface: Color, palette: any Palette,
+        fillingStatedTerminalField: Bool
+    ) -> Self {
         // A run may be the only thing on the buffer with anything to say: a blinking
         // caret over a faded well claims nothing statically, because no one rectangle
         // is true of both its frames (see ``AnimatedRunAlpha``).
@@ -187,7 +202,8 @@ extension FrameBuffer {
                 destinationShift: position.x,
                 alpha: { alphas[$0 - start] },
                 surface: resolvedSurface,
-                defaultForeground: resolvedForeground)
+                defaultForeground: resolvedForeground,
+                fillingStatedTerminalField: fillingStatedTerminalField)
             // Collapsed at the seam, where the seam is made: splicing leaves the
             // span's closing reset hard against the styling `insertOverlay`
             // restores for the suffix, and where the region reaches the end of
@@ -240,7 +256,7 @@ extension FrameBuffer {
             Self.faded(
                 run, covering: regionsForRuns, destination: destination,
                 position: position, surface: resolvedSurface,
-                defaultForeground: resolvedForeground)
+                defaultForeground: resolvedForeground, fillingStatedTerminalField: fillingStatedTerminalField)
         }
         result.animatedCells += Self.cyclingRuns(
             of: translucent, over: lines, rebuilding: rebuild)
@@ -326,7 +342,8 @@ extension FrameBuffer {
         destination: FrameBuffer,
         position: (x: Int, y: Int),
         surface resolvedSurface: Color,
-        defaultForeground resolvedForeground: Color
+        defaultForeground resolvedForeground: Color,
+        fillingStatedTerminalField: Bool
     ) -> AnimatedCellRun? {
         // Cut to the buffer's own columns FIRST, because a run can name columns to
         // the LEFT of column 0. `OverlayLayer`'s leading cut moves every payload by
@@ -434,7 +451,8 @@ extension FrameBuffer {
                 fieldsUnderStatedDefault: statedDefaultLine,
                 alpha: { perColumn[$0 - columns.lowerBound] },
                 surface: resolvedSurface,
-                defaultForeground: resolvedForeground)
+                defaultForeground: resolvedForeground,
+                fillingStatedTerminalField: fillingStatedTerminalField)
         }
         let fadedFrames: [String]
         if let perFrameAlpha = run.alpha, perFrameAlpha.isTranslucent {
@@ -643,8 +661,8 @@ extension FrameBuffer {
     ) -> Self {
         composited(
             with: overlay.resolvingOpacity(
-                over: self, at: position,
-                surface: surface ?? palette.background, palette: palette),
+                over: self, at: position, surface: surface ?? palette.background, palette: palette,
+                fillingStatedTerminalField: true),
             at: position)
     }
 }

@@ -4320,6 +4320,24 @@ anywhere in a frame: no painter's answer depends on where in its row the 49 is
 stated. The same test splices a second probe, which leaves its first cell bare
 and states 49 under its second, inside every painter.
 
+**2026-09-24, later: a fade reads a stated 49 as the terminal's own field.** The
+row opens on the page and the writer puts the page back after every reset, so on
+a page with an RGB a stated 49 is a colour of its own — on Apple Terminal's light
+profile, white on a dark page. The opacity blend read it as no field, and its
+rebuild of a covered row netted a reset and a 49 as one state, so a faded row
+could put either field where the unfaded one has the other: a cell after a
+coloured one on the terminal's own (the rebuild spelled its reset `ESC[49m`), and
+`Text("ab").background(Color.default).opacity(0.6)` on the page. Both are fixed
+at the blend, not the terminal: `Opacity as composition.md` §94 and §95, pinned by
+`FadedTerminalFieldTests` through `FrameDiffWriter`'s row builder, which is what
+tells the two apart. A transition's fade (`.transition(.opacity)`, `OpacityFade`)
+read a stated 49 as the page outright, and now reads it as `.opacity` does.
+Compositing's reading of a stated 49 (above) is unchanged, and a fade resolved against
+a compositor's base reads the layer's stated 49 the same way: as the field the composite
+fills it with, where the base shows one. Read as the terminal's own, it was mixed with the
+page the terminal reported (OSC 11) — a label on `Color.default` faded in a `ZStack` over red
+came out between the two, where unfaded it is on the red. Unreported, no RGB was there to mix.
+
 **2026-09-24, later: the colour effects rewrite the runs too.** `.colorInvert()`,
 `.grayscale(_:)`, `.hueRotation(_:)`, `.brightness(_:)`, `.contrast(_:)`,
 `.saturation(_:)` and `.colorMultiply(_:)` rewrite every colour a subtree's

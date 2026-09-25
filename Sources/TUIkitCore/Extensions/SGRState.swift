@@ -521,6 +521,10 @@ public struct SGRState: Sendable, Equatable {
     /// shorter wherever only the field moves and puts the terminal's own there.
     /// Every other change is the shortest, as ``rendered(changingFrom:)`` spells it.
     ///
+    /// A cell that states the terminal's own field keeps it as a background of its
+    /// own (`.named(49)`, the opacity blend's spelling of a stated 49), so the cell
+    /// after it that names none is a change from a field too.
+    ///
     /// - Parameters:
     ///   - previous: The state the row is in.
     ///   - resetRestoresAField: Whether a reset here will have a field put back

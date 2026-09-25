@@ -277,17 +277,23 @@ enum OpacityFade {
     /// left in it would show at full strength in the terminal's foreground, so
     /// it is dropped, as the composite drops it (§76, §83). A reversed cell is
     /// judged in the colours it displays, and its 7 is dropped with it (§91).
+    ///
+    /// A stated `ESC[49m` is a field of its own, the terminal's, and fades as
+    /// ``View/opacity(_:)`` fades it (§95): against a surface with an RGB it is the
+    /// heavier side from ½, and mixes once the terminal has reported its page. It
+    /// used to be read as the surface — so a transition faded
+    /// `Text("ab").background(Color.default)` onto the page at every phase, where
+    /// the same label under `.opacity` stays on the terminal's own field above ½.
     static func fading(
         _ line: String, by factor: Double, over surface: Color, defaultForeground: Color
     ) -> String {
         let fade = { (colour: Color) in colour.opacity(factor, over: surface) }
-        // Only that page can be an ink on itself here. A field is the surface
-        // (a stated 49 is read as the surface) or a colour faded toward it, so
-        // no field is the page unless the surface is. Over any other surface
-        // the rewrite is the whole of it, byte for byte.
+        // Only that page can be an ink on itself here. An ink is a colour faded
+        // toward the surface, so no ink is the page unless the surface is. Over any
+        // other surface the rewrite is the whole of it, byte for byte.
         guard FrameBuffer.isTheUnreportedPageOnItself(ink: surface, field: surface) else {
             return SGRColorRewrite.rewriting(
-                line, defaultForeground: defaultForeground, defaultBackground: surface,
+                line, defaultForeground: defaultForeground, defaultBackground: .terminalBackground,
                 transform: fade)
         }
         return fadingOverTheUnreportedPage(
@@ -331,7 +337,7 @@ enum OpacityFade {
                     cleared = nil
                 }
                 let rewritten = SGRColorRewrite.rewritingSGR(
-                    sequence, defaultForeground: defaultForeground, defaultBackground: surface,
+                    sequence, defaultForeground: defaultForeground, defaultBackground: .terminalBackground,
                     transform: fade
                 ) { slot, colour in
                     switch slot {

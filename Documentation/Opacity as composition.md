@@ -4860,6 +4860,8 @@ What the rule does not touch, and why:
 - **A veil in the page's colour.** It is emitted as 49, and the compositor reads a stated
   49 as no background at all (`readingColors`, OpacityModifier.swift), so it composites
   nothing and the text under it stays. That is a limit of its own, not this rule's.
+  (Lifted 2026-09-24, §95: the blend reads a stated 49 as the terminal's own field, so at
+  ½ and above the veil covers the text and this rule drops its glyphs.)
 
 **The cost, accepted.** §12 keeps a transparent ink's glyph so that copy and paste stays
 honest. Over an unreported page that is given up: a label faded below ½ is not in the
@@ -5889,3 +5891,100 @@ cell a fade passes over between two covered ones (the bold row; the translucent 
 every reset: a 49 kept after a reset, a return to no field after a colour spelled as a
 reset, a change between the two not held over spaces, and 400 randomised rows. Each fails
 with the mode's spelling taken out, and the bold row with the span's.
+
+## 95. A stated 49 is a field (2026-09-24)
+
+`ESC[49m` puts the terminal's own field under a cell. A row reaches the terminal opened on
+the PAGE (§94), so on a page with an RGB a stated 49 is not the page: it is a colour of its
+own, the terminal's. `Color.default` as a fill is spelled that way, and so is every field
+of a palette whose page is the terminal's own (§80).
+
+The blend read it as naming no field at all. `readingColors` reports 49 as `nil` ("the
+terminal's default; the caller decides what that means for it"), and the cell parse took
+`nil` for "no background", the same cell to the blend as one naming none. Rule 7 then let
+what was behind it show, at every alpha below 1, and a cell passed through unblended was
+re-emitted as the shortest change, which could be a reset:
+- On a page with an RGB, `Text("ab").background(Color.default).opacity(0.6)` faded to the
+  page's RGB, where unfaded it shows the terminal's own (measured on this tree, truecolor:
+  `48;2;5;10;5` under both letters).
+- `HStack(spacing: 0) { Text("a").opacity(0.6); Text("b").background(Color.default);
+  Text("c").opacity(0.6) }`: `b`, between the two regions and not blended at all, was
+  re-emitted behind a reset and drew on the page.
+- `.opacity(0)` over `Text("ab").background(Color.default)` in a `ZStack` revealed `ab` on
+  the page, for the same reason.
+- A veil in the terminal's own colour — `Text("     ").background(Color.default)
+  .opacity(0.6)` over `Text("hello")` in a `ZStack` — composited nothing, and the text stood
+  at every alpha (§76's last limit, "a limit of its own").
+
+Nothing decided that reading: §76 names it a limit, and `RowCell` said only that the two
+cells were "the same cell" to the blend. So the parse now reads a stated 49 as
+`Color.terminalBackground` — the terminal's own field, measured as the RGB the terminal
+reported for it (OSC 11) and as nothing until it has — and keeps its 49 in the cell's own
+spelling, which `SGRState` alone would net into a reset. Rule 9 does the rest: against a
+side with an RGB, the heavier side wins at ½, and once the terminal has reported its page
+the two mix. `Text("ab").background(Color.default)` at 0.6 stays on the terminal's own
+field and at 0.4 is the page; `b` between two regions, and `ab` revealed at zero, are on
+the terminal's own; the veil at 0.6 covers the text (its glyphs go by §76: the terminal's
+page as ink, unreported, on that page) and at 0.4 lets it through.
+
+A run's frame that states 49 takes the field from the record of what the painters made of
+one (§93's second record), as before. A REVERSED cell has its 49 in the background slot,
+which a reversal shows as the cell's ink — a `.plain` block caret on a `Color.default`
+palette is `ESC[7;38;2;220;220;220;49m `, the terminal's own drawn on a field of 220 — so
+there the record goes to the cell's ink, and its field, the foreground, is left alone.
+(Put in the field, the faded caret's frame was on the terminal's own where the faded line is
+on 220, and the replay drew the caret away: `FadedTerminalFieldTests`.)
+
+What it leaves alone: a cell stating no field is still emptiness (rule 7), and a
+compositor still reads a stated 49 as no field and fills it (`String.paintedOver(background:)`,
+`Terminal-compatibility.md`, the stated-49 note). On a page that is the terminal's own the
+two readings were one, and every built-in palette paints an RGB page, so a built-in view
+sees this only where it states `Color.default` itself.
+
+**A compositor's layer is blended as it is composited.** Where a fade is resolved against a
+compositor's base (`compositedResolvingOpacity`: a `ZStack`, an `.overlay`, a floating layer),
+the cell stating 49 is one the composite fills with the field under its column: unfaded, the
+label is on the base's colour. So it is blended as that field, and a faded 49 lands on the
+colour under it at every alpha, as the unfaded one does. Read as the terminal's own, the
+fade put a discontinuity at one once the terminal had reported its page (OSC 11, which
+Apple Terminal, iTerm2, Ghostty and Warp answer, `Terminal-compatibility.md`, measured
+2026-09-14): `ZStack(alignment: .leading) {
+Color.rgb(200, 40, 40).frame(width: 2, height: 1); Text("ab").background(Color.default)
+.opacity(0.6) }`, the page reported as `rgb(40, 44, 52)`, drew `ab` MIXED from the two, on
+about `48;2;104;42;47`, and at 0.99 on all but the terminal's page, beside the red at 1. Unreported,
+the terminal's side won as `49` above one half and was filled, so the red showed at every
+alpha by luck. A run's frame stating 49 there is read the same way, the records of what the
+painters inside the layer made of one first (`blendedSpan`'s `fillingStatedTerminalField`).
+Over a base cell with no field of its own there is nothing to fill it with, and the 49 stays
+the terminal's own, as it does unfaded: the veil over text above. Over a reversed base, as
+before. A painter lets a stated 49 through, and resolves its content without this reading
+(§96); a transition's fade (`OpacityFade`) sees no base, and fades toward the surface as it
+always has.
+
+Kept in the cell's own spelling, a stated 49 is a background of the cell's (`.named(49)`), so
+the cell after it that names none is a change FROM a field, and the span spells that from a
+reset (§94) — the shortest change, `ESC[49m`, would put the terminal's own there. So
+`HStack(spacing: 0) { Text("a").opacity(0.6); Text("b").background(Color.default);
+Text("c"); Text("d").opacity(0.6) }` keeps `c` on the page, faded as unfaded.
+
+**A transition's fade reads it the same way.** `.transition(.opacity)` fades by rewriting
+the colours a view drew (`OpacityFade.fading`), and says it performs `.opacity`'s fade; it
+read a stated 49 as the surface, so on a page with an RGB `Text("ab").background(
+Color.default)` sat on the page for the whole of a transition where `.opacity` keeps it on
+the terminal's own field from ½. It now fades a stated 49 as `Color.terminalBackground`,
+the heavier side against an RGB page from ½, mixed once the page is reported. On a page
+that is the terminal's own the two readings are one field.
+
+`FadedTerminalFieldTests` pins each shape: the label on an RGB page at 0.6 and 0.4, the
+cell between two regions, the reveal at zero, and the veil on an RGB page and on the
+terminal's own at 0.6 and 0.4. Before, five cases failed: the label at 0.6, the cell between two
+regions, the reveal, and the veil at 0.6 on both pages. With the 49 left out of the cell's
+own spelling, the cell between two regions and the reveal fail again. It also pins the cell
+after a stated 49 at 1 and 0.6 (with the span's reset spelling taken out, 0.6 fails), a cell
+revealed beside a stated 49 (a guard: a revealed cell is covered, and names the surface),
+and the transition against `.opacity` at 0.6 and 0.4 on both pages (before, the RGB page at
+0.6 failed: the page where `.opacity` has the terminal's own). On a reported page, it pins
+the label in a `ZStack` over red at 0.6 and 0.4 — on the red, which the unfaded label is on —
+and a run's frame stating 49 in the same layer, every frame spliced over the faded line, on
+the red; with the parse's reading alone, both mixed toward the terminal's page (4 and 2
+issues). A veil over text on a reported page, mixed over the page, is the guard.
