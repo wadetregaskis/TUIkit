@@ -6301,3 +6301,27 @@ And a label on a repeating fade in the selected row of a list without the keys, 
 row's opaque tint spends it, and a run breathes over the label; with the badged line's runs
 dropped whole, there is none. The same label wider than the row, through `ReplayOracle`: every
 tick draws the ellipsis at the phase a render draws.
+
+### 96.2 A floating surface
+
+A sheet, an alert and a cover paint no surface of their own: the compositor paints the
+layer's blanks onto the page's colour before it composites the layer (`OverlayLayer.isOpaque`),
+and that surface is behind every fade inside the layer. It then resolved the layer's regions
+against the dimmed page behind it, so a label faded inside a sheet met the surface as its own
+field: the surface under it took the label's fade toward the backdrop, and the label's glyph
+entered the glyph contest with whatever the page drew behind the sheet — at 0.3 it lost, and
+the page's own character showed through the sheet in its place.
+
+The compositor now spends a centred layer's fades against its surface, painted first, as a
+`.background` does. Only a centred layer: a fade outside the presenter never reaches one
+(`_OpacityView.fadingOverlays` leaves screen-level layers alone), so every region it carries
+is its own content's. An anchored layer can carry the presenter's fade, which has to take the
+surface with it, in the same list as its content's, and the compositor cannot tell the two
+apart; so a label faded inside an anchored layer that paints no surface of its own (a menu,
+a drop-down, a toast) still fades that surface toward what is behind the layer — a limit,
+held as a known issue. A popover paints its own, with a `.background`, and is §96's case.
+
+`FadeInsideAPainterTests`: a label at 0.3 in a centred modal layer over a page, on a palette
+whose backdrop wash is red — on the surface, its ink 30% of the way from it (before, the page's
+character in its place); a label in a popover, on the popover's surface; and the anchored
+limit.

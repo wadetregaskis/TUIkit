@@ -92,12 +92,24 @@ extension FrameBuffer {
                 // gives it a background to fade FROM. Painting afterwards would
                 // stamp the surface colour over the blend and freeze every
                 // translucent layer fully opaque.
-                let content =
+                var content =
                     layer.isOpaque
                     ? placed.content.paintedOver(
                         background: ANSIRenderer.backgroundCode(
                             for: palette.background.resolve(with: palette)))
                     : placed.content
+                // And a surface is the backdrop of every fade INSIDE it (§96.2): a
+                // label faded in a sheet fades into the sheet, whose surface stays
+                // put. Only a centred layer — a sheet, an alert, a cover — because a
+                // fade outside the presenter never reaches one (`fadingOverlays`),
+                // so every region it carries is its own content's. An anchored layer
+                // may carry the presenter's fade, which must take the surface with
+                // it, in the same list as its content's, and cannot be told apart
+                // here.
+                if layer.isOpaque, layer.isScreenLevel {
+                    content = content.resolvingOpacity(
+                        onOpaqueFill: { nil }, surface: palette.background, palette: palette)
+                }
                 result = result.compositedResolvingOpacity(
                     with: content, at: (x: placed.x, y: placed.y), palette: palette)
             }

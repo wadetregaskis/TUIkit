@@ -207,6 +207,88 @@ struct FadeInsideAPainterTests {
         #expect(probed > 0, "\(painter) drew no probe")
     }
 
+    /// A sheet's surface is painted by the compositor under every cell of the layer
+    /// that names none, and it is behind every fade inside the sheet. So a label
+    /// faded inside a sheet is on the surface, its ink 30% of the way from it; the
+    /// fade used to meet the surface at the compositor as the label's own field and
+    /// take it 30% of the way to the dimmed page behind the sheet — here, a wash
+    /// of red.
+    @Test("A label faded inside a sheet stays on the sheet's surface")
+    func aLabelFadedInsideASheet() throws {
+        let palette = ThemeProbePalette(overlayBackground: .rgb(200, 0, 0))
+        let context = makeRenderContext(width: 20, height: 6) { environment, _ in
+            environment.palette = palette
+        }
+        let composited = ColorDepth.withCurrent(.truecolor) {
+            var page = FrameBuffer(lines: Array(repeating: String(repeating: ".", count: 20), count: 6))
+            page.overlays = [
+                OverlayLayer(
+                    offsetX: 0, offsetY: 0, content: renderToBuffer(Text("x").opacity(0.3), context: context),
+                    level: .modal, centered: true, dimsBackground: true)
+            ]
+            return page.compositingOverlays(maxWidth: 20, maxHeight: 6, palette: context.environment.palette)
+        }
+        let cells = try #require(composited.lines.map(paintedCells).first { $0.contains { $0.glyph == "x" } })
+        let x = try #require(cells.first { $0.glyph == "x" })
+        let surface = try #require(palette.background.rgbComponents)
+        #expect(x.background == Self.spelled(surface), "x is drawn on \(x.background.debugDescription)")
+        let ink = try #require(palette.foreground.opacity(0.3, over: palette.background).rgbComponents)
+        #expect(x.ink == .rgb(Int(ink.red), Int(ink.green), Int(ink.blue)))
+    }
+
+    /// A popover paints its own surface — a `.background` around its content — so
+    /// the rule for a `.background` covers a label faded inside one.
+    @Test("A label faded inside a popover stays on the popover's surface")
+    func aLabelFadedInsideAPopover() throws {
+        let palette = ThemeProbePalette(background: .rgb(10, 10, 10))
+        let context = makeRenderContext(width: 30, height: 10) { environment, _ in
+            environment.palette = palette
+        }
+        let composited = ColorDepth.withCurrent(.truecolor) {
+            let page = renderToBuffer(
+                ZStack(alignment: .topLeading) {
+                    Color.rgb(200, 0, 0)
+                    Text("anchor").popover(isPresented: .constant(true)) { Text("x").opacity(0.3) }
+                },
+                context: context)
+            return page.compositingOverlays(maxWidth: 30, maxHeight: 10, palette: context.environment.palette)
+        }
+        let cells = try #require(composited.lines.map(paintedCells).first { $0.contains { $0.glyph == "x" } })
+        let x = try #require(cells.first { $0.glyph == "x" })
+        let surface = try #require(palette.background.rgbComponents)
+        #expect(x.background == Self.spelled(surface), "x is drawn on \(x.background.debugDescription)")
+    }
+
+    /// An anchored layer that paints NO surface of its own — the compositor paints
+    /// one under it, as it does a sheet's — is not done. A fade outside the
+    /// presenter reaches an anchored layer (`_OpacityView.fadingOverlays`) and has to
+    /// take the surface with it, and at the compositor it is in the same list as the
+    /// content's own fades; spending that list against the surface would lose the
+    /// presenter's fade on the surface. So a label faded inside such a layer still
+    /// fades the surface toward what is behind the layer.
+    @Test("A label faded inside an anchored layer with no surface of its own")
+    func aLabelFadedInsideABareAnchoredLayer() throws {
+        let palette = ThemeProbePalette(background: .rgb(10, 10, 10))
+        let context = makeRenderContext(width: 20, height: 6) { environment, _ in
+            environment.palette = palette
+        }
+        let composited = ColorDepth.withCurrent(.truecolor) {
+            var page = FrameBuffer(
+                lines: Array(repeating: ANSIRenderer.colorize(String(repeating: " ", count: 20), background: .rgb(200, 0, 0)), count: 6))
+            page.overlays = [
+                OverlayLayer(
+                    offsetX: 2, offsetY: 2, content: renderToBuffer(Text("x").opacity(0.3), context: context))
+            ]
+            return page.compositingOverlays(maxWidth: 20, maxHeight: 6, palette: context.environment.palette)
+        }
+        let cells = try #require(composited.lines.map(paintedCells).first { $0.contains { $0.glyph == "x" } })
+        let x = try #require(cells.first { $0.glyph == "x" })
+        let surface = try #require(palette.background.rgbComponents)
+        withKnownIssue("an anchored layer's own fade and its content's are one list at the compositor") {
+            #expect(x.background == Self.spelled(surface), "x is drawn on \(x.background.debugDescription)")
+        }
+    }
+
     /// A list's cursor row breathes: its fill is a run of whole-row frames, one per
     /// colour of the breath, replayed by the run loop. A label faded inside the row
     /// is on each frame's colour, as the row unfaded is — spent against every colour
