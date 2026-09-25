@@ -258,50 +258,78 @@ extension AnimatedCellRun {
     }
 
     /// `record` — a ground, or the record under a stated 49 — read cell by cell on
-    /// a row built on `page`, as ``groundFields(onPage:)`` describes.
+    /// a row built on `page`, as ``groundFields(onPage:)`` describes: the field under
+    /// each cell.
     private static func fields(of record: String, cells width: Int, onPage page: String) -> [SGRState.Colour?] {
-        var onPage = SGRState()
-        if !page.isEmpty { onPage.apply(page) }
-        let cells = max(0, width)
         var fields: [SGRState.Colour?] = []
-        fields.reserveCapacity(cells)
-        var state = onPage
-        for segment in record.ansiSegments() {
-            switch segment {
-            case .ansi(let sequence, isSGR: true):
-                state = Self.restatingPage(onPage, after: sequence, in: state)
-            case .ansi:
-                continue
-            case .visible(let character):
-                // A wide character covers two cells, both on the one field.
-                for _ in 0..<max(1, character.terminalWidth) where fields.count < cells {
-                    fields.append(state.backgroundColour)
-                }
-            }
+        fields.reserveCapacity(max(0, width))
+        walk(record, cells: width, onPage: page) { state in
+            fields.append(state.backgroundColour)
+            return true
         }
-        // A ground is always as wide as its run; this only answers for a short one.
-        while fields.count < cells { fields.append(state.backgroundColour) }
         return fields
     }
 
-    /// `state` after `sequence`, with the page put back at a reset the way the row
-    /// builder puts it back.
-    private static func restatingPage(
-        _ page: SGRState, after sequence: String, in state: SGRState
-    ) -> SGRState {
+    /// Walks `record` cell by cell on a row built on `page`, as
+    /// ``groundFields(onPage:)`` describes, handing `body` the whole state in force
+    /// under each of `width` cells — of which the field is one part — until it
+    /// answers `false`. A short record's last state stands under the cells it does
+    /// not reach.
+    private static func walk(
+        _ record: String, cells width: Int, onPage page: String, _ body: (SGRState) -> Bool
+    ) {
+        var onPage = SGRState()
+        if !page.isEmpty { onPage.apply(page) }
+        let cells = max(0, width)
+        var walked = 0
+        var state = onPage
+        let reachedTheEnd = record.forEachANSISegment { segment in
+            switch segment {
+            case .ansi(let sequence, isSGR: true):
+                state = SGRState.restating(onPage, after: sequence, in: state)
+            case .ansi:
+                break
+            case .visible(let character):
+                // A wide character covers two cells, both on the one field.
+                for _ in 0..<max(1, character.terminalWidth) where walked < cells {
+                    walked += 1
+                    guard body(state) else { return false }
+                }
+            }
+            return true
+        }
+        guard reachedTheEnd else { return }
+        // A ground is always as wide as its run; this only answers for a short one.
+        while walked < cells {
+            walked += 1
+            guard body(state) else { return }
+        }
+    }
+}
+
+// MARK: - A painter's reset rule
+
+extension SGRState {
+    /// `state` after `sequence`, with `restatement` put back at a reset the way a
+    /// painter puts its own back — and the row builder the page.
+    ///
+    /// What a reset is follows `ANSIRenderer.restating(_:afterResetsIn:)`, the rule
+    /// every painter and the row builder restate by: the literal `ESC[0m`, and the
+    /// collapsed `ESC[0;…m` read as a reset followed by the rest.
+    static func restating(_ restatement: SGRState, after sequence: String, in state: SGRState) -> SGRState {
         let reset = "\u{1B}[0m"
         let collapsed = "\u{1B}[0;"
-        if sequence == reset { return page }
+        if sequence == reset { return restatement }
         guard sequence.hasPrefix(collapsed) else {
             var next = state
             next.apply(sequence)
             return next
         }
-        // `ESC[0;…m` is a reset, the page, then the rest as a sequence of its own.
-        // A rest of `0m` is a second reset, and the builder restores after that too.
+        // `ESC[0;…m` is a reset, the restatement, then the rest as a sequence of its
+        // own. A rest of `0m` is a second reset, and the restatement follows that too.
         let rest = sequence.dropFirst(collapsed.count)
-        guard rest != "0m" else { return page }
-        var next = page
+        guard rest != "0m" else { return restatement }
+        var next = restatement
         next.apply("\u{1B}[" + rest)
         return next
     }
