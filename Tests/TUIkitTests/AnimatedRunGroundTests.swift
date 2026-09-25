@@ -63,14 +63,6 @@ private struct DefaultFieldProbe: View, Renderable {
     }
 }
 
-/// Alternating rows, so a list paints a still fill of its own under a row that is
-/// neither selected nor under the cursor.
-private struct ZebraListStyle: ListStyle {
-    var alternatingRowColors: Bool { true }
-    var showsBorder: Bool { false }
-    var rowPadding: EdgeInsets { EdgeInsets(all: 0) }
-}
-
 @MainActor
 @Suite("A run records the ground its containers painted under it")
 struct AnimatedRunGroundTests {
@@ -78,72 +70,6 @@ struct AnimatedRunGroundTests {
     /// The page every row here is built on, as the run loop's content area has it.
     private static let page = "\u{1B}[48;2;5;10;5m"
     private static let width = 24
-
-    /// Every kind of painter a run can sit inside.
-    enum Painter: String, CaseIterable, Sendable {
-        /// Nothing but the page.
-        case none
-        /// A flat `.background`.
-        case background
-        /// A `.background` outside padding and a border: what is under the run
-        /// is the fill, however far out it was painted.
-        case backgroundAroundPadding
-        /// Two backgrounds: the inner one is what the run sits on.
-        case nestedBackgrounds
-        /// A ramp across the row, a different entry under each cell.
-        case horizontalRamp
-        /// A `ZStack` over a colour: compositing paints the overlay over it.
-        case zStackOverColour
-        /// An `.overlay` on a view with a background.
-        case overlayOnFill
-        /// A row of a `List` that paints a fill of its own.
-        case listRowFill
-        /// A tab's surface, from `TabView`.
-        case tabSurface
-
-        @MainActor @ViewBuilder
-        fileprivate func view(_ probe: some View) -> some View {
-            switch self {
-            case .none:
-                probe
-            case .background:
-                probe.background(Color.rgb(200, 40, 40))
-            case .backgroundAroundPadding:
-                probe.padding(1).border().background(Color.rgb(40, 40, 200))
-            case .nestedBackgrounds:
-                HStack(spacing: 0) {
-                    probe
-                    Text(" ")
-                    probe.background(Color.rgb(200, 40, 40))
-                }
-                .background(Color.rgb(40, 40, 200))
-            case .horizontalRamp:
-                HStack(spacing: 0) { Text("    "); probe; Text("    ") }
-                    .background(
-                        LinearGradient(
-                            colors: [Color.rgb(200, 40, 40), Color.rgb(40, 40, 200)],
-                            startPoint: .leading, endPoint: .trailing))
-            case .zStackOverColour:
-                ZStack { Color.rgb(40, 160, 40).frame(width: 6, height: 1); probe }
-            case .overlayOnFill:
-                Text("      ").background(Color.rgb(40, 160, 40)).overlay { probe }
-            case .listRowFill:
-                List(selection: .constant(Int?.none)) {
-                    ForEach(0..<3, id: \.self) { row in
-                        HStack(spacing: 0) { Text("row \(row) "); probe }
-                    }
-                }
-                .listStyle(ZebraListStyle())
-                .frame(height: 3)
-            case .tabSurface:
-                TabView(selection: .constant(0)) {
-                    Tab("One", value: 0) { probe }
-                    Tab("Two", value: 1) { Text("two") }
-                }
-                .tabViewStyle(.bordered)
-            }
-        }
-    }
 
     /// The view's rows as the run loop builds them, and the probe's runs on them
     /// — only the probe's: a focused control beside it leaves a run of its own,
@@ -159,8 +85,8 @@ struct AnimatedRunGroundTests {
         return (rows, buffer.animatedCells.filter { $0.frames == GroundProbe.frames })
     }
 
-    @Test("Under a frame that states no field, the ground is the field the row shows", arguments: Painter.allCases)
-    func groundIsWhatTheRowShows(painter: Painter) throws {
+    @Test("Under a frame that states no field, the ground is the field the row shows", arguments: FieldPainter.allCases)
+    func groundIsWhatTheRowShows(painter: FieldPainter) throws {
         let (rows, runs) = built(painter.view(GroundProbe(drawn: 1)))
         try #require(!runs.isEmpty, "\(painter) carried no run up")
         for run in runs {
@@ -174,8 +100,8 @@ struct AnimatedRunGroundTests {
         }
     }
 
-    @Test("A frame drawn with a field of its own leaves the ground where it was", arguments: Painter.allCases)
-    func theDrawnFrameDoesNotMoveTheGround(painter: Painter) throws {
+    @Test("A frame drawn with a field of its own leaves the ground where it was", arguments: FieldPainter.allCases)
+    func theDrawnFrameDoesNotMoveTheGround(painter: FieldPainter) throws {
         let bare = built(painter.view(GroundProbe(drawn: 1)))
         let own = built(painter.view(GroundProbe(drawn: 0)))
         try #require(bare.runs.count == own.runs.count && !own.runs.isEmpty)
@@ -218,8 +144,8 @@ struct AnimatedRunGroundTests {
     /// cell it leaves bare, which the one record has to answer for too.
     @Test(
         "A frame that states the terminal's own field replays as each painter drew it",
-        arguments: Painter.allCases, [false, true])
-    func aStatedTerminalFieldReplaysAsDrawn(painter: Painter, late: Bool) throws {
+        arguments: FieldPainter.allCases, [false, true])
+    func aStatedTerminalFieldReplaysAsDrawn(painter: FieldPainter, late: Bool) throws {
         let probe = DefaultFieldProbe(late: late)
         let context = makeRenderContext(width: Self.width, height: 12)
         let buffer = ColorDepth.withCurrent(.truecolor) {
@@ -253,8 +179,8 @@ struct AnimatedRunGroundTests {
     /// it — not from the ground, or the faded frame states a field the resolved row
     /// does not show. A tab chip's label and a `.plain` block caret state it on a
     /// `Color.default` palette.
-    @Test("A faded frame that states the terminal's own field replays as each painter drew it", arguments: Painter.allCases)
-    func aFadedStatedTerminalFieldReplaysAsDrawn(painter: Painter) throws {
+    @Test("A faded frame that states the terminal's own field replays as each painter drew it", arguments: FieldPainter.allCases)
+    func aFadedStatedTerminalFieldReplaysAsDrawn(painter: FieldPainter) throws {
         let context = makeRenderContext(width: Self.width, height: 12) { environment, _ in
             environment.palette = ThemeProbePalette(background: .default, overlayBackground: .default)
         }
