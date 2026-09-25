@@ -4,9 +4,10 @@
 //  A run inside a row that restates more than a field after every reset in its
 //  line — a menu's focused row and a list's cursor row that REVERSE, where the
 //  palette's highlight has no RGB to breathe between (Opacity as composition
-//  §86, §88) — replayed at every frame of its cycle over the row a render drew at
-//  another, and compared with the row a render draws at that frame: cell by
-//  cell, as the cells LOOK, the reversal included.
+//  §86, §88), and a list row that refuses selection, drawn FAINT (§102) —
+//  replayed at every frame of its cycle over the row a render drew at another,
+//  and compared with the row a render draws at that frame: cell by cell, as the
+//  cells LOOK, the reversal and the dim included.
 //
 //  The row reverses by restating `ESC[7;<ink>;<field>m` after every reset in the
 //  line, so a run's frame, drawn inside it, is reversed with it: its glyph is
@@ -53,12 +54,16 @@ private struct SpinnerProbe: View, Renderable {
 @Suite("A run in a row that restates a style replays in it")
 struct RowStyleReplayTests {
 
-    /// The row that reverses around the probe.
+    /// The row that restates a style around the probe.
     enum Row: String, CaseIterable, Sendable, CustomTestStringConvertible {
-        /// A focused menu row's bar (`_MenuItemRowBar`).
+        /// A focused menu row's bar (`_MenuItemRowBar`), reversed.
         case menu
-        /// A focused list's cursor row (`RowBackground`).
+        /// A focused list's cursor row (`RowBackground`), reversed.
         case list
+        /// A list row that refuses selection (`.selectionDisabled()`), drawn faint:
+        /// `ESC[2m` after every reset in its line. In a list without the focus — a
+        /// button before it takes it — so the row is neither reversed nor breathing.
+        case faint
 
         var testDescription: String { rawValue }
 
@@ -75,6 +80,17 @@ struct RowStyleReplayTests {
                     }
                 }
                 .frame(width: 16, height: 2)
+            case .faint:
+                VStack(alignment: .leading, spacing: 0) {
+                    Button("Focus") {}
+                    List(selection: .constant(Optional(1))) {
+                        ForEach(0..<2, id: \.self) { row in
+                            HStack(spacing: 0) { Text("row \(row) "); SpinnerProbe(drawn: drawn) }
+                                .selectionDisabled(row == 0)
+                        }
+                    }
+                    .frame(width: 16, height: 2)
+                }
             }
         }
     }
@@ -152,7 +168,7 @@ struct RowStyleReplayTests {
     /// compared with the row a render draws at that frame — for each pair a
     /// reversal can exchange.
     @Test(
-        "A run in a reversed row replays as a render draws it",
+        "A run in a row that restates a style replays as a render draws it",
         arguments: Row.allCases, Fade.allCases)
     func aRunReplaysAsDrawn(row: Row, fade: Fade) throws {
         for pair in Pair.allCases { try replays(row, pair: pair, fade: fade) }
@@ -164,8 +180,8 @@ struct RowStyleReplayTests {
         try TerminalColors.withCurrent(.unknown) {
             let frames = SpinnerProbe.frames.indices
             let renders = frames.map { built(row, drawn: $0, pair: pair, fade: fade) }
-            // Not vacuous: unfaded, the row the probe sits in is drawn reversed. (Faded,
-            // a reversal whose colours have RGB is spelled without its 7.)
+            // Not vacuous: unfaded, the row the probe sits in is drawn reversed, or faint.
+            // (Faded, a reversal whose colours have RGB is spelled without its 7.)
             let unfaded = ColorDepth.withCurrent(.truecolor) { () -> FrameBuffer in
                 let context = makeRenderContext(width: Self.width, height: 8) { environment, _ in
                     environment.palette = pair.palette
@@ -175,8 +191,10 @@ struct RowStyleReplayTests {
             }
             let line = try #require(unfaded.animatedCells.first.map { unfaded.lines[$0.offsetY] })
             try #require(
-                paintedCells(line).contains { $0.state.reversesVideo },
-                "\(row), \(pair): the row is not reversed: \(line.debugDescription)")
+                paintedCells(line).contains {
+                    $0.state.reversesVideo || $0.shownAttributes.split(separator: ";").contains("2")
+                },
+                "\(row), \(pair): the row is neither reversed nor faint: \(line.debugDescription)")
             for drawn in frames {
                 let (rows, runs, page) = renders[drawn]
                 let run = try #require(runs.first, "\(row), \(pair), \(fade): no run carried up")

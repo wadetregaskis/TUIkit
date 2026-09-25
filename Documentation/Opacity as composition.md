@@ -6714,9 +6714,10 @@ faded run's ground kept, 54 faded cases of `RowStyleReplayTests`, both faded-ins
 of `ReplayedRunFieldTests` and `AnimatedRunGroundTests`' list row at 0.4 fail.
 
 Limits:
-- A persistent DIM (`.selectionDisabled()`, which dims its row's lines after every reset) is
+- ~~A persistent DIM (`.selectionDisabled()`, which dims its row's lines after every reset) is
   still neither recorded in the ground nor restated, so a run in such a row replays at full
-  intensity. The restatement would carry it; nothing paints it into the ground yet.
+  intensity. The restatement would carry it; nothing paints it into the ground yet.~~ Fixed
+  2026-09-25, §102.
 - A painter's style is assumed to be the same under every cell of a run — which it is for
   every painter the framework has. Where it is not, each cell takes the style under its own
   column, from a reset where an attribute has to go off (`GroundStyleRestatementTests`).
@@ -6760,3 +6761,28 @@ had. For the tick, an explicit `39` restated in front of a frame is the colour i
 `TransitionFadeRunTests` pins it: the probe in a list's cursor row and a menu's focused row, on
 the terminal's page and the terminal's own pair, at 0.25, 0.4, 0.6 and 0.75. Before, 48 replayed
 cells failed; composed without the stated ink, 60.
+## 102. A faint row records its dim (2026-09-25)
+
+§101's first limit. A `List` row under `.selectionDisabled()` is drawn faint: the modifier wraps
+the row's lines in `ESC[2m`, restated after every reset (`ANSIRenderer.applyPersistentDim`), and
+carries the row's runs through untouched. It painted nothing into their grounds, so the dim was
+the one thing a render drew under a spinner in such a row that neither record held: every render
+drew the spinner faint, and every tick between renders at full intensity. Through the run loop
+(`ReplayedRunFieldTests`, whose list now shows all three rows — the cursor row, the selected
+one, and a last one refusing selection) every ground but the two the flatten washes reported it,
+e.g. `.page: stop 0, tick 1, row 45, column 8: replayed '⠦' in rgb(102, 255, 102) on rgb(5, 10,
+5), rendered '⠦' in rgb(102, 255, 102) on rgb(5, 10, 5) [2]` — the `[2]` is the render's dim. (The
+row refusing selection is the last, not the first: refusing on the first moved the cursor off
+it, and the walk lost the plain cursor row, whose reversal §101 restates.) Faded the same, since the blend composes a frame in its ground's
+style (§100) and the ground had none. Not measured live: pyte, which the PTY probes read the
+screen through, keeps no SGR 2.
+
+**The fix** is the painter's: the modifier paints its runs' grounds with the same persistent dim
+it paints the lines with (`FrameBuffer.paintRunGrounds`), so the ground's style carries the 2 and
+the tick and the fade restate it (§100, §101). The dim flatten behind a modal and under
+`.dimmed()` needed nothing: it re-spells every frame itself.
+
+`RowStyleReplayTests` gains the faint row, in a list without the focus so that it is neither
+reversed nor breathing: before, 81 issues across the three pairs and three fades, e.g. `faint,
+terminalPage, none: frame 1 over frame 0, column 8: replayed '⠙' in the terminal's foreground on
+the terminal's background, rendered … [2]`.

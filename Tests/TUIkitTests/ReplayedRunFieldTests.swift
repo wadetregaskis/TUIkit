@@ -85,13 +85,18 @@ private func catalogue() -> some View {
         }
         .tabViewStyle(.bordered)
         // A spinner in each row of a list, and a selected row the list fills:
-        // the rows' own runs, carried up through the list's row painting.
+        // the rows' own runs, carried up through the list's row painting. All
+        // three rows show inside the border: the first is the cursor row — the
+        // plain one, which reverses where its wash cannot be measured — the
+        // second is selected, and the last refuses selection, which draws it
+        // faint. (Refusing on the first row moved the cursor off it, and the
+        // plain cursor row went unwalked.)
         List(selection: .constant(Optional(1))) {
             ForEach(0..<3, id: \.self) { row in
-                HStack(spacing: 0) { Text("row \(row) "); Spinner() }
+                HStack(spacing: 0) { Text("row \(row) "); Spinner() }.selectionDisabled(row == 2)
             }
         }
-        .frame(width: 20, height: 3)
+        .frame(width: 20, height: 5)
         Spinner("Spinning")
         ProgressView()
         // A link's frames carry the hyperlink's own escapes around the breath,

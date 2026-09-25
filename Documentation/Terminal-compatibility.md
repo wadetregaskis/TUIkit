@@ -4474,8 +4474,8 @@ cell-level excuse (`holding`) and reported the rows it held apart from its
 mismatches — a held cell did not stop the comparison, so a row's other
 disagreements still failed — and `ReplayedRunFieldTests` held, on each faded
 ground, exactly those two rows, named by what they drew and asserted to be all
-it held. Both are gone. Closed 2026-09-25 for the reversal, faded and unfaded
-(the last two notes of this section); the dim is still open.
+it held. Both are gone. Closed 2026-09-25: the reversal faded and unfaded, and
+the dim — the last three notes of this section.
 
 **2026-09-25: a floating surface is composited as it is painted.** The compositor
 above fills a stated 49, and a floating surface on a palette whose page is the
@@ -4562,7 +4562,19 @@ every burst of every variant above matched the render: reversed on every tick,
 before and after the focus report, and the Example's cursor row reversed at all
 115 cells on every tick. `Opacity as composition.md` §101; `RowStyleReplayTests`,
 and `ReplayedRunFieldTests` under the new oracle. Still open from the paragraph
-above: a persistent dim is neither recorded nor restated.
+above at that point: a persistent dim, neither recorded nor restated — closed by
+the next note.
+
+**2026-09-25, and the dim.** A `List` row under `.selectionDisabled()` is drawn
+faint — `ESC[2m` restated after every reset in its lines — and the modifier
+painted nothing into its runs' grounds, so a spinner in it was drawn faint by
+every render and at full intensity by every tick between them. Measured through
+the run loop only (`ReplayedRunFieldTests`, its list's last row refusing
+selection: on every ground but the two the flatten washes, e.g. `.page: … '⠦' in
+rgb(102, 255, 102) on rgb(5, 10, 5), rendered … [2]`); pyte, which the PTY probes
+read the screen through, keeps no SGR 2. The modifier now paints its runs'
+grounds with the same dim, and the tick and the fade restate it as they restate a
+reversal. `Opacity as composition.md` §102; `RowStyleReplayTests`' faint row.
 
 **2026-09-26: a transition fades a run in a reversed row as the row draws it.**
 Over the terminal's unreported page, a transition's fade drops a glyph whose ink

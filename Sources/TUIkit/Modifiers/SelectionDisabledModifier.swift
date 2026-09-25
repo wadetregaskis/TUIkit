@@ -66,6 +66,12 @@ extension SelectionDisabledModifier: Renderable {
         // through unchanged; only the drawn colour changes.
         var dimmed = buffer
         dimmed.lines = buffer.lines.map(ANSIRenderer.applyPersistentDim)
+        // And under the row's own runs, which the dim reaches in the lines after
+        // every reset in their frames: recorded in their grounds, the tick restates
+        // it with the field (`AnimatedCellRun.groundStyle`). Left out, a spinner in
+        // such a row was drawn faint by every render and at full intensity by every
+        // tick between them.
+        dimmed.paintRunGrounds { _, ground in ANSIRenderer.applyPersistentDim(ground) }
         return dimmed
     }
 
