@@ -502,8 +502,10 @@ extension Section: ListRowExtractor {
                 // child's place among ALL the children, spacers included: the
                 // place is what matches a looped row to its loop. `nil` when
                 // nothing can be cast into the selection type: the row draws
-                // and is simply not selectable. See `ListRow.id`.
-                let rowID = rowIDs.id(ofChildAt: index, ordinal: rows.count)
+                // and is simply not selectable. See `ListRow.id` — which asks
+                // for it when the list wants it, not here: a looped row's
+                // answer can cost a build of the row.
+                let rowID = rowIDs.askedID(ofChildAt: index, ordinal: rows.count)
                 // See `extractRowBadgeValue(from:)`: a `ForEach` row inside
                 // this Section arrives wrapped in `_MemoizedRow`, which the
                 // plain cast cannot see through, and its badge was dropped
@@ -512,7 +514,7 @@ extension Section: ListRowExtractor {
                 let buffer = child.render(
                     width: context.availableWidth, height: context.availableHeight,
                     context: context)
-                rows.append(ListRow(id: rowID, buffer: buffer, badge: badge))
+                rows.append(ListRow(askedID: rowID, buffer: buffer, badge: badge))
             }
             return rows
         }

@@ -198,14 +198,15 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// is an array read. Windowed, it is the loop's rule asked afresh on
     /// every call: a key-path read or a cast, except that a
     /// `.tag(_:)`-outermost row is BUILT to read its tag. A row whose type
-    /// is still to be asked (a flattened child of a list whose content is
-    /// several views — a hand-written row, a looped row beside one, or a
-    /// row of two `ForEach`es side by side) is asked now. For a
-    /// `.tag(_:)`-outermost looped row that BUILDS the row to read its tag;
-    /// for an untagged hand-written row beside a loop, under a selection its
-    /// ordinal casts into, it asks the looped rows their answers, in order,
-    /// until one holds this row's ordinal — every one of them where none
-    /// does, a build per tagged one. Each asked answer is kept once found.
+    /// is still to be asked (a flattened child — of a list, or of a
+    /// `Section` in one, whose content is several views: a hand-written row,
+    /// a looped row beside one, or a row of two `ForEach`es side by side) is
+    /// asked now. For a `.tag(_:)`-outermost looped row that BUILDS the row
+    /// to read its tag; for an untagged hand-written row beside a loop, under
+    /// a selection its ordinal casts into, it asks the looped rows their
+    /// answers, in order, until one holds this row's ordinal — every one of
+    /// them where none does, a build per tagged one. Each asked answer is
+    /// kept once found.
     func type(at index: Int) -> ListRowType<SelectionValue> { typeAt(index) }
 
     /// Where the row at `index` stands among its section's content rows — the
@@ -310,6 +311,17 @@ private struct EagerListRow<SelectionValue: Hashable & Sendable> {
     /// A row whose type is known.
     init(_ row: SelectableListRow<SelectionValue>) {
         kind = .known(row.type)
+        content = row.content
+    }
+
+    /// A content row of a `Section`, with its id still to be asked where the
+    /// section's walk left it so (``ListRow/askedID``).
+    init(_ row: ListRow<SelectionValue>) {
+        if let askedID = row.askedID {
+            kind = .asked(askedID)
+        } else {
+            kind = .known(row.id.map { .content(id: $0) } ?? .unselectable)
+        }
         content = row.content
     }
 
@@ -1321,12 +1333,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // visible row through `idAt`, and an empty `selectableIndices` already
         // means "every row is selectable" (see ItemListHandler) — so we never
         // materialise a 50k-entry id array or a 50k-index Set per frame. The id
-        // reads that remain are O(visible). A heterogeneous row set (Sections,
-        // with non-selectable headers/footers) is small, so it builds the
-        // explicit maps eagerly as before.
+        // reads that remain are O(visible). A source whose every row's type
+        // is known and not every row is content — a `Section` of one `ForEach`
+        // (its header and footer name nothing), a `ForEach` whose ids the
+        // selection cannot all hold — builds the explicit maps eagerly as
+        // before.
         //
         // A source that does not yet know whether its rows are all content —
-        // a mixed container's, whose looped rows' types are still to be asked
+        // one with a flattened row, a `Section`'s included: hand-written rows,
+        // alone or beside a loop, whose types are still to be asked
         // (`EagerListRow`) — hands both answers over UNSETTLED: the ids are
         // asked a row at a time through `idAt`, as the windowed path's are,
         // and the whole set only when a key or a follow reads it. Deciding
@@ -3345,12 +3360,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         restrictions?.rowIndexBase = 0
         let firstItemRow = firstRowIndex + rows.count
         for row in items.rows {
-            // Thread the lazy box through — don't force `.buffer` / `.badge`.
-            rows.append(
-                EagerListRow(
-                    SelectableListRow(
-                        type: row.id.map { .content(id: $0) } ?? .unselectable,
-                        content: row.content)))
+            // Thread the lazy box through — don't force `.buffer` / `.badge` —
+            // and the id too, where the section's walk left it to be asked.
+            rows.append(EagerListRow(row))
         }
         // The section's own `ForEach` owns exactly the rows it just
         // produced, and its `.onDelete` / `.onMove` offsets are indices

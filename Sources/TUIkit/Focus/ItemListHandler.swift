@@ -1008,14 +1008,14 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// Entries are `nil` for non-selectable rows (e.g. section headers/footers in List).
     ///
     /// Eager backing where the list knows every row's answer as it hands them
-    /// over and not every row is content: Sections, a `ForEach` whose ids the
-    /// selection cannot all hold, tests. A large flat windowed `List` and every
-    /// `Table` (whose rows are all content) leave this empty and supply
-    /// ``idAt`` instead, so neither materialises an id per off-screen row — and
-    /// so does a list with a flattened row still to be asked its answer
-    /// (hand-written rows, alone or beside a loop), which hands this over
-    /// unsettled (below). Read ids through ``id(at:)`` / ``index(of:)``, never
-    /// this array directly.
+    /// over and not every row is content: a `Section` of one `ForEach`, a
+    /// `ForEach` whose ids the selection cannot all hold, tests. A large flat
+    /// windowed `List` and every `Table` (whose rows are all content) leave
+    /// this empty and supply ``idAt`` instead, so neither materialises an id
+    /// per off-screen row — and so does a list with a flattened row still to
+    /// be asked its answer (hand-written rows, alone or beside a loop, flat or
+    /// in a `Section`), which hands this over unsettled (below). Read ids
+    /// through ``id(at:)`` / ``index(of:)``, never this array directly.
     ///
     /// May be handed over UNSETTLED, with ``selectableIndices``, by
     /// ``answerRowsWhenAsked(_:)``: then the first read of either settles both,
@@ -1103,10 +1103,11 @@ extension ItemListHandler {
     /// The id of the row at `index`, or `nil` for a non-selectable / out-of-range
     /// row. Resolves through the lazy ``idAt`` when present — a windowed
     /// `List`, a `Table`, and a list that handed its answers over unsettled
-    /// (see ``itemIDs``) — else the eager ``itemIDs`` (Sections, a `ForEach`
-    /// whose ids the selection cannot all hold, tests). Per frame only the
-    /// visible window and the focused row are asked (selection gestures ask
-    /// for their span on the way in, never per-frame).
+    /// (see ``itemIDs``) — else the eager ``itemIDs`` (a `Section` of one
+    /// `ForEach`, a `ForEach` whose ids the selection cannot all hold,
+    /// tests). Per frame only the visible window and the focused row are
+    /// asked (selection gestures ask for their span on the way in, never
+    /// per-frame).
     ///
     /// What one row costs: an array read from ``itemIDs``; through ``idAt`` a
     /// key-path read or a cast, except that a `.tag(_:)`-outermost looped row

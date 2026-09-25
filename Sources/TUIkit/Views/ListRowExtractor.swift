@@ -12,8 +12,9 @@
 /// for selection tracking. Rows can span multiple lines (multi-line content).
 ///
 /// The buffer and badge are rendered lazily (see ``LazyListRowContent``): the
-/// `id` is resolved eagerly, but the view is built and rendered only when the
-/// row is actually shown.
+/// view is built and rendered only when the row is actually shown. The `id`
+/// is resolved eagerly too, except a flattened child's, which is carried
+/// still to be asked (``askedID``) — see ``id``.
 struct ListRow<ID: Hashable> {
     /// The identifier the selection knows this row by, or `nil` when it has
     /// none it can express.
@@ -24,7 +25,22 @@ struct ListRow<ID: Hashable> {
     /// selection, which is SwiftUI's treatment of a row carrying no `tag(_:)`.
     /// It used to be DROPPED, which made a whole list of static rows render as
     /// the empty placeholder. See ``staticListRowID(of:ordinal:as:)``.
-    let id: ID?
+    ///
+    /// A row a `Section` flattened out of mixed content is asked for it here,
+    /// through ``askedID``: a looped row's answer is its loop's rule, which
+    /// for a `.tag(_:)`-outermost row BUILDS the row, and the list asks for
+    /// the ids of the rows it draws and the handler wants, not of every row.
+    @MainActor var id: ID? {
+        if let askedID { return askedID.id }
+        return knownID
+    }
+
+    /// ``id``, when it was resolved at construction.
+    private let knownID: ID?
+
+    /// ``id``, when it is still to be asked — `nil` for every row but a
+    /// flattened child's.
+    let askedID: AskedRowID<ID>?
 
     /// The lazily-rendered buffer + badge for this row.
     let content: LazyListRowContent
@@ -40,13 +56,23 @@ struct ListRow<ID: Hashable> {
 
     /// Creates a row whose content is rendered on demand.
     init(id: ID?, content: LazyListRowContent) {
-        self.id = id
+        self.knownID = id
+        self.askedID = nil
         self.content = content
     }
 
     /// Creates a row from an already-rendered buffer (fallback / chrome paths).
     init(id: ID?, buffer: FrameBuffer, badge: BadgeValue?) {
-        self.id = id
+        self.knownID = id
+        self.askedID = nil
+        self.content = LazyListRowContent(buffer: buffer, badge: badge)
+    }
+
+    /// Creates a flattened child's row from its already-rendered buffer, its
+    /// id still to be asked.
+    init(askedID: AskedRowID<ID>, buffer: FrameBuffer, badge: BadgeValue?) {
+        self.knownID = nil
+        self.askedID = askedID
         self.content = LazyListRowContent(buffer: buffer, badge: badge)
     }
 }

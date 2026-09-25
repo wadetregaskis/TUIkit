@@ -333,6 +333,42 @@ struct ListRowSelectionValueCostTests {
             "\(cost.tagBuilds) tag builds for \(cost.drawn) drawn rows of \(Self.rowCount)")
     }
 
+    /// The same mix inside a `Section`, which walks its own flattened
+    /// children (`Section.listRows(of:context:)`) and hands the list rows whose
+    /// ids it had already resolved — every one of them, every frame.
+    @Test("A Section mixing a loop with a hand-written row builds the tags of the rows it draws")
+    func mixedSectionReadsTheTagsItDraws() {
+        func steady(tagged: Bool) -> (builds: Int, drawn: Int) {
+            let counter = Counter()
+            let projects = Self.projects(counter)
+            let frames = Frames(counter: counter)
+            let cost =
+                tagged
+                ? frames.steadyFrame(
+                    List(selection: .constant(Pick?.some(.all))) {
+                        Section("Projects") {
+                            Text("All projects").tag(Pick.all)
+                            ForEach(projects) { Self.taggedRow($0) }
+                        }
+                    })
+                : frames.steadyFrame(
+                    List(selection: .constant(Int?.some(-1))) {
+                        Section("Projects") {
+                            Text("All projects").tag(-1)
+                            ForEach(projects) { Self.untaggedRow($0) }
+                        }
+                    })
+            return (cost.builds, cost.drawn)
+        }
+        let tagged = steady(tagged: true)
+        let untagged = steady(tagged: false)
+        let tagBuilds = tagged.builds - untagged.builds
+        #expect(tagged.drawn > 0 && tagged.drawn == untagged.drawn, "both lists drew their rows")
+        #expect(
+            tagBuilds <= tagged.drawn + 2,
+            "\(tagBuilds) tag builds for \(tagged.drawn) drawn rows of \(Self.rowCount)")
+    }
+
     // MARK: - The answers are the same answers
 
     /// The handler's row answers — the ids row by row, where each key lands,
@@ -407,5 +443,43 @@ struct ListRowSelectionValueCostTests {
         #expect(handler.focusedIndex == Self.rowCount)
         #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == true)
         #expect(selection == .project(Self.rowCount - 1))
+    }
+
+    /// The mix inside a `Section`: a header, a row the selection cannot name,
+    /// the looped rows and a tagged one — the answers its handler gave when
+    /// every row was resolved up front, asked in the same order as the flat
+    /// list's: rows and keys first, the maps whole after.
+    @Test("A mixed Section's handler answers every row as it did when every row was resolved up front")
+    func mixedSectionAnswersAreUnchanged() {
+        let counter = Counter()
+        let frames = Frames(counter: counter)
+        var selection: String?
+        let list = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            Section("Planets") {
+                Text("Every planet")
+                ForEach(["mercury", "venus", "earth"], id: \.self) { Text($0) }
+                Text("Pluto").tag("pluto")
+            }
+        }
+        _ = frames.steadyFrame(list)
+        guard let handler = frames.env.focusManager?.currentFocused as? ItemListHandler<String> else {
+            Issue.record("the list took focus")
+            return
+        }
+        #expect(
+            (0..<handler.itemCount).map { handler.id(at: $0) }
+                == [nil, nil, "mercury", "venus", "earth", "pluto"])
+        #expect(handler.index(of: "venus") == 3)
+        _ = handler.handleKeyEvent(KeyEvent(key: .home))
+        #expect(handler.focusedIndex == 2, "Home lands on the first selectable row")
+        _ = handler.handleKeyEvent(KeyEvent(key: .up))
+        #expect(handler.focusedIndex == 5, "Up wraps past the header and the unselectable row")
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        #expect(handler.focusedIndex == 2, "Down wraps back past them")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == true)
+        #expect(selection == "mercury")
+
+        #expect(handler.itemIDs == [nil, nil, "mercury", "venus", "earth", "pluto"])
+        #expect(handler.selectableIndices == [2, 3, 4, 5], "\(handler.selectableIndices.sorted())")
     }
 }
