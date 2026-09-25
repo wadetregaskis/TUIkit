@@ -3563,11 +3563,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 indicator: indicator, badgeColumns: badgeColumns, palette: palette)
         }
 
+        /// The row's content, with its fades spent against the fill the row paints
+        /// under it (§96.1): once for a still fill, per colour for a breath.
+        let content = ListRowContent(row.buffer, background: background, palette: palette)
+
         /// The row's lines over a given background — the ONE description of what
         /// this row looks like, called once for the frame on screen and once per
         /// point of a pulse for the runs that replay it.
         func lines(over backgroundColor: Color?) -> [String] {
-            row.buffer.lines.enumerated().map { lineIndex, line in
+            content.lines(over: backgroundColor).enumerated().map { lineIndex, line in
                 if shouldRenderBadge && lineIndex == 0 {
                     return renderLineWithBadge(
                         line: line,
@@ -3605,9 +3609,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// second derivation beside the one the line is drawn through, and nearly no
         /// badged row carries a run.
         let carried = Self.carriedChildRuns(
-            of: row.buffer, rowWidth: rowWidth,
+            of: content.drawn, rowWidth: rowWidth,
             badgedLine: shouldRenderBadge
-                ? { badgedLineFit(row.buffer.lines.first ?? "", badge: badge!, rowWidth: rowWidth) } : nil)
+                ? { badgedLineFit(content.drawn.lines.first ?? "", badge: badge!, rowWidth: rowWidth) } : nil)
         let childRuns = carried.runs
         // A run cut short of an ellipsis its frames move asks for a render at each of
         // its steps, which draws the ellipsis where that frame puts it. Under a token of
@@ -3621,11 +3625,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         let droppedRunClaims = cutToBadgedContent(
             carried.droppedClaims, of: row, badged: shouldRenderBadge, rowWidth: rowWidth)
-        /// What the content owes with `dropped` left behind: `nil` — its buffer's own
-        /// regions — when nothing was.
-        func contentClaims(_ dropped: [OpacityRegion]) -> [OpacityRegion]? {
-            dropped.isEmpty ? nil : row.buffer.opacityRegions + dropped
-        }
 
         // A row whose picture is still walking back to it keeps its space and
         // draws nothing in it — see ``ItemListHandler/returningRows``. Blanked
@@ -3651,7 +3650,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 RenderedRow(
                     lines: background.stillLines { lines(over: $0) },
                     pulseFrames: nil, childRuns: Self.grounding(childRuns, on: background),
-                    claims: claims(over: fill), contentClaims: contentClaims(droppedRunClaims)),
+                    claims: claims(over: fill), contentClaims: content.claims(leaving: droppedRunClaims)),
                 of: background, row: row, badged: shouldRenderBadge, rowWidth: rowWidth, palette: palette)
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
@@ -3694,7 +3693,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } },
             pulseTiming: cycle.timing,
             claims: claims(over: nil),
-            contentClaims: contentClaims(droppedRunClaims + childRuns.flatMap(\.leftBehind)))
+            contentClaims: content.claims(leaving: droppedRunClaims + childRuns.flatMap(\.leftBehind)))
     }
 
     /// A row's rendered lines, plus — when its background breathes — every frame

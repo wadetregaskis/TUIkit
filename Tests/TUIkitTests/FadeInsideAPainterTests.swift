@@ -19,6 +19,49 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitStyling
 
+/// `item`, on a repeating fade drawn at 0.9 of a breath down to 0.3.
+private struct BreathingItem: View, Renderable {
+    var body: Never { fatalError("renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        var buffer = FrameBuffer(lines: ["item"])
+        var breath = OpacityRegion(offsetX: 0, offsetY: 0, width: 4, height: 1, opacity: 0.9)
+        breath.cycle = OpacityCycle(phases: [0.9, 0.3], clock: .content)
+        buffer.opacityRegions = [breath]
+        return buffer
+    }
+}
+
+/// A label wider than its row on a repeating fade, badged, in the selected row of a list
+/// without the keys: the row spends the fade against its tint into a run over the
+/// label, which the badge cuts, and the ellipsis it ends in is drawn in the fade's ink.
+private struct TruncatedBreathingLabel: View {
+    @State private var dim = false
+
+    var body: some View {
+        Text(String(repeating: "x", count: 40)).opacity(dim ? 0.6 : 1)
+            .onAppear {
+                withAnimation(.linear(duration: 0.4).repeatForever(autoreverses: true)) { dim = true }
+            }
+    }
+}
+
+private struct TruncatedBreathingLabelApp: App {
+    init() {}
+    var body: some Scene {
+        WindowGroup {
+            VStack {
+                Button("focus") {}
+                List(selection: .constant(Optional(0))) {
+                    ForEach(0..<2, id: \.self) { _ in TruncatedBreathingLabel().badge(3) }
+                }
+                .frame(width: 24, height: 4)
+            }
+            .palette(SystemPalette(.green))
+        }
+    }
+}
+
 @MainActor
 @Suite("A fade inside a painter fades toward the painter's field")
 struct FadeInsideAPainterTests {
@@ -108,15 +151,12 @@ struct FadeInsideAPainterTests {
         // What the painter puts under each column, the probe drawing no field.
         let bare = writtenRows(of: painter.view(Text("xyab")), palette: palette)
         try #require(faded.count == unfaded.count && bare.count == unfaded.count)
-        if painter == .listRowFill {
-            withKnownIssue("a List row's fill is not yet the backdrop of the fades inside it") {
-                expectPaintersFieldsKept(painter, unfaded: unfaded, faded: faded, bare: bare, own: own)
-            }
-        } else if terminalPage, painter == .none || painter == .tabSurface {
-            // Where the backdrop is the terminal's own page, every cell the fade
-            // leaves on it is spelled `ESC[49m`, and the opacity splice paints the
-            // field under its span's first cell — the probe's own colour — under
-            // every one of them.
+        if terminalPage, [.none, .tabSurface, .listRowFill].contains(painter) {
+            // Where the backdrop is the terminal's own page — the page itself, a
+            // tab's surface on it, and a list's rows, which on it are unfilled or
+            // reversed — every cell the fade leaves on it is spelled `ESC[49m`, and
+            // the opacity splice paints the field under its span's first cell — the
+            // probe's own colour — under every one of them.
             withKnownIssue("the opacity splice fills a faded span's stated 49 with the field it lands on") {
                 expectPaintersFieldsKept(painter, unfaded: unfaded, faded: faded, bare: bare, own: own)
             }
@@ -139,21 +179,135 @@ struct FadeInsideAPainterTests {
                 start + 3 < cells.count && cells[start..<(start + 4)].map(\.glyph) == ["x", "y", "a", "b"]
             }
             probed += starts.count
-            // The four columns under each probe are what it states, over the painter.
-            var expected = cells.map(\.background)
+            // The four columns under each probe are what it states, over the painter:
+            // the fields the cells SHOW, which in a row that reverses is its ink's slot
+            // (§86.1). Compared by slot, a reversed row's hole — the terminal's own field
+            // in its background slot, where the row has the terminal's own ink — read as
+            // the row.
+            var expected = cells.map(\.shownField)
             for start in starts {
-                let under = (start..<(start + 4)).map { bare[row][$0].background }
-                let mixed = own.opacity(0.3, over: Self.colour(ofField: under[0]))
+                let under = (start..<(start + 4)).map { bare[row][$0] }
+                // A reversal shows the probe's own colour, in its background slot, as
+                // ink: every field under the probe is the row's.
+                guard !under[0].state.reversesVideo else {
+                    expected.replaceSubrange(start..<(start + 4), with: under.map(\.shownField))
+                    continue
+                }
+                let mixed = own.opacity(0.3, over: Self.colour(ofField: under[0].background))
+                let spelled = mixed.rgbComponents.map { ShownColour.colour(.rgb(Int($0.red), Int($0.green), Int($0.blue))) }
                 expected.replaceSubrange(
-                    start..<(start + 4), with: [mixed.rgbComponents.map(Self.spelled) ?? under[0]] + under.dropFirst())
+                    start..<(start + 4), with: [spelled ?? under[0].shownField] + under.dropFirst().map(\.shownField))
             }
             // And every other column is the unfaded row's: nothing outside the
             // probe moves.
             #expect(
-                faded[row].map(\.background) == expected,
-                "\(painter), row \(row): probes at \(starts) over \(bare[row].map(\.background))")
+                faded[row].map(\.shownField) == expected,
+                "\(painter), row \(row): probes at \(starts) over \(bare[row].map(\.shownField))")
         }
         #expect(probed > 0, "\(painter) drew no probe")
+    }
+
+    /// A list's cursor row breathes: its fill is a run of whole-row frames, one per
+    /// colour of the breath, replayed by the run loop. A label faded inside the row
+    /// is on each frame's colour, as the row unfaded is — spent against every colour
+    /// of the breath. Carried up, the row's content region covered the run, and the
+    /// fade blended each frame's fill under the label toward the page.
+    @Test("A breathing list row keeps its breath under a faded label at every step")
+    func aBreathingRowKeepsItsBreath() throws {
+        let context = makeRenderContext(width: 24, height: 12)
+        let buffer = ColorDepth.withCurrent(.truecolor) {
+            renderToScreen(FieldPainter.listRowFill.view(Text("y").opacity(0.3)), context: context)
+        }
+        let breath = try #require(
+            buffer.animatedCells.first { $0.frames.count > 1 && $0.frames.allSatisfy { $0.stripped.contains("y") } },
+            "the cursor row left no breath")
+        var fills: Set<String> = []
+        for (index, frame) in breath.frames.enumerated() {
+            let cells = paintedCells(frame)
+            let y = try #require(cells.firstIndex { $0.glyph == "y" })
+            #expect(
+                cells[y].background == cells[0].background,
+                "frame \(index): y is on \(cells[y].background.debugDescription), the row on \(cells[0].background.debugDescription)")
+            fills.insert(cells[0].background)
+        }
+        // Not vacuous: the frames are a breath, several colours.
+        #expect(fills.count > 1)
+    }
+
+    /// A cursor row that holds still — its cycle is a single frame under
+    /// `.selectionIndicatorStyle(.none)` — sits at the bright end of its breath, and
+    /// the row's content is spent against that. A faded spinner in it carries its
+    /// run up, and every frame of the run is spent against the same colour: the
+    /// replay draws each tick over what the render drew. Spent against the dim end,
+    /// every tick put the spinner on the dim wash in a bright row.
+    @Test("A faded run in a still cursor row is spent against the colour the row draws")
+    func aFadedRunInAStillCursorRow() throws {
+        let context = makeRenderContext(width: 24, height: 6)
+        let view = List(selection: .constant(Int?.none)) {
+            ForEach(0..<3, id: \.self) { row in
+                HStack(spacing: 0) { Text("row \(row) "); Spinner().opacity(0.3) }
+            }
+        }
+        .selectionIndicatorStyle(.none)
+        .frame(height: 3)
+        let buffer = ColorDepth.withCurrent(.truecolor) { renderToScreen(view, context: context) }
+        let run = try #require(buffer.animatedCells.first { $0.width == 1 }, "the spinner left no run")
+        let line = paintedCells(buffer.lines[run.offsetY])
+        // Not vacuous: the row is filled, still — the list's cursor row.
+        #expect(!line[run.offsetX].background.isEmpty)
+        #expect(!buffer.animatedCells.contains { $0.width > 1 }, "the cursor row breathes")
+        for (index, frame) in run.frames.enumerated() {
+            let cell = try #require(paintedCells(frame).first)
+            #expect(
+                cell.background == line[run.offsetX].background,
+                "frame \(index) is on \(cell.background.debugDescription), the row on \(line[run.offsetX].background.debugDescription)")
+        }
+    }
+
+    /// A repeating fade in a badged row the list fills, still: the selected row of a
+    /// list without the keys, its tint opaque on an RGB palette. The row spends the
+    /// fade against its fill into a run of its own, on the badged line; carried as far
+    /// as the content the badge keeps, it replays the breath over the fill. Dropped
+    /// there, as a badged line's runs were, and with the claim spent into it, nothing
+    /// was left to move the label: it held the phase it was drawn at while a render
+    /// moved it.
+    @Test("A repeating fade in a badged row the list fills is carried as a run over the label")
+    func aRepeatingFadeInABadgedRow() throws {
+        let context = makeBareRenderContext(width: 24, height: 4)
+        let palette = context.environment.palette
+        let buffer = ColorDepth.withCurrent(.truecolor) {
+            renderToBuffer(
+                List(selection: .constant(Optional(0))) {
+                    ForEach(0..<2, id: \.self) { _ in BreathingItem().badge(3) }
+                },
+                context: context)
+        }
+        let resolved = ColorDepth.withCurrent(.truecolor) {
+            buffer.resolvingOpacity(surface: palette.background, palette: palette)
+        }
+        let row = try #require(resolved.lines.firstIndex { $0.stripped.contains("item") })
+        let label = try #require(paintedCells(resolved.lines[row]).firstIndex { $0.glyph == "i" })
+        // Not vacuous: the row fills under the label, and the badge is drawn.
+        #expect(!paintedCells(resolved.lines[row])[label].background.isEmpty, "the row is not filled")
+        #expect(resolved.lines[row].stripped.contains("3"), "the row is not badged")
+        let run = resolved.animatedCells.first {
+            $0.offsetY == row && $0.offsetX <= label && label + 4 <= $0.offsetX + $0.width
+        }
+        #expect(
+            run.map { Set($0.frames).count > 1 } == true,
+            "no run breathes over the label: \(resolved.animatedCells.map { ($0.offsetY, $0.offsetX, $0.width) })")
+    }
+
+    /// The same fade on a label the badge TRUNCATES, through the run loop: the ellipsis
+    /// the line ends in is drawn in the state the cut leaves open, the fade's ink at the
+    /// phase drawn, and every tick shows it at the phase a render at that instant draws.
+    /// Cut short of it, the run moved the label and the ellipsis held the drawn phase
+    /// (23 ticks of 24).
+    @Test("A repeating fade on a truncated badged label breathes its ellipsis with it")
+    func aRepeatingFadeOnATruncatedBadgedLabel() throws {
+        let found = ReplayOracle.compare({ TruncatedBreathingLabelApp() }, ticks: 24, size: (30, 6))
+        try #require(found.compared >= 24, "only \(found.compared) rows were compared")
+        for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
     }
 
     /// A `withAnimation` fade from 0.2 to 0.8 inside a `.background`, on the

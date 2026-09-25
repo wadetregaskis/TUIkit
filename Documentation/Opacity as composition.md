@@ -6232,7 +6232,72 @@ the row's field (it fails with the row's own spend taken out), and `RepeatingFad
 replays a breath spent at a `.background` beside a breath at the root and inside one, against a
 render at every tick (it fails with §6b.1 taken out, 23 ticks of 24 each).
 
-Still carried, and held as known issues in `FadeInsideAPainterTests`: a `List` row's own fills (its cursor,
-selection and alternating tints), and, on the terminal's own page, the painters whose backdrop
-is that page — none, and a tab's surface there — where the opacity splice still paints the
-field under a span's first cell under every `ESC[49m` the span states.
+Still carried, and held as known issues in `FadeInsideAPainterTests`: on the terminal's own
+page, the painters whose backdrop is that page — none, a tab's surface there, and a list's rows,
+which on it are unfilled or reversed — where the opacity splice still paints the field under a
+span's first cell under every `ESC[49m` the span states.
+
+### 96.1 A list row's own fill
+
+A `List` row is a painter too: its cursor, its selection and its alternating tints are fills
+under content the row did not draw, and the row's content carried its fades up past them to
+the root, which faded the fill under a faded label toward the page. The cursor row breathes —
+its fill is a run of whole-row frames, one per colour of the breath — and the content's
+region covered the run too, so every frame's fill under the label was faded, sixteen of them.
+
+`_ListCore.renderRow` now spends the content's fades against the fill it paints: a still
+opaque tint once, a breath once per colour (each frame of the run is the content spent
+against its own colour), and the attach carries nothing up for that content
+(`PopulatedRenderState.contentClaims`). Only where the content has a fade to spend — asked
+first, so nearly every row does no more than before. A translucent tint is §22's case and
+still carries both claims. A reversal (the cursor row where its wash cannot be measured)
+already spends its content's fades itself, over its finished lines (§86.1).
+
+A repeating fade spent there leaves a run of its own, and nothing else: the attach carries no
+claim for it. So the row carries that run as it carries any of its content's runs, and a
+badged row carries it as far as the content the badge keeps (§69.4's revision): dropped there,
+as a badged first line's runs once were, the fade held the phase it was drawn at while a render
+moved it, with no claim left to move it at the root. Where the badge truncates the label, the
+run is carried over the ellipsis too, which the truncation draws in the fade's ink at the phase
+drawn, so it breathes with the label (§69.4); cut short of it, the ellipsis held the drawn
+phase through the run loop while a render moved it (23 ticks of 24). A row with nothing to
+spend keeps nothing for the colours of a breath either: every row `renderRow` draws, every
+frame, builds its content through `ListRowContent`, and the cache of spent colours is made only
+for a row that spends — `Stress --bench --scenario megalist` builds 396 rows in its 11 frames, and allocated
+the cache for every one of them.
+
+The colour a row is spent against is the one it draws in the frame being rendered: the
+cycle's own step (`SelectionEmphasisCycle.colorNow(dim:bright:)`, which reads no clock). A
+cursor row that holds still — a single-frame cycle under `.selectionIndicatorStyle(.none)`,
+a blink at rest — sits at the BRIGHT end of its breath (`RowBackground.stillLines`), and the
+content's runs, carried up with the row, are spent against that colour too: a faded spinner
+in such a row replays on the row it was rendered on. (Spent against the dim end, the line
+was right and every frame of the spinner's run was on the dim wash in a bright row: each
+tick drew it so.) A breath is spent once per distinct colour: a symmetric pulse comes back
+through most of its colours, and a label at 0.3 in the breathing cursor row of a zebra list
+costs ten spends a render where it cost nineteen.
+
+Every colour but the one drawn is spent for its LINES alone
+(`resolvingOpacity(over:at:surface:palette:buildingRuns:)` with `false`). The breath's frames
+are whole lines the row replays in place of its own, and keep nothing else. The lines take a
+run only through what its own alpha says about the frame they were drawn at, which is read
+either way. Spent whole, each colour faded every frame of every run inside the row, and rebuilt
+a repeating fade's runs, only for them to be thrown away. Counted with a temporary counter on
+`blendedSpan` for a faded ten-frame spinner in a breathing row of sixteen colours: 26 blends a
+render (11 for the drawn colour, one line for each other colour), where spending every colour
+whole took 176.
+
+`FadeInsideAPainterTests`: the probe inside a zebra list on the default page (compared as the
+fields its cells SHOW, since the cursor row reverses on the terminal's own page), and a label at
+0.3 in the breathing cursor row, whose every frame must keep the label on that frame's colour.
+Before, the probe failed on the cursor row and the tinted row, and all sixteen frames of the
+breath had the label on the fill faded 30% toward the page. And a faded spinner in a still
+cursor row, every frame of its run on the row's colour under it: spent against the dim end,
+each frame was on `48;2;14;63;14` in a row of `48;2;23;116;23`. `LinesOnlySpendTests` holds
+each colour's lines-only spend to the whole spend's lines, with no run built, over content that
+has a covered spinner, a repeating fade and a run stating its own alpha. It fails with the runs
+taken off before the spend, because the drawn frame's alpha is then missing from the lines.
+And a label on a repeating fade in the selected row of a list without the keys, badged: the
+row's opaque tint spends it, and a run breathes over the label; with the badged line's runs
+dropped whole, there is none. The same label wider than the row, through `ReplayOracle`: every
+tick draws the ellipsis at the phase a render draws.

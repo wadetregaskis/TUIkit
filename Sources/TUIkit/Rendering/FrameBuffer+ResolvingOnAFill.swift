@@ -64,9 +64,13 @@ extension FrameBuffer {
     ///     `surface` under every cell. Asked for only when there is a fade to spend.
     ///   - surface: The fill's colour, or for a ramp the ambient background.
     ///   - palette: Resolves the surface and SGR 39.
+    ///   - buildingRuns: `false` for a caller that keeps only the LINES — a breathing
+    ///     row spending its content against a colour of its breath that the frame
+    ///     being drawn does not show — so every run is left out rather than faded and
+    ///     thrown away (``resolvingOpacity(over:at:surface:palette:buildingRuns:)``).
     /// - Returns: The buffer, spent, or as it was.
     func resolvingOpacity(
-        onOpaqueFill fill: () -> FrameBuffer?, surface: Color, palette: any Palette
+        onOpaqueFill fill: () -> FrameBuffer?, surface: Color, palette: any Palette, buildingRuns: Bool = true
     ) -> Self {
         // Nothing asking what is behind it — nearly every painter, nearly every
         // frame, and every label of a palette with a translucent ink — and nothing
@@ -82,7 +86,9 @@ extension FrameBuffer {
         // never measures, and the page, once reported, does (§80).
         var backdrop = surface
         if case .terminalDefault = surface.value { backdrop = .terminalBackground }
-        return content.resolvingOpacity(over: fill() ?? Self(), surface: backdrop, palette: palette)
+        return content.resolvingOpacity(
+            over: fill() ?? Self(), at: (x: 0, y: 0), surface: backdrop, palette: palette,
+            fillingStatedTerminalField: false, buildingRuns: buildingRuns)
     }
 
     /// This buffer — content a painter has just drawn in REVERSE VIDEO, its lines

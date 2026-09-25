@@ -77,19 +77,28 @@ extension FrameBuffer {
         palette: any Palette
     ) -> Self {
         resolvingOpacity(
-            over: destination, at: position, surface: surface, palette: palette, fillingStatedTerminalField: false)
+            over: destination, at: position, surface: surface, palette: palette, fillingStatedTerminalField: false,
+            buildingRuns: true)
     }
 
     /// ``resolvingOpacity(over:at:surface:palette:)``, saying whether a stated
-    /// `ESC[49m` is read as the field under it.
+    /// `ESC[49m` is read as the field under it, and whether it builds the runs at all.
     ///
     /// `fillingStatedTerminalField` is a compositor's reading of the layer's stated 49:
     /// the composite that follows fills it with the field under its column, so a covered
     /// cell stating one is blended as that field where `destination` shows one (§95).
-    /// A root has nothing under it.
+    /// A painter lets a stated 49 through, and a root has nothing under it.
+    ///
+    /// `buildingRuns: false` answers the LINES alone, every run it carried gone, for a
+    /// caller that keeps nothing else — a breathing row spending its content against each
+    /// colour of its breath (`ListRowContent`, `_MenuItemRowBar`). The lines take a run
+    /// only through what its own alpha says about the frame they were drawn at, which is
+    /// read here either way; fading every frame of every run and building a repeating
+    /// fade's runs, for a buffer whose runs were then discarded, was work thrown away once
+    /// per colour.
     func resolvingOpacity(
         over destination: Self, at position: (x: Int, y: Int), surface: Color, palette: any Palette,
-        fillingStatedTerminalField: Bool
+        fillingStatedTerminalField: Bool, buildingRuns: Bool
     ) -> Self {
         // A run may be the only thing on the buffer with anything to say: a blinking
         // caret over a faded well claims nothing statically, because no one rectangle
@@ -253,6 +262,10 @@ extension FrameBuffer {
         // the frame the lines were drawn with, inside a fade that itself keeps
         // animating — a bounded compromise where the alternative was a full
         // render per tick.
+        guard buildingRuns else {
+            result.animatedCells = []
+            return result
+        }
         result.animatedCells = animatedCells.compactMap { run in
             Self.faded(
                 run, covering: regionsForRuns, destination: destination,
@@ -542,7 +555,7 @@ extension FrameBuffer {
         composited(
             with: overlay.resolvingOpacity(
                 over: self, at: position, surface: surface ?? palette.background, palette: palette,
-                fillingStatedTerminalField: true),
+                fillingStatedTerminalField: true, buildingRuns: true),
             at: position)
     }
 }

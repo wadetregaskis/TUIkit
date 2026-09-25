@@ -101,24 +101,49 @@ struct ListBreathingRowRunAlphaTests {
         #expect(atTheDrawnFrame, "at the faded frame its lines were drawn at: \(owed)")
     }
 
-    /// WHERE those regions go, not only that they exist. The resolver takes a cell's
-    /// LAYER from the first region covering it. Left behind among the list's own claims,
-    /// which the container lays down before any row's content regions, they came ahead
-    /// of an `.opacity(_:)` inside the row, and its border cells lost the fade: the ink
-    /// right, the layer gone.
-    @Test("An opacity inside the cursor row still comes first over its dropped border cells")
-    func contentOpacityStaysFirst() throws {
-        let drawn = focusedListBuffer(
-            List(selection: .constant(Set([0]))) {
-                ForEach(rows) { row in Text(row.name).border(border).opacity(0.3) }
-            }
-            .focusID("breathing-list")
-            .tint(.red),
-            focusID: "breathing-list")
-        let dropped = try #require(
-            drawn.opacityRegions.first { $0.inkOpacity < 1 && $0.offsetY == 1 },
-            "the cursor row's top rule left nothing: \(drawn.opacityRegions)")
-        let covering = drawn.opacityRegions.filter { $0.contains(column: dropped.offsetX, row: 1) }
-        #expect(covering.first?.opacity == 0.3, "the row's own fade is not first over its border: \(covering)")
+    /// Both alphas, in their order. The resolver takes a cell's LAYER from the first
+    /// region covering it, and a dropped run's drawn frame left behind among the
+    /// list's own claims came ahead of an `.opacity(_:)` inside the row: its border
+    /// cells lost the fade, the ink right, the layer gone.
+    ///
+    /// Since 2026-09-24 the row spends such content against the fill it paints
+    /// (`Opacity as composition.md` §96.1) — the row's own fade and its runs' drawn
+    /// frame together, in one resolution, which appends a run's payload after the
+    /// regions by construction — so nothing is left to order at the attach, and the
+    /// question is asked of the picture: the cursor row's top rule is the border's
+    /// red at its drawn alpha over the row's fill, and THEN at the row's 0.3 over
+    /// that fill.
+    @Test("An opacity inside the cursor row fades its dropped border cells at both alphas")
+    func contentOpacityAndBorderAlpha() throws {
+        let drawn = ColorDepth.withCurrent(.truecolor) {
+            focusedListBuffer(
+                List(selection: .constant(Set([0]))) {
+                    ForEach(rows) { row in Text(row.name).border(border).opacity(0.3) }
+                }
+                .focusID("breathing-list")
+                .tint(.red),
+                focusID: "breathing-list")
+        }
+        // Spent at the row: the cursor row's content owes the root nothing.
+        #expect(
+            !drawn.opacityRegions.contains { $0.opacity < 1 && (1...3).contains($0.offsetY) },
+            "the cursor row carried its fade up: \(drawn.opacityRegions)")
+        let cells = paintedCells(drawn.lines[1])
+        let corner = try #require(
+            cells.indices.first { $0 > 1 && ["╭", "┌"].contains(cells[$0].glyph) },
+            "no top rule on the cursor row: \(drawn.lines[1].stripped)")
+        let fill = try #require(Self.rgb(cells[corner].state.backgroundColour), "the rule is on no fill")
+        let expected = try #require(
+            Color.rgb(200, 40, 40).opacity(128.0 / 255, over: fill).opacity(0.3, over: fill).rgbComponents)
+        #expect(
+            Self.rgb(cells[corner].ink)?.rgbComponents.map { [$0.red, $0.green, $0.blue] }
+                == [expected.red, expected.green, expected.blue],
+            "the rule is drawn in \(String(describing: cells[corner].ink)) on \(fill)")
+    }
+
+    /// `colour` as a `Color`, where it is 24-bit.
+    private static func rgb(_ colour: SGRState.Colour?) -> Color? {
+        guard case .rgb(let red, let green, let blue) = colour else { return nil }
+        return .rgb(UInt8(red), UInt8(green), UInt8(blue))
     }
 }
