@@ -4387,16 +4387,64 @@ as the splice does. Pinned per painter at the faded level by
 nested ones failed, e.g. `(drawn → ["…48;2;200;40;40m", …]) == (shown → ["",
 ""])`.
 
-Found beside it, still open, and in the render rather than the replay: the
-opacity splice (`FrameBuffer.splicing`) paints the field under its span's first
-column beneath every cell the span spells `ESC[49m`, because it composites and
-compositing reads 49 as no field. On a `Color.default` palette every cell that
-blends to the terminal's own is spelled that way, a stated 49 included. So a
-faded row takes the colour of the cell its span starts on wherever it should
-show the terminal's own: `HStack { Text("x").background(.blue); Text("y") }
-.opacity(0.6)` draws `y` on blue, where `.opacity(1)` draws it on the terminal's
-own (measured on this tree; the splice is main's). `AnimatedRunGroundTests` holds
-the probe inside padding and a border, and on a ramp, as known issues.
+Found beside it, and in the render rather than the replay (fixed in the next
+note): the opacity splice (`FrameBuffer.splicing`) paints the field under its
+span's first column beneath every cell the span spells `ESC[49m`, because it
+composites and compositing reads 49 as no field. On a `Color.default` palette
+every cell that blends to the terminal's own is spelled that way, a stated 49
+included. So a faded row takes the colour of the cell its span starts on
+wherever it should show the terminal's own: `HStack { Text("x").background(.blue);
+Text("y") }.opacity(0.6)` draws `y` on blue, where `.opacity(1)` draws it on the
+terminal's own (measured on this tree; the splice is main's). `AnimatedRunGroundTests`
+held the probe inside padding and a border, and on a ramp, as known issues.
+
+**2026-09-24, later: the opacity splice takes its span literally.** The span
+the fade splices back into its row states every field it has: a covered cell
+names one (the surface where the blend leaves none), and a cell it passes over
+between two regions is the row's own. Nothing about it wants the compositor's
+reading of 49, which was never chosen: `splicing` predates compositing painting
+an overlay over the field it lands on (`590e71a4`), and inherited that step from
+the insert both share. It now inserts the span as the animation tick inserts a
+frame, without painting it (`overlayIsPainted`). Measured before, on a
+`Color.default` palette in truecolor: the faded `y` above was drawn on
+`48;2;0;122;255`, the UNFADED blue; `FadedTerminalFieldTests`, which holds a
+probe with a coloured cell, a bare one and a stated 49 inside every painter
+(`TestHelpers/FieldPainter.swift`) faded to 0.6 around it, failed five of the
+nine — none, a background, one around padding and a border, nested ones, a
+ramp — each with every terminal-own column of its row coloured (e.g. `[] ==
+[5, 6]` around padding). The other four passed for three different reasons,
+not one: the `List` row and the tab's surface because their spans open on no
+field (a list's rows are unfilled or reversed on such a palette, and a tab's
+surface is the page); the two compositors because compositing had already filled
+every 49 under the probe with its colour, and at 0.6 a colour outweighs the page,
+so the faded span stated no 49 for the splice to fill. (An earlier version of
+this note gave the first reason for all four.)
+
+The replay takes the same literal reading of a faded frame. A covered cell of a
+faded frame names its field too, a 49 the blend made among them, and the tick
+read that 49 as a STATED one, drawn over the record of what the painters made of
+a stated 49 — under a compositor, its colour. So with the render's splice literal,
+a probe run faded to 0.4 over green in a `ZStack`, or in an `.overlay` on green,
+rendered on the terminal's own (the page is the heavier side below one half) and
+replayed on the green, for a frame stating 49 and for one stating none alike
+(`AnimatedRunGroundTests`, at 0.6 and 0.4). The fade now rewrites that record to
+the terminal's own at the columns every frame was blended at, and a painter the
+run meets afterwards paints it as it paints the line.
+
+Through the run loop, `ReplayedRunFieldTests` gains the catalogue faded on the
+terminal's page three ways: to 0.6 around the colour (a `.background`), and to
+0.4 inside it and inside a `ZStack` over it — faded below one half AROUND the
+colour, every colour and ink blends to the page there and nothing is left to
+replay. Before, faded around it, four rows disagreed, each rendered on
+`48;2;90;20;120` (the colour, unfaded) where the replay drew the terminal's own
+or the bar's colour — two tab chips' labels, and the spinners in a menu's focused
+row and a list's cursor row. After, the chips agree; the two spinners still
+disagree, only because their rows are reversals (below). `AnimatedRunGroundTests`
+drops its two known issues. `AnimatedRunPatchGoldenTests` re-captures the splice
+half of the four rows that land a field-less frame on a field. A reversed cell
+stating 49, a `.plain` block caret, is §95's in `Opacity as composition.md`: its
+49 is in the slot a reversal shows as ink, and the faded frame now takes the
+record there.
 
 Still open: the replay restates the ground's field only. A reversal (SGR 7) a
 row paints over its content is recorded in the ground but not restated by the
@@ -4408,7 +4456,19 @@ limits). The reversal was inferred when this was written and is measured since
 breathe between, replays `⠹` in `ESC[38;2;220;220;220m` where a render at the
 same instant draws it in `ESC[7;38;2;220;220;220m`. The dim is still inferred.
 `ReplayOracle` compares each cell's glyph and field and a glyph's ink, not its
-attributes, so neither shows there.
+attributes, so neither shows there — unfaded. Faded (2026-09-24), the reversal
+does show: the fade blends a run's frame over its ground, which reads the
+row's reversal as a field, the bar's colour, so the frame states that field
+under its own ink, unreversed, while the render keeps the reversal (the page as
+ink has no spelling without it). The same spinner, and one in a list's cursor
+row, replay in their own ink on `48;2;220;220;220m` where the render draws them
+reversed. Faded INSIDE a colour, the render resolves the reversal at the painter,
+where it can be spelled without the 7, and the same two spinners replay inked in
+the colour the render draws as their field. `ReplayOracle` takes a cell-level
+excuse (`holding`) and reports the rows it held apart from its mismatches; a held
+cell does not stop the comparison, so a row's other disagreements still fail.
+`ReplayedRunFieldTests` holds, on each faded ground, exactly those two rows —
+named by what they draw, and asserted to be all it held.
 
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's

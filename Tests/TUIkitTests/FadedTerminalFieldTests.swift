@@ -100,13 +100,67 @@ struct FadedTerminalFieldTests {
         // Not vacuous: unfaded, `b` is on the page.
         #expect(opaque[1].glyph == "b" && faded[1].glyph == "b")
         #expect(opaque[1].background == Self.rgbPage)
-        // Where the span opens on a field, the opacity splice paints that field
-        // under every cell the span names none for — `b` after its reset included.
-        withKnownIssue("the opacity splice paints the field under its span's first cell") {
+        #expect(faded[1].background == Self.rgbPage, "the faded row draws b on \(faded[1].background.debugDescription)")
+    }
+
+    // MARK: - The splice
+
+    /// The columns of `row` that show the terminal's own field.
+    private static func terminalColumns(_ row: [PaintedCell]) -> [Int] {
+        row.indices.filter { showsTerminalField(row[$0]) }
+    }
+
+    /// On a `Color.default` palette every cell a fade leaves on the page is spelled
+    /// `ESC[49m`. `y` states no field and nothing paints one under it, so it is on
+    /// the page — the terminal's own — at full strength; faded, the opacity splice
+    /// used to paint the field under its span's first cell, `x`'s blue, under it.
+    @Test("A label after a coloured one stays on the terminal's own field through a fade")
+    func aLabelAfterAColouredOne() throws {
+        let view = HStack { Text("x").background(Color.blue); Text("y") }
+        let opaque = try #require(rows(view.opacity(1), terminalPage: true).first)
+        let faded = try #require(rows(view.opacity(0.6), terminalPage: true).first)
+        let y = try #require(opaque.firstIndex { $0.glyph == "y" })
+        // Not vacuous: at full strength `y` is on the terminal's own field and `x`
+        // is not.
+        #expect(Self.showsTerminalField(opaque[y]))
+        #expect(!Self.showsTerminalField(opaque[0]))
+        #expect(faded[y].glyph == "y")
+        #expect(
+            Self.showsTerminalField(faded[y]),
+            "the faded y is drawn on \(faded[y].background.debugDescription)")
+        // And the blue stays blue: at 0.6 a colour outweighs a page with no RGB.
+        #expect(!Self.showsTerminalField(faded[0]))
+    }
+
+    /// The same property inside every painter, with a probe that has all three
+    /// kinds of cell: one on a colour of its own, one stating no field (on
+    /// whatever the painter puts under it), and two stating the terminal's own
+    /// (`ESC[49m`), which a painter that restates its field only after a reset
+    /// lets through and a compositor fills. The fade is OUTSIDE the painter, so the
+    /// painter's field fades with the probe: at 0.6 every colour outweighs a page
+    /// with no RGB, and a cell is on the terminal's own field faded exactly where
+    /// it is unfaded.
+    @Test(
+        "Inside every painter, a faded row is on the terminal's own field exactly where the unfaded one is",
+        arguments: FieldPainter.allCases)
+    func everyPainterKeepsTheTerminalField(painter: FieldPainter) {
+        let probe = HStack(spacing: 0) {
+            Text("x").background(Color.rgb(40, 40, 200))
+            Text("y")
+            Text("ab").background(Color.default)
+        }
+        let opaque = rows(painter.view(probe).opacity(1), terminalPage: true)
+        let faded = rows(painter.view(probe).opacity(0.6), terminalPage: true)
+        #expect(faded.count == opaque.count)
+        for (row, (was, now)) in zip(opaque, faded).enumerated() {
             #expect(
-                faded[1].background == Self.rgbPage, "the faded row draws b on \(faded[1].background.debugDescription)")
-        } when: {
-            gap == .translucentFields
+                Self.terminalColumns(now) == Self.terminalColumns(was),
+                "\(painter), row \(row): unfaded on the terminal's own field at \(Self.terminalColumns(was))")
+        }
+        // Not vacuous: except where a compositor fills every `ESC[49m`, the probe
+        // puts cells on the terminal's own field.
+        if painter != .zStackOverColour, painter != .overlayOnFill {
+            #expect(opaque.contains { !Self.terminalColumns($0).isEmpty }, "\(painter) shows no terminal field")
         }
     }
 

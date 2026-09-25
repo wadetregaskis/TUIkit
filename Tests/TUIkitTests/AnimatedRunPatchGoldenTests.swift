@@ -21,6 +21,15 @@ import Testing
 /// has under the frame's columns — which is what the four-walk form read off it —
 /// it still produces the four-walk bytes, which is what `String.paintedOver(fields:)`
 /// promises for a frame over one field.
+///
+/// The splice no longer paints its span over the field where the span lands
+/// (2026-09-24): an opacity span states every field it has, `ESC[49m` included,
+/// and painted over the line's field a 49 was filled. So the SPLICE half of the
+/// four rows that land a field-less frame on a field — line 3's blue, at column 8,
+/// frames 0–3 — was re-captured from the splice that takes its span literally:
+/// the frame's bytes between the reset in front and the line's restored styling,
+/// with no `ESC[44m` put in. Every other hash, and every patch hash, is the
+/// four-walk form's still.
 @Suite("The one-walk run patch and splice produce the four-walk bytes")
 struct AnimatedRunPatchGoldenTests {
 
@@ -160,19 +169,19 @@ struct AnimatedRunPatchGoldenTests {
         "2|4|20|186dcbbf0ba41a4a,186dcbbf0ba41a4a,26ab9fa0c7d8e21e,186dcbbf0ba41a4a,8e827c3395886f5a,186dcbbf0ba41a4a",
         "3|0|0|262c504ae4c4c691,262c504ae4c4c691,262c504ae4c4c691,262c504ae4c4c691,262c504ae4c4c691,262c504ae4c4c691",
         "3|0|3|eefb717ea8ab54af,eefb717ea8ab54af,eefb717ea8ab54af,eefb717ea8ab54af,eefb717ea8ab54af,eefb717ea8ab54af",
-        "3|0|8|5b24dbdcc8334dcb,5b3942c0f9916ebf,5b24dbdcc8334dcb,5b3942c0f9916ebf,5b24dbdcc8334dcb,5b3942c0f9916ebf",
+        "3|0|8|5b24dbdcc8334dcb,28d80e2d9b3b4090,5b24dbdcc8334dcb,28d80e2d9b3b4090,5b24dbdcc8334dcb,28d80e2d9b3b4090",
         "3|0|20|fc4dce9706bb3521,fc4dce9706bb3521,736b0ba0701b10b3,fc4dce9706bb3521,39f5549e7dfd29c9,fc4dce9706bb3521",
         "3|1|0|46208ad454962b03,46208ad454962b03,46208ad454962b03,46208ad454962b03,46208ad454962b03,46208ad454962b03",
         "3|1|3|ef0d45ee007e6dcb,ef0d45ee007e6dcb,ef0d45ee007e6dcb,ef0d45ee007e6dcb,ef0d45ee007e6dcb,ef0d45ee007e6dcb",
-        "3|1|8|135446b6ce2f6bce,135446b6ce2f6bce,135446b6ce2f6bce,135446b6ce2f6bce,135446b6ce2f6bce,135446b6ce2f6bce",
+        "3|1|8|135446b6ce2f6bce,4f1ff6b649a8a3f3,135446b6ce2f6bce,4f1ff6b649a8a3f3,135446b6ce2f6bce,4f1ff6b649a8a3f3",
         "3|1|20|f099502fd57f751c,f099502fd57f751c,f099502fd57f751c,f099502fd57f751c,53f87d47c79434f4,f099502fd57f751c",
         "3|2|0|8e432fe04b22d9e6,8e432fe04b22d9e6,8e432fe04b22d9e6,8e432fe04b22d9e6,8e432fe04b22d9e6,8e432fe04b22d9e6",
         "3|2|3|816c2b691c475e08,816c2b691c475e08,816c2b691c475e08,816c2b691c475e08,816c2b691c475e08,816c2b691c475e08",
-        "3|2|8|efc78404b9ea0d53,89c6f8d661826430,efc78404b9ea0d53,89c6f8d661826430,efc78404b9ea0d53,89c6f8d661826430",
+        "3|2|8|efc78404b9ea0d53,005bb736568a4436,efc78404b9ea0d53,005bb736568a4436,efc78404b9ea0d53,005bb736568a4436",
         "3|2|20|c8bcb3a35cf649bb,c8bcb3a35cf649bb,c8bcb3a35cf649bb,c8bcb3a35cf649bb,0eeed996f67f1261,c8bcb3a35cf649bb",
         "3|3|0|624c4a2287eb604f,624c4a2287eb604f,624c4a2287eb604f,624c4a2287eb604f,624c4a2287eb604f,624c4a2287eb604f",
         "3|3|3|329f7eb9f2eb319b,329f7eb9f2eb319b,329f7eb9f2eb319b,329f7eb9f2eb319b,329f7eb9f2eb319b,329f7eb9f2eb319b",
-        "3|3|8|3c9781dfa7a1e5f2,3c9781dfa7a1e5f2,3c9781dfa7a1e5f2,3c9781dfa7a1e5f2,3c9781dfa7a1e5f2,3c9781dfa7a1e5f2",
+        "3|3|8|3c9781dfa7a1e5f2,4dbbfc0318c10b73,3c9781dfa7a1e5f2,4dbbfc0318c10b73,3c9781dfa7a1e5f2,4dbbfc0318c10b73",
         "3|3|20|afdb4944daa1060c,afdb4944daa1060c,afdb4944daa1060c,afdb4944daa1060c,72a3abff7f9d7cc4,afdb4944daa1060c",
         "3|4|0|4219605749d48c6e,4219605749d48c6e,4219605749d48c6e,4219605749d48c6e,4219605749d48c6e,4219605749d48c6e",
         "3|4|3|f882f55db6785a24,f882f55db6785a24,f882f55db6785a24,f882f55db6785a24,f882f55db6785a24,f882f55db6785a24",

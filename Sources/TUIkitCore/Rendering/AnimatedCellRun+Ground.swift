@@ -95,6 +95,49 @@ extension AnimatedCellRun {
     /// `ESC[49m`: the terminal's own field, stated.
     private static let statedDefault = "\u{1B}[49m"
 
+    /// This run with its record under a stated 49 saying "the terminal's own" at
+    /// `columns` — cells of its own, from 0 — for a run whose frames were blended
+    /// there, so that the splice takes those cells as the frames spell them.
+    ///
+    /// A blended cell names its field, every one of them (`blendedSpan` states the
+    /// surface where the blend leaves none), and one the blend left on the
+    /// terminal's own page says so with a 49 of the blend's own making — which the
+    /// splice would otherwise read as a stated 49 and draw over what the painters
+    /// made of one. Under a compositor's colour that is the colour: a spinner faded
+    /// to 0.4 over green in a `ZStack` on a `Color.default` palette rendered on the
+    /// page, the heavier side, and replayed on the green (`Opacity as composition`
+    /// §97). Only the record under a stated 49 is rewritten: a blended cell never
+    /// leaves its field unsaid, so the ground under a bare one is never asked there.
+    ///
+    /// A painter the run meets afterwards paints this record as it paints the line,
+    /// and treats the 49 as it treats the blended line's: a compositor fills both,
+    /// a persistent background lets both through.
+    ///
+    /// - Parameter columns: The run's cells every frame was blended at, ascending.
+    /// - Returns: The run, its record rewritten at those cells.
+    package func statingTerminalField(atBlendedColumns columns: [Int]) -> Self {
+        guard var record = groundUnderStatedDefault, let first = columns.first else { return self }
+        /// Splices the terminal's own field over `start..<end` of the record.
+        func state(_ start: Int, _ end: Int) {
+            let span = Self.statedDefault + String(repeating: " ", count: end - start) + "\u{1B}[0m"
+            record = FrameBuffer.splicing(span, into: record, atColumn: start)
+        }
+        var start = first
+        var end = first + 1
+        for column in columns.dropFirst() {
+            if column == end {
+                end += 1
+            } else {
+                state(start, end)
+                (start, end) = (column, column + 1)
+            }
+        }
+        state(start, end)
+        var copy = self
+        copy.groundUnderStatedDefault = record
+        return copy
+    }
+
     /// The fields a replayed frame's cells are drawn over, read on a row's page:
     /// one list for a cell whose frame states no field, one for a cell whose frame
     /// states the terminal's own (`ESC[49m`), each one field per cell of the run,

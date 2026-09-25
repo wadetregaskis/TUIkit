@@ -1393,8 +1393,9 @@ extension FrameBuffer {
     /// overlay's end, so nothing is measured again.
     ///
     /// `overlayIsPainted` is for a caller that has already put every field the
-    /// overlay needs in force, cell by cell (the animation tick); anything else is
-    /// painted over the one field where the overlay lands.
+    /// overlay needs in force, cell by cell — the animation tick, and the opacity
+    /// resolution's span; anything else is painted over the one field where the
+    /// overlay lands.
     static func insertOverlay(
         split: ANSIOverlaySplit,
         overlay: String,

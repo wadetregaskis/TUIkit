@@ -179,47 +179,57 @@ struct AnimatedRunGroundTests {
     /// it — not from the ground, or the faded frame states a field the resolved row
     /// does not show. A tab chip's label and a `.plain` block caret state it on a
     /// `Color.default` palette.
-    @Test("A faded frame that states the terminal's own field replays as each painter drew it", arguments: FieldPainter.allCases)
-    func aFadedStatedTerminalFieldReplaysAsDrawn(painter: FieldPainter) throws {
+    ///
+    /// And the faded frame is then replayed LITERALLY where the fade covered it:
+    /// every covered cell of a faded frame names its field, and one the blend left on
+    /// the terminal's own page says so with a 49 of its own making. Below one half a
+    /// colour loses to that page, so under a compositor's colour — which fills a
+    /// stated 49 in the lines and in the record alike — the render drew the page and
+    /// the replay, reading the blend's 49 as a stated one, drew the compositor's
+    /// colour back. A frame that states no field (`GroundProbe`, drawn bare) meets the
+    /// same thing: its field comes from the ground, blends to the page, and is spelled
+    /// 49 too.
+    @Test(
+        "A faded frame that states the terminal's own field replays as each painter drew it",
+        arguments: FieldPainter.allCases, [0.6, 0.4])
+    func aFadedStatedTerminalFieldReplaysAsDrawn(painter: FieldPainter, alpha: Double) throws {
         let context = makeRenderContext(width: Self.width, height: 12) { environment, _ in
             environment.palette = ThemeProbePalette(background: .default, overlayBackground: .default)
         }
-        let probe = DefaultFieldProbe()
-        let buffer = ColorDepth.withCurrent(.truecolor) {
-            renderToScreen(painter.view(probe).opacity(0.6), context: context)
-        }
-        // The probe's runs, recognised by their glyphs: the fade rewrote their bytes.
-        let runs = buffer.animatedCells.filter { $0.frames.map(\.stripped) == probe.frames.map(\.stripped) }
-        try #require(!runs.isEmpty, "\(painter) carried no run up")
-        for run in runs {
-            let row = buffer.lines[run.offsetY]
-            let replayed = FrameBuffer.patchingAnimatedCells(
-                in: row, with: run.frame(atIndex: 0), atColumn: run.offsetX, width: run.width,
-                fields: run.fields(onPage: ""))
-            let columns = run.offsetX..<(run.offsetX + run.width)
-            let cells = paintedCells(row)
-            let shown = columns.map { cells[$0].background }
-            let drawn = columns.map { paintedCells(replayed)[$0].background }
-            if columns.contains(where: { cells[$0].state.reversesVideo }) {
-                // A list's zebra fill on a `Color.default` palette is a reversal
-                // (`ESC[7;…;49m`), and the replay restates a ground's field without its
-                // reversal (`Terminal-compatibility.md`, the ground note, "still open").
-                withKnownIssue("the replay restates a reversed row's field without the reversal") {
-                    #expect(drawn == shown, "\(painter): the resolved row shows \(shown)")
+        let probes: [(view: AnyView, frames: [String], drawn: Int)] = [
+            (AnyView(DefaultFieldProbe()), DefaultFieldProbe().frames, 0),
+            (AnyView(GroundProbe(drawn: 1)), GroundProbe.frames, 1),
+        ]
+        for probe in probes {
+            let buffer = ColorDepth.withCurrent(.truecolor) {
+                renderToScreen(painter.view(probe.view).opacity(alpha), context: context)
+            }
+            // The probe's runs, recognised by their shape: the fade rewrote their bytes,
+            // and below one half on the terminal's own page it takes their glyphs too
+            // (the page as ink, on the page, is no glyph: §76). Nothing else in these
+            // painters leaves a two-cell run of two frames.
+            let runs = buffer.animatedCells.filter { $0.width == 2 && $0.frames.count == probe.frames.count }
+            try #require(!runs.isEmpty, "\(painter) carried no run up")
+            for run in runs {
+                let row = buffer.lines[run.offsetY]
+                let replayed = FrameBuffer.patchingAnimatedCells(
+                    in: row, with: run.frame(atIndex: probe.drawn), atColumn: run.offsetX, width: run.width,
+                    fields: run.fields(onPage: ""))
+                let columns = run.offsetX..<(run.offsetX + run.width)
+                let cells = paintedCells(row)
+                let shown = columns.map { cells[$0].background }
+                let drawn = columns.map { paintedCells(replayed)[$0].background }
+                let what = "\(painter) at \(alpha), frame \(probe.frames[probe.drawn].stripped)"
+                if columns.contains(where: { cells[$0].state.reversesVideo }) {
+                    // A list's zebra fill on a `Color.default` palette is a reversal
+                    // (`ESC[7;…;49m`), and the replay restates a ground's field without its
+                    // reversal (`Terminal-compatibility.md`, the ground note, "still open").
+                    withKnownIssue("the replay restates a reversed row's field without the reversal") {
+                        #expect(drawn == shown, "\(what): the resolved row shows \(shown)")
+                    }
+                } else {
+                    #expect(drawn == shown, "\(what): the resolved row shows \(shown)")
                 }
-            } else if painter == .backgroundAroundPadding || painter == .horizontalRamp {
-                // The RENDER is what is wrong here, and not by anything a run does: the
-                // opacity splice paints the field under its span's first cell beneath
-                // every cell the span leaves on `ESC[49m` (`FrameBuffer.splicing`, which
-                // composites), so where a field precedes the probe on its row the faded
-                // row shows that field — the padding's blue, the ramp's first stop —
-                // under a 49 the unfaded row lets through. The replay draws the
-                // terminal's own, as the unfaded row does.
-                withKnownIssue("the opacity splice fills a faded span's stated 49 with the field it lands on") {
-                    #expect(drawn == shown, "\(painter): the resolved row shows \(shown)")
-                }
-            } else {
-                #expect(drawn == shown, "\(painter): the resolved row shows \(shown)")
             }
         }
     }

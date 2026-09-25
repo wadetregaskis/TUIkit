@@ -151,18 +151,12 @@ struct FadeInsideAPainterTests {
         // What the painter puts under each column, the probe drawing no field.
         let bare = writtenRows(of: painter.view(Text("xyab")), palette: palette)
         try #require(faded.count == unfaded.count && bare.count == unfaded.count)
-        if terminalPage, [.none, .tabSurface, .listRowFill].contains(painter) {
-            // Where the backdrop is the terminal's own page — the page itself, a
-            // tab's surface on it, and a list's rows, which on it are unfilled or
-            // reversed — every cell the fade leaves on it is spelled `ESC[49m`, and
-            // the opacity splice paints the field under its span's first cell — the
-            // probe's own colour — under every one of them.
-            withKnownIssue("the opacity splice fills a faded span's stated 49 with the field it lands on") {
-                expectPaintersFieldsKept(painter, unfaded: unfaded, faded: faded, bare: bare, own: own)
-            }
-        } else {
-            expectPaintersFieldsKept(painter, unfaded: unfaded, faded: faded, bare: bare, own: own)
-        }
+        // Where the backdrop is the terminal's own page — the page itself, a tab's
+        // surface on it, and a list's rows, which on it are unfilled or reversed —
+        // every cell the fade leaves on it is spelled `ESC[49m`, and until the
+        // opacity splice took its span literally it painted the field under the
+        // span's first cell — the probe's own colour — under every one of them.
+        expectPaintersFieldsKept(painter, unfaded: unfaded, faded: faded, bare: bare, own: own)
     }
 
     /// Every probe `unfaded` has, in `faded` on exactly the fields
@@ -459,12 +453,10 @@ struct FadeInsideAPainterTests {
             stated.append(cells[2].background)
         }
         // The stated 49 goes from the blue to the terminal's own, once, and was on
-        // each side at some frame: the fade did cross one half. Above one half the
-        // span states it as `ESC[49m`, and the opacity splice paints the field under
-        // the span's first cell — `x`'s own colour — under it.
+        // each side at some frame: the fade did cross one half. (Above one half the
+        // span states it as `ESC[49m`, and the opacity splice used to paint the field
+        // under the span's first cell — `x`'s own colour — under it.)
         let changes = zip(stated, stated.dropFirst()).filter { $0 != $1 }.count
-        withKnownIssue("the opacity splice fills a faded span's stated 49 with the field it lands on") {
-            #expect(stated.first == blue && stated.last?.isEmpty == true && changes == 1, "the stated 49 was on \(stated)")
-        }
+        #expect(stated.first == blue && stated.last?.isEmpty == true && changes == 1, "the stated 49 was on \(stated)")
     }
 }

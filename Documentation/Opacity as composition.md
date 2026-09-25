@@ -6051,11 +6051,11 @@ from a reset (`SGRState.rendered(changingFrom:resetRestoresAField:)`), which is 
 on the page in the row it came from; so §9.8's "they reach the terminal unaltered" holds for
 the field too. The same shape with a translucent field either side of `b` in place of the
 fades is also drawn wrong by the opacity splice, which paints the field under the span's
-first cell under every cell the span names none for — `b` after its reset included — and is
-held as a known issue until the splice is.
+first cell under every cell the span names none for — `b` after its reset included — and was
+held as a known issue until the splice took its span literally (§97).
 
 `FadedTerminalFieldTests` pins the reported row (`b` on the page, faded as unfaded), and the
-cell a fade passes over between two covered ones (the bold row; the translucent fields, held);
+cell a fade passes over between two covered ones (the bold row, and the translucent fields since §97);
 `SGRCollapsingTests` pins the mode against the reference model with a page put back after
 every reset: a 49 kept after a reset, a return to no field after a colour spelled as a
 reset, a change between the two not held over spaces, and 400 randomised rows. Each fails
@@ -6232,10 +6232,10 @@ the row's field (it fails with the row's own spend taken out), and `RepeatingFad
 replays a breath spent at a `.background` beside a breath at the root and inside one, against a
 render at every tick (it fails with §6b.1 taken out, 23 ticks of 24 each).
 
-Still carried, and held as known issues in `FadeInsideAPainterTests`: on the terminal's own
-page, the painters whose backdrop is that page — none, a tab's surface there, and a list's rows,
-which on it are unfilled or reversed — where the opacity splice still paints the field under a
-span's first cell under every `ESC[49m` the span states.
+Held as known issues in `FadeInsideAPainterTests` when this landed, and fixed by §97: on the
+terminal's own page, the painters whose backdrop is that page — none, a tab's surface there,
+and a list's rows, which on it are unfilled or reversed — where the opacity splice painted the
+field under a span's first cell under every `ESC[49m` the span stated.
 
 ### 96.1 A list row's own fill
 
@@ -6346,3 +6346,86 @@ blends.
 
 `FadeInsideAPainterTests` pins it: the bar under the faded `x` equals the bar under the
 unfaded `z` in the drawn line and in every frame. Before, all seventeen failed.
+
+## 97. The splice takes its span literally, and so does the replay (2026-09-24)
+
+The resolution rebuilds a row's covered columns as one span (`blendedSpan`) and splices it
+back into the row with `FrameBuffer.splicing`. §9.8 made every covered cell NAME its field —
+the surface where the blend leaves none — because the span lands in a row the writer opened
+on the page. The splice then did one thing more that nothing asked for. It inserted the span
+with the insert compositing uses, and since compositing learned to paint an overlay over the
+field it lands on (`590e71a4`, a week after the splice was written), that insert painted the
+span over the row's field under its FIRST column wherever the span named none. Compositing
+reads `ESC[49m` as naming none.
+
+Where the page has an RGB, §9.8 means a covered cell says 49 only for a stated one (§95), so
+little noticed. Where the page is the terminal's own — a `Color.default` palette, or an
+unreported `.terminalBackground` (§80) — 49 IS the surface's spelling, and every faded cell
+that blended to the page took the colour of the cell the span opens on: `HStack {
+Text("x").background(.blue); Text("y") }.opacity(0.6)` drew `y` on `48;2;0;122;255`, which is
+the blue UNFADED, the field painted in being the source row's. The same went for a stated 49
+the painter lets through (a `.background`, a ramp, a list row's fill, the page:
+`Terminal-compatibility.md`, the stated-49 note), wherever a field preceded it on the row —
+inside padding and a border, on a ramp, after a coloured sibling — and for a fade inside a
+painter whose backdrop is the terminal's own page (§96: the page itself, a tab's surface on
+it), where the probe's own colour was painted under the rest of the probe.
+
+The span is now taken literally, as the animation tick takes a frame (`overlayIsPainted`),
+and that is right for every cell it can hold: a covered cell states its field; and a cell the
+span passes over between two regions is the row's own, parsed from the row the field under
+the first column was read from — so that field was only ever its field by coincidence — and
+re-emitted as it was spelled: its own colour, the field in force, or, for a stated 49, its 49
+(§95: a stated 49 keeps its 49 in the cell's own spelling, and the rebuild's collapse keeps
+it after a reset, §94; before those two it could come out as a reset, which puts the row's
+page back). "The field in force" includes none: a cell naming no field after one that named
+one is spelled from a reset (§94), which the row's page follows, and never as `ESC[49m`. On a
+terminal-own page §9.8 reads: a composite may not say 49 where 49 is not the page, and where it
+is, the splice must not unsay it. (With the splice literal, the cell a fade passes over
+between two translucent fields — `b` in `HStack(spacing: 0) { Text("a").background(
+Color.blue.opacity(0.5)); Text("b"); Text("c").background(Color.blue.opacity(0.5)) }` — is on
+the page as unfaded; before, the splice painted the unfaded blue under its reset, and
+`FadedTerminalFieldTests` held it as a known issue.)
+
+**The replay, likewise.** A run's frames are blended by the same function, and every covered
+cell of a faded frame names its field too, a 49 the blend made among them. The tick draws a
+frame over its records (`String.paintedOver(fields:)`), and reads a 49 in a frame as a STATED
+one, drawn over what the painters made of a stated 49 (§93's second record). Under a
+compositor that is the compositor's colour. So with the render's splice literal, a spinner
+faded to 0.4 over green in a `ZStack` on a `Color.default` palette rendered on the terminal's
+own — the page, the heavier side below one half — and every tick replayed it on the green. The
+resolution now rewrites that record to the terminal's own at the columns every frame was
+blended at (`AnimatedCellRun.statingTerminalField(atBlendedColumns:)`), so the tick takes those
+cells as the frames spell them. A painter the run meets afterwards paints the record as it
+paints the line: a compositor fills the 49 in both, a persistent background lets both
+through. Only the columns the fold covers: a run's own per-frame alpha can blend a cell in one
+frame and pass it through in another, and a stated 49 passed through still wants the record.
+And only for a run with a faded frame that can state the terminal's own field: the record is read
+under a stated 49 and nowhere else, and on a palette of RGB colours with no `Color.default` in
+the content no blend spells one. So the fade scans its frames' bytes for a `49` first
+(`mayStateTheTerminalsField`, which finds every such frame and a few RGB colours besides);
+rewritten for every faded run, `Spinner().background(.blue).opacity(0.5)` paid a splice of its
+record per render for a record nothing reads.
+In the run loop the shape is rarer than on the splice: below one half over an unreported page
+every colour of a faded run blends to the page, its glyphs go with them (§76), and a run whose
+frames are all alike is not kept.
+
+Pinned at the render by `FadedTerminalFieldTests` — the reported `HStack`, and a probe with a
+coloured cell, a bare one and a stated 49 inside every painter (`TestHelpers/FieldPainter.swift`),
+faded to 0.6 around it, whose columns on the terminal's own field must be exactly the unfaded
+row's: before, five painters failed with every such column coloured — none, a `.background`,
+one around padding and a border, nested ones, a ramp. By `FadeInsideAPainterTests`, the probe
+at 0.3 inside every painter on the terminal's own page (before: none, a tab's surface, and the
+list's three rows), and the `withAnimation` fade's stated 49 above one half (before: on `x`'s
+own colour). At the splice by `AnimatedRunGroundTests`, a faded probe's drawn frame spliced
+over its row inside every painter at 0.6 and 0.4, a frame stating 49 and one stating none:
+before the splice change, the painters with a field preceding the probe failed; with it and
+without the record rewritten, the two compositors failed at 0.4 for both frames. Through the
+run loop by `ReplayedRunFieldTests`' faded grounds (`Terminal-compatibility.md`).
+
+Limits:
+- Compositing still paints an overlay over ONE field, the base's under the overlay's first
+  column, and that is not the fade's to change: `ZStack(alignment: .leading)` over three red
+  cells then three blue ones, with `Text("abcdef")` on top, draws all six letters on red
+  (measured on this tree, truecolor).
+- A run in a reversed row replays without the reversal, and under a fade that shows in
+  `ReplayOracle` (`Terminal-compatibility.md`, the ground note).

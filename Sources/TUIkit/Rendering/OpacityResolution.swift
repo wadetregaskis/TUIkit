@@ -500,7 +500,19 @@ extension FrameBuffer {
         // further would fade them a second time wherever the buffer is resolved
         // again (a floating surface resolves, then the root resolves what it landed
         // on). Same reason the regions themselves are cleared.
-        return run.replacingFrames(fadedFrames, alpha: nil)
+        //
+        // And where every frame was blended, the frames now name their fields, a 49
+        // the blend made among them: the replay takes those cells as spelled, not a
+        // 49 as stated over what the painters made of one (§97). Only the columns
+        // the fold covers: a run's own per-frame alpha can cover a cell in one frame
+        // and pass it through in another, and a passed-through stated 49 still wants
+        // the record. And only where a faded frame can state it at all: the record is
+        // read under a stated 49 and nowhere else, and on a palette of colours with an
+        // RGB, with no `Color.default` among the content, no blend spells one — which
+        // is nearly every faded run, whose record was rewritten for nothing.
+        let faded = run.replacingFrames(fadedFrames, alpha: nil)
+        guard fadedFrames.contains(where: \.mayStateTheTerminalsField) else { return faded }
+        return faded.statingTerminalField(atBlendedColumns: alphas.indices.filter { alphas[$0] != nil })
     }
 
     private static func foldedAlphas(
@@ -557,5 +569,21 @@ extension FrameBuffer {
                 over: self, at: position, surface: surface ?? palette.background, palette: palette,
                 fillingStatedTerminalField: true, buildingRuns: true),
             at: position)
+    }
+}
+
+extension String {
+    /// Whether this frame's bytes hold a `49` anywhere: every frame that states the
+    /// terminal's own field, `ESC[49m` alone or among other parameters, and a few that
+    /// do not (a 49 in an RGB colour). For a question asked of every faded run that
+    /// only such a frame makes worth answering, which a scan of the bytes settles
+    /// without parsing a sequence.
+    fileprivate var mayStateTheTerminalsField: Bool {
+        var previous: UInt8 = 0
+        for byte in utf8 {
+            if previous == UInt8(ascii: "4"), byte == UInt8(ascii: "9") { return true }
+            previous = byte
+        }
+        return false
     }
 }

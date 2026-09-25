@@ -131,6 +131,19 @@ extension FrameBuffer {
     /// decided every cell's colours (opacity resolution) wants its span taken
     /// literally, while a pre-baked animation frame was coloured against an
     /// assumed background and needs the real one restated around it.
+    ///
+    /// Literally includes the field, and that is the one thing this did not do
+    /// until 2026-09-24. It inserted the span the way compositing inserts an
+    /// overlay, painted over the field where the span LANDS — the line's field
+    /// under its first cell — wherever the span named none, and compositing reads
+    /// a stated `ESC[49m` as naming none. But a faded span's cells are the line's
+    /// own cells, blended, and each already says what its field is: a covered
+    /// cell names one (the surface where the blend leaves none), and a cell the
+    /// span passes over is the line's own. On a `Color.default` palette the
+    /// surface is the terminal's own field, spelled `ESC[49m`, so every faded
+    /// cell that blended to it took the colour of the span's first cell instead:
+    /// `HStack { Text("x").background(.blue); Text("y") }.opacity(0.6)` drew `y`
+    /// on the blue, where the row unfaded shows it on the terminal's own.
     public static func splicing(_ span: String, into line: String, atColumn column: Int) -> String {
         let width = span.strippedLength
         guard width > 0 else { return line }
@@ -139,6 +152,9 @@ extension FrameBuffer {
         return insertOverlay(
             split: line.ansiOverlaySplit(prefixColumns: column, suffixDropColumns: column + width),
             overlay: span,
-            atColumn: column)
+            atColumn: column,
+            // Every field is the span's own already, a stated 49 included —
+            // see above. Painted over the field it lands on, a 49 is filled.
+            overlayIsPainted: true)
     }
 }
