@@ -509,6 +509,30 @@ public struct SGRState: Sendable, Equatable {
         return delta.utf8.count <= absolute.utf8.count ? delta : absolute
     }
 
+    /// ``rendered(changingFrom:)`` for bytes a row has yet to be finished with —
+    /// where a field is put back after every reset, as the row builder puts the
+    /// page back (`FrameDiffWriter.buildLine`) and a painter's persistent fill its
+    /// colour.
+    ///
+    /// There a reset and `ESC[49m` are two fields: the one around the row, and the
+    /// terminal's own — on a page with an RGB, two colours. A state with no
+    /// background after one that named some is a cell on the field around the row,
+    /// so the change is spelled from a reset, never as the delta's `49`, which is
+    /// shorter wherever only the field moves and puts the terminal's own there.
+    /// Every other change is the shortest, as ``rendered(changingFrom:)`` spells it.
+    ///
+    /// - Parameters:
+    ///   - previous: The state the row is in.
+    ///   - resetRestoresAField: Whether a reset here will have a field put back
+    ///     after it; without, exactly ``rendered(changingFrom:)``.
+    /// - Returns: The escape that takes the row to this state.
+    package func rendered(changingFrom previous: Self, resetRestoresAField: Bool) -> String {
+        guard resetRestoresAField, background == nil, previous.background != nil else {
+            return rendered(changingFrom: previous)
+        }
+        return isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + parameters + "m"
+    }
+
     /// Whether a cell holding nothing but a space looks the same under this
     /// state as under `other`: the background, the attributes that put ink on
     /// a blank cell, and — only when one of those is on — the foreground they

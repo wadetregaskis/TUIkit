@@ -73,7 +73,29 @@ extension String {
     /// intermediate state. It is deliberately done HERE, at the row builder,
     /// rather than in the diff downstream — a row written whole never reaches
     /// the diff, and a full repaint is all such rows.
-    public func collapsingAdjacentSGR() -> String {
+    ///
+    /// ## A row that is not finished yet
+    ///
+    /// All of the above is exact for bytes that go to the terminal as they are,
+    /// where a reset and `ESC[49m` put the same field under a cell: the
+    /// terminal's own. A row that has not reached the writer yet is different.
+    /// The writer puts the page back after every reset in it
+    /// (`FrameDiffWriter.buildLine`), and so does a painter's persistent fill, so
+    /// in such a row a reset means "the field around me" and a stated 49 means
+    /// "the terminal's own" — two fields, and on a page with an RGB two colours.
+    /// Netted as one state, a 49 stated after a reset was dropped (the cell took
+    /// the page), and a return to "no field" could be spelled `ESC[49m` where it
+    /// had been a reset (the cell took the terminal's own).
+    ///
+    /// `resetRestoresAField` is for such a row — the opacity resolution's, which
+    /// collapses a faded span into a row a painter or the writer has yet to
+    /// finish. A background that is the terminal's own is then tracked as either
+    /// of the two, and each is spelled so it survives: a stated 49 with its 49,
+    /// and the other with a reset.
+    ///
+    /// - Parameter resetRestoresAField: Whether a reset in this row will have a
+    ///   field put back after it before the row reaches the terminal.
+    public func collapsingAdjacentSGR(resetRestoresAField: Bool = false) -> String {
         guard containsAnySGR else { return self }
 
         var result = ""
@@ -93,6 +115,11 @@ extension String {
         var emitted: SGRState?
         var unresetRun: [String] = []
         var pending = false
+        // Whether a background of `nil` — which `SGRState` keeps for a reset and
+        // for a 49 alike — is a STATED 49, in what the row wants and in what this
+        // has put in it. Only asked with `resetRestoresAField`.
+        var desiredStates49 = false
+        var emittedStates49 = false
 
         func flushUnresetRun() {
             defer { unresetRun.removeAll(keepingCapacity: true) }
@@ -110,12 +137,16 @@ extension String {
             // Without, it is unknown (nothing has been netted yet, only the
             // line's inherited baseline), and only a reset-prefixed absolute is
             // safe. See ``SGRState/rendered(changingFrom:)``.
-            if let emitted {
-                result += desired.rendered(changingFrom: emitted)
-            } else {
-                result += desired.isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + desired.parameters + "m"
+            let absolute = desired.isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + desired.parameters + "m"
+            var change = emitted.map { desired.rendered(changingFrom: $0) } ?? absolute
+            if resetRestoresAField, desired.backgroundColour == nil {
+                change = Self.spellingWhichNoField(
+                    change, statesDefault: desiredStates49, absolute: absolute,
+                    after: emitted.map { ($0.backgroundColour != nil, emittedStates49) })
             }
+            result += change
             emitted = desired
+            emittedStates49 = desiredStates49
         }
 
         /// Whether the styling still owed may be held over a blank cell.
@@ -126,6 +157,8 @@ extension String {
         /// invisible.
         var canDeferAcross: Bool {
             guard sawReset, unresetRun.isEmpty, let emitted else { return false }
+            // A blank cell shows its field, and a reset and a stated 49 are two.
+            if resetRestoresAField, desiredStates49 != emittedStates49 { return false }
             return desired.paintsBlankCellsIdentically(to: emitted)
         }
 
@@ -167,13 +200,18 @@ extension String {
                 }
                 if sequence.hasSuffix("m") {
                     if sawReset {
-                        desired.apply(sequence)
+                        switch desired.applyReportingBackground(sequence) {
+                        case .terminalDefault: desiredStates49 = true
+                        case .colour, .reset: desiredStates49 = false
+                        case nil: break
+                        }
                         pending = true
                     } else if sequence.isSGRReset {
                         // From here on the state is knowable.
                         flushUnresetRun()
                         sawReset = true
                         desired = SGRState()
+                        desiredStates49 = false
                         emitted = nil
                         pending = true
                     } else {
@@ -203,6 +241,43 @@ extension String {
         // reconciled, printable characters or not.
         reconcile()
         return result
+    }
+
+    /// `change` — the escape that takes the row from what was emitted to a state
+    /// with no background — spelled so the row shows the right one of the two
+    /// fields that state can be, in a row whose resets have a field put back
+    /// after them: the terminal's own where `statesDefault`, and the field around
+    /// the row otherwise.
+    ///
+    /// What the row shows after `change`: the field put back, if `change` resets
+    /// (or nothing was emitted, so it is the line's first absolute); the
+    /// terminal's own, if it changes the background from a colour, because a
+    /// delta spells that as 49; and otherwise whatever was there.
+    ///
+    /// - Parameters:
+    ///   - change: The escape as the netting spells it.
+    ///   - statesDefault: Whether the row wants a stated 49.
+    ///   - absolute: The same state as a reset-prefixed absolute.
+    ///   - emitted: What was emitted before, if anything: whether it had a
+    ///     background colour, and whether its lack of one was a stated 49.
+    /// - Returns: `change`, with a 49 added, or replaced by `absolute`.
+    private static func spellingWhichNoField(
+        _ change: String, statesDefault: Bool, absolute: String,
+        after emitted: (hadColour: Bool, states49: Bool)?
+    ) -> String {
+        let resets = change.hasPrefix("\u{1B}[0m") || change.hasPrefix("\u{1B}[0;")
+        let shows49: Bool
+        if let emitted, !resets {
+            shows49 = emitted.hadColour || emitted.states49
+        } else {
+            shows49 = false
+        }
+        if statesDefault == shows49 { return change }
+        // A return to the field around the row is a reset, whatever it costs.
+        guard statesDefault else { return absolute }
+        // And a stated 49 is 49, said after whatever else changes.
+        guard change.hasSuffix("m"), change.count > 3 else { return change + "\u{1B}[49m" }
+        return String(change.dropLast()) + ";49m"
     }
 
     /// Whether the string carries any SGR at all — a plain line has nothing to

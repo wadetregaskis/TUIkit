@@ -20,6 +20,12 @@ struct ReferenceStyle: Equatable {
     /// (overline), which draws on an empty cell as surely as an underline does.
     var passthrough: [Int] = []
 
+    /// The field a row builder puts back after every reset, for a row that has
+    /// not reached the terminal yet (`FrameDiffWriter` puts the page back) —
+    /// `nil` for bytes that go to the terminal as they are, where a reset leaves
+    /// the terminal's own field, as `ESC[49m` does.
+    var fieldAfterReset: [Int]?
+
     /// The attributes that put ink on a cell holding nothing but a space, and
     /// so are the only ones a blank cell can show — together with the
     /// background, and with the foreground they colour.
@@ -47,7 +53,11 @@ struct ReferenceStyle: Equatable {
         while index < codes.count {
             let code = codes[index]
             switch code {
-            case 0: self = Self()
+            case 0:
+                let restored = fieldAfterReset
+                self = Self()
+                fieldAfterReset = restored
+                background = restored
             case 1...9: attributes.insert(code)
             case 21...29 where Self.attributeOff[code] != nil:
                 attributes.subtract(Self.attributeOff[code] ?? [])

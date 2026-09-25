@@ -265,6 +265,33 @@ struct SGRStateTests {
         assertDeltaEquivalent(from: ["\u{1B}[0;1;38;5;9m"], to: ["\u{1B}[0;38;5;9m"], "bold off")
     }
 
+    /// In a row the writer has yet to finish, a reset has the field around the row
+    /// put back after it, and `ESC[49m` is the terminal's own: two fields. A change
+    /// that leaves no field where there was one is spelled from a reset there, even
+    /// where the delta's `49` is shorter; every other change is the plain delta.
+    @Test("In an unfinished row, a change to no field is spelled from a reset")
+    func deltaToNoFieldInAnUnfinishedRow() {
+        var coloured = SGRState()
+        coloured.apply("\u{1B}[0;1;38;5;22;48;5;16m")
+        var bare = SGRState()
+        bare.apply("\u{1B}[0;1;38;5;9m")
+        // Not vacuous: the shortest spelling is the delta, and its 49.
+        #expect(bare.rendered(changingFrom: coloured) == "\u{1B}[38;5;9;49m")
+        #expect(bare.rendered(changingFrom: coloured, resetRestoresAField: true) == "\u{1B}[0;1;38;5;9m")
+        #expect(SGRState().rendered(changingFrom: coloured, resetRestoresAField: true) == "\u{1B}[0m")
+        // Every other change is as it was: to a field, and between two with none.
+        #expect(
+            coloured.rendered(changingFrom: bare, resetRestoresAField: true)
+                == coloured.rendered(changingFrom: bare))
+        var bold = SGRState()
+        bold.apply("\u{1B}[0;1m")
+        #expect(bare.rendered(changingFrom: bold, resetRestoresAField: true) == "\u{1B}[38;5;9m")
+        // And without the flag, exactly the shortest.
+        #expect(
+            bare.rendered(changingFrom: coloured, resetRestoresAField: false)
+                == bare.rendered(changingFrom: coloured))
+    }
+
     @Test("Randomised transitions stay equivalent")
     func randomisedDeltaSweep() {
         let pool = [

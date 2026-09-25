@@ -25,13 +25,16 @@ struct SGRCollapsingTests {
     /// The model is ``ReferenceStyle``, not ``SGRState``: this test grades
     /// `SGRState`'s netting, and checking it against itself would grade
     /// nothing.
-    private func statesAlongTheLine(_ line: String) -> [String] {
+    ///
+    /// `fieldAfterReset` models a row that has not reached the terminal yet, which
+    /// a row builder puts that field back into after every reset (and opens on).
+    private func statesAlongTheLine(_ line: String, fieldAfterReset: [Int]? = nil) -> [String] {
         // Walked at the SCALAR level, as a terminal's own parser does: an
         // escape's final byte can fuse with a following combining scalar into
         // one Character, and a Character-level walk would hand the model a
         // "sequence" with the mark inside it — grading the implementation
         // against its own mistake.
-        var state = ReferenceStyle()
+        var state = ReferenceStyle(background: fieldAfterReset, fieldAfterReset: fieldAfterReset)
         var states: [String] = []
         let scalars = Array(line.unicodeScalars)
         var index = 0
@@ -62,10 +65,11 @@ struct SGRCollapsingTests {
         return states
     }
 
-    private func check(_ line: String, expectSaving: Bool = true) {
-        let collapsed = line.collapsingAdjacentSGR()
+    private func check(_ line: String, expectSaving: Bool = true, fieldAfterReset: [Int]? = nil) {
+        let collapsed = line.collapsingAdjacentSGR(resetRestoresAField: fieldAfterReset != nil)
         #expect(
-            statesAlongTheLine(collapsed) == statesAlongTheLine(line),
+            statesAlongTheLine(collapsed, fieldAfterReset: fieldAfterReset)
+                == statesAlongTheLine(line, fieldAfterReset: fieldAfterReset),
             "collapsed \(collapsed.debugDescription) is not equivalent to \(line.debugDescription)")
         if expectSaving {
             #expect(
@@ -275,6 +279,66 @@ struct SGRCollapsingTests {
                 line.append(alphabet[next(alphabet.count)])
             }
             check(line + "\(esc)[0m", expectSaving: false)
+        }
+    }
+
+    // MARK: - A row the writer has yet to finish
+
+    /// The page a row builder puts back after every reset, in the model's terms.
+    private let page = [48, 2, 5, 10, 5]
+
+    /// A 49 stated after a reset is the terminal's own field in a row whose resets
+    /// have the page put back: netted as a reset, the cell took the page.
+    @Test("In an unfinished row, a 49 stated after a reset is kept")
+    func statedTerminalFieldAfterAReset() {
+        let line = "\(esc)[0m\(esc)[38;5;22;49mab\(esc)[0mcd\(esc)[0m"
+        check(line, expectSaving: false, fieldAfterReset: page)
+        #expect(
+            line.collapsingAdjacentSGR(resetRestoresAField: true).contains("49"),
+            "the 49 was netted away")
+    }
+
+    /// And the other way round: a return to no field after a colour is a reset
+    /// there, and spelled as the delta `ESC[49m` — shorter, and exact at the
+    /// terminal — the cell took the terminal's own field in place of the page.
+    @Test("In an unfinished row, a return to no field after a colour is a reset")
+    func noFieldAfterAColourIsAReset() {
+        let line = "\(esc)[0m\(esc)[38;5;22;41mX\(esc)[0m\(esc)[38;5;22mY\(esc)[0m"
+        check(line, expectSaving: false, fieldAfterReset: page)
+        #expect(
+            !line.collapsingAdjacentSGR(resetRestoresAField: true).contains("49"),
+            "the page was spelled as the terminal's own field")
+        // Not vacuous: at the terminal, the delta is the shorter and exact spelling.
+        #expect(line.collapsingAdjacentSGR().contains("\(esc)[49m"))
+    }
+
+    /// Two fields a blank cell shows cannot be held across it.
+    @Test("In an unfinished row, a change between the two no-fields is not held over spaces")
+    func noFieldChangeIsNotHeldOverSpaces() {
+        let line = "\(esc)[0m\(esc)[31mab\(esc)[49m   \(esc)[0m\(esc)[31m   cd\(esc)[0m"
+        check(line, expectSaving: false, fieldAfterReset: page)
+    }
+
+    @Test("Randomised unfinished rows stay faithful")
+    func randomisedUnfinishedRows() {
+        let palette = [
+            "", "\(esc)[0m", "\(esc)[31m", "\(esc)[38;5;22m", "\(esc)[1m", "\(esc)[4m",
+            "\(esc)[7m", "\(esc)[41m", "\(esc)[48;5;16m", "\(esc)[39m", "\(esc)[49m",
+            "\(esc)[0;49m", "\(esc)[0;31m", "\(esc)[24m", "\(esc)[27m",
+        ]
+        let alphabet = Array("ab  ─ ▓  ")
+        var seed: UInt64 = 0x0049_5EED
+        func next(_ bound: Int) -> Int {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Int((seed >> 33) % UInt64(bound))
+        }
+        for _ in 0..<400 {
+            var line = "\(esc)[0m"
+            for _ in 0..<(6 + next(40)) {
+                if next(3) == 0 { line += palette[next(palette.count)] }
+                line.append(alphabet[next(alphabet.count)])
+            }
+            check(line + "\(esc)[0m", expectSaving: false, fieldAfterReset: page)
         }
     }
 }

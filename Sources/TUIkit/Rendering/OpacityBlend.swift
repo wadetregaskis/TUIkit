@@ -228,7 +228,13 @@ extension FrameBuffer {
             if cell.isReversed || behind?.isReversed == true {
                 blended = Self.spelledWithReverseWhereNeeded(blended)
             }
-            span += blended.style.rendered(changingFrom: emitted)
+            // The span goes into a row the writer has yet to finish, which puts
+            // the field around it back after every reset: a cell that names no
+            // field after one that did — one the span passes over, which a reset
+            // had put on that field — is spelled from a reset. As the shortest
+            // change, `ESC[49m` wherever only the field and the ink moved, it
+            // took the terminal's own field (`Opacity as composition` §94).
+            span += blended.style.rendered(changingFrom: emitted, resetRestoresAField: true)
             span.append(blended.character)
             emitted = blended.style
             column += max(1, blended.character.terminalWidth)

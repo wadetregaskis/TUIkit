@@ -5841,3 +5841,51 @@ inside the fade painted beneath the run's cells, recorded as they painted it, an
 the drawn frame. `ReplayedCaretBlinkTests` replays that caret under the fade against a
 render at each instant; before, it had nothing to replay (`compared → 0`), after, every
 tick of both halves matches.
+
+## 94. A rebuilt row has two fields under no colour (2026-09-24)
+
+The resolution rebuilds a covered row and collapses its escapes where the seam is made
+(`collapsingAdjacentSGR()`, after `splicing`). The collapse nets the escapes in
+`SGRState`'s terms, where a reset and `ESC[49m` leave the same state, and that is exact for
+bytes that go to the terminal as they are: both put the terminal's own field under the next
+cell. A rebuilt row does not go to the terminal as it is. The writer opens it on the page
+and puts the page back after every reset in it (`FrameDiffWriter.buildLine`), and a
+painter's persistent fill does the same with its colour. In such a row a reset means "the
+field around me" and a stated 49 means "the terminal's own", and on a page with an RGB
+those are two colours.
+
+Netted as one, the collapse lost the difference both ways. A cell after a coloured one in
+the same ink, which a reset had put on the page, came out behind the shorter `ESC[49m`:
+`HStack(spacing: 0) { Text("x"); Text("a").background(.red); Text("b"); Text("c")
+.opacity(0.5) }` drew `b` on the terminal's own field where the unfaded row draws it on the
+page (measured on this tree, truecolor: `…48;2;255;59;48ma ESC[49mb`). On Apple Terminal's
+light profile that is a white cell on a dark page. And a 49 stated after a reset was netted
+away, so a cell on the terminal's own field took the page.
+
+The fix is where the row is known to be unfinished: the rebuild's collapse is asked with
+`resetRestoresAField`, and tracks a background of no colour as either of the two — the
+field put back after a reset, or a stated 49 — spelling each so it survives: the first
+with a reset, the second with its 49, and a change between them is not held over blank
+cells, which show it. The writer's own collapse, whose bytes do go to the terminal as they
+are, is unchanged, and so is every row no fade covers.
+
+The span the blend builds (`blendedSpan`) is bytes of the same kind, and made the same
+mistake before the collapse ever saw it: it emits each cell as the shortest change from the
+one before, so a cell the span passes over — uncovered, between two regions — that names no
+field after a covered one that did came out as `ESC[49m` wherever only the field and the ink
+moved, and the collapse then read that as a stated 49. `HStack(spacing: 0) { Text("a")
+.opacity(0.6); Text("b"); Text("c").opacity(0.6) }.bold()` drew `b` on the terminal's own
+field (measured on this tree, truecolor). The span now spells a change from a field to none
+from a reset (`SGRState.rendered(changingFrom:resetRestoresAField:)`), which is what put `b`
+on the page in the row it came from; so §9.8's "they reach the terminal unaltered" holds for
+the field too. The same shape with a translucent field either side of `b` in place of the
+fades is also drawn wrong by the opacity splice, which paints the field under the span's
+first cell under every cell the span names none for — `b` after its reset included — and is
+held as a known issue until the splice is.
+
+`FadedTerminalFieldTests` pins the reported row (`b` on the page, faded as unfaded), and the
+cell a fade passes over between two covered ones (the bold row; the translucent fields, held);
+`SGRCollapsingTests` pins the mode against the reference model with a page put back after
+every reset: a 49 kept after a reset, a return to no field after a colour spelled as a
+reset, a change between the two not held over spaces, and 400 randomised rows. Each fails
+with the mode's spelling taken out, and the bold row with the span's.

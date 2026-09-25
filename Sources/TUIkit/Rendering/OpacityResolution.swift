@@ -197,7 +197,15 @@ extension FrameBuffer {
             // `FrameDiffWriter` matches where the rest of it is done, at the
             // builder rather than downstream. It also keeps the assertion
             // "the faded colour appears nowhere in this row" meaningful.
-            return Self.splicing(span, into: line, atColumn: start).collapsingAdjacentSGR()
+            //
+            // Exact only as a row the writer has yet to finish, which puts a
+            // field back after every reset: there a reset and a stated 49 are two
+            // fields, the one around the row and the terminal's own, and netted
+            // as one state a reset came out as `ESC[49m` — a cell after a
+            // coloured one drew the terminal's own field in place of the page
+            // (§94, ``String/collapsingAdjacentSGR(resetRestoresAField:)``).
+            return Self.splicing(span, into: line, atColumn: start)
+                .collapsingAdjacentSGR(resetRestoresAField: true)
         }
 
         var rewritten = lines
