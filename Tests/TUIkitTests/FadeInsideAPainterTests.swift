@@ -392,6 +392,35 @@ struct FadeInsideAPainterTests {
         for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
     }
 
+    /// A menu's focused row draws a bar under its label, and on a palette whose
+    /// accent can be measured the bar breathes: a run of whole-row frames, one per
+    /// colour. A label faded inside the row is on the bar, faded or not, in the
+    /// drawn line and in every frame — the bar under it the same colour as the bar
+    /// under the unfaded label beside it. Carried up, the label's region faded the
+    /// bar under it toward the page.
+    @Test("A menu row's bar stays under a faded label at every step")
+    func aMenuRowsBarUnderAFadedLabel() throws {
+        let context = makeRenderContext(width: 24, height: 6)
+        let view = VStack {
+            Button(action: {}, label: { HStack(spacing: 0) { Text("x").opacity(0.3); Text("  z") } })
+                .buttonStyle(_MenuItemButtonStyle())
+            Button(action: {}, label: { Text("other") }).buttonStyle(_MenuItemButtonStyle())
+        }
+        // Twice: the first render registers the rows, and the first of them takes the focus.
+        _ = ColorDepth.withCurrent(.truecolor) { renderToScreen(view, context: context) }
+        let buffer = ColorDepth.withCurrent(.truecolor) { renderToScreen(view, context: context) }
+        let bar = try #require(buffer.animatedCells.first { $0.offsetY == 0 && $0.frames.count > 1 }, "the bar does not breathe")
+        for (index, picture) in ([buffer.lines[0]] + bar.frames).enumerated() {
+            let cells = paintedCells(picture)
+            let x = try #require(cells.firstIndex { $0.glyph == "x" })
+            let z = try #require(cells.firstIndex { $0.glyph == "z" })
+            let what = index == 0 ? "drawn" : "frame \(index - 1)"
+            #expect(
+                cells[x].background == cells[z].background,
+                "\(what): x is on \(cells[x].background.debugDescription), the bar \(cells[z].background.debugDescription)")
+        }
+    }
+
     /// A `withAnimation` fade from 0.2 to 0.8 inside a `.background`, on the
     /// terminal's own page, rendered every 100 ms across the second it takes. The
     /// cell that states no field is on the blue at every frame; a stated 49 — no

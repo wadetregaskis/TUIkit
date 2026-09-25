@@ -143,15 +143,14 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             // (`Opacity as composition.md` §86.1).
             buffer = buffer.resolvingOpacity(onReversal: ink.opaqueSpelling, palette: palette)
         case .fill(let color):
-            buffer.lines = plain.map { painted($0, color) }
-            buffer.paintRunGrounds { _, ground in painted(ground, color) }
+            buffer = Self.bar(under: buffer, lines: plain, in: color, palette: palette, buildingRuns: true)
         case .pulse(let dim, let bright):
             let cycle = context.environment.selectionEmphasis.cycle(true)
             let now = cycle.colorNow(dim: dim, bright: bright)
-            buffer.lines = plain.map { painted($0, now) }
             // For a bar that holds still, whose label keeps its runs. A breathing one
             // drops them below and leaves only its own, which ARE the bar.
-            buffer.paintRunGrounds { _, ground in painted(ground, now) }
+            let label = buffer
+            buffer = Self.bar(under: label, lines: plain, in: now, palette: palette, buildingRuns: true)
             // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
             // was already drawn above; replaying it would emit bytes per tick to
             // change nothing. Nor do two equal ends breathe (an accent the page's
@@ -175,13 +174,47 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             context.requestWake(
                 token: "menu-row-dropped-run-\(context.identity.path)",
                 forNextStepOf: dropped.map { ($0.clock, $0.frameTicks) })
+            // Each colour of the breath is a bar the label's fades are spent
+            // against, once per colour, where the label has any — the colour drawn
+            // above already, and every other its lines alone: these runs keep only
+            // lines, and a bar spent whole faded every frame of the label's runs to
+            // throw them away.
+            let spends = label.hasFadeOnWhatIsBehind
+            var spent: [(colour: Color, lines: [String])] = spends ? [(now, buffer.lines)] : []
             buffer.animatedCells = plain.indices.compactMap { index in
-                cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: index) {
-                    painted(plain[index], $0)
+                cycle.run(dim: dim, bright: bright, offsetX: 0, offsetY: index) { colour in
+                    guard spends else { return painted(plain[index], colour) }
+                    if let known = spent.first(where: { $0.colour == colour }) { return known.lines[index] }
+                    let lines = Self.bar(
+                        under: label, lines: plain, in: colour, palette: palette, buildingRuns: false
+                    ).lines
+                    spent.append((colour, lines))
+                    return lines[index]
                 }
             }
         }
         return buffer
+    }
+
+    /// `label` — its `lines` squared off to the bar — on a bar of `colour`, its runs'
+    /// grounds painted with it, and its fades spent against it where it is opaque;
+    /// its lines alone where `buildingRuns` is false.
+    ///
+    /// The bar is behind every fade inside the label, as a `.background` is
+    /// (`Opacity as composition.md` §96.3): carried up past it, a fade met the bar
+    /// as the faded label's own field and faded it too, toward the page.
+    private static func bar(
+        under label: FrameBuffer, lines: [String], in colour: Color, palette: any Palette, buildingRuns: Bool
+    ) -> FrameBuffer {
+        /// Self-contained, as every step of the bar is — see `renderToBuffer`.
+        func painted(_ line: String) -> String {
+            ANSIRenderer.applyPersistentBackground(line, color: colour) + ANSIRenderer.reset
+        }
+        var bar = label
+        bar.lines = lines.map(painted)
+        if buildingRuns { bar.paintRunGrounds { _, ground in painted(ground) } }
+        guard colour.isOpaque else { return bar }
+        return bar.resolvingOpacity(onOpaqueFill: { nil }, surface: colour, palette: palette, buildingRuns: buildingRuns)
     }
 }
 

@@ -6325,3 +6325,24 @@ held as a known issue. A popover paints its own, with a `.background`, and is §
 whose backdrop wash is red — on the surface, its ink 30% of the way from it (before, the page's
 character in its place); a label in a popover, on the popover's surface; and the anchored
 limit.
+
+### 96.3 A menu row's bar
+
+A menu's focused row paints a bar under its label, still or breathing (`_MenuItemRowBar`), and
+the label's fades travelled up past it: `HStack { Text("x").opacity(0.3); Text("  z") }` in a
+focused row drew `x` on `48;2;20;47;20` where the bar beside it is `48;2;54;133;54` — the bar
+faded 30% toward the page — in the drawn line and in all sixteen frames of the breath. The row
+now spends the label's fades against the bar it paints, as a `List` row does (§96.1): a still
+bar once, a breath once per colour; only where the label has a fade asking what is behind it,
+and only for an opaque bar. A reversed bar already spends its own (§86.1).
+
+The breath's runs keep lines and nothing else, so, as in the list, every colour but the one
+drawn is spent for its lines alone. The drawn colour's bar, spent whole for the frame being
+rendered, is the first answer the breath looks up, rather than a second spend of the same
+colour. Counted with temporary counters (not committed) for a focused row labelled
+`HStack(spacing: 0) { Text("x").opacity(0.5); Spinner().opacity(0.5) }` under a breath of
+nine distinct colours: 9 bars a render and 19 blends, where it had been 10 bars and 110
+blends.
+
+`FadeInsideAPainterTests` pins it: the bar under the faded `x` equals the bar under the
+unfaded `z` in the drawn line and in every frame. Before, all seventeen failed.
