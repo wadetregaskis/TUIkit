@@ -6584,6 +6584,64 @@ page before), and a run over a 49, whose ground on the page must be the terminal
 RGB before). `ANSIOverlaySplitTests` reads the expected field escape by escape beside the netted
 state; with the split's netted fields, 506 of its seeded sweep's checks failed.
 
+### 99.2 A reversed base shows its ink as its field (2026-09-25)
+
+A cell under reverse video (SGR 7) shows its INK as its field and its field as its ink (rule
+6, §91). The split read the base's field off the background SLOT whatever the 7 said, so an
+overlay cell over a reversed base took the base's ink as its field. On a palette whose highlight
+has no RGB to breathe between, a focused list's cursor row reverses the palette's ink and page
+(`ESC[7;38;2;220;220;220;49m` on a `Color.default` page with RGB roles, `RowBackground.reversed`),
+and a label a custom `Layout` lays over that row was drawn on the terminal's own field — the
+row's ink — in the middle of a bar of 220. The split now takes the field a cell SHOWS: under a 7,
+its ink, spelled for the background slot (`SGRState.Colour.asFieldFromInk`: a named ink as its
+background code, an indexed or RGB one as itself).
+
+Which producers reach it. Reversed cells come from `Text.inverted()`, from a `List`'s or a
+`Table`'s cursor row and a menu's bar where the highlight cannot be measured, a drop-down's
+highlighted row, a `DatePicker`'s chosen day, and the block carets of the text controls. None of
+the built-in ones was met by a compositor on the way to a screen: through the whole test suite,
+one insert composited a bare overlay cell over a reversed one, and that was an app's shape — a
+`Text.inverted()` over another in a `ZStack` (`ReversedCellOverUnreportedPageTests`) — and through
+the Example — 35 pages on the default palette and on its Terminal palette, the focus walked with
+Tab and the arrows in a 140×60 PTY, a temporary counter on every compositor insert (not committed)
+— the compositor ran on seven pages and never over a reversed cell. So it is reached by an app
+that lays something over one of those producers itself: a `ZStack`, an `.overlay`, a custom
+`Layout`, an `.offset` or `.position` layer — `ZStack(alignment: .leading) { Text("abcdef")
+.inverted(); Text("xy") }` is the plainest.
+
+Left as it was: a reversal whose ink is the terminal's own foreground (`ESC[7;39…m` — a
+reversal of the terminal's unreported pair, the Example's Terminal palette's highlight, or
+`Text.inverted()` on a palette whose ink is the terminal's own, which is the suite's one case
+above). That field has no spelling in the background slot: only a 7 draws it. Drawing the
+overlay's cells over it means drawing them reversed, each cell's own ink re-spelled in the other
+slot as the painter goes and a glyph dropped where its ink is that same colour — §85's rule, now
+in the blend, carried into the compositor's painter (`String.paintedOver(fields:)`, a fourth
+kind of field beside none, the terminal's own and a colour, and the split telling the painter
+which columns take it). Priced at a day with its tests; it costs nothing where no base column is
+reversed onto the terminal's own ink, which the split can say. There the background slot stands,
+as before: the overlay cell is on the reversal's INK, the terminal's own background.
+
+`CompositedFieldPerColumnTests` pins the label over the reversed cursor row (before, on the
+terminal's own field where the row shows `rgb(220, 220, 220)`) and a label over an `.inverted()`
+one (before, on the page where the inverted text shows its ink). `ANSIOverlaySplitTests` holds the
+split to a reversed line's ink — a named one, a bright one, an RGB one, and an unstated one that
+leaves the slot — and its reference reads a reversed cell's field the same way.
+
+Faded, the same (2026-09-26). A fade resolved against a compositor's base blends a stated 49 in
+the layer as the field the composite fills it with (§95), and left it the terminal's own over a
+reversed base: that dated from when the composite filled it there with the base's background
+slot, the reversal's ink. It fills it with the field the reversal shows now, and the blend's
+cell behind already holds that field (`cells(in:)` exchanges the two), so the fade blends it as
+that field too. Left the terminal's own, on a page the terminal reports as `rgb(40, 44, 52)`,
+`ZStack(alignment: .leading) { Text("abcdef").inverted(); Text("xy").background(Color.default)
+.opacity(0.99) }` drew `x` on about `48;2;40;46;52` — the terminal's page — in the middle of a
+block of `51;255;51`, and at 0.6 on about `48;2;44;128;52`; at 1 it is on the block. On a page
+that has not reported its colour it was hidden by accident: the terminal's side won as `49` and
+the composite filled it. `FadedTerminalFieldTests` pins both alphas, and the terminal's own
+pair, reported and not, where the faded label is on the field the unfaded one is on: reported,
+it was mixed from the reported page and foreground instead (`rgb(41, 45, 53)` at 0.99, where
+unfaded it is on the terminal's own field).
+
 ## 100. A faded run in a reversed row is blended as the row draws it (2026-09-25)
 
 A row that reverses — a menu's focused row, a `List`'s cursor row, where the highlight has no

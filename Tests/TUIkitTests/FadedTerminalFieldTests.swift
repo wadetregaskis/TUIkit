@@ -424,6 +424,49 @@ struct FadedTerminalFieldTests {
             #expect(row[0].background == "\u{1B}[48;2;\(rgb.red);\(rgb.green);\(rgb.blue)m", "h is on \(row[0].background)")
         }
     }
+
+    /// Over REVERSED cells the composite fills a stated 49 with the field the reversal
+    /// shows, its ink: unfaded, the label is on the block the inverted text shows.
+    /// Faded, it is the same cell. Left the terminal's own there, it was mixed with the
+    /// page the terminal reported: a hole about `48;2;40;46;52` — the page — in the
+    /// middle of the block at 0.99, and about `48;2;44;128;52` at 0.6.
+    @Test("A faded stated 49 over inverted text lands on the text's block on a reported page", arguments: [0.6, 0.99])
+    func aFadedStatedTerminalFieldOverInvertedText(alpha: Double) throws {
+        let view = { (alpha: Double) in
+            ZStack(alignment: .leading) {
+                Text("abcdef").inverted()
+                Text("xy").background(Color.default).opacity(alpha)
+            }
+        }
+        try TerminalColors.withCurrent(Self.reported) {
+            let opaque = try #require(writtenRows(of: view(1), width: 8, height: 2).first)
+            let faded = try #require(writtenRows(of: view(alpha), width: 8, height: 2).first)
+            // Not vacuous: unfaded, the label is on the block the inverted text shows.
+            #expect(opaque[0].shownField == opaque[2].shownField, "x is on \(opaque[0].shown), c on \(opaque[2].shown)")
+            #expect(faded[0].shownField == opaque[0].shownField, "faded, x is on \(faded[0].shown)")
+        }
+    }
+
+    /// A guard: on the terminal's own pair a reversal's ink has no RGB until the terminal
+    /// reports it, and whatever the composite draws a label's stated 49 over it as, the
+    /// label faded is on the same field, reported or not.
+    @Test("A faded stated 49 over inverted text of the terminal's own pair is on the field unfaded", arguments: [0.6, 0.99])
+    func aFadedStatedTerminalFieldOverTheTerminalsPair(alpha: Double) throws {
+        let view = { (alpha: Double) in
+            ZStack(alignment: .leading) {
+                Text("abcdef").inverted()
+                Text("xy").background(Color.default).opacity(alpha)
+            }
+        }
+        for colours in [TerminalColors.unknown, Self.reported] {
+            try TerminalColors.withCurrent(colours) {
+                let palette = ReversedRowTerminalPairPalette()
+                let opaque = try #require(writtenRows(of: view(1), palette: palette, width: 8, height: 2).first)
+                let faded = try #require(writtenRows(of: view(alpha), palette: palette, width: 8, height: 2).first)
+                #expect(faded[0].shownField == opaque[0].shownField, "faded, x is \(faded[0].shown); unfaded, \(opaque[0].shown)")
+            }
+        }
+    }
 }
 
 /// A block caret as a `.plain` field draws one on a `Color.default` palette:

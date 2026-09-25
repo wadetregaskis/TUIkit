@@ -297,6 +297,70 @@ struct CompositedFieldPerColumnTests {
             "the spinner's ground, on the page, is \(run.groundFields(onPage: Self.page))")
     }
 
+    // MARK: - A reversed base
+
+    /// Each subview's leading edge at its own cell of the grid — a custom `Layout`,
+    /// composited in place.
+    private struct AtCells: Layout {
+        let cells: [(x: Int, y: Int)]
+
+        func sizeThatFits(proposal: ProposedSize, subviews: Subviews, cache: inout ()) -> ViewSize {
+            ViewSize(width: 24, height: 6)
+        }
+
+        func placeSubviews(in bounds: CellRect, proposal: ProposedSize, subviews: Subviews, cache: inout ()) {
+            for index in subviews.indices {
+                subviews[index].place(
+                    at: (x: bounds.x + cells[index].x, y: bounds.y + cells[index].y), proposal: .unspecified)
+            }
+        }
+    }
+
+    /// A focused list's cursor row reverses where its highlight has no RGB to
+    /// breathe between (`ESC[7;<ink>;<field>m`): it SHOWS the palette's ink as its
+    /// field. A label laid over the row keeps that field, as it keeps any other.
+    /// Read off the background slot, it took the row's field SLOT — which the
+    /// reversal shows as the row's ink, here the terminal's own — and the label was
+    /// a hole in the bar.
+    @Test("A label over a list's reversed cursor row is drawn on the row's field")
+    func aLabelOverAReversedRow() throws {
+        let list = List(selection: .constant(Int?.none)) {
+            ForEach(0..<3, id: \.self) { row in Text("row \(row)") }
+        }
+        .frame(width: 20, height: 5)
+        func screen(_ view: some View) -> FrameBuffer {
+            let context = makeRenderContext(width: 24, height: 6) { environment, _ in
+                environment.palette = terminalPagePalette
+            }
+            return ColorDepth.withCurrent(.truecolor) { renderToScreen(view, context: context) }
+        }
+        let base = paintedCells(screen(list).lines[1])
+        // Not vacuous: the cursor row is reversed under the label, on an ink of its own.
+        #expect(base[4].state.reversesVideo && base[5].state.reversesVideo, "the row is \(base[4].shown)")
+        #expect(base[4].shownField != .terminalBackground)
+        let row = paintedCells(screen(AtCells(cells: [(0, 0), (4, 1)]) { list; Text("xy") }).lines[1])
+        #expect(row[4].glyph == "x" && row[5].glyph == "y")
+        #expect(
+            row[4...5].map(\.shownField) == base[4...5].map(\.shownField),
+            "the label is on \(row[4...5].map(\.shownField)), the row on \(base[4...5].map(\.shownField))")
+    }
+
+    /// The plainest shape: a label over inverted text. The text shows its ink — the
+    /// palette's foreground — as its field, and the label is drawn on that.
+    @Test("A label over inverted text is drawn on the field the text shows")
+    func aLabelOverInvertedText() throws {
+        let base = Text("abcdef").inverted()
+        let alone = try #require(writtenRows(of: base, width: 8, height: 2).first)
+        let row = try #require(
+            writtenRows(of: ZStack(alignment: .leading) { base; Text("xy") }, width: 8, height: 2).first)
+        // Not vacuous: the text is reversed, on an ink of its own.
+        #expect(alone[0].state.reversesVideo && alone[0].state.foregroundColour != nil, "the text is \(alone[0].shown)")
+        #expect(String(row.prefix(6).map(\.glyph)) == "xycdef")
+        #expect(
+            row.prefix(6).map(\.shownField) == alone.prefix(6).map(\.shownField),
+            "the label is on \(row.prefix(2).map(\.shownField)), the text on \(alone.prefix(2).map(\.shownField))")
+    }
+
     // MARK: - Faded, and floating
 
     /// A fade blends the cells it covers against the base under each; the cells it

@@ -112,6 +112,20 @@ public struct SGRState: Sendable, Equatable {
         /// (`AnimatedCellRun.groundStyle`).
         package static let statedTerminalInk = Self.named(39)
 
+        /// This colour, held as an INK, as the background slot spells it: what a
+        /// reversed cell shows as its field. `nil` where it has no such spelling —
+        /// a named code outside the sixteen inks.
+        package var asFieldFromInk: Self? {
+            switch self {
+            case .named(let code) where (30...37).contains(code) || (90...97).contains(code):
+                return .named(code + 10)
+            case .named:
+                return nil
+            case .indexed, .rgb:
+                return self
+            }
+        }
+
         /// A colour from a complete parameter list — one named code, or the
         /// three- or five-element extended forms — or `nil` for anything else.
         init?(parameters: [String]) {

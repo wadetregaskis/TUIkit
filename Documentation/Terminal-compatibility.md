@@ -4518,6 +4518,16 @@ the field as the row builder will read it, and says a stated 49 again after the
 overlay's reset; the tick's splice restores the cells after a frame the same
 way. `Opacity as composition.md` §99.1; `CompositedFieldPerColumnTests`.
 
+**2026-09-25, later: a reversed base's field is its ink.** Under SGR 7 a cell
+shows its foreground as its field, and the compositor read the field slot: a
+label laid over a list's reversed cursor row (`ESC[7;<ink>;49m`) was drawn on
+the terminal's own field in the middle of the row's bar. The split now takes the
+ink as the field there, spelled for the background slot. A reversal of the
+terminal's own ink (`ESC[7;39…m`) has no such spelling and is left as it was.
+No built-in view composites over a reversed cell (measured through the suite
+and the Example on both of its palettes); an app's own `ZStack`, `.overlay` or
+`Layout` does. `Opacity as composition.md` §99.2.
+
 **2026-09-25, later still: faded, a run in a reversed row is blended as the row
 draws it.** The reversal left open above reached the fade too, and there it
 drew something different from the unfaded replay. Measured live before the

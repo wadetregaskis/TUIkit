@@ -79,9 +79,10 @@ struct ANSIOverlaySplitTests {
         }
     }
 
-    /// The field `line` has in force at `column`, as a row still to be written
-    /// reads it: none after a reset, the terminal's own after an `ESC[49m`
-    /// (``SGRState/Colour/statedTerminalField``), a colour after one. Read escape by
+    /// The field `line` shows at `column`, as a row still to be written reads it:
+    /// none after a reset, the terminal's own after an `ESC[49m`
+    /// (``SGRState/Colour/statedTerminalField``), a colour after one — and under
+    /// reverse video the ink, spelled as a field where it can be. Read escape by
     /// escape through what each says about the background, beside the netted state
     /// — which keeps a reset and a 49 alike.
     ///
@@ -94,7 +95,9 @@ struct ANSIOverlaySplitTests {
         for segment in line.ansiSegments() {
             switch segment {
             case .ansi(let sequence, true):
-                guard includingBoundary ? visible <= column : visible < column else { return field }
+                guard includingBoundary ? visible <= column : visible < column else {
+                    return reversedInk(state) ?? field
+                }
                 switch state.applyReportingBackground(sequence) {
                 case .reset: field = nil
                 case .terminalDefault: field = .statedTerminalField
@@ -105,7 +108,38 @@ struct ANSIOverlaySplitTests {
             case .visible(let character): visible += character.terminalWidth
             }
         }
-        return field
+        return reversedInk(state) ?? field
+    }
+
+    /// The ink a reversed `state` shows as its field, spelled for the background
+    /// slot — spelled out here, not asked of the code under test — or `nil` where
+    /// the state is not reversed or its ink is the terminal's own, which has no
+    /// such spelling.
+    private static func reversedInk(_ state: SGRState) -> SGRState.Colour? {
+        guard state.reversesVideo, let ink = state.foregroundColour else { return nil }
+        switch ink {
+        case .named(let code) where (30...37).contains(code) || (90...97).contains(code): return .named(code + 10)
+        case .named: return nil
+        case .indexed, .rgb: return ink
+        }
+    }
+
+    /// Under reverse video a cell shows its INK as its field, so that is the field
+    /// the split notes — in the background slot's spelling. The terminal's own ink
+    /// has none, and there the slot stands.
+    @Test("Under reverse video the field under an overlay is the ink, spelled as a field")
+    func reversedFields() {
+        let named = "\u{1B}[7;31mabc\u{1B}[27mdef".ansiOverlaySplit(prefixColumns: 1, suffixDropColumns: 5)
+        #expect(named.fieldsUnderOverlay.fields(over: 1..<5) == [.named(41), .named(41), nil, nil])
+        let bright = "\u{1B}[7;93mab".ansiOverlaySplit(prefixColumns: 0, suffixDropColumns: 2)
+        #expect(bright.fieldsUnderOverlay.first == .named(103))
+        let rgb = "\u{1B}[7;38;2;1;2;3;44mabc".ansiOverlaySplit(prefixColumns: 0, suffixDropColumns: 2)
+        #expect(rgb.fieldsUnderOverlay.first == .rgb(1, 2, 3))
+        #expect(rgb.backgroundUnderOverlay == "\u{1B}[48;2;1;2;3m")
+        let unstated = "\u{1B}[7;44mabc".ansiOverlaySplit(prefixColumns: 0, suffixDropColumns: 2)
+        #expect(unstated.fieldsUnderOverlay.first == .named(44))
+        // And the suffix gets the line's own slots back, reversal and all.
+        #expect(rgb.styleBeforeSuffix == "\u{1B}[7;38;2;1;2;3;44m")
     }
 
     /// What the insert restores where the suffix begins: the netted state there

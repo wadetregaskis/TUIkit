@@ -214,9 +214,13 @@ extension FrameBuffer {
             // once the terminal had reported one — a label on `Color.default` faded in
             // a `ZStack` over red came out between the two, and at one it was on the
             // red (`Opacity as composition` §95). Over a base with no field of its own
-            // it stays the terminal's, as it does unfaded; over a reversed one, as it
-            // was.
-            if fillingStatedTerminalField, statesTheTerminals, coverage != nil, let behind, !behind.isReversed,
+            // it stays the terminal's, as it does unfaded. Over a REVERSED one the
+            // composite fills it with the field the reversal shows, its ink, which is
+            // what `behind` holds as its field (`cells(in:)` exchanges the two): left
+            // the terminal's own there, a label on `Color.default` faded just under one
+            // over inverted text was a hole the colour of the reported page in the
+            // middle of the block, where unfaded it is on the block.
+            if fillingStatedTerminalField, statesTheTerminals, coverage != nil, let behind,
                 let field = behind.background
             {
                 cell.background = field

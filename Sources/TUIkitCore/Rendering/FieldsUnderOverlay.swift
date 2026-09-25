@@ -32,7 +32,10 @@
 /// ``SGRState/Colour/statedTerminalField`` where it states `ESC[49m`, the
 /// terminal's own: in a row still to be written those are two fields, and on a
 /// page with an RGB two colours. (Netted as one `nil`, as `SGRState` nets them, an
-/// overlay over a stated 49 was drawn on the page.)
+/// overlay over a stated 49 was drawn on the page.) Under reverse video a cell
+/// shows its INK as its field, so there the field is that ink, spelled as a field
+/// — where it has a spelling: the terminal's own foreground has none, and there
+/// the background slot stands.
 struct FieldsUnderOverlay: Sendable, Equatable {
     /// Where the field changes: from base column `column` on, `field`.
     struct Change: Sendable, Equatable {

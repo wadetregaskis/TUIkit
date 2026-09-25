@@ -921,10 +921,19 @@ extension String {
                 case .colour: field = style.backgroundColour
                 case nil: break
                 }
+                // What a cell there SHOWS as its field: under reverse video, the
+                // ink the 7 exchanges it with — the colour a reversed row or
+                // caret is filled with — wherever that has a spelling as a field.
+                // Read off the background slot, an overlay over a list's reversed
+                // cursor row was drawn on the row's INK. The terminal's own
+                // foreground has no such spelling (only a 7 draws it as a field),
+                // and there the slot is what is left.
+                let shown =
+                    style.reversesVideo ? style.foregroundColour.flatMap(\.asFieldFromInk) ?? field : field
                 if total <= prefixColumns {
-                    fieldUnder = field
+                    fieldUnder = shown
                 } else if notingFields {
-                    changes.note(field, at: total, first: fieldUnder)
+                    changes.note(shown, at: total, first: fieldUnder)
                 }
             } else {
                 suffixLink.note(text)
