@@ -341,4 +341,29 @@ struct AnimatedRunGroundTests {
         let painted = buffer.paintedOver(background: green)
         #expect(painted.animatedCells.first?.groundFields(onPage: "").map(spelled) == [green, green])
     }
+
+    /// On a palette whose page is the terminal's own, a floating surface is spelled
+    /// `ESC[49m`, and compositing reads a stated 49 as no field and fills it: the row
+    /// under a run in a menu over a colour showed the colour, and the run's ground,
+    /// painted the same way, recorded it — agreeing with each other, and both wrong.
+    /// A surface states every cell's field, so it is composited as it is, and both
+    /// keep the terminal's own.
+    @Test("A run in a floating surface on the terminal's own page keeps the surface under it")
+    func aRunInASurfaceOnTheTerminalsOwnPage() throws {
+        let magenta = "\u{1B}[48;2;255;0;255m"
+        var page = FrameBuffer(
+            lines: Array(repeating: magenta + String(repeating: " ", count: 10) + "\u{1B}[0m", count: 3))
+        var content = FrameBuffer(lines: ["ab"])
+        content.animatedCells = [
+            AnimatedCellRun(offsetX: 0, offsetY: 0, width: 2, frames: ["ab", "cd"], clock: .content)
+        ]
+        page.overlays = [OverlayLayer(offsetX: 3, offsetY: 1, content: content)]
+        let composited = ColorDepth.withCurrent(.truecolor) {
+            page.compositingOverlays(maxWidth: 10, maxHeight: 3, palette: terminalPagePalette)
+        }
+        let run = try #require(composited.animatedCells.first)
+        let shown = Array(paintedCells(composited.lines[1])[3..<5].map(\.background))
+        #expect(shown == ["", ""], "the surface shows \(shown)")
+        #expect(run.groundFields(onPage: "").map(spelled) == shown)
+    }
 }

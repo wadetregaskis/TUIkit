@@ -6429,3 +6429,31 @@ Limits:
   (measured on this tree, truecolor).
 - A run in a reversed row replays without the reversal, and under a fade that shows in
   `ReplayOracle` (`Terminal-compatibility.md`, the ground note).
+
+## 98. A floating surface is composited as it is painted (2026-09-25)
+
+A floating layer that is a surface (`OverlayLayer.isOpaque`: a menu, a drop-down, a context
+menu, a popover, a toast, a lifted drag preview, a full-screen cover, a sheet, an alert) is
+painted onto the page's colour before it is
+composited (§96.2), so every cell of it states a field. It was then composited like any other
+overlay, painted over the field under its first column wherever it named none — and compositing
+reads `ESC[49m` as naming none. On a palette whose page is the terminal's own (`Color.default`,
+or an unreported `.terminalBackground`, §80) the surface IS spelled `ESC[49m`, so every such
+layer showed the colour under its first cell through its whole surface: a pop-up `Menu` over a
+page painted magenta was magenta, every cell of it. A sheet, an alert and a confirmation dialog
+were spared by their backdrop, which washes the page to the palette's own field first.
+
+The layer is now composited as painted (`FrameBuffer.composited(with:at:overlayIsPainted:)`),
+lines and runs alike: the surface's 49 is the terminal's own, and a run inside it keeps the
+surface under it on replay. Where the surface has an RGB nothing changes, byte for byte: the
+paint had already given every cell a field, a content's own stated 49 included (§95's
+compositor reading, applied by the paint with the surface's colour).
+
+`FloatingLayerOpacityTests` runs every presentation on the terminal's own page too, and a
+full-screen cover — centred like a sheet, but not dimmed: before, the drop-down, the pop-up
+menu, the context menu, the popover, the toast, the drag preview and the cover each showed the
+page through every cell of the surface; the three that dim passed.
+`AnimatedRunGroundTests` holds a run in such a surface to the row: before, both were the page's
+magenta, agreeing with each other. And a cover and a sheet over a page of two colours, red then
+blue, on both pages: the surface shows neither at any cell (composited asking what it lands on,
+the cover on the terminal's own page was red at every cell).

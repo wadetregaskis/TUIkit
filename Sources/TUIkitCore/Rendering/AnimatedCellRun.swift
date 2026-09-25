@@ -317,8 +317,9 @@ extension AnimationClock {
 /// A frame that states no background for a cell is drawn, on every replayed
 /// tick, over the field the views around the run painted beneath that cell. The
 /// framework records that field on the run as it paints it: `.background(_:)`,
-/// flat or ramped; compositing (a `ZStack`, an `.overlay`, a layer made opaque); a
-/// `List` row's fill; a menu row's bar. A pass that repaints the fields of
+/// flat or ramped; compositing (a `ZStack`, an `.overlay`); a floating layer's
+/// surface, painted onto it before it is composited; a `List` row's fill; a menu
+/// row's bar. A pass that repaints the fields of
 /// something already drawn repaints the record too, as it repaints the frames:
 /// the wash that `.dimmed()` and a modal's backdrop flatten everything to, and
 /// a colour effect (`.colorInvert()`, `.grayscale(_:)`, `.hueRotation(_:)`,
@@ -326,7 +327,8 @@ extension AnimationClock {
 /// and the fade of a `.transition(.opacity)`. A frame that states the terminal's
 /// own field for a cell (SGR 49, which `Color.default` as a background is spelled
 /// as) is replayed as each of those containers drew it: a `.background` lets it
-/// through, and compositing fills it. Inside an `.opacity(_:)`, whose blend of a
+/// through, and compositing fills it with the field it lands on — a floating
+/// surface, with its own. Inside an `.opacity(_:)`, whose blend of a
 /// run's frames reads the same records, both kinds of cell are blended from the
 /// field each was drawn over.
 ///

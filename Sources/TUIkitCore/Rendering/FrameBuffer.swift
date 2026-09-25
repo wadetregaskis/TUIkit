@@ -747,6 +747,20 @@ extension FrameBuffer {
     ///   - position: The (x, y) offset where the overlay should be placed.
     /// - Returns: A new buffer with the overlay composited.
     public func composited(with overlay: Self, at position: (x: Int, y: Int)) -> Self {
+        composited(with: overlay, at: position, overlayIsPainted: false)
+    }
+
+    /// ``composited(with:at:)`` for an overlay that has already stated every
+    /// cell's field itself, `overlayIsPainted`, so the field it lands on is not
+    /// asked for — in the lines or under its runs.
+    ///
+    /// A floating layer that is a surface (`OverlayLayer.isOpaque`) is painted onto
+    /// the page's colour before it is composited, so every cell of it names a
+    /// field, and that field is the layer's. Composited as anything else, the one
+    /// cell it can still differ on is the surface's own `ESC[49m` on a palette whose
+    /// page is the terminal's own: compositing reads a stated 49 as no field and
+    /// fills it, so the surface took the field under it and showed it through.
+    package func composited(with overlay: Self, at position: (x: Int, y: Int), overlayIsPainted: Bool) -> Self {
         guard !overlay.isEmpty else {
             // Nothing visible to draw, but the overlay may still carry its
             // own nested layers / hit-test regions that need to be
@@ -783,8 +797,11 @@ extension FrameBuffer {
 
         var result: [String] = []
         // The field each overlay row was painted over, for the overlay's runs to
-        // record — kept only when it carries any. See `shiftedRuns(groundedOn:byX:y:)`.
-        var fields = overlay.animatedCells.isEmpty ? nil : [String](repeating: "", count: overlay.lines.count)
+        // record — kept only when it carries any, and when it was painted over one.
+        // See `shiftedRuns(groundedOn:byX:y:)`.
+        var fields =
+            overlay.animatedCells.isEmpty || overlayIsPainted
+            ? nil : [String](repeating: "", count: overlay.lines.count)
 
         for row in 0..<resultHeight {
             var baseLine =
@@ -801,7 +818,8 @@ extension FrameBuffer {
                     let inserted = Self.insertOverlay(
                         base: baseLine,
                         overlay: overlayLine,
-                        atColumn: position.x
+                        atColumn: position.x,
+                        overlayIsPainted: overlayIsPainted
                     )
                     baseLine = inserted.line
                     fields?[overlayRow] = inserted.field
@@ -1347,6 +1365,9 @@ extension FrameBuffer {
     ///     the width of the row being built.
     ///   - overlay: The overlay text to insert (may contain ANSI codes).
     ///   - column: The column position (0-based, in visible characters).
+    ///   - overlayIsPainted: Whether the overlay already states every field it
+    ///     needs, so nothing is painted under it — see
+    ///     ``insertOverlay(split:overlay:atColumn:minimumTotalWidth:overlayIsPainted:)``.
     /// - Returns: The composited line with base styling preserved around the overlay,
     ///   and the field the overlay's bare cells were painted over there
     ///   (`ANSIOverlaySplit.backgroundUnderOverlay`, `""` for none) — which the
@@ -1354,7 +1375,8 @@ extension FrameBuffer {
     fileprivate static func insertOverlay(
         base: String,
         overlay: String,
-        atColumn column: Int
+        atColumn column: Int,
+        overlayIsPainted: Bool = false
     ) -> (line: String, field: String) {
         // An overlay starting LEFT of the base is cut to the part that is on it and
         // inserted at column 0 — the answer both composite twins already give a negative
@@ -1374,7 +1396,8 @@ extension FrameBuffer {
         guard column >= 0 else {
             guard column + overlay.strippedLength > 0 else { return (base, "") }
             return insertOverlay(
-                base: base, overlay: overlay.ansiAwareCuttingLeadingColumns(-column), atColumn: 0)
+                base: base, overlay: overlay.ansiAwareCuttingLeadingColumns(-column), atColumn: 0,
+                overlayIsPainted: overlayIsPainted)
         }
         let overlayVisibleWidth = overlay.strippedLength
 
@@ -1383,19 +1406,19 @@ extension FrameBuffer {
         let split = base.ansiOverlaySplit(
             prefixColumns: column, suffixDropColumns: column + overlayVisibleWidth)
         return (
-            insertOverlay(split: split, overlay: overlay, atColumn: column),
+            insertOverlay(split: split, overlay: overlay, atColumn: column, overlayIsPainted: overlayIsPainted),
             split.backgroundUnderOverlay
         )
     }
 
-    /// ``insertOverlay(base:overlay:atColumn:)`` for a caller that has already
+    /// ``insertOverlay(base:overlay:atColumn:overlayIsPainted:)`` for a caller that has already
     /// split the base at the overlay's columns — the split carries the
     /// overlay's end, so nothing is measured again.
     ///
     /// `overlayIsPainted` is for a caller that has already put every field the
-    /// overlay needs in force, cell by cell — the animation tick, and the opacity
-    /// resolution's span; anything else is painted over the one field where the
-    /// overlay lands.
+    /// overlay needs in force, cell by cell — the animation tick, the opacity
+    /// resolution's span, and a floating surface; anything else is painted over
+    /// the one field where the overlay lands.
     static func insertOverlay(
         split: ANSIOverlaySplit,
         overlay: String,

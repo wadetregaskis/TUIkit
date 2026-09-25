@@ -4293,8 +4293,13 @@ painters disagree about a stated 49:
   the row's styling so far (`BackgroundModifier`, `ansiAwareSlicedRuns`), a
   stated 49 included, so the 49 lasts until the frame's next reset, as it does
   under a flat one.
-- Compositing (`String.paintedOver(background:)`: a `ZStack`, an `.overlay`, a
-  layer made opaque) reads it as no field and fills it.
+- Compositing (`String.paintedOver(background:)`: a `ZStack`, an `.overlay`)
+  reads it as no field and fills it with the field it lands on. A floating
+  layer made opaque (`OverlayLayer.isOpaque`) fills it too, but with its own
+  surface: the page's colour, painted onto the layer before it is composited
+  (`FrameBuffer.paintedOver(background:)`), after which the layer is
+  composited as painted and asks nothing of what it lands on (2026-09-25,
+  below).
 
 Neither blanket rule matches the render. Measured through the run loop (a
 compact chip and a block caret on a `Color.default` palette, focus walked):
@@ -4469,6 +4474,20 @@ excuse (`holding`) and reports the rows it held apart from its mismatches; a hel
 cell does not stop the comparison, so a row's other disagreements still fail.
 `ReplayedRunFieldTests` holds, on each faded ground, exactly those two rows —
 named by what they draw, and asserted to be all it held.
+
+**2026-09-25: a floating surface is composited as it is painted.** The compositor
+above fills a stated 49, and a floating surface on a palette whose page is the
+terminal's own is spelled exactly that: the layer is painted onto the page's
+colour first (`OverlayLayer.isOpaque`), and that colour is `ESC[49m`. So every
+menu, drop-down, context menu, popover, toast, drag preview and full-screen cover
+on such a palette showed the field under its first cell through its whole surface
+(a sheet and an alert dim the page to one field first), and each run
+inside it recorded the same in its ground. A surface states every cell's field
+once painted, so it is now composited without being painted again
+(`FrameBuffer.composited(with:at:overlayIsPainted:)`), its runs' grounds likewise;
+on an RGB surface the bytes are unchanged. `Opacity as composition.md` §98;
+`FloatingLayerOpacityTests` (every presentation on the terminal's own page) and
+`AnimatedRunGroundTests`.
 
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's

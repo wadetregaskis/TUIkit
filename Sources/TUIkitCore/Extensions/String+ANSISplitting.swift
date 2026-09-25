@@ -815,7 +815,7 @@ extension String {
     /// - Parameters:
     ///   - prefixColumns: Visible columns to keep at the front.
     ///   - suffixDropColumns: Visible columns to drop before the suffix begins.
-    /// - Returns: Everything ``FrameBuffer/insertOverlay(base:overlay:atColumn:)``
+    /// - Returns: Everything ``FrameBuffer/insertOverlay(base:overlay:atColumn:overlayIsPainted:)``
     ///   needs from this line, in one scan — see ``ANSIOverlaySplit``.
     func ansiOverlaySplit(prefixColumns: Int, suffixDropColumns: Int) -> ANSIOverlaySplit {
         var prefix = ""

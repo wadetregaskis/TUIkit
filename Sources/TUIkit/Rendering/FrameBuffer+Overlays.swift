@@ -110,8 +110,15 @@ extension FrameBuffer {
                     content = content.resolvingOpacity(
                         onOpaqueFill: { nil }, surface: palette.background, palette: palette)
                 }
+                // Painted, a surface states every cell's field, so it is composited
+                // as it is. Asked what it lands on, its own `ESC[49m` — the surface
+                // on a palette whose page is the terminal's own — is what compositing
+                // reads as no field and fills, and every such menu, drop-down,
+                // popover and toast showed the colour under its first cell through
+                // it (`Opacity as composition.md` §98).
                 result = result.compositedResolvingOpacity(
-                    with: content, at: (x: placed.x, y: placed.y), palette: palette)
+                    with: content, at: (x: placed.x, y: placed.y), palette: palette,
+                    overlayIsPainted: layer.isOpaque)
             }
             // What this layer's content carried, lifted by the composite: into
             // the queue, not the next pass.

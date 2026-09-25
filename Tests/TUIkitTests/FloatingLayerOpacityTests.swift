@@ -19,6 +19,12 @@
 //  it, and read the background of every cell the layer covers. None of them may
 //  be the page's.
 //
+//  And each again on a palette whose page is the terminal's own, where the
+//  surface is spelled `ESC[49m`: compositing reads a stated 49 as no field and
+//  filled it with the colour under the layer's first cell, so every anchored
+//  surface showed the page through all of it until the compositor took a painted
+//  surface as it is (`Opacity as composition.md` §98).
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -39,9 +45,15 @@ struct FloatingLayerOpacityTests {
     private static let pageBackground = Color.rgb(255, 0, 255)
     private static let pageEscape = "48;2;255;0;255"
 
-    private func harness(width: Int = 60, height: Int = 24) -> (TUIContext, RenderContext) {
+    /// A context on the default palette — or, `onTerminalPage`, on one whose page
+    /// and every surface floated over it is the terminal's own field
+    /// (`Color.default`, spelled `ESC[49m`).
+    private func harness(width: Int = 60, height: Int = 24, onTerminalPage: Bool = false)
+        -> (TUIContext, RenderContext)
+    {
         let tui = TUIContext()
         var environment = EnvironmentValues()
+        if onTerminalPage { environment.palette = terminalPagePalette }
         environment.focusManager = FocusManager()
         environment.applyRuntimeServices(from: tui)
         return (
@@ -139,12 +151,14 @@ struct FloatingLayerOpacityTests {
 
     /// Every cell of `frame` whose background is the page's — i.e. every cell
     /// the floating layer failed to cover.
-    private func showThrough(_ frame: FrameBuffer, rows: Range<Int>, columns: Range<Int>) -> [(Int, Int)] {
+    private func showThrough(
+        _ frame: FrameBuffer, rows: Range<Int>, columns: Range<Int>, pageEscapes: [String] = [Self.pageEscape]
+    ) -> [(Int, Int)] {
         var leaks: [(Int, Int)] = []
         for row in rows where row < frame.lines.count {
             let backgrounds = cellBackgrounds(frame.lines[row])
             for column in columns where column < backgrounds.count {
-                if backgrounds[column]?.contains(Self.pageEscape) == true {
+                if let background = backgrounds[column], pageEscapes.contains(where: background.contains) {
                     leaks.append((row, column))
                 }
             }
@@ -167,9 +181,9 @@ struct FloatingLayerOpacityTests {
     // MARK: - The presentations
 
     /// A `Picker`'s drop-down: the one the report came in about.
-    @Test("A Picker's drop-down is opaque")
-    func pickerDropdown() throws {
-        let (tui, context) = harness()
+    @Test("A Picker's drop-down is opaque", arguments: [false, true])
+    func pickerDropdown(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             VStack {
                 Picker("Choose", selection: Binding<Int>.constant(0)) {
@@ -185,9 +199,9 @@ struct FloatingLayerOpacityTests {
     }
 
     /// A pop-up `Menu`.
-    @Test("A pop-up Menu is opaque")
-    func menuPopup() throws {
-        let (tui, context) = harness()
+    @Test("A pop-up Menu is opaque", arguments: [false, true])
+    func menuPopup(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             VStack {
                 Menu("Actions") {
@@ -202,9 +216,9 @@ struct FloatingLayerOpacityTests {
     }
 
     /// A `.contextMenu`, opened with a right-click.
-    @Test("A context menu is opaque")
-    func contextMenu() throws {
-        let (tui, context) = harness()
+    @Test("A context menu is opaque", arguments: [false, true])
+    func contextMenu(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             VStack {
                 Text("Right-click me").contextMenu {
@@ -219,9 +233,9 @@ struct FloatingLayerOpacityTests {
     }
 
     /// A `.popover`.
-    @Test("A popover is opaque")
-    func popover() throws {
-        let (tui, context) = harness()
+    @Test("A popover is opaque", arguments: [false, true])
+    func popover(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             VStack {
                 Text("anchor")
@@ -233,9 +247,9 @@ struct FloatingLayerOpacityTests {
     }
 
     /// An `.alert`.
-    @Test("An alert is opaque")
-    func alert() throws {
-        let (tui, context) = harness()
+    @Test("An alert is opaque", arguments: [false, true])
+    func alert(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             Text("page")
                 .alert("Careful", isPresented: .constant(true)) {
@@ -245,9 +259,9 @@ struct FloatingLayerOpacityTests {
     }
 
     /// A `.sheet` hosting a `Dialog`.
-    @Test("A sheet is opaque")
-    func sheet() throws {
-        let (tui, context) = harness()
+    @Test("A sheet is opaque", arguments: [false, true])
+    func sheet(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             Text("page")
                 .sheet(isPresented: .constant(true)) {
@@ -258,10 +272,53 @@ struct FloatingLayerOpacityTests {
         try expectOpaqueLayer(frame(view, tui: tui, context: context), context: context)
     }
 
+    /// A `.fullScreenCover`: a centred surface like a sheet's, but one that does
+    /// not dim — the cover is the whole content area — so no backdrop has washed
+    /// the page to one field before the cover is laid over it.
+    @Test("A full-screen cover is opaque", arguments: [false, true])
+    func fullScreenCover(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
+        let view = page(
+            Text("page")
+                .fullScreenCover(isPresented: .constant(true)) {
+                    Text("Cover")
+                })
+        try expectOpaqueLayer(frame(view, tui: tui, context: context), context: context)
+    }
+
+    /// A cover and a sheet over a page of TWO colours, red on the left and blue on
+    /// the right: a page compositing reads a field per column of. The surface is
+    /// the layer's own at every cell, over both halves — composited as painted, it
+    /// asks nothing of what it lands on. (A sheet's backdrop washes the page to one
+    /// field first; the cover lands on both.)
+    @Test("A cover or a sheet over a page of two colours shows neither", arguments: [false, true], [false, true])
+    func surfaceOverTwoColours(onTerminalPage: Bool, sheet: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
+        let presenter = Text("page")
+        let view = ZStack(alignment: .topLeading) {
+            HStack(spacing: 0) { Color.rgb(200, 0, 0); Color.rgb(0, 0, 200) }
+            if sheet {
+                presenter.sheet(isPresented: .constant(true)) { Dialog(title: "Details") { Text("Body") } }
+            } else {
+                presenter.fullScreenCover(isPresented: .constant(true)) { Text("Cover") }
+            }
+        }
+        let (pending, composited) = frame(view, tui: tui, context: context)
+        let layer = try #require(pending.overlays.first, "no floating layer was emitted")
+        let placed = layer.placed(maxWidth: context.availableWidth, maxHeight: context.availableHeight)
+        let columns = placed.x..<(placed.x + placed.content.width)
+        // Not vacuous: the layer spans both halves of the page.
+        #expect(columns.contains(context.availableWidth / 2 - 1) && columns.contains(context.availableWidth / 2))
+        let leaks = showThrough(
+            composited, rows: placed.y..<(placed.y + placed.content.height), columns: columns,
+            pageEscapes: ["48;2;200;0;0", "48;2;0;0;200"])
+        #expect(leaks.isEmpty, "the page shows through at \(leaks.prefix(8)) of \(leaks.count)")
+    }
+
     /// A `.confirmationDialog`.
-    @Test("A confirmation dialog is opaque")
-    func confirmationDialog() throws {
-        let (tui, context) = harness()
+    @Test("A confirmation dialog is opaque", arguments: [false, true])
+    func confirmationDialog(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let view = page(
             Text("page")
                 .confirmationDialog("Delete this?", isPresented: .constant(true)) {
@@ -297,9 +354,9 @@ struct FloatingLayerOpacityTests {
     /// two toasts is page, and only the toasts themselves are surface — which
     /// is why the assertion reads the toasts' own rows rather than the layer's
     /// bounding box.
-    @Test("A notification toast is opaque")
-    func notification() throws {
-        let (tui, base) = harness()
+    @Test("A notification toast is opaque", arguments: [false, true])
+    func notification(onTerminalPage: Bool) throws {
+        let (tui, base) = harness(onTerminalPage: onTerminalPage)
         let service = NotificationService()
         service.post("First toast")
         service.post("Second toast")
@@ -327,9 +384,9 @@ struct FloatingLayerOpacityTests {
     /// preview and its return flight — rather than a presentation. They took
     /// `isOpaque`'s default silently and no test rendered either; a row being
     /// carried is a card, and the page must not show through it.
-    @Test("A lifted drag preview is opaque")
-    func dragPreview() throws {
-        let (tui, context) = harness()
+    @Test("A lifted drag preview is opaque", arguments: [false, true])
+    func dragPreview(onTerminalPage: Bool) throws {
+        let (tui, context) = harness(onTerminalPage: onTerminalPage)
         let session = try #require(context.environment.dragAndDropSession)
         session.beginFrame()
         session.lastAbsoluteEvent = MouseEvent(button: .left, phase: .pressed, x: 4, y: 3)

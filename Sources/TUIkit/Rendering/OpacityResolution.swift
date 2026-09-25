@@ -558,17 +558,22 @@ extension FrameBuffer {
     ///   - palette: Resolves the surface and SGR 39.
     ///   - surface: The ambient background, when it is not the content area's
     ///     — the app header and the status bar have their own.
+    ///   - overlayIsPainted: Whether `overlay` already states every cell's field —
+    ///     a floating surface, painted onto the page's colour — so it is
+    ///     composited without asking what it lands on
+    ///     (``FrameBuffer/composited(with:at:overlayIsPainted:)``).
     func compositedResolvingOpacity(
         with overlay: Self,
         at position: (x: Int, y: Int),
         palette: any Palette,
-        surface: Color? = nil
+        surface: Color? = nil,
+        overlayIsPainted: Bool = false
     ) -> Self {
         composited(
             with: overlay.resolvingOpacity(
                 over: self, at: position, surface: surface ?? palette.background, palette: palette,
-                fillingStatedTerminalField: true, buildingRuns: true),
-            at: position)
+                fillingStatedTerminalField: !overlayIsPainted, buildingRuns: true),
+            at: position, overlayIsPainted: overlayIsPainted)
     }
 }
 
