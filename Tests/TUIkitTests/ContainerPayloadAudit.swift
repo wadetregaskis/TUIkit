@@ -222,17 +222,19 @@ struct ContainerPayloadAudit {
     /// container that drops it renders a plausible page in which one view is
     /// simply not translucent.
     ///
-    /// Two containers legitimately answer `0`, and they are the two that
-    /// COMPOSITE: a `ZStack` and `.overlay` draw one buffer onto another, which
-    /// is the moment what is behind the faded layer is known — so they resolve
-    /// the region into cells and spend it rather than passing it up. That is
-    /// the payload arriving at its destination, not being dropped, and the
-    /// assertion for them is that the picture changed.
+    /// Five containers legitimately answer `0`. Two COMPOSITE: a `ZStack` and
+    /// `.overlay` draw one buffer onto another, which is the moment what is behind
+    /// the faded layer is known. Three PAINT an opaque field under the child — a
+    /// `.background`, and a `TabView`'s surface in either style, which is one —
+    /// and that field is what is behind every fade inside it (`Opacity as
+    /// composition.md` §96). So all five resolve the region into cells and spend it
+    /// rather than passing it up. That is the payload arriving at its destination,
+    /// not being dropped, and the assertion for them is that the picture changed.
     ///
     /// Every other container is a carrier and must still hand it on.
     @Test("Every container carries its children's opacity regions")
     func containersCarryOpacityRegions() {
-        let sinks: Set<String> = ["ZStack", "overlay"]
+        let sinks: Set<String> = ["ZStack", "overlay", "background", "TabView", "a bordered TabView"]
         for (what, wrap) in containers() {
             let plain = render(wrap(AnyView(inert())))
             let translucent = render(wrap(AnyView(faded())))

@@ -26,24 +26,12 @@ struct FadedTerminalFieldTests {
     /// `view`'s rows as the screen shows them, column by column: on the terminal's
     /// own page with `terminalPage`, and on the default palette's RGB page without.
     ///
-    /// Built as the run loop builds them, on the page and with the page put back
-    /// after every reset (`FrameDiffWriter`), because that is the one thing that
-    /// tells a stated 49 from a cell naming no field: the buffer spells both as no
-    /// background, and only the row puts the page under one of them.
+    /// Written as the run loop writes them (``writtenRows(of:palette:width:height:)``),
+    /// because that is the one thing that tells a stated 49 from a cell naming no
+    /// field: the buffer spells both as no background, and only the written row
+    /// puts the page under one of them.
     private func rows(_ view: some View, terminalPage: Bool = false) -> [[PaintedCell]] {
-        let context = makeRenderContext(width: 24, height: 12) { environment, _ in
-            if terminalPage { environment.palette = terminalPagePalette }
-        }
-        let lines = ColorDepth.withCurrent(.truecolor) {
-            let buffer = renderToScreen(view, context: context)
-            let writer = FrameDiffWriter(
-                isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
-            return writer.buildOutputLines(
-                buffer: buffer, terminalWidth: 24, terminalHeight: buffer.lines.count,
-                bgCode: RenderBackgroundCodes(palette: context.environment.palette).content,
-                reset: ANSIRenderer.reset)
-        }
-        return lines.map(paintedCells)
+        writtenRows(of: view, palette: terminalPage ? terminalPagePalette : nil)
     }
 
     /// Whether `cell` shows the terminal's own field: it names no background, and
@@ -206,16 +194,8 @@ struct FadedTerminalFieldTests {
                 renderToScreen(label.opacity(phase), context: context)
             )
         }
-        func written(_ buffer: FrameBuffer) -> [PaintedCell] {
-            let writer = FrameDiffWriter(
-                isAppleTerminal: false, isITerm2: false, isGhostty: false, isWarp: false, isTmux: false)
-            return writer.buildOutputLines(
-                buffer: buffer, terminalWidth: 8, terminalHeight: 1,
-                bgCode: RenderBackgroundCodes(palette: palette).content, reset: ANSIRenderer.reset
-            ).first.map(paintedCells) ?? []
-        }
-        let faded = written(transition)
-        let reference = written(opacity)
+        let faded = writtenRows(transition, palette: palette, width: 8).first ?? []
+        let reference = writtenRows(opacity, palette: palette, width: 8).first ?? []
         // Below one half on the terminal's own page the ink is that page too, and
         // both fades drop the glyphs (§76).
         #expect(faded.prefix(2).map(\.glyph) == reference.prefix(2).map(\.glyph))

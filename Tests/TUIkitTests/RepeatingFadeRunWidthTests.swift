@@ -63,6 +63,41 @@ private struct FadeInsideARowFillInsideAFadeApp: App {
     var body: some Scene { WindowGroup { FadeInsideARowFillInsideAFade().palette(SystemPalette(.green)) } }
 }
 
+/// A label breathing inside a `.background`, which spends its content's fades
+/// against its fill (§96) and so leaves a run of its own, beside another label
+/// breathing at the root — or, nested, inside a breath of its own.
+private struct TwoBreaths: View {
+    let nested: Bool
+    @State private var dim = false
+
+    var body: some View {
+        Group {
+            if nested {
+                HStack(spacing: 0) {
+                    Text(" A ").opacity(dim ? 0.2 : 1).background(Color.rgb(40, 40, 200)).opacity(dim ? 0.2 : 1)
+                    Spacer()
+                }
+            } else {
+                HStack(spacing: 0) {
+                    Text(" A ").opacity(dim ? 0.2 : 1).background(Color.rgb(40, 40, 200))
+                    Text(" B ").opacity(dim ? 0.2 : 1)
+                    Spacer()
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 0.4).repeatForever(autoreverses: true)) { dim = true }
+        }
+    }
+}
+
+private struct TwoBreathsApp: App {
+    let nested: Bool
+    init() { nested = false }
+    init(nested: Bool) { self.nested = nested }
+    var body: some Scene { WindowGroup { TwoBreaths(nested: nested).palette(SystemPalette(.green)) } }
+}
+
 @MainActor
 @Suite("A repeating fade's run is as wide as its fades")
 struct RepeatingFadeRunWidthTests {
@@ -74,6 +109,17 @@ struct RepeatingFadeRunWidthTests {
         let found = ReplayOracle.compare({ SpinnerBesideAFadeApp() }, ticks: 24, size: (30, 4))
         try #require(found.compared >= 24, "only \(found.compared) rows were compared")
         #expect(found.movedGlyphs > 0, "no replay moved the spinner")
+        for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
+    }
+
+    /// A breath spent at a `.background`, beside one resolved at the root and inside
+    /// one. Whole-row, the root's run put the `.background`'s back at the phase it
+    /// was drawn at on every tick; and nested, the inner run was dropped under the
+    /// outer fade. Before, both held `A` still between renders.
+    @Test("A breath a background spent keeps breathing beside and inside another", arguments: [false, true])
+    func aBreathABackgroundSpentBreathes(nested: Bool) throws {
+        let found = ReplayOracle.compare({ TwoBreathsApp(nested: nested) }, ticks: 24, size: (30, 4))
+        try #require(found.compared >= 24, "only \(found.compared) rows were compared")
         for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
     }
 

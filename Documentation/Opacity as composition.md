@@ -6107,3 +6107,82 @@ the label in a `ZStack` over red at 0.6 and 0.4 — on the red, which the unfade
 and a run's frame stating 49 in the same layer, every frame spliced over the faded line, on
 the red; with the parse's reading alone, both mixed toward the terminal's page (4 and 2
 issues). A veil over text on a reported page, mixed over the page, is the guard.
+
+## 96. An opaque fill is the backdrop of the fades inside it (2026-09-24)
+
+§22 made one painter resolve its content's fades against its own fill: `.listRowBackground`,
+because "a fill is a backdrop, so the fade is spent there and nothing travels further". Every
+other painter carried the content's regions up past the field it had just painted, and the
+resolution — at the next composite, or the root — met that field as the faded layer's OWN
+field, and faded it with everything else toward whatever was behind the painter.
+
+`Text("x").opacity(0.3).background(.blue)`, truecolor:
+- On a page with an RGB, the blue came out 30% of the way to the page (`48;2;4;44;80` on
+  the default palette), where it should not have moved at all: the blue is outside the fade.
+- On the terminal's own page, the blue against a page with no RGB is rule 9's cut, and at
+  0.3 the page is the heavier side: the blue vanished, and the label's ink with it (§76),
+  leaving an empty cell on the terminal's own field. The blue used to survive on this shape by
+  accident: the opacity splice painted the field under its span's first cell — here the blue —
+  back under every cell the span spelled 49.
+- The same in every painter that is a `.background`: around padding and a border, nested, a
+  ramp, and a `TabView`'s surface, which is painted as one. A `withAnimation` fade from 0.2
+  to 0.8 inside a `.background(.blue)` on the terminal's own page had the blue vanish at
+  every frame below one half and come back at it.
+
+**The rule.** A painter that puts an OPAQUE field under content it did not draw resolves the
+content's fades against that field, where both are known (`FrameBuffer.resolvingOpacity(
+onOpaqueFill:surface:palette:)`): painted first — lines and every run's ground — so each cell
+reads as the painter left it, then blended toward the fill under it. A bare cell is on the
+fill, faded or not; a field the content states is mixed toward the fill; a stated 49 the
+painter lets through is the terminal's own (§95), the lighter side against the fill below
+one half; a reversed cell's unstated side is the fill the 7 exchanges. A ramp resolves over
+the ramp alone, painted as the content was, a different entry under each cell. A fully
+opaque region is dropped there rather than walked: every painted cell names a field, and at
+full strength a cell with a field of its own is the source outright (§9.7).
+
+A translucent fill is still not a backdrop (§22), and carries both claims up. That leaves one
+shape as it was: a layer fade inside a translucent fill fades the fill too, because the
+resolver cannot tell the two apart once they are one cell.
+
+**Only a fade that asks what is behind it.** A layer's opacity, a cycle of one, a field's
+own alpha, a run whose frames owe a translucent field: each is answered by what is behind the
+cell, so the painter spends it. An ink's own alpha is not: it is paint on the cell's own
+field, which the blend reads off the cell wherever it resolves, so it comes out the same at the
+painter as at the root. It travels on — and a palette with a translucent ink puts such a claim
+on every label it draws, which a painter spending them would walk for nothing
+(`FrameBuffer.hasFadeOnWhatIsBehind`).
+
+**A painter inside the painter spends its own first.** A row that reverses already spends the
+fades inside it against its reversal (§86.1), so a `.background` around a focused list meets
+none of them. If the `.background` spent them instead, against its own fill, a label at 0.6 in
+the cursor row inside `.background(Color.rgb(0, 0, 120))` on `terminalPagePalette` came out on
+`rgb(132, 132, 180)`, a patch in the bar of 220 (measured with the reversal's spend taken out).
+A repeating fade spent here leaves a run of its own, only as wide as its fades (§6b.1), so it
+keeps breathing beside a fade resolved further out, and inside one: before §6b.1, the root's
+whole-row run put it back at the phase it was drawn at, and an outer fade dropped it.
+
+**What it costs where no fade is present: one scan of the regions and the runs,** and the buffer
+back untouched. Counted with temporary instrumentation over `Stress --bench` (10 frames each):
+translucent 120 calls a frame, gradients 72, animating 50, and 0 of them with a region to
+spend; alpharamp, kitchensink, modifiers, anyview, dashboard, deep, menus, megalist, textwall
+and table make no call at all (their fills are translucent, memo-served, or absent). Checksums
+and memo counters of translucent, alpharamp, gradients, animating, kitchensink, modifiers and
+anyview are unchanged.
+
+`FadeInsideAPainterTests` pins it: the reported label on both pages (field and ink), a probe
+with a coloured cell, a bare one and a stated 49 faded to 0.3 inside every painter of
+`TestHelpers/FieldPainter.swift` on both pages — each column the painter's field, the
+coloured one mixed toward it, nothing else moving — and the `withAnimation` fade. Before, the
+label failed on both pages, the probe in five painters (a background, around padding and a
+border, nested, a ramp, a tab's surface), and the animated fade at every frame below one half.
+`ContainerPayloadAudit` counts `.background` and both `TabView` styles as sinks now, beside
+`ZStack` and `.overlay`: they spend a child's region rather than carry it. Also pinned: a label
+faded to 0.3 and 0.6 in a focused list's reversed cursor row inside an RGB `.background` stays on
+the row's field (it fails with the row's own spend taken out), and `RepeatingFadeRunWidthTests`
+replays a breath spent at a `.background` beside a breath at the root and inside one, against a
+render at every tick (it fails with §6b.1 taken out, 23 ticks of 24 each).
+
+Still carried, and held as known issues in `FadeInsideAPainterTests`: a `List` row's own fills (its cursor,
+selection and alternating tints), and, on the terminal's own page, the painters whose backdrop
+is that page — none, and a tab's surface there — where the opacity splice still paints the
+field under a span's first cell under every `ESC[49m` the span states.

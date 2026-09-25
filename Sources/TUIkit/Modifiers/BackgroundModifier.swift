@@ -103,16 +103,21 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             // in these lines and a background says nothing about it, which is what
             // lets `Text("x").background(.red.opacity(0.5))` fade the field and
             // leave the letter alone.
-            if let claim = OpacityRegion.claim(
-                width: width, height: buffer.lines.count, field: resolved)
-            {
-                filledBuffer.opacityRegions.append(claim)
-            }
+            let claim = OpacityRegion.claim(width: width, height: buffer.lines.count, field: resolved)
+            if let claim { filledBuffer.opacityRegions.append(claim) }
             // The content's runs are drawn on this fill wherever a frame leaves a
             // cell bare, and a replay has no line to read that off: the same fill
             // on their grounds (`AnimatedCellRun.ground`).
             filledBuffer.paintRunGrounds { _, ground in filled(ground, with: resolved.opaqueSpelling) }
-            return filledBuffer
+            // An opaque fill is the backdrop of every fade inside it, so they are
+            // spent here, against it (§96). Carried up, `Text("x").opacity(0.3)
+            // .background(.blue)` met the blue at the root as the faded label's
+            // own field and faded it toward the page with the label: 30% of the
+            // way on a page with an RGB, and on the terminal's own page — a colour
+            // with no RGB, the heavier side winning — all the way.
+            guard claim == nil else { return filledBuffer }
+            return filledBuffer.resolvingOpacity(
+                onOpaqueFill: { nil }, surface: resolved, palette: context.environment.palette)
         }
 
         let palette = context.environment.palette
@@ -212,19 +217,21 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
                 })
             return result + ANSIRenderer.reset
         }
-        let lines = buffer.lines.enumerated().map { row, line -> String in
-            let padded = line.padToVisibleWidth(width)
+        /// Row `row` of the content — or of nothing but the ramp — painted.
+        func paintedRow(_ padded: String, row: Int) -> String {
             guard sampler.variesAcrossRow else {
                 // One colour for the whole row: the same single persistent-fill
                 // this modifier has always emitted, and no per-cell work at all.
                 let colour = sampler.colour(row: row).resolve(with: palette)
-                rowFieldAlphas.append(colour.alpha)
-                return filled(
-                    padded, with: colour.opaqueSpelling)
+                if case .perRow = alphaShape { rowFieldAlphas.append(colour.alpha) }
+                return filled(padded, with: colour.opaqueSpelling)
             }
             // Otherwise the row is cut at the ramp's own boundaries and each
             // piece filled.
             return painted(padded, over: sampler.runs(row: row, cells: width), width: width)
+        }
+        let lines = buffer.lines.enumerated().map { row, line in
+            paintedRow(line.padToVisibleWidth(width), row: row)
         }
 
         // Background colouring is a styling pass — content stays in
@@ -254,7 +261,14 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             }
             return painted(ground, over: under, width: run.width)
         }
-        return ramped
+        // An opaque ramp is the backdrop of every fade inside it, as a flat fill
+        // is (§96), and a different one under each cell: the fade is spent over
+        // the ramp alone, painted as the content was.
+        guard case .opaque = alphaShape else { return ramped }
+        let blank = String(repeating: " ", count: width)
+        return ramped.resolvingOpacity(
+            onOpaqueFill: { FrameBuffer(lines: buffer.lines.indices.map { paintedRow(blank, row: $0) }) },
+            surface: palette.background, palette: palette)
     }
 
     /// The FIELD claims a ramp of this shape owes over a `width` × `rows` block.
