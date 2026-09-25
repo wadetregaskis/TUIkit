@@ -677,7 +677,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let textLines = TextIndicatorLines(context.environment)
         let bars = resolveScrollbars(
             viewportWidth: viewportWidth, viewportHeight: viewportHeight,
-            horizontal: wantsHorizontal, textLines: textLines, context: context)
+            horizontal: wantsHorizontal, textLines: textLines,
+            lastContentHeight: handler.contentHeight, context: context)
         // Fitted to the viewport BEFORE the reservation takes anything out of
         // it. The floor used to be applied afterwards, at the draw site, to the
         // content window, which under `.visible` the reservation had already made
@@ -911,16 +912,53 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// describe dimensions that are no longer the answer), and on the
     /// non-`.automatic` path, which measures nothing.
     ///
+    /// The first round's extents are read only when the content fits. When it
+    /// overflows, the vertical bar takes a column and the next round measures
+    /// again, narrower; the first round's width is then drawn nowhere, and its
+    /// ladder climbed for nothing — for a lazy stack past the windowing
+    /// threshold, one asking of its sampled rows per rung, and a rung per factor
+    /// of eight past 4,096 lines. So on a view that scrolls only vertically, a
+    /// round that can only ADD the vertical bar asks first whether the content
+    /// overflows at all, at the ladder's first rung and no further
+    /// (``contentOverflowsCanvas(contentWidth:viewportHeight:context:)``): a
+    /// yes reserves the bar and moves on; a no measures the ladder as before,
+    /// and its answer decides. Not on a view that also scrolls horizontally,
+    /// whose horizontal bar reads the round's measured WIDTH. And only when the
+    /// content overflowed as the handler last recorded it (`lastContentHeight`)
+    /// — at the latest render of this view. That is the previous frame's last
+    /// draw, unless another render of this view came after that draw: a
+    /// measuring one, or a frame's walk redone at a corrected header height
+    /// (`RenderLoop` walks a frame again when the app header's height differs
+    /// from its estimate, and the walk it throws away writes the hint too).
+    /// Then it is that render's. For content that fits, the question is the
+    /// ladder's first rung asked twice, and the second ask is served the first
+    /// only where the pass's memo keeps it — not for content that reads the
+    /// viewport, as an image fitted to it does, nor anywhere else the memo
+    /// declines to keep a measure. Asked on every frame, such content was
+    /// measured twice at that width where it had been once, for an answer that
+    /// is almost always the last pass's.
+    ///
     /// - Parameter textLines: The "N more" pair's claim on the height, so each
     ///   round measures at the content window the render will publish — the
     ///   viewport less the bar's row AND the two lines `.visible` reserves.
+    /// - Parameter lastContentHeight: The content's height as
+    ///   ``ScrollViewHandler/contentHeight`` holds it — NOT a record of what was
+    ///   last drawn: every render of this view writes it, a measuring render
+    ///   (`context.isMeasuring`) as well as the drawn one, so it is what the
+    ///   view's latest render found, at whatever size that render was offered.
+    ///   That is the previous frame's last draw, unless another render of
+    ///   this view came after that draw — a measuring one, or a frame's walk
+    ///   redone at a corrected header height, whose thrown-away walk writes it
+    ///   too — and then it is that render's. It decides which question the
+    ///   first round asks first, never the answer; `0`, the default and what
+    ///   the ideal-size ask passes, never asks the shortcut.
     ///
     /// Internal rather than private for ``idealSize(proposal:context:)``,
     /// which asks a horizontally scrolling view the same question on the
     /// measure side.
     func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool,
-        textLines: TextIndicatorLines, context: RenderContext
+        textLines: TextIndicatorLines, lastContentHeight: Int = 0, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
         let verticalPolicy = context.environment.verticalScrollIndicatorVisibility
         let horizontalPolicy = context.environment.horizontalScrollIndicatorVisibility
@@ -953,6 +991,18 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             let probeHeight = textLines.fitted(
                 viewportHeight: viewportHeight, horizontalBar: wantsHorizontalBar
             ).contentHeight
+            // Does the content overflow at all? A yes needs no climb (see
+            // above). Not on a view that also scrolls horizontally: its
+            // horizontal bar reads this round's measured WIDTH. Nor for content
+            // that fitted at the last render of this view, for which the
+            // question can be a second measure.
+            if measuresVertical, !wantsScrollbar, !horizontal, lastContentHeight > probeHeight,
+                contentOverflowsCanvas(
+                    contentWidth: probeWidth, viewportHeight: probeHeight, context: context)
+            {
+                wantsScrollbar = true
+                continue
+            }
             let extents = contentExtents(
                 contentWidth: probeWidth, viewportHeight: probeHeight,
                 horizontal: horizontal, context: context)

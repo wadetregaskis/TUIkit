@@ -70,6 +70,52 @@ extension _ScrollViewCore {
         return (width: renderWidth, height: max(viewportHeight, natural.height))
     }
 
+    /// Whether the content, laid out at `contentWidth` on the canvas
+    /// ``contentExtents(contentWidth:viewportHeight:horizontal:context:)``
+    /// measures a vertical view's content on, is taller than `viewportHeight` —
+    /// asked at the natural-extent ladder's first rung, and not climbed past it.
+    ///
+    /// The question the scrollbar's first round asks, and all it needs to: see
+    /// ``resolveScrollbars(viewportWidth:viewportHeight:horizontal:textLines:lastContentHeight:context:)``.
+    /// The climb is what made the round dear. A lazy stack past the windowing
+    /// threshold reports its estimate clamped to the budget it is offered, and a
+    /// clamp says nothing about what lies past it, so the ladder climbs by eight
+    /// until its budget clears the whole estimate, asking the stack's sampled
+    /// rows again at every rung — three rungs for a hundred thousand rows of one
+    /// and two lines. The first rung already knows the content overflows: it
+    /// offers thousands of lines, and content that fills them is taller than
+    /// any viewport.
+    ///
+    /// The first rung rather than one line past the viewport, because it is
+    /// the ladder's own question. A yes is the ladder's yes for everything but
+    /// content that goes from filling thousands of lines to fitting a screenful
+    /// as it is offered more. A no leaves the ladder its first rung in the
+    /// pass's memo, wherever the memo keeps it. And a measure that files
+    /// something per budget — a `TabView`'s per-extent tab sizes, written as it
+    /// is measured — is asked the budget it would have been asked anyway:
+    /// offered one line past the viewport, a tab view in an overflowing scroll
+    /// view filed a new extent on the first frame that took this path, and the
+    /// write asked for one frame more (`TabViewIdleRenderTests`). What that
+    /// gives up is small: an eager stack measures every row whatever it is
+    /// offered and a windowed one its sample, so only a little content is
+    /// cheaper at the smaller budget — a column of short lazy stacks among it.
+    func contentOverflowsCanvas(contentWidth: Int, viewportHeight: Int, context: RenderContext) -> Bool {
+        // The ladder's first rung, as `contentExtents` and then
+        // `measureNaturalExtent` ask it of a vertical view's content: the same
+        // canvas, no ideal-width mark, the width stated, the starting budget.
+        // The stated width is the context's own but for a view no column
+        // wide, whose first round still asks at one.
+        var probe = contentCanvasContext(
+            contentWidth: contentWidth, viewportHeight: viewportHeight, horizontal: false,
+            context: context
+        ).askingIdealWidth(false)
+        probe.availableWidth = contentWidth
+        probe.availableHeight = naturalExtentStartingBudget(forVisible: viewportHeight)
+        return measureChild(
+            content, proposal: ProposedSize(width: contentWidth, height: nil), context: probe
+        ).height > viewportHeight
+    }
+
     /// The context the content is laid out in at a candidate viewport: its own
     /// child identity (see ``contentExtents(contentWidth:viewportHeight:horizontal:context:)``),
     /// the visible viewport published, and the whole-content-width mark as the

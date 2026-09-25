@@ -37,7 +37,7 @@ extension _ScrollViewCore {
     /// answered without asking at all.
     ///
     /// A view that also scrolls horizontally asks
-    /// ``resolveScrollbars(viewportWidth:viewportHeight:horizontal:textLines:context:)``,
+    /// ``resolveScrollbars(viewportWidth:viewportHeight:horizontal:textLines:lastContentHeight:context:)``,
     /// the render's own fixpoint, since there each bar can tip the other. A
     /// vertical one has only the one bar, which leaves its content exactly as
     /// wide either way (the column is what the answer adds), so the question is
