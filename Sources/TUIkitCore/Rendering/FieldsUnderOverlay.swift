@@ -28,9 +28,11 @@
 /// its first column, and every column inside the span where it changes.
 ///
 /// A field is `nil` where the line states none there — after a reset, where the
-/// row builder puts the page back (`FrameDiffWriter.buildLine`). A stated `ESC[49m`
-/// in the base nets to the same `nil`, as it did when one field was read for the
-/// whole overlay.
+/// row builder puts the page back (`FrameDiffWriter.buildLine`) — and
+/// ``SGRState/Colour/statedTerminalField`` where it states `ESC[49m`, the
+/// terminal's own: in a row still to be written those are two fields, and on a
+/// page with an RGB two colours. (Netted as one `nil`, as `SGRState` nets them, an
+/// overlay over a stated 49 was drawn on the page.)
 struct FieldsUnderOverlay: Sendable, Equatable {
     /// Where the field changes: from base column `column` on, `field`.
     struct Change: Sendable, Equatable {

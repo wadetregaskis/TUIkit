@@ -28,8 +28,15 @@ import Testing
 /// four rows that land a field-less frame on a field — line 3's blue, at column 8,
 /// frames 0–3 — was re-captured from the splice that takes its span literally:
 /// the frame's bytes between the reset in front and the line's restored styling,
-/// with no `ESC[44m` put in. Every other hash, and every patch hash, is the
-/// four-walk form's still.
+/// with no `ESC[44m` put in.
+///
+/// And both halves of the five rows that land a frame on line 4's last cell, at
+/// column 20, after the line's stated `ESC[49m` (2026-09-25): the insert restores
+/// what the suffix begins in after the frame's reset, and restored as the netted
+/// state alone a stated 49 was dropped, so the cells after the frame — the pad the
+/// run's width reaches past the line — took the page where the line has the
+/// terminal's own. Re-captured with the 49 said again after that reset. Every other
+/// hash is the four-walk form's still.
 @Suite("The one-walk run patch and splice produce the four-walk bytes")
 struct AnimatedRunPatchGoldenTests {
 
@@ -190,23 +197,23 @@ struct AnimatedRunPatchGoldenTests {
         "4|0|0|a7b1120afaceb4d6,a7b1120afaceb4d6,a7b1120afaceb4d6,a7b1120afaceb4d6,a7b1120afaceb4d6,a7b1120afaceb4d6",
         "4|0|3|e44cb02d801786f9,e44cb02d801786f9,e44cb02d801786f9,e44cb02d801786f9,e44cb02d801786f9,e44cb02d801786f9",
         "4|0|8|5a19866d28b193aa,5a19866d28b193aa,5a19866d28b193aa,5a19866d28b193aa,5a19866d28b193aa,5a19866d28b193aa",
-        "4|0|20|6f9fc91b2bbf4ccd,6f9fc91b2bbf4ccd,6bcfa62b560fb6b7,6f9fc91b2bbf4ccd,418df2a33cb34295,6f9fc91b2bbf4ccd",
+        "4|0|20|c34cbd1e034bcdb3,c34cbd1e034bcdb3,2732ecff99ce50c9,c34cbd1e034bcdb3,69d99f5259937beb,c34cbd1e034bcdb3",
         "4|1|0|04d56d1667c1d360,04d56d1667c1d360,04d56d1667c1d360,04d56d1667c1d360,04d56d1667c1d360,04d56d1667c1d360",
         "4|1|3|2f80bb5f50dcbbdc,2f80bb5f50dcbbdc,2f80bb5f50dcbbdc,2f80bb5f50dcbbdc,2f80bb5f50dcbbdc,2f80bb5f50dcbbdc",
         "4|1|8|832aaf5e5379468b,832aaf5e5379468b,832aaf5e5379468b,832aaf5e5379468b,832aaf5e5379468b,832aaf5e5379468b",
-        "4|1|20|6e89e1f9d960d430,6e89e1f9d960d430,6e89e1f9d960d430,6e89e1f9d960d430,351f0b8c5f885730,6e89e1f9d960d430",
+        "4|1|20|2d09af03d2c989d8,2d09af03d2c989d8,2d09af03d2c989d8,2d09af03d2c989d8,50fe5b7f2c757068,2d09af03d2c989d8",
         "4|2|0|72460e4a188f007f,72460e4a188f007f,72460e4a188f007f,72460e4a188f007f,72460e4a188f007f,72460e4a188f007f",
         "4|2|3|5d64f6cd30a7d939,5d64f6cd30a7d939,5d64f6cd30a7d939,5d64f6cd30a7d939,5d64f6cd30a7d939,5d64f6cd30a7d939",
         "4|2|8|374e44323e6d054c,374e44323e6d054c,374e44323e6d054c,374e44323e6d054c,374e44323e6d054c,374e44323e6d054c",
-        "4|2|20|fbfa7624a9e5106f,fbfa7624a9e5106f,fbfa7624a9e5106f,fbfa7624a9e5106f,0fa70f4cb03ab63d,fbfa7624a9e5106f",
+        "4|2|20|50cdfcad5cfd7999,50cdfcad5cfd7999,50cdfcad5cfd7999,50cdfcad5cfd7999,4b7e139502b5d55b,50cdfcad5cfd7999",
         "4|3|0|aaff294f10e4f5f4,aaff294f10e4f5f4,aaff294f10e4f5f4,aaff294f10e4f5f4,aaff294f10e4f5f4,aaff294f10e4f5f4",
         "4|3|3|cf2ee9117dd157e8,cf2ee9117dd157e8,cf2ee9117dd157e8,cf2ee9117dd157e8,cf2ee9117dd157e8,cf2ee9117dd157e8",
         "4|3|8|62a0f8725dee612f,62a0f8725dee612f,62a0f8725dee612f,62a0f8725dee612f,62a0f8725dee612f,62a0f8725dee612f",
-        "4|3|20|bf312791a63407b0,bf312791a63407b0,bf312791a63407b0,bf312791a63407b0,148dcc7d6a68d9b0,bf312791a63407b0",
+        "4|3|20|1bb6bbd9e0497458,1bb6bbd9e0497458,1bb6bbd9e0497458,1bb6bbd9e0497458,60f5ab381cd0e7e8,1bb6bbd9e0497458",
         "4|4|0|13dd7cd02cda1d9b,13dd7cd02cda1d9b,13dd7cd02cda1d9b,13dd7cd02cda1d9b,13dd7cd02cda1d9b,13dd7cd02cda1d9b",
         "4|4|3|2f9c2df1873a862e,2f9c2df1873a862e,2f9c2df1873a862e,2f9c2df1873a862e,2f9c2df1873a862e,2f9c2df1873a862e",
         "4|4|8|f20df68e4990615b,f20df68e4990615b,f20df68e4990615b,f20df68e4990615b,f20df68e4990615b,f20df68e4990615b",
-        "4|4|20|3f349ed96998e158,3f349ed96998e158,ff4b636e6ec71ee8,3f349ed96998e158,9438bca63c594dd8,3f349ed96998e158",
+        "4|4|20|800b4420aff79c50,800b4420aff79c50,8ac1338b01bed250,800b4420aff79c50,851d0533f73f9450,800b4420aff79c50",
         "5|0|0|392c223bfdba80bd,392c223bfdba80bd,392c223bfdba80bd,392c223bfdba80bd,392c223bfdba80bd,392c223bfdba80bd",
         "5|0|3|889fef752cb0c417,889fef752cb0c417,889fef752cb0c417,889fef752cb0c417,889fef752cb0c417,889fef752cb0c417",
         "5|0|8|96b266a22c2903df,96b266a22c2903df,96b266a22c2903df,96b266a22c2903df,96b266a22c2903df,96b266a22c2903df",

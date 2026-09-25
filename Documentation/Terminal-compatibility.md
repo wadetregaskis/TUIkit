@@ -4506,6 +4506,18 @@ bytes as before. `Opacity as composition.md` §99; `CompositedFieldPerColumnTest
 and through the run loop `ReplayedRunFieldTests`' catalogue composited over a
 ramp.
 
+**2026-09-25, later: a stated 49 in the base is a field too.** The compositor
+read the base's field under an overlay from the netted SGR state, where a
+reset and `ESC[49m` are one "no background" — exact for bytes that go to the
+terminal as they are, not for a row the writer has yet to finish, which puts
+the page back after every reset. So on a page with an RGB an overlay cell over
+a stated 49 in the base, and every cell after the overlay while that 49 was in
+force, took the page where the base shows the terminal's own (on Apple
+Terminal's light profile, a dark page for a white field). The split now tracks
+the field as the row builder will read it, and says a stated 49 again after the
+overlay's reset; the tick's splice restores the cells after a frame the same
+way. `Opacity as composition.md` §99.1; `CompositedFieldPerColumnTests`.
+
 **2026-09-25, later still: faded, a run in a reversed row is blended as the row
 draws it.** The reversal left open above reached the fade too, and there it
 drew something different from the unfaded replay. Measured live before the

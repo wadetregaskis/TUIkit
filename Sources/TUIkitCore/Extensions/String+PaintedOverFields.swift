@@ -127,7 +127,11 @@ extension String {
             guard !own.namesBackground else { return }
             let under = statesDefault ? fields.underStatedDefault : fields.bare
             guard column < under.count else { return }
-            let wanted: Field = under[column].map { .colour($0) } ?? (statesDefault ? .terminal : afterReset)
+            // A field that is the terminal's own, stated (a compositor's base can
+            // state one), is the terminal's own however it is held.
+            let wanted: Field =
+                under[column].map { $0 == SGRState.Colour.statedTerminalField ? .terminal : .colour($0) }
+                ?? (statesDefault ? .terminal : afterReset)
             guard inForce != wanted else { return }
             switch wanted {
             case .colour(let colour): result += SGRState.backgroundEscape(colour)

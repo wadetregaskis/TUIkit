@@ -56,7 +56,7 @@ struct ANSIOverlaySplitTests {
                     fused.suffixWidth == expectedSuffix.strippedLength,
                     "\(label) suffixWidth dropping \(dropColumns)")
                 #expect(
-                    fused.styleBeforeSuffix == line.ansiStateBefore(visibleColumn: dropColumns),
+                    fused.styleBeforeSuffix == Self.styleBefore(line, column: dropColumns),
                     "\(label) styleBeforeSuffix at \(dropColumns)")
                 #expect(fused.totalWidth == width, "\(label) totalWidth")
                 expectFieldsUnderTheOverlay(fused, line, prefixColumns..<max(prefixColumns, dropColumns), label)
@@ -79,6 +79,49 @@ struct ANSIOverlaySplitTests {
         }
     }
 
+    /// The field `line` has in force at `column`, as a row still to be written
+    /// reads it: none after a reset, the terminal's own after an `ESC[49m`
+    /// (``SGRState/Colour/statedTerminalField``), a colour after one. Read escape by
+    /// escape through what each says about the background, beside the netted state
+    /// — which keeps a reset and a 49 alike.
+    ///
+    /// - Parameter includingBoundary: Whether escapes AT `column` count, as they do
+    ///   for the cell drawn there; not for the state where a suffix begins.
+    private static func field(_ line: String, at column: Int, includingBoundary: Bool = true) -> SGRState.Colour? {
+        var state = SGRState()
+        var field: SGRState.Colour?
+        var visible = 0
+        for segment in line.ansiSegments() {
+            switch segment {
+            case .ansi(let sequence, true):
+                guard includingBoundary ? visible <= column : visible < column else { return field }
+                switch state.applyReportingBackground(sequence) {
+                case .reset: field = nil
+                case .terminalDefault: field = .statedTerminalField
+                case .colour: field = state.backgroundColour
+                case nil: break
+                }
+            case .ansi: continue
+            case .visible(let character): visible += character.terminalWidth
+            }
+        }
+        return field
+    }
+
+    /// What the insert restores where the suffix begins: the netted state there
+    /// (``String/ansiStateBefore(visibleColumn:)``), with a stated 49 in force
+    /// said again — netted alone, it is dropped, and the suffix's cells took the
+    /// page where the line has the terminal's own.
+    private static func styleBefore(_ line: String, column: Int) -> String {
+        var state = SGRState()
+        let netted = line.ansiStateBefore(visibleColumn: column)
+        if !netted.isEmpty { state.apply(netted) }
+        if field(line, at: column, includingBoundary: false) == .statedTerminalField {
+            state.setBackground(.statedTerminalField)
+        }
+        return state.rendered
+    }
+
     /// The fields the split notes under the covered columns are what the line has
     /// in force at each of them, and it calls them uniform exactly when they are
     /// one field.
@@ -86,7 +129,7 @@ struct ANSIOverlaySplitTests {
         _ fused: ANSIOverlaySplit, _ line: String, _ covered: Range<Int>, _ label: String
     ) {
         let fields = fused.fieldsUnderOverlay.fields(over: covered)
-        let expected = covered.map { line.ansiSGRStateAt(visibleColumn: $0).backgroundColour }
+        let expected = covered.map { Self.field(line, at: $0) }
         #expect(fields == expected, "\(label) fields under \(covered)")
         let oneField = expected.dropFirst().allSatisfy { $0 == expected[0] }
         #expect(fused.fieldsUnderOverlay.isUniform == oneField, "\(label) uniform under \(covered)")

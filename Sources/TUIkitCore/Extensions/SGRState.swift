@@ -97,8 +97,16 @@ public struct SGRState: Sendable, Equatable {
             }
         }
 
+        /// `ESC[49m` held as a field of its own — the terminal's, stated — where a
+        /// caller tracks one beside the state it nets: `SGRState` itself keeps a
+        /// stated 49 and a reset alike, as no background, which is exact for bytes
+        /// that go to the terminal as they are and not for a row the writer has yet
+        /// to finish, which puts its page back after every reset.
+        package static let statedTerminalField = Self.named(49)
+
         /// `ESC[39m` held as an ink of its own — the terminal's, stated — where a
-        /// caller keeps what a painter stated beside what it nets. A reversal of the
+        /// caller keeps what a painter stated beside what it nets:
+        /// ``statedTerminalField``'s twin in the other slot. A reversal of the
         /// terminal's own pair states `39`, and a pass that rewrites colours reads it
         /// as the palette's ink, where an unsaid ink is the terminal's and left alone
         /// (`AnimatedCellRun.groundStyle`).

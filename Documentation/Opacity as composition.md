@@ -6548,6 +6548,42 @@ column, twelve cases of `AnimatedRunGroundTests` failed for the two. Through the
 `ReplayedRunFieldTests` gains the catalogue in a `ZStack` over a ramp: with the grounds over one
 field, twelve rows replayed on the ramp's first entry where the render drew the entry under them.
 
+### 99.1 A stated 49 in the base is the terminal's own (2026-09-25)
+
+The rule above took the base's field under each column from `SGRState`, which nets a reset and a
+stated `ESC[49m` into one "no background". That is exact for bytes that go to the terminal as
+they are, and not for a row the writer has yet to finish, which puts the page back after every
+reset (§94): there the two are two fields, and on a page with an RGB two colours. So a stated 49
+in the BASE — `.background(Color.default)`, or any fill of a palette whose page is the terminal's
+own — read as no field, and:
+- an overlay cell over it was drawn on the page: `ZStack(alignment: .leading) { Text("abcdef")
+  .background(Color.default); Text("xy") }` on an RGB page drew the cells after the overlay,
+  `cdef`, on `48;2;5;10;5` where the base alone has them on the terminal's own — the insert
+  restores what the suffix begins in after the overlay's closing reset, and restored the netted
+  state, which had dropped the 49. The same faded, the opacity splice being the same insert;
+- per column, `abc` over a stated 49 and `def` over blue drew `abc` on the page;
+- a run in the overlay over it recorded no field, and replayed on the page.
+
+The split now tracks the field as a row still to be written reads it, from what each sequence says
+about the background (`SGRState.applyReportingBackground`, the parse `apply` already makes): none
+after a reset, the terminal's own after a 49 (`SGRState.Colour.statedTerminalField`), a colour
+after one. A stated 49 under an overlay cell is painted under it as 49 — the compositor's reading
+of the overlay's own 49 is unchanged: it is filled with the field under it, which here is the
+terminal's own — and a stated 49 in force where the suffix begins is said again after the
+overlay's reset. On a page that is the terminal's own the two readings were one field, and
+nothing a reader can see changes there.
+
+The tick's splice restores the suffix the same way, so a frame landing before a stated 49 that
+runs on past it keeps the cells after it on the terminal's own: `AnimatedRunPatchGoldenTests`
+re-captured the five rows that land on line 4's last cell, after its `ESC[49m`, where the pad the
+run's width reaches past the line took the page before.
+
+`CompositedFieldPerColumnTests` pins the overlay over a stated 49 on both pages, faded and not (on
+the RGB page `cdef` on `48;2;5;10;5`, both, before), the label over a 49 and a colour (`abc` on the
+page before), and a run over a 49, whose ground on the page must be the terminal's own (the page's
+RGB before). `ANSIOverlaySplitTests` reads the expected field escape by escape beside the netted
+state; with the split's netted fields, 506 of its seeded sweep's checks failed.
+
 ## 100. A faded run in a reversed row is blended as the row draws it (2026-09-25)
 
 A row that reverses — a menu's focused row, a `List`'s cursor row, where the highlight has no

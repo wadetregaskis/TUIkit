@@ -241,6 +241,62 @@ struct CompositedFieldPerColumnTests {
         expect(cells, glyphs: "abcdef", fields: Self.threeThenThree(Self.redField, ""))
     }
 
+    // MARK: - A stated terminal field in the base
+
+    /// A stated `ESC[49m` in the BASE is a field too, the terminal's own: in a row
+    /// still to be written a reset and a 49 are two fields, and the row builder
+    /// puts the page under the first. An overlay cell over it keeps it, as it keeps
+    /// a colour, and so do the cells after the overlay, which the insert restores
+    /// the base's styling for after the overlay's closing reset — faded or not, the
+    /// opacity splice being the same insert. Netted with a reset into "no field",
+    /// both were drawn on the page. On the terminal's own page the two are one
+    /// field, and the case is a guard.
+    @Test(
+        "An overlay over a stated terminal field keeps it, and so do the cells after it",
+        arguments: [false, true], [false, true])
+    func anOverlayOverAStatedTerminalField(terminalPage: Bool, faded: Bool) throws {
+        let palette: (any Palette)? = terminalPage ? terminalPagePalette : nil
+        let base = Text("abcdef").background(Color.default)
+        let alone = try #require(writtenRows(of: base, palette: palette, width: 8, height: 2).first)
+        let composed = ZStack(alignment: .leading) { base; Text("xy").opacity(faded ? 0.6 : 1) }
+        let row = try #require(writtenRows(of: composed, palette: palette, width: 8, height: 2).first)
+        // Not vacuous: alone, the base is on the terminal's own field.
+        #expect(alone.prefix(6).allSatisfy { $0.background.isEmpty })
+        #expect(String(row.prefix(6).map(\.glyph)) == "xycdef")
+        #expect(
+            row.prefix(6).map(\.background) == alone.prefix(6).map(\.background),
+            "drawn on \(row.prefix(6).map(\.background))")
+    }
+
+    /// And per column: a stated 49 under the first half of a label, a colour under
+    /// the rest.
+    @Test("A label over a stated terminal field and a colour is drawn on each")
+    func aLabelOverAStatedTerminalFieldAndAColour() throws {
+        let base = HStack(spacing: 0) {
+            Text("   ").background(Color.default)
+            Text("   ").background(Self.blue)
+        }
+        let cells = try drawn(base.overlay(alignment: .leading) { Text("abcdef") })
+        expect(cells, glyphs: "abcdef", fields: Self.threeThenThree("", Self.blueField))
+    }
+
+    /// A run inside an overlay over a stated 49 records the terminal's own under its
+    /// cell — so a replay draws it there, as the render does, and not on the page.
+    @Test("A run over a stated terminal field records the terminal's own")
+    func aRunOverAStatedTerminalField() throws {
+        let (row, runs) = try drawnWithRuns(
+            ZStack(alignment: .leading) {
+                Text("      ").background(Color.default)
+                HStack(spacing: 0) { Text("ab"); Spinner() }
+            })
+        #expect(row[2].background.isEmpty, "the render draws the spinner on \(row[2].background.debugDescription)")
+        let run = try #require(runs.first, "the spinner left no run")
+        #expect(run.offsetX == 2)
+        #expect(
+            run.groundFields(onPage: Self.page) == [nil],
+            "the spinner's ground, on the page, is \(run.groundFields(onPage: Self.page))")
+    }
+
     // MARK: - Faded, and floating
 
     /// A fade blends the cells it covers against the base under each; the cells it

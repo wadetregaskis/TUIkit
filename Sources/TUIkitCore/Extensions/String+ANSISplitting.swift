@@ -836,15 +836,22 @@ extension String {
         // painted on, so an overlay cell that states no background of its own
         // can keep this one.
         //
-        // A COPY of `style`, taken at the overlay's column, rather than a
-        // second accumulator netted alongside it. Every sequence before the
-        // overlay is also before the suffix, so `style` has already applied
-        // every one of them, in order — and `SGRState.apply` splits the
-        // parameters and allocates a `String` per code, which is far more than
-        // a struct copy. Netting them twice made compositing a `Layout`'s
-        // children quadratic in escapes all over again, which is the very
-        // thing this one-scan split exists to have fixed.
-        var under: SGRState?
+        // The FIELD, as a row still to be written reads one — none after a reset,
+        // where the row builder puts the page back; a stated `ESC[49m`, the
+        // terminal's own (`.named(49)`); or a colour — and not `style`'s
+        // background, which nets a reset and a 49 into one `nil`. That is exact
+        // for bytes that go to the terminal as they are, and in a row the writer
+        // has yet to finish the two are two fields (`Opacity as composition`
+        // §94): read as none, a stated 49 in the base put an overlay's bare cells,
+        // and the cells after the overlay, on the page where the base shows the
+        // terminal's own. Tracked beside `style` from what each sequence says
+        // about the background (`applyReportingBackground`), which is the same
+        // parse `apply` makes, so nothing is netted twice — netting twice made
+        // compositing a `Layout`'s children quadratic in escapes all over again,
+        // which is the very thing this one-scan split exists to have fixed.
+        var field: SGRState.Colour?
+        // The field where the overlay LANDS: `field` at its column.
+        var fieldUnder: SGRState.Colour?
         // And where that field CHANGES under the overlay: an escape between its
         // first and its last column moves the field under every cell after it.
         // `style` has just applied it, so noting one costs a comparison, and only
@@ -908,11 +915,16 @@ extension String {
             if total >= suffixDropColumns {
                 suffix += text
             } else if isSGR {
-                style.apply(text)
+                switch style.applyReportingBackground(text) {
+                case .reset: field = nil
+                case .terminalDefault: field = SGRState.Colour.statedTerminalField
+                case .colour: field = style.backgroundColour
+                case nil: break
+                }
                 if total <= prefixColumns {
-                    under = style
+                    fieldUnder = field
                 } else if notingFields {
-                    changes.note(style.backgroundColour, at: total, first: under?.backgroundColour)
+                    changes.note(field, at: total, first: fieldUnder)
                 }
             } else {
                 suffixLink.note(text)
@@ -928,14 +940,18 @@ extension String {
         // and carries no width, so it goes in front of the content rather than
         // into a field of its own: `suffixWidth` is unchanged by construction.
         let resumedSuffix = suffixLink.reopening + suffix
+        // What the suffix begins in goes back after the overlay's reset, a stated
+        // 49 included: netted away, the cells after the overlay took the page.
+        var restored = style
+        if field == SGRState.Colour.statedTerminalField { restored.setBackground(field) }
 
         return ANSIOverlaySplit(
             prefix: prefix, prefixWidth: prefixWidth, suffix: resumedSuffix,
             suffixWidth: suffixWidth,
-            styleBeforeSuffix: style.rendered,
-            backgroundUnderOverlay: under?.renderedBackground ?? "",
+            styleBeforeSuffix: restored.rendered,
+            backgroundUnderOverlay: fieldUnder.map { SGRState.backgroundEscape($0) } ?? "",
             fieldsUnderOverlay: FieldsUnderOverlay(
-                column: prefixColumns, first: under?.backgroundColour, changes: changes.changes),
+                column: prefixColumns, first: fieldUnder, changes: changes.changes),
             totalWidth: total,
             suffixDropColumns: suffixDropColumns)
     }
@@ -957,11 +973,13 @@ struct ANSIOverlaySplit {
     let suffix: String
     /// How wide ``suffix`` is.
     let suffixWidth: Int
-    /// The NETTED styling where the suffix begins, ready to re-emit.
+    /// The NETTED styling where the suffix begins, ready to re-emit — a stated
+    /// `ESC[49m` in force there included, which netting alone would drop.
     let styleBeforeSuffix: String
-    /// The background in force where the overlay lands (`""` for the
-    /// terminal's own) — what an overlay cell that names none is drawn over,
-    /// where ``fieldsUnderOverlay`` is uniform.
+    /// The field in force where the overlay lands — `""` for none, which the row
+    /// builder puts the page under, and `ESC[49m` for the terminal's own — what
+    /// an overlay cell that names none is drawn over, where
+    /// ``fieldsUnderOverlay`` is uniform.
     let backgroundUnderOverlay: String
     /// The field under each column the overlay covers: the one it lands on, and
     /// every column where it changes — or the first alone, uniform, for a split

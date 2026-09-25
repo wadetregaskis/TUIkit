@@ -211,9 +211,9 @@ extension AnimatedCellRun {
 
     /// Both lists of fields this run's cells are drawn over in a row the writer has
     /// yet to build — a buffer's own line, before any page is put under it: a field a
-    /// painter stated as `ESC[49m` held as that statement (`.named(49)`), which the
-    /// splice restates, and a cell a reset left on no field as `nil`, which the page
-    /// will fill.
+    /// painter stated as `ESC[49m` held as the terminal's own, stated
+    /// (``SGRState/Colour/statedTerminalField``), which the splice restates, and a cell
+    /// a reset left on no field as `nil`, which the page will fill.
     ///
     /// In such a row a stated 49 and a reset are two fields — the terminal's own, and
     /// the page the writer will put back — and on a page with an RGB two colours
@@ -242,7 +242,7 @@ extension AnimatedCellRun {
     }
 
     /// `record` read cell by cell as a row still to be built reads it: the field
-    /// under each of `width` cells, a stated 49 as `.named(49)`, and `nil` after a
+    /// under each of `width` cells, a stated 49 as the terminal's own, stated, and `nil` after a
     /// reset. A short record's last field stands under the cells it does not reach.
     /// Whether a painter restated more than a field under a cell it reached is noted
     /// in `restatesMore`.
@@ -259,7 +259,7 @@ extension AnimatedCellRun {
             case .ansi(let sequence, isSGR: true):
                 switch state.applyReportingBackground(sequence) {
                 case .reset: field = nil
-                case .terminalDefault: field = .named(49)
+                case .terminalDefault: field = SGRState.Colour.statedTerminalField
                 case .colour: field = state.backgroundColour
                 case nil: break
                 }
