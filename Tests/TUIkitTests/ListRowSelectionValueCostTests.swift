@@ -8,10 +8,15 @@
 //  list's whole content — resolves them for the rows the frame draws and the
 //  handler asks about, and that is the reference every shape here is held to.
 //
+//  The mixed shapes are the Stress scenarios `app-shapes/sidebar` (a
+//  hand-written row above looped rows, every looped row tagged with the app's
+//  enum) and `app-shapes/sidebar-untagged` (the same list answering by the
+//  elements' ids), shrunk to a test and counted instead of timed.
+//
 //  Every count is a DIFFERENCE between two lists that share everything but the
-//  one thing being priced — tagged against untagged — so the rows' own
-//  renders, measures and identity keys cancel, and what is left is the
-//  selection-value work alone.
+//  one thing being priced — tagged against untagged, hugging against filling —
+//  so the rows' own renders, measures and identity keys cancel, and what is
+//  left is the selection-value work alone.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -147,5 +152,45 @@ struct ListRowSelectionValueCostTests {
         #expect(
             tagBuilds <= 2 * tagged.drawn + 2,
             "\(tagBuilds) tag builds for \(tagged.drawn) drawn rows of \(Self.rowCount)")
+    }
+
+    /// The mixed container's own hug: the list walks its flattened children
+    /// eagerly, once for the width and once to draw, and the width's walk
+    /// resolved every looped row's selection value — a build per tagged row —
+    /// that nothing in a measure reads.
+    @Test("A mixed list's hug measure resolves no looped row's tag")
+    func mixedHugMeasureReadsNoTags() {
+        func steadyBuilds(tagged: Bool, hugging: Bool) -> Int {
+            let counter = Counter()
+            let projects = Self.projects(counter)
+            let frames = Frames(counter: counter)
+            func list() -> AnyView {
+                let list: AnyView =
+                    tagged
+                    ? AnyView(
+                        List(selection: .constant(Pick?.some(.all))) {
+                            Text("All projects").tag(Pick.all)
+                            ForEach(projects) { Self.taggedRow($0) }
+                        })
+                    : AnyView(
+                        List(selection: .constant(Int?.some(-1))) {
+                            Text("All projects").tag(-1)
+                            ForEach(projects) { Self.untaggedRow($0) }
+                        })
+                // In a stack, which MEASURES its child before drawing it —
+                // what a `NavigationSplitView` does to its sidebar. A filling
+                // list answers that measure without building a row.
+                return hugging
+                    ? AnyView(HStack(spacing: 0) { list.fixedSize(horizontal: true) })
+                    : AnyView(HStack(spacing: 0) { list })
+            }
+            return frames.steadyFrame(list()).builds
+        }
+        // What hugging adds to a tagged list, less what it adds to the same
+        // list untagged: the tags the hug read, and nothing else.
+        let hugTagBuilds =
+            (steadyBuilds(tagged: true, hugging: true) - steadyBuilds(tagged: true, hugging: false))
+            - (steadyBuilds(tagged: false, hugging: true) - steadyBuilds(tagged: false, hugging: false))
+        #expect(hugTagBuilds == 0, "the hug built \(hugTagBuilds) rows to read tags it never uses")
     }
 }

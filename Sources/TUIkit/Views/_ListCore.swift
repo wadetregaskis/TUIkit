@@ -23,16 +23,21 @@ private let listRowGutter = 2
 
 /// A windowed view over a `List`'s rows.
 ///
-/// Every row's ``ListRowType`` (and thus its id) is known eagerly and cheaply —
-/// that's all the scroll/selection handler needs for off-screen rows. Each row's
-/// content *buffer*, by contrast, is materialised lazily and memoised, so only
-/// the rows the overflow check and the visible window actually walk get built.
-/// For a large flat `List` that's O(viewport) row boxes per frame instead of
-/// O(total) — the dominant idle cost on long lists was allocating a content box
-/// for every row every frame even though ~viewport are shown.
+/// Every row's ``ListRowType`` (and thus its id) can be asked for without
+/// building the row's content — that's all the scroll/selection handler needs
+/// for off-screen rows. Each row's content *buffer*, by contrast, is
+/// materialised lazily and memoised, so only the rows the overflow check and
+/// the visible window actually walk get built. For a large flat `List` that's
+/// O(viewport) row boxes per frame instead of O(total) — the dominant idle cost
+/// on long lists was allocating a content box for every row every frame even
+/// though ~viewport are shown.
 ///
 /// The eager paths (Sections, heterogeneous content) wrap their already-built
-/// rows via ``eager(_:)``; ``row(at:)`` simply hands those back.
+/// rows via ``eager(_:editOwners:)``; ``row(at:)`` simply hands those back. A
+/// looped row among them keeps its type ASKED FOR rather than resolved (see
+/// ``EagerListRow``): what it is depends on its loop's rule, which can cost a
+/// build of the row, and a frame that never asks — the hug measure, which
+/// wants widths — pays nothing for it.
 @MainActor
 private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// The number of rows. Known cheaply — O(1) for the windowed path
@@ -45,11 +50,37 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// handler reads this to skip building a per-row id map and selectable-index
     /// set for the all-content case, which is what keeps a huge flat list O(1) to
     /// set up. See ``_ListCore/resolvePopulatedHandler``.
-    let allContent: Bool
+    ///
+    /// Known at construction except where an eager source holds rows whose
+    /// types are still to be asked for, which are asked — every one of them —
+    /// the first time this is read.
+    var allContent: Bool {
+        if let knownAllContent { return knownAllContent }
+        let resolved = (0..<count).allSatisfy { index in
+            if case .content = typeAt(index) { return true }
+            return false
+        }
+        knownAllContent = resolved
+        return resolved
+    }
 
-    /// Resolves a row's type/id on demand — builds no content. O(1) per call, so
-    /// the windowed path resolves ids only for the rows the handler / window
+    /// ``allContent`` once known — from construction, or from the first read.
+    private var knownAllContent: Bool?
+
+    /// Resolves a row's type/id on demand — builds no content box (a
+    /// `.tag(_:)`-outermost row's VIEW is built to read the tag), so the
+    /// windowed path resolves ids only for the rows the handler / window
     /// actually touch (the visible window + the focused row), not all N.
+    ///
+    /// What a call costs: on the windowed path a key-path read or a cast, or
+    /// that build. On an eager path an array read where the row's type is
+    /// known; where it is still to be asked (a flattened container's row, see
+    /// ``EagerListRow``), the first question places the container's loops, a
+    /// looped row then costs what a windowed one does, and an untagged
+    /// hand-written row's ordinal is checked against the answer of every
+    /// looped row beside it, a build per tagged one, the first time any such
+    /// ordinal is asked (`FlattenedRowIDs.ordinalID`). The container keeps each
+    /// answer, so asking a row twice costs nothing more.
     private let typeAt: (Int) -> ListRowType<SelectionValue>
 
     /// Builds the deferred content box for a row index.
@@ -101,16 +132,19 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// hand. Its extent is settled after that, which is why it is a reference.
     let gradientRamp = ListRowRamp()
 
+    /// - Parameter allContent: ``allContent``, or `nil` when it can only be
+    ///   found by asking every row its type — which is then done the first
+    ///   time it is read, and not before.
     init(
         count: Int,
-        allContent: Bool,
+        allContent: Bool?,
         signature: AnyEquatableBox? = nil,
         editOwners: [ListRowEditOwner] = [],
         typeAt: @escaping (Int) -> ListRowType<SelectionValue>,
         make: @escaping (Int) -> LazyListRowContent
     ) {
         self.count = count
-        self.allContent = allContent
+        self.knownAllContent = allContent
         self.signature = signature
         self.editOwners = editOwners
         self.typeAt = typeAt
@@ -125,17 +159,28 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     }
 
     /// Wraps an already-built, materialised row array (the eager Section /
-    /// fallback paths). The set is small, so indexing it for `typeAt` and
-    /// scanning it for `allContent` are both cheap.
+    /// fallback paths). Indexing it for `typeAt` is an array read for a row
+    /// whose type is known; for one still to be asked it is that row's answer
+    /// (`EagerListRow.type`), which can build the row — see ``type(at:)``.
+    /// Scanning it for `allContent` is cheap where every type is known; where
+    /// some row's is still to be asked for, the scan waits for someone to want
+    /// the answer.
     static func eager(
-        _ rows: [SelectableListRow<SelectionValue>], editOwners: [ListRowEditOwner] = []
+        _ rows: [EagerListRow<SelectionValue>], editOwners: [ListRowEditOwner] = []
     ) -> RowSource {
         RowSource(
             count: rows.count,
-            allContent: rows.allSatisfy(\.isSelectable),
+            allContent: rows.allSatisfy(\.isKnown) ? rows.allSatisfy(\.isSelectable) : nil,
             editOwners: editOwners,
             typeAt: { rows[$0].type },
             make: { rows[$0].content })
+    }
+
+    /// ``eager(_:editOwners:)`` for rows whose types are all known.
+    static func eager(
+        _ rows: [SelectableListRow<SelectionValue>], editOwners: [ListRowEditOwner] = []
+    ) -> RowSource {
+        eager(rows.map(EagerListRow.init), editOwners: editOwners)
     }
 
     // `count` is the stored row count (an `Int`), not a Collection, so the
@@ -143,7 +188,19 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     // swiftlint:disable:next empty_count
     var isEmpty: Bool { count == 0 }
 
-    /// The row's type/id at `index` — cheap, builds no content.
+    /// The row's type/id at `index`. Materialises no content box (that is
+    /// ``content(at:)`` / ``row(at:)``), but is not always cheap. A known type
+    /// is an array read. Windowed, it is the loop's rule asked afresh on
+    /// every call: a key-path read or a cast, except that a
+    /// `.tag(_:)`-outermost row is BUILT to read its tag. A row whose type
+    /// is still to be asked (a flattened child of a list whose content is
+    /// several views — a hand-written row, a looped row beside one, or a
+    /// row of two `ForEach`es side by side) is asked now. For a
+    /// `.tag(_:)`-outermost looped row that BUILDS the row to read its tag;
+    /// for an untagged hand-written row beside a loop, under a selection its
+    /// ordinal casts into, it asks every looped row its answer, to learn
+    /// whether one already holds this row's ordinal — a build per tagged
+    /// one. Each asked answer is kept once found.
     func type(at index: Int) -> ListRowType<SelectionValue> { typeAt(index) }
 
     /// Where the row at `index` stands among its section's content rows — the
@@ -213,6 +270,70 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
         content.gradientRamp = gradientRamp
         content.rowIndex = index
         return content
+    }
+}
+
+// MARK: - An eager row whose type may be asked later
+
+/// A row of an eager source: its content, already rendered, and its type —
+/// known, or a flattened child's selection value still to be asked of the
+/// ``FlattenedRowIDs`` of the container it came from.
+///
+/// A looped row's selection value is its loop's rule, and for a
+/// `.tag(_:)`-outermost row that rule BUILDS the row to read the tag. The
+/// child walk used to ask it of every child as it rendered them, so a frame
+/// that wanted only the rows' widths — the measure a `NavigationSplitView`
+/// takes of its sidebar every frame — built every tagged row once more for
+/// nothing. Asked for here, the answer is found when the list asks for this
+/// row's type, and ``FlattenedRowIDs`` keeps it once found.
+@MainActor
+private struct EagerListRow<SelectionValue: Hashable & Sendable> {
+    private enum Kind {
+        case known(ListRowType<SelectionValue>)
+        /// The `ordinal`-th row of its container, which is `child` of `rowIDs`.
+        case asked(FlattenedRowIDs<SelectionValue>, child: Int, ordinal: Int)
+    }
+
+    private let kind: Kind
+    let content: LazyListRowContent
+
+    /// A row whose type is known.
+    init(_ row: SelectableListRow<SelectionValue>) {
+        kind = .known(row.type)
+        content = row.content
+    }
+
+    /// A flattened child, whose type is its selection value from `rowIDs`
+    /// (``FlattenedRowIDs/id(ofChildAt:ordinal:)``) — content when it has
+    /// one, unselectable when it has none — once someone asks.
+    init(
+        child: Int, ordinal: Int, of rowIDs: FlattenedRowIDs<SelectionValue>,
+        content: LazyListRowContent
+    ) {
+        kind = .asked(rowIDs, child: child, ordinal: ordinal)
+        self.content = content
+    }
+
+    /// Whether ``type`` is answered without asking anything.
+    var isKnown: Bool {
+        if case .known = kind { return true }
+        return false
+    }
+
+    /// The row's type, asked for if it has to be.
+    var type: ListRowType<SelectionValue> {
+        switch kind {
+        case .known(let type):
+            return type
+        case .asked(let rowIDs, let child, let ordinal):
+            return rowIDs.id(ofChildAt: child, ordinal: ordinal).map { .content(id: $0) } ?? .unselectable
+        }
+    }
+
+    /// Whether the row is selectable content, asked for if it has to be.
+    var isSelectable: Bool {
+        if case .content = type { return true }
+        return false
     }
 }
 
@@ -2983,7 +3104,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // failing, which meant it depended on the SELECTION type: a list of
         // `EmptyView` was empty with a `String?` selection and a blank row
         // with an `Int?` one.
-        guard !buffer.lines.isEmpty else { return .eager([]) }
+        guard !buffer.lines.isEmpty else { return .eager([SelectableListRow<SelectionValue>]()) }
         // A static row's own `.tag(_:)` names it; failing that its index, which
         // cannot be expressed when the selection is a String, a UUID or a Set
         // of either. It is still a row either way: it draws, it just cannot be
@@ -3013,7 +3134,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         of content: V,
         context: RenderContext
     ) -> ExtractedRows {
-        var result: [SelectableListRow<SelectionValue>] = []
+        var result: [EagerListRow<SelectionValue>] = []
         var editOwners: [ListRowEditOwner] = []
         // These rows render HERE rather than through a deferred box, so this is
         // where a ramp spanning the list has to place them. There are only ever
@@ -3071,18 +3192,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 continue
             }
 
-            // A looped row — a `ForEach`'s, spliced in among other rows — by
-            // its own loop's rule, the row's tag or its element's id (see
-            // `FlattenedRowIDs`). Any other row as in `extractRows`: its own
-            // `.tag(_:)` first, then its index — and an index-identified row
-            // is unselectable rather than absent when the selection type
-            // cannot hold an index, or when a looped row here already answers
-            // to it. The count advances over every row, tagged, looped or
-            // neither, so the ordinals stay 0, 1, 2 … for the Int case they
-            // exist for.
-            let type: ListRowType<SelectionValue> =
-                rowIDs.id(ofChildAt: childIndices[childIndex], ordinal: result.count)
-                .map { .content(id: $0) } ?? .unselectable
             // Through the row-level extractor, not `extractBadgeValue` directly:
             // a `ForEach` row arrives wrapped in `_MemoizedRow`, which is
             // `Renderable` and so opaque to the plain cast — the same opacity
@@ -3091,7 +3200,21 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let buffer = child.render(
                 width: context.availableWidth, height: context.availableHeight,
                 context: childContext)
-            result.append(SelectableListRow(type: type, content: LazyListRowContent(buffer: buffer, badge: badge)))
+            // A looped row — a `ForEach`'s, spliced in among other rows — by
+            // its own loop's rule, the row's tag or its element's id (see
+            // `FlattenedRowIDs`). Any other row as in `extractRows`: its own
+            // `.tag(_:)` first, then its index — and an index-identified row
+            // is unselectable rather than absent when the selection type
+            // cannot hold an index, or when a looped row here already answers
+            // to it. The count advances over every row, tagged, looped or
+            // neither, so the ordinals stay 0, 1, 2 … for the Int case they
+            // exist for. ASKED when the list wants the row's type, not here:
+            // a looped row's answer can cost a build of the row, and the hug
+            // measure walks every row for its width alone.
+            result.append(
+                EagerListRow(
+                    child: childIndices[childIndex], ordinal: result.count, of: rowIDs,
+                    content: LazyListRowContent(buffer: buffer, badge: badge)))
         }
 
         return ExtractedRows(rows: result, editOwners: editOwners)
@@ -3105,7 +3228,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// spans afterwards would mean walking the content twice and agreeing about
     /// it twice.
     private struct ExtractedRows {
-        var rows: [SelectableListRow<SelectionValue>] = []
+        var rows: [EagerListRow<SelectionValue>] = []
         var editOwners: [ListRowEditOwner] = []
     }
 
@@ -3152,13 +3275,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         context: RenderContext,
         firstRowIndex: Int
     ) -> ExtractedRows {
-        var rows: [SelectableListRow<SelectionValue>] = []
+        var rows: [EagerListRow<SelectionValue>] = []
         var editOwners: [ListRowEditOwner] = []
         let info = section.extractSectionInfo(context: context)
 
         // Header (non-selectable)
         if let headerBuffer = info.headerBuffer {
-            rows.append(SelectableListRow(type: .header, buffer: headerBuffer))
+            rows.append(EagerListRow(SelectableListRow(type: .header, buffer: headerBuffer)))
         }
 
         // Content rows (selectable), with the actions of the `ForEach` that
@@ -3178,9 +3301,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         for row in items.rows {
             // Thread the lazy box through — don't force `.buffer` / `.badge`.
             rows.append(
-                SelectableListRow(
-                    type: row.id.map { .content(id: $0) } ?? .unselectable,
-                    content: row.content))
+                EagerListRow(
+                    SelectableListRow(
+                        type: row.id.map { .content(id: $0) } ?? .unselectable,
+                        content: row.content)))
         }
         // The section's own `ForEach` owns exactly the rows it just
         // produced, and its `.onDelete` / `.onMove` offsets are indices
@@ -3196,7 +3320,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
         // Footer (non-selectable)
         if let footerBuffer = info.footerBuffer {
-            rows.append(SelectableListRow(type: .footer, buffer: footerBuffer))
+            rows.append(EagerListRow(SelectableListRow(type: .footer, buffer: footerBuffer)))
         }
 
         return ExtractedRows(rows: rows, editOwners: editOwners)
