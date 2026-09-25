@@ -126,6 +126,10 @@ flattened children eagerly and recover each looped row's selection value from
 the `ForEach` that made it. The tagged variant names every row with the app's
 own enum, read off the BUILT row; the untagged one answers by each project's
 `id`, a key-path read — so the difference between them is the price of a tag.
+It is paid for the rows the frame draws and the handler asks about, as a
+windowed loop pays it: the values are asked for, not resolved up front, and
+the split view's hug measure asks for none (`ListRowSelectionValueCostTests`
+counts both).
 
 `table-api` is the first: 43 variants over seven axes — how a column gets its
 value (key path, closure, sort-by-one-display-another, non-`Equatable` rows,

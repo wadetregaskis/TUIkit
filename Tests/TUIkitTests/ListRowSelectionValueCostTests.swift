@@ -64,6 +64,15 @@ struct ListRowSelectionValueCostTests {
             content: Text("project \(project.number)"))
     }
 
+    /// The looped row tagged with its own number — `Row($0).tag($0.id)` under
+    /// an `Int` selection.
+    static func numberTaggedRow(_ project: Project) -> _TaggedView<Text> {
+        project.counter.builds += 1
+        return _TaggedView(
+            tagValue: AnyHashable(project.number), includeOptional: true,
+            content: Text("project \(project.number)"))
+    }
+
     static func untaggedRow(_ project: Project) -> Text {
         project.counter.builds += 1
         return Text("project \(project.number)")
@@ -111,8 +120,9 @@ struct ListRowSelectionValueCostTests {
 
     private static let rowCount = 300
 
-    private static func projects(_ counter: Counter) -> [Project] {
-        (0..<rowCount).map { Project(number: $0, counter: counter) }
+    /// `rowCount` projects, numbered from `first`.
+    private static func projects(_ counter: Counter, numberedFrom first: Int = 0) -> [Project] {
+        (first..<first + rowCount).map { Project(number: $0, counter: counter) }
     }
 
     // MARK: - The hug walk
@@ -192,5 +202,210 @@ struct ListRowSelectionValueCostTests {
             (steadyBuilds(tagged: true, hugging: true) - steadyBuilds(tagged: true, hugging: false))
             - (steadyBuilds(tagged: false, hugging: true) - steadyBuilds(tagged: false, hugging: false))
         #expect(hugTagBuilds == 0, "the hug built \(hugTagBuilds) rows to read tags it never uses")
+    }
+
+    // MARK: - The frame
+
+    /// The tagged sidebar, filling its space: the handler asks about the rows
+    /// it draws and the row it focuses, and every other looped row's tag was
+    /// built anyway — 300 builds a frame where the same loop alone builds a
+    /// screenful.
+    @Test("A mixed list builds the tags of the rows it draws, not of every row")
+    func mixedListReadsTheTagsItDraws() {
+        func steady(tagged: Bool) -> (builds: Int, drawn: Int) {
+            let counter = Counter()
+            let projects = Self.projects(counter)
+            let frames = Frames(counter: counter)
+            let cost =
+                tagged
+                ? frames.steadyFrame(
+                    List(selection: .constant(Pick?.some(.all))) {
+                        Text("All projects").tag(Pick.all)
+                        ForEach(projects) { Self.taggedRow($0) }
+                    })
+                : frames.steadyFrame(
+                    List(selection: .constant(Int?.some(-1))) {
+                        Text("All projects").tag(-1)
+                        ForEach(projects) { Self.untaggedRow($0) }
+                    })
+            return (cost.builds, cost.drawn)
+        }
+        let tagged = steady(tagged: true)
+        let untagged = steady(tagged: false)
+        let tagBuilds = tagged.builds - untagged.builds
+        #expect(tagged.drawn > 0 && tagged.drawn == untagged.drawn, "both lists drew their rows")
+        #expect(
+            tagBuilds <= tagged.drawn + 2,
+            "\(tagBuilds) tag builds for \(tagged.drawn) drawn rows of \(Self.rowCount)")
+    }
+
+    /// The untagged sidebar: each looped row answers by its project's `id`, a
+    /// key-path read, and each was read on every frame whether or not the row
+    /// was drawn or asked about.
+    @Test("A mixed list reads the ids of the rows it draws, not of every row")
+    func mixedListReadsTheIDsItDraws() {
+        func steady(mixed: Bool) -> (idReads: Int, drawn: Int) {
+            let counter = Counter()
+            let projects = Self.projects(counter)
+            let frames = Frames(counter: counter)
+            let cost =
+                mixed
+                ? frames.steadyFrame(
+                    List(selection: .constant(Int?.some(-1))) {
+                        Text("All projects").tag(-1)
+                        ForEach(projects) { Self.untaggedRow($0) }
+                    })
+                : frames.steadyFrame(
+                    List(selection: .constant(Int?.some(-1))) {
+                        ForEach(projects) { Self.untaggedRow($0) }
+                    })
+            return (cost.idReads, cost.drawn)
+        }
+        let mixed = steady(mixed: true)
+        let windowed = steady(mixed: false)
+        // The mixed list keys every row's identity by its id — the splice
+        // flattens all of them, a read each — and the windowed one keys only
+        // the rows it builds. What the mixed list reads beyond its identity
+        // keys is what it paid for selection values.
+        let selectionReads = mixed.idReads - Self.rowCount
+        #expect(mixed.drawn > 0, "the mixed list drew its rows")
+        #expect(
+            selectionReads <= windowed.idReads + 4,
+            "\(selectionReads) id reads for selection values where the windowed loop reads \(windowed.idReads) in all")
+    }
+
+    /// An untagged hand-written row beside a tagged loop, under a selection its
+    /// ordinal casts into — `List(selection: $number) { Text("None");
+    /// ForEach(items) { Row($0).tag($0.id) } }` over projects numbered from
+    /// `first` — at a steady frame: the tag builds (tagged less untagged) and
+    /// the looped rows drawn. "None" answers to its ordinal, 0, unless a looped
+    /// row here already does (`FlattenedRowIDs.ordinalID`), and a looped row's
+    /// answer is its tag, read off the BUILT row.
+    private static func ordinalBesideATaggedLoop(numberedFrom first: Int) -> (tagBuilds: Int, drawn: Int) {
+        func steady(tagged: Bool) -> (builds: Int, drawn: Int) {
+            let counter = Counter()
+            let projects = Self.projects(counter, numberedFrom: first)
+            let frames = Frames(counter: counter)
+            let cost =
+                tagged
+                ? frames.steadyFrame(
+                    List(selection: .constant(Int?.none)) {
+                        Text("None")
+                        ForEach(projects) { Self.numberTaggedRow($0) }
+                    })
+                : frames.steadyFrame(
+                    List(selection: .constant(Int?.none)) {
+                        Text("None")
+                        ForEach(projects) { Self.untaggedRow($0) }
+                    })
+            return (cost.builds, cost.drawn)
+        }
+        let tagged = steady(tagged: true)
+        let untagged = steady(tagged: false)
+        #expect(tagged.drawn > 0 && tagged.drawn == untagged.drawn, "both lists drew their rows")
+        return (tagged.builds - untagged.builds, tagged.drawn)
+    }
+
+    /// A loop counted from 0 — `ForEach(0..<n)`, or tags numbered from 0, the
+    /// collision the ordinal's yield exists for — answers 0 at its first row.
+    /// The looped rows are asked in order and the question stops at the first
+    /// that answers the ordinal, so it builds that one row and no other; asked
+    /// of every looped row before any was checked, it built all 300.
+    @Test("An untagged row beside an Int-tagged loop that answers its ordinal builds the rows it draws")
+    func ordinalBesideACollidingLoopBuildsTheRowsItDraws() {
+        let cost = Self.ordinalBesideATaggedLoop(numberedFrom: 0)
+        #expect(
+            cost.tagBuilds <= cost.drawn + 2,
+            "\(cost.tagBuilds) tag builds for \(cost.drawn) drawn rows of \(Self.rowCount)")
+    }
+
+    /// What a mixed list still pays, pinned: the same list over projects
+    /// 1...300, so no looped row answers 0. A tag is any value at all, read off
+    /// the built row, so nothing short of building every looped row says that
+    /// none of them is 0. Every frame that asks about the hand-written row —
+    /// every frame it is drawn — builds them all. Counted so that the day it
+    /// moves is seen.
+    @Test("An untagged row beside an Int-tagged loop that never answers its ordinal builds every looped row on each frame it is drawn")
+    func ordinalBesideATaggedLoopBuildsEveryRow() {
+        let cost = Self.ordinalBesideATaggedLoop(numberedFrom: 1)
+        #expect(
+            cost.tagBuilds == Self.rowCount,
+            "\(cost.tagBuilds) tag builds for \(cost.drawn) drawn rows of \(Self.rowCount)")
+    }
+
+    // MARK: - The answers are the same answers
+
+    /// The handler's row answers — the ids row by row, where each key lands,
+    /// and then the maps whole — for a mixed list with a row the selection
+    /// cannot name. These are the answers the list gave when it resolved
+    /// every row up front; asked for one row at a time, and the rest only when
+    /// something reads them, they must not move. The rows and the keys are
+    /// asked first, while the maps are still to be settled: read whole first,
+    /// they would answer every key from the settled set.
+    @Test("A mixed list's handler answers every row as it did when every row was resolved up front")
+    func mixedListAnswersAreUnchanged() {
+        let counter = Counter()
+        let frames = Frames(counter: counter)
+        var selection: String?
+        let list = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            Text("Every planet")
+            ForEach(["mercury", "venus", "earth"], id: \.self) { Text($0) }
+            Text("Pluto").tag("pluto")
+        }
+        _ = frames.steadyFrame(list)
+        guard let handler = frames.env.focusManager?.currentFocused as? ItemListHandler<String> else {
+            Issue.record("the list took focus")
+            return
+        }
+        #expect(
+            (0..<handler.itemCount).map { handler.id(at: $0) }
+                == [nil, "mercury", "venus", "earth", "pluto"])
+        #expect(handler.index(of: "earth") == 3)
+
+        // The keys land where the landing set says.
+        _ = handler.handleKeyEvent(KeyEvent(key: .home))
+        #expect(handler.focusedIndex == 1, "Home lands on the first selectable row")
+        _ = handler.handleKeyEvent(KeyEvent(key: .up))
+        #expect(handler.focusedIndex == 4, "Up from the first selectable row wraps past the one above it")
+        _ = handler.handleKeyEvent(KeyEvent(key: .home))
+        _ = handler.handleKeyEvent(KeyEvent(key: .down))
+        #expect(handler.focusedIndex == 2, "Down steps onto the next looped row")
+        _ = handler.handleKeyEvent(KeyEvent(key: .end))
+        #expect(handler.focusedIndex == 4, "End lands on the last row")
+        #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == true)
+        #expect(selection == "pluto")
+
+        // And the maps, read whole, which settles them.
+        #expect(handler.itemIDs == [nil, "mercury", "venus", "earth", "pluto"])
+        #expect(handler.selectableIndices == [1, 2, 3, 4], "\(handler.selectableIndices.sorted())")
+    }
+
+    /// The sidebar: every row selectable, so the handler is told so — an
+    /// empty landing set and no id array, the windowed loop's shape — once
+    /// anything asks.
+    @Test("A mixed list whose every row is selectable hands its handler the all-content answers")
+    func allContentMixedListAnswersAreUnchanged() {
+        let counter = Counter()
+        let frames = Frames(counter: counter)
+        let projects = Self.projects(counter)
+        var selection: Pick? = .all
+        let list = List(selection: Binding(get: { selection }, set: { selection = $0 })) {
+            Text("All projects").tag(Pick.all)
+            ForEach(projects) { Self.taggedRow($0) }
+        }
+        _ = frames.steadyFrame(list)
+        guard let handler = frames.env.focusManager?.currentFocused as? ItemListHandler<Pick> else {
+            Issue.record("the list took focus")
+            return
+        }
+        #expect(handler.itemCount == Self.rowCount + 1)
+        #expect(handler.id(at: 0) == .all)
+        #expect(handler.id(at: Self.rowCount) == .project(Self.rowCount - 1))
+        #expect(handler.itemIDs.isEmpty && handler.selectableIndices.isEmpty, "all content")
+        #expect(handler.index(of: .project(250)) == 251)
+        _ = handler.handleKeyEvent(KeyEvent(key: .end))
+        #expect(handler.focusedIndex == Self.rowCount)
+        #expect(handler.handleKeyEvent(KeyEvent(key: .space)) == true)
+        #expect(selection == .project(Self.rowCount - 1))
     }
 }

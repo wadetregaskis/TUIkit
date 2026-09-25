@@ -119,9 +119,14 @@ final class FlattenedRowIDs<ID: Hashable> {
     /// question.
     private var ownAnswers: [OwnAnswer] = []
 
-    /// Every id a placed looped row answers to — built the first time an
-    /// ordinal has to be checked against them, and only then.
-    private var loopedIDs: Set<ID>?
+    /// What the looped rows before ``loopedIDsScanned`` answer to — gathered
+    /// by ``ordinalID(_:)``, in order, only as far as its questions have
+    /// needed.
+    private var loopedIDs: Set<ID> = []
+
+    /// How far into ``children`` ``loopedIDs`` has gathered: the next
+    /// ordinal question that needs more resumes here.
+    private var loopedIDsScanned = 0
 
     private enum Placement {
         /// Not a looped row, or a looped row this walk could not place.
@@ -186,25 +191,38 @@ final class FlattenedRowIDs<ID: Hashable> {
 
     /// `ordinal` as a selection value, unless a looped row here already
     /// answers to it — see the type's note on why it yields.
+    ///
+    /// The one question that can ask EVERY looped row. It asks them in order
+    /// and stops at the first that answers `ordinal`, keeping what it saw for
+    /// the next such question, which checks that first and resumes where this
+    /// one stopped. So where a looped row answers — `ForEach(0..<n)`, or tags
+    /// numbered from 0, the collision the yield exists for — the question
+    /// costs the rows up to that one. Where none does, knowing so takes every
+    /// answer, and a tagged row's is any value, read off the built row: no
+    /// key, count or range of its loop says it is not `ordinal`. So a list
+    /// that draws an untagged hand-written row, under a selection the ordinal
+    /// casts into, beside a tagged loop none of whose rows answers it, builds
+    /// every one of them on each frame the row is asked about — pinned in
+    /// `ListRowSelectionValueCostTests`.
     private func ordinalID(_ ordinal: Int) -> ID? {
         guard let id = ordinal as? ID else { return nil }
         let placements = placed()
         guard !placements.isEmpty else { return id }
-        // Only a looped ROW's id: a looped `Section` is spliced as rows keyed
-        // by its own items, so the group's id is no row's selection value, and
-        // counted here it took a hand-written row's number away for nothing.
-        // Every such row's answer is needed, so this is the one question that
-        // resolves them all.
-        let taken =
-            loopedIDs
-            ?? Set(
-                placements.indices.compactMap { index -> ID? in
-                    guard case .looped = placements[index], !Self.isSection(children[index])
-                    else { return nil }
-                    return ownAnswer(ofChildAt: index)
-                })
-        loopedIDs = taken
-        return taken.contains(id) ? nil : id
+        if loopedIDs.contains(id) { return nil }
+        while loopedIDsScanned < placements.count {
+            let index = loopedIDsScanned
+            loopedIDsScanned += 1
+            // Only a looped ROW's id: a looped `Section` is spliced as rows
+            // keyed by its own items, so the group's id is no row's selection
+            // value, and counted here it took a hand-written row's number away
+            // for nothing.
+            guard case .looped = placements[index], !Self.isSection(children[index]),
+                let answer = ownAnswer(ofChildAt: index)
+            else { continue }
+            loopedIDs.insert(answer)
+            if answer == id { return nil }
+        }
+        return id
     }
 
     /// The placement, made on the first question.

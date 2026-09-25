@@ -486,6 +486,46 @@ struct ListLoopedRowIDTests {
         #expect(handler.focusedIndex == 1, "focus-lost landing: row \(handler.focusedIndex)")
     }
 
+    /// Whether an ordinal yields is a question about every looped row's
+    /// answer, and a list asks its rows in whatever order it draws and moves
+    /// through them. The looped rows are asked in order only as far as the
+    /// question needs — up to the first that answers the ordinal — and the
+    /// next question resumes there. Asked in any order, every row must answer
+    /// as it would with every looped row's answer in hand: "A" (ordinal 0) is
+    /// answered by the third looped row, "B" (4) by none, and "C" (7) by a row
+    /// the question for "A" has already passed, so asked after it, "C" is
+    /// answered by what that question saw.
+    @Test("An ordinal yields where a looped row answers it, whichever row is asked first")
+    func ordinalYieldsWhicheverRowIsAskedFirst() {
+        @ViewBuilder func rows() -> some View {
+            Text("A")
+            ForEach([3, 7, 0], id: \.self) { Text("item \($0)").tag($0) }
+            Text("B")
+            ForEach([1, 9], id: \.self) { Text("item \($0)") }
+            Text("C")
+            ForEach([8, 2], id: \.self) { Text("item \($0)").tag($0) }
+        }
+        let tui = TUIContext()
+        var environment = EnvironmentValues()
+        environment.applyRuntimeServices(from: tui)
+        let context = RenderContext(
+            availableWidth: 30, availableHeight: 14, environment: environment, tuiContext: tui)
+        let content = rows()
+        // No spacer and no section, so each child's ordinal is its index.
+        let children = resolveChildViews(from: content, context: context)
+        let expected: [Int?] = [nil, 3, 7, 0, 4, 1, 9, nil, 8, 2]
+        #expect(children.count == expected.count, "\(children.count) children")
+        let orders: [[Int]] = [
+            Array(children.indices), children.indices.reversed(), [7, 4, 0, 9, 1, 2, 3, 5, 6, 8],
+        ]
+        for order in orders {
+            let rowIDs = FlattenedRowIDs<Int>(content: content, children: children)
+            var answers = [Int?](repeating: nil, count: children.count)
+            for index in order { answers[index] = rowIDs.id(ofChildAt: index, ordinal: index) }
+            #expect(answers == expected, "asked in the order \(order): \(answers)")
+        }
+    }
+
     /// A loop of sections makes no rows of its own — the list splices each
     /// section's rows, keyed by the section's items — so the groups' ids are
     /// nobody's selection value, and an untagged row beside them keeps its

@@ -67,6 +67,10 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// ``allContent`` once known — from construction, or from the first read.
     private var knownAllContent: Bool?
 
+    /// ``allContent`` if it is known without asking any row its type, else
+    /// `nil`.
+    var allContentIfKnown: Bool? { knownAllContent }
+
     /// Resolves a row's type/id on demand — builds no content box (a
     /// `.tag(_:)`-outermost row's VIEW is built to read the tag), so the
     /// windowed path resolves ids only for the rows the handler / window
@@ -77,10 +81,11 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// known; where it is still to be asked (a flattened container's row, see
     /// ``EagerListRow``), the first question places the container's loops, a
     /// looped row then costs what a windowed one does, and an untagged
-    /// hand-written row's ordinal is checked against the answer of every
-    /// looped row beside it, a build per tagged one, the first time any such
-    /// ordinal is asked (`FlattenedRowIDs.ordinalID`). The container keeps each
-    /// answer, so asking a row twice costs nothing more.
+    /// hand-written row's ordinal is checked against the answers of the looped
+    /// rows beside it, in order up to the first that answers it — every one of
+    /// them where none does, a build per tagged one
+    /// (`FlattenedRowIDs.ordinalID`). The container keeps each answer, so
+    /// asking a row twice costs nothing more.
     private let typeAt: (Int) -> ListRowType<SelectionValue>
 
     /// Builds the deferred content box for a row index.
@@ -198,9 +203,9 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// row of two `ForEach`es side by side) is asked now. For a
     /// `.tag(_:)`-outermost looped row that BUILDS the row to read its tag;
     /// for an untagged hand-written row beside a loop, under a selection its
-    /// ordinal casts into, it asks every looped row its answer, to learn
-    /// whether one already holds this row's ordinal — a build per tagged
-    /// one. Each asked answer is kept once found.
+    /// ordinal casts into, it asks the looped rows their answers, in order,
+    /// until one holds this row's ordinal — every one of them where none
+    /// does, a build per tagged one. Each asked answer is kept once found.
     func type(at index: Int) -> ListRowType<SelectionValue> { typeAt(index) }
 
     /// Where the row at `index` stands among its section's content rows — the
@@ -216,11 +221,17 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     ///
     /// O(1) where the length is: an all-content source (the windowed `ForEach`
     /// path, however long) has no header to find, and every row before this one
-    /// counts, so the index IS the answer. Only an eager source walks back, and
-    /// its row set is small — `resolvePopulatedHandler` already walks all of it
-    /// every frame.
+    /// counts, so the index IS the answer. Any other source walks back over the
+    /// rows above `index`, asking each its type until it meets a header — up to
+    /// `index` questions a call. Where the types are known each is an array
+    /// read, and `resolvePopulatedHandler` reads every one of them each frame
+    /// anyway. Where they are still to be asked, each is that row's answer
+    /// (``typeAt``), a build per tagged looped row: a striped list of
+    /// flattened rows, scrolled down, asks every row above the first one drawn
+    /// on each frame, where its handler asks only the rows it draws. Asked
+    /// only of a list that stripes its rows (see the composers' callers).
     func sectionContentIndex(at index: Int) -> Int {
-        guard !allContent else { return index }
+        guard knownAllContent != true else { return index }
         var contentRows = 0
         for earlier in stride(from: index - 1, through: 0, by: -1) {
             let type = typeAt(earlier)
@@ -959,6 +970,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         var scrollbarColumn: Int?
         var scrollbarHeight = 0
         var rowContentWidth = 0
+        // Where the first drawn row stands among its section's content rows —
+        // which only a striped list reads, and which a source whose rows'
+        // types are still to be asked can only learn by asking the rows above.
+        let firstSectionContentIndex =
+            style.alternatingRowColors ? source.sectionContentIndex(at: origin.offset) : 0
         if wantsScrollbar {
             let bar = listScrollbarCells(
                 source: source,
@@ -974,7 +990,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 visibleRows: visibleRows,
                 handler: handler,
                 origin: origin,
-                firstSectionContentIndex: source.sectionContentIndex(at: origin.offset),
+                firstSectionContentIndex: firstSectionContentIndex,
                 listHasFocus: listHasFocus,
                 contentRowWidth: contentRowWidth,
                 bar: bar,
@@ -993,7 +1009,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             (lines, visibleRowYRanges, animatedRuns, listRowClaims, droppedRunClaims) = composeRowLines(
                 handler: handler,
                 origin: origin,
-                firstSectionContentIndex: source.sectionContentIndex(at: origin.offset),
+                firstSectionContentIndex: firstSectionContentIndex,
                 visibleRows: visibleRows,
                 listHasFocus: listHasFocus,
                 rowWidth: rowWidth,
@@ -1016,9 +1032,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 origin: origin,
                 visibleRowYRanges: visibleRowYRanges,
                 visibleRows: visibleRows,
-                dropInsertion: (source.allContent
-                    ? source.rowsContent as? any DynamicViewContentActions
-                    : nil)?.dropInsertionAction,
+                dropInsertion: Self.dropInsertionAction(of: source),
                 scrollbarColumn: scrollbarColumn,
                 scrollbarHeight: scrollbarHeight,
                 rowContentWidth: rowContentWidth,
@@ -1075,9 +1089,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             origin: (0, 0, false, false),
             visibleRowYRanges: [],
             visibleRows: [],
-            dropInsertion: (source.allContent
-                ? source.rowsContent as? any DynamicViewContentActions
-                : nil)?.dropInsertionAction
+            dropInsertion: Self.dropInsertionAction(of: source)
         )
     }
 
@@ -1317,28 +1329,30 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // reads that remain are O(visible). A heterogeneous row set (Sections,
         // with non-selectable headers/footers) is small, so it builds the
         // explicit maps eagerly as before.
-        if source.allContent {
-            handler.idAt = { index in
-                if case .content(let id) = source.type(at: index) { return id }
-                return nil
-            }
-            handler.itemIDs = []
-            handler.selectableIndices = []
-        } else {
-            var selectableIndices = Set<Int>()
-            var itemIDs: [SelectionValue?] = []
-            itemIDs.reserveCapacity(source.count)
-            for index in 0..<source.count {
-                if case .content(let id) = source.type(at: index) {
-                    itemIDs.append(id)
-                    selectableIndices.insert(index)
-                } else {
-                    itemIDs.append(nil)
-                }
-            }
+        //
+        // A source that does not yet know whether its rows are all content —
+        // a mixed container's, whose looped rows' types are still to be asked
+        // (`EagerListRow`) — hands both answers over UNSETTLED: the ids are
+        // asked a row at a time through `idAt`, as the windowed path's are,
+        // and the whole set only when a key or a follow reads it. Deciding
+        // here would ask every looped row its loop's rule, a build per tagged
+        // row, on every frame, for the handful the frame draws.
+        let idAt: (Int) -> SelectionValue? = { index in
+            if case .content(let id) = source.type(at: index) { return id }
+            return nil
+        }
+        switch source.allContentIfKnown {
+        case true?:
+            handler.idAt = idAt
+            handler.answerRows(([], []))
+        case false?:
             handler.idAt = nil
-            handler.itemIDs = itemIDs
-            handler.selectableIndices = selectableIndices
+            handler.answerRows(Self.rowAnswers(of: source))
+        case nil:
+            handler.idAt = idAt
+            handler.answerRowsWhenAsked {
+                source.allContent ? ([], []) : Self.rowAnswers(of: source)
+            }
         }
         // Clamp, snap off the resting duplicate, apply the anchor — one sequence,
         // shared with `Table`'s two paths, along with the render-pass guard that
@@ -1371,6 +1385,43 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             }
         wireRowEditing(handler: handler, source: source)
         return (handler, showsScrollbar)
+    }
+
+    /// The `.dropDestination(for:action:)` insertion action of the `ForEach`
+    /// that is the rows' whole content, when every row is its — `nil`
+    /// otherwise.
+    ///
+    /// The cast first: only a `ForEach` carries one, and asking the source's
+    /// `allContent` of a mixed container's rows first would ask every row its
+    /// type, a build per tagged looped row, for an answer the cast then throws
+    /// away.
+    private static func dropInsertionAction(
+        of source: RowSource<SelectionValue>
+    ) -> (accepts: (Any) -> Bool, perform: (Int, [Any]) -> Void)? {
+        guard let actions = source.rowsContent as? any DynamicViewContentActions,
+            source.allContent
+        else { return nil }
+        return actions.dropInsertionAction
+    }
+
+    /// Every row's id (`nil` for a row the selection cannot name) and the rows
+    /// the cursor can land on — the handler's explicit maps, for a source whose
+    /// rows are not all content.
+    private static func rowAnswers(
+        of source: RowSource<SelectionValue>
+    ) -> ItemListHandler<SelectionValue>.RowAnswers {
+        var selectableIndices = Set<Int>()
+        var itemIDs: [SelectionValue?] = []
+        itemIDs.reserveCapacity(source.count)
+        for index in 0..<source.count {
+            if case .content(let id) = source.type(at: index) {
+                itemIDs.append(id)
+                selectableIndices.insert(index)
+            } else {
+                itemIDs.append(nil)
+            }
+        }
+        return (itemIDs, selectableIndices)
     }
 
     /// Hands the handler this frame's row-mutation actions.

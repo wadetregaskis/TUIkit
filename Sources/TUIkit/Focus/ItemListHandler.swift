@@ -1007,20 +1007,44 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     ///
     /// Entries are `nil` for non-selectable rows (e.g. section headers/footers in List).
     ///
-    /// Eager backing for the small/structured cases (Table, Sections, tests). A
-    /// large flat windowed `List` leaves this empty and supplies ``idAt`` instead,
-    /// so it never materialises an id per off-screen row. Read ids through
-    /// ``id(at:)`` / ``index(of:)``, never this array directly.
-    var itemIDs: [SelectionValue?] = []
+    /// Eager backing where the list knows every row's answer as it hands them
+    /// over and not every row is content: Sections, a `ForEach` whose ids the
+    /// selection cannot all hold, tests. A large flat windowed `List` and every
+    /// `Table` (whose rows are all content) leave this empty and supply
+    /// ``idAt`` instead, so neither materialises an id per off-screen row — and
+    /// so does a list with a flattened row still to be asked its answer
+    /// (hand-written rows, alone or beside a loop), which hands this over
+    /// unsettled (below). Read ids through ``id(at:)`` / ``index(of:)``, never
+    /// this array directly.
+    ///
+    /// May be handed over UNSETTLED, with ``selectableIndices``, by
+    /// ``answerRowsWhenAsked(_:)``: then the first read of either settles both,
+    /// and so does a write, before it lands.
+    var itemIDs: [SelectionValue?] {
+        get {
+            settleRowAnswers()
+            return settledItemIDs
+        }
+        set {
+            settleRowAnswers()
+            settledItemIDs = newValue
+        }
+    }
 
-    /// Lazy id resolver used in place of ``itemIDs`` by the windowed `List` path.
+    /// ``itemIDs``' storage, once settled.
+    private var settledItemIDs: [SelectionValue?] = []
+
+    /// Lazy id resolver used in place of ``itemIDs`` by the windowed `List` path
+    /// and by `Table`.
     ///
     /// When set, ``id(at:)`` resolves a row's id on demand — per frame only the
     /// visible window and the focused row are asked — so a 50k-row list pays
     /// O(1) for handler setup instead of building a 50k-entry ``itemIDs``.
     /// (User-initiated selection gestures ask for more: a range extension
     /// resolves its span, select-all every row — but never per-frame.) `nil`
-    /// for the eager paths, which use ``itemIDs``.
+    /// for the eager paths, which use ``itemIDs`` — except one that hands its
+    /// answers over unsettled (``answerRowsWhenAsked(_:)``), whose ids are
+    /// asked here one row at a time for the same reason.
     var idAt: ((Int) -> SelectionValue?)?
 
     /// The set of indices that can be selected and focused.
@@ -1030,7 +1054,25 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// When empty, all items are considered selectable (backward compatibility) —
     /// which is exactly what the all-content windowed `List` wants, so it leaves
     /// this empty rather than allocating a full `Set(0..<count)`.
-    var selectableIndices: Set<Int> = []
+    ///
+    /// Settled with ``itemIDs`` — see there.
+    var selectableIndices: Set<Int> {
+        get {
+            settleRowAnswers()
+            return settledSelectableIndices
+        }
+        set {
+            settleRowAnswers()
+            settledSelectableIndices = newValue
+        }
+    }
+
+    /// ``selectableIndices``' storage, once settled.
+    private var settledSelectableIndices: Set<Int> = []
+
+    /// This frame's ``itemIDs`` and ``selectableIndices`` while nothing has
+    /// read them yet — see ``answerRowsWhenAsked(_:)``.
+    private var unsettledRowAnswers: (() -> RowAnswers)?
 
     /// Creates an item list handler.
     ///
@@ -1059,10 +1101,20 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
 
 extension ItemListHandler {
     /// The id of the row at `index`, or `nil` for a non-selectable / out-of-range
-    /// row. Resolves through the lazy ``idAt`` when present (windowed `List`),
-    /// else the eager ``itemIDs`` (Table / Sections). O(1) either way — per
-    /// frame only the visible window and the focused row are asked (selection
-    /// gestures ask for their span on the way in, never per-frame).
+    /// row. Resolves through the lazy ``idAt`` when present — a windowed
+    /// `List`, a `Table`, and a list that handed its answers over unsettled
+    /// (see ``itemIDs``) — else the eager ``itemIDs`` (Sections, a `ForEach`
+    /// whose ids the selection cannot all hold, tests). Per frame only the
+    /// visible window and the focused row are asked (selection gestures ask
+    /// for their span on the way in, never per-frame).
+    ///
+    /// What one row costs: an array read from ``itemIDs``; through ``idAt`` a
+    /// key-path read or a cast, except that a `.tag(_:)`-outermost looped row
+    /// is BUILT to read its tag, and among flattened rows an untagged
+    /// hand-written row's ordinal is checked against the answers of the
+    /// looped rows beside it (`FlattenedRowIDs`), in order up to the first
+    /// that answers it — every one of them where none does, a build per
+    /// tagged one.
     func id(at index: Int) -> SelectionValue? {
         guard index >= 0 else { return nil }
         if let idAt {
@@ -1085,6 +1137,42 @@ extension ItemListHandler {
             return nil
         }
         return itemIDs.firstIndex(of: id)
+    }
+
+    /// ``itemIDs`` and ``selectableIndices``, together.
+    typealias RowAnswers = (itemIDs: [SelectionValue?], selectableIndices: Set<Int>)
+
+    /// Sets ``itemIDs`` and ``selectableIndices`` together, dropping any
+    /// answers ``answerRowsWhenAsked(_:)`` left unsettled rather than settling
+    /// them first — what a list hands over on each frame it knows them.
+    func answerRows(_ answers: RowAnswers) {
+        unsettledRowAnswers = nil
+        (settledItemIDs, settledSelectableIndices) = answers
+    }
+
+    /// Hands over ``itemIDs`` and ``selectableIndices`` unsettled: `answers`
+    /// runs the first time either is read (or written), and on a frame nothing
+    /// reads them it never runs. Replaces any answers still unsettled.
+    ///
+    /// For a list whose rows' ids are costly to learn all at once, of which a
+    /// frame needs only a few. One row's id is not free either: it can cost a
+    /// build of that row, or of looped rows beside it (see ``id(at:)``). The
+    /// list supplies ``idAt`` as well, which is what ``id(at:)`` and
+    /// ``index(of:)`` then ask, so a frame asks about the rows it draws and
+    /// the row it focuses — and only a key that needs the landing set whole
+    /// (Home, End, a move past a row the selection cannot name, select-all)
+    /// or a bottom-anchored follow settles the rest. The answers are the ones
+    /// `answers` would have given at hand-over; settling later asks the same
+    /// rows the same questions.
+    func answerRowsWhenAsked(_ answers: @escaping () -> RowAnswers) {
+        unsettledRowAnswers = answers
+    }
+
+    /// Runs the unsettled answers, if there are any, into their storage.
+    private func settleRowAnswers() {
+        guard let answers = unsettledRowAnswers else { return }
+        unsettledRowAnswers = nil
+        (settledItemIDs, settledSelectableIndices) = answers()
     }
 }
 
